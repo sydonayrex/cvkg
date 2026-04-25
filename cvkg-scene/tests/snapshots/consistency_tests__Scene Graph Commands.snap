@@ -1,0 +1,39 @@
+---
+source: cvkg-scene/tests/consistency_tests.rs
+expression: commands_json
+---
+[
+  "BeginFrame",
+  {
+    "FillRoundedRect": {
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 100.0
+      },
+      "radius": 8.0,
+      "color": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  },
+  {
+    "DrawText": {
+      "text": "Overlay",
+      "x": 0.0,
+      "y": 0.0,
+      "size": 14.0,
+      "color": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "EndFrame"
+]

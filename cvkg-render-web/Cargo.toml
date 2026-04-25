@@ -1,0 +1,38 @@
+[package]
+name = "cvkg-render-web"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+wgpu = { version = "29.0.1", features = ["webgpu"] }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+log = "0.4"
+console_log = "1.0"
+bytemuck = { version = "1.14", features = ["derive"] }
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Window",
+    "Performance",
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    "Element",
+    "Node",
+    "TextMetrics",
+    "Response",
+    "Headers",
+    "Request",
+    "RequestInit",
+    "RequestMode"
+] }
+cvkg-core = { path = "../cvkg-core", version = "0.1.9" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.9" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[features]
+webgpu = []
+default = ["webgpu"]

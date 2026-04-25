@@ -1,0 +1,37 @@
+[workspace]
+resolver = "2"
+members = [
+    "cvkg",
+    "cvkg-core",
+    "cvkg-scene",
+    "cvkg-layout",
+    "cvkg-anim",
+    "cvkg-render-native",
+    "cvkg-render-gpu",
+    "cvkg-render-web",
+    "cvkg-vdom",
+    "cvkg-cli",
+    "cvkg-webkit-server",
+    "cvkg-components",
+    "cvkg-themes",
+    "cvkg-macros",
+]
+
+[workspace.package]
+version = "0.1.9"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "Cyberpunk Viking Knowledge Graph (CVKG) - High-fidelity agentic UI framework"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", default-features = false, features = ["sync"] }
+log = "0.4"
+notify = "6.0"
+anyhow = "1.0"
+bytemuck = { version = "1.14", features = ["derive"] }
+glam = { version = "0.29", features = ["serde", "bytemuck"] }
+tobj = "4.0"
+stl_io = "0.7"

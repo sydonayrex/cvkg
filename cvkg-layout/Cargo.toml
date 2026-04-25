@@ -1,0 +1,11 @@
+[package]
+name = "cvkg-layout"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+cvkg-core = { path = "../cvkg-core", version = "0.1.9" }
+taffy = "0.6"

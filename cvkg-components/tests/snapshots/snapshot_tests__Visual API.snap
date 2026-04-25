@@ -1,0 +1,5 @@
+---
+source: cvkg-components/tests/snapshot_tests.rs
+expression: "\"All visual components constructed successfully.\""
+---
+All visual components constructed successfully.

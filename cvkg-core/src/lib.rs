@@ -1,0 +1,1928 @@
+//! # CVKG Agentic Development Guidelines (v1.2)
+//!
+//! All AI agents contributing to this crate MUST follow ALL seven rules:
+//!
+//! ── Karpathy Guidelines (1–4) ────────────────────────────────────────────
+//! 1. THINK FIRST     — State assumptions. Surface ambiguity. Push back on complexity.
+//! 2. STAY SIMPLE     — Minimum code. No speculative features. No unasked-for abstractions.
+//! 3. BE SURGICAL     — Touch only what's required. Own your orphans. Don't improve neighbors.
+//! 4. VERIFY GOALS    — Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
+//!
+//! ── CVKG Extended Protocols (5–7) ────────────────────────────────────────
+//! 5. TRIPLE-PASS     — Read the target, its surrounding context, and its full call graph
+//                      at least THREE TIMES before making any edit or revision.
+//! 6. COMMENT ALL     — Every major pub fn, unsafe block, and non-trivial algorithm in
+//                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
+//                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
+//! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
+//                      After 3 consecutive identical failures, stop, write BLOCKED.md,
+//                      and move to unblocked work. Never silently accept a broken state.
+//!
+//! Sources:
+//   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
+//   CVKG Extended: Section 2 of the CVKG Design Specification
+
+//! The View trait is the fundamental building block of CVKG. Every UI element — from a plain text label
+//! to a complex navigation controller — is a View. The trait is intentionally minimal; complexity emerges
+//! through modifier composition.
+//!
+//! # Conformance rules:
+//! 1. `body()` must be pure and side-effect free
+//! 2. Primitive views use `Never` as `Body` and register a `PaintCommand` directly with the scene graph
+//! 3. `View` types must implement `Send` but not necessarily `Sync`, enabling safe multi-threaded layout passes
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::str::FromStr;
+
+/// Design token value that can adapt to light/dark mode
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum TokenValue {
+    /// Single value (same for light and dark)
+    Single { value: String },
+    /// Different values for light and dark mode
+    Adaptive { light: String, dark: String },
+}
+
+/// YggdrasilTokens is the authoritative container for all design tokens in the CVKG ecosystem.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YggdrasilTokens {
+    pub color: HashMap<String, TokenValue>,
+    pub font: HashMap<String, TokenValue>,
+    pub spacing: HashMap<String, TokenValue>,
+    pub radius: HashMap<String, TokenValue>,
+    pub shadow: HashMap<String, TokenValue>,
+    pub border: HashMap<String, TokenValue>,
+    pub anim: HashMap<String, TokenValue>,
+    pub bifrost: HashMap<String, TokenValue>,
+    pub gungnir: HashMap<String, TokenValue>,
+    pub mjolnir: HashMap<String, TokenValue>,
+    pub accessibility: HashMap<String, TokenValue>,
+}
+
+impl YggdrasilTokens {
+    pub fn new() -> Self {
+        Self {
+            color: HashMap::new(),
+            font: HashMap::new(),
+            spacing: HashMap::new(),
+            radius: HashMap::new(),
+            shadow: HashMap::new(),
+            border: HashMap::new(),
+            anim: HashMap::new(),
+            bifrost: HashMap::new(),
+            gungnir: HashMap::new(),
+            mjolnir: HashMap::new(),
+            accessibility: HashMap::new(),
+        }
+    }
+
+    /// Get a color token value for the current mode
+    pub fn get_color(&self, key: &str, is_dark: bool) -> Option<String> {
+        self.color.get(key).and_then(|token| match token {
+            TokenValue::Single { value } => Some(value.clone()),
+            TokenValue::Adaptive { light, dark } => {
+                if is_dark {
+                    Some(dark.clone())
+                } else {
+                    Some(light.clone())
+                }
+            }
+        })
+    }
+
+    /// Get a token value of any type and parse it into the target type
+    pub fn get<T: FromStr>(&self, category: &str, key: &str, is_dark: bool) -> Option<T> {
+        let map = match category {
+            "color" => &self.color,
+            "font" => &self.font,
+            "spacing" => &self.spacing,
+            "radius" => &self.radius,
+            "shadow" => &self.shadow,
+            "border" => &self.border,
+            "anim" => &self.anim,
+            "bifrost" => &self.bifrost,
+            "gungnir" => &self.gungnir,
+            "mjolnir" => &self.mjolnir,
+            "accessibility" => &self.accessibility,
+            _ => return None,
+        };
+
+        map.get(key).and_then(|token| match token {
+            TokenValue::Single { value } => value.parse().ok(),
+            TokenValue::Adaptive { light, dark } => {
+                let value = if is_dark { dark } else { light };
+                value.parse().ok()
+            }
+        })
+    }
+}
+
+pub trait View: Sized + Send {
+    /// The concrete type produced after applying modifiers.
+    /// For primitive views this is Self.
+    type Body: View;
+
+    fn body(self) -> Self::Body;
+
+    /// Render this view into the provided renderer at the specified bounds.
+    /// Primitive views override this to perform drawing operations.
+    fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
+
+    /// Optionally provide a layout implementation for this view.
+    fn layout(&self) -> Option<&dyn layout::LayoutView> {
+        None
+    }
+
+    /// Provided modifier entry point
+    fn modifier<M: ViewModifier>(self, m: M) -> ModifiedView<Self, M> {
+        ModifiedView::new(self, m)
+    }
+
+    /// Apply a Bifrost (Frosted Glass) effect to the view
+    fn bifrost(
+        self,
+        blur: f32,
+        saturation: f32,
+        opacity: f32,
+    ) -> ModifiedView<Self, BifrostModifier> {
+        self.modifier(BifrostModifier {
+            blur,
+            saturation,
+            opacity,
+        })
+    }
+
+    /// Apply a Gungnir (Neon Glow) effect to the view
+    fn gungnir(
+        self,
+        color: impl Into<String>,
+        radius: f32,
+        intensity: f32,
+    ) -> ModifiedView<Self, GungnirModifier> {
+        self.modifier(GungnirModifier {
+            color: color.into(),
+            radius,
+            intensity,
+        })
+    }
+
+    /// Apply a Mjolnir Slice (Geometric cut) to the view
+    fn mjolnir_slice(self, angle: f32, offset: f32) -> ModifiedView<Self, MjolnirSliceModifier> {
+        self.modifier(MjolnirSliceModifier { angle, offset })
+    }
+
+    /// Apply a Mjolnir Shatter (Fragmented transition) to the view
+    fn mjolnir_shatter(
+        self,
+        pieces: u32,
+        force: f32,
+    ) -> ModifiedView<Self, MjolnirShatterModifier> {
+        self.modifier(MjolnirShatterModifier { pieces, force })
+    }
+
+    /// Mark this view as a Bifrost Bridge (Shared Element) for cross-view persistence
+    fn bifrost_bridge(self, id: impl Into<String>) -> ModifiedView<Self, BifrostBridgeModifier> {
+        self.modifier(BifrostBridgeModifier { id: id.into() })
+    }
+
+    /// Add a background color to this view
+    fn background(self, color: [f32; 4]) -> ModifiedView<Self, BackgroundModifier> {
+        self.modifier(BackgroundModifier { color })
+    }
+
+    /// Add padding to this view
+    fn padding(self, amount: f32) -> ModifiedView<Self, PaddingModifier> {
+        self.modifier(PaddingModifier { amount })
+    }
+
+    /// Set the opacity (alpha) of this view in the range [0.0, 1.0].
+    fn opacity(self, opacity: f32) -> ModifiedView<Self, OpacityModifier> {
+        self.modifier(OpacityModifier {
+            opacity: opacity.clamp(0.0, 1.0),
+        })
+    }
+
+    /// Override the foreground (text / icon) color of this view.
+    fn foreground_color(self, color: [f32; 4]) -> ModifiedView<Self, ForegroundColorModifier> {
+        self.modifier(ForegroundColorModifier { color })
+    }
+
+    /// Constrain this view to an explicit width and/or height.
+    fn frame(self, width: Option<f32>, height: Option<f32>) -> ModifiedView<Self, FrameModifier> {
+        self.modifier(FrameModifier { width, height })
+    }
+
+    /// Clip all child drawing to this view's bounds.
+    fn clip_to_bounds(self) -> ModifiedView<Self, ClipModifier> {
+        self.modifier(ClipModifier)
+    }
+
+    /// Draw a colored border around this view.
+    fn border(self, color: [f32; 4], width: f32) -> ModifiedView<Self, BorderModifier> {
+        self.modifier(BorderModifier { color, width })
+    }
+
+    /// Trigger an action when the view appears
+    fn on_appear<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, LifecycleModifier> {
+        self.modifier(LifecycleModifier {
+            on_appear: Some(Arc::new(action)),
+            on_disappear: None,
+        })
+    }
+
+    /// Trigger an action when the view disappears
+    fn on_disappear<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, LifecycleModifier> {
+        self.modifier(LifecycleModifier {
+            on_appear: None,
+            on_disappear: Some(Arc::new(action)),
+        })
+    }
+
+    /// Type-erase this view into AnyView
+    fn erase(self) -> AnyView
+    where
+        Self: 'static,
+    {
+        AnyView::new(self)
+    }
+}
+
+/// An object-safe version of the View trait for type erasure.
+pub trait ErasedView: Send {
+    fn render_erased(&self, renderer: &mut dyn Renderer, rect: Rect);
+    fn name(&self) -> &'static str;
+}
+
+impl<V: View + 'static> ErasedView for V {
+    fn render_erased(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        self.render(renderer, rect);
+    }
+
+    fn name(&self) -> &'static str {
+        std::any::type_name::<V>()
+    }
+}
+
+/// A type-erased View wrapper.
+pub struct AnyView {
+    inner: Box<dyn ErasedView>,
+}
+
+impl AnyView {
+    pub fn new<V: View + 'static>(view: V) -> Self {
+        Self {
+            inner: Box::new(view),
+        }
+    }
+}
+
+impl View for AnyView {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, self.inner.name());
+        self.inner.render_erased(renderer, rect);
+        renderer.pop_vnode();
+    }
+}
+
+/// BifrostBridgeModifier enables shared-element transitions.
+/// When two views share the same Bifrost Bridge ID, the Sleipnir solver will
+/// interpolate their geometry and effects (blur, glow) during the transition.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BifrostBridgeModifier {
+    pub id: String,
+}
+
+impl ViewModifier for BifrostBridgeModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Register this element with the renderer for shared-element transition logic
+        renderer.register_shared_element(&self.id, rect);
+    }
+}
+
+/// MjolnirSliceModifier implements the "Geometric Slice" aesthetic.
+/// It uses a signed distance field (SDF) to clip the view along a sharp angled line.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MjolnirSliceModifier {
+    pub angle: f32,
+    pub offset: f32,
+}
+
+impl ViewModifier for MjolnirSliceModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        renderer.push_mjolnir_slice(self.angle, self.offset);
+    }
+
+    fn post_render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        renderer.pop_mjolnir_slice();
+    }
+}
+
+/// MjolnirShatterModifier implements the "Shattering" effect.
+/// It breaks the view into discrete geometric fragments that can be animated.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MjolnirShatterModifier {
+    pub pieces: u32,
+    pub force: f32,
+}
+
+impl ViewModifier for MjolnirShatterModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        // RADIAL SHATTER: Fragment the view into wedges
+        let pieces = self.pieces.max(1);
+        for i in 0..pieces {
+            let progress = i as f32 / pieces as f32;
+            let next_progress = (i + 1) as f32 / pieces as f32;
+
+            let angle_start = progress * 360.0;
+            let angle_end = next_progress * 360.0;
+
+            // Wedge slice: intersection of two half-planes
+            renderer.push_mjolnir_slice(angle_start, 0.0);
+            renderer.push_mjolnir_slice(angle_end + 180.0, 0.0);
+
+            // Apply radial force offset
+            let mid_angle = (angle_start + angle_end) / 2.0;
+            let rad = mid_angle.to_radians();
+            let dx = rad.cos() * self.force;
+            let dy = rad.sin() * self.force;
+
+            let shard_rect = Rect {
+                x: rect.x + dx,
+                y: rect.y + dy,
+                ..rect
+            };
+
+            view.render(renderer, shard_rect);
+
+            renderer.pop_mjolnir_slice();
+            renderer.pop_mjolnir_slice();
+        }
+    }
+}
+
+/// BifrostModifier implements the Cyberpunk "Frosted Glass" aesthetic.
+/// It triggers backdrop blurring and light scattering in the render pipeline.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BifrostModifier {
+    pub blur: f32,
+    pub saturation: f32,
+    pub opacity: f32,
+}
+
+impl ViewModifier for BifrostModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.bifrost(rect, self.blur, self.saturation, self.opacity);
+    }
+}
+
+/// A modifier that adds a background color to a view.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BackgroundModifier {
+    pub color: [f32; 4],
+}
+
+impl ViewModifier for BackgroundModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.fill_rect(rect, self.color);
+    }
+}
+
+/// A modifier that adds padding to a view.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PaddingModifier {
+    pub amount: f32,
+}
+
+impl ViewModifier for PaddingModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn transform_rect(&self, rect: Rect) -> Rect {
+        Rect {
+            x: rect.x + self.amount,
+            y: rect.y + self.amount,
+            width: (rect.width - 2.0 * self.amount).max(0.0),
+            height: (rect.height - 2.0 * self.amount).max(0.0),
+        }
+    }
+}
+
+/// GungnirModifier implements the "Neon Glow" aesthetic.
+/// It uses additive blending and multi-pass blurring to simulate glowing light.
+#[derive(Debug, Clone, PartialEq)]
+pub struct GungnirModifier {
+    pub color: String,
+    pub radius: f32,
+    pub intensity: f32,
+}
+
+impl ViewModifier for GungnirModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Neon Glow using Mode 1 in the Surtr pipeline
+        renderer.stroke_rect(rect, [0.0, 1.0, 1.0, self.intensity], self.radius / 10.0);
+    }
+}
+
+/// GungnirPulseModifier implements a "breathing" neon effect.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GungnirPulseModifier {
+    pub color: [f32; 4],
+    pub radius: f32,
+    pub speed: f32,
+}
+
+impl ViewModifier for GungnirPulseModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f32();
+
+        // Mode 19: Dashed Border
+        // Mode 20: 9-Slice / Patch Scaling
+        let intensity = (time * self.speed).sin() * 0.5 + 0.5;
+        let mut color = self.color;
+        color[3] *= intensity;
+
+        // Mode 1 neon glow with dynamic intensity
+        renderer.stroke_rect(rect, color, self.radius);
+    }
+}
+
+/// SleipnirModifier handles physics-based animations via the Sleipnir RK4 solver.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SleipnirModifier<T> {
+    pub target: T,
+    pub stiffness: f32,
+    pub damping: f32,
+}
+
+impl<T: Send + Sync + 'static + Clone> ViewModifier for SleipnirModifier<T> {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// LifecycleModifier handles on_appear and on_disappear hooks.
+#[derive(Clone)]
+pub struct LifecycleModifier {
+    pub on_appear: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_disappear: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl ViewModifier for LifecycleModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// OpacityModifier fades this view and all its descendants to the given alpha.
+/// The renderer is expected to honour `push_opacity`/`pop_opacity` on the Renderer trait.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OpacityModifier {
+    pub opacity: f32,
+}
+
+impl ViewModifier for OpacityModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        renderer.push_opacity(self.opacity);
+    }
+
+    fn post_render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        renderer.pop_opacity();
+    }
+}
+
+/// ForegroundColorModifier overrides the foreground (text / icon) color inherited
+/// by all descendants until another ForegroundColorModifier is encountered.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ForegroundColorModifier {
+    pub color: [f32; 4],
+}
+
+impl ViewModifier for ForegroundColorModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// ClipModifier restricts all child drawing to the view's layout rectangle.
+/// The renderer must support `push_clip_rect`/`pop_clip_rect`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClipModifier;
+
+impl ViewModifier for ClipModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_clip_rect(rect);
+    }
+
+    fn post_render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        renderer.pop_clip_rect();
+    }
+}
+
+/// BorderModifier draws a solid-color border around the view bounds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BorderModifier {
+    pub color: [f32; 4],
+    pub width: f32,
+}
+
+impl ViewModifier for BorderModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.stroke_rect(rect, self.color, self.width);
+    }
+}
+
+// Primitive (leaf) views implement Never as body
+#[doc(hidden)]
+pub enum Never {}
+
+impl View for Never {
+    type Body = Never;
+    fn body(self) -> Never {
+        unreachable!()
+    }
+}
+
+/// A view that has been transformed by a modifier.
+///
+/// Section 4.3: "Each modifier implements ViewModifier and produces a ModifiedView<Inner, Self>."
+pub struct ModifiedView<V, M> {
+    view: V,
+    modifier: M,
+}
+
+impl<V: View, M: ViewModifier> ModifiedView<V, M> {
+    #[doc(hidden)]
+    pub fn new(view: V, modifier: M) -> Self {
+        Self { view, modifier }
+    }
+}
+
+impl<V: View, M: ViewModifier> View for ModifiedView<V, M> {
+    type Body = ModifiedView<V::Body, M>;
+
+    fn body(self) -> Self::Body {
+        ModifiedView {
+            view: self.view.body(),
+            modifier: self.modifier.clone(),
+        }
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        self.modifier.render_view(&self.view, renderer, rect);
+    }
+}
+
+pub trait ViewModifier: Send + Clone {
+    fn modify<V: View>(self, content: V) -> impl View;
+
+    /// Core rendering hook called before child views.
+    fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
+
+    /// Cleanup hook called after child views.
+    fn post_render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
+
+    /// Allows a modifier to completely override or wrap the rendering of its child.
+    /// Default implementation performs a standard push -> transform -> render child -> pop sequence.
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        self.render(renderer, rect);
+        let child_rect = self.transform_rect(rect);
+        view.render(renderer, child_rect);
+        self.post_render(renderer, rect);
+    }
+
+    fn transform_rect(&self, rect: Rect) -> Rect {
+        rect
+    }
+}
+
+/// The Renderer trait defines the atomic drawing operations for all CVKG backends.
+/// This trait is object-safe and used by the View::render system.
+///
+/// # Implementation Requirements
+/// 1. Coordinate system is origin-top-left (0,0) with Y increasing downwards.
+/// 2. Colors are [R, G, B, A] in the [0.0, 1.0] range.
+/// 3. All operations must be batchable by the underlying backend.
+pub trait Renderer: Send {
+    // ── Filled shapes ────────────────────────────────────────────────────
+    fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
+    fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]);
+    /// Fill an ellipse/circle that fits inside `rect`.
+    fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]);
+
+    // ── Stroked shapes ───────────────────────────────────────────────────
+    fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
+    fn stroke_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4], stroke_width: f32);
+    /// Stroke an ellipse/circle that fits inside `rect`.
+    fn stroke_ellipse(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
+    /// Draw a straight line from (x1,y1) to (x2,y2).
+    fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4], stroke_width: f32);
+
+    // ── Text ─────────────────────────────────────────────────────────────
+    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
+    /// Measure the width and height of the specified text.
+    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32);
+
+    // ── Images & textures ────────────────────────────────────────────────
+    /// Draw a texture (GPU-side) at the specified rect.
+    fn draw_texture(&mut self, texture_id: u32, rect: Rect);
+    /// Draw an image asset by name or path.
+    fn draw_image(&mut self, image_name: &str, rect: Rect);
+    /// Load an image asset from memory.
+    fn load_image(&mut self, name: &str, data: &[u8]);
+
+    // ── Data Visualization ───────────────────────────────────────────────
+    /// Upload raw float data as a GPU texture for heatmap rendering.
+    fn upload_data_texture(&mut self, _id: &str, _data: &[f32], _width: u32, _height: u32) {}
+    /// Draw a heatmap using a previously uploaded data texture.
+    fn draw_heatmap(&mut self, _texture_id: &str, _rect: Rect, _palette: &str) {}
+
+    // ── 3D Objects ───────────────────────────────────────────────────────
+    /// Draw a 3D mesh.
+    fn draw_mesh(&mut self, _mesh: &Mesh, _color: [f32; 4], _transform: glam::Mat4) {}
+
+    // ── Advanced Visual Effects ──────────────────────────────────────────
+    /// Draw a linear gradient between two colors at the specified angle.
+    fn draw_linear_gradient(
+        &mut self,
+        _rect: Rect,
+        _start_color: [f32; 4],
+        _end_color: [f32; 4],
+        _angle: f32,
+    ) {
+    }
+    /// Draw a radial gradient between two colors.
+    fn draw_radial_gradient(
+        &mut self,
+        _rect: Rect,
+        _inner_color: [f32; 4],
+        _outer_color: [f32; 4],
+    ) {
+    }
+    /// Draw a high-fidelity drop shadow for a rounded rectangle.
+    fn draw_drop_shadow(
+        &mut self,
+        _rect: Rect,
+        _radius: f32,
+        _color: [f32; 4],
+        _blur: f32,
+        _spread: f32,
+    ) {
+    }
+    /// Draw a dashed border for a rounded rectangle.
+    fn stroke_dashed_rounded_rect(
+        &mut self,
+        _rect: Rect,
+        _radius: f32,
+        _color: [f32; 4],
+        _width: f32,
+        _dash: f32,
+        _gap: f32,
+    ) {
+    }
+    /// Draw a 9-slice / patch scaled image.
+    fn draw_9slice(
+        &mut self,
+        _image_name: &str,
+        _rect: Rect,
+        _left: f32,
+        _top: f32,
+        _right: f32,
+        _bottom: f32,
+    ) {
+    }
+
+    // ── Clipping ─────────────────────────────────────────────────────────
+    /// Push a clip rectangle.  All subsequent drawing is clipped to `rect`.
+    /// Implementations that do not support clipping may ignore this call.
+    fn push_clip_rect(&mut self, rect: Rect);
+    /// Pop the most recently pushed clip rectangle.
+    fn pop_clip_rect(&mut self);
+
+    // ── Global opacity ───────────────────────────────────────────────────
+    /// Set a global opacity multiplier applied to all subsequent draw calls
+    /// until `pop_opacity` is called.  `opacity` is in [0.0, 1.0].
+    fn push_opacity(&mut self, opacity: f32);
+    /// Restore the previous opacity level.
+    fn pop_opacity(&mut self);
+
+    // ── Berserker Pipeline State ─────────────────────────────────────────
+    fn set_theme(&mut self, _theme: ColorTheme) {}
+    fn set_rage(&mut self, _rage: f32) {}
+    fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
+
+    // ── Cyberpunk Effects ────────────────────────────────────────────────
+    /// Apply a Bifrost (Frosted Glass) effect to the specified rect.
+    fn bifrost(&mut self, rect: Rect, blur: f32, saturation: f32, opacity: f32);
+    /// Push a Mjolnir Slice (geometric clipping).
+    fn push_mjolnir_slice(&mut self, angle: f32, offset: f32);
+    /// Pop the Mjolnir Slice.
+    fn pop_mjolnir_slice(&mut self);
+    /// Apply a Mjolnir Shatter effect (fragmentation) to the specified rect.
+    fn mjolnir_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
+    fn mjolnir_fluid_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
+    /// Draw a Mjolnir Bolt (lightning strike) between two points.
+    fn draw_mjolnir_bolt(&mut self, _from: [f32; 2], _to: [f32; 2], _color: [f32; 4]) {}
+
+    // ── Accessibility (ShieldWall) ───────────────────────────────────────
+    fn set_aria_role(&mut self, _role: &str) {}
+    fn set_aria_label(&mut self, _label: &str) {}
+
+    /// Register a shared element for Bifrost Bridge transitions.
+    fn register_shared_element(&mut self, _id: &str, _rect: Rect) {}
+
+    // ── VDOM Hierarchy ───────────────────────────────────────────────────
+    /// Push a Virtual DOM node onto the stack for hierarchy tracking.
+    fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
+    /// Pop the current Virtual DOM node from the stack.
+    fn pop_vnode(&mut self) {}
+    /// Register an event handler for the current VDOM node.
+    fn register_handler(
+        &mut self,
+        _event_type: &str,
+        _handler: std::sync::Arc<dyn Fn(Event) + Send + Sync>,
+    ) {
+    }
+}
+
+// =============================================================================
+// BERSERKER UNIFORMS
+// =============================================================================
+
+use bytemuck::{Pod, Zeroable};
+
+/// Fully themeable color palette for the Berserker pipeline.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+pub struct ColorTheme {
+    pub primary_neon: [f32; 4], // (R, G, B, intensity)
+    pub shatter_neon: [f32; 4],
+    pub glass_base: [f32; 4],
+    pub glass_edge: [f32; 4],
+    pub rune_glow: [f32; 4],
+    pub ember_core: [f32; 4],
+    pub background_deep: [f32; 4],
+    pub glass_blur_strength: f32,
+    pub shatter_edge_width: f32,
+    pub neon_bloom_radius: f32,
+    pub rune_opacity: f32, // 0.0–1.0, default 0.55
+    // Padding to ensure 16-byte alignment for GPU uniforms
+    pub _pad: [f32; 3], // align to 16 bytes
+    pub _pad2: f32,
+}
+
+impl ColorTheme {
+    pub fn cyberpunk_viking() -> Self {
+        Self {
+            primary_neon: [0.0, 1.0, 0.95, 1.2],
+            shatter_neon: [1.0, 0.0, 0.75, 1.5],
+            glass_base: [0.04, 0.04, 0.06, 0.82],
+            glass_edge: [0.0, 0.45, 0.55, 0.6],
+            rune_glow: [0.75, 0.98, 1.0, 0.9],
+            ember_core: [0.95, 0.12, 0.12, 1.0],
+            background_deep: [0.01, 0.01, 0.03, 1.0],
+            glass_blur_strength: 0.6,
+            shatter_edge_width: 1.8,
+            neon_bloom_radius: 0.022,
+            rune_opacity: 0.55,
+            _pad: [0.0; 3],
+            _pad2: 0.0,
+        }
+    }
+
+    pub fn vibrant_glass() -> Self {
+        Self {
+            primary_neon: [0.0, 1.0, 0.95, 1.2],
+            shatter_neon: [1.0, 0.0, 0.75, 1.5],
+            glass_base: [0.55, 0.6, 0.7, 0.08], // Luminous cool tint
+            glass_edge: [0.7, 0.85, 1.0, 0.45], // Subtle blue-white rim
+            rune_glow: [0.75, 0.98, 1.0, 0.9],
+            ember_core: [1.0, 0.4, 0.1, 1.0],
+            background_deep: [0.05, 0.05, 0.1, 1.0],
+            glass_blur_strength: 0.9,
+            shatter_edge_width: 1.8,
+            neon_bloom_radius: 0.022,
+            rune_opacity: 0.55,
+            _pad: [0.0; 3],
+            _pad2: 0.0,
+        }
+    }
+}
+
+impl Default for ColorTheme {
+    fn default() -> Self {
+        Self::vibrant_glass()
+    }
+}
+
+/// Per-frame scene state for the Berserker pipeline.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+pub struct SceneUniforms {
+    pub view: glam::Mat4,
+    pub proj: glam::Mat4,
+    pub time: f32,
+    pub delta_time: f32,
+    pub resolution: [f32; 2],
+    pub mouse: [f32; 2],
+    pub mouse_velocity: [f32; 2],
+    pub shatter_origin: [f32; 2],
+    pub shatter_time: f32,
+    pub shatter_force: f32,
+    pub berzerker_rage: f32,
+    pub scroll_offset: f32,
+    // Padding to ensure 16-byte alignment for GPU uniforms
+    pub _pad: [f32; 2],
+}
+
+impl SceneUniforms {
+    pub fn new(width: f32, height: f32) -> Self {
+        Self {
+            view: glam::Mat4::IDENTITY,
+            proj: glam::Mat4::orthographic_lh(0.0, width, height, 0.0, -100.0, 100.0),
+            time: 0.0,
+            delta_time: 0.016,
+            resolution: [width, height],
+            mouse: [0.5, 0.5],
+            mouse_velocity: [0.0, 0.0],
+            shatter_origin: [0.5, 0.5],
+            shatter_time: -100.0,
+            shatter_force: 0.0,
+            berzerker_rage: 0.0,
+            scroll_offset: 0.0,
+            _pad: [0.0; 2],
+        }
+    }
+}
+
+/// A 3D mesh containing vertex and index data.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Mesh {
+    pub vertices: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub indices: Vec<u32>,
+}
+
+impl Mesh {
+    pub fn from_obj(data: &[u8]) -> anyhow::Result<Vec<Self>> {
+        let mut cursor = std::io::Cursor::new(data);
+        let (models, _) = tobj::load_obj_buf(&mut cursor, &tobj::LoadOptions::default(), |_| {
+            Ok((Vec::new(), Default::default()))
+        })?;
+
+        let mut meshes = Vec::new();
+        for m in models {
+            let mesh = m.mesh;
+            let vertices: Vec<[f32; 3]> = mesh
+                .positions
+                .chunks(3)
+                .map(|c| [c[0], c[1], c[2]])
+                .collect();
+            let normals = if mesh.normals.is_empty() {
+                vec![[0.0, 0.0, 1.0]; vertices.len()]
+            } else {
+                mesh.normals.chunks(3).map(|c| [c[0], c[1], c[2]]).collect()
+            };
+            meshes.push(Mesh {
+                vertices,
+                normals,
+                indices: mesh.indices,
+            });
+        }
+        Ok(meshes)
+    }
+
+    pub fn from_stl(data: &[u8]) -> anyhow::Result<Self> {
+        let mut cursor = std::io::Cursor::new(data);
+        let stl = stl_io::read_stl(&mut cursor)?;
+
+        let vertices: Vec<[f32; 3]> = stl.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
+        let mut indices = Vec::new();
+        for face in stl.faces {
+            indices.push(face.vertices[0] as u32);
+            indices.push(face.vertices[1] as u32);
+            indices.push(face.vertices[2] as u32);
+        }
+
+        let normals = vec![[0.0, 0.0, 1.0]; vertices.len()];
+
+        Ok(Mesh {
+            vertices,
+            normals,
+            indices,
+        })
+    }
+}
+
+/// FrameRenderer extends Renderer with frame lifecycle management.
+/// It is typically implemented by the host windowing/rendering environment.
+pub trait FrameRenderer<E = ()>: Renderer {
+    fn begin_frame(&mut self) -> E;
+    fn end_frame(&mut self, encoder: E);
+}
+
+use std::sync::Arc;
+
+/// State wrapper that owns a value and notifies subscribers when changed
+#[derive(Clone)]
+pub struct State<T: Clone + Send + Sync + 'static> {
+    value: Arc<std::sync::RwLock<T>>,
+    subscribers: Arc<std::sync::RwLock<Vec<Box<dyn FnMut(&T) + Send + Sync>>>>,
+}
+
+impl<T: Clone + Send + Sync + 'static> State<T> {
+    /// Create a new State with initial value
+    pub fn new(value: T) -> Self {
+        Self {
+            value: Arc::new(std::sync::RwLock::new(value)),
+            subscribers: Arc::new(std::sync::RwLock::new(Vec::new())),
+        }
+    }
+
+    /// Get the current value
+    pub fn get(&self) -> T {
+        self.value.read().unwrap().clone()
+    }
+
+    /// Set a new value, notifying all subscribers
+    pub fn set(&self, value: T) {
+        *self.value.write().unwrap() = value;
+        // Notify subscribers
+        let mut subscribers = self.subscribers.write().unwrap();
+        for subscriber in subscribers.iter_mut() {
+            subscriber(&self.get());
+        }
+    }
+
+    /// Subscribe to state changes
+    pub fn subscribe<F: FnMut(&T) + Send + Sync + 'static>(&self, callback: F) {
+        self.subscribers.write().unwrap().push(Box::new(callback));
+    }
+}
+
+/// Error state for fault isolation at the component level.
+///
+/// Section 1.1: "Components must self-handle errors... isolating failures."
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ComponentErrorState {
+    pub has_error: bool,
+    pub error_message: Option<String>,
+    pub error_location: Option<String>,
+}
+
+impl ComponentErrorState {
+    /// Create a new clear error state.
+    pub fn clear() -> Self {
+        Self::default()
+    }
+
+    /// Create an error state with a message and location.
+    pub fn error(message: impl Into<String>, location: impl Into<String>) -> Self {
+        Self {
+            has_error: true,
+            error_message: Some(message.into()),
+            error_location: Some(location.into()),
+        }
+    }
+}
+
+/// A discrete fragment of knowledge stored in the agent's memory.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct KnowledgeFragment {
+    /// Unique identifier for this fragment
+    pub id: String,
+    /// Short summary for prompt injection and quick search
+    pub summary: String,
+    /// Reference source (e.g. filename, URL, or conversation ID)
+    pub source: String,
+    /// Frame number or timestamp of creation
+    pub created_at: u64,
+    /// Number of times this fragment has been retrieved
+    pub accessed_count: u32,
+    /// Full content (optional, can be loaded on-demand)
+    pub content: Option<String>,
+}
+
+/// The KnowledgeState registry is the central repository for all agent-observable application data.
+/// It stores both component-level states and high-level agentic memory fragments.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct KnowledgeState {
+    /// Component states indexed by NodeId. Skipped in serialization as it contains opaque types.
+    #[serde(skip)]
+    pub component_states: std::collections::HashMap<u64, Arc<dyn std::any::Any + Send + Sync>>,
+
+    /// Map of IDs to knowledge fragments (Agentic Memory)
+    pub fragments: HashMap<String, KnowledgeFragment>,
+
+    /// IDs of fragments returned by the last search query
+    pub last_query_results: Vec<String>,
+}
+
+use crate::runtime::NodeStateSnapshot;
+use std::sync::OnceLock;
+
+/// Global application state registry.
+pub static SYSTEM_STATE: OnceLock<Arc<std::sync::RwLock<KnowledgeState>>> = OnceLock::new();
+
+/// Get a reference to the global system state.
+pub fn get_system_state() -> Arc<std::sync::RwLock<KnowledgeState>> {
+    SYSTEM_STATE
+        .get_or_init(|| Arc::new(std::sync::RwLock::new(KnowledgeState::default())))
+        .clone()
+}
+
+impl KnowledgeState {
+    /// Create a new empty KnowledgeState.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set a component's internal state.
+    pub fn set_component_state<T: 'static + Send + Sync>(&mut self, id: u64, state: T) {
+        self.component_states
+            .insert(id, Arc::new(std::sync::RwLock::new(state)));
+    }
+
+    /// Get a reference to a component's internal state.
+    pub fn get_component_state<T: 'static + Send + Sync>(
+        &self,
+        id: u64,
+    ) -> Option<Arc<std::sync::RwLock<T>>> {
+        let lock = self.component_states.get(&id)?;
+        lock.clone().downcast::<std::sync::RwLock<T>>().ok()
+    }
+
+    /// Add a new fragment to memory.
+    pub fn remember(&mut self, fragment: KnowledgeFragment) {
+        self.fragments.insert(fragment.id.clone(), fragment);
+    }
+
+    /// Process a search query against the local knowledge base.
+    pub fn process_query(&mut self, query: &str) {
+        let query_lower = query.to_lowercase();
+        let mut results: Vec<(f32, String)> = self
+            .fragments
+            .iter()
+            .map(|(id, frag)| {
+                let mut score = 0.0;
+                if frag.summary.to_lowercase().contains(&query_lower) {
+                    score += 1.0;
+                }
+                if frag.source.to_lowercase().contains(&query_lower) {
+                    score += 0.5;
+                }
+                (score, id.clone())
+            })
+            .filter(|(score, _)| *score > 0.0)
+            .collect();
+
+        // Sort by relevance score
+        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+
+        self.last_query_results = results.into_iter().map(|(_, id)| id).take(5).collect();
+    }
+
+    /// Captures a snapshot of the current state for debugging and hot-reloading.
+    pub fn snapshot(&self) -> Vec<NodeStateSnapshot> {
+        let mut snapshots = Vec::new();
+
+        // Snapshots of agentic fragments
+        for (_id, frag) in &self.fragments {
+            if let Ok(val) = serde_json::to_value(frag) {
+                snapshots.push(NodeStateSnapshot { id: 0, state: val });
+            }
+        }
+
+        snapshots
+    }
+}
+
+/// Read/write reference to state owned by another view
+#[derive(Clone)]
+pub struct Binding<T: Clone + Send + Sync + 'static> {
+    state: Arc<std::sync::RwLock<T>>,
+}
+
+impl<T: Clone + Send + Sync + 'static> Binding<T> {
+    /// Create a binding from a State
+    pub fn from_state(state: &State<T>) -> Self {
+        Self {
+            state: state.value.clone(),
+        }
+    }
+
+    /// Get the current value
+    pub fn get(&self) -> T {
+        self.state.read().unwrap().clone()
+    }
+
+    /// Set a new value
+    pub fn set(&self, value: T) {
+        *self.state.write().unwrap() = value;
+    }
+}
+
+use std::any::TypeId;
+use std::sync::Mutex;
+
+/// Global environment storage using TypeId as keys.
+pub(crate) static ENVIRONMENT: OnceLock<
+    Mutex<HashMap<TypeId, Box<dyn std::any::Any + Send + Sync>>>,
+> = OnceLock::new();
+
+/// Environment key type for accessing ambient values
+///
+/// Implement this trait to define a new environment key.
+pub trait EnvKey: 'static + Send + Sync {
+    /// The type of value stored in the environment
+    type Value: Clone + Send + Sync + 'static;
+
+    /// Get a default value for this key
+    fn default_value() -> Self::Value;
+}
+
+/// Key for accessing the Yggdrasil design token tree
+pub struct YggdrasilKey;
+
+impl EnvKey for YggdrasilKey {
+    type Value = YggdrasilTokens;
+    fn default_value() -> Self::Value {
+        default_tokens()
+    }
+}
+
+/// Key for accessing the AssetManager
+pub struct AssetKey;
+
+impl EnvKey for AssetKey {
+    type Value = Arc<dyn AssetManager>;
+    fn default_value() -> Self::Value {
+        Arc::new(DefaultAssetManager::new())
+    }
+}
+
+/// System appearance (Light/Dark mode)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Appearance {
+    Light,
+    Dark,
+}
+
+/// Orientation for layouts
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Orientation {
+    Horizontal,
+    Vertical,
+}
+
+/// A color represented by RGBA components in the [0.0, 1.0] range.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+impl Color {
+    pub const BLACK: Color = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const WHITE: Color = Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const TRANSPARENT: Color = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
+    pub const RED: Color = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const GREEN: Color = Color {
+        r: 0.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const BLUE: Color = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const CYAN: Color = Color {
+        r: 0.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const YELLOW: Color = Color {
+        r: 1.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const MAGENTA: Color = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const GRAY: Color = Color {
+        r: 0.5,
+        g: 0.5,
+        b: 0.5,
+        a: 1.0,
+    };
+
+    /// Create a new color from RGBA components.
+    pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
+        Self { r, g, b, a }
+    }
+
+    /// Convert the color to a [r, g, b, a] array.
+    pub fn as_array(&self) -> [f32; 4] {
+        [self.r, self.g, self.b, self.a]
+    }
+}
+
+impl View for Color {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.fill_rect(rect, self.as_array());
+    }
+}
+
+/// Key for accessing the current system appearance
+pub struct AppearanceKey;
+
+impl EnvKey for AppearanceKey {
+    type Value = Appearance;
+    fn default_value() -> Self::Value {
+        Appearance::Dark // Default to Dark (Ginnungagap) for Berserker aesthetic
+    }
+}
+
+/// StyleResolver provides high-level access to themed values from the environment.
+pub struct StyleResolver;
+
+impl StyleResolver {
+    /// Resolve a color from the current environment
+    pub fn color(key: &str) -> String {
+        let tokens = Environment::<YggdrasilKey>::new().get();
+        let appearance = Environment::<AppearanceKey>::new().get();
+        let is_dark = appearance == Appearance::Dark;
+
+        tokens
+            .get_color(key, is_dark)
+            .unwrap_or_else(|| "#FF00FF".to_string()) // Default to MuspelMagenta on failure
+    }
+
+    /// Resolve a generic token value
+    pub fn get<T: FromStr>(category: &str, key: &str) -> Option<T> {
+        let tokens = Environment::<YggdrasilKey>::new().get();
+        let appearance = Environment::<AppearanceKey>::new().get();
+        let is_dark = appearance == Appearance::Dark;
+
+        tokens.get(category, key, is_dark)
+    }
+}
+
+/// The authoritative Cyberpunk Viking default tokens
+pub fn default_tokens() -> YggdrasilTokens {
+    let mut tokens = YggdrasilTokens::new();
+
+    // Core Norse Colorways
+    tokens.color.insert(
+        "background".to_string(),
+        TokenValue::Single {
+            value: "#000000".to_string(), // Ginnungagap (The Void)
+        },
+    );
+
+    tokens.color.insert(
+        "primary".to_string(),
+        TokenValue::Single {
+            value: "#00FFFF".to_string(), // NiflCyan (Aesir Primary)
+        },
+    );
+
+    tokens.color.insert(
+        "secondary".to_string(),
+        TokenValue::Single {
+            value: "#FF00FF".to_string(), // MuspelMagenta (Berserker Secondary)
+        },
+    );
+
+    tokens.color.insert(
+        "surface".to_string(),
+        TokenValue::Adaptive {
+            light: "#FFFFFF".to_string(),
+            dark: "#121212".to_string(),
+        },
+    );
+
+    tokens.color.insert(
+        "text".to_string(),
+        TokenValue::Adaptive {
+            light: "#000000".to_string(),
+            dark: "#FFFFFF".to_string(),
+        },
+    );
+
+    // Bifrost (Glassmorphism) - Frosted Style
+    tokens.bifrost.insert(
+        "blur".to_string(),
+        TokenValue::Single {
+            value: "25.0".to_string(),
+        },
+    );
+    tokens.bifrost.insert(
+        "saturation".to_string(),
+        TokenValue::Single {
+            value: "1.2".to_string(),
+        },
+    );
+    tokens.bifrost.insert(
+        "opacity".to_string(),
+        TokenValue::Single {
+            value: "0.65".to_string(),
+        },
+    );
+
+    // Gungnir (Neon Glow)
+    tokens.gungnir.insert(
+        "intensity".to_string(),
+        TokenValue::Single {
+            value: "1.0".to_string(),
+        },
+    );
+    tokens.gungnir.insert(
+        "radius".to_string(),
+        TokenValue::Single {
+            value: "15.0".to_string(),
+        },
+    );
+
+    // Mjolnir (Sharp Geometry)
+    tokens.mjolnir.insert(
+        "clip_angle".to_string(),
+        TokenValue::Single {
+            value: "12.0".to_string(),
+        },
+    );
+    tokens.mjolnir.insert(
+        "border_width".to_string(),
+        TokenValue::Single {
+            value: "2.0".to_string(),
+        },
+    );
+
+    // Sleipnir (Spring Animation)
+    tokens.anim.insert(
+        "stiffness".to_string(),
+        TokenValue::Single {
+            value: "170.0".to_string(),
+        },
+    );
+    tokens.anim.insert(
+        "damping".to_string(),
+        TokenValue::Single {
+            value: "26.0".to_string(),
+        },
+    );
+    tokens.anim.insert(
+        "mass".to_string(),
+        TokenValue::Single {
+            value: "1.0".to_string(),
+        },
+    );
+
+    // Accessibility
+    tokens.accessibility.insert(
+        "reduce_motion".to_string(),
+        TokenValue::Single {
+            value: "false".to_string(),
+        },
+    );
+
+    tokens
+}
+
+/// Environment wrapper for accessing ambient values
+pub struct Environment<K: EnvKey> {
+    _marker: std::marker::PhantomData<K>,
+}
+
+impl<K: EnvKey> Environment<K> {
+    /// Create a new Environment
+    pub fn new() -> Self {
+        Self {
+            _marker: std::marker::PhantomData,
+        }
+    }
+
+    /// Get the current value from the environment
+    pub fn get(&self) -> K::Value {
+        if let Some(env_store) = ENVIRONMENT.get() {
+            let env_lock = env_store.lock().unwrap();
+            if let Some(val) = env_lock.get(&std::any::TypeId::of::<K>()) {
+                if let Some(typed_val) = val.downcast_ref::<K::Value>() {
+                    return typed_val.clone();
+                }
+            }
+        }
+        K::default_value()
+    }
+}
+
+/// Ambient environment management
+pub mod env {
+
+    /// Insert a value into the environment
+    pub fn insert<K: super::EnvKey>(value: K::Value) {
+        if let Some(store) = super::ENVIRONMENT.get() {
+            let mut env_map = store.lock().unwrap();
+            env_map.insert(std::any::TypeId::of::<K>(), Box::new(value));
+        }
+    }
+
+    /// Remove a value from the environment.
+    pub fn remove<K: super::EnvKey>() {
+        if let Some(store) = super::ENVIRONMENT.get() {
+            let mut env_map = store.lock().unwrap();
+            env_map.remove(&std::any::TypeId::of::<K>());
+        }
+    }
+}
+
+/// Geometry modifiers
+
+/// Size of the view in logical pixels
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Size {
+    pub width: f32,
+    pub height: f32,
+}
+
+/// Insets for padding
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct EdgeInsets {
+    pub top: f32,
+    pub leading: f32,
+    pub bottom: f32,
+    pub trailing: f32,
+}
+
+impl EdgeInsets {
+    /// Equal insets on all edges
+    pub fn all(value: f32) -> Self {
+        Self {
+            top: value,
+            leading: value,
+            bottom: value,
+            trailing: value,
+        }
+    }
+
+    /// Vertical insets (top and bottom)
+    pub fn vertical(value: f32) -> Self {
+        Self {
+            top: value,
+            leading: 0.0,
+            bottom: value,
+            trailing: 0.0,
+        }
+    }
+
+    /// Horizontal insets (leading and trailing)
+    pub fn horizontal(value: f32) -> Self {
+        Self {
+            top: 0.0,
+            leading: value,
+            bottom: 0.0,
+            trailing: value,
+        }
+    }
+}
+
+/// Modifier to set the size of a view
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FrameModifier {
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+}
+
+impl FrameModifier {
+    pub fn new() -> Self {
+        Self {
+            width: None,
+            height: None,
+        }
+    }
+
+    pub fn width(mut self, width: f32) -> Self {
+        self.width = Some(width);
+        self
+    }
+
+    pub fn height(mut self, height: f32) -> Self {
+        self.height = Some(height);
+        self
+    }
+
+    pub fn size(mut self, width: f32, height: f32) -> Self {
+        self.width = Some(width);
+        self.height = Some(height);
+        self
+    }
+}
+
+impl ViewModifier for FrameModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// Modifier to offset a view
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OffsetModifier {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl OffsetModifier {
+    pub fn new(x: f32, y: f32) -> Self {
+        Self { x, y }
+    }
+}
+
+impl ViewModifier for OffsetModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// Modifier to set the z-index of a view
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZIndexModifier {
+    pub z_index: i32,
+}
+
+impl ZIndexModifier {
+    pub fn new(z_index: i32) -> Self {
+        Self { z_index }
+    }
+}
+
+impl ViewModifier for ZIndexModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// Layout constraints for views
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LayoutConstraints {
+    pub min_width: Option<f32>,
+    pub max_width: Option<f32>,
+    pub min_height: Option<f32>,
+    pub max_height: Option<f32>,
+}
+
+impl Default for LayoutConstraints {
+    fn default() -> Self {
+        Self {
+            min_width: None,
+            max_width: None,
+            min_height: None,
+            max_height: None,
+        }
+    }
+}
+
+/// Modifier to set layout constraints
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LayoutModifier {
+    pub constraints: LayoutConstraints,
+}
+
+impl LayoutModifier {
+    pub fn new(constraints: LayoutConstraints) -> Self {
+        Self { constraints }
+    }
+}
+
+impl ViewModifier for LayoutModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+/// Modifier to make a view flexible in layout
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FlexModifier {
+    pub flex: f32,
+}
+
+impl FlexModifier {
+    pub fn new(flex: f32) -> Self {
+        Self { flex }
+    }
+}
+
+impl ViewModifier for FlexModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+}
+
+// Layout subsystem
+pub mod layout {
+    use super::*;
+
+    // Layout pass scratch space
+    pub struct LayoutCache;
+
+    impl LayoutCache {
+        pub fn new() -> Self {
+            Self
+        }
+
+        pub fn clear(&mut self) {
+            // In a real implementation, this would clear cached layout data
+        }
+    }
+
+    /// Proposed size from parent view
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub struct SizeProposal {
+        pub width: Option<f32>,
+        pub height: Option<f32>,
+    }
+
+    impl SizeProposal {
+        pub fn unspecified() -> Self {
+            Self {
+                width: None,
+                height: None,
+            }
+        }
+
+        pub fn width(width: f32) -> Self {
+            Self {
+                width: Some(width),
+                height: None,
+            }
+        }
+
+        pub fn height(height: f32) -> Self {
+            Self {
+                width: None,
+                height: Some(height),
+            }
+        }
+
+        pub fn tight(width: f32, height: f32) -> Self {
+            Self {
+                width: Some(width),
+                height: Some(height),
+            }
+        }
+    }
+
+    /// A view that can participate in layout
+    pub trait LayoutView: Send {
+        /// Propose a size for this view given the available space
+        fn size_that_fits(
+            &self,
+            proposal: SizeProposal,
+            subviews: &[&dyn LayoutView],
+            cache: &mut LayoutCache,
+        ) -> Size;
+
+        /// Place subviews within the given bounds
+        fn place_subviews(
+            &self,
+            bounds: Rect,
+            subviews: &mut [&mut dyn LayoutView],
+            cache: &mut LayoutCache,
+        );
+    }
+
+    /// Rectangle in logical pixels
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+    pub struct Rect {
+        pub x: f32,
+        pub y: f32,
+        pub width: f32,
+        pub height: f32,
+    }
+
+    impl Rect {
+        pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
+            Self {
+                x,
+                y,
+                width,
+                height,
+            }
+        }
+
+        pub fn zero() -> Self {
+            Self {
+                x: 0.0,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            }
+        }
+
+        pub fn size(&self) -> Size {
+            Size {
+                width: self.width,
+                height: self.height,
+            }
+        }
+
+        /// Split the rect horizontally into N equal pieces
+        pub fn split_horizontal(&self, n: usize) -> Vec<Rect> {
+            if n == 0 {
+                return vec![];
+            }
+            let item_width = self.width / n as f32;
+            (0..n)
+                .map(|i| Rect {
+                    x: self.x + i as f32 * item_width,
+                    y: self.y,
+                    width: item_width,
+                    height: self.height,
+                })
+                .collect()
+        }
+
+        /// Split the rect vertically into N equal pieces
+        pub fn split_vertical(&self, n: usize) -> Vec<Rect> {
+            if n == 0 {
+                return vec![];
+            }
+            let item_height = self.height / n as f32;
+            (0..n)
+                .map(|i| Rect {
+                    x: self.x,
+                    y: self.y + i as f32 * item_height,
+                    width: self.width,
+                    height: item_height,
+                })
+                .collect()
+        }
+    }
+}
+
+// Re-export layout items for convenience
+pub use layout::{LayoutCache, LayoutView, Rect, SizeProposal};
+// Size and FrameRenderer are pub items in this module; no re-export alias needed.
+
+pub mod runtime;
+pub mod scene_graph;
+
+pub use scene_graph::{NodeId, bifrost_registry};
+
+/// State of an asset being loaded
+#[derive(Debug, Clone, PartialEq)]
+pub enum AssetState<T> {
+    Loading,
+    Ready(T),
+    Error(String),
+}
+
+/// AssetManager defines the interface for loading and caching external resources.
+pub trait AssetManager: Send + Sync {
+    /// Request an image asset. Returns the current state (Loading, Ready, or Error).
+    fn load_image(&self, url: &str) -> AssetState<Arc<Vec<u8>>>;
+
+    /// Pre-load an image into the cache.
+    fn preload_image(&self, url: &str);
+}
+
+/// User input event types
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum Event {
+    PointerDown { x: f32, y: f32 },
+    PointerUp { x: f32, y: f32 },
+    PointerMove { x: f32, y: f32 },
+    KeyDown { key: String },
+    KeyUp { key: String },
+}
+
+/// Response from an event handler
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventResponse {
+    Handled,
+    Ignored,
+}
+
+/// A basic implementation of AssetManager that can be overridden by platform backends.
+pub struct DefaultAssetManager {
+    cache: Arc<std::sync::RwLock<HashMap<String, AssetState<Arc<Vec<u8>>>>>>,
+}
+
+impl DefaultAssetManager {
+    pub fn new() -> Self {
+        Self {
+            cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+        }
+    }
+}
+
+impl AssetManager for DefaultAssetManager {
+    fn load_image(&self, url: &str) -> AssetState<Arc<Vec<u8>>> {
+        let mut cache = self.cache.write().unwrap();
+        if let Some(state) = cache.get(url) {
+            return state.clone();
+        }
+
+        // In the default manager, we just mark it as Loading and spawn a placeholder
+        // (Real backends will override this with actual I/O)
+        cache.insert(url.to_string(), AssetState::Loading);
+        AssetState::Loading
+    }
+
+    fn preload_image(&self, _url: &str) {
+        // No-op for default manager
+    }
+}
+
+#[cfg(test)]
+mod phase1_test;

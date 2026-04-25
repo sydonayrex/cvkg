@@ -1,0 +1,5 @@
+---
+source: cvkg-components/tests/snapshot_tests.rs
+expression: "\"All primitive components constructed successfully.\""
+---
+All primitive components constructed successfully.
