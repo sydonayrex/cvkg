@@ -14,8 +14,8 @@ path = "src/main.rs"
 path = "src/lib.rs"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.10" }
-cvkg-macros = { path = "../cvkg-macros", version = "0.1.10" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.11" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.1.11" }
 clap = { version = "4.0", features = ["derive"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.7", features = ["ws"] }
@@ -28,3 +28,7 @@ log = "0.4.29"
 notify = { workspace = true }
 anyhow = { workspace = true }
 webbrowser = "1.0"
+walkdir = "2.5.0"
+tokio-tungstenite = "0.29.0"
+indicatif = "0.18.4"
+console = "0.16.3"

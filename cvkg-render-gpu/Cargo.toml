@@ -7,15 +7,17 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.10" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.11" }
+runic-text = { package = "cvkg-runic-text", path = "../cvkg-runic-text", version = "0.1.11" }
 wgpu = "29.0.1"
 winit = "0.30"
-cosmic-text = "0.14"
 swash = "0.2.7"
 naga = "0.14"
 bytemuck = { workspace = true }
 glam = { workspace = true }
 image = "0.25"
+lyon = "1.0"
+usvg = "0.44"
 # ShieldWall — accessibility layer (AccessKit backend)
 accesskit        = "0.24"
 accesskit_winit  = "0.32"

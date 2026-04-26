@@ -1,8 +1,14 @@
-# cvkg-themes (Yggdrasil)
+# cvkg-themes
 
-**Yggdrasil** is the centralized design token system for the Cyberpunk Viking aesthetic.
+**cvkg-themes** manages the "Berserker" design system, color palettes, and visual tokens for the CVKG framework.
 
 ## Features
-- **Adaptive Appearance**: Built-in support for Dark and Light modes.
-- **Tactical Palettes**: High-fidelity color schemes like Void, Cyan, and Magenta.
-- **Unified Tokens**: Single source of truth for fonts, spacing, and glow effects.
+
+*   **Cyber Viking Palettes**: Pre-defined color schemes (Odin-Dark, Freyja-Light, Loki-Night).
+*   **Design Tokens**: Standardized constants for padding, corner radii, and stroke widths.
+*   **Dynamic Theming**: Support for switching themes at runtime without re-shaping the entire application.
+*   **Color Utilities**: Tools for HSL-based color manipulation and opacity application.
+
+## Key Exports
+*   `ColorTheme`: Struct containing primary, secondary, accent, and background colors.
+*   `CyberViking`: The default high-fidelity dark theme.

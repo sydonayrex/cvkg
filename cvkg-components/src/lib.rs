@@ -69,3 +69,22 @@ pub use cvkg_layout as layout;
 #[doc(hidden)]
 pub use cvkg_core::Never;
 pub use cvkg_core::Orientation;
+
+/// Extension trait for all views to add component-level modifiers like .sheet()
+pub trait ViewExt: cvkg_core::View + Sized {
+    /// Present a modal sheet over this view.
+    /// The modal uses a glassmorphic rounded rectangle with a mostly clear center and frosted edges.
+    fn sheet<V: cvkg_core::View + Clone + 'static>(
+        self,
+        is_presented: bool,
+        content: V,
+    ) -> cvkg_core::ModifiedView<Self, container::SheetModifier<V>> {
+        self.modifier(container::SheetModifier {
+            is_presented,
+            content,
+        })
+    }
+}
+
+// Blanket implementation for all Views
+impl<T: cvkg_core::View + Sized> ViewExt for T {}

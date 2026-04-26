@@ -1,74 +1,52 @@
 # CVKG: Cyber Viking Kvasir Graph
 
-![CVKG Banner](file:///D/rex/projects/cvkg/docs/static/banner.png)
+**CVKG** is a high-fidelity, agentic UI framework for Rust, designed for building stunning native and web applications with a Cyberpunk/Viking aesthetic ("Berserker Mode"). It leverages a custom GPU-accelerated rendering pipeline, a stateless Virtual DOM, and a fluent modifier-based API.
 
-**CVKG** is a high-fidelity, agentic UI framework for Rust. It is designed to empower developers to build immersive, high-performance interfaces with a "Cyberpunk Viking" aesthetic—combining the raw power of the Norse sagas with the neon-drenched precision of a digital future.
+## 🚀 Key Features
 
-## ⚡ The CVKG Edge
+*   **Stateless UI**: Declarative, functional-reactive UI definition inspired by SwiftUI and Dioxus.
+*   **Muspelheim Rendering**: High-performance GPU renderer (WGPU) with advanced shaders (Bifrost frosting, Gungnir glow, Mjolnir clipping).
+*   **Runic-Text Engine**: Natively integrated text shaping (rustybuzz) and layout (swash) with Global Font Fallback and BiDi support.
+*   **Intrinsic Sizing**: Sophisticated content-aware layout negotiation system allowing components to define their natural dimensions.
+*   **Vector Iconography**: GPU-accelerated SVG tessellation engine (via lyon) for resolution-independent icons and paths.
+*   **Performance Telemetry**: Real-time monitoring of frame times, draw calls, and vertex counts directly in the UI.
+*   **Cross-Platform**: Seamlessly targets Native (Desktop) and Web (WASM) via unified rendering traits.
+*   **Agent-Optimized**: Designed to be easily navigable and manipulatable by AI agents.
+*   **Accessibility**: Integrated Screen Reader support (AccessKit/Section 508) and IME functionality.
 
-- **Surtr GPU Pipeline**: A high-performance WGPU-based rendering engine featuring the **Muspelheim** multi-pass bloom and **Niflheim** shader suite.
-- **Sleipnir Physics**: Native RK4 spring physics for smooth, organic motion that feels alive.
-- **Yggdrasil Design System**: A centralized token system that propagates tactical "Cyberpunk Viking" themes across all components.
-- **ShieldWall Accessibility**: Native integration with AccessKit to ensure that even the most complex GPU-driven interfaces remain fully accessible.
-- **Cross-Platform VDOM**: A high-performance virtual DOM implementation with WebGL/WebGPU fallback for browsers.
+## 📦 Workspace Crates
 
-## 📦 Workspace Architecture
+| Crate | Purpose |
+| :--- | :--- |
+| `cvkg` | Main entry point and orchestration. |
+| `cvkg-core` | Core traits, types, and the fluent `ViewExt` API. |
+| `cvkg-vdom` | Stateless Virtual DOM and event dispatcher. |
+| `cvkg-render-gpu` | The **Surtr** GPU renderer (WGPU). |
+| `cvkg-render-native` | Native OS windowing and event loop integration. |
+| `cvkg-render-web` | WASM/Web platform integration. |
+| `cvkg-runic-text` | Native text shaping, layout, and font fallback engine. |
+| `cvkg-components` | High-level interactive UI component library. |
+| `cvkg-layout` | Flexbox-inspired geometric layout engine. |
+| `cvkg-themes` | Cyber Viking color themes and design tokens. |
+| `cvkg-anim` | **Sleipnir** RK4 physics-based animation solver. |
+| `cvkg-scene` | 3D scene management and coordinate systems. |
+| `cvkg-macros` | Procedural macros for view generation. |
+| `cvkg-cli` | Development tools for the CVKG ecosystem. |
 
-CVKG is a highly modular ecosystem consisting of 14 specialized crates:
+## 🛠️ Getting Started
 
-| Crate | Role | Description |
-|---|---|---|
-| `cvkg` | Facade | The main umbrella crate for the framework. |
-| `cvkg-core` | Foundation | Core traits, state graph, and environment tokens. |
-| `cvkg-scene` | Engine | Retained scene graph and diffing logic. |
-| `cvkg-render-gpu` | Visuals | The **Surtr** high-performance WGPU backend. |
-| `cvkg-components` | UI | A library of premium primitive and interactive views. |
-| `cvkg-anim` | Motion | The **Sleipnir** spring physics animation solver. |
-| `cvkg-layout` | Geometry | Flexbox-inspired layout engine. |
-| `cvkg-themes` | Aesthetic | The **Yggdrasil** design system and tactical themes. |
-| `cvkg-cli` | Tooling | CLI for scaffolding and managing CVKG projects. |
+### Prerequisites
 
-## 🚀 Quick Start
+*   Rust (latest stable)
+*   GPU with Vulkan, Metal, or DX12 support (for native GPU rendering)
 
-Add CVKG to your `Cargo.toml`:
+### Run a Demo
 
-```toml
-[dependencies]
-cvkg = "0.1.10"
+```bash
+# Run the interactive UI demo
+cargo run --example interactive_demo -p cvkg-components
 ```
 
-Create a high-fidelity button with spring physics:
+## 📜 License
 
-```rust
-use cvkg::prelude::*;
-
-fn body() -> impl View {
-    VStack::new((
-        Text::new("Enter the Void")
-            .font_size(24.0)
-            .color(Color::CYAN)
-            .glow(8.0),
-        Button::new("Ascend")
-            .on_click(|| println!("Valhalla awaits!"))
-            .modifier(Mjolnir::slice(45.0))
-    ))
-    .padding(20.0)
-    .background(Color::VOID)
-}
-```
-
-## 📖 Documentation
-
-Explore the **CVKG Saga** in our interactive manual:
-
-- [The Interface Atlas](docs/src/SUMMARY.md)
-- [Visual Engine Deep-Dive](docs/src/visual/cvkg-render-gpu.md)
-- [Core Ecosystem Guide](docs/src/core/README.md)
-
-## 🛡️ License
-
-Licensed under [MIT license](LICENSE-MIT).
-
----
-
-*Build your saga. Conquer the interface.*
+This project is licensed under the MIT License.

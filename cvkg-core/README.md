@@ -1,29 +1,36 @@
 # cvkg-core
 
-**cvkg-core** is the foundation of the CVKG framework. it provides the essential traits, types, and state management logic that power high-fidelity agentic interfaces.
+**cvkg-core** contains the fundamental traits and types that define the CVKG framework. It is the "glue" that allows the VDOM, renderers, and components to interoperate.
 
-## Key Features
+## Core Concepts
 
-- **The View Trait**: A declarative, functional interface for defining UI structures.
-- **State & Bindings**: A reactive state graph with support for local and environmental values.
-- **Environment Tokens**: A type-safe way to propagate context (themes, localizations) through the view tree.
-- **Geometry Primitives**: High-performance representations of Rects, Sizes, and Offsets.
+### `View` Trait
+The primary building block of the UI. Every component implements `View`.
+*   `body()`: Returns the view's composition.
+*   `render()`: Low-level hook for direct interaction with the `Renderer`.
+*   `intrinsic_size()`: Negotiates preferred dimensions based on content and layout constraints.
 
-## Usage
+### `Renderer` Trait
+An abstraction over the target platform (GPU, Web, Native Primitive).
+*   `fill_rect`, `stroke_rect`, `draw_text`: Basic drawing primitives.
+*   `push_vnode`: VDOM integration.
+*   `register_handler`: Event system integration.
+*   `get_telemetry`: Real-time performance metric harvesting.
+*   `set_aria_role`, `set_aria_label`: Accessibility integration.
 
-This crate is typically consumed via the main `cvkg` facade, but can be used independently for building custom CVKG backends.
+### State & Bindings
+*   `State<T>`: Reactive state container with atomic version tracking.
+*   `Binding<T>`: Read/Write handle for state sharing with minimal re-render overhead.
 
-```rust
-use cvkg_core::{View, Rect, Renderer};
+### `ViewExt` and Modifiers
+A fluent API for applying transformations to views.
+*   `.padding()`, `.background()`, `.opacity()`
+*   `.on_click()`, `.on_pointer_enter()`, `.on_pointer_leave()`
+*   `.on_appear()`, `.on_disappear()`
 
-pub struct MyPrimitive;
-
-impl View for MyPrimitive {
-    type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
-    
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Direct drawing implementation
-    }
-}
-```
+### Events
+Defines the `Event` enum used across the framework:
+*   `PointerDown`, `PointerUp`, `PointerMove`, `PointerClick`
+*   `KeyDown`, `KeyUp`
+*   `Ime` (Input Method Editor)
+*   `PointerEnter`, `PointerLeave` (Synthetic)

@@ -57,6 +57,13 @@ impl View for ProgressView {
             [0.0, 0.85, 1.0, 1.0],
         );
     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(100.0),
+            height: 12.0,
+        }
+    }
 }
 
 /// Radial or linear gauge display
@@ -104,6 +111,82 @@ impl View for Gauge {
             height: rect.height - 2.0 * inset,
         };
         renderer.fill_ellipse(inner, [0.0, 0.85, 1.0, 1.0]);
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let size = proposal.width.unwrap_or(100.0).min(proposal.height.unwrap_or(100.0));
+        cvkg_core::Size { width: size, height: size }
+    }
+}
+
+/// A circular progress ring
+pub struct ProgressRing {
+    pub value: f32,
+    pub total: f32,
+}
+
+impl ProgressRing {
+    pub fn new(value: f32, total: f32) -> Self {
+        Self { value, total }
+    }
+}
+
+impl View for ProgressRing {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
+        let pct = if self.total > 0.0 { (self.value / self.total).clamp(0.0, 1.0) } else { 0.0 };
+        
+        // Background ring
+        renderer.stroke_ellipse(rect, [0.1, 0.1, 0.15, 1.0], 4.0);
+        
+        // Progress ring (simulated with partial arc logic in Surtr or just a scaled ellipse)
+        // In CVKG, we'll use a specialized mode for arcs later, for now we draw a smaller ellipse
+        let inset = 4.0;
+        let progress_rect = Rect {
+            x: rect.x + inset,
+            y: rect.y + inset,
+            width: (rect.width - 2.0 * inset) * pct,
+            height: rect.height - 2.0 * inset,
+        };
+        renderer.stroke_ellipse(progress_rect, [0.0, 1.0, 1.0, 1.0], 4.0);
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size { width: 40.0, height: 40.0 }
+    }
+}
+
+/// A horizontal status bar for system indicators
+pub struct StatusBar {
+    pub text: String,
+    pub color: [f32; 4],
+}
+
+impl StatusBar {
+    pub fn new(text: impl Into<String>, color: [f32; 4]) -> Self {
+        Self { text: text.into(), color }
+    }
+}
+
+impl View for StatusBar {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
+        renderer.fill_rect(rect, [0.05, 0.05, 0.08, 0.9]);
+        renderer.draw_line(rect.x, rect.y, rect.x + rect.width, rect.y, [0.2, 0.2, 0.3, 1.0], 1.0);
+        
+        renderer.draw_text(&self.text, rect.x + 10.0, rect.y + (rect.height - 12.0) / 2.0, 12.0, self.color);
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let (tw, th) = renderer.measure_text(&self.text, 12.0);
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(tw + 40.0),
+            height: th + 8.0,
+        }
     }
 }
 use cvkg_core::{Rect, Renderer};
@@ -248,5 +331,35 @@ impl View for ChartView {
                 }
             }
         }
+    }
+}
+
+/// A real-time performance telemetry display
+pub struct TelemetryView;
+
+impl View for TelemetryView {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let stats = renderer.get_telemetry();
+        
+        renderer.fill_rounded_rect(rect, 4.0, [0.0, 0.0, 0.0, 0.8]);
+        renderer.stroke_rect(rect, [0.0, 1.0, 0.5, 0.5], 1.0);
+        
+        let lines = [
+            format!("FPS: {:.1}", 1000.0 / stats.frame_time_ms.max(0.1)),
+            format!("Frame: {:.2} ms", stats.frame_time_ms),
+            format!("Draw Calls: {}", stats.draw_calls),
+            format!("Vertices: {}", stats.vertices),
+        ];
+        
+        for (i, line) in lines.iter().enumerate() {
+            renderer.draw_text(line, rect.x + 8.0, rect.y + 8.0 + i as f32 * 18.0, 12.0, [0.0, 1.0, 0.5, 1.0]);
+        }
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size { width: 140.0, height: 80.0 }
     }
 }

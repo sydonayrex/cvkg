@@ -17,51 +17,73 @@
 //! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
-//!
-//! Sources:
-//! Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
-//! CVKG Extended: Section 2 of the CVKG Design Specification
 
 //! # Sleipnir Animation Engine
 //!
 //! Provides high-fidelity physics-based animation and transition systems for CVKG.
-//!
-//! - **Sleipnir**: RK4 Spring Physics solver for organic, interruptible motion.
-//! - **Bifrost Transitions**: Smooth glass-aware fades and blurs.
-//! - **Mjolnir Transitions**: Hard geometric slicing and shattering effects.
 
 use std::time::Duration;
+use std::sync::Arc;
 
 /// Sleipnir spring parameters for the physics solver
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SleipnirParams {
-    /// Spring stiffness (tension)
     pub stiffness: f32,
-    /// Damping ratio (friction)
     pub damping: f32,
-    /// Mass of the object
     pub mass: f32,
 }
 
-impl Default for SleipnirParams {
-    fn default() -> Self {
-        Self {
-            stiffness: 170.0,
-            damping: 26.0,
-            mass: 1.0,
-        }
-    }
+impl SleipnirParams {
+    pub fn snappy() -> Self { Self { stiffness: 230.0, damping: 22.0, mass: 1.0 } }
+    pub fn fluid() -> Self { Self { stiffness: 170.0, damping: 26.0, mass: 1.0 } }
+    pub fn heavy() -> Self { Self { stiffness: 90.0, damping: 20.0, mass: 1.0 } }
+    pub fn bouncy() -> Self { Self { stiffness: 190.0, damping: 14.0, mass: 1.0 } }
 }
 
-/// Animation describes how a view should animate over time
+impl Default for SleipnirParams {
+    fn default() -> Self { Self::fluid() }
+}
+
+/// A discrete keyframe in a hybrid animation path
 #[derive(Debug, Clone, PartialEq)]
+pub struct Keyframe {
+    pub value: f32,
+    pub time: Duration,
+    pub easing: Easing,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Easing {
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+/// High-level Animation Primitive
+#[derive(Clone)]
 pub enum Animation {
     /// No animation (instant)
     Ginnungagap,
     /// Linear animation
     Linear { duration: Duration },
-    /// Organic spring animation (The 8-legged horse)
+    /// Organic spring animation
     Sleipnir(SleipnirParams),
+    /// Hybrid: Keyframe path followed by a Spring settle
+    Hybrid {
+        keyframes: Vec<Keyframe>,
+        settle: SleipnirParams,
+    },
+    /// Coordination: Multiple animations in parallel
+    Parallel(Vec<Animation>),
+    /// Coordination: Multiple animations in sequence
+    Sequence(Vec<Animation>),
+    /// Coordination: Staggered start for multiple animations
+    /// Coordination: Staggered start for multiple animations
+    Stagger {
+        animations: Vec<Animation>,
+        interval: Duration,
+    },
     /// Bifrost transition (Glass-aware fade)
     BifrostFade { duration: Duration },
     /// Mjolnir transition (Geometric slice)
@@ -74,36 +96,80 @@ pub enum Animation {
     },
 }
 
-impl Animation {
-    /// Create a default Sleipnir spring animation
-    pub fn sleipnir() -> Self {
-        Animation::Sleipnir(SleipnirParams::default())
+/// Tactile "Rubber Banding" utility for scroll/drag physics.
+/// Maps an unbounded input value to a bounded range with elastic resistance.
+pub struct RubberBand {
+    /// Minimum bound of the valid range
+    pub min: f32,
+    /// Maximum bound of the valid range
+    pub max: f32,
+    /// Resistance constant (higher = stiffer)
+    pub constant: f32,
+}
+
+impl RubberBand {
+    /// Create a new RubberBand solver with default resistance.
+    pub fn new(min: f32, max: f32) -> Self {
+        Self { min, max, constant: 0.55 }
     }
 
-    /// Create a Bifrost fade transition
-    pub fn bifrost_fade(duration: Duration) -> Self {
-        Animation::BifrostFade { duration }
+    /// Calculate the resisted value for an input that may exceed bounds.
+    pub fn solve(&self, input: f32) -> f32 {
+        if input < self.min {
+            self.min - self.apply_resistance(self.min - input)
+        } else if input > self.max {
+            self.max + self.apply_resistance(input - self.max)
+        } else {
+            input
+        }
+    }
+
+    fn apply_resistance(&self, delta: f32) -> f32 {
+        // Logarithmic resistance similar to iOS/WebKit
+        (delta * self.constant).atan() * (1.0 / self.constant)
     }
 }
 
-/// A state in the Sleipnir physics solver
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct SolverState {
-    x: f32,
-    v: f32,
+/// Motion controller that handles lifecycle events and state transitions.
+pub struct Motion {
+    /// The target animation sequence or spring
+    pub animation: Animation,
+    /// Callback triggered when the animation starts
+    pub on_start: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Callback triggered when the physics settle at the target
+    pub on_settle: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// Callback triggered if the animation is interrupted by a new target
+    pub on_interrupt: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl Motion {
+    /// Create a new Motion controller for an animation.
+    pub fn new(animation: Animation) -> Self {
+        Self {
+            animation,
+            on_start: None,
+            on_settle: None,
+            on_interrupt: None,
+        }
+    }
 }
 
 /// SleipnirSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
-/// This provides superior stability and precision compared to Euler integration,
-/// especially for high-stiffness springs.
+/// This provides superior stability for high-fidelity interactive motion.
 pub struct SleipnirSolver {
     params: SleipnirParams,
     target: f32,
     state: SolverState,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SolverState {
+    x: f32,
+    v: f32,
+}
+
 impl SleipnirSolver {
-    /// Create a new solver with a target value and starting state
+    /// Create a new solver with a target value and starting state.
     pub fn new(params: SleipnirParams, target: f32, current: f32) -> Self {
         Self {
             params,
@@ -112,7 +178,7 @@ impl SleipnirSolver {
         }
     }
 
-    /// Advance the simulation by dt seconds using RK4 integration
+    /// Advance the simulation by dt seconds using RK4 integration.
     pub fn tick(&mut self, dt: f32) -> f32 {
         let a = self.evaluate(self.state, 0.0, SolverState { x: 0.0, v: 0.0 });
         let b = self.evaluate(self.state, dt * 0.5, a);
@@ -124,73 +190,31 @@ impl SleipnirSolver {
 
         self.state.x += dxdt * dt;
         self.state.v += dvdt * dt;
-
         self.state.x
     }
 
-    /// Evaluate acceleration at a specific sub-step
     fn evaluate(&self, initial: SolverState, dt: f32, d: SolverState) -> SolverState {
         let state = SolverState {
             x: initial.x + d.x * dt,
             v: initial.v + d.v * dt,
         };
-
-        let force =
-            -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
-        let acceleration = force / self.params.mass;
-
-        SolverState {
-            x: state.v,
-            v: acceleration,
-        }
+        let force = -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
+        // Protect against division by zero; mass must be positive.
+        let mass = self.params.mass.max(0.001);
+        SolverState { x: state.v, v: force / mass }
     }
 
-    /// Check if the spring has effectively settled at the target
     pub fn is_settled(&self) -> bool {
         (self.state.x - self.target).abs() < 0.001 && self.state.v.abs() < 0.001
     }
 }
 
-/// AnimationValue represents a value that can be interpolated or animated via physics
 pub trait AnimationValue: Sized + Clone + PartialEq {
-    /// Linear interpolation between two values
     fn lerp(&self, other: &Self, t: f32) -> Self;
-
-    /// Distance between two values (used for convergence checks)
     fn distance(&self, other: &Self) -> f32;
 }
 
 impl AnimationValue for f32 {
-    fn lerp(&self, other: &Self, t: f32) -> Self {
-        self + (other - self) * t
-    }
-
-    fn distance(&self, other: &Self) -> f32 {
-        (self - other).abs()
-    }
-}
-
-/// Color represented in the Nifl/Muspel colorway
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct NiflColor {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
-}
-
-impl AnimationValue for NiflColor {
-    fn lerp(&self, other: &Self, t: f32) -> Self {
-        Self {
-            r: self.r + (other.r - self.r) * t,
-            g: self.g + (other.g - self.g) * t,
-            b: self.b + (other.b - self.b) * t,
-            a: self.a + (other.a - self.a) * t,
-        }
-    }
-
-    fn distance(&self, other: &Self) -> f32 {
-        ((self.r - other.r).powi(2) + (self.g - other.g).powi(2) + (self.b - other.b).powi(2))
-            .sqrt()
-    }
+    fn lerp(&self, other: &Self, t: f32) -> Self { self + (other - self) * t }
+    fn distance(&self, other: &Self) -> f32 { (self - other).abs() }
 }

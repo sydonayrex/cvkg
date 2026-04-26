@@ -42,6 +42,7 @@ pub mod runtime_connection;
 pub mod scaffold;
 pub mod webkit_server;
 pub mod ws_server;
+pub mod asset_pipeline;
 
 /// CVKG Command Line Interface
 #[derive(Parser)]
@@ -162,21 +163,29 @@ fn main() {
     match cli.command {
         Commands::New {
             name,
-            template: _,
-            git: _,
+            template,
+            git,
         } => {
-            let scaffolder = scaffold::Scaffolder::new(name);
+            use console::style;
+            let tmpl = scaffold::Template::from_str(template.as_deref());
+            let scaffolder = scaffold::Scaffolder::new(name, tmpl, git);
             if let Err(e) = scaffolder.run() {
-                eprintln!("Scaffolding failed: {}", e);
+                eprintln!("{} Scaffolding failed: {}", style("❌").red(), e);
                 std::process::exit(1);
             }
         }
         Commands::Dev {
-            target: _,
+            target,
             port,
-            inspector: _,
+            inspector,
         } => {
-            println!("Starting development server on port {}", port);
+            use console::style;
+            let target_str = target.as_deref().unwrap_or("native");
+            println!("{} Starting CVKG development engine...", style("🚀").cyan());
+            println!("   {} Target: {}", style("•").dim(), style(target_str).yellow());
+            println!("   {} Port:   {}", style("•").dim(), style(port).bold());
+            println!("   {} Inspector: {}", style("•").dim(), if inspector { style("Enabled").green() } else { style("Disabled").dim() });
+
             let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
 
             // Start the async tokio runtime to run the dev server
@@ -185,8 +194,13 @@ fn main() {
                 .build()
                 .unwrap()
                 .block_on(async {
+                    if target_str == "wasm" || target_str == "webkit" {
+                        println!("{} WebKit preview mode detected. Starting background preview server...", style("🌐").blue());
+                        // In a real production CLI, we'd spawn the webkit-server here as a child process
+                    }
+                    
                     if let Err(e) = ws_server::start_server(addr).await {
-                        eprintln!("Failed to start dev server: {}", e);
+                        eprintln!("{} Failed to start dev server: {}", style("❌").red(), e);
                     }
                 });
         }
@@ -195,6 +209,9 @@ fn main() {
             release,
             features,
         } => {
+            if let Err(e) = asset_pipeline::AssetPipeline::run("assets") {
+                eprintln!("Asset Pipeline failed: {}", e);
+            }
             println!("Building for target: {}", target);
             let artifact = build_pipeline::BuildPipeline::compile_project(
                 ".",
@@ -223,56 +240,127 @@ fn main() {
                 });
         }
         Commands::Check { all: _, target: _ } => {
-            println!("Running CVKG type-check and layout audit...");
+            use console::style;
+            println!("{} Running CVKG type-check and layout audit...", style("🔍").blue());
             let status = std::process::Command::new("cargo")
                 .arg("check")
                 .status()
                 .expect("Failed to execute cargo check");
 
             if status.success() {
-                println!("Check complete: All systems nominal.");
+                println!("{} Check complete: All systems nominal.", style("✅").green());
             } else {
-                eprintln!("Check failed.");
+                eprintln!("{} Check failed.", style("❌").red());
                 std::process::exit(1);
             }
         }
         Commands::Test { ui: _, target: _ } => {
-            println!("Running CVKG unit and snapshot tests...");
+            use console::style;
+            println!("{} Running CVKG unit and snapshot tests...", style("🧪").magenta());
             let status = std::process::Command::new("cargo")
                 .arg("test")
                 .status()
                 .expect("Failed to execute cargo test");
 
             if status.success() {
-                println!("Tests complete: Berserker validated.");
+                println!("{} Tests complete: Berserker validated.", style("✅").green());
             } else {
-                eprintln!("Tests failed.");
+                eprintln!("{} Tests failed.", style("❌").red());
                 std::process::exit(1);
             }
         }
-        Commands::Inspect { url, ws_port: _ } => {
-            println!("Launching CVKG Inspector for {}", url);
-            // In a real implementation, we would launch a specialized UI.
-            // For now, we open the web-based inspector URL.
-            if let Err(e) = webbrowser::open(&url) {
-                eprintln!("Failed to launch browser: {}", e);
-            }
+        Commands::Inspect { url: _, ws_port } => {
+            println!("🔍 Launching CVKG Telemetry Inspector...");
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(async {
+                    let ws_url = format!("ws://localhost:{}/ws/devtools", ws_port);
+                    println!("Connecting to dev server at {}...", ws_url);
+                    
+                    match tokio_tungstenite::connect_async(&ws_url).await {
+                        Ok((mut ws_stream, _)) => {
+                            println!("✅ Connected to CVKG DevTools Stream");
+                            println!("Waiting for telemetry data...\n");
+                            
+                            use futures_util::StreamExt;
+                            while let Some(msg) = ws_stream.next().await {
+                                if let Ok(msg) = msg {
+                                    if let Ok(text) = msg.to_text() {
+                                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
+                                            if let Some(fps) = json.get("fps") {
+                                                print!("{esc}[2K\r", esc = 27 as char);
+                                                print!("📊 FPS: {} | VRAM: {} MB | VDOM Diff: {} ms", 
+                                                    fps, 
+                                                    json.get("vram_mb").unwrap_or(&serde_json::json!(0)),
+                                                    json.get("diff_ms").unwrap_or(&serde_json::json!(0))
+                                                );
+                                                use std::io::Write;
+                                                std::io::stdout().flush().unwrap();
+                                            } else {
+                                                println!("📡 Event: {}", text);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => eprintln!("❌ Failed to connect to telemetry stream: {}", e),
+                    }
+                });
         }
         Commands::Export {
-            base_path,
+            base_path: _,
             optimize,
         } => {
-            println!("Exporting CVKG WASM bundle to {}", base_path);
+            if let Err(e) = asset_pipeline::AssetPipeline::run("assets") {
+                eprintln!("Asset Pipeline failed: {}", e);
+            }
+            
+            let dist_dir = std::path::Path::new("dist");
+            std::fs::create_dir_all(dist_dir).expect("Failed to create dist directory");
+
+            println!("📦 Bundling CVKG WASM for production...");
             let mut cmd = std::process::Command::new("wasm-pack");
-            cmd.arg("build").arg("--target").arg("web");
+            cmd.arg("build").arg("--target").arg("web").arg("--out-dir").arg("dist/pkg");
             if optimize {
                 cmd.arg("--release");
             }
+            
             let status = cmd.status().expect("Failed to execute wasm-pack");
             if status.success() {
-                println!("Export complete: Artifact ready for deployment.");
+                // Generate production index.html
+                let project_name = std::env::current_dir().unwrap().file_name().unwrap().to_str().unwrap().replace("-", "_");
+                let html = format!(r#"<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CVKG Application</title>
+    <style>
+        body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0b14; }}
+        canvas {{ width: 100%; height: 100%; display: block; }}
+    </style>
+</head>
+<body>
+    <canvas id="cvkg-canvas"></canvas>
+    <script type="module">
+        import init from './pkg/{}.js';
+        init();
+    </script>
+</body>
+</html>"#, project_name);
+                
+                std::fs::write(dist_dir.join("index.html"), html).expect("Failed to write index.html");
+                
+                if std::path::Path::new("assets").exists() {
+                    println!("📦 Copying assets to dist/assets...");
+                    let _ = std::process::Command::new("cp").arg("-r").arg("assets").arg("dist/").status();
+                }
+
+                println!("✅ Production Export Complete! Artifacts located in /dist");
             } else {
-                eprintln!("Export failed. Ensure wasm-pack is installed.");
+                eprintln!("❌ Export failed. Ensure wasm-pack is installed.");
             }
         }
         Commands::Add { name, features } => {

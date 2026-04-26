@@ -59,7 +59,7 @@ impl ApplicationHandler for ErrorApp {
                 }
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame();
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
 
                 // ── Background ──
                 renderer.fill_rect(

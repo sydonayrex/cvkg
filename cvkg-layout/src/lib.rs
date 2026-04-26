@@ -22,19 +22,23 @@
 //   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //   CVKG Extended: Section 2 of the CVKG Design Specification
 
-use cvkg_core::{LayoutCache, LayoutView, Rect, Size, SizeProposal};
+use cvkg_core::{LayoutCache, LayoutView, Rect, Size, SizeProposal, Alignment, Distribution};
 
 /// HStack - lays out children horizontally
 pub struct HStack {
     spacing: f32,
+    alignment: Alignment,
+    distribution: Distribution,
     children: Vec<Box<dyn LayoutView>>,
 }
 
 impl HStack {
-    /// Create a new HStack with the given spacing
-    pub fn new(spacing: f32) -> Self {
+    /// Create a new HStack with the given spacing, alignment, and distribution
+    pub fn new(spacing: f32, alignment: Alignment, distribution: Distribution) -> Self {
         Self {
             spacing,
+            alignment,
+            distribution,
             children: Vec::new(),
         }
     }
@@ -47,21 +51,91 @@ impl HStack {
     /// Compute the layout rects for children without placing them.
     pub fn compute_layout(
         spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
         bounds: Rect,
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        let mut rects = Vec::with_capacity(subviews.len());
-        let mut x = bounds.x;
-        for child in subviews {
-            let desired = child.size_that_fits(SizeProposal::unspecified(), &[], cache);
-            rects.push(Rect {
+        let n = subviews.len();
+        if n == 0 { return Vec::new(); }
+
+        let mut rects = vec![Rect::zero(); n];
+        let mut child_sizes = Vec::with_capacity(n);
+        let mut total_fixed_width = 0.0;
+        let mut total_flex_weight = 0.0;
+        let mut flex_indices = Vec::new();
+
+        // Pass 1: Categorize children and measure fixed ones
+        for (i, child) in subviews.iter().enumerate() {
+            let weight = child.flex_weight();
+            if weight > 0.0 {
+                total_flex_weight += weight;
+                flex_indices.push(i);
+                child_sizes.push(Size::ZERO); // Placeholder
+            } else {
+                let desired = child.size_that_fits(
+                    SizeProposal::new(Some(bounds.width), Some(bounds.height)), 
+                    &[], 
+                    cache
+                );
+                child_sizes.push(desired);
+                total_fixed_width += desired.width;
+            }
+        }
+
+        let total_spacing = spacing * (n - 1) as f32;
+        let available_for_flex = (bounds.width - total_fixed_width - total_spacing).max(0.0);
+
+        // Pass 2: Measure and size flexible children
+        for &idx in &flex_indices {
+            let weight = subviews[idx].flex_weight();
+            let flex_width = (weight / total_flex_weight) * available_for_flex;
+            let desired = subviews[idx].size_that_fits(
+                SizeProposal::new(Some(flex_width), Some(bounds.height)),
+                &[],
+                cache
+            );
+            // Flexible children take the width assigned by flex, but height can still be intrinsic or frame-constrained
+            child_sizes[idx] = Size {
+                width: flex_width,
+                height: desired.height,
+            };
+        }
+
+        let content_width = if total_flex_weight > 0.0 {
+            bounds.width - total_spacing
+        } else {
+            total_fixed_width
+        } + total_spacing;
+
+        let (mut x, actual_spacing) = match distribution {
+            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => (bounds.x, spacing),
+            Distribution::Leading | Distribution::Fill => (bounds.x, spacing),
+            Distribution::Trailing => (bounds.x + bounds.width - content_width, spacing),
+            Distribution::Center => (bounds.x + (bounds.width - content_width) / 2.0, spacing),
+            Distribution::SpaceBetween => {
+                let s = if n > 1 { (bounds.width - (total_fixed_width + available_for_flex)) / (n - 1) as f32 } else { 0.0 };
+                (bounds.x, s)
+            }
+            _ => (bounds.x, spacing), // Simplification for mixed flex/distribution
+        };
+
+        for i in 0..n {
+            let size = child_sizes[i];
+            let y = match alignment {
+                Alignment::Top => bounds.y,
+                Alignment::Bottom => bounds.y + bounds.height - size.height,
+                _ => bounds.y + (bounds.height - size.height) / 2.0,
+            };
+
+            rects[i] = Rect {
                 x,
-                y: bounds.y,
-                width: desired.width,
-                height: bounds.height,
-            });
-            x += desired.width + spacing;
+                y,
+                width: size.width,
+                height: size.height,
+            };
+            x += size.width + actual_spacing;
         }
         rects
     }
@@ -74,7 +148,6 @@ impl LayoutView for HStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Size {
-        // For HStack, we want to know how much space we need
         let mut width = 0.0f32;
         let mut height = 0.0f32;
 
@@ -83,13 +156,15 @@ impl LayoutView for HStack {
             width += child_size.width;
             height = height.max(child_size.height);
 
-            // Add spacing between children (not after the last one)
             if i < subviews.len() - 1 {
                 width += self.spacing;
             }
         }
 
-        Size { width, height }
+        Size { 
+            width: proposal.width.unwrap_or(width),
+            height: proposal.height.unwrap_or(height),
+        }
     }
 
     fn place_subviews(
@@ -98,25 +173,18 @@ impl LayoutView for HStack {
         subviews: &mut [&mut dyn LayoutView],
         cache: &mut LayoutCache,
     ) {
-        let mut x = bounds.x;
-        let y = bounds.y;
+        let views: Vec<&dyn LayoutView> = subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
+        let rects = Self::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            bounds,
+            &views,
+            cache,
+        );
 
-        for (_i, child) in subviews.iter_mut().enumerate() {
-            // Get child's desired size
-            let desired_size = child.size_that_fits(SizeProposal::unspecified(), &[], cache);
-
-            // In HStack, we give the child as much height as available, but only the width it needs
-            let child_rect = Rect {
-                x,
-                y,
-                width: desired_size.width,
-                height: bounds.height,
-            };
-
-            child.place_subviews(child_rect, &mut [], cache);
-
-            // Move x position for next child
-            x += desired_size.width + self.spacing;
+        for (child, rect) in subviews.iter_mut().zip(rects) {
+            child.place_subviews(rect, &mut [], cache);
         }
     }
 }
@@ -124,14 +192,18 @@ impl LayoutView for HStack {
 /// VStack - lays out children vertically
 pub struct VStack {
     spacing: f32,
+    alignment: Alignment,
+    distribution: Distribution,
     children: Vec<Box<dyn LayoutView>>,
 }
 
 impl VStack {
-    /// Create a new VStack with the given spacing
-    pub fn new(spacing: f32) -> Self {
+    /// Create a new VStack with the given spacing, alignment, and distribution
+    pub fn new(spacing: f32, alignment: Alignment, distribution: Distribution) -> Self {
         Self {
             spacing,
+            alignment,
+            distribution,
             children: Vec::new(),
         }
     }
@@ -144,21 +216,90 @@ impl VStack {
     /// Compute the layout rects for children without placing them.
     pub fn compute_layout(
         spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
         bounds: Rect,
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        let mut rects = Vec::with_capacity(subviews.len());
-        let mut y = bounds.y;
-        for child in subviews {
-            let desired = child.size_that_fits(SizeProposal::unspecified(), &[], cache);
-            rects.push(Rect {
-                x: bounds.x,
+        let n = subviews.len();
+        if n == 0 { return Vec::new(); }
+
+        let mut rects = vec![Rect::zero(); n];
+        let mut child_sizes = Vec::with_capacity(n);
+        let mut total_fixed_height = 0.0;
+        let mut total_flex_weight = 0.0;
+        let mut flex_indices = Vec::new();
+
+        // Pass 1: Categorize children and measure fixed ones
+        for (i, child) in subviews.iter().enumerate() {
+            let weight = child.flex_weight();
+            if weight > 0.0 {
+                total_flex_weight += weight;
+                flex_indices.push(i);
+                child_sizes.push(Size::ZERO); // Placeholder
+            } else {
+                let desired = child.size_that_fits(
+                    SizeProposal::new(Some(bounds.width), Some(bounds.height)), 
+                    &[], 
+                    cache
+                );
+                child_sizes.push(desired);
+                total_fixed_height += desired.height;
+            }
+        }
+
+        let total_spacing = spacing * (n - 1) as f32;
+        let available_for_flex = (bounds.height - total_fixed_height - total_spacing).max(0.0);
+
+        // Pass 2: Measure and size flexible children
+        for &idx in &flex_indices {
+            let weight = subviews[idx].flex_weight();
+            let flex_height = (weight / total_flex_weight) * available_for_flex;
+            let desired = subviews[idx].size_that_fits(
+                SizeProposal::new(Some(bounds.width), Some(flex_height)),
+                &[],
+                cache
+            );
+            child_sizes[idx] = Size {
+                width: desired.width,
+                height: flex_height,
+            };
+        }
+
+        let content_height = if total_flex_weight > 0.0 {
+            bounds.height - total_spacing
+        } else {
+            total_fixed_height
+        } + total_spacing;
+
+        let (mut y, actual_spacing) = match distribution {
+            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => (bounds.y, spacing),
+            Distribution::Leading | Distribution::Fill => (bounds.y, spacing),
+            Distribution::Trailing => (bounds.y + bounds.height - content_height, spacing),
+            Distribution::Center => (bounds.y + (bounds.height - content_height) / 2.0, spacing),
+            Distribution::SpaceBetween => {
+                let s = if n > 1 { (bounds.height - (total_fixed_height + available_for_flex)) / (n - 1) as f32 } else { 0.0 };
+                (bounds.y, s)
+            }
+            _ => (bounds.y, spacing),
+        };
+
+        for i in 0..n {
+            let size = child_sizes[i];
+            let x = match alignment {
+                Alignment::Leading => bounds.x,
+                Alignment::Trailing => bounds.x + bounds.width - size.width,
+                _ => bounds.x + (bounds.width - size.width) / 2.0,
+            };
+
+            rects[i] = Rect {
+                x,
                 y,
-                width: bounds.width,
-                height: desired.height,
-            });
-            y += desired.height + spacing;
+                width: size.width,
+                height: size.height,
+            };
+            y += size.height + actual_spacing;
         }
         rects
     }
@@ -171,7 +312,6 @@ impl LayoutView for VStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Size {
-        // For VStack, we want to know how much space we need
         let mut width = 0.0f32;
         let mut height = 0.0f32;
 
@@ -180,13 +320,15 @@ impl LayoutView for VStack {
             width = width.max(child_size.width);
             height += child_size.height;
 
-            // Add spacing between children (not after the last one)
             if i < subviews.len() - 1 {
                 height += self.spacing;
             }
         }
 
-        Size { width, height }
+        Size { 
+            width: proposal.width.unwrap_or(width),
+            height: proposal.height.unwrap_or(height),
+        }
     }
 
     fn place_subviews(
@@ -195,25 +337,18 @@ impl LayoutView for VStack {
         subviews: &mut [&mut dyn LayoutView],
         cache: &mut LayoutCache,
     ) {
-        let x = bounds.x;
-        let mut y = bounds.y;
+        let views: Vec<&dyn LayoutView> = subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
+        let rects = Self::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            bounds,
+            &views,
+            cache,
+        );
 
-        for (_i, child) in subviews.iter_mut().enumerate() {
-            // Get child's desired size
-            let desired_size = child.size_that_fits(SizeProposal::unspecified(), &[], cache);
-
-            // In VStack, we give the child as much width as available, but only the height it needs
-            let child_rect = Rect {
-                x,
-                y,
-                width: bounds.width,
-                height: desired_size.height,
-            };
-
-            child.place_subviews(child_rect, &mut [], cache);
-
-            // Move y position for next child
-            y += desired_size.height + self.spacing;
+        for (child, rect) in subviews.iter_mut().zip(rects) {
+            child.place_subviews(rect, &mut [], cache);
         }
     }
 }
@@ -361,6 +496,79 @@ impl LayoutView for Flex {
                     child.place_subviews(child_rect, &mut [], cache);
                 }
             }
+        }
+    }
+}
+
+/// Grid - lays out children in a 2D grid
+pub struct Grid {
+    pub rows: usize,
+    pub cols: usize,
+    pub spacing: f32,
+}
+
+impl Grid {
+    pub fn new(rows: usize, cols: usize, spacing: f32) -> Self {
+        Self { rows, cols, spacing }
+    }
+
+    pub fn compute_layout(
+        rows: usize,
+        cols: usize,
+        spacing: f32,
+        bounds: Rect,
+        subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Vec<Rect> {
+        if subviews.is_empty() || rows == 0 || cols == 0 {
+            return Vec::new();
+        }
+
+        let mut rects = Vec::with_capacity(subviews.len());
+        let item_width = (bounds.width - (cols - 1) as f32 * spacing) / cols as f32;
+        let item_height = (bounds.height - (rows - 1) as f32 * spacing) / rows as f32;
+
+        for (i, _) in subviews.iter().enumerate() {
+            let r = i / cols;
+            let c = i % cols;
+
+            if r >= rows { break; }
+
+            rects.push(Rect {
+                x: bounds.x + c as f32 * (item_width + spacing),
+                y: bounds.y + r as f32 * (item_height + spacing),
+                width: item_width,
+                height: item_height,
+            });
+        }
+        rects
+    }
+}
+
+impl LayoutView for Grid {
+    fn size_that_fits(
+        &self,
+        proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: proposal.width.unwrap_or(200.0),
+            height: proposal.height.unwrap_or(200.0),
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        bounds: Rect,
+        subviews: &mut [&mut dyn LayoutView],
+        cache: &mut LayoutCache,
+    ) {
+        let views: Vec<&dyn LayoutView> = subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
+        let rects = Self::compute_layout(self.rows, self.cols, self.spacing, bounds, &views, cache);
+
+        for (child, rect) in subviews.iter_mut().zip(rects) {
+            child.place_subviews(rect, &mut [], cache);
         }
     }
 }

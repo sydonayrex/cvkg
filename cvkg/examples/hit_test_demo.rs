@@ -20,11 +20,11 @@ impl View for HitTestView {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let mut state = self.state.lock().unwrap();
-        
+        let state = self.state.lock().unwrap();
+
         // Background
         renderer.fill_rect(rect, [0.02, 0.02, 0.05, 1.0]);
-        
+
         // Title
         renderer.draw_text(
             "CVKG INTERACTION TEST SUITE",
@@ -33,10 +33,10 @@ impl View for HitTestView {
             32.0,
             [0.0, 1.0, 1.0, 1.0], // CYAN
         );
-        
+
         // Column Layout
         let content_x = rect.x + 40.0;
-        
+
         // 1. Button Section
         let button_rect = Rect {
             x: content_x,
@@ -46,12 +46,21 @@ impl View for HitTestView {
         };
         renderer.fill_rounded_rect(button_rect, 8.0, [0.1, 0.1, 0.2, 1.0]);
         renderer.stroke_rect(button_rect, [0.0, 0.8, 1.0, 1.0], 2.0);
-        renderer.draw_text("Click Me", button_rect.x + 50.0, button_rect.y + 32.0, 18.0, [1.0, 1.0, 1.0, 1.0]);
-        
+        renderer.draw_text(
+            "Click Me",
+            button_rect.x + 50.0,
+            button_rect.y + 32.0,
+            18.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
+
         let state_clone = self.state.clone();
-        renderer.register_handler("pointerclick", Arc::new(move |_| {
-            state_clone.lock().unwrap().click_count += 1;
-        }));
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |_| {
+                state_clone.lock().unwrap().click_count += 1;
+            }),
+        );
 
         renderer.draw_text(
             &format!("Clicks: {}", state.click_count),
@@ -72,7 +81,8 @@ impl View for HitTestView {
         let state_clone = self.state.clone();
         cvkg_components::TextField::new("Enter command...", field_text, move |t| {
             state_clone.lock().unwrap().text = t;
-        }).render(renderer, field_rect);
+        })
+        .render(renderer, field_rect);
 
         // 3. Toggle Section
         let toggle_rect = Rect {
@@ -83,16 +93,25 @@ impl View for HitTestView {
         };
         let toggle_val = state.toggle;
         let state_clone = self.state.clone();
-        cvkg_components::Toggle::new(toggle_val, move |v| {
+        cvkg_components::Toggle::new("Toggle", toggle_val, move |v| {
             state_clone.lock().unwrap().toggle = v;
-        }).render(renderer, toggle_rect);
-        
+        })
+        .render(renderer, toggle_rect);
+
         renderer.draw_text(
-            if state.toggle { "SYSTEM ONLINE" } else { "SYSTEM OFFLINE" },
+            if state.toggle {
+                "SYSTEM ONLINE"
+            } else {
+                "SYSTEM OFFLINE"
+            },
             content_x + 80.0,
             rect.y + 292.0,
             18.0,
-            if state.toggle { [0.0, 1.0, 0.0, 1.0] } else { [1.0, 0.0, 0.0, 1.0] },
+            if state.toggle {
+                [0.0, 1.0, 0.0, 1.0]
+            } else {
+                [1.0, 0.0, 0.0, 1.0]
+            },
         );
     }
 }

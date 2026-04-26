@@ -7,16 +7,16 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.10" }
-cvkg-layout = { path = "../cvkg-layout", version = "0.1.10" }
-cvkg-anim = { path = "../cvkg-anim", version = "0.1.10" }
-cvkg-themes = { path = "../cvkg-themes", version = "0.1.10" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.10" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.11" }
+cvkg-layout = { path = "../cvkg-layout", version = "0.1.11" }
+cvkg-anim = { path = "../cvkg-anim", version = "0.1.11" }
+cvkg-themes = { path = "../cvkg-themes", version = "0.1.11" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.11" }
 log = "0.4"
 
 [dev-dependencies]
 insta = "1.47.2"
 winit = "0.30"
-cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.10" }
-cvkg-render-native = { path = "../cvkg-render-native", version = "0.1.10" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.11" }
+cvkg-render-native = { path = "../cvkg-render-native", version = "0.1.11" }
 pollster = "0.3"

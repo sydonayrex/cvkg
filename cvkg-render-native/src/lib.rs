@@ -36,10 +36,9 @@ use winit::{
 };
 
 /// Native renderer backend implementing the Renderer trait.
-/// It wraps a SurtrRenderer for high-performance GPU drawing.
+/// It wraps a shared SurtrRenderer for high-performance GPU drawing.
 pub struct NativeRenderer {
-    window: Arc<Window>,
-    gpu: Option<cvkg_render_gpu::SurtrRenderer>,
+    gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
 }
 
 /// Custom events for the native application event loop
@@ -50,8 +49,8 @@ enum AppEvent {
 
 impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
-    fn new(window: Arc<Window>) -> Self {
-        Self { window, gpu: None }
+    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>) -> Self {
+        Self { gpu }
     }
 
     /// Start the CVKG native application with the given view.
@@ -64,11 +63,9 @@ impl NativeRenderer {
 
         let mut app = App {
             view,
-            renderer: None,
-            accesskit_adapter: None,
-            vdom: Some(cvkg_vdom::VDom::new()),
+            windows: std::collections::HashMap::new(),
+            gpu: None,
             asset_manager: std::sync::Arc::new(NativeAssetManager::new()),
-            cursor_pos: [0.0, 0.0],
             proxy: event_loop.create_proxy(),
         };
 
@@ -76,172 +73,161 @@ impl NativeRenderer {
     }
 }
 
-struct App<V: cvkg_core::View> {
-    view: V,
-    renderer: Option<NativeRenderer>,
+struct WindowState {
+    window: Arc<Window>,
     accesskit_adapter: Option<accesskit_winit::Adapter>,
     vdom: Option<cvkg_vdom::VDom>,
-    asset_manager: std::sync::Arc<NativeAssetManager>,
     cursor_pos: [f32; 2],
+}
+
+struct App<V: cvkg_core::View> {
+    view: V,
+    windows: std::collections::HashMap<WindowId, WindowState>,
+    gpu: Option<Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>>,
+    asset_manager: std::sync::Arc<NativeAssetManager>,
     proxy: winit::event_loop::EventLoopProxy<AppEvent>,
 }
 
 impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attrs = Window::default_attributes()
-            .with_title("CVKG Forge")
-            .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0));
+        if self.gpu.is_none() {
+            let window_attrs = Window::default_attributes()
+                .with_title("CVKG Forge")
+                .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0));
 
-        let window = Arc::new(
-            event_loop
-                .create_window(window_attrs)
-                .expect("Failed to create window"),
-        );
+            let window = Arc::new(
+                event_loop
+                    .create_window(window_attrs)
+                    .expect("Failed to create window"),
+            );
+            window.set_ime_allowed(true);
 
-        // Initialize AccessKit adapter
-        let adapter = accesskit_winit::Adapter::with_direct_handlers(
-            event_loop,
-            &window,
-            ShieldWall {
-                proxy: self.proxy.clone(),
-            },
-            ShieldWall {
-                proxy: self.proxy.clone(),
-            },
-            ShieldWall {
-                proxy: self.proxy.clone(),
-            },
-        );
-        self.accesskit_adapter = Some(adapter);
+            let adapter = accesskit_winit::Adapter::with_direct_handlers(
+                event_loop,
+                &window,
+                ShieldWall { proxy: self.proxy.clone() },
+                ShieldWall { proxy: self.proxy.clone() },
+                ShieldWall { proxy: self.proxy.clone() },
+            );
 
-        let mut renderer = NativeRenderer::new(window.clone());
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let gpu = rt.block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
+            let gpu = Arc::new(std::sync::Mutex::new(gpu));
+            self.gpu = Some(gpu);
 
-        // Use a Runtime to block on the async forge process
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        renderer.gpu = Some(rt.block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone())));
+            self.windows.insert(window.id(), WindowState {
+                window,
+                accesskit_adapter: Some(adapter),
+                vdom: Some(cvkg_vdom::VDom::new()),
+                cursor_pos: [0.0, 0.0],
+            });
 
-        self.renderer = Some(renderer);
-
-        // Register AssetManager in the environment
-        cvkg_core::env::insert::<cvkg_core::AssetKey>(self.asset_manager.clone());
+            cvkg_core::env::insert::<cvkg_core::AssetKey>(self.asset_manager.clone());
+        }
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        let renderer = if let Some(r) = &mut self.renderer {
-            r
-        } else {
-            return;
-        };
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        let gpu_arc = if let Some(g) = &self.gpu { g.clone() } else { return };
+        let state = if let Some(s) = self.windows.get_mut(&id) { s } else { return };
 
         match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(physical_size) => {
-                if let Some(gpu) = &mut renderer.gpu {
-                    gpu.resize(
-                        physical_size.width,
-                        physical_size.height,
-                        renderer.window.scale_factor() as f32,
-                    );
+            WindowEvent::CloseRequested => {
+                self.windows.remove(&id);
+                if self.windows.is_empty() {
+                    event_loop.exit();
                 }
-                renderer.window.request_redraw();
+            }
+            WindowEvent::Resized(physical_size) => {
+                gpu_arc.lock().unwrap().resize(
+                    id,
+                    physical_size.width,
+                    physical_size.height,
+                    state.window.scale_factor() as f32,
+                );
+                state.window.request_redraw();
             }
             WindowEvent::RedrawRequested => {
-                if let Some(gpu) = &mut renderer.gpu {
-                    let encoder = gpu.begin_frame();
+                let size = state.window.inner_size();
+                let scale = state.window.scale_factor();
+                let logical_size = size.to_logical::<f32>(scale);
 
-                    let size = renderer.window.inner_size();
-                    let scale = renderer.window.scale_factor();
-                    let logical_size = size.to_logical::<f32>(scale);
-                    
-                    let rect = cvkg_core::Rect {
-                        x: 0.0,
-                        y: 0.0,
-                        width: logical_size.width,
-                        height: logical_size.height,
-                    };
+                let rect = cvkg_core::Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: logical_size.width,
+                    height: logical_size.height,
+                };
 
-                    // Render the view tree
-                    self.view.render(gpu, rect);
-
-                    // Update VDOM and Accessibility Tree
-                    let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
-                    if let Some(prev_vdom) = &mut self.vdom {
-                        let patches = prev_vdom.diff(&new_vdom);
-
-                        // Generate AccessKit updates from patches if adapter is available
-                        if let Some(adapter) = &mut self.accesskit_adapter {
-                            let mut nodes = Vec::new();
-                            for patch in &patches {
-                                match patch {
-                                    cvkg_vdom::VDomPatch::Create(node)
-                                    | cvkg_vdom::VDomPatch::Replace { node, .. } => {
-                                        nodes.push((
-                                            accesskit::NodeId(node.id.0 as u64),
-                                            node.to_accesskit_node(),
-                                        ));
-                                    }
-                                    cvkg_vdom::VDomPatch::Update { id, .. } => {
-                                        if let Some(node) = new_vdom.nodes.get(id) {
-                                            nodes.push((
-                                                accesskit::NodeId(node.id.0 as u64),
-                                                node.to_accesskit_node(),
-                                            ));
-                                        }
-                                    }
-                                    _ => {}
+                let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                if let Some(prev_vdom) = &mut state.vdom {
+                    let patches = prev_vdom.diff(&new_vdom);
+                    if let Some(adapter) = &mut state.accesskit_adapter {
+                        let mut nodes = Vec::new();
+                        for patch in &patches {
+                            match patch {
+                                cvkg_vdom::VDomPatch::Create(node)
+                                | cvkg_vdom::VDomPatch::Replace { node, .. } => {
+                                    nodes.push((accesskit::NodeId(node.id.0 as u64), node.to_accesskit_node()));
                                 }
-                            }
-
-                            if !nodes.is_empty() {
-                                adapter.update_if_active(|| accesskit::TreeUpdate {
-                                    nodes,
-                                    tree: None,
-                                    focus: accesskit::NodeId(1),
-                                });
+                                cvkg_vdom::VDomPatch::Update { id, .. } => {
+                                    if let Some(node) = new_vdom.nodes.get(id) {
+                                        nodes.push((accesskit::NodeId(node.id.0 as u64), node.to_accesskit_node()));
+                                    }
+                                }
+                                _ => {}
                             }
                         }
-
-                        // Apply patches to preserve stateful properties (capture, focus)
-                        prev_vdom.apply_patches(patches);
-                    } else {
-                        self.vdom = Some(new_vdom);
+                        if !nodes.is_empty() {
+                            adapter.update_if_active(|| accesskit::TreeUpdate {
+                                nodes,
+                                tree: None,
+                                focus: accesskit::NodeId(1),
+                            });
+                        }
                     }
+                    prev_vdom.apply_patches(patches);
+                } else {
+                    state.vdom = Some(new_vdom);
+                }
 
+                {
+                    let mut gpu = gpu_arc.lock().unwrap();
+                    let encoder = gpu.begin_frame(id);
+                    let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone());
+                    self.view.render(&mut renderer, rect);
                     gpu.end_frame(encoder);
                 }
             }
             WindowEvent::CursorMoved { position, .. } => {
-                let scale = renderer.window.scale_factor();
+                let scale = state.window.scale_factor();
                 let logical = position.to_logical::<f32>(scale);
-                self.cursor_pos = [logical.x, logical.y];
-                if let Some(vdom) = &self.vdom {
+                state.cursor_pos = [logical.x, logical.y];
+                if let Some(vdom) = &state.vdom {
                     vdom.dispatch_event(cvkg_core::Event::PointerMove {
-                        x: self.cursor_pos[0],
-                        y: self.cursor_pos[1],
+                        x: state.cursor_pos[0],
+                        y: state.cursor_pos[1],
                     });
                 }
             }
-            WindowEvent::MouseInput { state, .. } => {
-                if let Some(vdom) = &self.vdom {
-                    let event = match state {
+            WindowEvent::MouseInput { state: mouse_state, .. } => {
+                if let Some(vdom) = &state.vdom {
+                    let event = match mouse_state {
                         winit::event::ElementState::Pressed => {
-                            let id = vdom.hit_test(self.cursor_pos[0], self.cursor_pos[1]);
-                            println!("Native: MousePress at {:?}, hit={:?}", self.cursor_pos, id);
                             cvkg_core::Event::PointerDown {
-                                x: self.cursor_pos[0],
-                                y: self.cursor_pos[1],
+                                x: state.cursor_pos[0],
+                                y: state.cursor_pos[1],
                             }
                         }
                         winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
-                            x: self.cursor_pos[0],
-                            y: self.cursor_pos[1],
+                            x: state.cursor_pos[0],
+                            y: state.cursor_pos[1],
                         },
                     };
                     vdom.dispatch_event(event);
                 }
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if let Some(vdom) = &self.vdom {
+                if let Some(vdom) = &state.vdom {
                     if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
                         let key_str = format!("{:?}", code);
                         let cvkg_event = if event.state == winit::event::ElementState::Pressed {
@@ -251,44 +237,40 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         };
                         vdom.dispatch_event(cvkg_event);
                     }
-
-                    // Also handle text input (IME / character events)
-                    if event.state == winit::event::ElementState::Pressed {
-                        if let Some(text) = event.text {
-                            for c in text.chars() {
-                                vdom.dispatch_event(cvkg_core::Event::KeyDown {
-                                    key: c.to_string(),
-                                });
-                            }
+                }
+            }
+            WindowEvent::Ime(ime_event) => {
+                if let Some(vdom) = &state.vdom {
+                    match ime_event {
+                        winit::event::Ime::Commit(string) => {
+                            vdom.dispatch_event(cvkg_core::Event::Ime(string));
                         }
+                        _ => {}
                     }
                 }
             }
-            _ => (),
+            _ => {}
         }
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::AccessibilityAction(request) => {
-                if let Some(vdom) = &self.vdom {
-                    let node_id = cvkg_vdom::NodeId(request.target.0 as usize);
-                    if let Some(node) = vdom.nodes.get(&node_id) {
-                        match request.action {
-                            accesskit::Action::Click => {
-                                // Translate default action (click) to PointerClick
-                                let event = cvkg_core::Event::PointerClick {
-                                    x: node.layout.x + node.layout.width / 2.0,
-                                    y: node.layout.y + node.layout.height / 2.0,
-                                };
-                                vdom.dispatch_event(event);
-                            }
-                            accesskit::Action::Focus => {
-                                if let Ok(mut focus) = vdom.focused_node.lock() {
-                                    *focus = Some(node_id);
+                let node_id = cvkg_vdom::NodeId(request.target.0 as u64);
+                // For accessibility, we'll route to the first window for now
+                if let Some(state) = self.windows.values_mut().next() {
+                    if let Some(vdom) = &state.vdom {
+                        if let Some(node) = vdom.nodes.get(&node_id) {
+                            match request.action {
+                                accesskit::Action::Click => {
+                                    let event = cvkg_core::Event::PointerClick {
+                                        x: node.layout.x + node.layout.width / 2.0,
+                                        y: node.layout.y + node.layout.height / 2.0,
+                                    };
+                                    vdom.dispatch_event(event);
                                 }
+                                _ => ()
                             }
-                            _ => (),
                         }
                     }
                 }
@@ -297,32 +279,24 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {
-        if let Some(renderer) = &self.renderer {
-            renderer.window.request_redraw();
+        for state in self.windows.values() {
+            state.window.request_redraw();
         }
     }
 }
 
 impl cvkg_core::Renderer for NativeRenderer {
     fn fill_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.fill_rect(rect, color);
-        }
+        self.gpu.lock().unwrap().fill_rect(rect, color);
     }
     fn fill_rounded_rect(&mut self, rect: cvkg_core::Rect, radius: f32, color: [f32; 4]) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.fill_rounded_rect(rect, radius, color);
-        }
+        self.gpu.lock().unwrap().fill_rounded_rect(rect, radius, color);
     }
     fn fill_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.fill_ellipse(rect, color);
-        }
+        self.gpu.lock().unwrap().fill_ellipse(rect, color);
     }
     fn stroke_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.stroke_rect(rect, color, stroke_width);
-        }
+        self.gpu.lock().unwrap().stroke_rect(rect, color, stroke_width);
     }
     fn stroke_rounded_rect(
         &mut self,
@@ -331,14 +305,10 @@ impl cvkg_core::Renderer for NativeRenderer {
         color: [f32; 4],
         stroke_width: f32,
     ) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.stroke_rounded_rect(rect, radius, color, stroke_width);
-        }
+        self.gpu.lock().unwrap().stroke_rounded_rect(rect, radius, color, stroke_width);
     }
     fn stroke_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.stroke_ellipse(rect, color, stroke_width);
-        }
+        self.gpu.lock().unwrap().stroke_ellipse(rect, color, stroke_width);
     }
     fn draw_line(
         &mut self,
@@ -349,80 +319,63 @@ impl cvkg_core::Renderer for NativeRenderer {
         color: [f32; 4],
         stroke_width: f32,
     ) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.draw_line(x1, y1, x2, y2, color, stroke_width);
-        }
+        self.gpu.lock().unwrap().draw_line(x1, y1, x2, y2, color, stroke_width);
     }
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.draw_text(text, x, y, size, color);
-        }
+        self.gpu.lock().unwrap().draw_text(text, x, y, size, color);
     }
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.measure_text(text, size)
-        } else {
-            (0.0, 0.0)
-        }
+        self.gpu.lock().unwrap().measure_text(text, size)
     }
     fn draw_texture(&mut self, texture_id: u32, rect: cvkg_core::Rect) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.draw_texture(texture_id, rect);
-        }
+        self.gpu.lock().unwrap().draw_texture(texture_id, rect);
     }
     fn draw_image(&mut self, image_name: &str, rect: cvkg_core::Rect) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.draw_image(image_name, rect);
-        }
+        self.gpu.lock().unwrap().draw_image(image_name, rect);
     }
     fn load_image(&mut self, name: &str, data: &[u8]) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.load_image(name, data);
-        }
+        self.gpu.lock().unwrap().load_image(name, data);
     }
     fn push_clip_rect(&mut self, rect: cvkg_core::Rect) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.push_clip_rect(rect);
-        }
+        self.gpu.lock().unwrap().push_clip_rect(rect);
     }
     fn pop_clip_rect(&mut self) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.pop_clip_rect();
-        }
+        self.gpu.lock().unwrap().pop_clip_rect();
     }
     fn push_opacity(&mut self, opacity: f32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.push_opacity(opacity);
-        }
+        self.gpu.lock().unwrap().push_opacity(opacity);
     }
     fn pop_opacity(&mut self) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.pop_opacity();
-        }
+        self.gpu.lock().unwrap().pop_opacity();
     }
     fn bifrost(&mut self, rect: cvkg_core::Rect, blur: f32, saturation: f32, opacity: f32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.bifrost(rect, blur, saturation, opacity);
-        }
+        self.gpu.lock().unwrap().bifrost(rect, blur, saturation, opacity);
     }
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.push_mjolnir_slice(angle, offset);
-        }
+        self.gpu.lock().unwrap().push_mjolnir_slice(angle, offset);
     }
     fn pop_mjolnir_slice(&mut self) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.pop_mjolnir_slice();
-        }
+        self.gpu.lock().unwrap().pop_mjolnir_slice();
     }
     fn register_shared_element(&mut self, id: &str, rect: cvkg_core::Rect) {
-        if let Some(gpu) = &mut self.gpu {
-            gpu.register_shared_element(id, rect);
-        }
+        self.gpu.lock().unwrap().register_shared_element(id, rect);
+    }
+    fn set_z_index(&mut self, z: f32) {
+        self.gpu.lock().unwrap().set_z_index(z);
+    }
+    fn get_z_index(&self) -> f32 {
+        self.gpu.lock().unwrap().get_z_index()
+    }
+    fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
+        self.gpu.lock().unwrap().load_svg(name, svg_data);
+    }
+    fn draw_svg(&mut self, name: &str, rect: cvkg_core::Rect) {
+        self.gpu.lock().unwrap().draw_svg(name, rect, None, 0);
+    }
+    fn get_telemetry(&self) -> cvkg_core::TelemetryData {
+        self.gpu.lock().unwrap().telemetry.clone()
     }
 }
-
-
 
 // Platform-specific implementations for macOS, Windows, and Linux are handled by winit and AccessKit.
 
@@ -432,7 +385,9 @@ struct ShieldWall {
 
 impl accesskit::ActionHandler for ShieldWall {
     fn do_action(&mut self, request: accesskit::ActionRequest) {
-        let _ = self.proxy.send_event(AppEvent::AccessibilityAction(request));
+        let _ = self
+            .proxy
+            .send_event(AppEvent::AccessibilityAction(request));
     }
 }
 

@@ -130,9 +130,20 @@ pub trait View: Sized + Send {
     /// Primitive views override this to perform drawing operations.
     fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
 
+    /// Calculate the natural (intrinsic) size of this view given proposed constraints.
+    /// This allows views like Buttons or Labels to inform the layout engine of their needs.
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size::ZERO
+    }
+
     /// Optionally provide a layout implementation for this view.
     fn layout(&self) -> Option<&dyn layout::LayoutView> {
         None
+    }
+
+    /// Returns the flex weight of this view for proportional distribution in stacks.
+    fn flex_weight(&self) -> f32 {
+        0.0
     }
 
     /// Provided modifier entry point
@@ -214,6 +225,21 @@ pub trait View: Sized + Send {
         self.modifier(FrameModifier { width, height })
     }
 
+    /// Give this view a flex weight for proportional space distribution in stacks.
+    fn flex(self, weight: f32) -> ModifiedView<Self, FlexModifier> {
+        self.modifier(FlexModifier { weight })
+    }
+
+    /// Automatically add padding to avoid overlapping with platform safe areas (notches, bars).
+    fn safe_area_padding(self) -> ModifiedView<Self, SafeAreaModifier> {
+        self.modifier(SafeAreaModifier { ignores: false })
+    }
+
+    /// Explicitly ignore platform safe areas and draw into the margins.
+    fn ignores_safe_area(self) -> ModifiedView<Self, SafeAreaModifier> {
+        self.modifier(SafeAreaModifier { ignores: true })
+    }
+
     /// Clip all child drawing to this view's bounds.
     fn clip_to_bounds(self) -> ModifiedView<Self, ClipModifier> {
         self.modifier(ClipModifier)
@@ -222,6 +248,11 @@ pub trait View: Sized + Send {
     /// Draw a colored border around this view.
     fn border(self, color: [f32; 4], width: f32) -> ModifiedView<Self, BorderModifier> {
         self.modifier(BorderModifier { color, width })
+    }
+
+    /// Add elevation (shadow) to the view. Level determines the shadow depth.
+    fn elevation(self, level: f32) -> ModifiedView<Self, ElevationModifier> {
+        self.modifier(ElevationModifier { level })
     }
 
     /// Trigger an action when the view appears
@@ -246,6 +277,66 @@ pub trait View: Sized + Send {
         })
     }
 
+    /// Trigger an action when the view is clicked
+    fn on_click<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, OnClickModifier> {
+        self.modifier(OnClickModifier {
+            action: Arc::new(action),
+        })
+    }
+
+    /// Trigger an action when the pointer enters the view bounds
+    fn on_pointer_enter<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, OnPointerEnterModifier> {
+        self.modifier(OnPointerEnterModifier {
+            action: Arc::new(action),
+        })
+    }
+
+    /// Trigger an action when the pointer leaves the view bounds
+    fn on_pointer_leave<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, OnPointerLeaveModifier> {
+        self.modifier(OnPointerLeaveModifier {
+            action: Arc::new(action),
+        })
+    }
+
+    /// Trigger an action when the pointer moves inside the view bounds
+    fn on_pointer_move<F: Fn(f32, f32) + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, OnPointerMoveModifier> {
+        self.modifier(OnPointerMoveModifier {
+            action: Arc::new(action),
+        })
+    }
+
+    /// Trigger an action when the pointer is pressed down
+    fn on_pointer_down<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, OnPointerDownModifier> {
+        self.modifier(OnPointerDownModifier {
+            action: Arc::new(action),
+        })
+    }
+
+    /// Trigger an action when the pointer is released
+    fn on_pointer_up<F: Fn() + Send + Sync + 'static>(
+        self,
+        action: F,
+    ) -> ModifiedView<Self, OnPointerUpModifier> {
+        self.modifier(OnPointerUpModifier {
+            action: Arc::new(action),
+        })
+    }
+
     /// Type-erase this view into AnyView
     fn erase(self) -> AnyView
     where
@@ -259,6 +350,7 @@ pub trait View: Sized + Send {
 pub trait ErasedView: Send {
     fn render_erased(&self, renderer: &mut dyn Renderer, rect: Rect);
     fn name(&self) -> &'static str;
+    fn flex_weight_erased(&self) -> f32;
 }
 
 impl<V: View + 'static> ErasedView for V {
@@ -268,6 +360,10 @@ impl<V: View + 'static> ErasedView for V {
 
     fn name(&self) -> &'static str {
         std::any::type_name::<V>()
+    }
+
+    fn flex_weight_erased(&self) -> f32 {
+        self.flex_weight()
     }
 }
 
@@ -294,6 +390,10 @@ impl View for AnyView {
         renderer.push_vnode(rect, self.inner.name());
         self.inner.render_erased(renderer, rect);
         renderer.pop_vnode();
+    }
+
+    fn flex_weight(&self) -> f32 {
+        self.inner.flex_weight_erased()
     }
 }
 
@@ -439,6 +539,22 @@ impl ViewModifier for PaddingModifier {
             height: (rect.height - 2.0 * self.amount).max(0.0),
         }
     }
+
+    fn transform_proposal(&self, mut proposal: SizeProposal) -> SizeProposal {
+        if let Some(w) = proposal.width {
+            proposal.width = Some((w - 2.0 * self.amount).max(0.0));
+        }
+        if let Some(h) = proposal.height {
+            proposal.height = Some((h - 2.0 * self.amount).max(0.0));
+        }
+        proposal
+    }
+
+    fn transform_size(&self, mut size: Size) -> Size {
+        size.width += 2.0 * self.amount;
+        size.height += 2.0 * self.amount;
+        size
+    }
 }
 
 /// GungnirModifier implements the "Neon Glow" aesthetic.
@@ -539,6 +655,150 @@ impl ViewModifier for OpacityModifier {
     }
 }
 
+/// OnClickModifier registers a click handler for this view.
+#[derive(Clone)]
+pub struct OnClickModifier {
+    pub action: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl ViewModifier for OnClickModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        let action = self.action.clone();
+        renderer.register_handler(
+            "pointerclick",
+            std::sync::Arc::new(move |event| {
+                if let Event::PointerClick { .. } = event {
+                    (action)();
+                }
+            }),
+        );
+    }
+}
+
+/// OnPointerEnterModifier registers a pointer enter handler.
+#[derive(Clone)]
+pub struct OnPointerEnterModifier {
+    pub action: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl ViewModifier for OnPointerEnterModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        let action = self.action.clone();
+        renderer.register_handler(
+            "pointerenter",
+            std::sync::Arc::new(move |event| {
+                if let Event::PointerEnter = event {
+                    (action)();
+                }
+            }),
+        );
+    }
+}
+
+/// OnPointerLeaveModifier registers a pointer leave handler.
+#[derive(Clone)]
+pub struct OnPointerLeaveModifier {
+    pub action: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl ViewModifier for OnPointerLeaveModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        let action = self.action.clone();
+        renderer.register_handler(
+            "pointerleave",
+            std::sync::Arc::new(move |event| {
+                if let Event::PointerLeave = event {
+                    (action)();
+                }
+            }),
+        );
+    }
+}
+
+/// OnPointerMoveModifier registers a pointer move handler.
+#[derive(Clone)]
+pub struct OnPointerMoveModifier {
+    pub action: Arc<dyn Fn(f32, f32) + Send + Sync>,
+}
+
+impl ViewModifier for OnPointerMoveModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        let action = self.action.clone();
+        renderer.register_handler(
+            "pointermove",
+            std::sync::Arc::new(move |event| {
+                if let Event::PointerMove { x, y } = event {
+                    (action)(x, y);
+                }
+            }),
+        );
+    }
+}
+
+/// OnPointerDownModifier registers a pointer down handler.
+#[derive(Clone)]
+pub struct OnPointerDownModifier {
+    pub action: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl ViewModifier for OnPointerDownModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        let action = self.action.clone();
+        renderer.register_handler(
+            "pointerdown",
+            std::sync::Arc::new(move |event| {
+                if let Event::PointerDown { .. } = event {
+                    (action)();
+                }
+            }),
+        );
+    }
+}
+
+/// OnPointerUpModifier registers a pointer up handler.
+#[derive(Clone)]
+pub struct OnPointerUpModifier {
+    pub action: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl ViewModifier for OnPointerUpModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+        let action = self.action.clone();
+        renderer.register_handler(
+            "pointerup",
+            std::sync::Arc::new(move |event| {
+                if let Event::PointerUp { .. } = event {
+                    (action)();
+                }
+            }),
+        );
+    }
+}
+
 /// ForegroundColorModifier overrides the foreground (text / icon) color inherited
 /// by all descendants until another ForegroundColorModifier is encountered.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -627,6 +887,14 @@ impl<V: View, M: ViewModifier> View for ModifiedView<V, M> {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         self.modifier.render_view(&self.view, renderer, rect);
     }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        self.modifier.measure_view(&self.view, renderer, proposal)
+    }
+
+    fn flex_weight(&self) -> f32 {
+        self.modifier.child_flex_weight(&self.view)
+    }
 }
 
 pub trait ViewModifier: Send + Clone {
@@ -650,6 +918,37 @@ pub trait ViewModifier: Send + Clone {
     fn transform_rect(&self, rect: Rect) -> Rect {
         rect
     }
+
+    /// Allows a modifier to transform the layout proposal before it reaches the child.
+    fn transform_proposal(&self, proposal: SizeProposal) -> SizeProposal {
+        proposal
+    }
+
+    /// Allows a modifier to transform the resulting size from the child.
+    fn transform_size(&self, size: Size) -> Size {
+        size
+    }
+
+    /// Measure hook that coordinates size propagation.
+    fn measure_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let child_proposal = self.transform_proposal(proposal);
+        let child_size = view.intrinsic_size(renderer, child_proposal);
+        self.transform_size(child_size)
+    }
+
+    /// Allows a modifier to override or pass through the child's flex weight.
+    fn child_flex_weight<V: View>(&self, view: &V) -> f32 {
+        view.flex_weight()
+    }
+}
+
+/// TelemetryData tracks real-time performance metrics for the GPU renderer.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct TelemetryData {
+    pub frame_time_ms: f32,
+    pub draw_calls: u32,
+    pub vertices: u32,
+    pub vram_usage_mb: f32,
 }
 
 /// The Renderer trait defines the atomic drawing operations for all CVKG backends.
@@ -790,7 +1089,19 @@ pub trait Renderer: Send {
     /// Set a unique key for the current VDOM node to ensure stable identity during diffing.
     fn set_key(&mut self, _key: &str) {}
 
-    // ── VDOM Hierarchy ───────────────────────────────────────────────────
+    // ── Telemetry ────────────────────────────────────────────────────────
+    /// Get real-time performance telemetry.
+    fn get_telemetry(&self) -> TelemetryData {
+        TelemetryData::default()
+    }
+
+    // ── GPU State Management ─────────────────────────────────────────────
+    /// Push a shadow state to the stack. All following draw calls will have this shadow.
+    fn push_shadow(&mut self, _radius: f32, _color: [f32; 4], _offset: [f32; 2]) {}
+    /// Pop the last shadow state from the stack.
+    fn pop_shadow(&mut self) {}
+
+    // ── VDOM & Scene Graph ───────────────────────────────────────────────
     /// Push a Virtual DOM node onto the stack for hierarchy tracking.
     fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
     /// Pop the current Virtual DOM node from the stack.
@@ -802,6 +1113,21 @@ pub trait Renderer: Send {
         _handler: std::sync::Arc<dyn Fn(Event) + Send + Sync>,
     ) {
     }
+
+    // ── Z-Index & Depth ──────────────────────────────────────────────────
+    /// Set the current Z-index for depth sorting.
+    /// Higher values appear closer to the viewer.
+    fn set_z_index(&mut self, _z: f32) {}
+    /// Get the current Z-index.
+    fn get_z_index(&self) -> f32 {
+        0.0
+    }
+
+    // ── Vector Graphics ──────────────────────────────────────────────────
+    /// Load an SVG model from raw bytes.
+    fn load_svg(&mut self, _name: &str, _svg_data: &[u8]) {}
+    /// Draw a pre-loaded SVG model.
+    fn draw_svg(&mut self, _name: &str, _rect: Rect) {}
 }
 
 // =============================================================================
@@ -890,8 +1216,9 @@ pub struct SceneUniforms {
     pub shatter_force: f32,
     pub berzerker_rage: f32,
     pub scroll_offset: f32,
-    // Padding to ensure 16-byte alignment for GPU uniforms
-    pub _pad: [f32; 2],
+    pub scale_factor: f32,
+    // Padding to ensure 16-byte alignment for GPU uniforms (47 f32s + 1 = 48)
+    pub _pad: [f32; 1],
 }
 
 impl SceneUniforms {
@@ -909,7 +1236,8 @@ impl SceneUniforms {
             shatter_force: 0.0,
             berzerker_rage: 0.0,
             scroll_offset: 0.0,
-            _pad: [0.0; 2],
+            scale_factor: 1.0,
+            _pad: [0.0; 1],
         }
     }
 }
@@ -986,7 +1314,8 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct State<T: Clone + Send + Sync + 'static> {
     value: Arc<std::sync::RwLock<T>>,
-    subscribers: Arc<std::sync::RwLock<Vec<Box<dyn FnMut(&T) + Send + Sync>>>>,
+    subscribers: Arc<std::sync::RwLock<Vec<Box<dyn Fn(&T) + Send + Sync>>>>,
+    version: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl<T: Clone + Send + Sync + 'static> State<T> {
@@ -995,6 +1324,7 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
         Self {
             value: Arc::new(std::sync::RwLock::new(value)),
             subscribers: Arc::new(std::sync::RwLock::new(Vec::new())),
+            version: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -1006,15 +1336,21 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
     /// Set a new value, notifying all subscribers
     pub fn set(&self, value: T) {
         *self.value.write().unwrap() = value;
+        self.version.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         // Notify subscribers
-        let mut subscribers = self.subscribers.write().unwrap();
-        for subscriber in subscribers.iter_mut() {
+        let subscribers = self.subscribers.read().unwrap();
+        for subscriber in subscribers.iter() {
             subscriber(&self.get());
         }
     }
 
+    /// Get current version
+    pub fn version(&self) -> u64 {
+        self.version.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     /// Subscribe to state changes
-    pub fn subscribe<F: FnMut(&T) + Send + Sync + 'static>(&self, callback: F) {
+    pub fn subscribe<F: Fn(&T) + Send + Sync + 'static>(&self, callback: F) {
         self.subscribers.write().unwrap().push(Box::new(callback));
     }
 }
@@ -1160,6 +1496,7 @@ impl KnowledgeState {
 #[derive(Clone)]
 pub struct Binding<T: Clone + Send + Sync + 'static> {
     state: Arc<std::sync::RwLock<T>>,
+    version: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl<T: Clone + Send + Sync + 'static> Binding<T> {
@@ -1167,6 +1504,7 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
     pub fn from_state(state: &State<T>) -> Self {
         Self {
             state: state.value.clone(),
+            version: state.version.clone(),
         }
     }
 
@@ -1178,6 +1516,12 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
     /// Set a new value
     pub fn set(&self, value: T) {
         *self.state.write().unwrap() = value;
+        self.version.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Get current version
+    pub fn version(&self) -> u64 {
+        self.version.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -1234,6 +1578,30 @@ pub enum Orientation {
     Vertical,
 }
 
+/// Cross-axis alignment for layout containers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Alignment {
+    #[default]
+    Center,
+    Leading,
+    Trailing,
+    Top,
+    Bottom,
+}
+
+/// Main-axis distribution for linear layout containers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Distribution {
+    #[default]
+    Fill,
+    Center,
+    Leading,
+    Trailing,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+}
+
 /// A color represented by RGBA components in the [0.0, 1.0] range.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Color {
@@ -1280,6 +1648,30 @@ impl Color {
         b: 1.0,
         a: 1.0,
     };
+
+    /// Calculate the relative luminance of the color as defined by WCAG 2.x
+    pub fn relative_luminance(&self) -> f32 {
+        fn res(c: f32) -> f32 {
+            if c <= 0.03928 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        }
+        0.2126 * res(self.r) + 0.7152 * res(self.g) + 0.0722 * res(self.b)
+    }
+
+    /// Calculate the contrast ratio between this color and another color
+    pub fn contrast_ratio(&self, other: &Color) -> f32 {
+        let l1 = self.relative_luminance();
+        let l2 = other.relative_luminance();
+        if l1 > l2 {
+            (l1 + 0.05) / (l2 + 0.05)
+        } else {
+            (l2 + 0.05) / (l1 + 0.05)
+        }
+    }
+
     pub const CYAN: Color = Color {
         r: 0.0,
         g: 1.0,
@@ -1539,6 +1931,14 @@ pub struct Size {
     pub height: f32,
 }
 
+impl Size {
+    pub const ZERO: Self = Self { width: 0.0, height: 0.0 };
+
+    pub fn new(width: f32, height: f32) -> Self {
+        Self { width, height }
+    }
+}
+
 /// Insets for padding
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EdgeInsets {
@@ -1618,6 +2018,22 @@ impl ViewModifier for FrameModifier {
     }
 }
 
+/// Modifier to set the flex weight of a view
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FlexModifier {
+    pub weight: f32,
+}
+
+impl ViewModifier for FlexModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn child_flex_weight<V: View>(&self, _view: &V) -> f32 {
+        self.weight
+    }
+}
+
 /// Modifier to offset a view
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OffsetModifier {
@@ -1693,21 +2109,40 @@ impl ViewModifier for LayoutModifier {
     }
 }
 
-/// Modifier to make a view flexible in layout
+/// Modifier to handle platform safe areas
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FlexModifier {
-    pub flex: f32,
+pub struct SafeAreaModifier {
+    pub ignores: bool,
 }
 
-impl FlexModifier {
-    pub fn new(flex: f32) -> Self {
-        Self { flex }
+impl ViewModifier for SafeAreaModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
     }
 }
 
-impl ViewModifier for FlexModifier {
+/// Modifier to add elevation (shadow) to a view
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ElevationModifier {
+    pub level: f32,
+}
+
+impl ViewModifier for ElevationModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        if self.level > 0.0 {
+            let radius = self.level * 2.0;
+            let offset_y = self.level * 0.5;
+            let shadow_color = [0.0, 0.0, 0.0, 0.3];
+            renderer.push_shadow(radius, shadow_color, [0.0, offset_y]);
+            view.render(renderer, rect);
+            renderer.pop_shadow();
+        } else {
+            view.render(renderer, rect);
+        }
     }
 }
 
@@ -1716,15 +2151,34 @@ pub mod layout {
     use super::*;
 
     // Layout pass scratch space
-    pub struct LayoutCache;
+    pub struct LayoutCache {
+        pub safe_area: SafeArea,
+        size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
+    }
 
     impl LayoutCache {
         pub fn new() -> Self {
-            Self
+            Self {
+                safe_area: SafeArea::default(),
+                size_cache: HashMap::new(),
+            }
         }
 
         pub fn clear(&mut self) {
-            // In a real implementation, this would clear cached layout data
+            self.safe_area = SafeArea::default();
+            self.size_cache.clear();
+        }
+
+        pub fn get_size(&self, view_hash: u64, proposal: SizeProposal) -> Option<Size> {
+            let pw = (proposal.width.unwrap_or(-1.0) * 100.0) as u32;
+            let ph = (proposal.height.unwrap_or(-1.0) * 100.0) as u32;
+            self.size_cache.get(&(view_hash, pw, ph)).copied()
+        }
+
+        pub fn set_size(&mut self, view_hash: u64, proposal: SizeProposal, size: Size) {
+            let pw = (proposal.width.unwrap_or(-1.0) * 100.0) as u32;
+            let ph = (proposal.height.unwrap_or(-1.0) * 100.0) as u32;
+            self.size_cache.insert((view_hash, pw, ph), size);
         }
     }
 
@@ -1763,6 +2217,10 @@ pub mod layout {
                 height: Some(height),
             }
         }
+
+        pub fn new(width: Option<f32>, height: Option<f32>) -> Self {
+            Self { width, height }
+        }
     }
 
     /// A view that can participate in layout
@@ -1782,6 +2240,40 @@ pub mod layout {
             subviews: &mut [&mut dyn LayoutView],
             cache: &mut LayoutCache,
         );
+
+        /// Returns the flex weight of this view (default is 0.0, which means fixed/intrinsic)
+        fn flex_weight(&self) -> f32 {
+            0.0
+        }
+    }
+    /// Edge insets for padding, margins, and safe areas
+    #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+    pub struct EdgeInsets {
+        pub top: f32,
+        pub leading: f32,
+        pub bottom: f32,
+        pub trailing: f32,
+    }
+
+    impl EdgeInsets {
+        pub fn new(top: f32, leading: f32, bottom: f32, trailing: f32) -> Self {
+            Self { top, leading, bottom, trailing }
+        }
+
+        pub fn all(value: f32) -> Self {
+            Self {
+                top: value,
+                leading: value,
+                bottom: value,
+                trailing: value,
+            }
+        }
+    }
+
+    /// SafeArea constraints provided by the platform
+    #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+    pub struct SafeArea {
+        pub insets: EdgeInsets,
     }
 
     /// Rectangle in logical pixels
@@ -1886,8 +2378,29 @@ pub enum Event {
     PointerUp { x: f32, y: f32 },
     PointerMove { x: f32, y: f32 },
     PointerClick { x: f32, y: f32 },
+    PointerEnter,
+    PointerLeave,
     KeyDown { key: String },
     KeyUp { key: String },
+    /// Input Method Editor event (e.g. CJK character composition)
+    Ime(String),
+}
+
+impl Event {
+    /// Returns the canonical string name of the event for lookup in handler maps.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::PointerDown { .. } => "pointerdown",
+            Self::PointerUp { .. } => "pointerup",
+            Self::PointerMove { .. } => "pointermove",
+            Self::PointerClick { .. } => "pointerclick",
+            Self::PointerEnter => "pointerenter",
+            Self::PointerLeave => "pointerleave",
+            Self::KeyDown { .. } => "keydown",
+            Self::KeyUp { .. } => "keyup",
+            Self::Ime(_) => "ime",
+        }
+    }
 }
 
 /// Response from an event handler

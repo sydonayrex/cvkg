@@ -1,8 +1,7 @@
 # cvkg-scene
 
-**cvkg-scene** manages the high-fidelity retained scene graph for CVKG.
+**cvkg-scene** manages 3D coordinate systems and scene graphs for hybrid 2D/3D CVKG applications.
 
 ## Features
-- **Retained Scene Graph**: Persistent representation of the UI tree.
-- **Structural Diffing**: Efficient updates to the rendering backends.
-- **TestRenderer**: Built-in mock renderer for consistency verification.
+*   **Perspective Projection**: Handles 3D-to-2D projection for UI elements.
+*   **Scene Graph**: Tree-based management of 3D objects and lighting.

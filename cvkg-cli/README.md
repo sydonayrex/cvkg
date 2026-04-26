@@ -1,8 +1,7 @@
 # cvkg-cli
 
-**cvkg-cli** is the primary developer tool for the CVKG ecosystem.
+**cvkg-cli** is the development command-line tool for CVKG.
 
-## Commands
-- `cvkg init`: Scaffold a new project.
-- `cvkg dev`: Run a high-fidelity dev server with HMR.
-- `cvkg doctor`: Verify your environment for GPU rendering.
+## Features
+*   `cvkg new`: Scaffolds a new project.
+*   `cvkg dev`: Hot-reloading development server.

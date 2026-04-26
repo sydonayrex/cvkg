@@ -118,7 +118,7 @@ impl ApplicationHandler for AppState {
 
         match event {
             WindowEvent::Resized(new_size) => {
-                renderer.resize(new_size.width, new_size.height);
+                renderer.resize(window.id(), new_size.width, new_size.height, 1.0);
             }
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::MouseInput {
@@ -141,7 +141,7 @@ impl ApplicationHandler for AppState {
                         height: size.height as f32,
                     };
 
-                    let encoder = renderer.begin_frame();
+                    let encoder = renderer.begin_frame(window.id());
                     self.app.render(renderer, rect);
                     renderer.end_frame(encoder);
                 }

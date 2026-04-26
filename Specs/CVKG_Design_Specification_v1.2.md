@@ -663,7 +663,7 @@ The GPU backend uses `wgpu` — supporting Vulkan, Metal, DirectX 12, and WebGPU
 #### GPU Renderer Requirements
 
 - Maintain a per-frame command buffer built from scene graph paint commands
-- GPU atlas for glyph rasterization (cosmic-text + swash)
+- GPU atlas for glyph rasterization (runic-text + swash)
 - Batch draw calls: group solid fills → gradient fills → textured quads → text
 - Texture atlas for images with LRU eviction policy
 - Shadow/blur pipeline using a two-pass Gaussian blur compute shader
@@ -1003,7 +1003,7 @@ The agentic AI system SHALL implement CVKG in the following phases, in strict or
 - Before modifying any file, perform triple-pass review: read the `CvkgRenderer` trait, all its call sites in the scene graph, and the full wgpu backend skeleton (Guideline 5)
 - Implement `CvkgRenderer` trait in `cvkg-render-gpu` using wgpu
 - Implement WGSL shaders for: solid fill, gradient fill, rounded rect, text glyph atlas, image blit — each entry point MUST have a leading block comment (Guideline 6)
-- Integrate cosmic-text for text shaping and layout
+- Integrate runic-text for text shaping and layout
 - Monitor `wgpu` device initialization; if stalled >30s, check adapter enumeration and apply Guideline 7 corrective protocol
 
 ---
@@ -1100,7 +1100,7 @@ The agentic AI system SHALL implement CVKG in the following phases, in strict or
 | `axum` | latest stable | Async HTTP server for dev server and static file serving |
 | `wry` | latest stable | WebKit/WebView2 native shell for `cvkg serve` preview |
 | `taffy` | latest stable | Flexbox layout engine, constraint solving backend |
-| `cosmic-text` | latest stable | Cross-platform text shaping, layout, and glyph rendering |
+| `runic-text` | latest stable | Cross-platform text shaping, layout, and glyph rendering |
 | `swash` | latest stable | Font loading, glyph rasterization into wgpu atlas |
 | `accesskit` | latest stable | Cross-platform accessibility tree bridge |
 | `serde` / `serde_json` | latest stable | Serialization for Inspector protocol, state persistence, tokens |

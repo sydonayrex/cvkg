@@ -49,14 +49,18 @@ impl View for Button {
         let bg = if is_pressed {
             [0.2, 0.2, 0.25, 1.0]
         } else {
-            [0.1, 0.1, 0.15, 1.0]
+            [0.12, 0.12, 0.18, 1.0]
         };
+        
+        // Elevation & Depth
+        renderer.push_shadow(1.0, [0.0, 0.0, 0.0, 0.5], [0.0, 1.0]);
         renderer.fill_rounded_rect(rect, 6.0, bg);
-        
+        renderer.pop_shadow();
+
         // Neon cyan border, thicker if pressed
-        let border_width = if is_pressed { 3.0 } else { 2.0 };
-        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 1.0], border_width);
-        
+        let border_width = if is_pressed { 3.0 } else { 1.5 };
+        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 0.8], border_width);
+
         // Label text
         let text_x = rect.x + 8.0;
         let text_y = rect.y + (rect.height - 14.0) / 2.0;
@@ -90,6 +94,14 @@ impl View for Button {
             }),
         );
         renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let (tw, th) = renderer.measure_text(&self.label, 14.0);
+        cvkg_core::Size {
+            width: tw + 16.0,
+            height: th + 12.0,
+        }
     }
 }
 
@@ -183,6 +195,14 @@ impl View for Toggle {
             }),
         );
         renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let (tw, th) = renderer.measure_text(&self.label, 14.0);
+        cvkg_core::Size {
+            width: 40.0 + 8.0 + tw,
+            height: th.max(20.0) + 4.0,
+        }
     }
 }
 
@@ -308,6 +328,13 @@ impl View for Slider {
             }),
         );
     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(150.0),
+            height: 24.0,
+        }
+    }
 }
 
 /// Stepper for discrete increment/decrement
@@ -416,6 +443,15 @@ impl View for Stepper {
                 }
             }),
         );
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let (lw, lh) = renderer.measure_text(&self.label, 14.0);
+        let (vw, _) = renderer.measure_text(&self.value.to_string(), 14.0);
+        cvkg_core::Size {
+            width: lw + 8.0 + 30.0 + vw + 20.0 + 30.0 + 8.0,
+            height: lh.max(30.0) + 8.0,
+        }
     }
 }
 
@@ -531,6 +567,15 @@ impl View for TextField {
         );
         renderer.pop_vnode();
     }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let text = if self.text.is_empty() { &self.placeholder } else { &self.text };
+        let (tw, th) = renderer.measure_text(text, 14.0);
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(tw + 24.0).max(100.0),
+            height: th + 16.0,
+        }
+    }
 }
 
 /// Secure password input
@@ -614,6 +659,16 @@ impl View for SecureField {
                 }
             }),
         );
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let text = if self.text.is_empty() { &self.placeholder } else { "*" }; // Proxy for measurement
+        let (tw, th) = renderer.measure_text(text, 14.0);
+        let width = if self.text.is_empty() { tw + 24.0 } else { (self.text.len() as f32 * 10.0) + 24.0 };
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(width).max(100.0),
+            height: th + 16.0,
+        }
     }
 }
 
@@ -710,6 +765,144 @@ impl View for TextEditor {
         );
         renderer.pop_vnode();
     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(300.0),
+            height: proposal.height.unwrap_or(200.0),
+        }
+    }
+}
+
+/// Dropdown component for selecting from a list of options with a popover
+pub struct Dropdown {
+    pub(crate) selection: usize,
+    pub(crate) options: Vec<String>,
+    pub(crate) on_change: std::sync::Arc<dyn Fn(usize) + Send + Sync>,
+}
+
+impl Dropdown {
+    pub fn new(
+        selection: usize,
+        options: Vec<String>,
+        on_change: impl Fn(usize) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            selection,
+            options,
+            on_change: std::sync::Arc::new(on_change),
+        }
+    }
+}
+
+impl View for Dropdown {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "Dropdown");
+        
+        let state_registry = cvkg_core::get_system_state();
+        let id_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "dropdown".hash(&mut s);
+            self.options.len().hash(&mut s);
+            s.finish()
+        };
+
+        let is_expanded = {
+            let s = state_registry.read().unwrap();
+            s.get_component_state::<bool>(id_hash)
+                .map(|v| *v.read().unwrap())
+                .unwrap_or(false)
+        };
+
+        // Main button
+        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 1.0], 1.0);
+
+        let selected = self.options.get(self.selection).cloned().unwrap_or_default();
+        renderer.draw_text(&selected, rect.x + 8.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(if is_expanded { "▲" } else { "▼" }, rect.x + rect.width - 20.0, rect.y + (rect.height - 14.0) / 2.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+
+        if is_expanded {
+            let popover_h = (self.options.len() as f32 * 30.0).min(200.0);
+            let popover_rect = Rect {
+                x: rect.x,
+                y: rect.y + rect.height + 4.0,
+                width: rect.width,
+                height: popover_h,
+            };
+
+            // Z-Index boost for popover
+            renderer.set_z_index(100.0);
+            renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
+            renderer.fill_rounded_rect(popover_rect, 4.0, [0.05, 0.05, 0.1, 0.95]);
+            renderer.stroke_rect(popover_rect, [0.0, 1.0, 1.0, 0.5], 1.0);
+
+            for (i, opt) in self.options.iter().enumerate() {
+                let item_rect = Rect {
+                    x: popover_rect.x,
+                    y: popover_rect.y + i as f32 * 30.0,
+                    width: popover_rect.width,
+                    height: 30.0,
+                };
+                
+                if i == self.selection {
+                    renderer.fill_rect(item_rect, [0.0, 0.5, 0.8, 0.3]);
+                }
+                
+                renderer.draw_text(opt, item_rect.x + 8.0, item_rect.y + (item_rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+            }
+            renderer.set_z_index(0.0);
+        }
+
+        let state_reg = state_registry.clone();
+        let options_count = self.options.len();
+        let on_change = self.on_change.clone();
+        
+        renderer.register_handler("pointerclick", std::sync::Arc::new(move |event| {
+            if let cvkg_core::Event::PointerClick { x, y } = event {
+                if is_expanded {
+                    let popover_h = (options_count as f32 * 30.0).min(200.0);
+                    let popover_rect = Rect {
+                        x: rect.x,
+                        y: rect.y + rect.height + 4.0,
+                        width: rect.width,
+                        height: popover_h,
+                    };
+                    
+                    if x >= popover_rect.x && x <= popover_rect.x + popover_rect.width &&
+                       y >= popover_rect.y && y <= popover_rect.y + popover_rect.height {
+                        let idx = ((y - popover_rect.y) / 30.0) as usize;
+                        if idx < options_count {
+                            on_change(idx);
+                        }
+                    }
+                }
+                
+                let mut s = state_reg.write().unwrap();
+                s.set_component_state(id_hash, !is_expanded);
+            }
+        }));
+
+        renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let mut max_w = 0.0f32;
+        for opt in &self.options {
+            let (w, _) = renderer.measure_text(opt, 14.0);
+            max_w = max_w.max(w);
+        }
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(max_w + 40.0).max(120.0),
+            height: 32.0,
+        }
+    }
 }
 
 /// Picker for selection from a list of options
@@ -781,6 +974,20 @@ impl View for Picker {
                 }
             }),
         );
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let mut max_w = 0.0f32;
+        let mut max_h = 0.0f32;
+        for opt in &self.options {
+            let (w, h) = renderer.measure_text(opt, 14.0);
+            max_w = max_w.max(w);
+            max_h = max_h.max(h);
+        }
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(max_w + 40.0).max(120.0),
+            height: max_h + 16.0,
+        }
     }
 }
 

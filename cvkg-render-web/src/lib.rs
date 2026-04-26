@@ -732,7 +732,12 @@ impl WebRenderer {
                 ctx.surface.configure(&ctx.device, &ctx.config);
                 return Err(JsValue::from_str("Surface outdated, reconfigured"));
             }
-            Err(e) => return Err(JsValue::from_str(&format!("Failed to get surface texture: {}", e))),
+            Err(e) => {
+                return Err(JsValue::from_str(&format!(
+                    "Failed to get surface texture: {}",
+                    e
+                )));
+            }
         };
         let view = output
             .texture

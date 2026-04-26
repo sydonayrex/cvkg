@@ -15,10 +15,11 @@ members = [
     "cvkg-components",
     "cvkg-themes",
     "cvkg-macros",
+    "cvkg-runic-text",
 ]
 
 [workspace.package]
-version = "0.1.10"
+version = "0.1.11"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -35,3 +36,4 @@ bytemuck = { version = "1.14", features = ["derive"] }
 glam = { version = "0.29", features = ["serde", "bytemuck"] }
 tobj = "4.0"
 stl_io = "0.7"
+bincode = "1.3"

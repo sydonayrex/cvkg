@@ -117,7 +117,6 @@ impl<V: View> View for Sheet<V> {
         // Render dimming background (Ginnungagap Void)
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.7]);
 
-        // Render centered modal content with Bifrost glass style
         let modal_width = (rect.width * 0.8).min(500.0);
         let modal_height = (rect.height * 0.6).min(400.0);
         let modal_rect = Rect {
@@ -127,10 +126,56 @@ impl<V: View> View for Sheet<V> {
             height: modal_height,
         };
 
-        renderer.fill_rounded_rect(modal_rect, 12.0, [0.05, 0.05, 0.05, 0.9]);
-        renderer.stroke_rect(modal_rect, [0.0, 1.0, 1.0, 1.0], 2.0); // Neon border
+        // Render frosted glass background for the modal edges (evident frosting)
+        renderer.bifrost(modal_rect, 25.0, 1.5, 0.85);
+        // Mostly clear center
+        renderer.fill_rounded_rect(modal_rect, 12.0, [0.0, 0.0, 0.0, 0.3]);
+        // Neon glass border
+        renderer.stroke_rounded_rect(modal_rect, 12.0, [0.2, 0.25, 0.3, 0.6], 2.0);
 
         self.content.render(renderer, modal_rect);
+    }
+}
+
+/// A modifier that presents a modal sheet over a view.
+#[derive(Clone)]
+pub struct SheetModifier<V2> {
+    pub is_presented: bool,
+    pub content: V2,
+}
+
+impl<V2: View + Clone> cvkg_core::ViewModifier for SheetModifier<V2> {
+    fn modify<V: View>(self, content: V) -> impl View {
+        cvkg_core::ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        // Render the underlying view first
+        view.render(renderer, rect);
+
+        // If presented, render the modal on top
+        if self.is_presented {
+            // Render dimming background (Ginnungagap Void)
+            renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.7]);
+
+            let modal_width = (rect.width * 0.8).min(500.0);
+            let modal_height = (rect.height * 0.6).min(400.0);
+            let modal_rect = Rect {
+                x: rect.x + (rect.width - modal_width) / 2.0,
+                y: rect.y + (rect.height - modal_height) / 2.0,
+                width: modal_width,
+                height: modal_height,
+            };
+
+            // Evident frosting of the glass around the edges
+            renderer.bifrost(modal_rect, 25.0, 1.5, 0.85);
+            // Mostly clear center
+            renderer.fill_rounded_rect(modal_rect, 12.0, [0.0, 0.0, 0.0, 0.3]);
+            // Neon glass border
+            renderer.stroke_rounded_rect(modal_rect, 12.0, [0.2, 0.25, 0.3, 0.6], 2.0);
+
+            self.content.render(renderer, modal_rect);
+        }
     }
 }
 
@@ -318,6 +363,8 @@ impl<V: View> View for Form<V> {
 /// A vertical stack of views
 pub struct VStack {
     spacing: f32,
+    alignment: cvkg_core::Alignment,
+    distribution: cvkg_core::Distribution,
     children: Vec<cvkg_core::AnyView>,
 }
 
@@ -325,8 +372,20 @@ impl VStack {
     pub fn new(spacing: f32) -> Self {
         Self {
             spacing,
+            alignment: cvkg_core::Alignment::Center,
+            distribution: cvkg_core::Distribution::Fill,
             children: Vec::new(),
         }
+    }
+
+    pub fn alignment(mut self, alignment: cvkg_core::Alignment) -> Self {
+        self.alignment = alignment;
+        self
+    }
+
+    pub fn distribution(mut self, distribution: cvkg_core::Distribution) -> Self {
+        self.distribution = distribution;
+        self
     }
 
     pub fn child<V: View + 'static>(mut self, view: V) -> Self {
@@ -350,13 +409,36 @@ impl View for VStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let rects = cvkg_layout::VStack::compute_layout(self.spacing, rect, &layouts, &mut cache);
+        let rects = cvkg_layout::VStack::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            rect,
+            &layouts,
+            &mut cache,
+        );
 
         for (i, child) in self.children.iter().enumerate() {
             if i < rects.len() {
                 child.render(renderer, rects[i]);
             }
         }
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let mut width = 0.0f32;
+        let mut height = 0.0f32;
+
+        for (i, child) in self.children.iter().enumerate() {
+            let child_size = child.intrinsic_size(renderer, proposal);
+            width = width.max(child_size.width);
+            height += child_size.height;
+            if i < self.children.len() - 1 {
+                height += self.spacing;
+            }
+        }
+
+        Size { width, height }
     }
 
     fn layout(&self) -> Option<&dyn LayoutView> {
@@ -397,7 +479,14 @@ impl LayoutView for VStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let _rects = cvkg_layout::VStack::compute_layout(self.spacing, bounds, &layouts, cache);
+        let _rects = cvkg_layout::VStack::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            bounds,
+            &layouts,
+            cache,
+        );
         // Note: in a full recursive layout engine, we would call place_subviews on children here.
     }
 }
@@ -464,6 +553,8 @@ impl View for LazyVStack {
 /// A horizontal stack of views
 pub struct HStack {
     spacing: f32,
+    alignment: cvkg_core::Alignment,
+    distribution: cvkg_core::Distribution,
     children: Vec<cvkg_core::AnyView>,
 }
 
@@ -471,8 +562,20 @@ impl HStack {
     pub fn new(spacing: f32) -> Self {
         Self {
             spacing,
+            alignment: cvkg_core::Alignment::Center,
+            distribution: cvkg_core::Distribution::Fill,
             children: Vec::new(),
         }
+    }
+
+    pub fn alignment(mut self, alignment: cvkg_core::Alignment) -> Self {
+        self.alignment = alignment;
+        self
+    }
+
+    pub fn distribution(mut self, distribution: cvkg_core::Distribution) -> Self {
+        self.distribution = distribution;
+        self
     }
 
     pub fn child<V: View + 'static>(mut self, view: V) -> Self {
@@ -496,13 +599,36 @@ impl View for HStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let rects = cvkg_layout::HStack::compute_layout(self.spacing, rect, &layouts, &mut cache);
+        let rects = cvkg_layout::HStack::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            rect,
+            &layouts,
+            &mut cache,
+        );
 
         for (i, child) in self.children.iter().enumerate() {
             if i < rects.len() {
                 child.render(renderer, rects[i]);
             }
         }
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let mut width = 0.0f32;
+        let mut height = 0.0f32;
+
+        for (i, child) in self.children.iter().enumerate() {
+            let child_size = child.intrinsic_size(renderer, proposal);
+            width += child_size.width;
+            height = height.max(child_size.height);
+            if i < self.children.len() - 1 {
+                width += self.spacing;
+            }
+        }
+
+        Size { width, height }
     }
 
     fn layout(&self) -> Option<&dyn LayoutView> {
@@ -543,6 +669,111 @@ impl LayoutView for HStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let _rects = cvkg_layout::HStack::compute_layout(self.spacing, bounds, &layouts, cache);
+        let _rects = cvkg_layout::HStack::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            bounds,
+            &layouts,
+            cache,
+        );
+    }
+}
+
+/// A flexible container that defaults to a glassmorphic construct over a void black background
+pub struct FlexBox {
+    pub orientation: cvkg_core::Orientation,
+    pub spacing: f32,
+    children: Vec<cvkg_core::AnyView>,
+}
+
+impl FlexBox {
+    pub fn new(orientation: cvkg_core::Orientation, spacing: f32) -> Self {
+        Self {
+            orientation,
+            spacing,
+            children: Vec::new(),
+        }
+    }
+
+    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+        self.children.push(view.erase());
+        self
+    }
+}
+
+impl View for FlexBox {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
+        // Natural void black background with glassmorphic construct
+        renderer.fill_rounded_rect(rect, 8.0, [0.0, 0.0, 0.0, 0.85]);
+        renderer.stroke_rect(rect, [0.2, 0.2, 0.25, 0.5], 1.0);
+        renderer.bifrost(rect, 15.0, 1.2, 0.85); // Glassmorphism
+
+        if self.children.is_empty() {
+            return;
+        }
+
+        // Use the flex layout to compute placements.
+        let n = self.children.len() as f32;
+        match self.orientation {
+            cvkg_core::Orientation::Horizontal => {
+                let total_spacing = self.spacing * (n - 1.0);
+                let item_width = (rect.width - total_spacing) / n;
+                for (i, child) in self.children.iter().enumerate() {
+                    let child_rect = Rect {
+                        x: rect.x + i as f32 * (item_width + self.spacing),
+                        y: rect.y,
+                        width: item_width,
+                        height: rect.height,
+                    };
+                    child.render(renderer, child_rect);
+                }
+            }
+            cvkg_core::Orientation::Vertical => {
+                let total_spacing = self.spacing * (n - 1.0);
+                let item_height = (rect.height - total_spacing) / n;
+                for (i, child) in self.children.iter().enumerate() {
+                    let child_rect = Rect {
+                        x: rect.x,
+                        y: rect.y + i as f32 * (item_height + self.spacing),
+                        width: rect.width,
+                        height: item_height,
+                    };
+                    child.render(renderer, child_rect);
+                }
+            }
+        }
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let mut width = 0.0f32;
+        let mut height = 0.0f32;
+
+        for (i, child) in self.children.iter().enumerate() {
+            let child_size = child.intrinsic_size(renderer, proposal);
+            match self.orientation {
+                cvkg_core::Orientation::Horizontal => {
+                    width += child_size.width;
+                    height = height.max(child_size.height);
+                    if i < self.children.len() - 1 {
+                        width += self.spacing;
+                    }
+                }
+                cvkg_core::Orientation::Vertical => {
+                    width = width.max(child_size.width);
+                    height += child_size.height;
+                    if i < self.children.len() - 1 {
+                        height += self.spacing;
+                    }
+                }
+            }
+        }
+
+        Size { width, height }
     }
 }

@@ -1,8 +1,8 @@
 # cvkg-render-web
 
-**cvkg-render-web** is the high-performance Web backend for CVKG.
+**cvkg-render-web** provides the WASM-based rendering bridge for running CVKG applications in the browser.
 
 ## Features
-- **WebGPU Support**: Native WebGPU rendering with WebGL2 fallback.
-- **Canvas2D Fallback**: Automatic detection and resolution of the best available rendering context.
-- **WASM Optimized**: Designed to run seamlessly in the browser via wasm-bindgen.
+*   **HTML Canvas Integration**: Bridges the CVKG `Renderer` trait to a WebGL2 or WebGPU context in the browser.
+*   **DOM Event Mapping**: Translates browser DOM events (PointerEvents, KeyboardEvents) into CVKG `Event` variants.
+*   **WASM Orchestration**: Provides the entry point for compiled CVKG applications.

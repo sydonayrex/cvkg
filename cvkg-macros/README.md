@@ -1,13 +1,7 @@
 # cvkg-macros
 
-**cvkg-macros** provides procedural macros for the CVKG framework, simplifying the definition of views and state.
+**cvkg-macros** contains procedural macros for the CVKG framework.
 
 ## Features
-
-- **`#[derive(View)]`**: Automatically implement the `View` trait for structs.
-- **`view!` Macro**: A declarative macro for composing complex view hierarchies (experimental).
-- **Environment Key Derives**: Easily define custom tokens for the Yggdrasil design system.
-
-## Usage
-
-This crate is usually not consumed directly. Instead, use the macros re-exported by the main `cvkg` crate.
+*   `#[derive(View)]`: Automatically implements the `View` trait for custom structs.
+*   `view! { ... }`: DSL-like macro for declarative UI definition.

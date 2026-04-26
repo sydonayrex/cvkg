@@ -11,10 +11,11 @@ name = "cvkg-webkit-server"
 path = "src/main.rs"
 
 [dependencies]
-cvkg-cli = { path = "../cvkg-cli", version = "0.1.10" }
+cvkg-cli = { path = "../cvkg-cli", version = "0.1.11" }
 axum = { version = "0.7", features = ["ws"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tower-http = { version = "0.5", features = ["cors", "fs"] }
+anyhow = "1.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 wry = "0.55.0"

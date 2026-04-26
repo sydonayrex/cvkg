@@ -93,10 +93,24 @@ impl View for BerserkerFireDemo {
         // 2. Render Tactical Grid
         let grid_size = 80.0;
         for x in (0..(rect.width as i32)).step_by(grid_size as usize) {
-            renderer.draw_line(x as f32, 0.0, x as f32, rect.height, [0.0, 1.0, 1.0, 0.1], 1.0);
+            renderer.draw_line(
+                x as f32,
+                0.0,
+                x as f32,
+                rect.height,
+                [0.0, 1.0, 1.0, 0.1],
+                1.0,
+            );
         }
         for y in (0..(rect.height as i32)).step_by(grid_size as usize) {
-            renderer.draw_line(0.0, y as f32, rect.width, y as f32, [0.0, 1.0, 1.0, 0.1], 1.0);
+            renderer.draw_line(
+                0.0,
+                y as f32,
+                rect.width,
+                y as f32,
+                [0.0, 1.0, 1.0, 0.1],
+                1.0,
+            );
         }
 
         // 3. Render Particles
@@ -107,33 +121,93 @@ impl View for BerserkerFireDemo {
         for p in particles.iter() {
             let mut p_color = p.color;
             p_color[3] *= p.life;
-            renderer.fill_ellipse(Rect { x: p.pos[0] - p.size/2.0, y: p.pos[1] - p.size/2.0, width: p.size, height: p.size }, p_color);
+            renderer.fill_ellipse(
+                Rect {
+                    x: p.pos[0] - p.size / 2.0,
+                    y: p.pos[1] - p.size / 2.0,
+                    width: p.size,
+                    height: p.size,
+                },
+                p_color,
+            );
         }
 
         // 4. Glass Cards
         for i in 0..3 {
-            let card_rect = Rect { x: (i as f32 * 400.0) + 100.0, y: 250.0, width: 340.0, height: 400.0 };
+            let card_rect = Rect {
+                x: (i as f32 * 400.0) + 100.0,
+                y: 250.0,
+                width: 340.0,
+                height: 400.0,
+            };
             renderer.draw_drop_shadow(card_rect, 24.0, [0.0, 0.0, 0.0, 0.25], 20.0, 4.0);
             renderer.bifrost(card_rect, 24.0, 1.0, 0.3);
             renderer.stroke_rounded_rect(card_rect, 24.0, [1.0, 1.0, 1.0, 0.4], 1.0);
-            renderer.draw_text(&format!("NODE PROTOCOL {:02}", i + 7), card_rect.x + 40.0, card_rect.y + 60.0, 26.0, [1.0, 1.0, 1.0, 1.0]);
-            renderer.draw_text("SYSTEM: STABLE", card_rect.x + 40.0, card_rect.y + 100.0, 16.0, [0.0, 1.0, 1.0, 0.9]);
-            renderer.fill_rounded_rect(Rect { x: card_rect.x + 40.0, y: card_rect.y + 340.0, width: 260.0, height: 6.0 }, 3.0, [1.0, 1.0, 1.0, 0.1]);
-            renderer.fill_rounded_rect(Rect { x: card_rect.x + 40.0, y: card_rect.y + 340.0, width: 260.0 * (0.5 + (t * 0.5).sin() * 0.5), height: 6.0 }, 3.0, [0.0, 1.0, 1.0, 0.8]);
+            renderer.draw_text(
+                &format!("NODE PROTOCOL {:02}", i + 7),
+                card_rect.x + 40.0,
+                card_rect.y + 60.0,
+                26.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+            renderer.draw_text(
+                "SYSTEM: STABLE",
+                card_rect.x + 40.0,
+                card_rect.y + 100.0,
+                16.0,
+                [0.0, 1.0, 1.0, 0.9],
+            );
+            renderer.fill_rounded_rect(
+                Rect {
+                    x: card_rect.x + 40.0,
+                    y: card_rect.y + 340.0,
+                    width: 260.0,
+                    height: 6.0,
+                },
+                3.0,
+                [1.0, 1.0, 1.0, 0.1],
+            );
+            renderer.fill_rounded_rect(
+                Rect {
+                    x: card_rect.x + 40.0,
+                    y: card_rect.y + 340.0,
+                    width: 260.0 * (0.5 + (t * 0.5).sin() * 0.5),
+                    height: 6.0,
+                },
+                3.0,
+                [0.0, 1.0, 1.0, 0.8],
+            );
         }
 
         // 5. Ember
-        renderer.fill_ellipse(Rect { x: ember_x - 16.0, y: ember_y - 16.0, width: 32.0, height: 32.0 }, [1.0, 1.0, 0.9, 1.0]);
+        renderer.fill_ellipse(
+            Rect {
+                x: ember_x - 16.0,
+                y: ember_y - 16.0,
+                width: 32.0,
+                height: 32.0,
+            },
+            [1.0, 1.0, 0.9, 1.0],
+        );
 
         // 6. Lightning
         if (t * 2.5).sin() > 0.96 {
-            renderer.draw_mjolnir_bolt([ember_x, ember_y], [rect.width / 2.0, rect.height / 2.0], [1.0, 0.6, 0.0, 1.0]);
+            renderer.draw_mjolnir_bolt(
+                [ember_x, ember_y],
+                [rect.width / 2.0, rect.height / 2.0],
+                [1.0, 0.6, 0.0, 1.0],
+            );
         }
 
         // 7. Click Counter & Button
         let button_w = 120.0;
         let button_h = 40.0;
-        let button_rect = Rect { x: rect.width - button_w - 40.0, y: 40.0, width: button_w, height: button_h };
+        let button_rect = Rect {
+            x: rect.width - button_w - 40.0,
+            y: 40.0,
+            width: button_w,
+            height: button_h,
+        };
 
         let count = *self.click_count.lock().unwrap();
         renderer.draw_text(
@@ -149,7 +223,8 @@ impl View for BerserkerFireDemo {
             let mut c = count_clone.lock().unwrap();
             *c += 1;
             audit_event(&format!("PULSE click! Count: {}", *c));
-        }).render(renderer, button_rect);
+        })
+        .render(renderer, button_rect);
 
         // ── Event Audit Log ────────────────────────────────────────────────
         let audit_log = cvkg_core::SYSTEM_STATE.get().unwrap().read().unwrap();
@@ -176,7 +251,11 @@ impl View for BerserkerFireDemo {
 /// Helper to log events to the audit system
 fn audit_event(msg: &str) {
     let mut s = cvkg_core::SYSTEM_STATE.get().unwrap().write().unwrap();
-    let msg_with_time = format!("[{:.2}] {}", std::time::Instant::now().elapsed().as_secs_f32(), msg);
+    let msg_with_time = format!(
+        "[{:.2}] {}",
+        std::time::Instant::now().elapsed().as_secs_f32(),
+        msg
+    );
     if let Some(lock) = s.get_component_state::<Vec<String>>(0x1337) {
         let mut logs = lock.write().unwrap();
         logs.push(msg_with_time);

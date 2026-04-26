@@ -31,7 +31,8 @@ struct SceneUniforms {
     shatter_force:   f32,
     berzerker_rage:  f32,
     scroll_offset:   f32,
-    _pad:            vec2<f32>,
+    scale_factor:    f32,
+    _pad:            f32,
 };
 
 // --- Group 2: Berserker Uniforms ---
@@ -108,7 +109,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     // Large sentinel so sd_box clip test always passes (clip_alpha → 1).
     out.clip   = vec4<f32>(-10000.0, -10000.0, 20000.0, 20000.0);
     out.size   = vec2<f32>(scene.resolution.x, scene.resolution.y);
-    out.screen = vec2<f32>(scene.resolution.x, scene.resolution.y);
+    out.screen = scene.resolution * scene.scale_factor;
     out.normal = vec3<f32>(0.0, 0.0, 1.0);
     return out;
 }
@@ -219,11 +220,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
     let fw = length(vec2(dpdx(in.logical.x), dpdy(in.logical.y)));
     
-    // Global Clipping
-    let clip_pos = in.clip.xy;
-    let clip_size = in.clip.zw;
-    let clip_d = sd_box(in.clip_position.xy - (clip_pos + clip_size * 0.5), clip_size * 0.5);
-    let clip_alpha = 1.0 - smoothstep(-fw, fw, clip_d);
+    // Global Clipping: Compare physical window coordinates to physical clip bounds.
+    let p_clip_pos = in.clip.xy * scene.scale_factor;
+    let p_clip_size = in.clip.zw * scene.scale_factor;
+    let clip_d = sd_box(in.clip_position.xy - (p_clip_pos + p_clip_size * 0.5), p_clip_size * 0.5);
+    let clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d); // Sharper physical clip
     color.a *= clip_alpha;
     if color.a <= 0.0 { discard; }
 

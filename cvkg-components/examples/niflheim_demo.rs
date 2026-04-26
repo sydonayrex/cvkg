@@ -89,7 +89,7 @@ impl ApplicationHandler for NiflheimApp {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame();
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
 
                 // ── Background void ──────────────────────────────────────────
                 renderer.fill_rect(

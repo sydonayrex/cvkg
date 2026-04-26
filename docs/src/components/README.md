@@ -3,7 +3,7 @@
 CVKG provides a suite of premium components designed to look and feel state-of-the-art.
 
 ## Primitive Views
-- **Text**: Support for high-fidelity typography via `cosmic-text`.
+- **Text**: Support for high-fidelity typography via `runic-text`.
 - **Shape**: Rectangles, circles, and rounded-rects with direct GPU fill support.
 - **Image**: High-performance texture sampling (Muspelheim compatible).
 

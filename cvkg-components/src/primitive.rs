@@ -24,7 +24,7 @@ impl Text {
             content: content.into(),
             font_size: 14.0,
             font_weight: FontWeight::Regular,
-            color: Color::BLACK,
+            color: Color::WHITE,
         }
     }
 
@@ -61,6 +61,11 @@ impl View for Text {
             self.font_size,
             self.color.as_array(),
         );
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        let (w, h) = renderer.measure_text(&self.content, self.font_size);
+        Size { width: w, height: h }
     }
 
     fn layout(&self) -> Option<&dyn LayoutView> {
@@ -145,6 +150,19 @@ impl View for Divider {
         };
         renderer.fill_rect(line_rect, color);
     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        match self.orientation {
+            Orientation::Horizontal => Size {
+                width: proposal.width.unwrap_or(0.0),
+                height: self.width,
+            },
+            Orientation::Vertical => Size {
+                width: self.width,
+                height: proposal.height.unwrap_or(0.0),
+            },
+        }
+    }
 }
 
 /// Spacer for flexible layout gaps
@@ -175,6 +193,17 @@ impl View for Spacer {
     fn layout(&self) -> Option<&dyn LayoutView> {
         Some(self)
     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        Size {
+            width: proposal.width.unwrap_or(self.min_length),
+            height: proposal.height.unwrap_or(self.min_length),
+        }
+    }
+
+    fn flex_weight(&self) -> f32 {
+        1.0
+    }
 }
 
 impl LayoutView for Spacer {
@@ -196,6 +225,10 @@ impl LayoutView for Spacer {
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
     ) {
+    }
+
+    fn flex_weight(&self) -> f32 {
+        1.0
     }
 }
 

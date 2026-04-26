@@ -28,9 +28,9 @@ expression: commands_json
       "y": 0.0,
       "size": 14.0,
       "color": [
-        0.0,
-        0.0,
-        0.0,
+        1.0,
+        1.0,
+        1.0,
         1.0
       ]
     }
