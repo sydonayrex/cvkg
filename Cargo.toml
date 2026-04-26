@@ -18,11 +18,11 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.9"
+version = "0.1.10"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/sydonayrex/cvkg"
-description = "Cyberpunk Viking Knowledge Graph (CVKG) - High-fidelity agentic UI framework"
+description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }

@@ -1,6 +1,6 @@
 # CVKG Framework: Optimization & Feature Roadmap
 
-This document outlines the systematic improvements required for the CVKG (Cyberpunk Viking Knowledge Graph) framework to achieve full feature parity and production-grade stability for the Ulfhednar native application.
+This document outlines the systematic improvements required for the CVKG (Cyber Viking Kvasir Graph) framework to achieve full feature parity and production-grade stability for the Ulfhednar native application.
 
 ## 1. Core Rendering & Typography
 *   [ ] **Full Font Rasterization**: Finalize `cosmic-text` integration in the `SurtrRenderer` to support high-fidelity font rendering with proper kerning and anti-aliasing.

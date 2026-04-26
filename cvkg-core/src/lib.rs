@@ -787,6 +787,9 @@ pub trait Renderer: Send {
     /// Register a shared element for Bifrost Bridge transitions.
     fn register_shared_element(&mut self, _id: &str, _rect: Rect) {}
 
+    /// Set a unique key for the current VDOM node to ensure stable identity during diffing.
+    fn set_key(&mut self, _key: &str) {}
+
     // ── VDOM Hierarchy ───────────────────────────────────────────────────
     /// Push a Virtual DOM node onto the stack for hierarchy tracking.
     fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
@@ -1882,6 +1885,7 @@ pub enum Event {
     PointerDown { x: f32, y: f32 },
     PointerUp { x: f32, y: f32 },
     PointerMove { x: f32, y: f32 },
+    PointerClick { x: f32, y: f32 },
     KeyDown { key: String },
     KeyUp { key: String },
 }

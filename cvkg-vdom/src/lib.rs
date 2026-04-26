@@ -159,7 +159,7 @@ impl VNode {
 }
 
 /// A discrete mutation to the Virtual DOM tree.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Clone)]
 pub enum VDomPatch {
     /// Create and append a new node
     Create(VNode),
@@ -168,7 +168,17 @@ pub enum VDomPatch {
         /// ID of the node to update
         id: NodeId,
         /// Updated properties map
-        props: HashMap<String, serde_json::Value>,
+        props: Option<HashMap<String, serde_json::Value>>,
+        /// Updated layout
+        layout: Option<LayoutRect>,
+        /// Updated ARIA properties
+        aria_props: Option<AriaProps>,
+        /// Updated ARIA role
+        aria_role: Option<String>,
+        /// Updated children list
+        children: Option<Vec<NodeId>>,
+        /// Updated event handlers
+        handlers: Option<HashMap<String, std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>>,
     },
     /// Remove an existing node
     Remove(NodeId),
@@ -186,6 +196,147 @@ pub enum VDomPatch {
         /// The new index position
         new_index: usize,
     },
+    /// Update the root node ID
+    SetRoot(Option<NodeId>),
+}
+
+impl std::fmt::Debug for VDomPatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Create(node) => f.debug_tuple("Create").field(node).finish(),
+            Self::Update {
+                id,
+                props,
+                layout,
+                aria_props,
+                aria_role,
+                children,
+                handlers,
+            } => f
+                .debug_struct("Update")
+                .field("id", id)
+                .field("props", props)
+                .field("layout", layout)
+                .field("aria_props", aria_props)
+                .field("aria_role", aria_role)
+                .field("children", children)
+                .field("handlers_count", &handlers.as_ref().map(|h| h.len()))
+                .finish(),
+            Self::Remove(id) => f.debug_tuple("Remove").field(id).finish(),
+            Self::Replace { id, node } => f
+                .debug_struct("Replace")
+                .field("id", id)
+                .field("node", node)
+                .finish(),
+            Self::Move { id, new_index } => f
+                .debug_struct("Move")
+                .field("id", id)
+                .field("new_index", new_index)
+                .finish(),
+            Self::SetRoot(id) => f.debug_tuple("SetRoot").field(id).finish(),
+        }
+    }
+}
+
+impl serde::Serialize for VDomPatch {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStructVariant;
+        match self {
+            Self::Create(node) => serializer.serialize_newtype_variant("VDomPatch", 0, "Create", node),
+            Self::Update {
+                id,
+                props,
+                layout,
+                aria_props,
+                aria_role,
+                children,
+                handlers: _,
+            } => {
+                let mut state =
+                    serializer.serialize_struct_variant("VDomPatch", 1, "Update", 6)?;
+                state.serialize_field("id", id)?;
+                state.serialize_field("props", props)?;
+                state.serialize_field("layout", layout)?;
+                state.serialize_field("aria_props", aria_props)?;
+                state.serialize_field("aria_role", aria_role)?;
+                state.serialize_field("children", children)?;
+                state.end()
+            }
+            Self::Remove(id) => serializer.serialize_newtype_variant("VDomPatch", 2, "Remove", id),
+            Self::Replace { id, node } => {
+                let mut state =
+                    serializer.serialize_struct_variant("VDomPatch", 3, "Replace", 2)?;
+                state.serialize_field("id", id)?;
+                state.serialize_field("node", node)?;
+                state.end()
+            }
+            Self::Move { id, new_index } => {
+                let mut state = serializer.serialize_struct_variant("VDomPatch", 4, "Move", 2)?;
+                state.serialize_field("id", id)?;
+                state.serialize_field("new_index", new_index)?;
+                state.end()
+            }
+            Self::SetRoot(id) => serializer.serialize_newtype_variant("VDomPatch", 5, "SetRoot", id),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for VDomPatch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        enum VDomPatchInternal {
+            Create(VNode),
+            Update {
+                id: NodeId,
+                props: Option<HashMap<String, serde_json::Value>>,
+                layout: Option<LayoutRect>,
+                aria_props: Option<AriaProps>,
+                aria_role: Option<String>,
+                children: Option<Vec<NodeId>>,
+            },
+            Remove(NodeId),
+            Replace {
+                id: NodeId,
+                node: VNode,
+            },
+            Move {
+                id: NodeId,
+                new_index: usize,
+            },
+            SetRoot(Option<NodeId>),
+        }
+
+        let internal = VDomPatchInternal::deserialize(deserializer)?;
+        Ok(match internal {
+            VDomPatchInternal::Create(n) => VDomPatch::Create(n),
+            VDomPatchInternal::Update {
+                id,
+                props,
+                layout,
+                aria_props,
+                aria_role,
+                children,
+            } => VDomPatch::Update {
+                id,
+                props,
+                layout,
+                aria_props,
+                aria_role,
+                children,
+                handlers: None,
+            },
+            VDomPatchInternal::Remove(id) => VDomPatch::Remove(id),
+            VDomPatchInternal::Replace { id, node } => VDomPatch::Replace { id, node },
+            VDomPatchInternal::Move { id, new_index } => VDomPatch::Move { id, new_index },
+            VDomPatchInternal::SetRoot(id) => VDomPatch::SetRoot(id),
+        })
+    }
 }
 
 /// The root container for the Virtual DOM state.
@@ -232,6 +383,7 @@ impl VDom {
                 VDomPatch::Remove(id) => log::debug!("ShieldWall: Remove node {}", id.0),
                 VDomPatch::Replace { id, .. } => log::debug!("ShieldWall: Replace node {}", id.0),
                 VDomPatch::Move { id, .. } => log::debug!("ShieldWall: Move node {}", id.0),
+                VDomPatch::SetRoot(id) => log::debug!("ShieldWall: SetRoot {:?}", id),
             }
         }
     }
@@ -575,6 +727,14 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     fn register_shared_element(&mut self, _id: &str, _rect: cvkg_core::Rect) {}
 
+    fn set_key(&mut self, key: &str) {
+        if let Some(id) = self.stack.last() {
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.key = Some(key.to_string());
+            }
+        }
+    }
+
     fn register_handler(
         &mut self,
         event_type: &str,
@@ -591,6 +751,9 @@ impl VDom {
     /// Mutate the Virtual DOM state by applying a sequence of patches.
     #[tracing::instrument(skip(self, patches))]
     pub fn apply_patches(&mut self, patches: Vec<VDomPatch>) {
+        if !patches.is_empty() {
+            println!("VDom: Applying {} patches", patches.len());
+        }
         let _span = tracing::info_span!("vdom_apply_patches").entered();
         for patch in patches {
             match patch {
@@ -600,35 +763,87 @@ impl VDom {
                     }
                     self.nodes.insert(node.id, node);
                 }
-                VDomPatch::Update { id, props } => {
+                VDomPatch::Update {
+                    id,
+                    props,
+                    layout,
+                    aria_props,
+                    aria_role,
+                    children,
+                    handlers,
+                } => {
                     if let Some(node) = self.nodes.get_mut(&id) {
-                        node.props = props;
+                        if let Some(p) = props {
+                            node.props = p;
+                        }
+                        if let Some(l) = layout {
+                            node.layout = l;
+                        }
+                        if let Some(ap) = aria_props {
+                            node.aria_props = ap;
+                        }
+                        if let Some(ar) = aria_role {
+                            node.aria_role = ar;
+                        }
+                        if let Some(c) = children {
+                            // Update children and parents map
+                            for child_id in &node.children {
+                                self.parents.remove(child_id);
+                            }
+                            node.children = c;
+                            for child_id in &node.children {
+                                self.parents.insert(*child_id, id);
+                            }
+                        }
+                        if let Some(h) = handlers {
+                            node.handlers = h;
+                        }
                     }
                 }
                 VDomPatch::Remove(id) => {
-                    self.nodes.remove(&id);
+                    if let Some(node) = self.nodes.remove(&id) {
+                        for child_id in &node.children {
+                            self.parents.remove(child_id);
+                        }
+                    }
                     self.parents.remove(&id);
                 }
                 VDomPatch::Replace { id, node } => {
-                    for child_id in &node.children {
-                        self.parents.insert(*child_id, node.id);
-                    }
-                    self.nodes.insert(id, node);
-                }
-                VDomPatch::Move { id, new_index } => {
-                    let mut parent_id = self.parents.get(&id).copied();
-
-                    if parent_id.is_none() {
-                        // Fallback search if parent map is inconsistent
-                        for node in self.nodes.values() {
-                            if node.children.contains(&id) {
-                                parent_id = Some(node.id);
-                                break;
-                            }
+                    let is_root = self.root == Some(id);
+                    let new_id = node.id;
+                    
+                    // Cleanup old children from parents map
+                    if let Some(old_node) = self.nodes.get(&id) {
+                        for child_id in &old_node.children {
+                            self.parents.remove(child_id);
                         }
                     }
+                    for child_id in &node.children {
+                        self.parents.insert(*child_id, new_id);
+                    }
+                    
+                    // Update nodes map. We use the new_id as the key to keep it consistent.
+                    self.nodes.remove(&id);
+                    self.nodes.insert(new_id, node);
+                    
+                    if is_root {
+                        self.root = Some(new_id);
+                    }
 
-                    if let Some(p_id) = parent_id {
+                    // Migrate capture and focus state
+                    if let Ok(mut capture) = self.captured_node.lock() {
+                        if *capture == Some(id) {
+                            *capture = Some(new_id);
+                        }
+                    }
+                    if let Ok(mut focus) = self.focused_node.lock() {
+                        if *focus == Some(id) {
+                            *focus = Some(new_id);
+                        }
+                    }
+                }
+                VDomPatch::Move { id, new_index } => {
+                    if let Some(&p_id) = self.parents.get(&id) {
                         if let Some(parent) = self.nodes.get_mut(&p_id) {
                             if let Some(old_pos) = parent.children.iter().position(|&x| x == id) {
                                 parent.children.remove(old_pos);
@@ -637,6 +852,9 @@ impl VDom {
                             }
                         }
                     }
+                }
+                VDomPatch::SetRoot(id) => {
+                    self.root = id;
                 }
             }
         }
@@ -652,18 +870,30 @@ impl VDom {
         let mut patches = Vec::new();
 
         // Handle root changes
-        match (&self.root, &other.root) {
+        match (self.root.as_ref(), other.root.as_ref()) {
             (None, None) => return patches,
             (None, Some(new_root_id)) => {
                 if let Some(new_node) = other.nodes.get(new_root_id) {
                     patches.push(VDomPatch::Create(new_node.clone()));
+                    patches.push(VDomPatch::SetRoot(Some(*new_root_id)));
                 }
             }
             (Some(old_root_id), None) => {
                 patches.push(VDomPatch::Remove(*old_root_id));
+                patches.push(VDomPatch::SetRoot(None));
             }
             (Some(old_root_id), Some(new_root_id)) => {
-                self.diff_node(*old_root_id, *new_root_id, other, &mut patches);
+                if old_root_id != new_root_id {
+                    if let Some(new_node) = other.nodes.get(new_root_id) {
+                        patches.push(VDomPatch::Replace {
+                            id: *old_root_id,
+                            node: new_node.clone(),
+                        });
+                        patches.push(VDomPatch::SetRoot(Some(*new_root_id)));
+                    }
+                } else {
+                    self.diff_node(*old_root_id, *new_root_id, other, &mut patches);
+                }
             }
         }
 
@@ -695,11 +925,47 @@ impl VDom {
             return;
         }
 
-        // If props changed, emit an Update
-        if old_node.props != new_node.props {
+        // If props, layout, aria_props, or children changed, emit an Update
+        let props_changed = old_node.props != new_node.props;
+        let layout_changed = old_node.layout != new_node.layout;
+        let aria_props_changed = old_node.aria_props != new_node.aria_props;
+        let aria_role_changed = old_node.aria_role != new_node.aria_role;
+        let children_changed = old_node.children != new_node.children;
+
+        if props_changed
+            || layout_changed
+            || aria_props_changed
+            || aria_role_changed
+            || children_changed
+        {
             patches.push(VDomPatch::Update {
                 id: old_id,
-                props: new_node.props.clone(),
+                props: if props_changed {
+                    Some(new_node.props.clone())
+                } else {
+                    None
+                },
+                layout: if layout_changed {
+                    Some(new_node.layout.clone())
+                } else {
+                    None
+                },
+                aria_props: if aria_props_changed {
+                    Some(new_node.aria_props.clone())
+                } else {
+                    None
+                },
+                aria_role: if aria_role_changed {
+                    Some(new_node.aria_role.clone())
+                } else {
+                    None
+                },
+                children: if children_changed {
+                    Some(new_node.children.clone())
+                } else {
+                    None
+                },
+                handlers: Some(new_node.handlers.clone()),
             });
         }
 
@@ -823,9 +1089,27 @@ impl VDom {
                         cvkg_core::Event::PointerUp { .. } => "pointerup",
                         _ => unreachable!(),
                     };
-                    let res = self.dispatch_to_node(id, event.clone(), event_type);
+                    let mut res = self.dispatch_to_node(id, event.clone(), event_type);
 
-                    if let cvkg_core::Event::PointerUp { .. } = event {
+                    if let cvkg_core::Event::PointerUp { x, y } = event {
+                        // Also dispatch a PointerClick if the up event is within the captured node bounds
+                        if let Some(node) = self.nodes.get(&id) {
+                            let within_bounds = x >= node.layout.x 
+                                && x <= node.layout.x + node.layout.width 
+                                && y >= node.layout.y 
+                                && y <= node.layout.y + node.layout.height;
+
+                            if within_bounds {
+                                let click_event = cvkg_core::Event::PointerClick { x, y };
+                                let click_res =
+                                    self.dispatch_to_node(id, click_event, "pointerclick");
+                                if click_res == cvkg_core::EventResponse::Handled {
+                                    res = cvkg_core::EventResponse::Handled;
+                                }
+                            }
+                        }
+
+                        // Always clear capture on release
                         if let Ok(mut capture) = self.captured_node.lock() {
                             *capture = None;
                         }
@@ -835,6 +1119,11 @@ impl VDom {
                     if let Some(id) = self.hit_test(x, y) {
                         return self.dispatch_to_node(id, event, "pointermove");
                     }
+                }
+            }
+            cvkg_core::Event::PointerClick { x, y } => {
+                if let Some(id) = self.hit_test(x, y) {
+                    return self.dispatch_to_node(id, event, "pointerclick");
                 }
             }
             cvkg_core::Event::KeyDown { .. } | cvkg_core::Event::KeyUp { .. } => {

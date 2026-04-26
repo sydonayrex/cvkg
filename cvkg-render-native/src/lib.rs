@@ -42,6 +42,12 @@ pub struct NativeRenderer {
     gpu: Option<cvkg_render_gpu::SurtrRenderer>,
 }
 
+/// Custom events for the native application event loop
+#[derive(Debug)]
+enum AppEvent {
+    AccessibilityAction(accesskit::ActionRequest),
+}
+
 impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
     fn new(window: Arc<Window>) -> Self {
@@ -51,7 +57,9 @@ impl NativeRenderer {
     /// Start the CVKG native application with the given view.
     /// This is the main entry point for desktop applications.
     pub fn run<V: cvkg_core::View + 'static>(view: V) {
-        let event_loop = EventLoop::new().expect("Failed to create event loop");
+        let event_loop = EventLoop::<AppEvent>::with_user_event()
+            .build()
+            .expect("Failed to create event loop");
         event_loop.set_control_flow(ControlFlow::Poll);
 
         let mut app = App {
@@ -61,6 +69,7 @@ impl NativeRenderer {
             vdom: Some(cvkg_vdom::VDom::new()),
             asset_manager: std::sync::Arc::new(NativeAssetManager::new()),
             cursor_pos: [0.0, 0.0],
+            proxy: event_loop.create_proxy(),
         };
 
         event_loop.run_app(&mut app).expect("Event loop error");
@@ -74,9 +83,10 @@ struct App<V: cvkg_core::View> {
     vdom: Option<cvkg_vdom::VDom>,
     asset_manager: std::sync::Arc<NativeAssetManager>,
     cursor_pos: [f32; 2],
+    proxy: winit::event_loop::EventLoopProxy<AppEvent>,
 }
 
-impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
+impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attrs = Window::default_attributes()
             .with_title("CVKG Forge")
@@ -90,7 +100,17 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
 
         // Initialize AccessKit adapter
         let adapter = accesskit_winit::Adapter::with_direct_handlers(
-            event_loop, &window, ShieldWall, ShieldWall, ShieldWall,
+            event_loop,
+            &window,
+            ShieldWall {
+                proxy: self.proxy.clone(),
+            },
+            ShieldWall {
+                proxy: self.proxy.clone(),
+            },
+            ShieldWall {
+                proxy: self.proxy.clone(),
+            },
         );
         self.accesskit_adapter = Some(adapter);
 
@@ -117,7 +137,11 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(physical_size) => {
                 if let Some(gpu) = &mut renderer.gpu {
-                    gpu.resize(physical_size.width, physical_size.height);
+                    gpu.resize(
+                        physical_size.width,
+                        physical_size.height,
+                        renderer.window.scale_factor() as f32,
+                    );
                 }
                 renderer.window.request_redraw();
             }
@@ -126,11 +150,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
                     let encoder = gpu.begin_frame();
 
                     let size = renderer.window.inner_size();
+                    let scale = renderer.window.scale_factor();
+                    let logical_size = size.to_logical::<f32>(scale);
+                    
                     let rect = cvkg_core::Rect {
                         x: 0.0,
                         y: 0.0,
-                        width: size.width as f32,
-                        height: size.height as f32,
+                        width: logical_size.width,
+                        height: logical_size.height,
                     };
 
                     // Render the view tree
@@ -138,35 +165,47 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
 
                     // Update VDOM and Accessibility Tree
                     let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
-                    if let (Some(prev_vdom), Some(adapter)) =
-                        (&mut self.vdom, &mut self.accesskit_adapter)
-                    {
-                        let patches = new_vdom.diff(prev_vdom);
+                    if let Some(prev_vdom) = &mut self.vdom {
+                        let patches = prev_vdom.diff(&new_vdom);
 
-                        // Generate AccessKit updates from patches
-                        let mut nodes = Vec::new();
-                        for patch in patches {
-                            match patch {
-                                cvkg_vdom::VDomPatch::Create(node)
-                                | cvkg_vdom::VDomPatch::Replace { node, .. } => {
-                                    nodes.push((
-                                        accesskit::NodeId(node.id.0 as u64),
-                                        node.to_accesskit_node(),
-                                    ));
+                        // Generate AccessKit updates from patches if adapter is available
+                        if let Some(adapter) = &mut self.accesskit_adapter {
+                            let mut nodes = Vec::new();
+                            for patch in &patches {
+                                match patch {
+                                    cvkg_vdom::VDomPatch::Create(node)
+                                    | cvkg_vdom::VDomPatch::Replace { node, .. } => {
+                                        nodes.push((
+                                            accesskit::NodeId(node.id.0 as u64),
+                                            node.to_accesskit_node(),
+                                        ));
+                                    }
+                                    cvkg_vdom::VDomPatch::Update { id, .. } => {
+                                        if let Some(node) = new_vdom.nodes.get(id) {
+                                            nodes.push((
+                                                accesskit::NodeId(node.id.0 as u64),
+                                                node.to_accesskit_node(),
+                                            ));
+                                        }
+                                    }
+                                    _ => {}
                                 }
-                                _ => {}
+                            }
+
+                            if !nodes.is_empty() {
+                                adapter.update_if_active(|| accesskit::TreeUpdate {
+                                    nodes,
+                                    tree: None,
+                                    focus: accesskit::NodeId(1),
+                                });
                             }
                         }
 
-                        if !nodes.is_empty() {
-                            adapter.update_if_active(|| accesskit::TreeUpdate {
-                                nodes,
-                                tree: None,
-                                focus: accesskit::NodeId(1),
-                            });
-                        }
+                        // Apply patches to preserve stateful properties (capture, focus)
+                        prev_vdom.apply_patches(patches);
+                    } else {
+                        self.vdom = Some(new_vdom);
                     }
-                    self.vdom = Some(new_vdom);
 
                     gpu.end_frame(encoder);
                 }
@@ -185,10 +224,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
             WindowEvent::MouseInput { state, .. } => {
                 if let Some(vdom) = &self.vdom {
                     let event = match state {
-                        winit::event::ElementState::Pressed => cvkg_core::Event::PointerDown {
-                            x: self.cursor_pos[0],
-                            y: self.cursor_pos[1],
-                        },
+                        winit::event::ElementState::Pressed => {
+                            let id = vdom.hit_test(self.cursor_pos[0], self.cursor_pos[1]);
+                            println!("Native: MousePress at {:?}, hit={:?}", self.cursor_pos, id);
+                            cvkg_core::Event::PointerDown {
+                                x: self.cursor_pos[0],
+                                y: self.cursor_pos[1],
+                            }
+                        }
                         winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
                             x: self.cursor_pos[0],
                             y: self.cursor_pos[1],
@@ -222,6 +265,34 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler for App<V> {
                 }
             }
             _ => (),
+        }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::AccessibilityAction(request) => {
+                if let Some(vdom) = &self.vdom {
+                    let node_id = cvkg_vdom::NodeId(request.target.0 as usize);
+                    if let Some(node) = vdom.nodes.get(&node_id) {
+                        match request.action {
+                            accesskit::Action::Click => {
+                                // Translate default action (click) to PointerClick
+                                let event = cvkg_core::Event::PointerClick {
+                                    x: node.layout.x + node.layout.width / 2.0,
+                                    y: node.layout.y + node.layout.height / 2.0,
+                                };
+                                vdom.dispatch_event(event);
+                            }
+                            accesskit::Action::Focus => {
+                                if let Ok(mut focus) = vdom.focused_node.lock() {
+                                    *focus = Some(node_id);
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -355,10 +426,14 @@ impl cvkg_core::Renderer for NativeRenderer {
 
 // Platform-specific implementations for macOS, Windows, and Linux are handled by winit and AccessKit.
 
-struct ShieldWall;
+struct ShieldWall {
+    proxy: winit::event_loop::EventLoopProxy<AppEvent>,
+}
 
 impl accesskit::ActionHandler for ShieldWall {
-    fn do_action(&mut self, _request: accesskit::ActionRequest) {}
+    fn do_action(&mut self, request: accesskit::ActionRequest) {
+        let _ = self.proxy.send_event(AppEvent::AccessibilityAction(request));
+    }
 }
 
 impl accesskit::ActivationHandler for ShieldWall {

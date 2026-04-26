@@ -165,6 +165,7 @@ pub struct SurtrRenderer {
     scene_bind_group: wgpu::BindGroup,
     scene_texture_bind_group: wgpu::BindGroup,
     env_bind_group_layout: wgpu::BindGroupLayout,
+    scale_factor: f32,
 }
 
 const MAX_VERTICES: usize = 100_000;
@@ -780,7 +781,11 @@ impl SurtrRenderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let current_scene = SceneUniforms::new(config.width as f32, config.height as f32);
+        let scale_factor = window.scale_factor() as f32;
+        let current_scene = SceneUniforms::new(
+            size.width as f32 / scale_factor,
+            size.height as f32 / scale_factor,
+        );
         let scene_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Surtr Scene Buffer"),
             contents: bytemuck::bytes_of(&current_scene),
@@ -866,6 +871,7 @@ impl SurtrRenderer {
             current_theme,
             current_scene,
             background_pipeline,
+            scale_factor,
         }
     }
 
@@ -874,10 +880,11 @@ impl SurtrRenderer {
     /// This is a non-trivial algorithm that must ensure all intermediate Muspelheim textures
     /// (Bloom, Blur, Scene Capture) are recreated with matching dimensions to prevent
     /// coordinate drift in the composite pass.
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&mut self, width: u32, height: u32, scale_factor: f32) {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
+            self.scale_factor = scale_factor;
             self.surface.configure(&self.device, &self.config);
 
             // Re-create Muspelheim textures
@@ -1005,13 +1012,14 @@ impl SurtrRenderer {
         self.current_texture_id = None;
 
         let time = self.start_time.elapsed().as_secs_f32();
-        let (width, height) = (self.config.width as f32, self.config.height as f32);
+        let logical_w = self.config.width as f32 / self.scale_factor;
+        let logical_h = self.config.height as f32 / self.scale_factor;
         let dt = time - self.current_scene.time;
         self.current_scene.time = time;
         self.current_scene.delta_time = dt;
-        self.current_scene.resolution = [width, height];
+        self.current_scene.resolution = [logical_w, logical_h];
         self.current_scene.proj =
-            glam::Mat4::orthographic_lh(0.0, width, height, 0.0, -100.0, 100.0);
+            glam::Mat4::orthographic_lh(0.0, logical_w, logical_h, 0.0, -100.0, 100.0);
 
         self.queue.write_buffer(
             &self.scene_buffer,

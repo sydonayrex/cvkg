@@ -44,7 +44,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-cvkg = {{ version = "0.1.9", features = ["native"] }}
+cvkg = {{ version = "0.1.10", features = ["native"] }}
 tokio = {{ version = "1.0", features = ["full"] }}
 "#,
             self.name

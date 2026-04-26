@@ -1,6 +1,6 @@
-# CVKG: Cyberpunk Viking Knowledge Graph
+# CVKG: Cyber Viking Kvasir Graph
 
-![CVKG Banner](https://raw.githubusercontent.com/sydonayrex/cvkg/main/docs/static/banner.png)
+![CVKG Banner](file:///D/rex/projects/cvkg/docs/static/banner.png)
 
 **CVKG** is a high-fidelity, agentic UI framework for Rust. It is designed to empower developers to build immersive, high-performance interfaces with a "Cyberpunk Viking" aesthetic—combining the raw power of the Norse sagas with the neon-drenched precision of a digital future.
 
@@ -34,7 +34,7 @@ Add CVKG to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cvkg = "0.1.0"
+cvkg = "0.1.10"
 ```
 
 Create a high-fidelity button with spring physics:

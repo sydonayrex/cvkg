@@ -24,26 +24,72 @@ impl View for Button {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "Button");
+        renderer.set_key(&self.label);
         renderer.set_aria_role("button");
         renderer.set_aria_label(&self.label);
 
-        // Background: dark panel
-        renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.15, 1.0]);
-        // Neon cyan border
-        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 1.0], 2.0);
+        // Get pressed state from system state
+        let state_registry = cvkg_core::get_system_state();
+        let id_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            self.label.hash(&mut s);
+            s.finish()
+        };
+
+        let is_pressed = {
+            let s = state_registry.read().unwrap();
+            s.get_component_state::<bool>(id_hash)
+                .map(|v| *v.read().unwrap())
+                .unwrap_or(false)
+        };
+
+        // Background: dark panel, slightly brighter if pressed
+        let bg = if is_pressed {
+            [0.2, 0.2, 0.25, 1.0]
+        } else {
+            [0.1, 0.1, 0.15, 1.0]
+        };
+        renderer.fill_rounded_rect(rect, 6.0, bg);
+        
+        // Neon cyan border, thicker if pressed
+        let border_width = if is_pressed { 3.0 } else { 2.0 };
+        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 1.0], border_width);
+        
         // Label text
         let text_x = rect.x + 8.0;
         let text_y = rect.y + (rect.height - 14.0) / 2.0;
         renderer.draw_text(&self.label, text_x, text_y, 14.0, [1.0, 1.0, 1.0, 1.0]);
 
-        // Register interaction handler
+        // Register interaction handlers
         let on_click = self.on_click.clone();
+        let state_registry_down = state_registry.clone();
+        let state_registry_up = state_registry.clone();
+
         renderer.register_handler(
             "pointerdown",
+            std::sync::Arc::new(move |_| {
+                let mut s = state_registry_down.write().unwrap();
+                s.set_component_state(id_hash, true);
+            }),
+        );
+
+        renderer.register_handler(
+            "pointerup",
+            std::sync::Arc::new(move |_| {
+                let mut s = state_registry_up.write().unwrap();
+                s.set_component_state(id_hash, false);
+            }),
+        );
+
+        renderer.register_handler(
+            "pointerclick",
             std::sync::Arc::new(move |_| {
                 (on_click)();
             }),
         );
+        renderer.pop_vnode();
     }
 }
 
@@ -81,9 +127,9 @@ impl View for Toggle {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Track background
-        let track_w = 44.0;
-        let track_h = 24.0;
+        renderer.push_vnode(rect, "Toggle");
+        let track_w = 40.0;
+        let track_h = 20.0;
         let track_x = rect.x;
         let track_y = rect.y + (rect.height - track_h) / 2.0;
         let track = Rect {
@@ -92,11 +138,13 @@ impl View for Toggle {
             width: track_w,
             height: track_h,
         };
+
         let bg = if self.is_on {
-            [0.0, 0.85, 1.0, 1.0]
+            [0.0, 0.8, 0.4, 1.0]
         } else {
             [0.2, 0.2, 0.25, 1.0]
         };
+
         renderer.set_aria_role("switch");
         renderer.set_aria_label(&self.label);
         renderer.fill_rounded_rect(track, track_h / 2.0, bg);
@@ -129,11 +177,12 @@ impl View for Toggle {
         let is_on = self.is_on;
         let on_change = self.on_change.clone();
         renderer.register_handler(
-            "pointerdown",
+            "pointerclick",
             std::sync::Arc::new(move |_| {
                 (on_change)(!is_on);
             }),
         );
+        renderer.pop_vnode();
     }
 }
 
@@ -356,9 +405,9 @@ impl View for Stepper {
         // For now, we simulate by checking coordinates in a single handler or using multiple sub-nodes.
         // In CVKG VDOM, we can just register handlers on the parent and check coords.
         renderer.register_handler(
-            "pointerdown",
+            "pointerclick",
             std::sync::Arc::new(move |event| {
-                if let cvkg_core::Event::PointerDown { x, .. } = event {
+                if let cvkg_core::Event::PointerClick { x, .. } = event {
                     if x >= minus_rect.x && x <= minus_rect.x + minus_rect.width {
                         (on_change)(value - 1);
                     } else if x >= plus_rect.x && x <= plus_rect.x + plus_rect.width {
@@ -404,13 +453,16 @@ impl View for TextField {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "TextField");
         renderer.set_aria_role("textbox");
         renderer.set_aria_label(&self.placeholder);
 
         // Input background
         renderer.fill_rounded_rect(rect, 6.0, [0.08, 0.08, 0.12, 1.0]);
         renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-        let display = if self.text.is_empty() {
+
+        let is_focused = true; // Simplified focus for now
+        let display_text = if self.text.is_empty() {
             &self.placeholder
         } else {
             &self.text
@@ -420,17 +472,34 @@ impl View for TextField {
         } else {
             [1.0, 1.0, 1.0, 1.0]
         };
+
         renderer.draw_text(
-            display,
+            display_text,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
             text_color,
         );
 
+        // Draw Cursor (simulated at end for now, but with proper rendering)
+        if is_focused && !self.text.is_empty() {
+            let (tw, _) = renderer.measure_text(&self.text, 14.0);
+            let cursor_x = rect.x + 8.0 + tw;
+            let cursor_y = rect.y + (rect.height - 16.0) / 2.0;
+            // Flashing cursor based on some global timer or just solid for now
+            renderer.draw_line(
+                cursor_x,
+                cursor_y,
+                cursor_x,
+                cursor_y + 16.0,
+                [0.0, 1.0, 1.0, 1.0],
+                2.0,
+            );
+        }
+
         // Interaction
-        let current_text = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
         let on_change = self.on_change.clone();
+        let text_mutex = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
 
         renderer.register_handler(
             "keydown",
@@ -439,15 +508,18 @@ impl View for TextField {
                     let mut changed = false;
                     let mut new_text = String::new();
 
-                    if let Ok(mut text_guard) = current_text.lock() {
+                    if let Ok(mut text_guard) = text_mutex.lock() {
                         if key.len() == 1 {
                             text_guard.push_str(&key);
-                            new_text = text_guard.clone();
                             changed = true;
-                        } else if key == "Backspace" {
+                        } else if key == "Back" || key == "Backspace" {
                             text_guard.pop();
-                            new_text = text_guard.clone();
                             changed = true;
+                        } else if key == "Return" || key == "Enter" {
+                            // Handle submission or blur?
+                        }
+                        if changed {
+                            new_text = text_guard.clone();
                         }
                     }
 
@@ -457,6 +529,7 @@ impl View for TextField {
                 }
             }),
         );
+        renderer.pop_vnode();
     }
 }
 
@@ -569,13 +642,14 @@ impl View for TextEditor {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "TextEditor");
         renderer.set_aria_role("textbox");
 
         // Editor background
         renderer.fill_rounded_rect(rect, 4.0, [0.05, 0.05, 0.08, 1.0]);
         renderer.stroke_rect(rect, [0.2, 0.2, 0.3, 1.0], 1.0);
 
-        // Draw text (limited multiline simulation)
+        // Draw text
         let lines: Vec<&str> = self.text.lines().collect();
         for (i, line) in lines.iter().enumerate() {
             renderer.draw_text(
@@ -587,9 +661,23 @@ impl View for TextEditor {
             );
         }
 
+        // Draw Cursor on last line
+        let last_line = lines.last().copied().unwrap_or("");
+        let (tw, _) = renderer.measure_text(last_line, 14.0);
+        let cursor_x = rect.x + 8.0 + tw;
+        let cursor_y = rect.y + 8.0 + (lines.len().max(1) - 1) as f32 * 20.0;
+        renderer.draw_line(
+            cursor_x,
+            cursor_y,
+            cursor_x,
+            cursor_y + 16.0,
+            [0.0, 1.0, 1.0, 1.0],
+            2.0,
+        );
+
         // Interaction
-        let current_text = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
         let on_change = self.on_change.clone();
+        let text_mutex = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
 
         renderer.register_handler(
             "keydown",
@@ -597,27 +685,30 @@ impl View for TextEditor {
                 if let cvkg_core::Event::KeyDown { key } = event {
                     let mut changed = false;
                     let mut new_text = String::new();
-                    if let Ok(mut text_guard) = current_text.lock() {
+
+                    if let Ok(mut text_guard) = text_mutex.lock() {
                         if key.len() == 1 {
                             text_guard.push_str(&key);
-                            new_text = text_guard.clone();
                             changed = true;
-                        } else if key == "Backspace" {
+                        } else if key == "Back" || key == "Backspace" {
                             text_guard.pop();
-                            new_text = text_guard.clone();
                             changed = true;
-                        } else if key == "Enter" {
+                        } else if key == "Return" || key == "Enter" {
                             text_guard.push('\n');
-                            new_text = text_guard.clone();
                             changed = true;
                         }
+                        if changed {
+                            new_text = text_guard.clone();
+                        }
                     }
+
                     if changed {
                         (on_change)(new_text);
                     }
                 }
             }),
         );
+        renderer.pop_vnode();
     }
 }
 
@@ -683,7 +774,7 @@ impl View for Picker {
         let count = self.options.len();
 
         renderer.register_handler(
-            "pointerdown",
+            "pointerclick",
             std::sync::Arc::new(move |_| {
                 if count > 0 {
                     (on_change)((selection + 1) % count);
@@ -741,7 +832,7 @@ impl View for DatePicker {
         let timestamp = self.timestamp;
 
         renderer.register_handler(
-            "pointerdown",
+            "pointerclick",
             std::sync::Arc::new(move |_| {
                 (on_change)(timestamp + 86400);
             }),
@@ -826,9 +917,9 @@ impl View for ColorPicker {
             // Interaction
             let on_change = self.on_change.clone();
             renderer.register_handler(
-                "pointerdown",
+                "pointerclick",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerDown { x, .. } = event {
+                    if let cvkg_core::Event::PointerClick { x, .. } = event {
                         if x >= cell_rect.x && x <= cell_rect.x + cell_rect.width {
                             (on_change)(col);
                         }
