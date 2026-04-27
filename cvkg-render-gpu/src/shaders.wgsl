@@ -59,6 +59,9 @@ struct VertexInput {
     @location(8) size:     vec2<f32>,
     @location(9) screen:   vec2<f32>,
     @location(10) clip:    vec4<f32>,
+    @location(11) translation: vec2<f32>,
+    @location(12) scale:       vec2<f32>,
+    @location(13) rotation:    f32,
 };
 
 struct VertexOutput {
@@ -78,7 +81,23 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-        out.clip_position = scene.proj * scene.view * vec4<f32>(in.position, 1.0);
+    
+    // Apply 2D Transform: Rotate -> Scale -> Translate
+    var pos = in.position.xy;
+    
+    // Rotation
+    let s = sin(in.rotation);
+    let c = cos(in.rotation);
+    let rot_matrix = mat2x2<f32>(c, s, -s, c);
+    pos = rot_matrix * pos;
+    
+    // Scale
+    pos = pos * in.scale;
+    
+    // Translation
+    pos = pos + in.translation;
+    
+    out.clip_position = scene.proj * scene.view * vec4<f32>(pos, in.position.z, 1.0);
     out.uv = in.uv;
     out.color = in.color;
     out.mode = in.mode;
@@ -113,6 +132,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.normal = vec3<f32>(0.0, 0.0, 1.0);
     return out;
 }
+
 
 // --- SDF MATH ---
 fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
@@ -441,10 +461,14 @@ fn fs_blur_h(in: VertexOutput) -> @location(0) vec4<f32> {
     let weight = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
     let tex_offset = 6.0 / scene.resolution.x;
     result += textureSample(t_diffuse, s_diffuse, in.uv).rgb * weight[0];
-    for (var i = 1; i < 5; i++) {
-        result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * f32(i), 0.0)).rgb * weight[i];
-        result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * f32(i), 0.0)).rgb * weight[i];
-    }
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 1.0, 0.0)).rgb * weight[1];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 1.0, 0.0)).rgb * weight[1];
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 2.0, 0.0)).rgb * weight[2];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 2.0, 0.0)).rgb * weight[2];
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 3.0, 0.0)).rgb * weight[3];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 3.0, 0.0)).rgb * weight[3];
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 4.0, 0.0)).rgb * weight[4];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 4.0, 0.0)).rgb * weight[4];
     return vec4<f32>(result, 1.0);
 }
 
@@ -454,10 +478,14 @@ fn fs_blur_v(in: VertexOutput) -> @location(0) vec4<f32> {
     let weight = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
     let tex_offset = 6.0 / scene.resolution.y;
     result += textureSample(t_diffuse, s_diffuse, in.uv).rgb * weight[0];
-    for (var i = 1; i < 5; i++) {
-        result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * f32(i))).rgb * weight[i];
-        result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * f32(i))).rgb * weight[i];
-    }
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 1.0)).rgb * weight[1];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 1.0)).rgb * weight[1];
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 2.0)).rgb * weight[2];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 2.0)).rgb * weight[2];
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 3.0)).rgb * weight[3];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 3.0)).rgb * weight[3];
+    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 4.0)).rgb * weight[4];
+    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 4.0)).rgb * weight[4];
     return vec4<f32>(result, 1.0);
 }
 

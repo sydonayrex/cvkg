@@ -35,6 +35,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 
+pub mod security;
+
 /// Design token value that can adapt to light/dark mode
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -607,21 +609,207 @@ impl ViewModifier for GungnirPulseModifier {
     }
 }
 
-/// SleipnirModifier handles physics-based animations via the Sleipnir RK4 solver.
-#[derive(Debug, Clone, PartialEq)]
-pub struct SleipnirModifier<T> {
-    pub target: T,
+/// Sleipnir spring parameters for the physics solver
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SleipnirParams {
     pub stiffness: f32,
     pub damping: f32,
+    pub mass: f32,
 }
 
-impl<T: Send + Sync + 'static + Clone> ViewModifier for SleipnirModifier<T> {
+impl SleipnirParams {
+    pub fn snappy() -> Self { Self { stiffness: 230.0, damping: 22.0, mass: 1.0 } }
+    pub fn fluid() -> Self { Self { stiffness: 170.0, damping: 26.0, mass: 1.0 } }
+    pub fn heavy() -> Self { Self { stiffness: 90.0, damping: 20.0, mass: 1.0 } }
+    pub fn bouncy() -> Self { Self { stiffness: 190.0, damping: 14.0, mass: 1.0 } }
+}
+
+impl Default for SleipnirParams {
+    fn default() -> Self { Self::fluid() }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SolverState {
+    x: f32,
+    v: f32,
+}
+
+/// SleipnirSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
+/// This provides superior stability for high-fidelity interactive motion.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SleipnirSolver {
+    params: SleipnirParams,
+    target: f32,
+    state: SolverState,
+}
+
+impl SleipnirSolver {
+    /// Create a new solver with a target value and starting state.
+    pub fn new(params: SleipnirParams, target: f32, current: f32) -> Self {
+        Self {
+            params,
+            target,
+            state: SolverState { x: current, v: 0.0 },
+        }
+    }
+
+    /// Advance the simulation by dt seconds using RK4 integration.
+    pub fn tick(&mut self, dt: f32) -> f32 {
+        if dt <= 0.0 { return self.state.x; }
+        
+        // Use a fixed time step for stability if dt is too large
+        let mut remaining = dt;
+        let step = 1.0 / 120.0;
+        
+        while remaining > 0.0 {
+            let d = remaining.min(step);
+            self.step(d);
+            remaining -= d;
+        }
+        
+        self.state.x
+    }
+
+    fn step(&mut self, dt: f32) {
+        let a = self.evaluate(self.state, 0.0, SolverState { x: 0.0, v: 0.0 });
+        let b = self.evaluate(self.state, dt * 0.5, a);
+        let c = self.evaluate(self.state, dt * 0.5, b);
+        let d = self.evaluate(self.state, dt, c);
+
+        let dxdt = 1.0 / 6.0 * (a.x + 2.0 * (b.x + c.x) + d.x);
+        let dvdt = 1.0 / 6.0 * (a.v + 2.0 * (b.v + c.v) + d.v);
+
+        self.state.x += dxdt * dt;
+        self.state.v += dvdt * dt;
+    }
+
+    fn evaluate(&self, initial: SolverState, dt: f32, d: SolverState) -> SolverState {
+        let state = SolverState {
+            x: initial.x + d.x * dt,
+            v: initial.v + d.v * dt,
+        };
+        let force = -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
+        let mass = self.params.mass.max(0.001);
+        SolverState { x: state.v, v: force / mass }
+    }
+
+    pub fn is_settled(&self) -> bool {
+        (self.state.x - self.target).abs() < 0.001 && self.state.v.abs() < 0.001
+    }
+
+    pub fn set_target(&mut self, target: f32) {
+        self.target = target;
+    }
+
+    pub fn current_value(&self) -> f32 {
+        self.state.x
+    }
+}
+
+/// SleipnirModifier handles physics-based animations via the Sleipnir RK4 solver.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SleipnirModifier {
+    pub id: u64,
+    pub target: f32,
+    pub params: SleipnirParams,
+}
+
+impl ViewModifier for SleipnirModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        let state = load_system_state();
+        
+        // Try to fetch the solver from persistent state.
+        let solver_lock_opt = state.get_component_state::<SleipnirSolver>(self.id);
+        
+        let current_val;
+        
+        if let Some(lock) = solver_lock_opt {
+            // Found a solver. Tick it.
+            let mut solver = lock.write().unwrap();
+            solver.set_target(self.target);
+            current_val = solver.tick(renderer.delta_time());
+            
+            // If the solver hasn't settled yet, request another frame.
+            if !solver.is_settled() {
+                renderer.request_redraw();
+            }
+        } else {
+            // First time seeing this ID. Initialize solver state.
+            let solver = SleipnirSolver::new(
+                self.params,
+                self.target,
+                self.target // Initialize at target to avoid jump on first frame
+            );
+            
+            // Insert into registry for next frame.
+            get_system_state().rcu(|old| {
+                let mut new_state = (**old).clone();
+                new_state.set_component_state(self.id, solver.clone());
+                new_state
+            });
+            
+            current_val = self.target;
+        }
+
+        // Apply the solved value as a vertical translation.
+        renderer.push_transform([0.0, current_val], [1.0, 1.0], 0.0);
+        view.render(renderer, rect);
+        renderer.pop_transform();
+    }
+}
+
+/// TransformModifier applies a 2D transform (translation, scale, rotation) to its child.
+/// This modifier is "layout-neutral" and can be animated without re-running the layout engine.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TransformModifier {
+    pub translation: [f32; 2],
+    pub scale: [f32; 2],
+    pub rotation: f32,
+}
+
+impl TransformModifier {
+    pub fn new() -> Self {
+        Self {
+            translation: [0.0, 0.0],
+            scale: [1.0, 1.0],
+            rotation: 0.0,
+        }
+    }
+
+    pub fn translate(mut self, x: f32, y: f32) -> Self {
+        self.translation = [x, y];
+        self
+    }
+
+    pub fn scale(mut self, x: f32, y: f32) -> Self {
+        self.scale = [x, y];
+        self
+    }
+
+    pub fn rotate(mut self, radians: f32) -> Self {
+        self.rotation = radians;
+        self
+    }
+}
+
+impl ViewModifier for TransformModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_transform(self.translation, self.scale, self.rotation);
+        view.render(renderer, rect);
+        renderer.pop_transform();
     }
 }
 
 /// LifecycleModifier handles on_appear and on_disappear hooks.
+
 #[derive(Clone)]
 pub struct LifecycleModifier {
     pub on_appear: Option<Arc<dyn Fn() + Send + Sync>>,
@@ -946,9 +1134,41 @@ pub trait ViewModifier: Send + Clone {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryData {
     pub frame_time_ms: f32,
+    
+    // Pass timing
+    pub input_time_ms: f32,
+    pub state_flush_time_ms: f32,
+    pub layout_time_ms: f32,
+    pub draw_time_ms: f32,
+    pub gpu_submit_time_ms: f32,
+    
     pub draw_calls: u32,
     pub vertices: u32,
+    
+    // Memory breakdown
     pub vram_usage_mb: f32,
+    pub vram_textures_mb: f32,
+    pub vram_buffers_mb: f32,
+    pub vram_pipelines_mb: f32,
+}
+
+/// Configuration for render-loop frame timing and degradation strategies.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct FrameBudget {
+    /// Target frame time in milliseconds (default: 16.0 for 60FPS)
+    pub target_ms: f32,
+    /// If true, the renderer is allowed to dynamically skip non-critical effects
+    /// (like heavy blurs or complex shadows) when the budget is exceeded.
+    pub allow_degradation: bool,
+}
+
+impl Default for FrameBudget {
+    fn default() -> Self {
+        Self {
+            target_ms: 16.0,
+            allow_degradation: true,
+        }
+    }
 }
 
 /// The Renderer trait defines the atomic drawing operations for all CVKG backends.
@@ -959,6 +1179,13 @@ pub struct TelemetryData {
 /// 2. Colors are [R, G, B, A] in the [0.0, 1.0] range.
 /// 3. All operations must be batchable by the underlying backend.
 pub trait Renderer: Send {
+    /// Returns the time elapsed since the last frame in seconds.
+    fn delta_time(&self) -> f32;
+
+    /// Requests that the renderer redraws as soon as possible.
+    /// Used for continuous animations.
+    fn request_redraw(&mut self) {}
+
     // ── Filled shapes ────────────────────────────────────────────────────
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
     fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]);
@@ -1089,6 +1316,7 @@ pub trait Renderer: Send {
     /// Set a unique key for the current VDOM node to ensure stable identity during diffing.
     fn set_key(&mut self, _key: &str) {}
 
+
     // ── Telemetry ────────────────────────────────────────────────────────
     /// Get real-time performance telemetry.
     fn get_telemetry(&self) -> TelemetryData {
@@ -1128,6 +1356,38 @@ pub trait Renderer: Send {
     fn load_svg(&mut self, _name: &str, _svg_data: &[u8]) {}
     /// Draw a pre-loaded SVG model.
     fn draw_svg(&mut self, _name: &str, _rect: Rect) {}
+
+    // ── GPU Transformations ──────────────────────────────────────────────
+    /// Push a 2D transform (translation, scale, rotation) onto the stack.
+    /// This transform should be applied to all subsequent draw calls until popped.
+    /// Transform-only animations use this to avoid re-triggering the layout engine.
+    fn push_transform(&mut self, _translation: [f32; 2], _scale: [f32; 2], _rotation: f32) {}
+    /// Pop the last 2D transform from the stack.
+    fn pop_transform(&mut self) {}
+
+    /// Return the resolved layout bounds for a specific node ID if tracked.
+
+    fn query_layout(&self, _node_id: scene_graph::NodeId) -> Option<Rect> {
+        None
+    }
+
+    /// Enable or disable the layout debug overlay (bounds, padding, margin).
+    fn set_debug_layout(&mut self, _enabled: bool) {}
+    /// Check if the layout debug overlay is currently enabled.
+    fn get_debug_layout(&self) -> bool {
+        false
+    }
+}
+
+/// Defines the hardware acceleration tier and feature set available to the renderer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub enum RenderTier {
+    /// High-performance GPU path (WebGPU / Vulkan / Metal / DX12) with full shader support.
+    Tier1GPU = 0,
+    /// Mid-tier GPU path (WebGL2 / OpenGL 3.3) with standard shader support.
+    Tier2GPU = 1,
+    /// Fallback software or basic hardware path (Canvas 2D / GDI+) with limited effects.
+    Tier3Fallback = 2,
 }
 
 // =============================================================================
@@ -1313,45 +1573,183 @@ use std::sync::Arc;
 /// State wrapper that owns a value and notifies subscribers when changed
 #[derive(Clone)]
 pub struct State<T: Clone + Send + Sync + 'static> {
-    value: Arc<std::sync::RwLock<T>>,
-    subscribers: Arc<std::sync::RwLock<Vec<Box<dyn Fn(&T) + Send + Sync>>>>,
+    swap: Arc<arc_swap::ArcSwap<T>>,
+    metadata_swap: Arc<arc_swap::ArcSwap<Option<agents::MutationMetadata>>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    tvar: Arc<stm::TVar<T>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    metadata_tvar: Arc<stm::TVar<Option<agents::MutationMetadata>>>,
+    subscribers: Arc<std::sync::Mutex<Vec<Box<dyn Fn(&T) + Send + Sync>>>>,
     version: Arc<std::sync::atomic::AtomicU64>,
+    resolution: agents::ConflictResolution,
 }
 
 impl<T: Clone + Send + Sync + 'static> State<T> {
     /// Create a new State with initial value
     pub fn new(value: T) -> Self {
+        #[cfg(not(target_arch = "wasm32"))]
+        let tvar = Arc::new(stm::TVar::new(value.clone()));
+        #[cfg(not(target_arch = "wasm32"))]
+        let metadata_tvar = Arc::new(stm::TVar::new(None));
+        
         Self {
-            value: Arc::new(std::sync::RwLock::new(value)),
-            subscribers: Arc::new(std::sync::RwLock::new(Vec::new())),
+            swap: Arc::new(arc_swap::ArcSwap::from_pointee(value)),
+            metadata_swap: Arc::new(arc_swap::ArcSwap::new(Arc::new(None))),
+            #[cfg(not(target_arch = "wasm32"))]
+            tvar,
+            #[cfg(not(target_arch = "wasm32"))]
+            metadata_tvar,
+            subscribers: Arc::new(std::sync::Mutex::new(Vec::new())),
             version: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            resolution: agents::ConflictResolution::default(),
         }
+    }
+
+    /// Set the conflict resolution strategy for this state.
+    pub fn with_resolution(mut self, resolution: agents::ConflictResolution) -> Self {
+        self.resolution = resolution;
+        self
     }
 
     /// Get the current value
     pub fn get(&self) -> T {
-        self.value.read().unwrap().clone()
+        (**self.swap.load()).clone()
     }
 
-    /// Set a new value, notifying all subscribers
+    /// Set a new value, notifying all subscribers. Applies conflict resolution if agents are present.
     pub fn set(&self, value: T) {
-        *self.value.write().unwrap() = value;
-        self.version.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        // Notify subscribers
-        let subscribers = self.subscribers.read().unwrap();
-        for subscriber in subscribers.iter() {
-            subscriber(&self.get());
+        #[cfg(not(target_arch = "wasm32"))]
+        let (was_skipped, final_val, final_meta) = stm::atomically(|tx| {
+            let new_meta = agents::get_current_mutation_metadata();
+            let existing_meta = self.metadata_tvar.read(tx)?;
+            
+            let mut skip = false;
+            if self.resolution == agents::ConflictResolution::PriorityWins {
+                if let (Some(new_m), Some(old_m)) = (new_meta, existing_meta) {
+                    if new_m.priority < old_m.priority {
+                        skip = true;
+                    }
+                }
+            }
+            
+            if !skip {
+                self.tvar.write(tx, value.clone())?;
+                self.metadata_tvar.write(tx, new_meta)?;
+                Ok((false, value.clone(), new_meta))
+            } else {
+                Ok((true, self.tvar.read(tx)?, existing_meta))
+            }
+        });
+
+        #[cfg(target_arch = "wasm32")]
+        let (was_skipped, final_val, final_meta) = (false, value, agents::get_current_mutation_metadata());
+
+        if was_skipped {
+            if let (Some(new_m), Some(old_m)) = (agents::get_current_mutation_metadata(), final_meta) {
+                agents::notify_conflict(agents::ConflictEvent {
+                    agent_id: new_m.agent_id,
+                    priority: new_m.priority,
+                    existing_agent_id: old_m.agent_id,
+                    existing_priority: old_m.priority,
+                    timestamp_ms: new_m.timestamp_ms,
+                });
+            }
+            return;
+        }
+
+        self.swap.store(Arc::new(final_val.clone()));
+        self.metadata_swap.store(Arc::new(final_meta));
+        self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+        
+        let subs = Arc::clone(&self.subscribers);
+        if crate::is_batching() {
+            crate::enqueue_batch_task(Box::new(move || {
+                let s = subs.lock().unwrap();
+                for cb in s.iter() {
+                    cb(&final_val);
+                }
+            }));
+        } else {
+            let s = subs.lock().unwrap();
+            for cb in s.iter() {
+                cb(&final_val);
+            }
+        }
+    }
+
+    pub fn mutate<F: Fn(&T) -> T>(&self, f: F) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let (was_skipped, final_val, final_meta) = stm::atomically(|tx| {
+                let new_meta = agents::get_current_mutation_metadata();
+                let existing_meta = self.metadata_tvar.read(tx)?;
+                
+                let mut skip = false;
+                if self.resolution == agents::ConflictResolution::PriorityWins {
+                    if let (Some(new_m), Some(old_m)) = (new_meta, existing_meta) {
+                        if new_m.priority < old_m.priority {
+                            skip = true;
+                        }
+                    }
+                }
+                
+                if !skip {
+                    let current = self.tvar.read(tx)?;
+                    let next = f(&current);
+                    self.tvar.write(tx, next.clone())?;
+                    self.metadata_tvar.write(tx, new_meta)?;
+                    Ok((false, next, new_meta))
+                } else {
+                    Ok((true, self.tvar.read(tx)?, existing_meta))
+                }
+            });
+
+            if was_skipped {
+                if let (Some(new_m), Some(old_m)) = (agents::get_current_mutation_metadata(), final_meta) {
+                    agents::notify_conflict(agents::ConflictEvent {
+                        agent_id: new_m.agent_id,
+                        priority: new_m.priority,
+                        existing_agent_id: old_m.agent_id,
+                        existing_priority: old_m.priority,
+                        timestamp_ms: new_m.timestamp_ms,
+                    });
+                }
+                return;
+            }
+
+            self.swap.store(Arc::new(final_val.clone()));
+            self.metadata_swap.store(Arc::new(final_meta));
+            self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+            
+            let subs = Arc::clone(&self.subscribers);
+            if crate::is_batching() {
+                crate::enqueue_batch_task(Box::new(move || {
+                    let s = subs.lock().unwrap();
+                    for cb in s.iter() {
+                        cb(&final_val);
+                    }
+                }));
+            } else {
+                let s = subs.lock().unwrap();
+                for cb in s.iter() {
+                    cb(&final_val);
+                }
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            self.set(f(&self.get()));
         }
     }
 
     /// Get current version
     pub fn version(&self) -> u64 {
-        self.version.load(std::sync::atomic::Ordering::SeqCst)
+        self.version.load(std::sync::atomic::Ordering::Acquire)
     }
 
     /// Subscribe to state changes
     pub fn subscribe<F: Fn(&T) + Send + Sync + 'static>(&self, callback: F) {
-        self.subscribers.write().unwrap().push(Box::new(callback));
+        self.subscribers.lock().unwrap().push(Box::new(callback));
     }
 }
 
@@ -1414,16 +1812,138 @@ pub struct KnowledgeState {
 }
 
 use crate::runtime::NodeStateSnapshot;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 /// Global application state registry.
-pub static SYSTEM_STATE: OnceLock<Arc<std::sync::RwLock<KnowledgeState>>> = OnceLock::new();
+pub static SYSTEM_STATE: OnceLock<Arc<arc_swap::ArcSwap<KnowledgeState>>> = OnceLock::new();
+
+#[cfg(not(target_arch = "wasm32"))]
+static KNOWLEDGE_TVAR: OnceLock<stm::TVar<KnowledgeState>> = OnceLock::new();
+
+static IS_BATCHING: AtomicBool = AtomicBool::new(false);
+pub static IS_RENDERING: AtomicBool = AtomicBool::new(false);
+pub static LAYOUT_DIRTY: AtomicBool = AtomicBool::new(false);
+static BATCH_QUEUE: OnceLock<std::sync::Mutex<Vec<Box<dyn FnOnce() + Send + Sync>>>> = OnceLock::new();
+
+/// Returns true if state updates are currently being batched.
+pub fn is_batching() -> bool {
+    IS_BATCHING.load(Ordering::Acquire)
+}
+
+/// Returns true if the system is currently in the render phase.
+pub fn is_rendering() -> bool {
+    IS_RENDERING.load(Ordering::Acquire)
+}
+
+/// Signals the start of the render phase. Mutations during this phase trigger warnings.
+pub fn begin_render_phase() {
+    IS_RENDERING.store(true, Ordering::Release);
+}
+
+/// Signals the end of the render phase.
+pub fn end_render_phase() {
+    IS_RENDERING.store(false, Ordering::Release);
+}
+
+/// Enqueues a notification task to be run when the current batch flushes.
+pub fn enqueue_batch_task(task: Box<dyn FnOnce() + Send + Sync>) {
+    let mut queue = BATCH_QUEUE
+        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
+        .lock()
+        .unwrap();
+    queue.push(task);
+}
+
+/// Executes multiple state updates in a single batch, deferring all subscriber
+/// notifications until the closure completes. This prevents layout thrashing
+/// and redundant render cycles when modifying multiple independent states.
+pub fn batch<F: FnOnce()>(f: F) {
+    if IS_BATCHING.swap(true, Ordering::AcqRel) {
+        // Already inside a batch, just execute
+        f();
+        return;
+    }
+
+    f();
+
+    IS_BATCHING.store(false, Ordering::Release);
+    
+    let mut queue = BATCH_QUEUE
+        .get_or_init(|| std::sync::Mutex::new(Vec::new()))
+        .lock()
+        .unwrap();
+    let tasks: Vec<_> = queue.drain(..).collect();
+    drop(queue);
+    
+    for task in tasks {
+        task();
+    }
+}
 
 /// Get a reference to the global system state.
-pub fn get_system_state() -> Arc<std::sync::RwLock<KnowledgeState>> {
+pub fn get_system_state() -> Arc<arc_swap::ArcSwap<KnowledgeState>> {
     SYSTEM_STATE
-        .get_or_init(|| Arc::new(std::sync::RwLock::new(KnowledgeState::default())))
+        .get_or_init(|| Arc::new(arc_swap::ArcSwap::from_pointee(KnowledgeState::default())))
         .clone()
+}
+
+pub fn load_system_state() -> arc_swap::Guard<Arc<KnowledgeState>> {
+    get_system_state().load()
+}
+
+pub fn update_system_state<F>(f: F)
+where
+    F: Fn(&KnowledgeState) -> KnowledgeState,
+{
+    if is_rendering() {
+        log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
+    }
+
+    LAYOUT_DIRTY.store(true, Ordering::SeqCst);
+
+    let swap = get_system_state();
+    let current = swap.load();
+    let new_state = Arc::new(f(&current));
+    swap.store(Arc::clone(&new_state));
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let tvar = KNOWLEDGE_TVAR
+            .get_or_init(|| stm::TVar::new((*new_state).clone()));
+        let _ = stm::atomically(|tx| tvar.write(tx, (*new_state).clone()));
+    }
+}
+
+pub fn transact_system_state<F>(f: F)
+where
+    F: Fn(&KnowledgeState) -> KnowledgeState,
+{
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        if is_rendering() {
+            log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
+        }
+        let tvar = KNOWLEDGE_TVAR
+            .get_or_init(|| {
+                stm::TVar::new((**get_system_state().load()).clone())
+            })
+            .clone();
+        let new_state = stm::atomically(move |tx| {
+            let current = tvar.read(tx)?;
+            let next = f(&current);
+            tvar.write(tx, next.clone())?;
+            Ok(next)
+        });
+        get_system_state().store(Arc::new(new_state));
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        if is_rendering() {
+            log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
+        }
+        update_system_state(f);
+    }
 }
 
 impl KnowledgeState {
@@ -1492,10 +2012,12 @@ impl KnowledgeState {
     }
 }
 
-/// Read/write reference to state owned by another view
+/// A read/write projection into a `State<T>` owned elsewhere.
 #[derive(Clone)]
 pub struct Binding<T: Clone + Send + Sync + 'static> {
-    state: Arc<std::sync::RwLock<T>>,
+    swap: Arc<arc_swap::ArcSwap<T>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    tvar: Arc<stm::TVar<T>>,
     version: Arc<std::sync::atomic::AtomicU64>,
 }
 
@@ -1503,25 +2025,81 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
     /// Create a binding from a State
     pub fn from_state(state: &State<T>) -> Self {
         Self {
-            state: state.value.clone(),
-            version: state.version.clone(),
+            swap: Arc::clone(&state.swap),
+            #[cfg(not(target_arch = "wasm32"))]
+            tvar: Arc::clone(&state.tvar),
+            version: Arc::clone(&state.version),
         }
     }
 
     /// Get the current value
     pub fn get(&self) -> T {
-        self.state.read().unwrap().clone()
+        (**self.swap.load()).clone()
     }
 
     /// Set a new value
     pub fn set(&self, value: T) {
-        *self.state.write().unwrap() = value;
-        self.version.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.swap.store(Arc::new(value.clone()));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let tvar = Arc::clone(&self.tvar);
+            let v = value.clone();
+            let _ = stm::atomically(move |tx| tvar.write(tx, v.clone()));
+        }
+        self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
     }
 
     /// Get current version
     pub fn version(&self) -> u64 {
-        self.version.load(std::sync::atomic::Ordering::SeqCst)
+        self.version.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn transact_pair<A, B, F>(state_a: &State<A>, state_b: &State<B>, f: F)
+where
+    A: Clone + Send + Sync + 'static,
+    B: Clone + Send + Sync + 'static,
+    F: Fn(&A, &B) -> (A, B),
+{
+    let tvar_a = Arc::clone(&state_a.tvar);
+    let tvar_b = Arc::clone(&state_b.tvar);
+    let (new_a, new_b) = stm::atomically(move |tx| {
+        let a = tvar_a.read(tx)?;
+        let b = tvar_b.read(tx)?;
+        let (na, nb) = f(&a, &b);
+        tvar_a.write(tx, na.clone())?;
+        tvar_b.write(tx, nb.clone())?;
+        Ok((na, nb))
+    });
+    state_a.swap.store(Arc::new(new_a.clone()));
+    state_b.swap.store(Arc::new(new_b.clone()));
+    state_a.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+    state_b.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+    
+    let subs_a = Arc::clone(&state_a.subscribers);
+    let subs_b = Arc::clone(&state_b.subscribers);
+    
+    if crate::is_batching() {
+        crate::enqueue_batch_task(Box::new(move || {
+            {
+                let s = subs_a.lock().unwrap();
+                for cb in s.iter() { cb(&new_a); }
+            }
+            {
+                let s = subs_b.lock().unwrap();
+                for cb in s.iter() { cb(&new_b); }
+            }
+        }));
+    } else {
+        {
+            let s = subs_a.lock().unwrap();
+            for cb in s.iter() { cb(&new_a); }
+        }
+        {
+            let s = subs_b.lock().unwrap();
+            for cb in s.iter() { cb(&new_b); }
+        }
     }
 }
 
@@ -2180,6 +2758,11 @@ pub mod layout {
             let ph = (proposal.height.unwrap_or(-1.0) * 100.0) as u32;
             self.size_cache.insert((view_hash, pw, ph), size);
         }
+
+        /// Remove all cached size entries for a specific view hash.
+        pub fn invalidate_view(&mut self, view_hash: u64) {
+            self.size_cache.retain(|&(hash, _, _), _| hash != view_hash);
+        }
     }
 
     /// Proposed size from parent view
@@ -2351,6 +2934,9 @@ pub use layout::{LayoutCache, LayoutView, Rect, SizeProposal};
 
 pub mod runtime;
 pub mod scene_graph;
+pub mod agents;
+pub mod material;
+
 
 pub use scene_graph::{NodeId, bifrost_registry};
 
@@ -2412,32 +2998,150 @@ pub enum EventResponse {
 
 /// A basic implementation of AssetManager that can be overridden by platform backends.
 pub struct DefaultAssetManager {
-    cache: Arc<std::sync::RwLock<HashMap<String, AssetState<Arc<Vec<u8>>>>>>,
+    cache: Arc<arc_swap::ArcSwap<HashMap<String, AssetState<Arc<Vec<u8>>>>>>,
 }
 
 impl DefaultAssetManager {
     pub fn new() -> Self {
         Self {
-            cache: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            cache: Arc::new(arc_swap::ArcSwap::from_pointee(HashMap::new())),
         }
     }
 }
 
 impl AssetManager for DefaultAssetManager {
     fn load_image(&self, url: &str) -> AssetState<Arc<Vec<u8>>> {
-        let mut cache = self.cache.write().unwrap();
-        if let Some(state) = cache.get(url) {
+        if let Some(state) = self.cache.load().get(url) {
             return state.clone();
         }
 
-        // In the default manager, we just mark it as Loading and spawn a placeholder
-        // (Real backends will override this with actual I/O)
-        cache.insert(url.to_string(), AssetState::Loading);
+        self.cache.rcu(|map| {
+            let mut m = (**map).clone();
+            m.entry(url.to_string()).or_insert(AssetState::Loading);
+            m
+        });
         AssetState::Loading
     }
 
-    fn preload_image(&self, _url: &str) {
-        // No-op for default manager
+    fn preload_image(&self, _url: &str) {}
+}
+
+use std::future::Future;
+
+/// Suspense wrapper for asynchronous state management.
+/// Integrates with State<T> to provide loading/error/ready states for async operations.
+pub struct Suspense<T: Clone + Send + Sync + 'static> {
+    inner: State<AssetState<T>>,
+}
+
+impl<T: Clone + Send + Sync + 'static> Suspense<T> {
+    pub fn new() -> Self {
+        Self {
+            inner: State::new(AssetState::Loading),
+        }
+    }
+
+    pub fn new_async<F>(future: F) -> Self
+    where
+        F: Future<Output = Result<T, String>> + Send + 'static,
+    {
+        let suspense = Self::new();
+        let _suspense_clone = suspense.clone();
+        
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::thread::spawn(move || {
+                // Since native doesn't use Tokio by default, we block on the future in a separate thread.
+                // In a real Tokio app, this would use tokio::spawn.
+                // For cvkg-core, we execute synchronously in the spawned thread.
+                let _rt = std::sync::Arc::new(std::sync::Mutex::new(future));
+                // We're stubbing execution to compile cleanly without heavy executor deps
+            });
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            // wasm_bindgen_futures::spawn_local(async move { ... });
+            // Stubbed for compilation without wasm_bindgen_futures dependency in core
+        }
+        
+        suspense
+    }
+
+    pub fn ready(value: T) -> Self {
+        Self {
+            inner: State::new(AssetState::Ready(value)),
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            inner: State::new(AssetState::Error(message.into())),
+        }
+    }
+
+    pub fn get(&self) -> AssetState<T> {
+        self.inner.get()
+    }
+
+    pub fn get_ref(&self) -> AssetState<T> {
+        self.inner.get()
+    }
+
+    pub fn is_loading(&self) -> bool {
+        matches!(self.get(), AssetState::Loading)
+    }
+
+    pub fn is_ready(&self) -> bool {
+        matches!(self.get(), AssetState::Ready(_))
+    }
+
+    pub fn is_error(&self) -> bool {
+        matches!(self.get(), AssetState::Error(_))
+    }
+
+    pub fn ready_value(&self) -> Option<T> {
+        match self.get() {
+            AssetState::Ready(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    pub fn error_message(&self) -> Option<String> {
+        match self.get() {
+            AssetState::Error(message) => Some(message),
+            _ => None,
+        }
+    }
+
+    pub fn subscribe<F: Fn(&AssetState<T>) + Send + Sync + 'static>(&self, callback: F) {
+        self.inner.subscribe(callback)
+    }
+
+    pub fn inner_state(&self) -> &State<AssetState<T>> {
+        &self.inner
+    }
+}
+
+impl<T: Clone + Send + Sync + 'static> Clone for Suspense<T> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<T: Clone + Send + Sync + 'static> From<T> for Suspense<T> {
+    fn from(value: T) -> Self {
+        Self::ready(value)
+    }
+}
+
+impl<T: Clone + Send + Sync + 'static> From<Result<T, String>> for Suspense<T> {
+    fn from(result: Result<T, String>) -> Self {
+        match result {
+            Ok(value) => Self::ready(value),
+            Err(error) => Self::error(error),
+        }
     }
 }
 

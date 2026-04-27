@@ -34,6 +34,8 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
+use cvkg_core::Renderer;
+
 
 /// Native renderer backend implementing the Renderer trait.
 /// It wraps a shared SurtrRenderer for high-performance GPU drawing.
@@ -51,6 +53,11 @@ impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
     fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>) -> Self {
         Self { gpu }
+    }
+
+    /// Get real-time performance telemetry.
+    fn get_telemetry(&self) -> cvkg_core::TelemetryData {
+        self.gpu.lock().unwrap().get_telemetry()
     }
 
     /// Start the CVKG native application with the given view.
@@ -78,6 +85,8 @@ struct WindowState {
     accesskit_adapter: Option<accesskit_winit::Adapter>,
     vdom: Option<cvkg_vdom::VDom>,
     cursor_pos: [f32; 2],
+    /// The instant the last redraw finished, used for measuring inter-frame timing.
+    last_redraw_start: std::time::Instant,
 }
 
 struct App<V: cvkg_core::View> {
@@ -120,6 +129,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 accesskit_adapter: Some(adapter),
                 vdom: Some(cvkg_vdom::VDom::new()),
                 cursor_pos: [0.0, 0.0],
+                last_redraw_start: std::time::Instant::now(),
             });
 
             cvkg_core::env::insert::<cvkg_core::AssetKey>(self.asset_manager.clone());
@@ -158,7 +168,16 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     height: logical_size.height,
                 };
 
+                // Start timing for this redraw
+                let redraw_start = std::time::Instant::now();
+                
+                // Build new vdom and diff (layout pass)
+                let layout_start = std::time::Instant::now();
                 let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                let layout_end = std::time::Instant::now();
+
+                // Apply patches
+                let state_flush_start = std::time::Instant::now();
                 if let Some(prev_vdom) = &mut state.vdom {
                     let patches = prev_vdom.diff(&new_vdom);
                     if let Some(adapter) = &mut state.accesskit_adapter {
@@ -189,14 +208,35 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 } else {
                     state.vdom = Some(new_vdom);
                 }
+                let state_flush_end = std::time::Instant::now();
 
-                {
-                    let mut gpu = gpu_arc.lock().unwrap();
-                    let encoder = gpu.begin_frame(id);
-                    let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone());
-                    self.view.render(&mut renderer, rect);
-                    gpu.end_frame(encoder);
-                }
+                // GPU rendering
+                let draw_start = std::time::Instant::now();
+                let mut gpu = gpu_arc.lock().unwrap();
+                let encoder = gpu.begin_frame(id);
+                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone());
+                self.view.render(&mut renderer, rect);
+                let draw_end = std::time::Instant::now();
+
+                // Submission
+                let gpu_submit_start = std::time::Instant::now();
+                gpu.end_frame(encoder);
+                let gpu_submit_end = std::time::Instant::now();
+
+                // Update telemetry
+                let mut telemetry = gpu.telemetry.clone();
+                // input_time_ms uses the previous frame's completion to this frame's start as a proxy
+                telemetry.input_time_ms = redraw_start.duration_since(state.last_redraw_start).as_secs_f32() * 1000.0;
+                telemetry.layout_time_ms = layout_end.duration_since(layout_start).as_secs_f32() * 1000.0;
+                telemetry.state_flush_time_ms = state_flush_end.duration_since(state_flush_start).as_secs_f32() * 1000.0;
+                telemetry.draw_time_ms = draw_end.duration_since(draw_start).as_secs_f32() * 1000.0;
+                telemetry.gpu_submit_time_ms = gpu_submit_end.duration_since(gpu_submit_start).as_secs_f32() * 1000.0;
+                
+                // Total frame time
+                telemetry.frame_time_ms = gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
+                
+                gpu.telemetry = telemetry;
+                state.last_redraw_start = gpu_submit_end;
             }
             WindowEvent::CursorMoved { position, .. } => {
                 let scale = state.window.scale_factor();
@@ -410,49 +450,57 @@ impl accesskit::DeactivationHandler for ShieldWall {
 }
 
 /// A concrete AssetManager for native desktop targets that loads from the local filesystem.
+///
+/// The cache is read on every render frame (lock-free via `ArcSwap::load()`) but written
+/// at most once per URL after disk I/O completes. `rcu()` atomically inserts the result
+/// without blocking concurrent render-loop readers.
 pub struct NativeAssetManager {
     cache: std::sync::Arc<
-        std::sync::RwLock<
+        arc_swap::ArcSwap<
             std::collections::HashMap<String, cvkg_core::AssetState<std::sync::Arc<Vec<u8>>>>,
         >,
     >,
 }
 
 impl NativeAssetManager {
+    /// Create a new, empty NativeAssetManager.
     pub fn new() -> Self {
         Self {
-            cache: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            cache: std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(
+                std::collections::HashMap::new(),
+            )),
         }
     }
 }
 
 impl cvkg_core::AssetManager for NativeAssetManager {
+    /// Return the cached asset state for `url`.
+    ///
+    /// Fast path: lock-free snapshot read via `ArcSwap::load()`.
+    /// Slow path (cache miss): perform filesystem I/O, then publish the result
+    /// with `rcu()` — no lock is held while reading the disk.
     fn load_image(&self, url: &str) -> cvkg_core::AssetState<std::sync::Arc<Vec<u8>>> {
-        {
-            let cache = self.cache.read().unwrap();
-            if let Some(state) = cache.get(url) {
-                return state.clone();
-            }
+        // Fast path: lock-free read from current cache snapshot
+        if let Some(state) = self.cache.load().get(url) {
+            return state.clone();
         }
 
-        // Real filesystem I/O (simplistic implementation for now)
-        match std::fs::read(url) {
-            Ok(data) => {
-                let state = cvkg_core::AssetState::Ready(std::sync::Arc::new(data));
-                let mut cache = self.cache.write().unwrap();
-                cache.insert(url.to_string(), state.clone());
-                state
-            }
-            Err(e) => {
-                let state = cvkg_core::AssetState::Error(e.to_string());
-                let mut cache = self.cache.write().unwrap();
-                cache.insert(url.to_string(), state.clone());
-                state
-            }
-        }
+        // Slow path: disk I/O, then atomic rcu insert
+        let result = match std::fs::read(url) {
+            Ok(data) => cvkg_core::AssetState::Ready(std::sync::Arc::new(data)),
+            Err(e) => cvkg_core::AssetState::Error(e.to_string()),
+        };
+        let result_clone = result.clone();
+        let key = url.to_string();
+        self.cache.rcu(move |map| {
+            let mut m = (**map).clone();
+            m.insert(key.clone(), result_clone.clone());
+            m
+        });
+        result
     }
 
     fn preload_image(&self, _url: &str) {
-        // Implementation for async preloading could go here
+        // Async preloading could be wired to a background thread here
     }
 }

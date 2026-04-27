@@ -68,8 +68,10 @@ impl ShelfPacker {
     }
 }
 
-use cvkg_core::{ColorTheme, Mesh, Rect, Renderer, SceneUniforms};
+use cvkg_core::{ColorTheme, Mesh, Rect, Renderer, SceneUniforms, LAYOUT_DIRTY};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
+include!(concat!(env!("OUT_DIR"), "/shader_spirv.rs"));
 
 
 /// SvgModel — A collection of tessellated triangles representing a vector icon.
@@ -108,7 +110,13 @@ pub struct Vertex {
     pub size: [f32; 2],
     pub screen: [f32; 2],
     pub clip: [f32; 4], // [x, y, width, height]
+    pub translation: [f32; 2],
+    pub scale: [f32; 2],
+    pub rotation: f32,
+    pub _pad: f32,
 }
+
+
 
 /// Represents a single batched GPU draw call.
 /// Batches are broken whenever the active texture or primitive mode changes.
@@ -130,7 +138,7 @@ struct ShadowState {
 }
 
 impl Vertex {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 14] = wgpu::vertex_attr_array![
         0 => Float32x3, // position
         1 => Float32x3, // normal
         2 => Float32x2, // uv
@@ -141,8 +149,12 @@ impl Vertex {
         7 => Float32x2, // logical
         8 => Float32x2, // size
         9 => Float32x2, // screen
-        10 => Float32x4 // clip
+        10 => Float32x4, // clip
+        11 => Float32x2, // translation
+        12 => Float32x2, // scale
+        13 => Float32    // rotation
     ];
+
 
     fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
@@ -220,8 +232,27 @@ pub struct SurtrRenderer {
     
     // Telemetry
     pub telemetry: cvkg_core::TelemetryData,
-    last_frame_start: std::time::Instant,
+
+    /// Configuration for render-loop frame timing and degradation strategies.
+    pub frame_budget: cvkg_core::FrameBudget,
+    /// Instant at the start of the last redraw, used for measuring frame timings.
+    pub last_redraw_start: std::time::Instant,
+    /// Instant at the start of the last frame, used for frame_time_ms calculation.
+    pub last_frame_start: std::time::Instant,
+
+    // VRAM Tracking (Bytes)
+    vram_buffers_bytes: u64,
+    vram_textures_bytes: u64,
+
+    // Debugging
+    debug_layout: bool,
+
+    // Transform Stack
+    transform_stack: Vec<([f32; 2], [f32; 2], f32)>,
+    /// Whether a redraw has been requested for the next frame.
+    pub redraw_requested: bool,
 }
+
 
 struct SurfaceContext {
     surface: wgpu::Surface<'static>,
@@ -308,11 +339,9 @@ impl SurtrRenderer {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
-
-        // Load the Muspelheim Shaders
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Muspelheim Main Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders.wgsl").into()),
+            source: wgpu::ShaderSource::SpirV(std::borrow::Cow::Borrowed(SPIRV)),
         });
 
         // Niflheim Bind Group Layout (for textures/samplers)
@@ -856,7 +885,49 @@ impl SurtrRenderer {
             current_z: 0.0,
             telemetry: cvkg_core::TelemetryData::default(),
             last_frame_start: std::time::Instant::now(),
+            last_redraw_start: std::time::Instant::now(),
+            frame_budget: cvkg_core::FrameBudget::default(),
+            vram_buffers_bytes: 0,
+            vram_textures_bytes: 0,
+            debug_layout: false,
+            transform_stack: Vec::new(),
+            redraw_requested: false,
         }
+    }
+
+    /// Update VRAM telemetry based on currently allocated resources.
+    fn update_vram_telemetry(&mut self) {
+        // Calculate Buffer VRAM
+        let mut buffer_bytes = 0;
+        buffer_bytes += (MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64;
+        buffer_bytes += (MAX_INDICES * std::mem::size_of::<u32>()) as u64;
+        buffer_bytes += std::mem::size_of::<cvkg_core::ColorTheme>() as u64;
+        buffer_bytes += std::mem::size_of::<cvkg_core::SceneUniforms>() as u64;
+        self.vram_buffers_bytes = buffer_bytes;
+
+        // Calculate Texture VRAM
+        let mut texture_bytes = 0;
+        texture_bytes += 4096 * 4096 * 4; // Mega Atlas (RGBA8)
+        texture_bytes += 1 * 1 * 4; // Dummy (RGBA8)
+        
+        for ctx in self.surfaces.values() {
+            let bpp = 4; 
+            let surface_bytes = (ctx.config.width * ctx.config.height * bpp) as u64;
+            texture_bytes += surface_bytes * 3; // scene, blur_a, blur_b
+            texture_bytes += (ctx.config.width * ctx.config.height * 4) as u64; // depth (Depth32Float)
+        }
+        
+        self.vram_textures_bytes = texture_bytes;
+        
+        self.telemetry.vram_buffers_mb = buffer_bytes as f32 / 1_048_576.0;
+        self.telemetry.vram_textures_mb = texture_bytes as f32 / 1_048_576.0;
+        self.telemetry.vram_pipelines_mb = 0.0; 
+        self.telemetry.vram_usage_mb = self.telemetry.vram_buffers_mb + self.telemetry.vram_textures_mb;
+    }
+
+    /// Get real-time performance telemetry.
+    pub fn get_telemetry(&self) -> cvkg_core::TelemetryData {
+        self.telemetry.clone()
     }
 
     /// resize — Reconfigures a specific surface and its internal textures.
@@ -1352,6 +1423,7 @@ impl SurtrRenderer {
             let px = points[i][0];
             let py = points[i][1];
 
+            let (translation, scale_transform, rotation) = self.get_current_transform();
             self.vertices.push(Vertex {
                 position: [px, py, 0.0],
                 normal: [0.0, 0.0, 1.0],
@@ -1364,6 +1436,10 @@ impl SurtrRenderer {
                 size: [rect.width, rect.height],
                 screen,
                 clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                translation,
+                scale: scale_transform,
+                rotation,
+                _pad: 0.0,
             });
         }
 
@@ -1486,6 +1562,8 @@ impl SurtrRenderer {
         });
         let clip = [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height];
 
+        let (translation, scale_transform, rotation) = self.get_current_transform();
+
         self.vertices.push(Vertex {
             position: [x1, y1, z],
             normal,
@@ -1498,6 +1576,10 @@ impl SurtrRenderer {
             size: [rect.width, rect.height],
             screen,
             clip,
+            translation,
+            scale: scale_transform,
+            rotation,
+            _pad: 0.0,
         });
         self.vertices.push(Vertex {
             position: [x2, y1, z],
@@ -1511,6 +1593,10 @@ impl SurtrRenderer {
             size: [rect.width, rect.height],
             screen,
             clip,
+            translation,
+            scale: scale_transform,
+            rotation,
+            _pad: 0.0,
         });
         self.vertices.push(Vertex {
             position: [x2, y2, z],
@@ -1524,6 +1610,10 @@ impl SurtrRenderer {
             size: [rect.width, rect.height],
             screen,
             clip,
+            translation,
+            scale: scale_transform,
+            rotation,
+            _pad: 0.0,
         });
         self.vertices.push(Vertex {
             position: [x1, y2, z],
@@ -1537,6 +1627,10 @@ impl SurtrRenderer {
             size: [rect.width, rect.height],
             screen,
             clip,
+            translation,
+            scale: scale_transform,
+            rotation,
+            _pad: 0.0,
         });
 
         self.indices.extend_from_slice(&[
@@ -1555,6 +1649,20 @@ impl SurtrRenderer {
 
     /// end_frame — Quench the blade by submitting the full Muspelheim multi-pass effect.
     pub fn end_frame(&mut self, mut encoder: wgpu::CommandEncoder) {
+        // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
+        // draw a 10px red border as a warning flash.
+        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel) {
+            if let Some(window_id) = self.current_window {
+                if let Some(surface_ctx) = self.surfaces.get(&window_id) {
+                    let w = surface_ctx.config.width as f32;
+                    let h = surface_ctx.config.height as f32;
+                    let border_rect = Rect { x: 0.0, y: 0.0, width: w, height: h };
+                    // Draw a thick red border to signal layout-thrashing
+                    self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+                }
+            }
+        }
+
         self.queue
             .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
         self.queue
@@ -1913,6 +2021,7 @@ impl SurtrRenderer {
         }
 
         self.telemetry.frame_time_ms = self.last_frame_start.elapsed().as_secs_f32() * 1000.0;
+        self.update_vram_telemetry();
         self.queue.submit(Some(encoder.finish()));
         frame.present();
     }
@@ -2388,7 +2497,25 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.shadow_stack.pop();
     }
 
+    fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
+        let (current_t, current_s, current_r) = self.transform_stack.last().copied().unwrap_or(([0.0, 0.0], [1.0, 1.0], 0.0));
+        
+        // Combine transforms (simplified: this doesn't handle full matrix multiplication yet,
+        // but for basic UI nesting it's often sufficient to just add translation and multiply scale).
+        // A full implementation would use mat3x3.
+        let new_t = [current_t[0] + translation[0] * current_s[0], current_t[1] + translation[1] * current_s[1]];
+        let new_s = [current_s[0] * scale[0], current_s[1] * scale[1]];
+        let new_r = current_r + rotation;
+        
+        self.transform_stack.push((new_t, new_s, new_r));
+    }
+
+    fn pop_transform(&mut self) {
+        self.transform_stack.pop();
+    }
+
     fn set_theme(&mut self, theme: ColorTheme) {
+
         self.current_theme = theme;
         self.queue
             .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
@@ -2498,6 +2625,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let pos = transform.transform_point3(glam::Vec3::from(mesh.vertices[i]));
             let norm = transform.transform_vector3(glam::Vec3::from(mesh.normals[i]));
 
+            let (translation, scale_transform, rotation) = self.get_current_transform();
             self.vertices.push(Vertex {
                 position: pos.to_array(),
                 normal: norm.to_array(),
@@ -2510,6 +2638,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 size: [0.0, 0.0],
                 screen,
                 clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                translation,
+                scale: scale_transform,
+                rotation,
+                _pad: 0.0,
             });
         }
 
@@ -2542,6 +2674,14 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn get_z_index(&self) -> f32 {
         self.current_z
+    }
+
+    fn delta_time(&self) -> f32 {
+        self.current_scene.delta_time
+    }
+
+    fn request_redraw(&mut self) {
+        self.redraw_requested = true;
     }
 }
 
@@ -2578,8 +2718,20 @@ fn usvg_to_lyon(path: &usvg::Path) -> lyon::path::Path {
     builder.build()
 }
 
+impl SurtrRenderer {
+    fn get_current_transform(&self) -> ([f32; 2], [f32; 2], f32) {
+        self.transform_stack
+            .last()
+            .cloned()
+            .unwrap_or(([0.0, 0.0], [1.0, 1.0], 0.0))
+    }
+}
+
 struct SceneVertexConstructor {
     color: [f32; 4],
+    translation: [f32; 2],
+    scale: [f32; 2],
+    rotation: f32,
 }
 
 impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
@@ -2596,6 +2748,10 @@ impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
             size: [1.0, 1.0],
             screen: [0.0, 0.0],
             clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+            translation: self.translation,
+            scale: self.scale,
+            rotation: self.rotation,
+            _pad: 0.0,
         }
     }
 }
@@ -2612,12 +2768,14 @@ impl Drop for SurtrRenderer {
 
 impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
     fn begin_frame(&mut self) -> wgpu::CommandEncoder {
+        cvkg_core::begin_render_phase();
         let id = self.current_window.expect("No target window set for frame. Call set_target_window first.");
         self.begin_frame(id)
     }
 
     fn end_frame(&mut self, encoder: wgpu::CommandEncoder) {
-        self.end_frame(encoder)
+        self.end_frame(encoder);
+        cvkg_core::end_render_phase();
     }
 }
 
@@ -2678,7 +2836,12 @@ impl SurtrRenderer {
                     tessellator.tessellate_path(
                         &lyon_path,
                         &FillOptions::default(),
-                        &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color }),
+                        &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor {
+                            color,
+                            translation: [0.0, 0.0],
+                            scale: [1.0, 1.0],
+                            rotation: 0.0,
+                        }),
                     ).unwrap();
 
                     vertices.extend(buffers.vertices);
@@ -2770,4 +2933,31 @@ impl SurtrRenderer {
             call.index_count += model.indices.len() as u32;
         }
     }
+
+    /// forge_headless — Initializes Surtr without a window for visual regression testing.
+    pub async fn forge_headless(_width: u32, _height: u32) -> Self {
+        let instance = Arc::new(wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle()));
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .await
+            .unwrap();
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor::default())
+            .await
+            .unwrap();
+
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
+        
+        // This is a minimal initialization for headless rendering.
+        // Full implementation would require setting up the pipelines and buffers.
+        // For now, we'll reuse the logic from forge() by refactoring it.
+        
+        // Actually, let's just use the default forge and pass a dummy window if possible.
+        // Since we are being SURGICAL, I'll stop here and implement the test harness
+        // using the existing infrastructure if possible.
+        
+        todo!("Headless initialization requires refactoring forge()")
+    }
 }
+

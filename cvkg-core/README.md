@@ -28,6 +28,12 @@ A fluent API for applying transformations to views.
 *   `.on_click()`, `.on_pointer_enter()`, `.on_pointer_leave()`
 *   `.on_appear()`, `.on_disappear()`
 
+### Security & Sandboxing
+*   `Capability`: Granular permission system for plugins (Network, File, Agent).
+*   `SecurityPolicy`: Enforcement layer for capability-based access control.
+*   `SandboxLimits`: Resource metering and isolation (CPU/Memory/Events).
+*   `PluginManifest`: Secure metadata for untrusted component loading.
+
 ### Events
 Defines the `Event` enum used across the framework:
 *   `PointerDown`, `PointerUp`, `PointerMove`, `PointerClick`

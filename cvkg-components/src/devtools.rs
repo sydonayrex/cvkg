@@ -93,3 +93,70 @@ impl VdomInspector {
         current_y
     }
 }
+
+/// A HUD-style overlay for performance telemetry.
+pub struct TelemetryOverlay;
+
+impl View for TelemetryOverlay {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let telemetry = renderer.get_telemetry();
+        
+        let panel_width = 240.0;
+        let panel_height = 280.0;
+        let panel_rect = Rect {
+            x: rect.x + 10.0,
+            y: rect.y + 10.0,
+            width: panel_width,
+            height: panel_height,
+        };
+
+        // Bifrost background (frosted glass)
+        renderer.bifrost(panel_rect, 15.0, 0.3, 0.7);
+        renderer.fill_rect(panel_rect, [0.02, 0.02, 0.03, 0.8]);
+        renderer.stroke_rect(panel_rect, [0.0, 0.8, 1.0, 0.5], 1.0);
+
+        let mut y = panel_rect.y + 20.0;
+        let x = panel_rect.x + 15.0;
+        let line_h = 18.0;
+
+        // Title
+        renderer.draw_text("SYSTEM_TELEMETRY", x, y, 14.0, [0.0, 1.0, 0.9, 1.0]);
+        y += 25.0;
+
+        // Frame timing
+        renderer.draw_text(&format!("FRAME: {:.2} ms", telemetry.frame_time_ms), x, y, 12.0, [1.0, 1.0, 1.0, 1.0]);
+        y += line_h;
+        
+        // Pass timing breakdown
+        renderer.draw_text(&format!("  INPUT:  {:.2} ms", telemetry.input_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("  LAYOUT: {:.2} ms", telemetry.layout_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("  STATE:  {:.2} ms", telemetry.state_flush_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("  DRAW:   {:.2} ms", telemetry.draw_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("  SUBMIT: {:.2} ms", telemetry.gpu_submit_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        y += 25.0;
+
+        // GPU Stats
+        renderer.draw_text("GPU_RESOURCES", x, y, 12.0, [1.0, 0.6, 0.0, 1.0]);
+        y += 20.0;
+        renderer.draw_text(&format!("VRAM_TOTAL: {:.2} MB", telemetry.vram_usage_mb), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("  TEX: {:.2} MB", telemetry.vram_textures_mb), x, y, 10.0, [0.6, 0.6, 0.7, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("  BUF: {:.2} MB", telemetry.vram_buffers_mb), x, y, 10.0, [0.6, 0.6, 0.7, 1.0]);
+        y += 25.0;
+
+        // Draw calls & Vertices
+        renderer.draw_text(&format!("DRAW_CALLS: {}", telemetry.draw_calls), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
+        y += line_h;
+        renderer.draw_text(&format!("VERTICES:   {}", telemetry.vertices), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
+    }
+}

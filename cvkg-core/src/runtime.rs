@@ -56,9 +56,6 @@ pub struct RuntimeEvent {
 /// This integrates directly with the scheduler to execute safe mutations
 /// during the frame lifecycle.
 pub fn apply_patch(patch: RuntimePatch) {
-    let state_lock = crate::get_system_state();
-    let _state = state_lock.write().unwrap();
-
     match patch {
         RuntimePatch::ReplaceView { node_id, new_view } => {
             log::info!(
@@ -92,8 +89,8 @@ pub fn apply_patch(patch: RuntimePatch) {
 
 /// Captures and returns the current state of the application.
 pub fn snapshot_state() -> RuntimeStateSnapshot {
-    let state_lock = crate::get_system_state();
-    let state = state_lock.read().unwrap();
+    // load_system_state() is lock-free; safe to call from any thread.
+    let state = crate::load_system_state();
     RuntimeStateSnapshot {
         nodes: state.snapshot(),
     }

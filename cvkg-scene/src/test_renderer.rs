@@ -122,6 +122,10 @@ impl TestRenderer {
 }
 
 impl Renderer for TestRenderer {
+    fn delta_time(&self) -> f32 {
+        0.016 // Fixed 60fps for testing
+    }
+
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.commands.push(Command::FillRect { rect, color });
     }

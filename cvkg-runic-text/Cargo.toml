@@ -1,6 +1,6 @@
 [package]
 name = "cvkg-runic-text"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2024"
 license = "MIT"
 description = "Natively integrated Cyber Viking text shaping and layout engine for CVKG"

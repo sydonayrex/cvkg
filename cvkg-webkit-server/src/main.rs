@@ -21,6 +21,7 @@
 //! Professional CVKG Dev Server & App Preview Host.
 //! Features: Universal Build Pipeline, State-Preserving HMR, SEO Pre-rendering.
 
+use arc_swap::ArcSwap;
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, State},
     response::{Html, IntoResponse},
@@ -29,15 +30,19 @@ use axum::{
 };
 use futures_util::StreamExt;
 use std::net::SocketAddr;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use tokio::process::Command;
 
-/// Shared application state for the dev server
+/// Shared application state for the dev server.
+///
+/// `last_vdom_snapshot` is served on every HTTP request to `/` but written only once per
+/// client render cycle. `ArcSwap` gives the read path a lock-free snapshot; the write path
+/// publishes atomically with `store()`.
 struct AppState {
     #[allow(dead_code)]
     config: ServeConfig,
-    /// Last captured vDOM snapshot for SSG/SEO
-    last_vdom_snapshot: RwLock<Option<String>>,
+    /// Last captured vDOM snapshot for SSG/SEO (lock-free read via ArcSwap).
+    last_vdom_snapshot: ArcSwap<Option<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,15 +92,16 @@ async fn capture_snapshot(
     State(state): State<Arc<AppState>>,
     body: String,
 ) -> impl IntoResponse {
-    let mut snapshot = state.last_vdom_snapshot.write().unwrap();
-    *snapshot = Some(body);
+    // Atomically publish the new snapshot — lock-free for all concurrent readers.
+    state.last_vdom_snapshot.store(Arc::new(Some(body)));
     "Snapshot captured"
 }
 
 /// Serve the pre-rendered static HTML (SEO/SSG).
 async fn serve_ssg(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let snapshot = state.last_vdom_snapshot.read().unwrap();
-    let content = snapshot.as_deref().unwrap_or("<div id='app'>Loading...</div>");
+    // load() returns a lock-free Arc guard; valid for this request's lifetime.
+    let snapshot_guard = state.last_vdom_snapshot.load();
+    let content = snapshot_guard.as_deref().unwrap_or("<div id='app'>Loading...</div>");
     
     Html(format!(
         "<!DOCTYPE html><html><head><title>CVKG App</title></head><body>{}<script src='/pkg/app.js'></script></body></html>",
@@ -120,7 +126,7 @@ async fn main() {
 
     let state = Arc::new(AppState {
         config: config.clone(),
-        last_vdom_snapshot: RwLock::new(None),
+        last_vdom_snapshot: ArcSwap::from_pointee(None),
     });
 
     let app = Router::new()

@@ -30,7 +30,7 @@
 
 #![allow(deprecated)]
 
-use cvkg_core::{FrameRenderer, Rect, Renderer, View};
+use cvkg_core::{FrameRenderer, Rect, Renderer, View, RenderTier};
 use wasm_bindgen::prelude::*;
 
 use cvkg_vdom::VDomPatch;
@@ -62,14 +62,24 @@ pub struct GpuContext {
 pub struct WebRenderer {
     canvas: Option<web_sys::HtmlCanvasElement>,
     canvas_context: Option<web_sys::CanvasRenderingContext2d>,
+    gl_context: Option<web_sys::WebGl2RenderingContext>,
     #[allow(dead_code)]
     webgpu_context: Option<GpuContext>,
-    #[allow(dead_code)]
-    use_webgpu: bool,
+    tier: RenderTier,
     vdom: Option<cvkg_vdom::VDom>,
     previous_vdom: Option<cvkg_vdom::VDom>,
     start_time: f64,
     pub asset_manager: std::sync::Arc<WebAssetManager>,
+    /// Telemetry data for the last frame
+    pub telemetry: cvkg_core::TelemetryData,
+    /// Configuration for render-loop frame timing and degradation strategies.
+    pub frame_budget: cvkg_core::FrameBudget,
+    /// Timestamp of the last redraw start, used for measuring frame timings.
+    pub last_redraw_start: f64,
+    /// Time elapsed since the last frame in seconds.
+    pub delta_time: f32,
+    /// Whether a redraw has been requested for the next frame.
+    pub redraw_requested: bool,
 }
 
 // WebRenderer is only used on a single thread in WASM, but Renderer trait requires Send.
@@ -78,16 +88,28 @@ unsafe impl Send for WebRenderer {}
 impl WebRenderer {
     #[doc(hidden)]
     pub fn new() -> Self {
+        let now = web_sys::window().unwrap().performance().unwrap().now();
         Self {
             canvas: None,
             canvas_context: None,
+            gl_context: None,
             webgpu_context: None,
-            use_webgpu: false,
+            tier: RenderTier::Tier3Fallback,
             vdom: Some(cvkg_vdom::VDom::new()),
             previous_vdom: None,
-            start_time: web_sys::window().unwrap().performance().unwrap().now(),
+            start_time: now,
             asset_manager: std::sync::Arc::new(WebAssetManager::new()),
+            telemetry: cvkg_core::TelemetryData::default(),
+            frame_budget: cvkg_core::FrameBudget::default(),
+            last_redraw_start: now,
+            delta_time: 0.016,
+            redraw_requested: false,
         }
+    }
+
+    /// Get real-time performance telemetry.
+    fn get_telemetry(&self) -> cvkg_core::TelemetryData {
+        self.telemetry.clone()
     }
 
     #[doc(hidden)]
@@ -188,7 +210,38 @@ impl WebRenderer {
         Ok(())
     }
 
-    fn init_canvas(&mut self) -> Result<(), JsValue> {
+    /// Initialize the renderer, trying WebGPU first, then WebGL2, then Canvas 2D.
+    pub async fn forge(&mut self) -> Result<RenderTier, JsValue> {
+        self.init_base_canvas()?;
+
+        // 1. Try WebGPU
+        #[cfg(feature = "webgpu")]
+        {
+            log::info!("Attempting WebGPU initialization...");
+            if let Ok(_) = self.init_webgpu_async().await {
+                self.tier = RenderTier::Tier1GPU;
+                log::info!("Forge Success: WebGPU tier active.");
+                return Ok(self.tier);
+            }
+        }
+
+        // 2. Try WebGL2
+        log::info!("Attempting WebGL2 fallback...");
+        if let Ok(_) = self.init_webgl2() {
+            self.tier = RenderTier::Tier2GPU;
+            log::info!("Forge Success: WebGL2 tier active.");
+            return Ok(self.tier);
+        }
+
+        // 3. Fallback to Canvas 2D
+        log::info!("Attempting Canvas 2D final fallback...");
+        self.init_canvas_2d()?;
+        self.tier = RenderTier::Tier3Fallback;
+        log::info!("Forge Success: Canvas 2D tier active (Degraded).");
+        Ok(self.tier)
+    }
+
+    fn init_base_canvas(&mut self) -> Result<(), JsValue> {
         if self.canvas.is_none() {
             let window = web_sys::window().ok_or_else(|| JsValue::from_str("No window found"))?;
             let document = window
@@ -201,14 +254,26 @@ impl WebRenderer {
             canvas.set_height(window.inner_height()?.as_f64().unwrap_or(600.0) as u32);
             self.canvas = Some(canvas);
         }
+        Ok(())
+    }
 
-        if let Some(ref canvas) = self.canvas {
-            let context = canvas
-                .get_context("2d")?
-                .ok_or_else(|| JsValue::from_str("2D context not supported"))?
-                .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
-            self.canvas_context = Some(context);
-        }
+    fn init_webgl2(&mut self) -> Result<(), JsValue> {
+        let canvas = self.canvas.as_ref().unwrap();
+        let context = canvas
+            .get_context("webgl2")?
+            .ok_or_else(|| JsValue::from_str("WebGL2 not supported"))?
+            .dyn_into::<web_sys::WebGl2RenderingContext>()?;
+        self.gl_context = Some(context);
+        Ok(())
+    }
+
+    fn init_canvas_2d(&mut self) -> Result<(), JsValue> {
+        let canvas = self.canvas.as_ref().unwrap();
+        let context = canvas
+            .get_context("2d")?
+            .ok_or_else(|| JsValue::from_str("2D context not supported"))?
+            .dyn_into::<web_sys::CanvasRenderingContext2d>()?;
+        self.canvas_context = Some(context);
         Ok(())
     }
 
@@ -636,12 +701,57 @@ impl Renderer for WebRenderer {
     fn bifrost(&mut self, rect: Rect, blur: f32, _saturation: f32, opacity: f32) {
         if let Some(ref gl) = self.canvas_context {
             gl.save();
-            // Basic web-side approximation using CSS filter on the context if possible,
-            // or just a semi-transparent overlay.
-            gl.set_filter(&format!("blur({}px)", blur / 4.0));
+            match self.tier {
+                RenderTier::Tier1GPU | RenderTier::Tier2GPU => {
+                    // High/Mid Tier: Apply CSS blur filter approximation
+                    gl.set_filter(&format!("blur({}px)", blur / 4.0));
+                    gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
+                        "rgba(255, 255, 255, {})",
+                        opacity * 0.2
+                    )));
+                }
+                RenderTier::Tier3Fallback => {
+                    // Low Tier: Degrade to simple semi-transparent white (glassmorphism -> transparency)
+                    gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
+                        "rgba(255, 255, 255, {})",
+                        opacity * 0.4
+                    )));
+                }
+            }
+            gl.fill_rect(
+                rect.x as f64,
+                rect.y as f64,
+                rect.width as f64,
+                rect.height as f64,
+            );
+            gl.restore();
+        }
+    }
+
+    fn gungnir(&mut self, rect: Rect, glow_radius: f32, color: [f32; 4]) {
+        if let Some(ref gl) = self.canvas_context {
+            gl.save();
+            match self.tier {
+                RenderTier::Tier1GPU | RenderTier::Tier2GPU => {
+                    gl.set_shadow_blur(glow_radius as f64);
+                    gl.set_shadow_color(&format!(
+                        "rgba({}, {}, {}, {})",
+                        color[0] * 255.0,
+                        color[1] * 255.0,
+                        color[2] * 255.0,
+                        color[3]
+                    ));
+                }
+                RenderTier::Tier3Fallback => {
+                    // No glow on fallback tier
+                }
+            }
             gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
-                "rgba(255, 255, 255, {})",
-                opacity * 0.2
+                "rgba({}, {}, {}, {})",
+                color[0] * 255.0,
+                color[1] * 255.0,
+                color[2] * 255.0,
+                color[3]
             )));
             gl.fill_rect(
                 rect.x as f64,
@@ -649,6 +759,41 @@ impl Renderer for WebRenderer {
                 rect.width as f64,
                 rect.height as f64,
             );
+            gl.restore();
+        }
+    }
+
+    fn mjolnir_shatter(&mut self, rect: Rect, _pieces: u32, _force: f32, color: [f32; 4]) {
+        if let Some(ref gl) = self.canvas_context {
+            gl.save();
+            match self.tier {
+                RenderTier::Tier1GPU | RenderTier::Tier2GPU => {
+                    // Approximate shatter with dashed lines
+                    gl.set_stroke_style(&wasm_bindgen::JsValue::from_str("rgba(255, 255, 255, 0.8)"));
+                    let _ = gl.set_line_dash(&wasm_bindgen::JsValue::from_str("[5, 2]"));
+                    gl.stroke_rect(
+                        rect.x as f64,
+                        rect.y as f64,
+                        rect.width as f64,
+                        rect.height as f64,
+                    );
+                }
+                RenderTier::Tier3Fallback => {
+                    // Degrade to simple outline
+                    gl.set_stroke_style(&wasm_bindgen::JsValue::from_str(&format!(
+                        "rgba({}, {}, {}, 0.5)",
+                        color[0] * 255.0,
+                        color[1] * 255.0,
+                        color[2] * 255.0
+                    )));
+                    gl.stroke_rect(
+                        rect.x as f64,
+                        rect.y as f64,
+                        rect.width as f64,
+                        rect.height as f64,
+                    );
+                }
+            }
             gl.restore();
         }
     }
@@ -686,13 +831,72 @@ impl Renderer for WebRenderer {
         }
     }
 
+    fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
+        if let Some(ref gl) = self.canvas_context {
+            let _ = gl.save();
+            let _ = gl.translate(translation[0] as f64, translation[1] as f64);
+            let _ = gl.scale(scale[0] as f64, scale[1] as f64);
+            let _ = gl.rotate(rotation as f64);
+        }
+    }
+
+    fn pop_transform(&mut self) {
+        if let Some(ref gl) = self.canvas_context {
+            let _ = gl.restore();
+        }
+    }
+
+
+    fn push_vnode(&mut self, rect: Rect, name: &'static str) {
+        if self.tier == RenderTier::Tier3Fallback {
+            if let Some(ref gl) = self.canvas_context {
+                if self.telemetry.debug_layout {
+                    gl.save();
+                    gl.set_stroke_style(&wasm_bindgen::JsValue::from_str("magenta"));
+                    gl.set_line_width(1.0);
+                    gl.stroke_rect(
+                        rect.x as f64,
+                        rect.y as f64,
+                        rect.width as f64,
+                        rect.height as f64,
+                    );
+                    gl.set_fill_style(&wasm_bindgen::JsValue::from_str("white"));
+                    gl.set_font("10px monospace");
+                    let _ = gl.fill_text(name, rect.x as f64 + 2.0, rect.y as f64 + 10.0);
+                    gl.restore();
+                }
+            }
+        }
+    }
+
+    fn set_debug_layout(&mut self, enabled: bool) {
+        self.telemetry.debug_layout = enabled;
+    }
+
+    fn get_debug_layout(&self) -> bool {
+        self.telemetry.debug_layout
+    }
+
     fn register_shared_element(&mut self, id: &str, rect: Rect) {
         log::trace!("Web: register_shared_element '{}' {:?}", id, rect);
+    }
+
+    fn delta_time(&self) -> f32 {
+        self.delta_time
+    }
+
+    fn request_redraw(&mut self) {
+        self.redraw_requested = true;
     }
 }
 
 impl FrameRenderer<()> for WebRenderer {
     fn begin_frame(&mut self) -> () {
+        cvkg_core::begin_render_phase();
+        let now = web_sys::window().unwrap().performance().unwrap().now();
+        self.delta_time = ((now - self.last_redraw_start) / 1000.0) as f32;
+        self.last_redraw_start = now;
+
         if let Some(ref gl) = self.canvas_context {
             let width = gl.canvas().map(|c| c.width()).unwrap_or(800) as f64;
             let height = gl.canvas().map(|c| c.height()).unwrap_or(600) as f64;
@@ -701,13 +905,32 @@ impl FrameRenderer<()> for WebRenderer {
     }
 
     fn end_frame(&mut self, _encoder: ()) {
-        if self.use_webgpu {
-            let _ = self.render_webgpu();
+        match self.tier {
+            RenderTier::Tier1GPU => {
+                let _ = self.render_webgpu();
+            }
+            RenderTier::Tier2GPU => {
+                let _ = self.render_webgl2();
+            }
+            RenderTier::Tier3Fallback => {
+                // No-op: Canvas 2D draws immediately during Renderer calls.
+            }
         }
+        cvkg_core::end_render_phase();
     }
 }
 
 impl WebRenderer {
+    fn render_webgl2(&mut self) -> Result<(), JsValue> {
+        let gl = self
+            .gl_context
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("WebGL2 context missing"))?;
+        gl.clear_color(0.0, 0.0, 0.0, 1.0);
+        gl.clear(web_sys::WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        Ok(())
+    }
+
     fn render_webgpu(&mut self) -> Result<(), JsValue> {
         let ctx = self
             .webgpu_context
@@ -925,42 +1148,57 @@ pub fn apply_vdom_patches(serialized_patches: &str) -> Result<(), JsValue> {
 }
 
 /// A concrete AssetManager for Web targets that uses the browser's fetch API.
+///
+/// The cache is read lock-free via `ArcSwap::load()` every render frame.
+/// Writes happen only once per URL: a synchronous `rcu()` inserts `Loading` immediately,
+/// and the spawned async future calls `rcu()` again once the fetch resolves to publish the
+/// final state. WASM is single-threaded so the `rcu()` clone-insert-swap is always safe.
 pub struct WebAssetManager {
     cache: std::sync::Arc<
-        std::sync::RwLock<
+        arc_swap::ArcSwap<
             std::collections::HashMap<String, cvkg_core::AssetState<std::sync::Arc<Vec<u8>>>>,
         >,
     >,
 }
 
 impl WebAssetManager {
+    /// Create a new, empty WebAssetManager.
     pub fn new() -> Self {
         Self {
-            cache: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            cache: std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(
+                std::collections::HashMap::new(),
+            )),
         }
     }
 }
 
 impl cvkg_core::AssetManager for WebAssetManager {
+    /// Return the cached asset state for `url`.
+    ///
+    /// If the URL is not cached, inserts `Loading` synchronously via `rcu()`,
+    /// spawns an async fetch, and returns `Loading` immediately.
+    /// The spawned future calls `rcu()` again with `Ready` or `Error` once the
+    /// fetch resolves — no lock is ever held across an await point.
     fn load_image(&self, url: &str) -> cvkg_core::AssetState<std::sync::Arc<Vec<u8>>> {
-        {
-            let cache = self.cache.read().unwrap();
-            if let Some(state) = cache.get(url) {
-                return state.clone();
-            }
+        // Fast path: lock-free read from current cache snapshot
+        if let Some(state) = self.cache.load().get(url) {
+            return state.clone();
         }
 
-        // Start async fetch
-        let cache_clone = self.cache.clone();
+        let cache_arc = self.cache.clone();
         let url_string = url.to_string();
 
-        // Return Loading immediately
-        let initial_state = cvkg_core::AssetState::Loading;
+        // Mark as Loading synchronously via atomic rcu
         {
-            let mut cache = self.cache.write().unwrap();
-            cache.insert(url_string.clone(), initial_state.clone());
+            let key = url_string.clone();
+            self.cache.rcu(move |map| {
+                let mut m = (**map).clone();
+                m.entry(key.clone()).or_insert(cvkg_core::AssetState::Loading);
+                m
+            });
         }
 
+        // Spawn async fetch; publish result via rcu — no lock across await
         wasm_bindgen_futures::spawn_local(async move {
             let mut opts = web_sys::RequestInit::new();
             opts.method("GET");
@@ -974,30 +1212,28 @@ impl cvkg_core::AssetManager for WebAssetManager {
                     .unwrap();
             let resp: web_sys::Response = resp_value.dyn_into().unwrap();
 
-            if resp.status() == 200 {
+            let result = if resp.status() == 200 {
                 let array_buffer_value =
                     wasm_bindgen_futures::JsFuture::from(resp.array_buffer().unwrap())
                         .await
                         .unwrap();
                 let array_buffer: js_sys::ArrayBuffer = array_buffer_value.dyn_into().unwrap();
                 let uint8_array = js_sys::Uint8Array::new(&array_buffer);
-                let data = uint8_array.to_vec();
-
-                let mut cache = cache_clone.write().unwrap();
-                cache.insert(
-                    url_string,
-                    cvkg_core::AssetState::Ready(std::sync::Arc::new(data)),
-                );
+                cvkg_core::AssetState::Ready(std::sync::Arc::new(uint8_array.to_vec()))
             } else {
-                let mut cache = cache_clone.write().unwrap();
-                cache.insert(
-                    url_string,
-                    cvkg_core::AssetState::Error(format!("HTTP {}", resp.status())),
-                );
-            }
+                cvkg_core::AssetState::Error(format!("HTTP {}", resp.status()))
+            };
+
+            // Publish the resolved state atomically
+            let key = url_string.clone();
+            cache_arc.rcu(move |map| {
+                let mut m = (**map).clone();
+                m.insert(key.clone(), result.clone());
+                m
+            });
         });
 
-        initial_state
+        cvkg_core::AssetState::Loading
     }
 
     fn preload_image(&self, url: &str) {

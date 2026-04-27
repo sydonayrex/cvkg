@@ -16,3 +16,11 @@ bytemuck = { workspace = true }
 glam = { workspace = true }
 tobj = { workspace = true }
 stl_io = { workspace = true }
+# Lock-free RCU for top-level state reads (replaces RwLock on read-dominated paths)
+arc-swap = { workspace = true }
+once_cell = { workspace = true }
+
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# STM for composable atomic multi-field mutations; excluded from WASM (requires pthreads)
+stm = { workspace = true }

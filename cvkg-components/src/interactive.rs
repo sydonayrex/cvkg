@@ -29,8 +29,7 @@ impl View for Button {
         renderer.set_aria_role("button");
         renderer.set_aria_label(&self.label);
 
-        // Get pressed state from system state
-        let state_registry = cvkg_core::get_system_state();
+        // Get pressed state from system state (lock-free snapshot)
         let id_hash = {
             use std::hash::{Hash, Hasher};
             let mut s = std::collections::hash_map::DefaultHasher::new();
@@ -39,7 +38,7 @@ impl View for Button {
         };
 
         let is_pressed = {
-            let s = state_registry.read().unwrap();
+            let s = cvkg_core::load_system_state();
             s.get_component_state::<bool>(id_hash)
                 .map(|v| *v.read().unwrap())
                 .unwrap_or(false)
@@ -68,22 +67,26 @@ impl View for Button {
 
         // Register interaction handlers
         let on_click = self.on_click.clone();
-        let state_registry_down = state_registry.clone();
-        let state_registry_up = state_registry.clone();
 
         renderer.register_handler(
             "pointerdown",
             std::sync::Arc::new(move |_| {
-                let mut s = state_registry_down.write().unwrap();
-                s.set_component_state(id_hash, true);
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(id_hash, true);
+                    s
+                });
             }),
         );
 
         renderer.register_handler(
             "pointerup",
             std::sync::Arc::new(move |_| {
-                let mut s = state_registry_up.write().unwrap();
-                s.set_component_state(id_hash, false);
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(id_hash, false);
+                    s
+                });
             }),
         );
 
@@ -537,6 +540,8 @@ impl View for TextField {
         let on_change = self.on_change.clone();
         let text_mutex = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
 
+        let on_change_kd = on_change.clone();
+        let text_mutex_kd = text_mutex.clone();
         renderer.register_handler(
             "keydown",
             std::sync::Arc::new(move |event| {
@@ -544,7 +549,7 @@ impl View for TextField {
                     let mut changed = false;
                     let mut new_text = String::new();
 
-                    if let Ok(mut text_guard) = text_mutex.lock() {
+                    if let Ok(mut text_guard) = text_mutex_kd.lock() {
                         if key.len() == 1 {
                             text_guard.push_str(&key);
                             changed = true;
@@ -560,8 +565,24 @@ impl View for TextField {
                     }
 
                     if changed {
-                        (on_change)(new_text);
+                        (on_change_kd)(new_text);
                     }
+                }
+            }),
+        );
+
+        let on_change_ime = on_change.clone();
+        let text_mutex_ime = text_mutex.clone();
+        renderer.register_handler(
+            "ime",
+            std::sync::Arc::new(move |event| {
+                if let cvkg_core::Event::Ime(composition) = event {
+                    let mut new_text = String::new();
+                    if let Ok(mut text_guard) = text_mutex_ime.lock() {
+                        text_guard.push_str(composition.as_str());
+                        new_text = text_guard.clone();
+                    }
+                    (on_change_ime)(new_text);
                 }
             }),
         );
@@ -734,6 +755,8 @@ impl View for TextEditor {
         let on_change = self.on_change.clone();
         let text_mutex = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
 
+        let on_change_kd = on_change.clone();
+        let text_mutex_kd = text_mutex.clone();
         renderer.register_handler(
             "keydown",
             std::sync::Arc::new(move |event| {
@@ -741,7 +764,7 @@ impl View for TextEditor {
                     let mut changed = false;
                     let mut new_text = String::new();
 
-                    if let Ok(mut text_guard) = text_mutex.lock() {
+                    if let Ok(mut text_guard) = text_mutex_kd.lock() {
                         if key.len() == 1 {
                             text_guard.push_str(&key);
                             changed = true;
@@ -758,8 +781,24 @@ impl View for TextEditor {
                     }
 
                     if changed {
-                        (on_change)(new_text);
+                        (on_change_kd)(new_text);
                     }
+                }
+            }),
+        );
+
+        let on_change_ime = on_change.clone();
+        let text_mutex_ime = text_mutex.clone();
+        renderer.register_handler(
+            "ime",
+            std::sync::Arc::new(move |event| {
+                if let cvkg_core::Event::Ime(composition) = event {
+                    let mut new_text = String::new();
+                    if let Ok(mut text_guard) = text_mutex_ime.lock() {
+                        text_guard.push_str(composition.as_str());
+                        new_text = text_guard.clone();
+                    }
+                    (on_change_ime)(new_text);
                 }
             }),
         );
@@ -804,7 +843,6 @@ impl View for Dropdown {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Dropdown");
         
-        let state_registry = cvkg_core::get_system_state();
         let id_hash = {
             use std::hash::{Hash, Hasher};
             let mut s = std::collections::hash_map::DefaultHasher::new();
@@ -813,8 +851,9 @@ impl View for Dropdown {
             s.finish()
         };
 
+        // Lock-free read of expanded state
         let is_expanded = {
-            let s = state_registry.read().unwrap();
+            let s = cvkg_core::load_system_state();
             s.get_component_state::<bool>(id_hash)
                 .map(|v| *v.read().unwrap())
                 .unwrap_or(false)
@@ -860,7 +899,6 @@ impl View for Dropdown {
             renderer.set_z_index(0.0);
         }
 
-        let state_reg = state_registry.clone();
         let options_count = self.options.len();
         let on_change = self.on_change.clone();
         
@@ -884,8 +922,12 @@ impl View for Dropdown {
                     }
                 }
                 
-                let mut s = state_reg.write().unwrap();
-                s.set_component_state(id_hash, !is_expanded);
+                // Toggle expanded state atomically
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(id_hash, !is_expanded);
+                    s
+                });
             }
         }));
 

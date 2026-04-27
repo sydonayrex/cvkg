@@ -13,6 +13,7 @@
 *   **Cross-Platform**: Seamlessly targets Native (Desktop) and Web (WASM) via unified rendering traits.
 *   **Agent-Optimized**: Designed to be easily navigable and manipulatable by AI agents.
 *   **Accessibility**: Integrated Screen Reader support (AccessKit/Section 508) and IME functionality.
+*   **SecOps Ready**: Production-hardened with capability-based security, WASM sandboxing, and resource metering.
 
 ## 📦 Workspace Crates
 

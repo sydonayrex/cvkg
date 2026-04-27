@@ -11,7 +11,7 @@ name = "cvkg-webkit-server"
 path = "src/main.rs"
 
 [dependencies]
-cvkg-cli = { path = "../cvkg-cli", version = "0.1.11" }
+cvkg-cli = { path = "../cvkg-cli", version = "0.1.12" }
 axum = { version = "0.7", features = ["ws"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
 tower-http = { version = "0.5", features = ["cors", "fs"] }
@@ -23,3 +23,5 @@ futures-util = "0.3.32"
 tower = { version = "0.4", features = ["util"] }
 bytes = "1.0"
 http-body-util = "0.1"
+# Lock-free snapshot reads for AppState (replaces RwLock on vdom snapshot in Phase 5)
+arc-swap = { workspace = true }

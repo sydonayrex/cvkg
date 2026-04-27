@@ -49,6 +49,7 @@ pub mod niflheim_demo;
 pub mod primitive;
 pub mod richtext;
 pub mod visual;
+pub mod virtual_list;
 
 pub use container::*;
 pub use devtools::*;
@@ -61,6 +62,7 @@ pub use niflheim_demo::*;
 pub use primitive::*;
 pub use richtext::*;
 pub use visual::*;
+pub use virtual_list::*;
 
 // Re-export layout components
 pub use cvkg_layout as layout;

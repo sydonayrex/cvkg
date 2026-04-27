@@ -227,7 +227,7 @@ impl View for BerserkerFireDemo {
         .render(renderer, button_rect);
 
         // ── Event Audit Log ────────────────────────────────────────────────
-        let audit_log = cvkg_core::SYSTEM_STATE.get().unwrap().read().unwrap();
+        let audit_log = cvkg_core::load_system_state();
         let logs = if let Some(lock) = audit_log.get_component_state::<Vec<String>>(0x1337) {
             lock.read().unwrap().clone()
         } else {
@@ -250,20 +250,34 @@ impl View for BerserkerFireDemo {
 
 /// Helper to log events to the audit system
 fn audit_event(msg: &str) {
-    let mut s = cvkg_core::SYSTEM_STATE.get().unwrap().write().unwrap();
     let msg_with_time = format!(
         "[{:.2}] {}",
         std::time::Instant::now().elapsed().as_secs_f32(),
         msg
     );
-    if let Some(lock) = s.get_component_state::<Vec<String>>(0x1337) {
-        let mut logs = lock.write().unwrap();
-        logs.push(msg_with_time);
-        if logs.len() > 20 {
-            logs.remove(0);
-        }
+    // Check if the log Vec already exists before deciding to insert or append.
+    // update_system_state takes a snapshot, mutates, and publishes atomically.
+    let exists = cvkg_core::load_system_state()
+        .get_component_state::<Vec<String>>(0x1337)
+        .is_some();
+    if exists {
+        cvkg_core::update_system_state(|s| {
+            let s = s.clone();
+            if let Some(lock) = s.get_component_state::<Vec<String>>(0x1337) {
+                let mut logs = lock.write().unwrap();
+                logs.push(msg_with_time.clone());
+                if logs.len() > 20 {
+                    logs.remove(0);
+                }
+            }
+            s
+        });
     } else {
-        s.set_component_state(0x1337, vec![msg_with_time]);
+        cvkg_core::update_system_state(|s| {
+            let mut s = s.clone();
+            s.set_component_state(0x1337, vec![msg_with_time.clone()]);
+            s
+        });
     }
 }
 

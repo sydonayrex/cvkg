@@ -7,12 +7,12 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.11" }
-runic-text = { package = "cvkg-runic-text", path = "../cvkg-runic-text", version = "0.1.11" }
-wgpu = "29.0.1"
+cvkg-core = { path = "../cvkg-core", version = "0.1.12" }
+runic-text = { package = "cvkg-runic-text", path = "../cvkg-runic-text", version = "0.1.12" }
+wgpu = { version = "29.0.1", features = ["spirv"] }
 winit = "0.30"
 swash = "0.2.7"
-naga = "0.14"
+naga = { version = "0.14", features = ["wgsl-in", "spv-out"] }
 bytemuck = { workspace = true }
 glam = { workspace = true }
 image = "0.25"
@@ -27,3 +27,6 @@ accesskit_unix = { version = "0.21", optional = true }
 
 [dev-dependencies]
 pollster = "0.4.0"
+
+[build-dependencies]
+naga = { version = "0.14", features = ["wgsl-in", "spv-out", "validate"] }

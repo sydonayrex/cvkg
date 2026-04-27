@@ -533,6 +533,10 @@ impl VNodeRenderer {
 }
 
 impl cvkg_core::Renderer for VNodeRenderer {
+    fn delta_time(&self) -> f32 {
+        0.0 // VDOM capture is static, delta_time is irrelevant but required by trait
+    }
+
     fn fill_rect(&mut self, rect: cvkg_core::Rect, _color: [f32; 4]) {
         let id = self.next_id();
         self.add_node(VNode {
