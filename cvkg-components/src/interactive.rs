@@ -318,10 +318,9 @@ impl View for Slider {
         renderer.register_handler(
             "pointermove",
             std::sync::Arc::new(move |event| {
-                if let Ok(dragging) = is_dragging.lock() {
-                    if !*dragging {
+                if let Ok(dragging) = is_dragging.lock()
+                    && !*dragging {
                         return;
-                    }
                 }
                 if let cvkg_core::Event::PointerMove { x, .. } = event {
                     let pct = ((x - slider_rect.x) / slider_rect.width).clamp(0.0, 1.0);
@@ -1168,10 +1167,8 @@ impl View for ColorPicker {
             renderer.register_handler(
                 "pointerclick",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerClick { x, .. } = event {
-                        if x >= cell_rect.x && x <= cell_rect.x + cell_rect.width {
-                            (on_change)(col);
-                        }
+                    if let cvkg_core::Event::PointerClick { x, .. } = event && x >= cell_rect.x && x <= cell_rect.x + cell_rect.width {
+                        (on_change)(col);
                     }
                 }),
             );

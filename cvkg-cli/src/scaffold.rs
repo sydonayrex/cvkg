@@ -9,11 +9,13 @@ pub enum Template {
     Dashboard,
 }
 
-impl Template {
-    pub fn from_str(s: Option<&str>) -> Self {
+impl std::str::FromStr for Template {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            Some("dashboard") => Template::Dashboard,
-            _ => Template::Minimal,
+            "dashboard" => Ok(Template::Dashboard),
+            _ => Ok(Template::Minimal),
         }
     }
 }

@@ -169,7 +169,7 @@ impl VNode {
         node.set_children(
             self.children
                 .iter()
-                .map(|id| accesskit::NodeId(id.0 as u64))
+                .map(|id| accesskit::NodeId(id.0))
                 .collect::<Vec<_>>(),
         );
 
@@ -379,6 +379,12 @@ pub struct VDom {
     pub event_handlers: HashMap<NodeId, HashMap<String, std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>>,
 }
 
+impl Default for VDom {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl VDom {
     /// Create a new empty VDom.
     pub fn new() -> Self {
@@ -479,6 +485,12 @@ pub struct VNodeRenderer {
     next_id: u64,
     stack: Vec<NodeId>,
     root: Option<NodeId>,
+}
+
+impl Default for VNodeRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VNodeRenderer {
@@ -753,10 +765,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
             height: (y1 - y2).abs(),
         };
         self.push_vnode(rect, "Primitive::Line");
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
                 node.props = props;
-            }
         }
         self.pop_vnode();
     }
@@ -767,10 +778,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
         let mut props = HashMap::new();
         props.insert("src".to_string(), serde_json::to_value(name).unwrap());
         self.push_vnode(rect, "Primitive::Image");
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
                 node.props = props;
-            }
         }
         self.pop_vnode();
     }
@@ -790,10 +800,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
         props.insert("force".to_string(), serde_json::to_value(force).unwrap());
         props.insert("color".to_string(), serde_json::to_value(color).unwrap());
         self.push_vnode(rect, "Effect::Shatter");
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
                 node.props = props;
-            }
         }
         self.pop_vnode();
     }
@@ -801,28 +810,25 @@ impl cvkg_core::Renderer for VNodeRenderer {
     fn draw_mjolnir_bolt(&mut self, _from: [f32; 2], _to: [f32; 2], _color: [f32; 4]) {}
 
     fn set_aria_role(&mut self, role: &str) {
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
                 node.aria_role = role.to_string();
-            }
         }
     }
 
     fn set_aria_label(&mut self, label: &str) {
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
                 node.aria_props.label = Some(label.to_string());
-            }
         }
     }
 
     fn register_shared_element(&mut self, _id: &str, _rect: cvkg_core::Rect) {}
 
     fn set_key(&mut self, key: &str) {
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
                 node.key = Some(key.to_string());
-            }
         }
     }
 
@@ -834,7 +840,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
         if let Some(id) = self.stack.last() {
             self.event_handlers
                 .entry(*id)
-                .or_insert_with(HashMap::new)
+                .or_default()
                 .insert(event_type.to_string(), handler);
         }
     }
@@ -923,26 +929,22 @@ impl VDom {
                     }
 
                     // Migrate capture and focus state
-                    if let Ok(mut capture) = self.captured_node.lock() {
-                        if *capture == Some(id) {
+                    if let Ok(mut capture) = self.captured_node.lock()
+                        && *capture == Some(id) {
                             *capture = Some(new_id);
-                        }
                     }
-                    if let Ok(mut focus) = self.focused_node.lock() {
-                        if *focus == Some(id) {
+                    if let Ok(mut focus) = self.focused_node.lock()
+                        && *focus == Some(id) {
                             *focus = Some(new_id);
-                        }
                     }
                 }
                 VDomPatch::Move { id, new_index } => {
-                    if let Some(&p_id) = self.parents.get(&id) {
-                        if let Some(parent) = self.nodes.get_mut(&p_id) {
-                            if let Some(old_pos) = parent.children.iter().position(|&x| x == id) {
-                                parent.children.remove(old_pos);
-                                let target_pos = new_index.min(parent.children.len());
-                                parent.children.insert(target_pos, id);
-                            }
-                        }
+                    if let Some(&p_id) = self.parents.get(&id)
+                        && let Some(parent) = self.nodes.get_mut(&p_id)
+                        && let Some(old_pos) = parent.children.iter().position(|&x| x == id) {
+                            parent.children.remove(old_pos);
+                            let target_pos = new_index.min(parent.children.len());
+                            parent.children.insert(target_pos, id);
                     }
                 }
                 VDomPatch::SetRoot(id) => {
@@ -1069,10 +1071,9 @@ impl VDom {
         // 1. Map old children by key for fast lookup
         let mut old_keyed: HashMap<String, (usize, NodeId)> = HashMap::new();
         for (i, id) in old_children.iter().enumerate() {
-            if let Some(node) = self.nodes.get(id) {
-                if let Some(key) = &node.key {
+            if let Some(node) = self.nodes.get(id)
+                && let Some(key) = &node.key {
                     old_keyed.insert(key.clone(), (i, *id));
-                }
             }
         }
 

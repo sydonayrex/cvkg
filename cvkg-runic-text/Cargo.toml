@@ -1,8 +1,9 @@
 [package]
 name = "cvkg-runic-text"
-version = "0.1.12"
-edition = "2024"
-license = "MIT"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Natively integrated Cyber Viking text shaping and layout engine for CVKG"
 
 [dependencies]

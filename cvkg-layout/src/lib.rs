@@ -358,6 +358,12 @@ pub struct ZStack {
     children: Vec<Box<dyn LayoutView>>,
 }
 
+impl Default for ZStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ZStack {
     /// Create a new ZStack
     pub fn new() -> Self {

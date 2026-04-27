@@ -4,14 +4,12 @@ use cvkg_macros::cvkg_component;
 #[cvkg_component]
 pub struct TestButton {
     pub label: String,
-    pub on_click: std::sync::Arc<dyn Fn() + Send + Sync>,
 }
 
 impl TestButton {
-    pub fn new(label: impl Into<String>, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn new(label: impl Into<String>, _on_click: impl Fn() + Send + Sync + 'static) -> Self {
         Self::builder()
             .label(label.into())
-            .on_click(std::sync::Arc::new(on_click))
             .build()
     }
 }

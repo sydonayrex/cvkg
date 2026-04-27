@@ -9,6 +9,12 @@ use super::patch_engine::CompiledArtifact;
 /// Build pipeline hook
 pub struct BuildPipeline;
 
+impl Default for BuildPipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BuildPipeline {
     /// Create a new BuildPipeline
     pub fn new() -> Self {
@@ -34,7 +40,7 @@ impl BuildPipeline {
             .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
             .template("{spinner:.green} [{elapsed_precise}] {msg}")
             .unwrap());
-        pb.set_message(format!("Compiling target..."));
+        pb.set_message("Compiling target...".to_string());
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
         let start_time = Instant::now();

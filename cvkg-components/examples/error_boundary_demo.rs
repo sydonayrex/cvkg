@@ -43,8 +43,7 @@ impl ApplicationHandler for ErrorApp {
             }
             WindowEvent::KeyboardInput {
                 event: kb_event, ..
-            } => {
-                if kb_event.state.is_pressed() {
+            } if kb_event.state.is_pressed() => {
                     // Toggle error state on any key press
                     let current = self.error_state.get();
                     if current.has_error {
@@ -56,7 +55,6 @@ impl ApplicationHandler for ErrorApp {
                         ));
                     }
                     self.window.as_ref().unwrap().request_redraw();
-                }
             }
             WindowEvent::RedrawRequested => {
                 let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());

@@ -40,6 +40,12 @@ pub struct BifrostRegistry {
     geometry_cache: HashMap<NodeId, crate::Rect>,
 }
 
+impl Default for BifrostRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BifrostRegistry {
     pub fn new() -> Self {
         Self {

@@ -63,6 +63,14 @@ pub struct YggdrasilTokens {
     pub accessibility: HashMap<String, TokenValue>,
 }
 
+impl Default for YggdrasilTokens {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+
 impl YggdrasilTokens {
     pub fn new() -> Self {
         Self {
@@ -82,13 +90,13 @@ impl YggdrasilTokens {
 
     /// Get a color token value for the current mode
     pub fn get_color(&self, key: &str, is_dark: bool) -> Option<String> {
-        self.color.get(key).and_then(|token| match token {
-            TokenValue::Single { value } => Some(value.clone()),
+        self.color.get(key).map(|token| match token {
+            TokenValue::Single { value } => value.clone(),
             TokenValue::Adaptive { light, dark } => {
                 if is_dark {
-                    Some(dark.clone())
+                    dark.clone()
                 } else {
-                    Some(light.clone())
+                    light.clone()
                 }
             }
         })
@@ -748,7 +756,7 @@ impl ViewModifier for SleipnirModifier {
             // Insert into registry for next frame.
             get_system_state().rcu(|old| {
                 let mut new_state = (**old).clone();
-                new_state.set_component_state(self.id, solver.clone());
+                new_state.set_component_state(self.id, solver);
                 new_state
             });
             
@@ -769,6 +777,12 @@ pub struct TransformModifier {
     pub translation: [f32; 2],
     pub scale: [f32; 2],
     pub rotation: f32,
+}
+
+impl Default for TransformModifier {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TransformModifier {
@@ -1364,13 +1378,10 @@ pub trait Renderer: Send {
     fn push_transform(&mut self, _translation: [f32; 2], _scale: [f32; 2], _rotation: f32) {}
     /// Pop the last 2D transform from the stack.
     fn pop_transform(&mut self) {}
-
-    /// Return the resolved layout bounds for a specific node ID if tracked.
-
+    /// Return the resolved layout bounds for a specific node ID if it exists.
     fn query_layout(&self, _node_id: scene_graph::NodeId) -> Option<Rect> {
         None
     }
-
     /// Enable or disable the layout debug overlay (bounds, padding, margin).
     fn set_debug_layout(&mut self, _enabled: bool) {}
     /// Check if the layout debug overlay is currently enabled.
@@ -1378,7 +1389,6 @@ pub trait Renderer: Send {
         false
     }
 }
-
 /// Defines the hardware acceleration tier and feature set available to the renderer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum RenderTier {
@@ -1389,13 +1399,10 @@ pub enum RenderTier {
     /// Fallback software or basic hardware path (Canvas 2D / GDI+) with limited effects.
     Tier3Fallback = 2,
 }
-
 // =============================================================================
 // BERSERKER UNIFORMS
 // =============================================================================
-
 use bytemuck::{Pod, Zeroable};
-
 /// Fully themeable color palette for the Berserker pipeline.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
@@ -1415,7 +1422,6 @@ pub struct ColorTheme {
     pub _pad: [f32; 3], // align to 16 bytes
     pub _pad2: f32,
 }
-
 impl ColorTheme {
     pub fn cyberpunk_viking() -> Self {
         Self {
@@ -1434,7 +1440,6 @@ impl ColorTheme {
             _pad2: 0.0,
         }
     }
-
     pub fn vibrant_glass() -> Self {
         Self {
             primary_neon: [0.0, 1.0, 0.95, 1.2],
@@ -1453,13 +1458,11 @@ impl ColorTheme {
         }
     }
 }
-
 impl Default for ColorTheme {
     fn default() -> Self {
         Self::vibrant_glass()
     }
 }
-
 /// Per-frame scene state for the Berserker pipeline.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
@@ -1480,7 +1483,6 @@ pub struct SceneUniforms {
     // Padding to ensure 16-byte alignment for GPU uniforms (47 f32s + 1 = 48)
     pub _pad: [f32; 1],
 }
-
 impl SceneUniforms {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
@@ -1501,7 +1503,6 @@ impl SceneUniforms {
         }
     }
 }
-
 /// A 3D mesh containing vertex and index data.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Mesh {
@@ -1509,14 +1510,12 @@ pub struct Mesh {
     pub normals: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
 }
-
 impl Mesh {
     pub fn from_obj(data: &[u8]) -> anyhow::Result<Vec<Self>> {
         let mut cursor = std::io::Cursor::new(data);
         let (models, _) = tobj::load_obj_buf(&mut cursor, &tobj::LoadOptions::default(), |_| {
             Ok((Vec::new(), Default::default()))
         })?;
-
         let mut meshes = Vec::new();
         for m in models {
             let mesh = m.mesh;
@@ -1538,11 +1537,9 @@ impl Mesh {
         }
         Ok(meshes)
     }
-
     pub fn from_stl(data: &[u8]) -> anyhow::Result<Self> {
         let mut cursor = std::io::Cursor::new(data);
         let stl = stl_io::read_stl(&mut cursor)?;
-
         let vertices: Vec<[f32; 3]> = stl.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
         let mut indices = Vec::new();
         for face in stl.faces {
@@ -1550,9 +1547,7 @@ impl Mesh {
             indices.push(face.vertices[1] as u32);
             indices.push(face.vertices[2] as u32);
         }
-
         let normals = vec![[0.0, 0.0, 1.0]; vertices.len()];
-
         Ok(Mesh {
             vertices,
             normals,
@@ -1560,16 +1555,13 @@ impl Mesh {
         })
     }
 }
-
 /// FrameRenderer extends Renderer with frame lifecycle management.
 /// It is typically implemented by the host windowing/rendering environment.
 pub trait FrameRenderer<E = ()>: Renderer {
     fn begin_frame(&mut self) -> E;
     fn end_frame(&mut self, encoder: E);
 }
-
 use std::sync::Arc;
-
 /// State wrapper that owns a value and notifies subscribers when changed
 #[derive(Clone)]
 pub struct State<T: Clone + Send + Sync + 'static> {
@@ -1583,7 +1575,6 @@ pub struct State<T: Clone + Send + Sync + 'static> {
     version: Arc<std::sync::atomic::AtomicU64>,
     resolution: agents::ConflictResolution,
 }
-
 impl<T: Clone + Send + Sync + 'static> State<T> {
     /// Create a new State with initial value
     pub fn new(value: T) -> Self {
@@ -1591,7 +1582,6 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
         let tvar = Arc::new(stm::TVar::new(value.clone()));
         #[cfg(not(target_arch = "wasm32"))]
         let metadata_tvar = Arc::new(stm::TVar::new(None));
-        
         Self {
             swap: Arc::new(arc_swap::ArcSwap::from_pointee(value)),
             metadata_swap: Arc::new(arc_swap::ArcSwap::new(Arc::new(None))),
@@ -1604,34 +1594,27 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             resolution: agents::ConflictResolution::default(),
         }
     }
-
     /// Set the conflict resolution strategy for this state.
     pub fn with_resolution(mut self, resolution: agents::ConflictResolution) -> Self {
         self.resolution = resolution;
         self
     }
-
     /// Get the current value
     pub fn get(&self) -> T {
         (**self.swap.load()).clone()
     }
-
     /// Set a new value, notifying all subscribers. Applies conflict resolution if agents are present.
     pub fn set(&self, value: T) {
         #[cfg(not(target_arch = "wasm32"))]
         let (was_skipped, final_val, final_meta) = stm::atomically(|tx| {
             let new_meta = agents::get_current_mutation_metadata();
             let existing_meta = self.metadata_tvar.read(tx)?;
-            
             let mut skip = false;
-            if self.resolution == agents::ConflictResolution::PriorityWins {
-                if let (Some(new_m), Some(old_m)) = (new_meta, existing_meta) {
-                    if new_m.priority < old_m.priority {
-                        skip = true;
-                    }
-                }
+            if self.resolution == agents::ConflictResolution::PriorityWins
+                && let (Some(new_m), Some(old_m)) = (new_meta, existing_meta)
+                && new_m.priority < old_m.priority {
+                    skip = true;
             }
-            
             if !skip {
                 self.tvar.write(tx, value.clone())?;
                 self.metadata_tvar.write(tx, new_meta)?;
@@ -1640,10 +1623,8 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
                 Ok((true, self.tvar.read(tx)?, existing_meta))
             }
         });
-
         #[cfg(target_arch = "wasm32")]
         let (was_skipped, final_val, final_meta) = (false, value, agents::get_current_mutation_metadata());
-
         if was_skipped {
             if let (Some(new_m), Some(old_m)) = (agents::get_current_mutation_metadata(), final_meta) {
                 agents::notify_conflict(agents::ConflictEvent {
@@ -1656,11 +1637,9 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             }
             return;
         }
-
         self.swap.store(Arc::new(final_val.clone()));
         self.metadata_swap.store(Arc::new(final_meta));
         self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
-        
         let subs = Arc::clone(&self.subscribers);
         if crate::is_batching() {
             crate::enqueue_batch_task(Box::new(move || {
@@ -1676,23 +1655,18 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             }
         }
     }
-
     pub fn mutate<F: Fn(&T) -> T>(&self, f: F) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let (was_skipped, final_val, final_meta) = stm::atomically(|tx| {
                 let new_meta = agents::get_current_mutation_metadata();
                 let existing_meta = self.metadata_tvar.read(tx)?;
-                
                 let mut skip = false;
-                if self.resolution == agents::ConflictResolution::PriorityWins {
-                    if let (Some(new_m), Some(old_m)) = (new_meta, existing_meta) {
-                        if new_m.priority < old_m.priority {
-                            skip = true;
-                        }
-                    }
+                if self.resolution == agents::ConflictResolution::PriorityWins
+                    && let (Some(new_m), Some(old_m)) = (new_meta, existing_meta)
+                    && new_m.priority < old_m.priority {
+                        skip = true;
                 }
-                
                 if !skip {
                     let current = self.tvar.read(tx)?;
                     let next = f(&current);
@@ -1703,7 +1677,6 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
                     Ok((true, self.tvar.read(tx)?, existing_meta))
                 }
             });
-
             if was_skipped {
                 if let (Some(new_m), Some(old_m)) = (agents::get_current_mutation_metadata(), final_meta) {
                     agents::notify_conflict(agents::ConflictEvent {
@@ -1716,11 +1689,9 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
                 }
                 return;
             }
-
             self.swap.store(Arc::new(final_val.clone()));
             self.metadata_swap.store(Arc::new(final_meta));
             self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
-            
             let subs = Arc::clone(&self.subscribers);
             if crate::is_batching() {
                 crate::enqueue_batch_task(Box::new(move || {
@@ -1741,20 +1712,16 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             self.set(f(&self.get()));
         }
     }
-
     /// Get current version
     pub fn version(&self) -> u64 {
         self.version.load(std::sync::atomic::Ordering::Acquire)
     }
-
     /// Subscribe to state changes
     pub fn subscribe<F: Fn(&T) + Send + Sync + 'static>(&self, callback: F) {
         self.subscribers.lock().unwrap().push(Box::new(callback));
     }
 }
-
 /// Error state for fault isolation at the component level.
-///
 /// Section 1.1: "Components must self-handle errors... isolating failures."
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct ComponentErrorState {
@@ -1762,13 +1729,11 @@ pub struct ComponentErrorState {
     pub error_message: Option<String>,
     pub error_location: Option<String>,
 }
-
 impl ComponentErrorState {
     /// Create a new clear error state.
     pub fn clear() -> Self {
         Self::default()
     }
-
     /// Create an error state with a message and location.
     pub fn error(message: impl Into<String>, location: impl Into<String>) -> Self {
         Self {
@@ -1778,7 +1743,6 @@ impl ComponentErrorState {
         }
     }
 }
-
 /// A discrete fragment of knowledge stored in the agent's memory.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct KnowledgeFragment {
@@ -1795,7 +1759,6 @@ pub struct KnowledgeFragment {
     /// Full content (optional, can be loaded on-demand)
     pub content: Option<String>,
 }
-
 /// The KnowledgeState registry is the central repository for all agent-observable application data.
 /// It stores both component-level states and high-level agentic memory fragments.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -1803,49 +1766,38 @@ pub struct KnowledgeState {
     /// Component states indexed by NodeId. Skipped in serialization as it contains opaque types.
     #[serde(skip)]
     pub component_states: std::collections::HashMap<u64, Arc<dyn std::any::Any + Send + Sync>>,
-
     /// Map of IDs to knowledge fragments (Agentic Memory)
     pub fragments: HashMap<String, KnowledgeFragment>,
-
     /// IDs of fragments returned by the last search query
     pub last_query_results: Vec<String>,
 }
-
 use crate::runtime::NodeStateSnapshot;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
-
 /// Global application state registry.
 pub static SYSTEM_STATE: OnceLock<Arc<arc_swap::ArcSwap<KnowledgeState>>> = OnceLock::new();
-
 #[cfg(not(target_arch = "wasm32"))]
 static KNOWLEDGE_TVAR: OnceLock<stm::TVar<KnowledgeState>> = OnceLock::new();
-
 static IS_BATCHING: AtomicBool = AtomicBool::new(false);
 pub static IS_RENDERING: AtomicBool = AtomicBool::new(false);
 pub static LAYOUT_DIRTY: AtomicBool = AtomicBool::new(false);
 static BATCH_QUEUE: OnceLock<std::sync::Mutex<Vec<Box<dyn FnOnce() + Send + Sync>>>> = OnceLock::new();
-
 /// Returns true if state updates are currently being batched.
 pub fn is_batching() -> bool {
     IS_BATCHING.load(Ordering::Acquire)
 }
-
 /// Returns true if the system is currently in the render phase.
 pub fn is_rendering() -> bool {
     IS_RENDERING.load(Ordering::Acquire)
 }
-
 /// Signals the start of the render phase. Mutations during this phase trigger warnings.
 pub fn begin_render_phase() {
     IS_RENDERING.store(true, Ordering::Release);
 }
-
 /// Signals the end of the render phase.
 pub fn end_render_phase() {
     IS_RENDERING.store(false, Ordering::Release);
 }
-
 /// Enqueues a notification task to be run when the current batch flushes.
 pub fn enqueue_batch_task(task: Box<dyn FnOnce() + Send + Sync>) {
     let mut queue = BATCH_QUEUE
@@ -1854,7 +1806,6 @@ pub fn enqueue_batch_task(task: Box<dyn FnOnce() + Send + Sync>) {
         .unwrap();
     queue.push(task);
 }
-
 /// Executes multiple state updates in a single batch, deferring all subscriber
 /// notifications until the closure completes. This prevents layout thrashing
 /// and redundant render cycles when modifying multiple independent states.
@@ -1864,34 +1815,27 @@ pub fn batch<F: FnOnce()>(f: F) {
         f();
         return;
     }
-
     f();
-
     IS_BATCHING.store(false, Ordering::Release);
-    
     let mut queue = BATCH_QUEUE
         .get_or_init(|| std::sync::Mutex::new(Vec::new()))
         .lock()
         .unwrap();
     let tasks: Vec<_> = queue.drain(..).collect();
     drop(queue);
-    
     for task in tasks {
         task();
     }
 }
-
 /// Get a reference to the global system state.
 pub fn get_system_state() -> Arc<arc_swap::ArcSwap<KnowledgeState>> {
     SYSTEM_STATE
         .get_or_init(|| Arc::new(arc_swap::ArcSwap::from_pointee(KnowledgeState::default())))
         .clone()
 }
-
 pub fn load_system_state() -> arc_swap::Guard<Arc<KnowledgeState>> {
     get_system_state().load()
 }
-
 pub fn update_system_state<F>(f: F)
 where
     F: Fn(&KnowledgeState) -> KnowledgeState,
@@ -1899,22 +1843,18 @@ where
     if is_rendering() {
         log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
     }
-
     LAYOUT_DIRTY.store(true, Ordering::SeqCst);
-
     let swap = get_system_state();
     let current = swap.load();
     let new_state = Arc::new(f(&current));
     swap.store(Arc::clone(&new_state));
-
     #[cfg(not(target_arch = "wasm32"))]
     {
         let tvar = KNOWLEDGE_TVAR
             .get_or_init(|| stm::TVar::new((*new_state).clone()));
-        let _ = stm::atomically(|tx| tvar.write(tx, (*new_state).clone()));
+        stm::atomically(|tx| tvar.write(tx, (*new_state).clone()));
     }
 }
-
 pub fn transact_system_state<F>(f: F)
 where
     F: Fn(&KnowledgeState) -> KnowledgeState,
@@ -1945,19 +1885,16 @@ where
         update_system_state(f);
     }
 }
-
 impl KnowledgeState {
     /// Create a new empty KnowledgeState.
     pub fn new() -> Self {
         Self::default()
     }
-
     /// Set a component's internal state.
     pub fn set_component_state<T: 'static + Send + Sync>(&mut self, id: u64, state: T) {
         self.component_states
             .insert(id, Arc::new(std::sync::RwLock::new(state)));
     }
-
     /// Get a reference to a component's internal state.
     pub fn get_component_state<T: 'static + Send + Sync>(
         &self,
@@ -1966,12 +1903,10 @@ impl KnowledgeState {
         let lock = self.component_states.get(&id)?;
         lock.clone().downcast::<std::sync::RwLock<T>>().ok()
     }
-
     /// Add a new fragment to memory.
     pub fn remember(&mut self, fragment: KnowledgeFragment) {
         self.fragments.insert(fragment.id.clone(), fragment);
     }
-
     /// Process a search query against the local knowledge base.
     pub fn process_query(&mut self, query: &str) {
         let query_lower = query.to_lowercase();
@@ -1990,28 +1925,22 @@ impl KnowledgeState {
             })
             .filter(|(score, _)| *score > 0.0)
             .collect();
-
         // Sort by relevance score
         results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
-
         self.last_query_results = results.into_iter().map(|(_, id)| id).take(5).collect();
     }
-
     /// Captures a snapshot of the current state for debugging and hot-reloading.
     pub fn snapshot(&self) -> Vec<NodeStateSnapshot> {
         let mut snapshots = Vec::new();
-
         // Snapshots of agentic fragments
-        for (_id, frag) in &self.fragments {
+        for frag in self.fragments.values() {
             if let Ok(val) = serde_json::to_value(frag) {
                 snapshots.push(NodeStateSnapshot { id: 0, state: val });
             }
         }
-
         snapshots
     }
 }
-
 /// A read/write projection into a `State<T>` owned elsewhere.
 #[derive(Clone)]
 pub struct Binding<T: Clone + Send + Sync + 'static> {
@@ -2020,7 +1949,6 @@ pub struct Binding<T: Clone + Send + Sync + 'static> {
     tvar: Arc<stm::TVar<T>>,
     version: Arc<std::sync::atomic::AtomicU64>,
 }
-
 impl<T: Clone + Send + Sync + 'static> Binding<T> {
     /// Create a binding from a State
     pub fn from_state(state: &State<T>) -> Self {
@@ -2031,12 +1959,10 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
             version: Arc::clone(&state.version),
         }
     }
-
     /// Get the current value
     pub fn get(&self) -> T {
         (**self.swap.load()).clone()
     }
-
     /// Set a new value
     pub fn set(&self, value: T) {
         self.swap.store(Arc::new(value.clone()));
@@ -2044,17 +1970,15 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
         {
             let tvar = Arc::clone(&self.tvar);
             let v = value.clone();
-            let _ = stm::atomically(move |tx| tvar.write(tx, v.clone()));
+            stm::atomically(move |tx| tvar.write(tx, v.clone()));
         }
         self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
     }
-
     /// Get current version
     pub fn version(&self) -> u64 {
         self.version.load(std::sync::atomic::Ordering::Acquire)
     }
 }
-
 #[cfg(not(target_arch = "wasm32"))]
 pub fn transact_pair<A, B, F>(state_a: &State<A>, state_b: &State<B>, f: F)
 where
@@ -2076,10 +2000,8 @@ where
     state_b.swap.store(Arc::new(new_b.clone()));
     state_a.version.fetch_add(1, std::sync::atomic::Ordering::Release);
     state_b.version.fetch_add(1, std::sync::atomic::Ordering::Release);
-    
     let subs_a = Arc::clone(&state_a.subscribers);
     let subs_b = Arc::clone(&state_b.subscribers);
-    
     if crate::is_batching() {
         crate::enqueue_batch_task(Box::new(move || {
             {
@@ -2102,60 +2024,49 @@ where
         }
     }
 }
-
 use std::any::TypeId;
 use std::sync::Mutex;
-
 /// Global environment storage using TypeId as keys.
 pub(crate) static ENVIRONMENT: OnceLock<
     Mutex<HashMap<TypeId, Box<dyn std::any::Any + Send + Sync>>>,
 > = OnceLock::new();
-
 /// Environment key type for accessing ambient values
 ///
 /// Implement this trait to define a new environment key.
 pub trait EnvKey: 'static + Send + Sync {
     /// The type of value stored in the environment
     type Value: Clone + Send + Sync + 'static;
-
     /// Get a default value for this key
     fn default_value() -> Self::Value;
 }
-
 /// Key for accessing the Yggdrasil design token tree
 pub struct YggdrasilKey;
-
 impl EnvKey for YggdrasilKey {
     type Value = YggdrasilTokens;
     fn default_value() -> Self::Value {
         default_tokens()
     }
 }
-
 /// Key for accessing the AssetManager
 pub struct AssetKey;
-
 impl EnvKey for AssetKey {
     type Value = Arc<dyn AssetManager>;
     fn default_value() -> Self::Value {
         Arc::new(DefaultAssetManager::new())
     }
 }
-
 /// System appearance (Light/Dark mode)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Appearance {
     Light,
     Dark,
 }
-
 /// Orientation for layouts
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Orientation {
     Horizontal,
     Vertical,
 }
-
 /// Cross-axis alignment for layout containers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Alignment {
@@ -2166,7 +2077,6 @@ pub enum Alignment {
     Top,
     Bottom,
 }
-
 /// Main-axis distribution for linear layout containers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Distribution {
@@ -2179,7 +2089,6 @@ pub enum Distribution {
     SpaceAround,
     SpaceEvenly,
 }
-
 /// A color represented by RGBA components in the [0.0, 1.0] range.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Color {
@@ -2188,7 +2097,6 @@ pub struct Color {
     pub b: f32,
     pub a: f32,
 }
-
 impl Color {
     pub const BLACK: Color = Color {
         r: 0.0,
@@ -2226,7 +2134,6 @@ impl Color {
         b: 1.0,
         a: 1.0,
     };
-
     /// Calculate the relative luminance of the color as defined by WCAG 2.x
     pub fn relative_luminance(&self) -> f32 {
         fn res(c: f32) -> f32 {
@@ -2238,7 +2145,6 @@ impl Color {
         }
         0.2126 * res(self.r) + 0.7152 * res(self.g) + 0.0722 * res(self.b)
     }
-
     /// Calculate the contrast ratio between this color and another color
     pub fn contrast_ratio(&self, other: &Color) -> f32 {
         let l1 = self.relative_luminance();
@@ -2249,7 +2155,6 @@ impl Color {
             (l2 + 0.05) / (l1 + 0.05)
         }
     }
-
     pub const CYAN: Color = Color {
         r: 0.0,
         g: 1.0,
@@ -2274,68 +2179,55 @@ impl Color {
         b: 0.5,
         a: 1.0,
     };
-
     /// Create a new color from RGBA components.
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
-
     /// Convert the color to a [r, g, b, a] array.
     pub fn as_array(&self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
     }
 }
-
 impl View for Color {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
-
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, self.as_array());
     }
 }
-
 /// Key for accessing the current system appearance
 pub struct AppearanceKey;
-
 impl EnvKey for AppearanceKey {
     type Value = Appearance;
     fn default_value() -> Self::Value {
         Appearance::Dark // Default to Dark (Ginnungagap) for Berserker aesthetic
     }
 }
-
 /// StyleResolver provides high-level access to themed values from the environment.
 pub struct StyleResolver;
-
 impl StyleResolver {
     /// Resolve a color from the current environment
     pub fn color(key: &str) -> String {
         let tokens = Environment::<YggdrasilKey>::new().get();
         let appearance = Environment::<AppearanceKey>::new().get();
         let is_dark = appearance == Appearance::Dark;
-
         tokens
             .get_color(key, is_dark)
             .unwrap_or_else(|| "#FF00FF".to_string()) // Default to MuspelMagenta on failure
     }
-
     /// Resolve a generic token value
     pub fn get<T: FromStr>(category: &str, key: &str) -> Option<T> {
         let tokens = Environment::<YggdrasilKey>::new().get();
         let appearance = Environment::<AppearanceKey>::new().get();
         let is_dark = appearance == Appearance::Dark;
-
         tokens.get(category, key, is_dark)
     }
 }
-
 /// The authoritative Cyberpunk Viking default tokens
 pub fn default_tokens() -> YggdrasilTokens {
     let mut tokens = YggdrasilTokens::new();
-
     // Core Norse Colorways
     tokens.color.insert(
         "background".to_string(),
@@ -2343,21 +2235,18 @@ pub fn default_tokens() -> YggdrasilTokens {
             value: "#000000".to_string(), // Ginnungagap (The Void)
         },
     );
-
     tokens.color.insert(
         "primary".to_string(),
         TokenValue::Single {
             value: "#00FFFF".to_string(), // NiflCyan (Aesir Primary)
         },
     );
-
     tokens.color.insert(
         "secondary".to_string(),
         TokenValue::Single {
             value: "#FF00FF".to_string(), // MuspelMagenta (Berserker Secondary)
         },
     );
-
     tokens.color.insert(
         "surface".to_string(),
         TokenValue::Adaptive {
@@ -2365,7 +2254,6 @@ pub fn default_tokens() -> YggdrasilTokens {
             dark: "#121212".to_string(),
         },
     );
-
     tokens.color.insert(
         "text".to_string(),
         TokenValue::Adaptive {
@@ -2373,7 +2261,6 @@ pub fn default_tokens() -> YggdrasilTokens {
             dark: "#FFFFFF".to_string(),
         },
     );
-
     // Bifrost (Glassmorphism) - Frosted Style
     tokens.bifrost.insert(
         "blur".to_string(),
@@ -2393,7 +2280,6 @@ pub fn default_tokens() -> YggdrasilTokens {
             value: "0.65".to_string(),
         },
     );
-
     // Gungnir (Neon Glow)
     tokens.gungnir.insert(
         "intensity".to_string(),
@@ -2407,7 +2293,6 @@ pub fn default_tokens() -> YggdrasilTokens {
             value: "15.0".to_string(),
         },
     );
-
     // Mjolnir (Sharp Geometry)
     tokens.mjolnir.insert(
         "clip_angle".to_string(),
@@ -2421,7 +2306,6 @@ pub fn default_tokens() -> YggdrasilTokens {
             value: "2.0".to_string(),
         },
     );
-
     // Sleipnir (Spring Animation)
     tokens.anim.insert(
         "stiffness".to_string(),
@@ -2441,7 +2325,6 @@ pub fn default_tokens() -> YggdrasilTokens {
             value: "1.0".to_string(),
         },
     );
-
     // Accessibility
     tokens.accessibility.insert(
         "reduce_motion".to_string(),
@@ -2449,15 +2332,17 @@ pub fn default_tokens() -> YggdrasilTokens {
             value: "false".to_string(),
         },
     );
-
     tokens
 }
-
 /// Environment wrapper for accessing ambient values
 pub struct Environment<K: EnvKey> {
     _marker: std::marker::PhantomData<K>,
 }
-
+impl<K: EnvKey> Default for Environment<K> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<K: EnvKey> Environment<K> {
     /// Create a new Environment
     pub fn new() -> Self {
@@ -2465,24 +2350,20 @@ impl<K: EnvKey> Environment<K> {
             _marker: std::marker::PhantomData,
         }
     }
-
     /// Get the current value from the environment
     pub fn get(&self) -> K::Value {
         if let Some(env_store) = ENVIRONMENT.get() {
             let env_lock = env_store.lock().unwrap();
-            if let Some(val) = env_lock.get(&std::any::TypeId::of::<K>()) {
-                if let Some(typed_val) = val.downcast_ref::<K::Value>() {
+            if let Some(val) = env_lock.get(&std::any::TypeId::of::<K>())
+                && let Some(typed_val) = val.downcast_ref::<K::Value>() {
                     return typed_val.clone();
-                }
             }
         }
         K::default_value()
     }
 }
-
 /// Ambient environment management
 pub mod env {
-
     /// Insert a value into the environment
     pub fn insert<K: super::EnvKey>(value: K::Value) {
         if let Some(store) = super::ENVIRONMENT.get() {
@@ -2490,7 +2371,6 @@ pub mod env {
             env_map.insert(std::any::TypeId::of::<K>(), Box::new(value));
         }
     }
-
     /// Remove a value from the environment.
     pub fn remove<K: super::EnvKey>() {
         if let Some(store) = super::ENVIRONMENT.get() {
@@ -2499,9 +2379,7 @@ pub mod env {
         }
     }
 }
-
 /// Geometry modifiers
-
 /// Size of the view in logical pixels
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Size {
@@ -2563,6 +2441,12 @@ impl EdgeInsets {
 pub struct FrameModifier {
     pub width: Option<f32>,
     pub height: Option<f32>,
+}
+
+impl Default for FrameModifier {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FrameModifier {
@@ -2650,23 +2534,12 @@ impl ViewModifier for ZIndexModifier {
 }
 
 /// Layout constraints for views
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct LayoutConstraints {
     pub min_width: Option<f32>,
     pub max_width: Option<f32>,
     pub min_height: Option<f32>,
     pub max_height: Option<f32>,
-}
-
-impl Default for LayoutConstraints {
-    fn default() -> Self {
-        Self {
-            min_width: None,
-            max_width: None,
-            min_height: None,
-            max_height: None,
-        }
-    }
 }
 
 /// Modifier to set layout constraints
@@ -2732,6 +2605,12 @@ pub mod layout {
     pub struct LayoutCache {
         pub safe_area: SafeArea,
         size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
+    }
+
+    impl Default for LayoutCache {
+        fn default() -> Self {
+            Self::new()
+        }
     }
 
     impl LayoutCache {
@@ -3001,6 +2880,12 @@ pub struct DefaultAssetManager {
     cache: Arc<arc_swap::ArcSwap<HashMap<String, AssetState<Arc<Vec<u8>>>>>>,
 }
 
+impl Default for DefaultAssetManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DefaultAssetManager {
     pub fn new() -> Self {
         Self {
@@ -3032,6 +2917,12 @@ use std::future::Future;
 /// Integrates with State<T> to provide loading/error/ready states for async operations.
 pub struct Suspense<T: Clone + Send + Sync + 'static> {
     inner: State<AssetState<T>>,
+}
+
+impl<T: Clone + Send + Sync + 'static> Default for Suspense<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: Clone + Send + Sync + 'static> Suspense<T> {

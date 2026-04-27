@@ -90,7 +90,6 @@ pub use accesskit::{
 };
 pub use accesskit_winit::Adapter as ShieldWallAdapter;
 
-use usvg;
 use lyon::tessellation::{
     FillOptions, FillTessellator, FillVertex, FillVertexConstructor, VertexBuffers, BuffersBuilder
 };
@@ -849,7 +848,7 @@ impl SurtrRenderer {
             blur_v_pipeline,
             composite_pipeline,
             env_bind_group_layout,
-            text_engine: runic_text::RunicTextEngine::new(),
+            text_engine: runic_text::RunicTextEngine::default(),
             mega_atlas_tex,
             mega_atlas_view: mega_atlas_view_obj,
             _mega_atlas_sampler: text_sampler,
@@ -908,7 +907,7 @@ impl SurtrRenderer {
         // Calculate Texture VRAM
         let mut texture_bytes = 0;
         texture_bytes += 4096 * 4096 * 4; // Mega Atlas (RGBA8)
-        texture_bytes += 1 * 1 * 4; // Dummy (RGBA8)
+        texture_bytes += 4; // Dummy (RGBA8)
         
         for ctx in self.surfaces.values() {
             let bpp = 4; 
@@ -932,8 +931,8 @@ impl SurtrRenderer {
 
     /// resize — Reconfigures a specific surface and its internal textures.
     pub fn resize(&mut self, window_id: winit::window::WindowId, width: u32, height: u32, scale_factor: f32) {
-        if width > 0 && height > 0 {
-            if let Some(ctx) = self.surfaces.get_mut(&window_id) {
+        if width > 0 && height > 0
+            && let Some(ctx) = self.surfaces.get_mut(&window_id) {
                 ctx.config.width = width;
                 ctx.config.height = height;
                 ctx.scale_factor = scale_factor;
@@ -1017,7 +1016,6 @@ impl SurtrRenderer {
                     view_formats: &[],
                 });
                 ctx.depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
-            }
         }
     }
 
@@ -1484,17 +1482,16 @@ impl SurtrRenderer {
         uv_rect: Rect,
     ) {
         // If a shadow is active, draw it first
-        if let Some(shadow) = self.shadow_stack.last().copied() {
-            if shadow.color[3] > 0.001 {
-                Renderer::draw_drop_shadow(
-                    self,
-                    rect,
-                    radius,
-                    shadow.color,
-                    shadow.radius,
-                    0.0, // Spread
-                );
-            }
+        if let Some(shadow) = self.shadow_stack.last().copied() 
+            && shadow.color[3] > 0.001 {
+            Renderer::draw_drop_shadow(
+                self,
+                rect,
+                radius,
+                shadow.color,
+                shadow.radius,
+                0.0, // Spread
+            );
         }
 
         let slice = self
@@ -1651,16 +1648,14 @@ impl SurtrRenderer {
     pub fn end_frame(&mut self, mut encoder: wgpu::CommandEncoder) {
         // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
         // draw a 10px red border as a warning flash.
-        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel) {
-            if let Some(window_id) = self.current_window {
-                if let Some(surface_ctx) = self.surfaces.get(&window_id) {
-                    let w = surface_ctx.config.width as f32;
-                    let h = surface_ctx.config.height as f32;
-                    let border_rect = Rect { x: 0.0, y: 0.0, width: w, height: h };
-                    // Draw a thick red border to signal layout-thrashing
-                    self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
-                }
-            }
+        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
+            && let Some(window_id) = self.current_window
+            && let Some(surface_ctx) = self.surfaces.get(&window_id) {
+                let w = surface_ctx.config.width as f32;
+                let h = surface_ctx.config.height as f32;
+                let border_rect = Rect { x: 0.0, y: 0.0, width: w, height: h };
+                // Draw a thick red border to signal layout-thrashing
+                self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
         }
 
         self.queue
@@ -2816,46 +2811,41 @@ impl SurtrRenderer {
     }
 
     fn tessellate_node(&self, node: &usvg::Node, tessellator: &mut FillTessellator, vertices: &mut Vec<Vertex>, indices: &mut Vec<u32>) {
-        match *node {
-            usvg::Node::Path(ref path) => {
-                if let Some(ref fill) = path.fill() {
-                    let color = match fill.paint() {
-                        usvg::Paint::Color(c) => [
-                            c.red as f32 / 255.0,
-                            c.green as f32 / 255.0,
-                            c.blue as f32 / 255.0,
-                            fill.opacity().get(),
-                        ],
-                        _ => [1.0, 1.0, 1.0, 1.0],
-                    };
-
-                    let lyon_path = usvg_to_lyon(path);
-                    let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-                    let base_vertex_idx = vertices.len() as u32;
-
-                    tessellator.tessellate_path(
-                        &lyon_path,
-                        &FillOptions::default(),
-                        &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor {
-                            color,
-                            translation: [0.0, 0.0],
-                            scale: [1.0, 1.0],
-                            rotation: 0.0,
-                        }),
-                    ).unwrap();
-
-                    vertices.extend(buffers.vertices);
-                    for idx in buffers.indices {
-                        indices.push(base_vertex_idx + idx);
-                    }
-                }
+        if let usvg::Node::Group(ref group) = *node {
+            for child in group.children() {
+                self.tessellate_node(child, tessellator, vertices, indices);
             }
-            usvg::Node::Group(ref group) => {
-                for child in group.children() {
-                    self.tessellate_node(child, tessellator, vertices, indices);
+        } else if let usvg::Node::Path(ref path) = *node
+            && let Some(fill) = path.fill() {
+                let color = match fill.paint() {
+                    usvg::Paint::Color(c) => [
+                        c.red as f32 / 255.0,
+                        c.green as f32 / 255.0,
+                        c.blue as f32 / 255.0,
+                        fill.opacity().get(),
+                    ],
+                    _ => [1.0, 1.0, 1.0, 1.0],
+                };
+
+                let lyon_path = usvg_to_lyon(path);
+                let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+                let base_vertex_idx = vertices.len() as u32;
+
+                tessellator.tessellate_path(
+                    &lyon_path,
+                    &FillOptions::default(),
+                    &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor {
+                        color,
+                        translation: [0.0, 0.0],
+                        scale: [1.0, 1.0],
+                        rotation: 0.0,
+                    }),
+                ).unwrap();
+
+                vertices.extend(buffers.vertices);
+                for idx in buffers.indices {
+                    indices.push(base_vertex_idx + idx);
                 }
-            }
-            _ => {}
         }
     }
 

@@ -55,10 +55,6 @@ impl NativeRenderer {
         Self { gpu, delta_time }
     }
 
-    /// Get real-time performance telemetry.
-    fn get_telemetry(&self) -> cvkg_core::TelemetryData {
-        self.gpu.lock().unwrap().get_telemetry()
-    }
 
     /// Start the CVKG native application with the given view.
     /// This is the main entry point for desktop applications.
@@ -183,17 +179,11 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     if let Some(adapter) = &mut state.accesskit_adapter {
                         let mut nodes = Vec::new();
                         for patch in &patches {
-                            match patch {
-                                cvkg_vdom::VDomPatch::Create(node)
-                                | cvkg_vdom::VDomPatch::Replace { node, .. } => {
-                                    nodes.push((accesskit::NodeId(node.id.0 as u64), node.to_accesskit_node()));
-                                }
-                                cvkg_vdom::VDomPatch::Update { id, .. } => {
-                                    if let Some(node) = new_vdom.nodes.get(id) {
-                                        nodes.push((accesskit::NodeId(node.id.0 as u64), node.to_accesskit_node()));
-                                    }
-                                }
-                                _ => {}
+                            if let cvkg_vdom::VDomPatch::Create(node) | cvkg_vdom::VDomPatch::Replace { node, .. } = patch {
+                                nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                            } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
+                                && let Some(node) = new_vdom.nodes.get(id) {
+                                nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
                             }
                         }
                         if !nodes.is_empty() {
@@ -268,8 +258,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 }
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                if let Some(vdom) = &state.vdom {
-                    if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+                if let Some(vdom) = &state.vdom
+                    && let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
                         let key_str = format!("{:?}", code);
                         let cvkg_event = if event.state == winit::event::ElementState::Pressed {
                             cvkg_core::Event::KeyDown { key: key_str }
@@ -277,17 +267,12 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             cvkg_core::Event::KeyUp { key: key_str }
                         };
                         vdom.dispatch_event(cvkg_event);
-                    }
                 }
             }
             WindowEvent::Ime(ime_event) => {
-                if let Some(vdom) = &state.vdom {
-                    match ime_event {
-                        winit::event::Ime::Commit(string) => {
-                            vdom.dispatch_event(cvkg_core::Event::Ime(string));
-                        }
-                        _ => {}
-                    }
+                if let Some(vdom) = &state.vdom
+                    && let winit::event::Ime::Commit(string) = ime_event {
+                        vdom.dispatch_event(cvkg_core::Event::Ime(string));
                 }
             }
             _ => {}
@@ -295,28 +280,19 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
-        match event {
-            AppEvent::AccessibilityAction(request) => {
-                let node_id = cvkg_vdom::NodeId(request.target.0 as u64);
-                // For accessibility, we'll route to the first window for now
-                if let Some(state) = self.windows.values_mut().next() {
-                    if let Some(vdom) = &state.vdom {
-                        if let Some(node) = vdom.nodes.get(&node_id) {
-                            match request.action {
-                                accesskit::Action::Click => {
-                                    let event = cvkg_core::Event::PointerClick {
-                                        x: node.layout.x + node.layout.width / 2.0,
-                                        y: node.layout.y + node.layout.height / 2.0,
-                                    };
-                                    vdom.dispatch_event(event);
-                                }
-                                _ => ()
-                            }
-                        }
-                    }
-                }
+        let AppEvent::AccessibilityAction(request) = event;
+            let node_id = cvkg_vdom::NodeId(request.target.0);
+            // For accessibility, we'll route to the first window for now
+            if let Some(state) = self.windows.values_mut().next()
+                && let Some(vdom) = &state.vdom
+                && let Some(node) = vdom.nodes.get(&node_id)
+                && request.action == accesskit::Action::Click {
+                    let event = cvkg_core::Event::PointerClick {
+                        x: node.layout.x + node.layout.width / 2.0,
+                        y: node.layout.y + node.layout.height / 2.0,
+                    };
+                    vdom.dispatch_event(event);
             }
-        }
     }
 
     fn about_to_wait(&mut self, _event_loop: &ActiveEventLoop) {

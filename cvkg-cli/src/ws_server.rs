@@ -76,8 +76,7 @@ async fn handle_runtime_socket(mut ws: WebSocket) {
                     "capabilities": ["patch", "state", "event"]
                 }
             }))
-            .unwrap()
-            .into(),
+            .unwrap(),
         ))
         .await;
 
@@ -142,11 +141,10 @@ async fn handle_hotreload_socket(mut ws: WebSocket, state: AppState) {
         tokio::select! {
             // Listen for broadcasted patches from the build pipeline
             Ok(msg) = patch_rx.recv() => {
-                if let Ok(serialized) = serde_json::to_string(&msg) {
-                    if let Err(e) = ws.send(Message::Text(serialized.into())).await {
+                if let Ok(serialized) = serde_json::to_string(&msg)
+                    && let Err(e) = ws.send(Message::Text(serialized)).await {
                         error!("Failed to send patch to client: {}", e);
                         break;
-                    }
                 }
             }
             // Listen for client messages or disconnects

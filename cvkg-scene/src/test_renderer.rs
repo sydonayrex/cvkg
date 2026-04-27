@@ -112,6 +112,12 @@ pub struct TestRenderer {
     pub commands: Vec<Command>,
 }
 
+impl Default for TestRenderer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestRenderer {
     /// Create a new TestRenderer
     pub fn new() -> Self {

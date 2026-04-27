@@ -167,7 +167,7 @@ fn main() {
             git,
         } => {
             use console::style;
-            let tmpl = scaffold::Template::from_str(template.as_deref());
+            let tmpl = template.as_deref().unwrap_or("minimal").parse().unwrap_or(scaffold::Template::Minimal);
             let scaffolder = scaffold::Scaffolder::new(name, tmpl, git);
             if let Err(e) = scaffolder.run() {
                 eprintln!("{} Scaffolding failed: {}", style("❌").red(), e);
@@ -192,11 +192,10 @@ fn main() {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
-                .unwrap()
+                .unwrap_or_else(|e| panic!("Failed to build runtime: {}", e))
                 .block_on(async {
                     if target_str == "wasm" || target_str == "webkit" {
                         println!("{} WebKit preview mode detected. Starting background preview server...", style("🌐").blue());
-                        // In a real production CLI, we'd spawn the webkit-server here as a child process
                     }
                     
                     if let Err(e) = ws_server::start_server(addr).await {
@@ -232,7 +231,7 @@ fn main() {
             tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
-                .unwrap()
+                .unwrap_or_else(|e| panic!("Failed to build runtime: {}", e))
                 .block_on(async {
                     if let Err(e) = webkit_server::start_server(addr).await {
                         eprintln!("Failed to start preview server: {}", e);
@@ -274,7 +273,7 @@ fn main() {
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
-                .unwrap()
+                .unwrap_or_else(|e| panic!("Failed to build runtime: {}", e))
                 .block_on(async {
                     let ws_url = format!("ws://localhost:{}/ws/devtools", ws_port);
                     println!("Connecting to dev server at {}...", ws_url);
@@ -286,24 +285,22 @@ fn main() {
                             
                             use futures_util::StreamExt;
                             while let Some(msg) = ws_stream.next().await {
-                                if let Ok(msg) = msg {
-                                    if let Ok(text) = msg.to_text() {
-                                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
-                                            if let Some(fps) = json.get("fps") {
-                                                print!("{esc}[2K\r", esc = 27 as char);
-                                                print!("📊 FPS: {} | VRAM: {} MB | VDOM Diff: {} ms", 
-                                                    fps, 
-                                                    json.get("vram_mb").unwrap_or(&serde_json::json!(0)),
-                                                    json.get("diff_ms").unwrap_or(&serde_json::json!(0))
-                                                );
-                                                use std::io::Write;
-                                                std::io::stdout().flush().unwrap();
-                                            } else {
-                                                println!("📡 Event: {}", text);
-                                            }
+                                if let Ok(msg) = msg
+                                    && let Ok(text) = msg.to_text()
+                                    && let Ok(json) = serde_json::from_str::<serde_json::Value>(text) {
+                                        if let Some(fps) = json.get("fps") {
+                                            print!("{esc}[2K\r", esc = 27 as char);
+                                            print!("📊 FPS: {} | VRAM: {} MB | VDOM Diff: {} ms", 
+                                                fps, 
+                                                json.get("vram_mb").unwrap_or(&serde_json::json!(0)),
+                                                json.get("diff_ms").unwrap_or(&serde_json::json!(0))
+                                            );
+                                            use std::io::Write;
+                                            std::io::stdout().flush().unwrap_or_default();
+                                        } else {
+                                            println!("📡 Event: {}", text);
                                         }
                                     }
-                                }
                             }
                         }
                         Err(e) => eprintln!("❌ Failed to connect to telemetry stream: {}", e),
@@ -330,8 +327,7 @@ fn main() {
             
             let status = cmd.status().expect("Failed to execute wasm-pack");
             if status.success() {
-                // Generate production index.html
-                let project_name = std::env::current_dir().unwrap().file_name().unwrap().to_str().unwrap().replace("-", "_");
+                let project_name = std::env::current_dir().unwrap().file_name().unwrap().to_str().unwrap().replace('-', "_");
                 let html = format!(r#"<!DOCTYPE html>
 <html>
 <head>
@@ -397,8 +393,8 @@ fn main() {
             rs_content.push_str("pub const CUSTOM_THEME: Theme = Theme {\n");
             if let Some(obj) = tokens.as_object() {
                 for (key, val) in obj {
-                    if let Some(arr) = val.as_array() {
-                        if arr.len() == 4 {
+                    if let Some(arr) = val.as_array()
+                        && arr.len() == 4 {
                             let r = arr[0].as_f64().unwrap_or(0.0);
                             let g = arr[1].as_f64().unwrap_or(0.0);
                             let b = arr[2].as_f64().unwrap_or(0.0);
@@ -407,7 +403,6 @@ fn main() {
                                 "    {}: [{:.2}, {:.2}, {:.2}, {:.2}],\n",
                                 key, r, g, b, a
                             ));
-                        }
                     }
                 }
             }

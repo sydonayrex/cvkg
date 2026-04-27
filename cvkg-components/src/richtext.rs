@@ -12,6 +12,12 @@ pub struct RichText {
     segments: Vec<RichTextSegment>,
 }
 
+impl Default for RichText {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RichText {
     pub fn new() -> Self {
         Self {

@@ -83,6 +83,12 @@ pub struct SceneGraph {
     next_id: u64,
 }
 
+impl Default for SceneGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SceneGraph {
     /// Create a new empty scene graph.
     pub fn new() -> Self {

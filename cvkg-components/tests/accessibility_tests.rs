@@ -11,5 +11,5 @@ fn test_accessibility_traits() {
     let _button = Button::new("Submit", || {});
     let _slider = Slider::new(0.5, 0.0..=1.0, |_| {});
 
-    assert!(true, "A11y pass completed for mocked properties.");
+    println!("A11y pass completed for mocked properties.");
 }

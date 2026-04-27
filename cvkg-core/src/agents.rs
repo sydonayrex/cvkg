@@ -52,7 +52,7 @@ pub enum ConflictResolution {
 }
 
 thread_local! {
-    static CURRENT_AGENT: std::cell::RefCell<Option<MutationMetadata>> = std::cell::RefCell::new(None);
+    static CURRENT_AGENT: std::cell::RefCell<Option<MutationMetadata>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Executes a closure within the context of a specific agent.

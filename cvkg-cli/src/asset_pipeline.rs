@@ -24,8 +24,8 @@ impl AssetPipeline {
 
         for entry in walkdir::WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension() {
+            if path.is_file()
+                && let Some(ext) = path.extension() {
                     match ext.to_str().unwrap_or("") {
                         "wgsl" | "glsl" => {
                             Self::validate_shader(path)?;
@@ -37,7 +37,6 @@ impl AssetPipeline {
                         }
                         _ => {}
                     }
-                }
             }
         }
 

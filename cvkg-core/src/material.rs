@@ -27,6 +27,12 @@ pub struct MaterialRegistry {
 
 static REGISTRY: OnceLock<Arc<Mutex<MaterialRegistry>>> = OnceLock::new();
 
+impl Default for MaterialRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MaterialRegistry {
     pub fn new() -> Self {
         let mut registry = Self {

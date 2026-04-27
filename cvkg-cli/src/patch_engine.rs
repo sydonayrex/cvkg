@@ -55,6 +55,12 @@ pub struct PatchEngine {
     previous_view: Option<SerializedView>,
 }
 
+impl Default for PatchEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PatchEngine {
     /// Create a new PatchEngine
     pub fn new() -> Self {

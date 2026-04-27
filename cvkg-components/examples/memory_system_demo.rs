@@ -75,8 +75,7 @@ impl ApplicationHandler for MemoryApp {
             }
             WindowEvent::KeyboardInput {
                 event: kb_event, ..
-            } => {
-                if kb_event.state.is_pressed() {
+            } if kb_event.state.is_pressed() => {
                     // Cyclic search demonstration
                     let queries = ["", "bifrost", "niflheim", "thermal", "security"];
                     static mut QUERY_INDEX: usize = 0;
@@ -88,7 +87,6 @@ impl ApplicationHandler for MemoryApp {
                         println!("Searching for: '{}'", queries[QUERY_INDEX]);
                     }
                     self.window.as_ref().unwrap().request_redraw();
-                }
             }
             WindowEvent::RedrawRequested => {
                 let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
