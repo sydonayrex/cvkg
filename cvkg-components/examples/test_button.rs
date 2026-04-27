@@ -41,3 +41,7 @@ impl cvkg_core::View for TestButton {
         renderer.pop_vnode();
     }
 }
+
+fn main() {
+    println!("TestButton example compiled successfully.");
+}

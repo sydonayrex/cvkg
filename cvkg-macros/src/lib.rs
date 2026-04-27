@@ -35,13 +35,11 @@ pub fn view(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut field_names = Vec::new();
 
     for arg in inputs {
-        if let FnArg::Typed(pat_type) = arg {
-            if let Pat::Ident(pat_ident) = &*pat_type.pat {
-                let arg_name = &pat_ident.ident;
-                let arg_type = &pat_type.ty;
-                fields.push(quote! { pub #arg_name: #arg_type });
-                field_names.push(arg_name);
-            }
+        if let FnArg::Typed(pat_type) = arg && let Pat::Ident(pat_ident) = &*pat_type.pat {
+            let arg_name = &pat_ident.ident;
+            let arg_type = &pat_type.ty;
+            fields.push(quote! { pub #arg_name: #arg_type });
+            field_names.push(arg_name);
         }
     }
 
@@ -161,20 +159,6 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
         
-        impl cvkg_core::View for #name {
-            type Body = impl cvkg_core::View;
-            
-            fn body(self) -> Self::Body {
-                // For now, we just return a placeholder; users can customize by implementing body themselves
-                // Alternatively, we could generate a body that uses the fields, but that's complex.
-                // We'll leave it as Never and expect users to override body if needed.
-                cvkg_core::Never
-            }
-            
-            fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
-                // Default render does nothing; users should override if needed
-            }
-        }
     };
     
     TokenStream::from(expanded)

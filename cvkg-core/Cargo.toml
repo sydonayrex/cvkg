@@ -19,6 +19,7 @@ stl_io = { workspace = true }
 # Lock-free RCU for top-level state reads (replaces RwLock on read-dominated paths)
 arc-swap = { workspace = true }
 once_cell = { workspace = true }
+thiserror = { workspace = true }
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

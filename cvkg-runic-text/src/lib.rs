@@ -177,10 +177,8 @@ impl RunicTextEngine {
                                 let mut buf = UnicodeBuffer::new();
                                 buf.push_str(&c.to_string());
                                 let out = rustybuzz::shape(&face, &[], buf);
-                                if let Some(info) = out.glyph_infos().first() {
-                                    if info.glyph_id == 0 && !c.is_whitespace() {
-                                        needs_fallback = true;
-                                    }
+                                if out.glyph_infos().first().is_some_and(|info| info.glyph_id == 0 && !c.is_whitespace()) {
+                                    needs_fallback = true;
                                 }
                             }
                         });
@@ -225,11 +223,9 @@ impl RunicTextEngine {
                     }
 
                     // Wrap if needed
-                    if current_x + word_width > max_width && current_x > 0.0 {
-                        if !word.trim().is_empty() {
-                            current_y += current_line_max_height;
-                            current_x = 0.0;
-                        }
+                    if current_x + word_width > max_width && current_x > 0.0 && !word.trim().is_empty() {
+                        current_y += current_line_max_height;
+                        current_x = 0.0;
                     }
 
                     // Shape and emit

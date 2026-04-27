@@ -1132,7 +1132,7 @@ impl VDom {
         // 5. Cleanup excess unkeyed old children
         if old_children.len() > new_children.len() {
             for id in old_children.iter().skip(new_children.len()) {
-                if self.nodes.get(id).map_or(false, |n| n.key.is_none()) {
+                if self.nodes.get(id).is_some_and(|n| n.key.is_none()) {
                     patches.push(VDomPatch::Remove(*id));
                 }
             }
@@ -1224,8 +1224,8 @@ impl VDom {
                     if let Ok(mut focus) = self.focused_node.lock() { *focus = id; }
                     if let Ok(mut capture) = self.captured_node.lock() { *capture = id; }
                 }
-                if let cvkg_core::Event::PointerUp { .. } = event {
-                    if let Ok(mut capture) = self.captured_node.lock() { *capture = None; }
+                if let cvkg_core::Event::PointerUp { .. } = event && let Ok(mut capture) = self.captured_node.lock() {
+                    *capture = None;
                 }
                 
                 // Handle hover transitions
@@ -1263,11 +1263,9 @@ impl VDom {
         let mut processed = false;
 
         loop {
-            if let Some(handlers) = self.event_handlers.get(&current_id) {
-                if let Some(handler) = handlers.get(event_name) {
-                    handler(event.clone());
-                    processed = true;
-                }
+            if let Some(handlers) = self.event_handlers.get(&current_id) && let Some(handler) = handlers.get(event_name) {
+                handler(event.clone());
+                processed = true;
             }
             
             if let Some(parent_id) = self.parents.get(&current_id) {

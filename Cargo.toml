@@ -42,4 +42,5 @@ arc-swap = "1.9"
 # Software transactional memory for atomic multi-field sub-state mutations (native only)
 stm = "0.4"
 once_cell = "1.19"
+thiserror = "1.0"
 

@@ -4,7 +4,6 @@
 //! It provides identity and priority tracking for UI state mutations,
 //! enabling predictable resolution when multiple AI agents contend for the same state.
 
-use std::sync::Arc;
 use serde::{Serialize, Deserialize};
 
 /// Unique identifier for an AI agent or system component issuing state mutations.

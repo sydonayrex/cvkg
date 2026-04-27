@@ -62,7 +62,7 @@ mod tests {
         };
 
         // Check initial state
-        assert_eq!(app.state.get(), false);
+        assert!(!app.state.get());
 
         // Get the body (which is a button)
         let body = app.body();
@@ -79,11 +79,11 @@ mod tests {
             state_clone.set(!current);
         };
 
-        assert_eq!(state.get(), false);
+        assert!(!state.get());
         action();
-        assert_eq!(state.get(), true);
+        assert!(state.get());
         action();
-        assert_eq!(state.get(), false);
+        assert!(!state.get());
     }
 }
 

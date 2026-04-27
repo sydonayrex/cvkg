@@ -19,4 +19,5 @@ insta = "1.47.2"
 winit = "0.30"
 cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.12" }
 cvkg-render-native = { path = "../cvkg-render-native", version = "0.1.12" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.1.12" }
 pollster = "0.3"

@@ -245,7 +245,7 @@ pub struct SurtrRenderer {
     vram_textures_bytes: u64,
 
     // Debugging
-    debug_layout: bool,
+    _debug_layout: bool,
 
     // Transform Stack
     transform_stack: Vec<([f32; 2], [f32; 2], f32)>,
@@ -889,7 +889,7 @@ impl SurtrRenderer {
             frame_budget: cvkg_core::FrameBudget::default(),
             vram_buffers_bytes: 0,
             vram_textures_bytes: 0,
-            debug_layout: false,
+            _debug_layout: false,
             transform_stack: Vec::new(),
             redraw_requested: false,
         }
@@ -2946,8 +2946,8 @@ impl SurtrRenderer {
             .await
             .unwrap();
 
-        let device = Arc::new(device);
-        let queue = Arc::new(queue);
+        let _device = Arc::new(device);
+        let _queue = Arc::new(queue);
         
         // This is a minimal initialization for headless rendering.
         // Full implementation would require setting up the pipelines and buffers.

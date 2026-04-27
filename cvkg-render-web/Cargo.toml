@@ -40,4 +40,4 @@ webgpu = []
 default = ["webgpu"]
 
 [build-dependencies]
-naga = "29.0.1"
+naga = { version = "29.0.1", features = ["wgsl-in", "spv-out"] }

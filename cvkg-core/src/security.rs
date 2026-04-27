@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Capability defines the granular permissions available to plugins.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -72,7 +72,8 @@ impl SecurityPolicy {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+/// SecurityError defines possible security-related failures.
+#[derive(Debug, Error)]
 pub enum SecurityError {
     #[error("Capability denied: {0:?}")]
     CapabilityDenied(Capability),

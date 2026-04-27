@@ -34,13 +34,13 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
-use cvkg_core::Renderer;
 
 
 /// Native renderer backend implementing the Renderer trait.
 /// It wraps a shared SurtrRenderer for high-performance GPU drawing.
 pub struct NativeRenderer {
     gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
+    delta_time: f32,
 }
 
 /// Custom events for the native application event loop
@@ -51,8 +51,8 @@ enum AppEvent {
 
 impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
-    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>) -> Self {
-        Self { gpu }
+    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>, delta_time: f32) -> Self {
+        Self { gpu, delta_time }
     }
 
     /// Get real-time performance telemetry.
@@ -212,9 +212,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                 // GPU rendering
                 let draw_start = std::time::Instant::now();
+                let delta_time = redraw_start.duration_since(state.last_redraw_start).as_secs_f32();
                 let mut gpu = gpu_arc.lock().unwrap();
                 let encoder = gpu.begin_frame(id);
-                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone());
+                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone(), delta_time);
                 self.view.render(&mut renderer, rect);
                 let draw_end = std::time::Instant::now();
 
@@ -326,6 +327,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 }
 
 impl cvkg_core::Renderer for NativeRenderer {
+    fn delta_time(&self) -> f32 {
+        self.delta_time
+    }
+
     fn fill_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
         self.gpu.lock().unwrap().fill_rect(rect, color);
     }
@@ -460,6 +465,12 @@ pub struct NativeAssetManager {
             std::collections::HashMap<String, cvkg_core::AssetState<std::sync::Arc<Vec<u8>>>>,
         >,
     >,
+}
+
+impl Default for NativeAssetManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NativeAssetManager {
