@@ -1,4 +1,40 @@
-#![cfg(target_arch = "wasm32")]
+#[cfg(not(target_arch = "wasm32"))]
+mod stubs {
+    use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer, RenderTier};
+    pub struct WebRenderer;
+    impl WebRenderer {
+        pub fn new() -> Self { Self }
+        pub async fn forge(&mut self) -> Result<RenderTier, String> { Ok(RenderTier::Tier3Fallback) }
+        pub fn canvas(&self) -> Option<&()> { None }
+        pub fn update_vdom<V>(&mut self, _: V) -> Result<(), String> { Ok(()) }
+        pub fn tier(&self) -> RenderTier { RenderTier::Tier3Fallback }
+    }
+    impl Renderer for WebRenderer {
+        fn fill_rect(&mut self, _: Rect, _: [f32; 4]) {}
+        fn fill_rounded_rect(&mut self, _: Rect, _: f32, _: [f32; 4]) {}
+        fn fill_ellipse(&mut self, _: Rect, _: [f32; 4]) {}
+        fn stroke_rect(&mut self, _: Rect, _: [f32; 4], _: f32) {}
+        fn stroke_rounded_rect(&mut self, _: Rect, _: f32, _: [f32; 4], _: f32) {}
+        fn stroke_ellipse(&mut self, _: Rect, _: [f32; 4], _: f32) {}
+        fn draw_line(&mut self, _: f32, _: f32, _: f32, _: f32, _: [f32; 4], _: f32) {}
+        fn draw_text(&mut self, _: &str, _: f32, _: f32, _: f32, _: [f32; 4]) {}
+        fn measure_text(&mut self, _: &str, _: f32) -> (f32, f32) { (0.0, 0.0) }
+    }
+    impl ElapsedTime for WebRenderer {
+        fn elapsed_time(&self) -> f32 { 0.0 }
+        fn delta_time(&self) -> f32 { 0.016 }
+    }
+    impl FrameRenderer<()> for WebRenderer {
+        fn begin_frame(&mut self) -> () { () }
+        fn end_frame(&mut self, _: ()) {}
+    }
+    pub fn get_render_tier_name() -> String { "None".to_string() }
+}
+#[cfg(not(target_arch = "wasm32"))]
+pub use stubs::*;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_impl {
 //! # CVKG Agentic Development Guidelines (v1.2)
 //!
 //! All AI agents contributing to this crate MUST follow ALL seven rules:
@@ -1774,3 +1810,6 @@ impl WebKitBridge {
         let _ = window.fetch_with_str_and_init("/snapshot", &opts);
     }
 }
+}
+#[cfg(target_arch = "wasm32")]
+pub use wasm_impl::*;

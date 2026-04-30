@@ -2024,7 +2024,7 @@ impl SurtrRenderer {
 
 impl cvkg_core::ElapsedTime for SurtrRenderer {
     fn delta_time(&self) -> f32 {
-        self.telemetry.frame_time_ms / 1000.0
+        self.current_scene.delta_time
     }
 
     fn elapsed_time(&self) -> f32 {
@@ -2706,9 +2706,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.current_z
     }
 
-    fn delta_time(&self) -> f32 {
-        self.current_scene.delta_time
-    }
 
     fn request_redraw(&mut self) {
         self.redraw_requested = true;

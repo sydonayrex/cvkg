@@ -48,6 +48,14 @@ impl ComponentErrorState {
     pub fn clear() -> Self {
         Self::default()
     }
+
+    pub fn error(message: impl Into<String>, location: impl Into<String>) -> Self {
+        Self {
+            has_error: true,
+            error_message: Some(message.into()),
+            error_location: Some(location.into()),
+        }
+    }
 }
 
 /// Knowledge state for the agentic memory system.

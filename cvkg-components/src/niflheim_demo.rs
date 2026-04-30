@@ -122,7 +122,7 @@ impl Lcg {
 fn floating_fire_ball() -> impl View {
     let particles = Arc::new(Mutex::new(Vec::<Particle>::new()));
     let last_time = Arc::new(Mutex::new(0.0f32));
-    let mut rng = Lcg::new(42);
+    let rng = Arc::new(Mutex::new(Lcg::new(42)));
 
     Canvas::new(move |renderer, rect| {
         let t = renderer.elapsed_time();
@@ -135,15 +135,16 @@ fn floating_fire_ball() -> impl View {
         let cy = rect.y + rect.height * 0.5 + (t * 1.1).sin() * (rect.height * 0.3) + (t * 3.1).cos() * 20.0;
         
         let mut p_list = particles.lock().unwrap();
+        let mut rng_lock = rng.lock().unwrap();
         
         // 1. Spawn particles
         for _ in 0..3 {
             p_list.push(Particle {
                 pos: [cx, cy],
-                vel: [rng.next_f32() * 200.0 - 100.0, rng.next_f32() * 200.0 - 100.0],
-                color: [1.0, 0.4 + rng.next_f32() * 0.4, 0.1, 1.0],
+                vel: [rng_lock.next_f32() * 200.0 - 100.0, rng_lock.next_f32() * 200.0 - 100.0],
+                color: [1.0, 0.4 + rng_lock.next_f32() * 0.4, 0.1, 1.0],
                 life: 1.0,
-                size: 4.0 + rng.next_f32() * 12.0,
+                size: 4.0 + rng_lock.next_f32() * 12.0,
             });
         }
 

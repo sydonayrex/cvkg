@@ -1,3 +1,4 @@
+#![cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 use cvkg_render_web::WebRenderer;
 use cvkg_components::niflheim_demo;

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVKG VikingLoader Game Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #0a0a0f; color: #00ffff; }
+        canvas { border: 2px solid #00ffff; margin: 20px 0; }
+        .test-pass { color: #00ff00; }
+        .test-fail { color: #ff0000; }
+        #results { background: #111; padding: 15px; margin-top: 20px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>CVKG VikingLoader Game Test Suite</h1>
+    <canvas id="test-canvas" width="600" height="400"></canvas>
+    <div id="results">Running tests...</div>
+    
+    <script>
+        // Test framework
+        const tests = [];
+        let passed = 0;
+        let failed = 0;
+        
+        function assert(condition, message) {
+            if (condition) {
+                passed++;
+                return `<div class="test-pass">✓ PASS: ${message}</div>`;
+            } else {
+                failed++;
+                return `<div class="test-fail">✗ FAIL: ${message}</div>`;
+            }
+        }
+        
+        // Load the VikingLoader from loader.html
+        async function runTests() {
+            const results = document.getElementById('results');
+            let html = '';
+            
+            // Test 1: Canvas element exists
+            const canvas = document.getElementById('test-canvas');
+            html += assert(!!canvas, 'Canvas element exists');
+            
+            // Test 2: Canvas has 2D context
+            const ctx = canvas.getContext('2d');
+            html += assert(!!ctx, 'Canvas 2D context is available');
+            
+            // Test 3: Load VikingLoader from static/loader.html
+            try {
+                const response = await fetch('/static/loader.html');
+                const loaderHtml = await response.text();
+                
+                // Test 4: Loader HTML contains VikingLoader class
+                html += assert(loaderHtml.includes('class VikingLoader'), 
+                    'VikingLoader class defined in loader.html');
+                
+                // Test 5: Loader HTML contains setProgress method
+                html += assert(loaderHtml.includes('setProgress'), 
+                    'setProgress method exists');
+                
+                // Test 6: Loader HTML contains start method
+                html += assert(loaderHtml.includes('start()'), 
+                    'start method exists');
+                
+                // Test 7: Loader HTML contains stop method
+                html += assert(loaderHtml.includes('stop()'), 
+                    'stop method exists');
+                
+                // Test 8: Loader HTML has CVKG logo
+                html += assert(loaderHtml.includes('CVKG'), 
+                    'CVKG branding present');
+                
+                // Test 9: Loader HTML contains neon styling
+                html += assert(loaderHtml.includes('#00ffff') && loaderHtml.includes('#ff00ff'), 
+                    'Neon cyberpunk styling present');
+                
+                // Test 10: Loader HTML contains loading bar
+                html += assert(loaderHtml.includes('LOADING...'), 
+                    'Loading bar text present');
+                
+            } catch (e) {
+                html += assert(false, `Failed to load loader.html: ${e.message}`);
+            }
+            
+            // Test 11: Check file exists via fetch
+            try {
+                const checkResponse = await fetch('/static/loader.html', { method: 'HEAD' });
+                html += assert(checkResponse.ok, 'loader.html is accessible via HTTP');
+            } catch (e) {
+                html += assert(false, `loader.html accessibility check failed: ${e.message}`);
+            }
+            
+            // Summary
+            html += `<hr><div><strong>Summary: ${passed} passed, ${failed} failed</strong></div>`;
+            results.innerHTML = html;
+            
+            // Cleanup
+            if (window.gameInstance) {
+                window.gameInstance.stop();
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>

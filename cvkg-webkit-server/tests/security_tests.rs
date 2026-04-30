@@ -157,6 +157,4 @@ fn test_path_validation_performance() {
     
     let elapsed = start.elapsed();
     assert!(elapsed.as_millis() < 100, "Path validation should be fast");
-}</arg_value>
-}
 }
