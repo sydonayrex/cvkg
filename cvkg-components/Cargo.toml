@@ -17,7 +17,7 @@ log = "0.4"
 [dev-dependencies]
 insta = "1.47.2"
 winit = "0.30"
-cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.13" }
-cvkg-render-native = { path = "../cvkg-render-native", version = "0.1.13" }
-cvkg-macros = { path = "../cvkg-macros", version = "0.1.13" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu" }
+cvkg-render-native = { path = "../cvkg-render-native" }
+cvkg-macros = { path = "../cvkg-macros" }
 pollster = "0.3"
