@@ -29,42 +29,20 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     outputs:
-      success: ${{ job.status == 'success' }}
+      build-success:
+        description: 'Whether the build succeeded'
+        value: ${{ jobs.build.outputs.success }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Setup Rust toolchain
-      uses: dtolnay/rust-toolchain@master
+    - name: Call reusable build workflow
+      uses: ./.github/workflows/reusable/build.yml
       with:
-        toolchain: stable
-        components: clippy, rustfmt
-    
-    - name: Cache Cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-    
-    - name: Cache Cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-index-
-    
-    - name: Build project
-      run: cargo build --verbose --workspace
-    
-    - name: Run clippy
-      run: cargo clippy --workspace -- -D warnings
-    
-    - name: Check formatting
-      run: cargo fmt --workspace -- --check
+        os: ${{ matrix.os }}
+        rust-toolchain: stable
+        build-args: --workspace
 
   test:
     name: Test Suite
@@ -79,36 +57,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
     
-    - name: Setup Rust toolchain
-      uses: dtolnay/rust-toolchain@master
+    - name: Call reusable test workflow
+      uses: ./.github/workflows/reusable/test.yml
       with:
-        toolchain: stable
-        components: clippy, rustfmt
-    
-    - name: Cache Cargo registry
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-    
-    - name: Cache Cargo index
-      uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-index-
-    
-    - name: Run tests
-      run: cargo test --verbose --workspace
-    
-    - name: Run tests with features
-      run: cargo test --verbose --all-features --workspace
-    
-    - name: Run doctests
-      run: cargo test --doc --workspace
+        os: ${{ matrix.os }}
+        rust-toolchain: stable
+        test-args: --workspace
 
   # Additional jobs for comprehensive CI (run on ubuntu-latest for consistency)
   clippy:
