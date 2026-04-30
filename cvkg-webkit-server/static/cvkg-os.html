@@ -1,9 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CVKG OS - Cyberpunk Viking Operating System</title>
+    <title>CVKG OS - Grand Viking Longboaters</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
             --dark: #07070f;
@@ -12,22 +16,29 @@
             --amber: #ffaa00;
             --glass-bg: rgba(5, 5, 20, 0.75);
             --glass-border: rgba(0, 255, 255, 0.3);
-            --neon-glow: 0 0 8px;\n        }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+            --neon-glow: 0 0 8px;
+            --gungnir: linear-gradient(90deg, transparent, #00ffff, #ff00ff, #00ffff, transparent);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             margin: 0;
             padding: 0;
             background: var(--dark);
-            font-family: 'Courier New', monospace;
+            font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
             height: 100vh;
             color: var(--cyan);
             position: relative;
+            cursor: default;
         }
-        
-        /* Scanline overlay */
+
+        /* Scanline overlay - Subtle */
         body::after {
             content: '';
             position: fixed;
@@ -35,48 +46,31 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: repeating-linear-gradient(
-                0deg,
-                rgba(0, 255, 255, 0.02) 0,,
-                rgba(0, 255, 255, 0.02) 1px,
-                transparent 1px,,
-                transparent 2px
-            );
+            background: repeating-linear-gradient(0deg,
+                    rgba(0, 255, 255, 0.01) 0px,
+                    rgba(0, 255, 255, 0.01) 1px,
+                    transparent 1px,
+                    transparent 2px);
             pointer-events: none;
             z-index: 9999;
-            animation: scanline 8s linear infinite;
         }
-        
-        @keyframes scanline {
-            0% { transform: translateY(-100%); }
-            100% { transform: translateY(100%); }
-        }
-        
-        /* Chamfered corners - no border-radius */
-        .chamfered {
-            clip-path: polygon(
-                8px 0%, 0% 8px,
-                0% calc(100% - 8px), 8px 100%,
-                calc(100% - 8px) 100%, 100% calc(100% - 8px),
-                100% 8px, calc(100% - 8px) 0%
-            );
-        }
-        
+
         /* Glassmorphism panel */
         .panel {
             background: var(--glass-bg);
             border: 1px solid var(--glass-border);
             backdrop-filter: blur(12px);
+            border-radius: 12px;
         }
-        
+
         .panel:hover {
-            box-shadow: 0 0 8px var(--magenta);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.2);
         }
-        
+
         .panel.active {
             border-color: var(--cyan);
         }
-        
+
         /* Desktop */
         #desktop {
             position: fixed;
@@ -87,450 +81,1432 @@
             background: radial-gradient(circle at center, #0a0a1f 0%, #07070f 100%);
             overflow: hidden;
         }
-        
-        /* Wallpaper pattern - nordic rune style */
-        #desktop::before {
-            content: '';
-            position: absolute;
-            width: 200%;
-            height: 200%;
-            background: 
-                repeating-conic-gradient(
-                    from 0deg at 50% 50%,
-                    transparent 0deg,
-                    var(--cyan) 1deg,
-                    transparent 2deg,
-                    transparent 10deg
-                ),
-                repeating-conic-gradient(
-                    from 45deg at 30% 30%,
-                    transparent 0deg,
-                    var(--magenta) 1deg,
-                    transparent 2deg,
-                    transparent 15deg
-                );
-            opacity: 0.05;
-            animation: rotate 120s linear infinite;
-        }
-        
-        @keyframes rotate {
-            100% { transform: rotate(360deg); }
-        }
-        
+
         /* Desktop icons */
         .desktop-icon {
             position: absolute;
-            width: 80px;
-            height: 80px;
+            width: 90px;
+            height: 100px;
             text-align: center;
             cursor: pointer;
             user-select: none;
-            padding: 8px;
-            transition: transform 0.2s;
+            padding: 10px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 12px;
         }
-        
+
         .desktop-icon:hover {
-            transform: scale(1.05);
+            background: rgba(0, 255, 255, 0.1);
+            transform: translateY(-5px);
         }
-        
+
         .desktop-icon.selected {
             background: rgba(0, 255, 255, 0.2);
             border: 1px solid var(--cyan);
         }
-        
+
         .icon-img {
             width: 48px;
             height: 48px;
-            margin: 0 auto 4px;
-            background: var(--cyan);
-            clip-path: polygon(
-                8px 0%, 0% 8px,
-                0% calc(100% - 8px), 8px 100%,
-                calc(100% - 8px) 100%, 100% calc(100% - 8px),
-                100% 8px, calc(100% - 8px) 0%
-            );
-        }
-        
-        .icon-name {
-            font-size: 11px;
-            color: var(--cyan);
-            text-shadow: 0 0 4px var(--cyan);
-            word-break: break-word;
-        }
-        
-        /* Taskbar */
-        #taskbar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 48px;
-            background: var(--glass-bg);
-            border-top: 1px solid var(--glass-border);
-            backdrop-filter: blur(12px);
+            margin: 0 auto 8px;
+            background: rgba(30, 30, 45, 0.6);
+            backdrop-filter: blur(5px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
             display: flex;
             align-items: center;
-            padding: 0 8px;
+            justify-content: center;
+            color: var(--cyan);
+        }
+
+        .icon-name {
+            font-size: 11px;
+            color: #fff;
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+            font-weight: 500;
+        }
+
+        /* Liquid Floating Dock */
+        #dock-container {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 1000;
+            padding: 10px;
         }
-        
-        .taskbar-btn {
-            width: 120px;
-            height: 36px;
-            margin: 0 4px;
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            color: var(--cyan);
-            font-family: inherit;
-            font-size: 12px;
+
+        #dock {
+            background: linear-gradient(135deg, rgba(30, 10, 5, 0.4), rgba(60, 20, 5, 0.4));
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
+            border: 1px solid rgba(255, 100, 0, 0.3);
+            border-radius: 28px;
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow:
+                0 15px 45px rgba(0, 0, 0, 0.8),
+                0 0 20px rgba(255, 60, 0, 0.2) inset;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Circulating Hot Spots */
+        #dock::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 20% 50%, rgba(255, 100, 0, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 50%, rgba(255, 200, 0, 0.2) 0%, transparent 50%);
+            mix-blend-mode: color-dodge;
+            animation: magma-move 8s ease-in-out infinite alternate;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes magma-move {
+            0% { transform: scale(1) translateX(-10%); opacity: 0.5; }
+            50% { transform: scale(1.2) translateX(10%); opacity: 0.8; }
+            100% { transform: scale(1) translateX(-10%); opacity: 0.5; }
+        }
+
+        /* Gungnir Glow Effect */
+        #dock::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -100%;
+            width: 200%;
+            height: 2px;
+            background: var(--gungnir);
+            animation: gungnir-sweep 5s linear infinite;
+            filter: blur(6px);
+            opacity: 0.6;
+        }
+
+        @keyframes gungnir-sweep {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(50%);
+            }
+        }
+
+        .dock-icon {
+            width: 54px;
+            height: 54px;
+            background: rgba(20, 20, 35, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
-            clip-path: polygon(
-                6px 0%, 0% 6px,
-                0% calc(100% - 6px), 6px 100%,
-                calc(100% - 6px) 100%, 100% calc(100% - 6px),
-                100% 6px, calc(100% - 6px) 0%
-            );
-        }
-        
-        .taskbar-btn:hover {
-            box-shadow: var(--neon-glow) var(--magenta);
-        }
-        
-        .taskbar-btn.active {
-            border-color: var(--cyan);
-        }
-        
-        #system-tray {
-            margin-left: auto;
-            padding: 0 12px;
-            font-size: 12px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             color: var(--cyan);
+            position: relative;
         }
-        
+
+        .dock-icon:hover {
+            transform: translateY(-12px) scale(1.15);
+            background: rgba(30, 30, 50, 0.9);
+            border-color: var(--cyan);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        .dock-icon svg {
+            width: 28px;
+            height: 28px;
+            transition: all 0.3s;
+        }
+
+        .dock-icon:hover svg {
+            filter: drop-shadow(0 0 8px var(--cyan));
+        }
+
+        /* Tooltip */
+        .dock-icon::before {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%) translateY(10px);
+            background: rgba(10, 10, 20, 0.9);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s;
+            border: 1px solid var(--glass-border);
+        }
+
+        .dock-icon:hover::before {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
         /* Start Menu */
         #start-menu {
             position: fixed;
-            bottom: 48px;
-            left: 8px;
-            width: 480px;
-            height: 500px;
-            background: var(--glass-bg);
+            bottom: 90px;
+            left: 50%;
+            transform: translateX(-50%) translateY(20px);
+            width: 420px;
+            height: 520px;
+            background: rgba(10, 10, 20, 0.85);
             border: 1px solid var(--glass-border);
-            backdrop-filter: blur(12px);
-            clip-path: polygon(
-                12px 0%, 0% 12px,
-                0% calc(100% - 12px), 12px 100%,
-                calc(100% - 12px) 100%, 100% calc(100% - 12px),
-                100% 12px, calc(100% - 12px) 0%
-            );
-            padding: 16px;
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 24px;
             display: none;
             flex-direction: column;
             z-index: 1001;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        
+
         #start-menu.active {
             display: flex;
+            transform: translateX(-50%) translateY(0);
         }
-        
+
         .app-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
             margin-bottom: 24px;
         }
-        
+
         .app-icon {
-            width: 80px;
-            height: 80px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            cursor: pointer;            padding: 8px;
-            transition: transform 0.2s;
-        }        
-        .app-icon:hover {
-            transform: scale(1.1);
+            gap: 10px;
+            cursor: pointer;
+            padding: 16px;
+            border-radius: 16px;
+            transition: all 0.3s;
         }
-        
+
+        .app-icon:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: scale(1.05);
+        }
+
         .app-icon-img {
             width: 48px;
             height: 48px;
-            background: var(--cyan);
-            margin-bottom: 4px;
-            clip-path: polygon(
-                6px 0%, 0% 6px,
-                0% calc(100% - 6px), 6px 100%,
-                calc(100% - 6px) 100%, 100% calc(100% - 6px),
-                100% 6px, calc(100% - 6px) 0%
-            );
+            background: rgba(30, 30, 45, 0.8);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--glass-border);
         }
-        
+
         /* Window */
         .window {
             position: absolute;
-            background: var(--glass-bg);
+            background: rgba(10, 10, 20, 0.7);
             border: 1px solid var(--glass-border);
-            backdrop-filter: blur(12px);
-            min-width: 320px;
-            min-height: 240px;
-            clip-path: polygon(
-                12px 0%, 0% 12px,
-                0% calc(100% - 12px), 12px 100%,
-                calc(100% - 12px) 100%, 100% calc(100% - 12px),
-                100% 12px, calc(100% - 12px) 0%
-            );
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            min-width: 400px;
+            min-height: 300px;
             display: flex;
             flex-direction: column;
-            resize: both;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
             overflow: hidden;
-        }                .window-titlebar {
-            height: 32px;
-            background: rgba(10, 10, 30, 0.8);
-            border-bottom: 1px solid var(--glass-border);
+            animation: windowOpen 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes windowOpen {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .window-titlebar {
+            height: 40px;
+            background: rgba(0, 0, 0, 0.3);
             display: flex;
             align-items: center;
-            padding: 0 12px;
+            padding: 0 16px;
             cursor: move;
             user-select: none;
-        }                .window-title {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .window-title {
             flex: 1;
-            font-size: 12px;
-            color: var(--cyan);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }                .window-controls {
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+            letter-spacing: 0.5px;
+        }
+
+        .window-controls {
             display: flex;
-            gap: 4px;        }                .window-btn {
-            width: 20px;
-            height: 20px;
-            border: 1px solid var(--glass-border);
-            background: var(--glass-bg);            cursor: pointer;            clip-path: polygon(
-                4px 0%, 0% 4px,
-                0% calc(100% - 4px), 4px 100%,
-                calc(100% - 4px) 100%, 100% calc(100% - 4px),
-                100% 4px, calc(100% - 4px) 0%
-            );
-        }                .window-btn:hover {
-            box-shadow: var(--neon-glow) var(--magenta);
-        }                .window-content {
+            gap: 8px;
+        }
+
+        .window-btn {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .close-btn {
+            background: #ff5f56;
+        }
+
+        .min-btn {
+            background: #ffbd2e;
+        }
+
+        .max-btn {
+            background: #27c93f;
+        }
+
+        .window-btn:hover {
+            transform: scale(1.2);
+            filter: brightness(1.2);
+        }
+
+        .window-content {
             flex: 1;
-            overflow: auto;            padding: 12px;
-        }                /* Radial Menu */
-        #radial-menu {
+            color: #ccc;
+            font-size: 14px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* System Tray */
+        #system-tray {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background: rgba(10, 10, 20, 0.4);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            z-index: 900;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tray-icon {
+            color: var(--cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #lightning-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+            opacity: 0.25;
+        }
+
+        .shatter-fragment {
+            position: fixed;
+            width: 3px;
+            height: 3px;
+            background: var(--cyan);
+            pointer-events: none;
+            z-index: 9999;
+            border-radius: 50%;
+        }
+
+        /* Circular Context Menu */
+        #context-menu {
             position: fixed;
             width: 200px;
             height: 200px;
             display: none;
-            z-index: 2000;
-        }                .radial-segment {
+            z-index: 10000;
+            pointer-events: none;
+        }
+
+        .menu-center {
             position: absolute;
-            width: 100px;
-            height: 100px;            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
-            background: var(--glass-bg);
-            border: 1px solid var(--glass-border);            display: flex;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 50%;
+            border: 1px solid var(--glass-border);
+            z-index: 2;
+        }
+
+        .menu-item {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 50px;
+            height: 50px;
+            background: rgba(10, 10, 20, 0.95);
+            border: 1px solid var(--cyan);
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;            font-size: 10px;
-            text-transform: uppercase;            cursor: pointer;            transition: all 0.2s;        }                .radial-segment:hover {
-            background: rgba(0, 255, 255, 0.3);
-            box-shadow: var(--neon-glow) var(--cyan);        }                /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }                ::-webkit-scrollbar-track {
-            background: rgba(10, 10, 20, 0.8);
-        }\
-                ::-webkit-scrollbar-thumb {
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: auto;
+            transform-origin: center;
+            color: #fff;
+        }
+
+        .menu-item span {
+            font-size: 8px;
+            font-weight: bold;
+            margin-top: 2px;
+            text-transform: uppercase;
+            pointer-events: none;
+        }
+
+        .menu-item:hover {
             background: var(--cyan);
-            clip-path: polygon(
-                3px 0%, 0% 3px,
-                0% calc(100% - 3px), 3px 100%,
-                calc(100% - 3px) 100%, 100% calc(100% - 3px),
-                100% 3px, calc(100% - 3px) 0%            );        }    </style>
-</head><body>
-    <div id="desktop"></div>
-    
+            color: #000;
+            transform: scale(1.15);
+            box-shadow: 0 0 20px var(--cyan);
+        }
+
+        /* List Context Menu (Files) */
+        #file-menu {
+            position: fixed;
+            width: 160px;
+            background: rgba(10, 10, 20, 0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            display: none;
+            z-index: 10001;
+            padding: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .file-menu-item {
+            padding: 8px 12px;
+            color: #fff;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .file-menu-item:hover {
+            background: rgba(0, 255, 255, 0.2);
+            color: var(--cyan);
+        }
+
+        /* Wanted Warning */
+        #wanted-warning {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 0, 0, 0.8);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-weight: 900;
+            letter-spacing: 2px;
+            display: none;
+            animation: pulse 1s infinite alternate;
+            z-index: 100;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.5; transform: scale(1); }
+            to { opacity: 1; transform: scale(1.05); }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="desktop" oncontextmenu="CVKG.showContextMenu(event)"></div>
+    <canvas id="lightning-canvas"></canvas>
+    <div id="context-menu">
+        <div class="menu-center"></div>
+        <div class="menu-item" style="transform: translate(-50%, -50%) translate(0, -75px)" onclick="CVKG.menuAction('New File')"><span>📄</span><span>New File</span></div>
+        <div class="menu-item" style="transform: translate(-50%, -50%) translate(75px, 0)" onclick="CVKG.menuAction('New Folder')"><span>📁</span><span>Folder</span></div>
+        <div class="menu-item" style="transform: translate(-50%, -50%) translate(0, 75px)" onclick="CVKG.menuAction('Refresh')"><span>🔄</span><span>Refresh</span></div>
+        <div class="menu-item" style="transform: translate(-50%, -50%) translate(-75px, 0)" onclick="CVKG.menuAction('Settings')"><span>⚙️</span><span>Settings</span></div>
+    </div>
+
+    <div id="file-menu">
+        <div class="file-menu-item" onclick="CVKG.fileAction('Rename')">✏️ Rename</div>
+        <div class="file-menu-item" onclick="CVKG.fileAction('Copy')">📋 Copy</div>
+        <div class="file-menu-item" onclick="CVKG.fileAction('Move')">📦 Move</div>
+        <div class="file-menu-item" onclick="CVKG.fileAction('Delete')" style="color:#ff5f56;">🗑️ Delete</div>
+        <div class="file-menu-item" onclick="CVKG.fileAction('Properties')">ℹ️ Info</div>
+    </div>
+
+    <div id="system-tray">
+        <div class="tray-icon" title="Network: Connected">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12.55a11 11 0 0 1 14.08 0" />
+                <path d="M1.42 9a16 16 0 0 1 21.16 0" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12" y2="20" />
+            </svg>
+        </div>
+        <div id="system-tray-time">--:--:--</div>
+    </div>
+
     <div id="start-menu" class="panel">
+        <h2 style="margin-bottom: 24px; font-size: 18px; color: #fff;">Applications</h2>
         <div class="app-grid">
-            <div class="app-icon" onclick="openApp('filemanager')">
-                <div class="app-icon-img"></div>
-                <div class="icon-name">File Manager</div>
+            <div class="app-icon" onclick="CVKG.openApp('filemanager')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                </div>
+                <div class="icon-name">Explorer</div>
             </div>
-            <div class="app-icon" onclick="openApp('vikinggta')">
-                <div class="app-icon-img"></div>
-                <div class="icon-name">Viking GTA 3D</div>
+            <div class="app-icon" onclick="CVKG.openApp('vikinggta')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M12 2v20M2 12h20" />
+                    </svg>
+                </div>
+                <div class="icon-name">Grand Viking Longboaters</div>
             </div>
-            <div class="app-icon" onclick="openApp('terminal')">
-                <div class="app-icon-img"></div>
+            <div class="app-icon" onclick="CVKG.openApp('terminal')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="4 17 10 11 4 5" />
+                        <line x1="12" y1="19" x2="20" y2="19" />
+                    </svg>
+                </div>
                 <div class="icon-name">Terminal</div>
             </div>
-        </div>
-        <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--glass-border);">
-            <div class="panel" style="padding: 8px; cursor: pointer;" onclick="toggleNeon()">Neon Color: Cyan/Magenta</div>
-            <div class="panel" style="padding: 8px; margin-top: 8px; cursor: pointer;" onclick="openWallpaperPicker()">Wallpaper</div>
-            <div class="panel" style="padding: 8px; margin-top: 8px; cursor: pointer;">Sound (stub)</div>
-            <div class="panel" style="padding: 8px; margin-top: 8px; cursor: pointer;">About CVKG OS</div>
+            <div class="app-icon" onclick="CVKG.openApp('settings')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                </div>
+                <div class="icon-name">Settings</div>
+            </div>
+            <div class="app-icon" onclick="CVKG.openApp('browser')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                    </svg>
+                </div>
+                <div class="icon-name">Web Browser</div>
+            </div>
+            <div class="app-icon" onclick="CVKG.openApp('editor')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                </div>
+                <div class="icon-name">Text Editor</div>
+            </div>
+            <div class="app-icon" onclick="CVKG.openApp('imageviewer')">
+                <div class="app-icon-img">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                        <circle cx="8.5" cy="8.5" r="1.5" />
+                        <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                </div>
+                <div class="icon-name">Image Viewer</div>
+            </div>
         </div>
     </div>
-    
-    <div id="taskbar">
-        <button id="start-btn" class="taskbar-btn chamfered">ᚲ</button>
-        <div id="task-buttons"></div>
-        <div id="system-tray">00:00:00</div>
+
+    <!-- Liquid Floating Dock -->
+    <div id="dock-container">
+        <div id="dock">
+            <div class="dock-icon" data-tooltip="Start Menu" onclick="CVKG.toggleStartMenu()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                    stroke-linejoin="round">
+                    <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" />
+                    <path d="M12 22V12" />
+                    <path d="M12 12l9-5M12 12L3 7" />
+                </svg>
+            </div>
+            <div class="dock-icon" data-tooltip="File Manager" onclick="CVKG.openApp('filemanager')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                </svg>
+            </div>
+            <div class="dock-icon" data-tooltip="Grand Viking Longboaters" onclick="CVKG.openApp('vikinggta')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <circle cx="12" cy="12" r="3" />
+                    <line x1="12" y1="2" x2="12" y2="22" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                    <line x1="4.93" y1="19.07" x2="19.07" y2="4.93" />
+                </svg>
+            </div>
+            <div class="dock-icon" data-tooltip="Terminal" onclick="CVKG.openApp('terminal')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 17 10 11 4 5" />
+                    <line x1="12" y1="19" x2="20" y2="19" />
+                </svg>
+            </div>
+        </div>
     </div>
-    
-    <div id="radial-menu"></div>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script src="/cvkg-webkit-server/static/three.min.js"></script>
     <script>
+        // Lightning Cursor Effect
+        const LightningCursor = {
+            canvas: null,
+            ctx: null,
+            mouse: { x: -100, y: -100 },
+            bolts: [],
+
+            init() {
+                this.canvas = document.createElement('canvas');
+                this.canvas.style.position = 'fixed';
+                this.canvas.style.top = '0';
+                this.canvas.style.left = '0';
+                this.canvas.style.pointerEvents = 'none';
+                this.canvas.style.zIndex = '10001';
+                document.body.appendChild(this.canvas);
+                this.ctx = this.canvas.getContext('2d');
+
+                window.addEventListener('resize', () => this.resize());
+                window.addEventListener('mousemove', (e) => {
+                    this.mouse.x = e.clientX;
+                    this.mouse.y = e.clientY;
+                    if (Math.random() > 0.7) this.createBolt();
+                });
+
+                this.resize();
+                this.animate();
+            },
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            },
+
+            createBolt() {
+                this.bolts.push({
+                    x: this.mouse.x,
+                    y: this.mouse.y,
+                    life: 1.0,
+                    segments: this.generateSegments(this.mouse.x, this.mouse.y)
+                });
+            },
+
+            generateSegments(x, y) {
+                const segments = [];
+                let curX = x, curY = y;
+                for (let i = 0; i < 5; i++) {
+                    const nx = curX + (Math.random() - 0.5) * 30;
+                    const ny = curY + (Math.random() - 0.5) * 30;
+                    segments.push({ x1: curX, y1: curY, x2: nx, y2: ny });
+                    curX = nx; curY = ny;
+                }
+                return segments;
+            },
+
+            animate() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.strokeStyle = '#00ffff';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = '#00ffff';
+
+                for (let i = this.bolts.length - 1; i >= 0; i--) {
+                    const b = this.bolts[i];
+                    b.life -= 0.1;
+                    if (b.life <= 0) {
+                        this.bolts.splice(i, 1);
+                        continue;
+                    }
+
+                    this.ctx.globalAlpha = b.life;
+                    this.ctx.lineWidth = 2 * b.life;
+                    this.ctx.beginPath();
+                    b.segments.forEach(s => {
+                        this.ctx.moveTo(s.x1, s.y1);
+                        this.ctx.lineTo(s.x2, s.y2);
+                    });
+                    this.ctx.stroke();
+                }
+
+                requestAnimationFrame(() => this.animate());
+            }
+        };
+        LightningCursor.init();
+
+        // Lightning System - Subtle
+        const Lightning = {
+            canvas: document.getElementById('lightning-canvas'),
+            ctx: null,
+            init() {
+                this.ctx = this.canvas.getContext('2d');
+                window.addEventListener('resize', () => {
+                    this.canvas.width = window.innerWidth;
+                    this.canvas.height = window.innerHeight;
+                });
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+                this.loop();
+            },
+            drawBolt(x, y, len, angle, branches) {
+                if (branches <= 0 || len <= 0) return;
+                const endX = x + Math.cos(angle) * len;
+                const endY = y + Math.sin(angle) * len;
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y);
+                this.ctx.lineTo(endX, endY);
+                this.ctx.stroke();
+                if (Math.random() > 0.8) this.drawBolt(endX, endY, len * 0.7, angle + 0.6, branches - 1);
+                this.drawBolt(endX, endY, len * 0.9, angle + (Math.random() - 0.5) * 0.4, branches - 1);
+            },
+            loop() {
+                if (Math.random() > 0.99) {
+                    this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+                    this.ctx.lineWidth = 1;
+                    this.drawBolt(Math.random() * this.canvas.width, 0, 40, Math.PI/2, 15);
+                    setTimeout(() => this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height), 60);
+                }
+                setTimeout(() => this.loop(), 100);
+            }
+        };
+        Lightning.init();
+
+        // Mjolnir Shatter Logic
+        const Mjolnir = {
+            shatter(x, y) {
+                for (let i = 0; i < 20; i++) {
+                    const f = document.createElement('div');
+                    f.className = 'shatter-fragment';
+                    f.style.left = x + 'px'; f.style.top = y + 'px';
+                    document.body.appendChild(f);
+                    const a = Math.random() * Math.PI * 2;
+                    const s = Math.random() * 8 + 4;
+                    const vx = Math.cos(a) * s;
+                    const vy = Math.sin(a) * s;
+                    let o = 1;
+                    const step = () => {
+                        f.style.left = (parseFloat(f.style.left) + vx) + 'px';
+                        f.style.top = (parseFloat(f.style.top) + vy) + 'px';
+                        o -= 0.03; f.style.opacity = o;
+                        if (o > 0) requestAnimationFrame(step); else f.remove();
+                    };
+                    requestAnimationFrame(step);
+                }
+                document.body.style.transform = `translate(${(Math.random()-0.5)*12}px, ${(Math.random()-0.5)*12}px)`;
+                setTimeout(() => document.body.style.transform = '', 100);
+            }
+        };
+
         // CVKG OS Core System
         const CVKG = {
             windows: {},
             zIndex: 100,
-            neonMode: 'cyan',
-            
+            fs: {
+                '/': { type: 'dir', children: ['Documents', 'Images'] },
+                '/Documents': { type: 'dir', children: ['Viking_Code.rs'] },
+                '/Images': { type: 'dir', children: [] },
+                '/Documents/Viking_Code.rs': { type: 'file', content: 'pub fn berserk() { ... }' }
+            },
+            currentPath: '/',
+
             init() {
                 this.createDesktopIcons();
                 this.updateClock();
                 setInterval(() => this.updateClock(), 1000);
                 this.setupEventListeners();
             },
-            
+
             createDesktopIcons() {
                 const icons = [
-                    { name: 'File Manager', action: 'filemanager' },
-                    { name: 'Viking GTA 3D', action: 'vikinggta' },
-                    { name: 'Terminal', action: 'terminal' }
+                    { name: 'System Root', action: 'filemanager', icon: 'folder' },
+                    { name: 'Viking Saga', action: 'vikinggta', icon: 'shield' },
+                    { name: 'Terminal', action: 'terminal', icon: 'terminal' }
                 ];
-                
+
                 icons.forEach((icon, i) => {
                     const el = document.createElement('div');
-                    el.className = 'desktop-icon chamfered';
-                    el.style.left = (50 + i * 100) + 'px';
-                    el.style.top = (100 + i * 20) + 'px';
-                    el.innerHTML = `<div class="icon-img"></div><div class="icon-name">${icon.name}</div>`;
+                    el.className = 'desktop-icon';
+                    el.style.left = '40px';
+                    el.style.top = (40 + i * 120) + 'px';
+
+                    let iconSvg = '';
+                    if (icon.icon === 'folder') iconSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+                    else if (icon.icon === 'shield') iconSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><path d="M12 2v20M2 12h20"/></svg>';
+                    else iconSvg = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+
+                    el.innerHTML = `<div class="icon-img">${iconSvg}</div><div class="icon-name">${icon.name}</div>`;
                     el.dataset.action = icon.action;
-                    el.addEventListener('dblclick', () => this.openApp(icon.action));
+                    el.addEventListener('dblclick', (e) => {
+                        Mjolnir.shatter(e.clientX, e.clientY);
+                        this.openApp(icon.action);
+                    });
                     document.getElementById('desktop').appendChild(el);
                 });
             },
-            
+
+            toggleStartMenu() {
+                document.getElementById('start-menu').classList.toggle('active');
+            },
+
             openApp(name) {
                 if (!this.windows[name]) {
                     this.createWindow(name);
-                }else {
+                } else {
                     this.focusWindow(name);
                 }
                 document.getElementById('start-menu').classList.remove('active');
             },
-            
+
             createWindow(name) {
                 const win = document.createElement('div');
-                win.className = 'window panel';
-                win.style.left = (100 + Object.keys(this.windows).length * 30) + 'px';
-                win.style.top = (100 + Object.keys(this.windows).length * 30) + 'px';
-                win.style.width = '640px';
-                win.style.height = '480px';
-                
+                win.className = 'window';
+                win.style.left = (150 + Object.keys(this.windows).length * 40) + 'px';
+                win.style.top = (100 + Object.keys(this.windows).length * 40) + 'px';
+                win.style.width = '800px';
+                win.style.height = '600px';
+
                 win.innerHTML = `
-                    <div class="window-titlebar chamfered" onmousedown="CVKG.startDrag(event, '${name}')">
-                        <div class="window-title">${name}</div>
+                    <div class="window-titlebar" onmousedown="CVKG.startDrag(event, '${name}')">
+                        <div class="window-title">${name.toUpperCase()}</div>
                         <div class="window-controls">
-                            <div class="window-btn" onclick="CVKG.minimizeWindow('${name}')">_</div>
-                            <div class="window-btn" onclick="CVKG.maximizeWindow('${name}')">□</div>
-                            <div class="window-btn" onclick="CVKG.closeWindow('${name}')">×</div>
+                            <div class="window-btn min-btn" onclick="CVKG.minimizeWindow('${name}')"></div>
+                            <div class="window-btn max-btn" onclick="CVKG.maximizeWindow('${name}')"></div>
+                            <div class="window-btn close-btn" onclick="CVKG.closeWindow('${name}')"></div>
                         </div>
                     </div>
                     <div class="window-content" id="${name}-content"></div>
                 `;
-                
+
                 document.getElementById('desktop').appendChild(win);
                 this.windows[name] = { element: win, minimized: false };
                 this.focusWindow(name);
-                
-                // Add to taskbar
-                const btn = document.createElement('button');
-                btn.className = 'taskbar-btn chamfered';
-                btn.textContent = name;
-                btn.onclick = () => this.focusWindow(name);
-                document.getElementById('task-buttons').appendChild(btn);
-                
                 this.loadAppContent(name);
             },
-                        loadAppContent(name) {
+
+            loadAppContent(name, path = this.currentPath) {
                 const content = document.getElementById(`${name}-content`);
-                
                 if (name === 'filemanager') {
-                    content.innerHTML = '<div style="color: var(--cyan);">File Manager - Coming Soon</div>';
+                    this.currentPath = path;
+                    const node = this.fs[path];
+                    let html = `<div style="padding:15px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:10px;">
+                        <button onclick="CVKG.navigateBack()" style="background:none; border:1px solid var(--cyan); color:var(--cyan); padding:2px 8px; border-radius:4px; cursor:pointer;">←</button>
+                        <span style="font-size:12px; opacity:0.6;">${path}</span>
+                    </div>
+                    <div style="padding:20px; display:grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap:20px;">`;
+                    
+                    if (node && node.type === 'dir') {
+                        node.children.forEach(child => {
+                            const childPath = path === '/' ? `/${child}` : `${path}/${child}`;
+                            const isDir = this.fs[childPath].type === 'dir';
+                            html += `<div class="fm-item" style="text-align:center; cursor:pointer; padding:10px; border-radius:8px;" ondblclick="CVKG.openFile('${childPath}')" oncontextmenu="CVKG.showFileMenu(event, '${childPath}')">
+                                <div style="font-size:32px; margin-bottom:8px;">${isDir ? '📂' : '📄'}</div>
+                                <div style="font-size:11px; color:#fff;">${child}</div>
+                            </div>`;
+                        });
+                    }
+                    html += `</div>`;
+                    content.innerHTML = html;
+                } else if (name === 'settings') {
+                    content.innerHTML = `<div style="padding:30px;">
+                        <h3>Desktop Settings</h3>
+                        <p style="margin:20px 0 10px; font-size:12px; opacity:0.7;">Background Image URL:</p>
+                        <input id="bg-url-input" type="text" placeholder="https://..." style="width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--cyan); color:#fff; padding:8px; border-radius:4px;">
+                        <button onclick="CVKG.setWallpaper()" style="margin-top:20px; background:var(--cyan); color:#000; border:none; padding:8px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">Apply Wallpaper</button>
+                    </div>`;
+                } else if (name === 'editor') {
+                    const fileContent = this.fs[this.editingFile]?.content || '';
+                    content.innerHTML = `<div style="height:100%; display:flex; flex-direction:column;">
+                        <div style="padding:10px; background:rgba(0,0,0,0.2); font-size:12px; opacity:0.6; border-bottom:1px solid rgba(255,255,255,0.05);">${this.editingFile || 'Untitled'}</div>
+                        <textarea id="editor-textarea" style="flex:1; background:transparent; border:none; color:#eee; padding:20px; font-family:monospace; resize:none; outline:none;">${fileContent}</textarea>
+                        <div style="padding:10px; border-top:1px solid rgba(255,255,255,0.05); text-align:right;">
+                            <button onclick="CVKG.saveFile()" style="background:var(--cyan); color:#000; border:none; padding:4px 15px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer;">Save File</button>
+                        </div>
+                    </div>`;
+                } else if (name === 'browser') {
+                    content.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; background:#000;">
+                        <div style="padding:10px; background:rgba(20,20,40,0.8); display:flex; gap:10px; border-bottom:1px solid var(--cyan);">
+                            <input id="browser-addr" type="text" value="https://www.duckduckgo.com" style="flex:1; background:rgba(0,0,0,0.5); border:1px solid var(--cyan); color:#0ff; padding:4px 12px; border-radius:20px; font-size:12px; outline:none; box-shadow: 0 0 5px rgba(0,255,255,0.2);">
+                            <button onclick="document.getElementById('browser-frame').src = document.getElementById('browser-addr').value" style="background:var(--cyan); color:#000; border:none; padding:4px 20px; border-radius:20px; font-size:11px; font-weight:bold; cursor:pointer; text-transform:uppercase;">Go</button>
+                        </div>
+                        <div style="flex:1; position:relative; background:#111;">
+                            <iframe id="browser-frame" src="https://www.duckduckgo.com" style="width:100%; height:100%; border:none; background:#fff;"></iframe>
+                            <div id="browser-blocker-note" style="position:absolute; bottom:10px; right:10px; font-size:10px; color:var(--cyan); opacity:0.5; pointer-events:none;">Note: Some sites block embedding.</div>
+                        </div>
+                    </div>`;
+                } else if (name === 'imageviewer') {
+                    content.innerHTML = `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:#000;">
+                        <img id="viewer-img" src="${this.viewingImage}" style="max-width:100%; max-height:100%; object-fit:contain;">
+                    </div>`;
                 } else if (name === 'vikinggta') {
-                    content.innerHTML = '<div id="game-container" style="width: 100%; height: 100%; position: relative;'3D Game</div>';
-                    this.initVikingGTA();
+                    this.initVikingGTA(content);
+                } else {
+                    content.innerHTML = '<div style="padding:20px; font-family:monospace; color:#0f0;">cvkg@os:~$ _</div>';
                 }
             },
-                        focusWindow(name) {
+
+            initVikingGTA(container) {
+                if (typeof THREE === 'undefined') {
+                    container.innerHTML = '<div style="padding:20px; color:red;">[ ERROR ]: THREE.js failed to load. Check Content Security Policy.</div>';
+                    return;
+                }
+                const scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x050510);
+
+                const camera = new THREE.PerspectiveCamera(75, 800 / 560, 0.1, 1000);
+                camera.position.set(0, 10, 20);
+
+                const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                renderer.setSize(800, 560);
+                container.appendChild(renderer.domElement);
+
+                const worldSize = 200;
+                const groundGeo = new THREE.PlaneGeometry(worldSize, worldSize);
+                const groundMat = new THREE.MeshPhongMaterial({ color: 0x1a2a1a });
+                const ground = new THREE.Mesh(groundGeo, groundMat);
+                ground.rotation.x = -Math.PI / 2;
+                scene.add(ground);
+
+                const riverGeo = new THREE.PlaneGeometry(20, worldSize);
+                const riverMat = new THREE.MeshPhongMaterial({
+                    color: 0x00aaff,
+                    transparent: true,
+                    opacity: 0.7,
+                    emissive: 0x004488
+                });
+                const river = new THREE.Mesh(riverGeo, riverMat);
+                river.rotation.x = -Math.PI / 2;
+                river.position.set(40, 0.1, 0);
+                scene.add(river);
+
+                const createHouse = (x, z) => {
+                    const houseGroup = new THREE.Group();
+                    const bodyGeo = new THREE.BoxGeometry(4, 4, 4);
+                    const bodyMat = new THREE.MeshPhongMaterial({ color: 0x442211 });
+                    const body = new THREE.Mesh(bodyGeo, bodyMat);
+                    body.position.y = 2;
+                    houseGroup.add(body);
+                    
+                    // Windows
+                    const winGeo = new THREE.PlaneGeometry(1, 1);
+                    const winMat = new THREE.MeshPhongMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.5 });
+                    const w1 = new THREE.Mesh(winGeo, winMat); w1.position.set(0, 2, 2.01); houseGroup.add(w1);
+                    
+                    const roofGeo = new THREE.ConeGeometry(4, 3, 4);
+                    const roofMat = new THREE.MeshPhongMaterial({ color: 0x221100 });
+                    const roof = new THREE.Mesh(roofGeo, roofMat);
+                    roof.position.y = 5.5;
+                    roof.rotation.y = Math.PI / 4;
+                    houseGroup.add(roof);
+                    houseGroup.position.set(x, 0, z);
+                    scene.add(houseGroup);
+                };
+
+                for (let i = 0; i < 15; i++) {
+                    createHouse(-30 - Math.random() * 20, -100 + i * 15);
+                    createHouse(30 + Math.random() * 20, -100 + i * 15);
+                }
+
+                const boatGroup = new THREE.Group();
+                const hullGeo = new THREE.BoxGeometry(8, 1.5, 4);
+                const hullMat = new THREE.MeshPhongMaterial({ color: 0x331100 });
+                const hull = new THREE.Mesh(hullGeo, hullMat);
+                boatGroup.add(hull);
+                
+                // Dragon Head
+                const headGeo = new THREE.BoxGeometry(1, 2, 1);
+                const head = new THREE.Mesh(headGeo, hullMat);
+                head.position.set(4.5, 1.5, 0);
+                boatGroup.add(head);
+
+                const mastGeo = new THREE.CylinderGeometry(0.15, 0.15, 7);
+                const mastMat = new THREE.MeshPhongMaterial({ color: 0x553311 });
+                const mast = new THREE.Mesh(mastGeo, mastMat);
+                mast.position.y = 3.5;
+                boatGroup.add(mast);
+                const sailGeo = new THREE.PlaneGeometry(4, 5);
+                const sailMat = new THREE.MeshPhongMaterial({ color: 0x992222, side: THREE.DoubleSide });
+                const sail = new THREE.Mesh(sailGeo, sailMat);
+                sail.position.set(0, 4.5, 0.1);
+                boatGroup.add(sail);
+                boatGroup.position.set(40, 0.5, 0);
+                scene.add(boatGroup);
+
+                const createVikingModel = (color) => {
+                    const group = new THREE.Group();
+                    const mat = new THREE.MeshPhongMaterial({ color: color, emissive: color, emissiveIntensity: 0.3 });
+                    
+                    // Head
+                    const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), mat);
+                    head.position.y = 2.2;
+                    group.add(head);
+
+                    // Torso
+                    const torso = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 0.5), mat);
+                    torso.position.y = 1.3;
+                    group.add(torso);
+
+                    // Arms
+                    const armGeo = new THREE.BoxGeometry(0.3, 1, 0.3);
+                    const la = new THREE.Mesh(armGeo, mat); la.position.set(-0.7, 1.3, 0); group.add(la);
+                    const ra = new THREE.Mesh(armGeo, mat); ra.position.set(0.7, 1.3, 0); group.add(ra);
+
+                    // Legs
+                    const legGeo = new THREE.BoxGeometry(0.4, 1, 0.4);
+                    const ll = new THREE.Mesh(legGeo, mat); ll.position.set(-0.3, 0.5, 0); group.add(ll);
+                    const rl = new THREE.Mesh(legGeo, mat); rl.position.set(0.3, 0.5, 0); group.add(rl);
+
+                    return group;
+                };
+
+                const player = createVikingModel(0xffff00);
+                
+                // Detailed Viking Shield
+                const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.1, 16), new THREE.MeshPhongMaterial({ color: 0x442211 }));
+                shield.rotation.z = Math.PI / 2;
+                shield.position.set(0.8, 1.3, 0.3);
+                player.add(shield);
+
+                // Detailed Viking Axe
+                const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.8), new THREE.MeshPhongMaterial({ color: 0x331100 }));
+                handle.position.set(-0.8, 1.3, 0.3);
+                handle.rotation.x = Math.PI / 4;
+                player.add(handle);
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.6, 0.7), new THREE.MeshPhongMaterial({ color: 0xcccccc }));
+                blade.position.set(-0.8, 2.0, 0.6);
+                player.add(blade);
+
+                scene.add(player);
+
+                // Spawning Other Vikings (Magenta) and Jarl (Blue)
+                let jarlNPC = null;
+                const spawnNPC = (x, z, color, isJarl = false) => {
+                    const npc = createVikingModel(color);
+                    npc.position.set(x, 0, z);
+                    scene.add(npc);
+                    if (isJarl) jarlNPC = npc;
+                };
+
+                for (let i = 0; i < 8; i++) {
+                    spawnNPC(-30 + Math.random() * 60, -120 + i * 20, 0xff00ff); // Magenta Vikings
+                }
+                spawnNPC(10, -50, 0x0000ff, true); // Blue Jarl
+
+                const wantedUI = document.createElement('div');
+                wantedUI.id = 'wanted-warning';
+                wantedUI.textContent = 'WANTED: COMMITTING A CRIME';
+                container.appendChild(wantedUI);
+
+                const deathUI = document.createElement('div');
+                deathUI.style = 'position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:200; color:#fff; font-family:Inter;';
+                deathUI.innerHTML = `<h1 id="death-msg" style="font-size:48px; color:#ff3333; margin-bottom:20px;"></h1><button id="respawn-btn" style="background:var(--cyan); color:#000; border:none; padding:15px 40px; border-radius:4px; font-weight:bold; cursor:pointer;">CONTINUE (RESPAWN)</button>`;
+                container.appendChild(deathUI);
+
+                document.getElementById('respawn-btn').onclick = () => {
+                    state.health = 2;
+                    state.wanted = false;
+                    state.gameOver = false;
+                    wantedUI.style.display = 'none';
+                    deathUI.style.display = 'none';
+                    player.position.set(0, 0, 0);
+                    boatGroup.position.set(40, 0.5, 0);
+                    state.mode = 'onFoot';
+                    player.visible = true;
+                    jarlNPC.position.set(10, 0, -50);
+                };
+
+                const ambientLight = new THREE.AmbientLight(0x404040);
+                scene.add(ambientLight);
+                const pointLight = new THREE.PointLight(0xffff00, 1.5, 20);
+                player.add(pointLight);
+                pointLight.position.set(0, 2, 0);
+
+                let state = { mode: 'onFoot', prompt: null, vy: 0, jumping: false, camRot: 0, camDist: 20, health: 2, wanted: false, gameOver: false };
+                const gravity = -0.015;
+                const keys = {};
+                
+                container.addEventListener('mousedown', (e) => {
+                    if (e.button === 2) state.isOrbiting = true;
+                });
+                window.addEventListener('mouseup', () => state.isOrbiting = false);
+                container.addEventListener('mousemove', (e) => {
+                    if (state.isOrbiting) {
+                        state.camRot -= e.movementX * 0.01;
+                    }
+                });
+                container.oncontextmenu = (e) => e.preventDefault();
+
+                const onKeyDown = (e) => {
+                    keys[e.code] = true;
+                    if (e.code === 'Space' && !state.jumping && state.mode === 'onFoot') {
+                        state.vy = 0.4;
+                        state.jumping = true;
+                    }
+                    if (e.code === 'KeyE') {
+                        const dist = player.position.distanceTo(boatGroup.position);
+                        if (dist < 5) {
+                            state.mode = state.mode === 'onFoot' ? 'inBoat' : 'onFoot';
+                            player.visible = state.mode === 'onFoot';
+                            if (state.mode === 'inBoat') {
+                                wantedUI.style.display = 'block';
+                                state.wanted = true;
+                            }
+                            if (state.mode === 'onFoot') {
+                                player.position.copy(boatGroup.position);
+                                player.position.x -= 5;
+                            }
+                        }
+                    }
+                };
+                const onKeyUp = (e) => keys[e.code] = false;
+                window.addEventListener('keydown', onKeyDown);
+                window.addEventListener('keyup', onKeyUp);
+
+                const animate = () => {
+                    if (!container.parentNode) {
+                        window.removeEventListener('keydown', onKeyDown);
+                        window.removeEventListener('keyup', onKeyUp);
+                        return;
+                    }
+                    requestAnimationFrame(animate);
+                    const target = state.mode === 'onFoot' ? player : boatGroup;
+
+                    if (state.gameOver) return;
+
+                    // Jarl AI logic
+                    if (state.wanted && jarlNPC) {
+                        const jarlDir = target.position.clone().sub(jarlNPC.position).normalize();
+                        jarlNPC.position.add(jarlDir.multiplyScalar(0.15));
+                        jarlNPC.rotation.y = Math.atan2(jarlDir.x, jarlDir.z);
+                        
+                        const distToJarl = target.position.distanceTo(jarlNPC.position);
+                        if (distToJarl < 2) {
+                            if (state.mode === 'inBoat') {
+                                state.gameOver = true;
+                                document.getElementById('death-msg').textContent = 'BLOOD EAGLED';
+                                deathUI.style.display = 'flex';
+                            } else {
+                                state.health -= 0.05; // Slow drain during attack
+                                if (state.health <= 0) {
+                                    state.gameOver = true;
+                                    document.getElementById('death-msg').textContent = 'SEE YOU IN VALHALLA';
+                                    deathUI.style.display = 'flex';
+                                }
+                            }
+                        }
+                    }
+
+                    if (state.mode === 'onFoot') {
+                        // Camera-Relative Movement
+                        const forward = new THREE.Vector3();
+                        camera.getWorldDirection(forward);
+                        forward.y = 0;
+                        forward.normalize();
+                        const right = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), forward).normalize();
+
+                        const moveDir = new THREE.Vector3(0, 0, 0);
+                        if (keys['KeyW']) moveDir.add(forward);
+                        if (keys['KeyS']) moveDir.sub(forward);
+                        if (keys['KeyA']) moveDir.add(right);
+                        if (keys['KeyD']) moveDir.sub(right);
+
+                        if (moveDir.length() > 0) {
+                            moveDir.normalize().multiplyScalar(0.2);
+                            const nextPos = player.position.clone().add(moveDir);
+                            
+                            // Sleipnir Collision: Boat Clipping Prevention
+                            const distToBoat = nextPos.distanceTo(boatGroup.position);
+                            if (distToBoat > 4.5) {
+                                player.position.copy(nextPos);
+                                player.rotation.y = Math.atan2(moveDir.x, moveDir.z);
+                            }
+                        }
+                        state.vy += gravity;
+                        player.position.y += state.vy;
+                        if (player.position.y <= 0) {
+                            player.position.y = 0;
+                            state.vy = 0;
+                            state.jumping = false;
+                        }
+                    } else {
+                         const speed = 0.4;
+                         if (keys['KeyW']) boatGroup.position.z -= speed;
+                         if (keys['KeyS']) boatGroup.position.z += speed;
+                         if (keys['KeyA']) boatGroup.position.x -= speed;
+                         if (keys['KeyD']) boatGroup.position.x += speed;
+                    }
+
+                    const distToBoat = player.position.distanceTo(boatGroup.position);
+                    if (distToBoat < 5 && state.mode === 'onFoot') {
+                        if (!state.prompt) {
+                            state.prompt = document.createElement('div');
+                            state.prompt.style.position = 'absolute';
+                            state.prompt.style.top = '20px';
+                            state.prompt.style.left = '50%';
+                            state.prompt.style.transform = 'translateX(-50%)';
+                            state.prompt.style.background = 'rgba(0,0,0,0.8)';
+                            state.prompt.style.color = 'var(--cyan)';
+                            state.prompt.style.padding = '10px 20px';
+                            state.prompt.style.borderRadius = '20px';
+                            state.prompt.style.border = '1px solid var(--cyan)';
+                            state.prompt.textContent = 'PRESS [E] TO STEAL BOAT';
+                            container.appendChild(state.prompt);
+                        }
+                    } else if (state.prompt) {
+                        state.prompt.remove();
+                        state.prompt = null;
+                    }
+                    camera.position.x = target.position.x + Math.sin(state.camRot) * state.camDist;
+                    camera.position.z = target.position.z + Math.cos(state.camRot) * state.camDist;
+                    camera.position.y = target.position.y + 10;
+                    camera.lookAt(target.position);
+                    renderer.render(scene, camera);
+                };
+                animate();
+            },
+
+            focusWindow(name) {
                 const win = this.windows[name];
+                if (!win) return;
                 win.element.style.zIndex = ++this.zIndex;
-                win.minimized = false;\n            },
-                        minimizeWindow(name) {
+                win.minimized = false;
+                win.element.style.display = 'flex';
+            },
+
+            minimizeWindow(name) {
+                this.windows[name].element.style.display = 'none';
                 this.windows[name].minimized = true;
             },
-                        maximizeWindow(name) {
+
+            maximizeWindow(name) {
                 const win = this.windows[name].element;
-                if (win.dataset.maximized !== 'true') {
-                    win.dataset.maximized = 'true';
+                if (win.style.width !== '100%') {
+                    win.dataset.oldStyle = win.getAttribute('style');
                     win.style.left = '0';
                     win.style.top = '0';
-                    win.style.width = '100%';\n                    win.style.height = 'calc(100% - 48px)';\n                } else {
-                    win.dataset.maximized = 'false';
-                    win.style.left = '100px';
-                    win.style.top = '100px';
-                    win.style.width = '640px';
-                    win.style.height = '480px';
+                    win.style.width = '100%';
+                    win.style.height = '100%';
+                    win.style.borderRadius = '0';
+                } else {
+                    win.setAttribute('style', win.dataset.oldStyle);
                 }
             },
-                        closeWindow(name) {
+
+            closeWindow(name) {
                 this.windows[name].element.remove();
                 delete this.windows[name];
             },
-                        startDrag(e, name) {
-                // Drag implementation
+
+            startDrag(e, name) {
+                const win = this.windows[name].element;
+                this.focusWindow(name);
+                const rect = win.getBoundingClientRect();
+                const shiftX = e.clientX - rect.left;
+                const shiftY = e.clientY - rect.top;
+                function moveAt(pageX, pageY) {
+                    win.style.left = pageX - shiftX + 'px';
+                    win.style.top = pageY - shiftY + 'px';
+                }
+                function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
+                document.addEventListener('mousemove', onMouseMove);
+                document.onmouseup = function () {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.onmouseup = null;
+                };
             },
-                        initVikingGTA() {
-                // Three.js Viking GTA implementation
-                console.log('Initializing Viking GTA 3D...');
+
+            async updateClock() {
+                try {
+                    const response = await fetch('/api/system/time');
+                    const data = await response.json();
+                    const now = new Date(data.timestamp * 1000);
+                    document.getElementById('system-tray-time').textContent = now.toLocaleTimeString();
+                } catch (e) {
+                    const now = new Date();
+                    document.getElementById('system-tray-time').textContent = now.toLocaleTimeString();
+                }
             },
-                        toggleNeon() {
-                this.neonMode = this.neonMode === 'cyan' ? 'magenta' : 'cyan';
-                document.documentElement.style.setProperty('--neon', this.neonMode === 'cyan' ? '#00ffff' : '#ff00ff');
-            },
-                        updateClock() {
-                const now = new Date();
-                document.getElementById('system-tray').textContent = now.toTimeString().slice(0, 8);
-            },
-                        setupEventListeners() {
-                // Desktop right-click
-                document.getElementById('desktop').addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    this.showRadialMenu(e.clientX, e.clientY);
-                });
-                
-                // Start button
-                document.getElementById('start-btn').addEventListener('click', () => {
-                    document.getElementById('start-menu').classList.toggle('active');
-                });
-                
-                // Close menus on outside click
+
+            setupEventListeners() {
                 document.addEventListener('click', (e) => {
-                    if (!e.target.closest('#start-menu') && !e.target.closest('#start-btn')) {
+                    document.getElementById('context-menu').style.display = 'none';
+                    document.getElementById('file-menu').style.display = 'none';
+                    if (!e.target.closest('#start-menu') && !e.target.closest('.dock-icon')) {
                         document.getElementById('start-menu').classList.remove('active');
                     }
                 });
             },
-                        showRadialMenu(x, y) {
-                // Radial menu implementation
+
+            showContextMenu(e) {
+                if (e.target.closest('.fm-item')) return; // File menu handles this
+                e.preventDefault();
+                const menu = document.getElementById('context-menu');
+                menu.style.display = 'block';
+                menu.style.left = (e.clientX - 100) + 'px';
+                menu.style.top = (e.clientY - 100) + 'px';
+            },
+
+            showFileMenu(e, path) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.selectedFilePath = path;
+                const menu = document.getElementById('file-menu');
+                menu.style.display = 'block';
+                menu.style.left = e.clientX + 'px';
+                menu.style.top = e.clientY + 'px';
+            },
+
+            fileAction(action) {
+                if (!this.selectedFilePath) return;
+                const parts = this.selectedFilePath.split('/');
+                const name = parts.pop();
+                const parentPath = parts.join('/') || '/';
+
+                if (action === 'Delete') {
+                    this.fs[parentPath].children = this.fs[parentPath].children.filter(c => c !== name);
+                    delete this.fs[this.selectedFilePath];
+                    this.loadAppContent('filemanager', parentPath);
+                } else if (action === 'Rename') {
+                    const newName = prompt('Enter new name:', name);
+                    if (newName && newName !== name) {
+                        this.fs[parentPath].children = this.fs[parentPath].children.map(c => c === name ? newName : c);
+                        const newNodePath = parentPath === '/' ? `/${newName}` : `${parentPath}/${newName}`;
+                        this.fs[newNodePath] = this.fs[this.selectedFilePath];
+                        delete this.fs[this.selectedFilePath];
+                        this.loadAppContent('filemanager', parentPath);
+                    }
+                } else if (action === 'Copy') {
+                    this.clipboard = this.selectedFilePath;
+                } else if (action === 'Move') {
+                    if (this.clipboard) {
+                        const cParts = this.clipboard.split('/');
+                        const cName = cParts.pop();
+                        const cParent = cParts.join('/') || '/';
+                        // Remove from old
+                        this.fs[cParent].children = this.fs[cParent].children.filter(c => c !== cName);
+                        // Add to current
+                        this.fs[parentPath].children.push(cName);
+                        const newPath = parentPath === '/' ? `/${cName}` : `${parentPath}/${cName}`;
+                        this.fs[newPath] = this.fs[this.clipboard];
+                        delete this.fs[this.clipboard];
+                        this.clipboard = null;
+                        this.loadAppContent('filemanager', parentPath);
+                    }
+                } else if (action === 'Properties') {
+                    const node = this.fs[this.selectedFilePath];
+                    alert(`Path: ${this.selectedFilePath}\nType: ${node.type}\nContent: ${node.type === 'file' ? node.content.length + ' bytes' : node.children.length + ' items'}`);
+                }
+                document.getElementById('file-menu').style.display = 'none';
+            },
+
+            menuAction(action) {
+                document.getElementById('context-menu').style.display = 'none';
+                if (action === 'Settings') {
+                    this.openApp('settings');
+                } else if (action === 'New File') {
+                    const name = 'New_File_' + Date.now() + '.txt';
+                    this.fs['/Documents'].children.push(name);
+                    this.fs['/Documents/' + name] = { type: 'file', content: '' };
+                    this.openApp('filemanager');
+                    this.loadAppContent('filemanager', '/Documents');
+                } else if (action === 'New Folder') {
+                    const name = 'New_Folder_' + Date.now();
+                    this.fs['/'].children.push(name);
+                    this.fs['/' + name] = { type: 'dir', children: [] };
+                    this.openApp('filemanager');
+                    this.loadAppContent('filemanager', '/');
+                } else if (action === 'Refresh') {
+                    window.location.reload();
+                }
+            },
+
+            navigateBack() {
+                if (this.currentPath === '/') return;
+                const parts = this.currentPath.split('/');
+                parts.pop();
+                const parent = parts.join('/') || '/';
+                this.loadAppContent('filemanager', parent);
+            },
+
+            setWallpaper() {
+                const url = document.getElementById('bg-url-input').value;
+                if (url) {
+                    document.getElementById('desktop').style.background = `url('${url}') center/cover no-repeat`;
+                }
+            },
+
+            openFile(path) {
+                const node = this.fs[path];
+                if (node.type === 'dir') {
+                    this.loadAppContent('filemanager', path);
+                } else if (path.endsWith('.txt') || path.endsWith('.rs')) {
+                    this.editingFile = path;
+                    this.openApp('editor');
+                } else if (path.endsWith('.png') || path.endsWith('.jpg')) {
+                    this.viewingImage = path;
+                    this.openApp('imageviewer');
+                }
+            },
+
+            saveFile() {
+                const content = document.getElementById('editor-textarea').value;
+                if (this.editingFile) {
+                    this.fs[this.editingFile].content = content;
+                }
             }
         };
-                CVKG.init();
+
+        CVKG.init();
     </script>
 </body>
+
 </html>

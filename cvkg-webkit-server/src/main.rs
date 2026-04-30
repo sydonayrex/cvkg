@@ -13,7 +13,8 @@
 //! 6. COMMENT ALL — Every major pub fn, unsafe block, and non-trivial algorithm in every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment. Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
 //! 7. MONITOR LOOPS — Check every tool call / command for progress every 30 seconds. After 3 consecutive identical failures, stop, write BLOCKED.md, and move to unblocked work. Never silently accept a broken state.
 
-//! Professional CVKG Dev Server & App Preview Host.
+//! CVKG Webkit Server - Cyber-Viking OS Host
+//! [VERIFICATION]: File system writes are active and confirmed.
 //! Features: Universal Build Pipeline, State-Preserving HMR, SEO Pre-rendering, Production Hardening.
 
 use arc_swap::ArcSwap;
@@ -149,80 +150,22 @@ async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl IntoRe
             snapshot
         ))
     } else {
-        // Serve niflheim.html as the default load screen
-        let path = format!("{}/niflheim.html", state.config.static_dir);
+        // Serve cvkg-os.html as the default OS
+        let path = format!("{}/cvkg-os.html", state.config.static_dir);
         match tokio::fs::read_to_string(&path).await {
             Ok(content) => Html(content),
             Err(e) => {
                 warn!("Failed to read {}: {}", path, e);
-                Html(r#"<!DOCTYPE html>
+                Html(format!(r#"<!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CVKG | Niflheim Protocol</title>
-    <style>
-        :root {
-            --bg: #0a0a0c;
-            --accent: #00f2ff;
-            --accent-dim: rgba(0, 242, 255, 0.2);
-            --glass: rgba(255, 255, 255, 0.03);
-        }
-        body {
-            margin: 0; padding: 0; background: var(--bg); color: #fff;
-            font-family: 'Inter', -apple-system, sans-serif;
-            display: flex; align-items: center; justify-content: center;
-            height: 100vh; overflow: hidden;
-        }
-        .container {
-            text-align: center; padding: 3rem; background: var(--glass);
-            backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 24px; animation: fadeIn 0.8s ease-out;
-        }
-        .logo { font-size: 3rem; font-weight: 900; margin-bottom: 1rem; background: linear-gradient(135deg, #fff, var(--accent)); -webkit-background-clip: text; -webkit-fill-color: transparent; }
-        .loader { width: 48px; height: 48px; border: 3px solid var(--accent-dim); border-radius: 50%; display: inline-block; position: relative; animation: rotation 1s linear infinite; }
-        .loader::after { content: ''; position: absolute; left: 0; top: 0; background: var(--accent); width: 12px; height: 12px; border-radius: 50%; }
-        .status { margin-top: 1.5rem; font-size: 0.875rem; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; }
-        @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        #cvkg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
-    </style>
-</head>
-<body>
-    <div id="cvkg-root"><canvas id="cvkg-canvas"></canvas></div>
-    <div class="container" id="loader-ui">
-        <div class="logo">CVKG</div>
-        <div class="loader"></div>
-        <div id="status" class="status">INITIALIZING NIFLHEIM...</div>
-    </div>
-    <script type="module" crossorigin>
-        import init, { get_render_tier_name } from 'cvkg-webkit-server/pkg/wgpu/niflheim_web_demo.js';
-        async function run() {
-            try {
-                await init();
-                document.getElementById('loader-ui').style.display = 'none';
-                const update = () => {
-                    const tier = get_render_tier_name();
-                    if (tier !== "Detecting...") {
-                        const statusText = `CVKG // NIFLHEIM PROTOCOL // ${tier.toUpperCase()} BACKEND`;
-                        console.log(statusText);
-                    } else { setTimeout(update, 100); }
-                };
-                update();
-            } catch (e) {
-                console.error("Initialization Failed:", e);
-                document.getElementById('status').textContent = "BOOT ERROR";
-                document.getElementById('status').style.color = "red";
-            }
-        }
-        run();
-    </script>
-</body>
-</html>"#.to_string())
+<head><title>CVKG | Boot Error</title><style>body {{ background: #07070f; color: #00ffff; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: monospace; }}</style></head>
+<body><div>[ CRITICAL ERROR ]: FAILED TO LOAD CVKG OS<br>REASON: {}</div></body>
+</html>"#, e))
             }
         }
     }
 }
+
 
 /// Handler for triggering a manual build.
 async fn trigger_build_handler() -> impl IntoResponse {
@@ -243,6 +186,20 @@ async fn liveness_handler() -> &'static str {
 /// Readiness health check handler.
 async fn readiness_handler() -> &'static str {
     "READY"
+}
+
+/// Handler for serving the current system time.
+#[derive(serde::Serialize)]
+struct SystemTime {
+    timestamp: u64,
+}
+
+async fn system_time_handler() -> impl IntoResponse {
+    let now = std::time::SystemTime::now();
+    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    axum::Json(SystemTime {
+        timestamp: duration.as_secs(),
+    })
 }
 
 /// WebSocket handler for CVKG protocol.
@@ -393,6 +350,7 @@ async fn main() -> anyhow::Result<()> {
             let rendered = metric_handle.render();
             async move { rendered }
         }))
+        .route("/api/system/time", get(system_time_handler))
         .with_state(state)
         .layer(
             ServiceBuilder::new()
@@ -400,7 +358,7 @@ async fn main() -> anyhow::Result<()> {
                 .layer(middleware::from_fn(metrics_middleware))
                 .layer(SetResponseHeaderLayer::overriding(
                     axum::http::header::CONTENT_SECURITY_POLICY,
-                    axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss: blob:;"),
+                    axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss: blob:; frame-src *;"),
                 ))
                 .layer(SetResponseHeaderLayer::overriding(
                     axum::http::header::STRICT_TRANSPORT_SECURITY,
