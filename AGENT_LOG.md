@@ -16,7 +16,7 @@ Tracking the development and stabilization of the CVKG saga.
 - [x] Created `cvkg` facade crate.
 - [x] Standardized all `Cargo.toml` metadata and dependencies.
 
-### Publishing Progress (v0.1.3)
+### Publishing Progress (v0.1.12)
 1. `cvkg-core` - Published
 2. `cvkg-macros` - Published
 3. `cvkg-themes` - Published
@@ -31,3 +31,5 @@ Tracking the development and stabilization of the CVKG saga.
 12. `cvkg-cli` - Published
 13. `cvkg-webkit-server` - Published
 14. `cvkg` (facade) - Published
+15. `cvkg-runic-text` - Published
+16. `cvkg-test` - Published

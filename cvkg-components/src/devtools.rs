@@ -160,3 +160,111 @@ impl View for TelemetryOverlay {
         renderer.draw_text(&format!("VERTICES:   {}", telemetry.vertices), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
     }
 }
+
+/// A visual overlay showing layout constraints and boundaries.
+pub struct ConstraintOverlay {
+    /// Whether to show the overlay
+    pub enabled: bool,
+    /// Color for constraint lines (RGBA)
+    pub constraint_color: [f32; 4],
+    /// Color for padding areas (RGBA)
+    pub padding_color: [f32; 4],
+    /// Show margin visualization
+    pub show_margins: bool,
+    /// Show padding visualization
+    pub show_padding: bool,
+}
+
+impl Default for ConstraintOverlay {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            constraint_color: [0.0, 1.0, 1.0, 0.8], // Cyan
+            padding_color: [1.0, 0.0, 1.0, 0.3],     // Magenta (semi-transparent)
+            show_margins: true,
+            show_padding: true,
+        }
+    }
+}
+
+impl View for ConstraintOverlay {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if !self.enabled {
+            return;
+        }
+        
+        // Draw main constraint boundary
+        renderer.stroke_rect(
+            rect,
+            self.constraint_color,
+            1.0,
+        );
+        
+        // Draw corner markers for precise alignment
+        let marker_size = 8.0;
+        
+        // Top-left
+        renderer.fill_rect(
+            Rect { x: rect.x - marker_size/2.0, y: rect.y - marker_size/2.0, width: marker_size, height: marker_size },
+            self.constraint_color,
+        );
+        
+        // Top-right
+        renderer.fill_rect(
+            Rect { x: rect.x + rect.width - marker_size/2.0, y: rect.y - marker_size/2.0, width: marker_size, height: marker_size },
+            self.constraint_color,
+        );
+        
+        // Bottom-left
+        renderer.fill_rect(
+            Rect { x: rect.x - marker_size/2.0, y: rect.y + rect.height - marker_size/2.0, width: marker_size, height: marker_size },
+            self.constraint_color,
+        );
+        
+        // Bottom-right
+        renderer.fill_rect(
+            Rect { x: rect.x + rect.width - marker_size/2.0, y: rect.y + rect.height - marker_size/2.0, width: marker_size, height: marker_size },
+            self.constraint_color,
+        );
+        
+        // Center crosshairs
+        renderer.fill_rect(
+            Rect { x: rect.x + rect.width/2.0 - 0.5, y: rect.y, width: 1.0, height: rect.height },
+            [self.constraint_color[0], self.constraint_color[1], self.constraint_color[2], 0.4],
+        );
+        renderer.fill_rect(
+            Rect { x: rect.x, y: rect.y + rect.height/2.0 - 0.5, width: rect.width, height: 1.0 },
+            [self.constraint_color[0], self.constraint_color[1], self.constraint_color[2], 0.4],
+        );
+    }
+}
+
+impl ConstraintOverlay {
+    /// Create a new constraint overlay with default settings.
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    /// Enable or disable the overlay.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+    
+    /// Set the constraint color.
+    pub fn constraint_color(mut self, color: [f32; 4]) -> Self {
+        self.constraint_color = color;
+        self
+    }
+    
+    /// Set the padding visualization color.
+    pub fn padding_color(mut self, color: [f32; 4]) -> Self {
+        self.padding_color = color;
+        self
+    }
+}

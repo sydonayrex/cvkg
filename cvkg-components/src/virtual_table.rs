@@ -59,27 +59,34 @@ where
         unreachable!()
     }
 
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Vertical virtualization
-        for (idx, item) in self.data.iter().enumerate() {
-            let row_y = idx as f32 * self.row_height;
-            
-            if row_y + self.row_height < 0.0 || row_y > rect.height {
-                continue;
-            }
-            
-            let mut current_x = rect.x;
-            for col in &self.columns {
-                let cell_rect = Rect {
-                    x: current_x,
-                    y: rect.y + row_y,
-                    width: col.width,
-                    height: self.row_height,
-                };
-                
-                let view = (col.cell_builder)(item);
-                view.render(renderer, cell_rect);
-                current_x += col.width;
+fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Calculate visible range for O(visible) complexity
+        let start_idx = if rect.y > 0.0 {
+            (rect.y / self.row_height).floor() as usize
+        } else {
+            0
+        };
+        
+        let visible_count = ((rect.height / self.row_height).ceil() as usize).max(1);
+        let end_idx = (start_idx + visible_count + 1).min(self.data.len());
+        
+        // Only iterate through visible items
+        for idx in start_idx..end_idx {
+            if let Some(item) = self.data.get(idx) {
+                let row_y = idx as f32 * self.row_height;
+                let mut current_x = rect.x;
+                for col in &self.columns {
+                    let cell_rect = Rect {
+                        x: current_x,
+                        y: rect.y + row_y,
+                        width: col.width,
+                        height: self.row_height,
+                    };
+                    
+                    let view = (col.cell_builder)(item);
+                    view.render(renderer, cell_rect);
+                    current_x += col.width;
+                }
             }
         }
     }

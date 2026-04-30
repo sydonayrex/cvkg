@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niflheim Web Demo - WGPU</title>
+    <style>
+        :root {
+            --glass-bg: rgba(15, 20, 35, 0.4);
+            --glass-border: rgba(0, 242, 255, 0.3);
+            --accent: #00f2ff;
+            --accent-dim: rgba(0, 242, 255, 0.15);
+            --fire-orange: #ff6b35;
+            --fire-yellow: #ffd23f;
+            --fire-white: #fff176;
+            --lightning-blue: #00f2ff;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(ellipse at center, #020205 0%, #000000 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            position: relative;
+        }
+        
+        /* Glassmorphism container */
+        #cvkg-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #00FFFF;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            pointer-events: none;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+        }
+        
+        /* Fireball overlay canvas */
+        #fireball-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">DIAGNOSTIC BOOT ACTIVE...</div>
+    <canvas id="fireball-canvas"></canvas>
+    <div id="cvkg-root">
+        <div id="cvkg-container">
+            <canvas id="cvkg-canvas"></canvas>
+        </div>
+    </div>
+    
+    <script>
+        console.log("Niflheim: PRE-FLIGHT CHECK - HTML script execution active.");
+    </script>
+    
+    <script type="module" crossorigin>
+        import init, { get_render_tier_name } from '/cvkg-webkit-server/pkg/wgpu/niflheim_web_demo.js';
+        
+        // Fireball particle system
+        class FireballSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.lightning = [];
+                this.fireball = {
+                    x: 400,
+                    y: 300,
+                    vx: 8.5,
+                    vy: 6.0,
+                    radius: 20,
+                    pulse: 0
+                };
+                this.lastLightning = 0;
+                this.resize();
+                this.animate();
+            }
+            
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+            
+            createFlameTrail(x, y) {
+                for (let i = 0; i < 5; i++) {
+                    this.particles.push({
+                        x: x + (Math.random() - 0.5) * 20,
+                        y: y + (Math.random() - 0.5) * 20,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: (Math.random() - 0.5) * 2 - 1,
+                        life: 40 + Math.random() * 20,
+                        maxLife: 60,
+                        size: 2 + Math.random() * 3,
+                        color: Math.random() > 0.5 ? '#ff6b35' : '#ffd23f'
+                    });
+                }
+            }
+            
+            createLightning() {
+                const segments = 8;
+                const points = [];
+                let x = this.fireball.x;
+                let y = this.fireball.y;
+                
+                for (let i = 0; i < segments; i++) {
+                    points.push({
+                        x: x + (Math.random() - 0.5) * 50,
+                        y: y + (Math.random() - 0.5) * 50
+                    });
+                }
+                
+                this.lightning.push({
+                    points: points,
+                    life: 20,
+                    maxLife: 20
+                });
+            }
+            
+            update() {
+                // Update fireball position
+                this.fireball.x += this.fireball.vx;
+                this.fireball.y += this.fireball.vy;
+                
+                // Bounce off edges
+                if (this.fireball.x > this.canvas.width - 100 || this.fireball.x < 100) {
+                    this.fireball.vx *= -1;
+                }
+                if (this.fireball.y > this.canvas.height - 100 || this.fireball.y < 100) {
+                    this.fireball.vy *= -1;
+                }
+                
+                this.fireball.pulse += 0.1;
+                
+                // Create flame trail
+                this.createFlameTrail(this.fireball.x, this.fireball.y);
+                
+                // Create lightning periodically
+                if (Date.now() - this.lastLightning > 2000 + Math.random() * 2000) {
+                    this.createLightning();
+                    this.lastLightning = Date.now();
+                }
+                
+                // Update particles
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.05;
+                    p.life--;
+                    if (p.life <= 0) this.particles.splice(i, 1);
+                }
+                
+                // Update lightning
+                for (let i = this.lightning.length - 1; i >= 0; i--) {
+                    this.lightning[i].life--;
+                    if (this.lightning[i].life <= 0) this.lightning.splice(i, 1);
+                }
+            }
+            
+            draw() {
+                const ctx = this.ctx;
+                ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                
+                // Draw particles
+                for (const p of this.particles) {
+                    const alpha = p.life / p.maxLife;
+                    ctx.globalAlpha = alpha;
+                    ctx.fillStyle = p.color;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                
+                // Draw lightning
+                for (const bolt of this.lightning) {
+                    ctx.globalAlpha = bolt.life / bolt.maxLife;
+                    ctx.strokeStyle = '#00f2ff';
+                    ctx.lineWidth = 2 + Math.random() * 2;
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = '#00f2ff';
+                    ctx.beginPath();
+                    ctx.moveTo(this.fireball.x, this.fireball.y);
+                    for (const pt of bolt.points) {
+                        ctx.lineTo(pt.x, pt.y);
+                    }
+                    ctx.stroke();
+                }
+                
+                // Draw fireball
+                const pulseSize = Math.sin(this.fireball.pulse) * 2;
+                const grad = ctx.createRadialGradient(
+                    this.fireball.x, this.fireball.y, 0,
+                    this.fireball.x, this.fireball.y, this.fireball.radius + pulseSize
+                );
+                grad.addColorStop(0, '#fff176');
+                grad.addColorStop(0.4, '#ffd23f');
+                grad.addColorStop(0.7, '#ff6b35');
+                grad.addColorStop(1, 'rgba(255, 107, 53, 0)');
+                
+                ctx.globalAlpha = 0.8;
+                ctx.fillStyle = grad;
+                ctx.shadowBlur = 30;
+                ctx.shadowColor = '#ff6b35';
+                ctx.beginPath();
+                ctx.arc(this.fireball.x, this.fireball.y, this.fireball.radius + pulseSize, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0;
+            }
+            
+            animate() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+        
+        async function run() {
+            try {
+                console.log("Niflheim: Loading WASM artifacts...");
+                await init();
+                console.log("Niflheim: WASM loaded, starting protocol...");
+                
+                // Initialize fireball system
+                const fbCanvas = document.getElementById('fireball-canvas');
+                const fireball = new FireballSystem(fbCanvas);
+                
+                window.addEventListener('resize', () => fireball.resize());
+                
+                // Initialize the app (this calls the #[wasm_bindgen(start)] function)
+                console.log("CVKG Niflheim Demo Started");
+                
+                // Update status with actual tier
+                const updateStatus = () => {
+                    const tier = get_render_tier_name();
+                    console.log("Current Render Tier:", tier);
+                    const statusText = `CVKG // NIFLHEIM PROTOCOL // ${tier.toUpperCase()} BACKEND`;
+                    document.getElementById('status').textContent = statusText;
+                    
+                    if (tier === "Detecting...") {
+                        setTimeout(updateStatus, 100);
+                    }
+                };
+                updateStatus();
+            } catch (e) {
+                console.error("Failed to start CVKG:", e);
+                document.getElementById('status').textContent = "INITIALIZATION FAILED";
+                document.getElementById('status').style.color = "red";
+            }
+        }
+        run();
+    </script>
+</body>
+</html>

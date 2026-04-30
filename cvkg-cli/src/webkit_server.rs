@@ -1,5 +1,7 @@
+//!
 //! WebKit Preview Server
 //! Serves the host shell and WASM bundle for app preview
+//!
 
 use axum::{Router, routing::get};
 use std::net::SocketAddr;
@@ -12,8 +14,10 @@ use tower_http::{
 pub async fn start_server(addr: SocketAddr) -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/", get(serve_shell))
-        .nest_service("/app.wasm", ServeFile::new("pkg/app.wasm"))
-        .nest_service("/assets", ServeDir::new("assets"))
+        .nest_service("/app.wasm", ServeFile::new("pkg/wgpu/niflheim_web_demo_bg.wasm"))
+        .nest_service("/app.js", ServeFile::new("pkg/wgpu/niflheim_web_demo.js"))
+        .nest_service("/assets", ServeDir::new("cvkg-webkit-server/assets"))
+        .nest_service("/static", ServeDir::new("cvkg-webkit-server/static"))
         .layer(CorsLayer::permissive());
 
     log::info!("Starting WebKit preview server on http://{}", addr);

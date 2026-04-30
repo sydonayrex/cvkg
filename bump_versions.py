@@ -2,8 +2,8 @@ import os
 import re
 
 def bump_versions():
-    old_ver = "0.1.11"
-    new_ver = "0.1.12"
+    old_ver = "0.1.12"
+    new_ver = "0.1.13"
     
     files_to_update = []
     for root, dirs, files in os.walk("."):

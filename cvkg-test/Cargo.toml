@@ -7,8 +7,8 @@ repository.workspace = true
 description = "Automated visual regression testing harness for CVKG"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core" }
-cvkg-render-gpu = { path = "../cvkg-render-gpu" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.13" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.13" }
 image = "0.24"
 bytemuck = "1.13"
 pollster = "0.3"

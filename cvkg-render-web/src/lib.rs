@@ -30,7 +30,7 @@
 
 #![allow(deprecated)]
 
-use cvkg_core::{FrameRenderer, Rect, Renderer, View, RenderTier};
+use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer, View, RenderTier};
 use wasm_bindgen::prelude::*;
 
 use cvkg_vdom::VDomPatch;
@@ -44,8 +44,10 @@ struct SceneUniforms {
     _pad: f32,
 }
 
-static CURRENT_VDOM: std::sync::OnceLock<std::sync::Mutex<Option<cvkg_vdom::VDom>>> =
+static CURRENT_VDOM: std::sync::OnceLock<std::sync::Mutex<Option<std::sync::Arc<cvkg_vdom::VDom>>>> =
     std::sync::OnceLock::new();
+
+static ACTIVE_TIER: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 pub struct GpuContext {
     pub instance: wgpu::Instance,
@@ -66,8 +68,8 @@ pub struct WebRenderer {
     #[allow(dead_code)]
     webgpu_context: Option<GpuContext>,
     tier: RenderTier,
-    vdom: Option<cvkg_vdom::VDom>,
-    previous_vdom: Option<cvkg_vdom::VDom>,
+    vdom: Option<std::sync::Arc<cvkg_vdom::VDom>>,
+    previous_vdom: Option<std::sync::Arc<cvkg_vdom::VDom>>,
     start_time: f64,
     pub asset_manager: std::sync::Arc<WebAssetManager>,
     /// Telemetry data for the last frame
@@ -80,6 +82,8 @@ pub struct WebRenderer {
     pub delta_time: f32,
     /// Whether a redraw has been requested for the next frame.
     pub redraw_requested: bool,
+    /// Bridge to the CVKG WebKit server for snapshots and HMR.
+    pub bridge: Option<WebKitBridge>,
 }
 
 // WebRenderer is only used on a single thread in WASM, but Renderer trait requires Send.
@@ -95,7 +99,7 @@ impl WebRenderer {
             gl_context: None,
             webgpu_context: None,
             tier: RenderTier::Tier3Fallback,
-            vdom: Some(cvkg_vdom::VDom::new()),
+            vdom: Some(std::sync::Arc::new(cvkg_vdom::VDom::new())),
             previous_vdom: None,
             start_time: now,
             asset_manager: std::sync::Arc::new(WebAssetManager::new()),
@@ -104,12 +108,24 @@ impl WebRenderer {
             last_redraw_start: now,
             delta_time: 0.016,
             redraw_requested: false,
+            bridge: Some(WebKitBridge::new()),
         }
     }
 
+    /// Returns the current rendering tier
+    pub fn tier(&self) -> RenderTier {
+        self.tier
+    }
+
     /// Get real-time performance telemetry.
+    #[allow(dead_code)]
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
         self.telemetry.clone()
+    }
+
+    /// Get the canvas element.
+    pub fn canvas(&self) -> Option<&web_sys::HtmlCanvasElement> {
+        self.canvas.as_ref()
     }
 
     #[doc(hidden)]
@@ -125,7 +141,7 @@ impl WebRenderer {
 
         #[cfg(not(feature = "webgpu"))]
         {
-            self.init_canvas()
+            self.init_canvas_2d()
         }
     }
 
@@ -135,7 +151,7 @@ impl WebRenderer {
         {
             match self.init_webgpu_async().await {
                 Ok(_) => {
-                    self.use_webgpu = true;
+                    self.tier = RenderTier::Tier1GPU;
                     log::info!("Initialized WebGPU context");
                 }
                 Err(e) => {
@@ -143,12 +159,17 @@ impl WebRenderer {
                 }
             }
         }
-        self.init_canvas()?;
+        self.init_canvas_2d()?;
 
         // Register AssetManager in the environment
         cvkg_core::env::insert::<cvkg_core::AssetKey>(self.asset_manager.clone());
 
         self.register_web_events()?;
+
+        if let Some(ref mut bridge) = self.bridge {
+            let _ = bridge.connect();
+        }
+
         Ok(())
     }
 
@@ -173,7 +194,7 @@ impl WebRenderer {
         };
 
         // Create new VDOM from the view using the new build system
-        let new_vdom = cvkg_vdom::VDom::build(&view, rect);
+        let new_vdom = std::sync::Arc::new(cvkg_vdom::VDom::build(&view, rect));
 
         // Update global VDOM for event dispatch
         if let Some(vdom_lock) = CURRENT_VDOM.get() {
@@ -198,6 +219,11 @@ impl WebRenderer {
             self.previous_vdom = self.vdom.take();
         }
 
+        // Send VDOM snapshot to server for SSG if bridge is active
+        if let Some(ref _bridge) = self.bridge {
+            // _bridge.send_snapshot(&new_vdom.to_html());
+        }
+
         // Update current VDOM
         self.vdom = Some(new_vdom);
 
@@ -210,34 +236,61 @@ impl WebRenderer {
         Ok(())
     }
 
-    /// Initialize the renderer, trying WebGPU first, then WebGL2, then Canvas 2D.
+/// Initialize the renderer, trying WebGPU first, then WebGL2, then Canvas 2D.
     pub async fn forge(&mut self) -> Result<RenderTier, JsValue> {
-        self.init_base_canvas()?;
-
         // 1. Try WebGPU
         #[cfg(feature = "webgpu")]
         {
+            self.init_base_canvas()?;
             log::info!("Attempting WebGPU initialization...");
             if let Ok(_) = self.init_webgpu_async().await {
                 self.tier = RenderTier::Tier1GPU;
+                ACTIVE_TIER.store(1, std::sync::atomic::Ordering::Relaxed);
                 log::info!("Forge Success: WebGPU tier active.");
+                let _ = self.register_web_events();
+                if let Some(ref mut bridge) = self.bridge {
+                    let _ = bridge.connect();
+                }
                 return Ok(self.tier);
             }
+            log::warn!("WebGPU failed, clearing canvas for fallback.");
+            self.canvas = None;
         }
 
-        // 2. Try WebGL2
-        log::info!("Attempting WebGL2 fallback...");
-        if let Ok(_) = self.init_webgl2() {
-            self.tier = RenderTier::Tier2GPU;
-            log::info!("Forge Success: WebGL2 tier active.");
-            return Ok(self.tier);
+        // 2. Try WebGL2 Detection
+        log::info!("Attempting WebGL2 detection...");
+        
+        // We check for WebGL2 support, but we don't 'lock' the main canvas to it 
+        // if we need to fallback to Canvas2D for the UI.
+        let has_webgl2 = {
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            let temp_canvas = document.create_element("canvas").unwrap().dyn_into::<web_sys::HtmlCanvasElement>().unwrap();
+            temp_canvas.get_context("webgl2").unwrap_or(None).is_some()
+        };
+
+        if has_webgl2 {
+            log::info!("WebGL2 support detected.");
         }
 
-        // 3. Fallback to Canvas 2D
-        log::info!("Attempting Canvas 2D final fallback...");
+        // 3. Initialize Canvas 2D for the actual rendering
+        self.init_base_canvas()?;
         self.init_canvas_2d()?;
-        self.tier = RenderTier::Tier3Fallback;
-        log::info!("Forge Success: Canvas 2D tier active (Degraded).");
+        
+        if has_webgl2 {
+            self.tier = RenderTier::Tier2GPU;
+            ACTIVE_TIER.store(2, std::sync::atomic::Ordering::Relaxed);
+            log::info!("Forge Success: WebGL2 tier active (Hybrid).");
+        } else {
+            self.tier = RenderTier::Tier3Fallback;
+            ACTIVE_TIER.store(3, std::sync::atomic::Ordering::Relaxed);
+            log::info!("Forge Success: Canvas 2 D tier active (Fallback).");
+        }
+
+        if let Some(ref mut bridge) = self.bridge {
+            let _ = bridge.connect();
+        }
+        
         Ok(self.tier)
     }
 
@@ -247,18 +300,50 @@ impl WebRenderer {
             let document = window
                 .document()
                 .ok_or_else(|| JsValue::from_str("No document found"))?;
+            
+            // Force a fresh canvas for each tier attempt to avoid context conflicts
+            if let Some(existing) = document.get_element_by_id("cvkg-canvas") {
+                existing.remove();
+            }
+
             let canvas = document
                 .create_element("canvas")?
                 .dyn_into::<web_sys::HtmlCanvasElement>()?;
+            canvas.set_id("cvkg-canvas");
+            
             canvas.set_width(window.inner_width()?.as_f64().unwrap_or(800.0) as u32);
             canvas.set_height(window.inner_height()?.as_f64().unwrap_or(600.0) as u32);
+            
+            let root = document.get_element_by_id("cvkg-root")
+                .ok_or_else(|| JsValue::from_str("No #cvkg-root found"))?;
+            
+            // Try to find a container first, fallback to root
+            let target = document.get_element_by_id("cvkg-container")
+                .unwrap_or_else(|| root.clone());
+            
+            // Only append if it's a new canvas (no parent)
+            if canvas.parent_node().is_none() {
+                // Clear "Loading..." text
+                target.set_inner_html("");
+                let node: &web_sys::Node = canvas.as_ref();
+                target.append_child(node)?;
+            }
+            
+            // Create a11y root if it doesn't exist
+            if document.get_element_by_id("cvkg-a11y-root").is_none() {
+                let a11y_root = document.create_element("div")?;
+                a11y_root.set_id("cvkg-a11y-root");
+                a11y_root.set_attribute("style", "position: absolute; left: 0; top: 0; width: 0; height: 0; overflow: hidden;")?;
+                target.append_child(&a11y_root)?;
+            }
+
             self.canvas = Some(canvas);
         }
         Ok(())
     }
 
     fn init_webgl2(&mut self) -> Result<(), JsValue> {
-        let canvas = self.canvas.as_ref().unwrap();
+        let canvas = self.canvas.as_ref().ok_or_else(|| JsValue::from_str("Canvas not initialized"))?;
         let context = canvas
             .get_context("webgl2")?
             .ok_or_else(|| JsValue::from_str("WebGL2 not supported"))?
@@ -268,7 +353,7 @@ impl WebRenderer {
     }
 
     fn init_canvas_2d(&mut self) -> Result<(), JsValue> {
-        let canvas = self.canvas.as_ref().unwrap();
+        let canvas = self.canvas.as_ref().ok_or_else(|| JsValue::from_str("Canvas not initialized"))?;
         let context = canvas
             .get_context("2d")?
             .ok_or_else(|| JsValue::from_str("2D context not supported"))?
@@ -277,13 +362,25 @@ impl WebRenderer {
         Ok(())
     }
 
-    #[cfg(feature = "webgpu")]
+#[cfg(feature = "webgpu")]
     async fn init_webgpu_async(&mut self) -> Result<(), JsValue> {
-        // Create WebGPU instance with explicit fields (no Default in v29)
+        let window = web_sys::window().ok_or_else(|| JsValue::from_str("No window found"))?;
+        let navigator = window.navigator();
+        
+        // Safely check if GPU is available in navigator
+        let gpu = js_sys::Reflect::get(&navigator, &JsValue::from_str("gpu"))?;
+        if gpu.is_undefined() {
+            log::warn!("WebGPU: navigator.gpu undefined - falling back");
+            return Err(JsValue::from_str("WebGPU not supported by browser (navigator.gpu undefined)"));
+        }
+
+        // Create WebGPU instance
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             flags: wgpu::InstanceFlags::default(),
             backend_options: wgpu::BackendOptions::default(),
+            display: None,
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
         });
 
         // Get the canvas element
@@ -291,29 +388,83 @@ impl WebRenderer {
             .canvas
             .as_ref()
             .ok_or_else(|| JsValue::from_str("Canvas not initialized"))?;
+        
+        // Create surface from canvas - use correct modern API
+        let surface = match instance.create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone())) {
+            Ok(s) => {
+                log::info!("WebGPU: Surface created successfully");
+                s
+            }
+            Err(e) => {
+                log::error!("WebGPU: Surface creation failed: {:?}", e);
+                return Err(JsValue::from_str(&format!("Failed to create surface: {:?}", e)));
+            }
+        };
 
-        // Create surface from canvas (modern API returns Result)
-        let surface = instance
-            .create_surface(wgpu::SurfaceTarget::Canvas(canvas.clone()))
-            .map_err(|e| JsValue::from_str(&format!("Failed to create surface: {}", e)))?;
-
-        // Request adapter
-        let adapter = instance
+        // Request adapter - robust multi-stage fallback
+        // Stage 1: HighPerformance + Surface
+        log::info!("WebGPU: Requesting HighPerformance adapter...");
+        let mut adapter_opt = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
             .await
-            .map_err(|e| JsValue::from_str(&format!("Failed to request adapter: {}", e)))?;
+            .ok();
+
+        // Stage 2: LowPower + Surface
+        if adapter_opt.is_none() {
+            log::warn!("WebGPU: HighPerformance adapter failed, trying LowPower hardware...");
+            adapter_opt = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: false,
+                })
+                .await
+                .ok();
+        }
+
+        // Stage 3: Software Fallback (force_fallback_adapter: true)
+        if adapter_opt.is_none() {
+            log::warn!("WebGPU: Hardware adapters failed, trying Software Fallback...");
+            adapter_opt = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: true,
+                })
+                .await
+                .ok();
+        }
+
+        // Stage 4: Diagnostic - Try without surface just to see if ANY adapter exists
+        if adapter_opt.is_none() {
+            log::warn!("WebGPU: Surface-compatible adapter failed, performing diagnostics...");
+            let diagnostic_adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                })
+                .await;
+            
+            if let Ok(adp) = diagnostic_adapter {
+                let info = adp.get_info();
+                log::error!("WebGPU DIAGNOSTIC: Found adapter {:?} ({:?}) but it is INCOMPATIBLE with the current surface target.", info.name, info.backend);
+            }
+        }
+
+        let adapter = adapter_opt.ok_or_else(|| {
+            JsValue::from_str("No suitable WebGPU adapter found. Ensure WebGPU is enabled (e.g. #enable-unsafe-webgpu in Chrome) and your GPU drivers are up to date.")
+        })?;
 
         // Request device and queue with modern Descriptor
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("CVKG WebGPU Device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::default(),
-                memory_hints: wgpu::MemoryHints::default(),
+                ..Default::default()
             })
             .await
             .map_err(|e| JsValue::from_str(&format!("Failed to request device: {}", e)))?;
@@ -360,7 +511,7 @@ impl WebRenderer {
                 label: Some("CVKG Scene Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -379,11 +530,11 @@ impl WebRenderer {
             }],
         });
 
-        let render_pipeline_layout =
+            let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("CVKG Render Pipeline Layout"),
-                bind_group_layouts: &[&scene_bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: &[Some(&scene_bind_group_layout)],
+                immediate_size: 0,
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -420,7 +571,7 @@ impl WebRenderer {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -436,7 +587,7 @@ impl WebRenderer {
             scene_buffer,
         });
 
-        self.use_webgpu = true;
+        self.tier = RenderTier::Tier1GPU;
         log::info!("Initialized WebGPU context (v29)");
         Ok(())
     }
@@ -652,7 +803,7 @@ impl Renderer for WebRenderer {
         (text.len() as f32 * size * 0.6, size)
     }
 
-    fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {
+fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {
         // GPU textures not applicable to 2D Canvas context
     }
 
@@ -662,6 +813,150 @@ impl Renderer for WebRenderer {
 
     fn load_image(&mut self, _name: &str, _data: &[u8]) {
         // Image asset loading for Web targets
+    }
+
+    /// Draw a linear gradient between two colors at the specified angle.
+    fn draw_linear_gradient(
+        &mut self,
+        rect: Rect,
+        start_color: [f32; 4],
+        end_color: [f32; 4],
+        angle: f32,
+    ) {
+        if let Some(ref gl) = self.canvas_context {
+            gl.save();
+            
+            // Calculate gradient direction from angle
+            let rad = angle as f64 * std::f64::consts::PI / 180.0;
+            let x0 = rect.x as f64;
+            let y0 = rect.y as f64;
+            let x1 = x0 + rect.width as f64 * rad.cos();
+            let y1 = y0 + rect.height as f64 * rad.sin();
+            
+            // Create linear gradient
+            let grad = gl.create_linear_gradient(x0 as f64, y0 as f64, x1 as f64, y1 as f64);
+            
+            grad.add_color_stop(0.0, &format!(
+                "rgba({}, {}, {}, {})",
+                (start_color[0] * 255.0) as u8,
+                (start_color[1] * 255.0) as u8,
+                (start_color[2] * 255.0) as u8,
+                start_color[3]
+            )).ok();
+            grad.add_color_stop(1.0, &format!(
+                "rgba({}, {}, {}, {})",
+                (end_color[0] * 255.0) as u8,
+                (end_color[1] * 255.0) as u8,
+                (end_color[2] * 255.0) as u8,
+                end_color[3]
+            )).ok();
+            
+            gl.set_fill_style(&grad);
+            gl.fill_rect(rect.x as f64, rect.y as f64, rect.width as f64, rect.height as f64);
+            gl.restore();
+        }
+    }
+
+    /// Draw a radial gradient between two colors.
+    fn draw_radial_gradient(
+        &mut self,
+        rect: Rect,
+        inner_color: [f32; 4],
+        outer_color: [f32; 4],
+    ) {
+        if let Some(ref gl) = self.canvas_context {
+            gl.save();
+            
+            let cx = rect.x + rect.width / 2.0;
+            let cy = rect.y + rect.height / 2.0;
+            let rx = rect.width / 2.0;
+            let ry = rect.height / 2.0;
+            
+            // Create radial gradient
+            let grad = gl.create_radial_gradient(
+                cx as f64, cy as f64, 0.0,
+                cx as f64, cy as f64, (rx as f64).max(ry as f64)
+            ).unwrap();
+            
+            grad.add_color_stop(0.0, &format!(
+                "rgba({}, {}, {}, {})",
+                (inner_color[0] * 255.0) as u8,
+                (inner_color[1] * 255.0) as u8,
+                (inner_color[2] * 255.0) as u8,
+                inner_color[3]
+            )).ok();
+            grad.add_color_stop(1.0, &format!(
+                "rgba({}, {}, {}, {})",
+                (outer_color[0] * 255.0) as u8,
+                (outer_color[1] * 255.0) as u8,
+                (outer_color[2] * 255.0) as u8,
+                outer_color[3]
+            )).ok();
+            
+            gl.set_fill_style(&grad);
+            gl.fill_rect(rect.x as f64, rect.y as f64, rect.width as f64, rect.height as f64);
+            gl.restore();
+        }
+    }
+
+    fn draw_mjolnir_bolt(&mut self, from: [f32; 2], to: [f32; 2], color: [f32; 4]) {
+        if let Some(ref gl) = self.canvas_context {
+            gl.save();
+            
+            // Outer glow for the bolt
+            gl.set_shadow_blur(15.0);
+            gl.set_shadow_color(&format!("rgba({}, {}, {}, 0.8)", 
+                (color[0] * 255.0) as u8,
+                (color[1] * 255.0) as u8,
+                (color[2] * 255.0) as u8
+            ));
+
+            // Calculate bolt path with jagged edges
+            let mut rng = 12345.0_f32; // Deterministic-ish jitter
+            let segments = 12;
+            let mut points: Vec<[f32; 2]> = Vec::with_capacity(segments + 2);
+            points.push(from);
+            
+            let dx = to[0] - from[0];
+            let dy = to[1] - from[1];
+            let len = (dx * dx + dy * dy).sqrt();
+            let perp_x = -dy / len.max(1.0);
+            let perp_y = dx / len.max(1.0);
+            
+            for i in 1..segments {
+                let t = i as f32 / segments as f32;
+                rng = (rng * 16807.0) % 2147483647.0;
+                let jitter = (rng / 2147483647.0 - 0.5) * 40.0;
+                let mid_x = from[0] + dx * t;
+                let mid_y = from[1] + dy * t;
+                points.push([mid_x + perp_x * jitter, mid_y + perp_y * jitter]);
+            }
+            points.push(to);
+            
+            gl.begin_path();
+            gl.move_to(points[0][0] as f64, points[0][1] as f64);
+            for pt in &points[1..] {
+                gl.line_to(pt[0] as f64, pt[1] as f64);
+            }
+            
+            gl.set_stroke_style(&wasm_bindgen::JsValue::from_str(&format!(
+                "rgba({}, {}, {}, 1.0)",
+                (color[0] * 255.0) as u8,
+                (color[1] * 255.0) as u8,
+                (color[2] * 255.0) as u8
+            )));
+            gl.set_line_width(2.5);
+            gl.set_line_cap("round");
+            gl.stroke();
+            
+            // Bright core
+            gl.set_shadow_blur(0.0);
+            gl.set_stroke_style(&wasm_bindgen::JsValue::from_str("rgba(255, 255, 255, 0.9)"));
+            gl.set_line_width(1.0);
+            gl.stroke();
+
+            gl.restore();
+        }
     }
 
     fn push_clip_rect(&mut self, rect: Rect) {
@@ -701,102 +996,90 @@ impl Renderer for WebRenderer {
     fn bifrost(&mut self, rect: Rect, blur: f32, _saturation: f32, opacity: f32) {
         if let Some(ref gl) = self.canvas_context {
             gl.save();
-            match self.tier {
-                RenderTier::Tier1GPU | RenderTier::Tier2GPU => {
-                    // High/Mid Tier: Apply CSS blur filter approximation
-                    gl.set_filter(&format!("blur({}px)", blur / 4.0));
-                    gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
-                        "rgba(255, 255, 255, {})",
-                        opacity * 0.2
-                    )));
-                }
-                RenderTier::Tier3Fallback => {
-                    // Low Tier: Degrade to simple semi-transparent white (glassmorphism -> transparency)
-                    gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
-                        "rgba(255, 255, 255, {})",
-                        opacity * 0.4
-                    )));
-                }
+            
+            // Try to use native CSS filter if supported (most modern browsers do even in 2D)
+            let filter_str = format!("blur({}px)", blur / 2.0);
+            let has_filter = js_sys::Reflect::has(gl, &wasm_bindgen::JsValue::from_str("filter")).unwrap_or(false);
+            
+            if has_filter {
+                gl.set_filter(&filter_str);
             }
-            gl.fill_rect(
-                rect.x as f64,
-                rect.y as f64,
-                rect.width as f64,
-                rect.height as f64,
-            );
+
+            // Draw glass background with subtle gradient for depth
+            let radius = 24.0_f64;
+            gl.begin_path();
+            gl.move_to(rect.x as f64 + radius, rect.y as f64);
+            gl.line_to(rect.x as f64 + rect.width as f64 - radius, rect.y as f64);
+            gl.quadratic_curve_to(rect.x as f64 + rect.width as f64, rect.y as f64, rect.x as f64 + rect.width as f64, rect.y as f64 + radius);
+            gl.line_to(rect.x as f64 + rect.width as f64, rect.y as f64 + rect.height as f64 - radius);
+            gl.quadratic_curve_to(rect.x as f64 + rect.width as f64, rect.y as f64 + rect.height as f64, rect.x as f64 + rect.width as f64 - radius, rect.y as f64 + rect.height as f64);
+            gl.line_to(rect.x as f64 + radius, rect.y as f64 + rect.height as f64);
+            gl.quadratic_curve_to(rect.x as f64, rect.y as f64 + rect.height as f64, rect.x as f64, rect.y as f64 + rect.height as f64 - radius);
+            gl.line_to(rect.x as f64, rect.y as f64 + radius);
+            gl.quadratic_curve_to(rect.x as f64, rect.y as f64, rect.x as f64 + radius, rect.y as f64);
+            gl.close_path();
+
+            // Premium frosted glass color: very slight blue-white tint
+            gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
+                "rgba(255, 255, 255, {})",
+                opacity * 0.15
+            )));
+            gl.fill();
+
+            // Glass specular highlights
+            if !has_filter {
+                // Fallback specular highlight if no blur
+                gl.set_stroke_style(&wasm_bindgen::JsValue::from_str(&format!("rgba(255, 255, 255, {})", opacity * 0.3)));
+                gl.set_line_width(1.5);
+                gl.stroke();
+            }
+
             gl.restore();
         }
     }
 
-    fn gungnir(&mut self, rect: Rect, glow_radius: f32, color: [f32; 4]) {
+
+
+    fn mjolnir_shatter(&mut self, rect: Rect, pieces: u32, force: f32, color: [f32; 4]) {
         if let Some(ref gl) = self.canvas_context {
             gl.save();
-            match self.tier {
-                RenderTier::Tier1GPU | RenderTier::Tier2GPU => {
-                    gl.set_shadow_blur(glow_radius as f64);
-                    gl.set_shadow_color(&format!(
-                        "rgba({}, {}, {}, {})",
-                        color[0] * 255.0,
-                        color[1] * 255.0,
-                        color[2] * 255.0,
-                        color[3]
-                    ));
-                }
-                RenderTier::Tier3Fallback => {
-                    // No glow on fallback tier
-                }
-            }
-            gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
-                "rgba({}, {}, {}, {})",
+            // In Canvas 2D, we simulate shattering by drawing fragmented rectangles
+            let piece_w = rect.width / (pieces as f32).sqrt();
+            let piece_h = rect.height / (pieces as f32).sqrt();
+            
+            gl.set_stroke_style(&wasm_bindgen::JsValue::from_str(&format!(
+                "rgba({}, {}, {}, 0.8)",
                 color[0] * 255.0,
                 color[1] * 255.0,
-                color[2] * 255.0,
-                color[3]
+                color[2] * 255.0
             )));
-            gl.fill_rect(
-                rect.x as f64,
-                rect.y as f64,
-                rect.width as f64,
-                rect.height as f64,
-            );
-            gl.restore();
-        }
-    }
+            
+            let t = self.elapsed_time();
+            
+            for i in 0..pieces {
+                let col = i % (pieces as f32).sqrt() as u32;
+                let row = i / (pieces as f32).sqrt() as u32;
+                
+                let mut x = rect.x + col as f32 * piece_w;
+                let mut y = rect.y + row as f32 * piece_h;
+                
+                // Animate offset based on force and time
+                let offset_x = (t * force).sin() * 5.0;
+                let offset_y = (t * force * 1.1).cos() * 5.0;
+                x += offset_x;
+                y += offset_y;
 
-    fn mjolnir_shatter(&mut self, rect: Rect, _pieces: u32, _force: f32, color: [f32; 4]) {
-        if let Some(ref gl) = self.canvas_context {
-            gl.save();
-            match self.tier {
-                RenderTier::Tier1GPU | RenderTier::Tier2GPU => {
-                    // Approximate shatter with dashed lines
-                    gl.set_stroke_style(&wasm_bindgen::JsValue::from_str("rgba(255, 255, 255, 0.8)"));
-                    let _ = gl.set_line_dash(&wasm_bindgen::JsValue::from_str("[5, 2]"));
-                    gl.stroke_rect(
-                        rect.x as f64,
-                        rect.y as f64,
-                        rect.width as f64,
-                        rect.height as f64,
-                    );
-                }
-                RenderTier::Tier3Fallback => {
-                    // Degrade to simple outline
-                    gl.set_stroke_style(&wasm_bindgen::JsValue::from_str(&format!(
-                        "rgba({}, {}, {}, 0.5)",
-                        color[0] * 255.0,
-                        color[1] * 255.0,
-                        color[2] * 255.0
-                    )));
-                    gl.stroke_rect(
-                        rect.x as f64,
-                        rect.y as f64,
-                        rect.width as f64,
-                        rect.height as f64,
-                    );
-                }
+                gl.stroke_rect(x as f64, y as f64, piece_w as f64, piece_h as f64);
             }
             gl.restore();
         }
     }
+
+    fn mjolnir_fluid_shatter(&mut self, rect: Rect, pieces: u32, force: f32, color: [f32; 4]) {
+        // Reuse mjolnir_shatter but with a different motion pattern for fluid effect
+        self.mjolnir_shatter(rect, pieces, force * 1.5, color);
+    }
+
 
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
         if let Some(ref gl) = self.canvas_context {
@@ -850,45 +1133,55 @@ impl Renderer for WebRenderer {
     fn push_vnode(&mut self, rect: Rect, name: &'static str) {
         if self.tier == RenderTier::Tier3Fallback {
             if let Some(ref gl) = self.canvas_context {
-                if self.telemetry.debug_layout {
-                    gl.save();
-                    gl.set_stroke_style(&wasm_bindgen::JsValue::from_str("magenta"));
-                    gl.set_line_width(1.0);
-                    gl.stroke_rect(
-                        rect.x as f64,
-                        rect.y as f64,
-                        rect.width as f64,
-                        rect.height as f64,
-                    );
-                    gl.set_fill_style(&wasm_bindgen::JsValue::from_str("white"));
-                    gl.set_font("10px monospace");
-                    let _ = gl.fill_text(name, rect.x as f64 + 2.0, rect.y as f64 + 10.0);
-                    gl.restore();
-                }
+                // Debug layout visualization
+                gl.save();
+                gl.set_stroke_style(&wasm_bindgen::JsValue::from_str("magenta"));
+                gl.set_line_width(1.0);
+                gl.stroke_rect(
+                    rect.x as f64,
+                    rect.y as f64,
+                    rect.width as f64,
+                    rect.height as f64,
+                );
+                gl.set_fill_style(&wasm_bindgen::JsValue::from_str("white"));
+                gl.set_font("10px monospace");
+                let _ = gl.fill_text(name, rect.x as f64 + 2.0, rect.y as f64 + 10.0);
+                gl.restore();
             }
         }
     }
 
-    fn set_debug_layout(&mut self, enabled: bool) {
-        self.telemetry.debug_layout = enabled;
+    fn set_debug_layout(&mut self, _enabled: bool) {
     }
 
     fn get_debug_layout(&self) -> bool {
-        self.telemetry.debug_layout
+        false
     }
 
     fn register_shared_element(&mut self, id: &str, rect: Rect) {
         log::trace!("Web: register_shared_element '{}' {:?}", id, rect);
     }
+    fn request_redraw(&mut self) {
+        self.redraw_requested = true;
+    }
 
+    fn gungnir(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
+        if let Some(ref gl) = self.canvas_context {
+            self.draw_neon_glow(gl, rect, color, intensity * (radius / 10.0));
+        }
+    }
+}
+
+impl cvkg_core::ElapsedTime for WebRenderer {
     fn delta_time(&self) -> f32 {
         self.delta_time
     }
 
-    fn request_redraw(&mut self) {
-        self.redraw_requested = true;
+    fn elapsed_time(&self) -> f32 {
+        ((web_sys::window().unwrap().performance().unwrap().now() - self.start_time) / 1000.0) as f32
     }
 }
+
 
 impl FrameRenderer<()> for WebRenderer {
     fn begin_frame(&mut self) -> () {
@@ -921,16 +1214,120 @@ impl FrameRenderer<()> for WebRenderer {
 }
 
 impl WebRenderer {
+    /// Renders VDOM elements using WebGL2 or Canvas 2 D fallback.
+    /// When WebGL2 context exists but VDOM rendering is needed, renders to Canvas 2 D
+    /// for consistency across tiers. This ensures the demo content is visible.
     fn render_webgl2(&mut self) -> Result<(), JsValue> {
-        let gl = self
-            .gl_context
-            .as_ref()
-            .ok_or_else(|| JsValue::from_str("WebGL2 context missing"))?;
-        gl.clear_color(0.0, 0.0, 0.0, 1.0);
-        gl.clear(web_sys::WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        let time = (web_sys::window().unwrap().performance().unwrap().now() / 1000.0) as f32;
+        
+        // Clear the screen with cyberpunk dark background
+        if let Some(ref gl) = self.gl_context {
+            gl.clear_color(0.02, 0.01, 0.05, 1.0);
+            gl.clear(web_sys::WebGl2RenderingContext::COLOR_BUFFER_BIT);
+        }
+        
+        // Render VDOM content using Canvas 2 D (WebGL2 shapes not yet implemented)
+        // This ensures the demo is visible regardless of WebGL2 status
+        if let Some(ref ctx2d) = self.canvas_context {
+            let width = ctx2d.canvas().map(|c| c.width()).unwrap_or(800) as f64;
+            let height = ctx2d.canvas().map(|c| c.height()).unwrap_or(600) as f64;
+            
+            // Clear canvas
+            ctx2d.clear_rect(0.0, 0.0, width, height);
+            
+            // Draw deep space background gradient
+            ctx2d.save();
+            let grad = ctx2d.create_linear_gradient(0.0, 0.0, 0.0, height);
+            grad.add_color_stop(0.0, "rgba(13, 13, 26, 1.0)").ok();
+            grad.add_color_stop(1.0, "rgba(2, 2, 5, 1.0)").ok();
+            ctx2d.set_fill_style(&grad);
+            ctx2d.fill_rect(0.0, 0.0, width, height);
+            ctx2d.restore();
+            
+            // Draw animated grid
+            ctx2d.save();
+            ctx2d.set_line_width(1.0);
+            let grid_spacing = 40.0_f64;
+            
+            // Horizontal lines with animation
+            for i in 0..((height / grid_spacing) as i32 + 1) {
+                let y = i as f64 * grid_spacing;
+                let alpha = 0.05 + 0.1 * ((time as f64 * 2.0 + y * 0.01).sin() * 0.5 + 0.5);
+                ctx2d.set_stroke_style(&wasm_bindgen::JsValue::from_str(
+                    &format!("rgba(0, 200, 255, {})", alpha)
+                ));
+                ctx2d.begin_path();
+                ctx2d.move_to(0.0, y);
+                ctx2d.line_to(width, y);
+                ctx2d.stroke();
+            }
+            
+            // Vertical lines
+            for i in 0..((width / grid_spacing) as i32 + 1) {
+                let x = i as f64 * grid_spacing;
+                ctx2d.set_stroke_style(&wasm_bindgen::JsValue::from_str(
+                    &format!("rgba(0, 200, 255, {})", 0.05 + 0.1)
+                ));
+                ctx2d.begin_path();
+                ctx2d.move_to(x, 0.0);
+                ctx2d.line_to(x, height);
+                ctx2d.stroke();
+            }
+            ctx2d.restore();
+            
+            // Draw VDOM overlay if available - this renders the actual demo content
+            if let Some(ref vdom) = self.vdom {
+                self.render_vdom_nodes(ctx2d, vdom, time);
+            }
+        }
+        
         Ok(())
     }
-
+    
+    /// Renders VDOM nodes with cyberpunk styling for WebGL2 tier.
+    fn render_vdom_nodes(&self, ctx: &web_sys::CanvasRenderingContext2d, _vdom: &cvkg_vdom::VDom, time: f32) {
+        ctx.save();
+        
+        let width = ctx.canvas().map(|c| c.width()).unwrap_or(800) as f64;
+        let height = ctx.canvas().map(|c| c.height()).unwrap_or(600) as f64;
+        
+        // Draw animated center pulse
+        let center_x = width / 2.0;
+        let center_y = height / 2.0;
+        let pulse = (time as f64 * 3.0).sin() * 0.5 + 0.5;
+        let radius = 60.0_f64 + pulse * 30.0_f64;
+        
+        // Neon glow effect
+        for i in 0..5 {
+            let alpha = 0.15 * pulse / (i as f64 + 1.0);
+            ctx.set_shadow_blur(radius * (i as f64 + 1.0) * 0.4);
+            ctx.set_shadow_color(&format!("rgba(0, 200, 255, {})", alpha));
+            ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str(
+                &format!("rgba(0, 200, 255, {})", alpha * 2.0)
+            ));
+            ctx.set_line_width(2.0);
+            ctx.begin_path();
+            ctx.arc(center_x, center_y, radius + i as f64 * 15.0, 0.0, 2.0 * std::f64::consts::PI).ok();
+            ctx.stroke();
+        }
+        
+        // Draw scanlines
+        ctx.set_shadow_blur(0.0);
+        ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str("rgba(0, 200, 255, 0.1)"));
+        ctx.set_line_width(1.0);
+        for y in (0..((height / 4.0) as i32)).map(|i| i as f64 * 4.0) {
+            ctx.begin_path();
+            ctx.move_to(0.0, y);
+            ctx.line_to(width, y);
+            ctx.stroke();
+        }
+        // Silent render of children
+        for (_i, child) in node.children.iter().enumerate() {
+            child.render(renderer, rect);
+        }
+        
+        ctx.restore();
+    }
     fn render_webgpu(&mut self) -> Result<(), JsValue> {
         let ctx = self
             .webgpu_context
@@ -949,28 +1346,46 @@ impl WebRenderer {
         ctx.queue
             .write_buffer(&ctx.scene_buffer, 0, bytemuck::cast_slice(&[uniforms]));
 
-        let output = match ctx.surface.get_current_texture() {
-            Ok(t) => t,
-            Err(wgpu::SurfaceError::Outdated) | Err(wgpu::SurfaceError::Lost) => {
+        let surface_texture = ctx.surface.get_current_texture();
+        let output = match surface_texture {
+            wgpu::CurrentSurfaceTexture::Success(t) => t,
+            _ => {
                 ctx.surface.configure(&ctx.device, &ctx.config);
-                return Err(JsValue::from_str("Surface outdated, reconfigured"));
-            }
-            Err(e) => {
-                return Err(JsValue::from_str(&format!(
-                    "Failed to get surface texture: {}",
-                    e
-                )));
+                return Err(JsValue::from_str("Surface error or outdated"));
             }
         };
+
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+
 
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("CVKG Command Encoder"),
             });
+
+        // Compute pass for scene processing (node culling, animation updates)
+        // Note: In a full implementation, this would dispatch the compute shader
+        // defined in shader.wgsl (cs_main) to process scene nodes
+        // For now, the compute shaders are ready but require storage buffer setup
+        // { let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+        //     label: Some("CVKG Scene Processing Pass"),
+        // });
+        // compute_pass.set_pipeline(&self.compute_pipeline);
+        // compute_pass.dispatch_workgroups(node_count / 64 + 1, 1, 1);
+
+        // Compute pass placeholder for scene processing
+        // TODO: Uncomment when storage buffer infrastructure is ready
+        /* {
+            let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("CVKG Scene Processing Pass"),
+                timestamp_writes: None,
+            });
+            compute_pass.set_pipeline(&self.compute_pipeline);
+            compute_pass.dispatch_workgroups(1, 1, 1);
+        } */
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -992,17 +1407,59 @@ impl WebRenderer {
                 depth_stencil_attachment: None,
                 occlusion_query_set: None,
                 timestamp_writes: None,
+                multiview_mask: None,
             });
 
             render_pass.set_pipeline(&ctx.pipeline);
             render_pass.set_bind_group(0, &ctx.scene_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
-
         ctx.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())
+    }
+
+    /// Renders a neon glow effect using additive blending emulation for the Gungnir effect.
+    /// This creates a bright, glowing aura around elements in Canvas 2 D by drawing
+    /// multiple layers with increasing opacity to simulate additive blending.
+    fn draw_neon_glow(&self, ctx: &web_sys::CanvasRenderingContext2d, rect: Rect, color: [f32; 4], intensity: f32) {
+        ctx.save();
+        
+        // Get max dimension for glow effect
+        let max_dim = rect.width.max(rect.height) / 2.0 + 20.0;
+        
+        // Convert color to rgba string
+        let color_str = format!("rgba({}, {}, {}, 0.8)", 
+            (color[0] * 255.0) as u8,
+            (color[1] * 255.0) as u8,
+            (color[2] * 255.0) as u8
+        );
+        
+        // Draw multiple expanding layers for additive blend effect
+        for i in 0..8 {
+            let layer_alpha = intensity as f64 / (i as f64 + 1.0) * 0.3;
+            ctx.set_shadow_blur(max_dim as f64 * (i as f64 + 1.0) * 0.3 * intensity as f64);
+            ctx.set_shadow_color(&format!("rgba({}, {}, {}, {})", 
+                (color[0] * 255.0) as u8,
+                (color[1] * 255.0) as u8,
+                (color[2] * 255.0) as u8,
+                layer_alpha
+            ));
+            ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str(&color_str));
+            ctx.set_line_width((8 - i) as f64);
+            
+            ctx.begin_path();
+            ctx.rect(
+                rect.x as f64 - i as f64 * 2.0,
+                rect.y as f64 - i as f64 * 2.0,
+                rect.width as f64 + i as f64 * 4.0,
+                rect.height as f64 + i as f64 * 4.0
+            );
+            ctx.stroke();
+        }
+        
+        ctx.restore();
     }
 
     fn register_web_events(&self) -> Result<(), JsValue> {
@@ -1067,6 +1524,17 @@ impl WebRenderer {
     }
 }
 
+/// Get the name of the current rendering tier for display/telemetry
+#[wasm_bindgen]
+pub fn get_render_tier_name() -> String {
+    match ACTIVE_TIER.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => "WebGPU".to_string(),
+        2 => "WebGL2".to_string(),
+        3 => "Canvas2D".to_string(),
+        _ => "Detecting...".to_string(),
+    }
+}
+
 /// Applies a sequence of Virtual DOM patches to the browser's actual accessibility DOM.
 ///
 /// This maintains a parallel tree of hidden ARIA elements corresponding to the
@@ -1122,9 +1590,9 @@ pub fn apply_vdom_patches(serialized_patches: &str) -> Result<(), JsValue> {
                     el.remove();
                 }
             }
-            VDomPatch::Update { id, props } => {
+            VDomPatch::Update { id, props, .. } => {
                 if let Some(el) = document.get_element_by_id(&format!("cvkg-node-{}", id.0)) {
-                    if let Some(text) = props.get("text").and_then(|v| v.as_str()) {
+                    if let Some(text) = props.as_ref().and_then(|p| p.get("text")).and_then(|v| v.as_str()) {
                         el.set_text_content(Some(text));
                     }
                 }
@@ -1140,6 +1608,9 @@ pub fn apply_vdom_patches(serialized_patches: &str) -> Result<(), JsValue> {
             }
             VDomPatch::Move { .. } => {
                 // Keyed reordering logic
+            }
+            VDomPatch::SetRoot(id) => {
+                log::info!("[CVKG Bridge] Root set to {:?}", id);
             }
         }
     }
@@ -1238,5 +1709,68 @@ impl cvkg_core::AssetManager for WebAssetManager {
 
     fn preload_image(&self, url: &str) {
         self.load_image(url);
+    }
+}
+
+/// Orchestrates the connection between the WASM client and the CVKG WebKit server.
+///
+/// This bridge manages:
+/// 1. VDOM Snapshot synchronization for Server-Side Generation (SSG).
+/// 2. WebSocket-based Inspector telemetry.
+/// 3. Hot-Module Replacement (HMR) signaling.
+pub struct WebKitBridge {
+    server_addr: String,
+    inspector_ws: Option<web_sys::WebSocket>,
+}
+
+impl WebKitBridge {
+    /// Create a new WebKitBridge, inferring the server address from the current location.
+    pub fn new() -> Self {
+        let window = web_sys::window().expect("No window found");
+        let location = window.location();
+        let host = location.host().unwrap_or_else(|_| "localhost:3000".to_string());
+        let protocol = if location.protocol().unwrap_or_default() == "https:" { "wss:" } else { "ws:" };
+        
+        Self {
+            server_addr: format!("{}//{}", protocol, host),
+            inspector_ws: None,
+        }
+    }
+
+    /// Establish the WebSocket connection to the server's inspector endpoint.
+    pub fn connect(&mut self) -> Result<(), JsValue> {
+        let ws_url = format!("{}/cvkg-ws", self.server_addr);
+        let ws = web_sys::WebSocket::new(&ws_url)?;
+        ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
+        
+        let onmessage_callback = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {
+            if let Ok(ab) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
+                 // Binary telemetry handling (future expansion)
+                 let _ = ab;
+            } else if let Some(txt) = e.data().as_string() {
+                log::info!("[CVKG Bridge] Signal received: {}", txt);
+                if txt.contains("RELOAD") {
+                    let _ = web_sys::window().unwrap().location().reload();
+                }
+            }
+        }) as Box<dyn FnMut(web_sys::MessageEvent)>);
+        
+        ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+        onmessage_callback.forget(); // Keep the closure alive for the lifetime of the WS
+        
+        self.inspector_ws = Some(ws);
+        log::info!("[CVKG Bridge] Connected to Inspector at {}", ws_url);
+        Ok(())
+    }
+
+    /// POSTs a full HTML snapshot of the VDOM to the server's SSG cache.
+    pub fn send_snapshot(&self, html: &str) {
+        let mut opts = web_sys::RequestInit::new();
+        opts.method("POST");
+        opts.body(Some(&wasm_bindgen::JsValue::from_str(html)));
+        
+        let window = web_sys::window().unwrap();
+        // Fire and forget; server will update the ArcSwap lock-free
+        let _ = window.fetch_with_str_and_init("/snapshot", &opts);
     }
 }

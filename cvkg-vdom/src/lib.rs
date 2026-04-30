@@ -544,10 +544,17 @@ impl VNodeRenderer {
     }
 }
 
-impl cvkg_core::Renderer for VNodeRenderer {
+impl cvkg_core::ElapsedTime for VNodeRenderer {
     fn delta_time(&self) -> f32 {
         0.0 // VDOM capture is static, delta_time is irrelevant but required by trait
     }
+
+    fn elapsed_time(&self) -> f32 {
+        0.0
+    }
+}
+
+impl cvkg_core::Renderer for VNodeRenderer {
 
     fn fill_rect(&mut self, rect: cvkg_core::Rect, _color: [f32; 4]) {
         let id = self.next_id();
@@ -808,6 +815,55 @@ impl cvkg_core::Renderer for VNodeRenderer {
     }
 
     fn draw_mjolnir_bolt(&mut self, _from: [f32; 2], _to: [f32; 2], _color: [f32; 4]) {}
+
+    fn draw_linear_gradient(
+        &mut self,
+        rect: cvkg_core::Rect,
+        start_color: [f32; 4],
+        end_color: [f32; 4],
+        angle: f32,
+    ) {
+        let mut props = HashMap::new();
+        props.insert("start_color".to_string(), serde_json::to_value(start_color).unwrap());
+        props.insert("end_color".to_string(), serde_json::to_value(end_color).unwrap());
+        props.insert("angle".to_string(), serde_json::to_value(angle).unwrap());
+        self.push_vnode(rect, "Primitive::LinearGradient");
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
+                node.props = props;
+        }
+        self.pop_vnode();
+    }
+
+    fn draw_radial_gradient(
+        &mut self,
+        rect: cvkg_core::Rect,
+        inner_color: [f32; 4],
+        outer_color: [f32; 4],
+    ) {
+        let mut props = HashMap::new();
+        props.insert("inner_color".to_string(), serde_json::to_value(inner_color).unwrap());
+        props.insert("outer_color".to_string(), serde_json::to_value(outer_color).unwrap());
+        self.push_vnode(rect, "Primitive::RadialGradient");
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
+                node.props = props;
+        }
+        self.pop_vnode();
+    }
+
+    fn gungnir(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32, intensity: f32) {
+        let mut props = HashMap::new();
+        props.insert("radius".to_string(), serde_json::to_value(radius).unwrap());
+        props.insert("intensity".to_string(), serde_json::to_value(intensity).unwrap());
+        props.insert("color".to_string(), serde_json::to_value(color).unwrap());
+        self.push_vnode(rect, "Effect::Gungnir");
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
+                node.props = props;
+        }
+        self.pop_vnode();
+    }
 
     fn set_aria_role(&mut self, role: &str) {
         if let Some(id) = self.stack.last()

@@ -2022,6 +2022,16 @@ impl SurtrRenderer {
     }
 }
 
+impl cvkg_core::ElapsedTime for SurtrRenderer {
+    fn delta_time(&self) -> f32 {
+        self.telemetry.frame_time_ms / 1000.0
+    }
+
+    fn elapsed_time(&self) -> f32 {
+        self.start_time.elapsed().as_secs_f32()
+    }
+}
+
 impl cvkg_core::Renderer for SurtrRenderer {
     /// fill_rect — Standard rectangle drawing method.
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
@@ -2071,6 +2081,31 @@ impl cvkg_core::Renderer for SurtrRenderer {
         // Use mode 7 for high-fidelity background blur sampling
         // Use the blur parameter as corner radius for the glass panel
         self.fill_rect_with_full_params(rect, [1.0, 1.0, 1.0, opacity], 7, None, blur, screen_uv);
+    }
+
+    fn gungnir(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
+        // Create neon glow effect using additive blending
+        // This renders a glowing aura around the element
+        let center_x = rect.x + rect.width * 0.5;
+        let center_y = rect.y + rect.height * 0.5;
+        let max_dim = rect.width.max(rect.height) * 0.5 + radius;
+        
+        // Draw expanding glow layers
+        for i in 0..8 {
+            let alpha = intensity / (i as f32 + 1.0) * 0.3;
+            let glow_color = [color[0], color[1], color[2], alpha];
+            self.fill_rect_with_mode(
+                Rect {
+                    x: center_x - max_dim - i as f32 * 2.0,
+                    y: center_y - max_dim - i as f32 * 2.0,
+                    width: max_dim * 2.0 + i as f32 * 4.0,
+                    height: max_dim * 2.0 + i as f32 * 4.0,
+                },
+                glow_color,
+                8, // Mode for additive blending
+                None,
+            );
+        }
     }
 
     fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32) {

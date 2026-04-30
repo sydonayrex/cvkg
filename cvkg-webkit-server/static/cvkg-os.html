@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVKG OS - Cyberpunk Viking Operating System</title>
+    <style>
+        :root {
+            --dark: #07070f;
+            --cyan: #00ffff;
+            --magenta: #ff00ff;
+            --amber: #ffaa00;
+            --glass-bg: rgba(5, 5, 20, 0.75);
+            --glass-border: rgba(0, 255, 255, 0.3);
+            --neon-glow: 0 0 8px;\n        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--dark);
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+            color: var(--cyan);
+            position: relative;
+        }
+        
+        /* Scanline overlay */
+        body::after {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 255, 255, 0.02) 0,,
+                rgba(0, 255, 255, 0.02) 1px,
+                transparent 1px,,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 9999;
+            animation: scanline 8s linear infinite;
+        }
+        
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
+        
+        /* Chamfered corners - no border-radius */
+        .chamfered {
+            clip-path: polygon(
+                8px 0%, 0% 8px,
+                0% calc(100% - 8px), 8px 100%,
+                calc(100% - 8px) 100%, 100% calc(100% - 8px),
+                100% 8px, calc(100% - 8px) 0%
+            );
+        }
+        
+        /* Glassmorphism panel */
+        .panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+        }
+        
+        .panel:hover {
+            box-shadow: 0 0 8px var(--magenta);
+        }
+        
+        .panel.active {
+            border-color: var(--cyan);
+        }
+        
+        /* Desktop */
+        #desktop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #0a0a1f 0%, #07070f 100%);
+            overflow: hidden;
+        }
+        
+        /* Wallpaper pattern - nordic rune style */
+        #desktop::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: 
+                repeating-conic-gradient(
+                    from 0deg at 50% 50%,
+                    transparent 0deg,
+                    var(--cyan) 1deg,
+                    transparent 2deg,
+                    transparent 10deg
+                ),
+                repeating-conic-gradient(
+                    from 45deg at 30% 30%,
+                    transparent 0deg,
+                    var(--magenta) 1deg,
+                    transparent 2deg,
+                    transparent 15deg
+                );
+            opacity: 0.05;
+            animation: rotate 120s linear infinite;
+        }
+        
+        @keyframes rotate {
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Desktop icons */
+        .desktop-icon {
+            position: absolute;
+            width: 80px;
+            height: 80px;
+            text-align: center;
+            cursor: pointer;
+            user-select: none;
+            padding: 8px;
+            transition: transform 0.2s;
+        }
+        
+        .desktop-icon:hover {
+            transform: scale(1.05);
+        }
+        
+        .desktop-icon.selected {
+            background: rgba(0, 255, 255, 0.2);
+            border: 1px solid var(--cyan);
+        }
+        
+        .icon-img {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 4px;
+            background: var(--cyan);
+            clip-path: polygon(
+                8px 0%, 0% 8px,
+                0% calc(100% - 8px), 8px 100%,
+                calc(100% - 8px) 100%, 100% calc(100% - 8px),
+                100% 8px, calc(100% - 8px) 0%
+            );
+        }
+        
+        .icon-name {
+            font-size: 11px;
+            color: var(--cyan);
+            text-shadow: 0 0 4px var(--cyan);
+            word-break: break-word;
+        }
+        
+        /* Taskbar */
+        #taskbar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 48px;
+            background: var(--glass-bg);
+            border-top: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            z-index: 1000;
+        }
+        
+        .taskbar-btn {
+            width: 120px;
+            height: 36px;
+            margin: 0 4px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--cyan);
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+            clip-path: polygon(
+                6px 0%, 0% 6px,
+                0% calc(100% - 6px), 6px 100%,
+                calc(100% - 6px) 100%, 100% calc(100% - 6px),
+                100% 6px, calc(100% - 6px) 0%
+            );
+        }
+        
+        .taskbar-btn:hover {
+            box-shadow: var(--neon-glow) var(--magenta);
+        }
+        
+        .taskbar-btn.active {
+            border-color: var(--cyan);
+        }
+        
+        #system-tray {
+            margin-left: auto;
+            padding: 0 12px;
+            font-size: 12px;
+            color: var(--cyan);
+        }
+        
+        /* Start Menu */
+        #start-menu {
+            position: fixed;
+            bottom: 48px;
+            left: 8px;
+            width: 480px;
+            height: 500px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            clip-path: polygon(
+                12px 0%, 0% 12px,
+                0% calc(100% - 12px), 12px 100%,
+                calc(100% - 12px) 100%, 100% calc(100% - 12px),
+                100% 12px, calc(100% - 12px) 0%
+            );
+            padding: 16px;
+            display: none;
+            flex-direction: column;
+            z-index: 1001;
+        }
+        
+        #start-menu.active {
+            display: flex;
+        }
+        
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .app-icon {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;            padding: 8px;
+            transition: transform 0.2s;
+        }        
+        .app-icon:hover {
+            transform: scale(1.1);
+        }
+        
+        .app-icon-img {
+            width: 48px;
+            height: 48px;
+            background: var(--cyan);
+            margin-bottom: 4px;
+            clip-path: polygon(
+                6px 0%, 0% 6px,
+                0% calc(100% - 6px), 6px 100%,
+                calc(100% - 6px) 100%, 100% calc(100% - 6px),
+                100% 6px, calc(100% - 6px) 0%
+            );
+        }
+        
+        /* Window */
+        .window {
+            position: absolute;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+            min-width: 320px;
+            min-height: 240px;
+            clip-path: polygon(
+                12px 0%, 0% 12px,
+                0% calc(100% - 12px), 12px 100%,
+                calc(100% - 12px) 100%, 100% calc(100% - 12px),
+                100% 12px, calc(100% - 12px) 0%
+            );
+            display: flex;
+            flex-direction: column;
+            resize: both;
+            overflow: hidden;
+        }                .window-titlebar {
+            height: 32px;
+            background: rgba(10, 10, 30, 0.8);
+            border-bottom: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            cursor: move;
+            user-select: none;
+        }                .window-title {
+            flex: 1;
+            font-size: 12px;
+            color: var(--cyan);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }                .window-controls {
+            display: flex;
+            gap: 4px;        }                .window-btn {
+            width: 20px;
+            height: 20px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass-bg);            cursor: pointer;            clip-path: polygon(
+                4px 0%, 0% 4px,
+                0% calc(100% - 4px), 4px 100%,
+                calc(100% - 4px) 100%, 100% calc(100% - 4px),
+                100% 4px, calc(100% - 4px) 0%
+            );
+        }                .window-btn:hover {
+            box-shadow: var(--neon-glow) var(--magenta);
+        }                .window-content {
+            flex: 1;
+            overflow: auto;            padding: 12px;
+        }                /* Radial Menu */
+        #radial-menu {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            display: none;
+            z-index: 2000;
+        }                .radial-segment {
+            position: absolute;
+            width: 100px;
+            height: 100px;            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);            display: flex;
+            align-items: center;
+            justify-content: center;            font-size: 10px;
+            text-transform: uppercase;            cursor: pointer;            transition: all 0.2s;        }                .radial-segment:hover {
+            background: rgba(0, 255, 255, 0.3);
+            box-shadow: var(--neon-glow) var(--cyan);        }                /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }                ::-webkit-scrollbar-track {
+            background: rgba(10, 10, 20, 0.8);
+        }\
+                ::-webkit-scrollbar-thumb {
+            background: var(--cyan);
+            clip-path: polygon(
+                3px 0%, 0% 3px,
+                0% calc(100% - 3px), 3px 100%,
+                calc(100% - 3px) 100%, 100% calc(100% - 3px),
+                100% 3px, calc(100% - 3px) 0%            );        }    </style>
+</head><body>
+    <div id="desktop"></div>
+    
+    <div id="start-menu" class="panel">
+        <div class="app-grid">
+            <div class="app-icon" onclick="openApp('filemanager')">
+                <div class="app-icon-img"></div>
+                <div class="icon-name">File Manager</div>
+            </div>
+            <div class="app-icon" onclick="openApp('vikinggta')">
+                <div class="app-icon-img"></div>
+                <div class="icon-name">Viking GTA 3D</div>
+            </div>
+            <div class="app-icon" onclick="openApp('terminal')">
+                <div class="app-icon-img"></div>
+                <div class="icon-name">Terminal</div>
+            </div>
+        </div>
+        <div style="margin-top: auto; padding-top: 16px; border-top: 1px solid var(--glass-border);">
+            <div class="panel" style="padding: 8px; cursor: pointer;" onclick="toggleNeon()">Neon Color: Cyan/Magenta</div>
+            <div class="panel" style="padding: 8px; margin-top: 8px; cursor: pointer;" onclick="openWallpaperPicker()">Wallpaper</div>
+            <div class="panel" style="padding: 8px; margin-top: 8px; cursor: pointer;">Sound (stub)</div>
+            <div class="panel" style="padding: 8px; margin-top: 8px; cursor: pointer;">About CVKG OS</div>
+        </div>
+    </div>
+    
+    <div id="taskbar">
+        <button id="start-btn" class="taskbar-btn chamfered">ᚲ</button>
+        <div id="task-buttons"></div>
+        <div id="system-tray">00:00:00</div>
+    </div>
+    
+    <div id="radial-menu"></div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // CVKG OS Core System
+        const CVKG = {
+            windows: {},
+            zIndex: 100,
+            neonMode: 'cyan',
+            
+            init() {
+                this.createDesktopIcons();
+                this.updateClock();
+                setInterval(() => this.updateClock(), 1000);
+                this.setupEventListeners();
+            },
+            
+            createDesktopIcons() {
+                const icons = [
+                    { name: 'File Manager', action: 'filemanager' },
+                    { name: 'Viking GTA 3D', action: 'vikinggta' },
+                    { name: 'Terminal', action: 'terminal' }
+                ];
+                
+                icons.forEach((icon, i) => {
+                    const el = document.createElement('div');
+                    el.className = 'desktop-icon chamfered';
+                    el.style.left = (50 + i * 100) + 'px';
+                    el.style.top = (100 + i * 20) + 'px';
+                    el.innerHTML = `<div class="icon-img"></div><div class="icon-name">${icon.name}</div>`;
+                    el.dataset.action = icon.action;
+                    el.addEventListener('dblclick', () => this.openApp(icon.action));
+                    document.getElementById('desktop').appendChild(el);
+                });
+            },
+            
+            openApp(name) {
+                if (!this.windows[name]) {
+                    this.createWindow(name);
+                }else {
+                    this.focusWindow(name);
+                }
+                document.getElementById('start-menu').classList.remove('active');
+            },
+            
+            createWindow(name) {
+                const win = document.createElement('div');
+                win.className = 'window panel';
+                win.style.left = (100 + Object.keys(this.windows).length * 30) + 'px';
+                win.style.top = (100 + Object.keys(this.windows).length * 30) + 'px';
+                win.style.width = '640px';
+                win.style.height = '480px';
+                
+                win.innerHTML = `
+                    <div class="window-titlebar chamfered" onmousedown="CVKG.startDrag(event, '${name}')">
+                        <div class="window-title">${name}</div>
+                        <div class="window-controls">
+                            <div class="window-btn" onclick="CVKG.minimizeWindow('${name}')">_</div>
+                            <div class="window-btn" onclick="CVKG.maximizeWindow('${name}')">□</div>
+                            <div class="window-btn" onclick="CVKG.closeWindow('${name}')">×</div>
+                        </div>
+                    </div>
+                    <div class="window-content" id="${name}-content"></div>
+                `;
+                
+                document.getElementById('desktop').appendChild(win);
+                this.windows[name] = { element: win, minimized: false };
+                this.focusWindow(name);
+                
+                // Add to taskbar
+                const btn = document.createElement('button');
+                btn.className = 'taskbar-btn chamfered';
+                btn.textContent = name;
+                btn.onclick = () => this.focusWindow(name);
+                document.getElementById('task-buttons').appendChild(btn);
+                
+                this.loadAppContent(name);
+            },
+                        loadAppContent(name) {
+                const content = document.getElementById(`${name}-content`);
+                
+                if (name === 'filemanager') {
+                    content.innerHTML = '<div style="color: var(--cyan);">File Manager - Coming Soon</div>';
+                } else if (name === 'vikinggta') {
+                    content.innerHTML = '<div id="game-container" style="width: 100%; height: 100%; position: relative;'3D Game</div>';
+                    this.initVikingGTA();
+                }
+            },
+                        focusWindow(name) {
+                const win = this.windows[name];
+                win.element.style.zIndex = ++this.zIndex;
+                win.minimized = false;\n            },
+                        minimizeWindow(name) {
+                this.windows[name].minimized = true;
+            },
+                        maximizeWindow(name) {
+                const win = this.windows[name].element;
+                if (win.dataset.maximized !== 'true') {
+                    win.dataset.maximized = 'true';
+                    win.style.left = '0';
+                    win.style.top = '0';
+                    win.style.width = '100%';\n                    win.style.height = 'calc(100% - 48px)';\n                } else {
+                    win.dataset.maximized = 'false';
+                    win.style.left = '100px';
+                    win.style.top = '100px';
+                    win.style.width = '640px';
+                    win.style.height = '480px';
+                }
+            },
+                        closeWindow(name) {
+                this.windows[name].element.remove();
+                delete this.windows[name];
+            },
+                        startDrag(e, name) {
+                // Drag implementation
+            },
+                        initVikingGTA() {
+                // Three.js Viking GTA implementation
+                console.log('Initializing Viking GTA 3D...');
+            },
+                        toggleNeon() {
+                this.neonMode = this.neonMode === 'cyan' ? 'magenta' : 'cyan';
+                document.documentElement.style.setProperty('--neon', this.neonMode === 'cyan' ? '#00ffff' : '#ff00ff');
+            },
+                        updateClock() {
+                const now = new Date();
+                document.getElementById('system-tray').textContent = now.toTimeString().slice(0, 8);
+            },
+                        setupEventListeners() {
+                // Desktop right-click
+                document.getElementById('desktop').addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    this.showRadialMenu(e.clientX, e.clientY);
+                });
+                
+                // Start button
+                document.getElementById('start-btn').addEventListener('click', () => {
+                    document.getElementById('start-menu').classList.toggle('active');
+                });
+                
+                // Close menus on outside click
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('#start-menu') && !e.target.closest('#start-btn')) {
+                        document.getElementById('start-menu').classList.remove('active');
+                    }
+                });
+            },
+                        showRadialMenu(x, y) {
+                // Radial menu implementation
+            }
+        };
+                CVKG.init();
+    </script>
+</body>
+</html>

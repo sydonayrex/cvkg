@@ -10,18 +10,121 @@ edition.workspace = true
 name = "cvkg-webkit-server"
 path = "src/main.rs"
 
+# ── Feature flags ────────────────────────────────────────────────────────────
+#
+# Each flag enables exactly one rendering backend.  The build pipeline sets
+# CVKG_BACKEND=<name> and maps it to the appropriate feature via build.rs.
+# Only one backend flag should be active per compiled artifact; the server
+# builds all four in parallel and routes clients to the correct bundle.
+#
+#   default = []   ← server binary needs no rendering features itself.
+#
+[features]
+default = []
+
+## Backend: WebGPU + WGSL shaders (Chrome 113+, Edge 113+)
+backend-wgpu   = ["wgpu/webgpu", "wgpu/wgsl"]
+
+## Backend: WebGL2 (Safari 15+, Firefox 78+, all Chromium)
+backend-webgl2 = ["wgpu/webgl"]
+
+## Backend: pure-WASM CPU software renderer (universal fallback)
+backend-wasm   = []
+
+## Backend: native wgpu for wry WebView with direct GPU context
+backend-native = ["wgpu/metal", "wgpu/dx12", "wgpu/vulkan-portability"]
+
 [dependencies]
-cvkg-cli = { path = "../cvkg-cli", version = "0.1.12" }
-axum = { version = "0.7", features = ["ws"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "process"] }
-tower-http = { version = "0.5", features = ["cors", "fs"] }
-anyhow = "1.0"
-serde = { workspace = true }
-serde_json = { workspace = true }
-wry = "0.55.0"
-futures-util = "0.3.32"
-tower = { version = "0.4", features = ["util"] }
-bytes = "1.0"
+# ── Server / transport ───────────────────────────────────────────────────────
+cvkg-cli       = { path = "../cvkg-cli", version = "0.1.13" }
+axum           = { version = "0.7", features = ["ws"] }
+tokio          = { workspace = true, features = ["macros", "rt-multi-thread", "process", "signal"] }
+tower-http     = { version = "0.5", features = ["cors", "fs", "set-header", "trace", "timeout", "limit", "compression-full"] }
+tower          = { version = "0.4", features = ["util", "limit"] }
+tracing        = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap           = { version = "4.4", features = ["derive", "env"] }
+tower_governor = "0.3"
+anyhow         = "1.0"
+serde          = { workspace = true, features = ["derive"] }
+serde_json     = { workspace = true }
+futures-util   = "0.3.32"
+bytes          = "1.0"
 http-body-util = "0.1"
-# Lock-free snapshot reads for AppState (replaces RwLock on vdom snapshot in Phase 5)
-arc-swap = { workspace = true }
+wasmtime       = { version = "44.0", features = ["cranelift", "runtime", "component-model"] }
+wasmtime-wasi  = { version = "44.0", features = ["p1"] }
+
+# Lock-free snapshot reads for AppState (replaces RwLock on vdom snapshot).
+arc-swap       = { workspace = true }
+
+# ── Rendering — wgpu (WebGPU / WGSL / WebGL2 / Native) ─────────────────────
+#
+# wgpu is the single dependency that covers all GPU backends:
+#   - `webgpu`  feature → compiles to navigator.gpu (WGSL shaders)
+#   - `webgl`   feature → compiles to WebGL2 (same Rust code, different backend)
+#   - `metal`/`dx12`/`vulkan` → native wgpu for the wry WebView path
+#
+# The server binary itself does NOT link wgpu; only the WASM targets do.
+# wgpu is therefore an optional dep gated on the backend feature flags above.
+wgpu           = { version = "0.20", optional = true, features = [] }
+
+# ── wry WebView host (native embedding) ──────────────────────────────────────
+#
+# wry is used when CVKG runs as a desktop app wrapping the web renderer
+# in a platform WebView. It is always compiled into the server binary so
+# the server can launch a wry window for local dev without a separate process.
+wry            = "0.55.0"
+mime_guess = "2.0.5"
+dotenvy = "0.15.7"
+metrics-exporter-prometheus = "0.15"
+metrics = "0.23"
+validator = { version = "0.20.0", features = ["derive"] }
+
+# ── WASM target dependencies (only active when compiling WASM artifacts) ─────
+#
+# These are not needed by the server binary itself; they are listed here so
+# `wasm-pack` can resolve them when building the WASM frontend targets.
+# Gated on cfg(target_arch = "wasm32") in build.rs / lib.rs.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen   = "0.2"
+js-sys         = "0.3"
+web-sys        = { version = "0.3", features = [
+    # Canvas / 2D context (Inspector overlay)
+    "HtmlCanvasElement",
+    "CanvasRenderingContext2d",
+    # WebGL2 context
+    "WebGl2RenderingContext",
+    "WebGlBuffer",
+    "WebGlProgram",
+    "WebGlShader",
+    "WebGlUniformLocation",
+    "WebGlVertexArrayObject",
+    # WebGPU (gated behind the backend-wgpu feature at runtime)
+    "Gpu",
+    "GpuAdapter",
+    "GpuDevice",
+    "GpuQueue",
+    "GpuBuffer",
+    "GpuCommandEncoder",
+    "GpuRenderPassEncoder",
+    "GpuRenderPipeline",
+    "GpuShaderModule",
+    "GpuCanvasContext",
+    "GpuTextureFormat",
+    "GpuColorDict",
+    # Window / DOM
+    "Window",
+    "Document",
+    "Element",
+    "HtmlElement",
+    "Navigator",
+    "Performance",
+    "Storage",
+]}
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = { version = "0.1", optional = true }
+
+[dev-dependencies]
+# Integration tests hit the live server endpoints.
+tokio          = { workspace = true, features = ["test-util"] }
+reqwest        = { version = "0.12", features = ["json"] }

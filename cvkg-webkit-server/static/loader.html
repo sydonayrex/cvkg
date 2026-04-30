@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CVKG - Loading...</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000000;
+            color: #00ffff;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px #00ffff44;
+            background: #000000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="viking-loader" width="600" height="400"></canvas>
+    
+    <script>
+class VikingLoader {
+    constructor(canvas, config = {}) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.progress = 0;
+        this.running = false;
+        this.lastTime = 0;
+        this.score = 0; // Track cacti chopped
+        this.viking = { x: 80, y: 280, width: 30, height: 40, vy: 0, onGround: true, walkCycle: 0, swinging: false, swingTimer: 0 };
+        this.scrollX = 0;
+        this.baseSpeed = 1.5;
+        this.obstacles = [];
+        this.particles = [];
+        this.keys = { right: false, left: false, jump: false, swing: false };
+        this.setupEvents();
+    }
+    
+    setupEvents() {
+        document.addEventListener('keydown', (e) => {
+            switch(e.code) {
+                case 'ArrowRight': this.keys.right = true; break;
+                case 'ArrowLeft': this.keys.left = true; break;
+                case 'Space': this.keys.jump = true; break;
+                case 'ControlLeft':
+                case 'ControlRight':
+                case 'MetaLeft':
+                case 'MetaRight': this.keys.swing = true; break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            switch(e.code) {
+                case 'ArrowRight': this.keys.right = false; break;
+                case 'ArrowLeft': this.keys.left = false; break;
+                case 'Space': this.keys.jump = false; break;
+                case 'ControlLeft':
+                case 'ControlRight':
+                case 'MetaLeft':
+                case 'MetaRight': this.keys.swing = false; break;
+            }
+        });
+    }
+    
+    setProgress(n) { this.progress = Math.max(0, Math.min(100, n)); }
+    start() { if (!this.running) { this.running = true; this.lastTime = performance.now(); this.gameLoop(this.lastTime); } }
+    stop() { this.running = false; }
+    complete() { this.stop(); if (typeof this.onComplete === 'function') this.onComplete(); }
+    
+    gameLoop(time) {
+        if (!this.running) return;
+        const dt = Math.min(32, time - this.lastTime);
+        this.lastTime = time;
+        this.update(dt);
+        this.draw();
+        requestAnimationFrame((t) => this.gameLoop(t));
+    }
+    
+    update(dt) {
+        const v = this.viking;
+        if (v.onGround && this.keys.jump) { v.vy = -12; v.onGround = false; }
+        v.vy += 0.5; v.y += v.vy;
+        if (v.y >= 280) { v.y = 280; v.vy = 0; v.onGround = true; }
+        
+        if (this.keys.swing && !v.swinging) {
+            v.swinging = true; v.swingTimer = 30;
+            this.checkAxeHits();
+        }
+        if (v.swinging) { v.swingTimer--; if (v.swingTimer <= 0) v.swinging = false; }
+        v.walkCycle += 0.2;
+        
+        if (Math.random() < 0.02) {
+            this.obstacles.push({ x: this.canvas.width + this.scrollX, y: 290, width: 20, height: 30, type: Math.random() > 0.5 ? 'cactus' : 'rock' });
+        }
+        for (let obs of this.obstacles) obs.x -= this.baseSpeed;
+        this.obstacles = this.obstacles.filter(o => o.x > -50);
+        for (let p of this.particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; }
+        this.particles = this.particles.filter(p => p.life > 0);
+        this.scrollX += this.keys.right ? 3 : this.keys.left ? -2 : this.baseSpeed;
+    }
+    
+    checkAxeHits() {
+        const v = this.viking;
+        const hitbox = { x: v.x + v.width + 20, y: v.y + 10, width: 40, height: 20 };
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obs = this.obstacles[i];
+            if (obs.type === 'cactus' && this.rectIntersect(hitbox, obs)) {
+                this.obstacles.splice(i, 1);
+                this.createParticles(obs.x, obs.y);
+                this.score++;
+            }
+        }
+    }
+    
+    rectIntersect(a, b) {
+        return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
+    }
+    
+    createParticles(x, y) {
+        for (let i = 0; i < 8; i++) {
+            this.particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6, life: 30, color: Math.random() > 0.5 ? '#ff00ff' : '#00ffff' });
+        }
+    }
+    
+    draw() {
+        const ctx = this.ctx;
+        const w = this.canvas.width;
+        const h = this.canvas.height;
+        
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, w, h);
+        
+        ctx.strokeStyle = '#00ffff11';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < w; i += 40) {
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, h);
+            ctx.stroke();
+        }
+        
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 24px Courier New';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00ffff';
+        ctx.fillText('CVKG', w/2 - 30, 30);
+        ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(w/2 - 40, 35);
+        ctx.lineTo(w/2 + 40, 35);
+        ctx.stroke();
+        
+        // Draw SCORE in top right
+        ctx.fillStyle = '#00ffff';
+        ctx.font = 'bold 18px Courier New';
+        ctx.textAlign = 'right';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00ffff';
+        ctx.fillText(`SCORE: ${this.score}`, w - 20, 30);
+        ctx.shadowBlur = 0;
+        ctx.textAlign = 'left';
+        
+        ctx.fillStyle = '#ff00ff22';
+        ctx.fillRect(0, 310, w, 90);
+        
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00ffff';
+        ctx.beginPath();
+        ctx.moveTo(0, 310);
+        ctx.lineTo(w, 310);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        for (let obs of this.obstacles) {
+            if (obs.type === 'cactus') this.drawCactus(obs.x - this.scrollX, obs.y);
+            else this.drawRock(obs.x - this.scrollX, obs.y);
+        }
+        
+        for (let p of this.particles) {
+            ctx.fillStyle = p.color;
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = p.color;
+            ctx.fillRect(p.x - this.scrollX, p.y, 3, 3);
+            ctx.shadowBlur = 0;
+        }
+        
+        this.drawViking(this.viking.x, this.viking.y);
+        
+        const barWidth = w - 40;
+        const barX = 20;
+        const barY = h - 40;
+        
+        ctx.fillStyle = '#222';
+        ctx.fillRect(barX, barY, barWidth, 20);
+        
+        ctx.fillStyle = '#ff00ff';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#ff00ff';
+        ctx.fillRect(barX, barY, barWidth * this.progress / 100, 20);
+        ctx.shadowBlur = 0;
+        
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(barX, barY, barWidth, 20);
+        
+        ctx.fillStyle = '#00ffff';
+        ctx.font = '14px Courier New';
+        const text = this.progress >= 100 ? 'PRESS ENTER' : `LOADING... ${this.progress}%`;
+        ctx.fillText(text, w/2 - ctx.measureText(text).width/2, barY + 14);
+    }
+    
+    drawViking(x, y) {
+        const ctx = this.ctx;
+        const v = this.viking;
+        const walkOffset = Math.sin(v.walkCycle) * 3;
+        
+        ctx.save();
+        ctx.fillStyle = '#0088ff';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#0088ff';
+        ctx.beginPath();
+        ctx.moveTo(x + 5, y + 30);
+        ctx.lineTo(x + 20, y + 40 + walkOffset);
+        ctx.lineTo(x + 5, y + 50);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = '#00cccc';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00cccc';
+        ctx.fillRect(x + 10, y + 10, 20, 30);
+        
+        ctx.fillStyle = '#0088ff';
+        ctx.beginPath();
+        ctx.arc(x + 20, y + 5, 8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Helmet - historically accurate (no horns)
+        ctx.fillStyle = '#444444';
+        ctx.fillRect(x + 12, y - 3, 16, 6);
+        ctx.strokeStyle = '#222222';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + 20, y + 5);
+        ctx.lineTo(x + 20, y + 10);
+        ctx.stroke();
+        
+        const leg1Y = y + 50 + Math.sin(v.walkCycle) * 3;
+        const leg2Y = y + 50 - Math.sin(v.walkCycle) * 3;
+        ctx.fillStyle = '#0088ff';
+        ctx.fillRect(x + 12, leg1Y, 5, 10);
+        ctx.fillRect(x + 23, leg2Y, 5, 10);
+        
+        ctx.strokeStyle = '#00cccc';
+        ctx.lineWidth = 4;
+        if (v.swinging) {
+            // BIGGER AXE - larger and more visible
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y + 15);
+            ctx.lineTo(x + 70, y + 5);
+            ctx.stroke();
+            ctx.fillStyle = '#ffaa00';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ffaa00';
+            ctx.fillRect(x + 66, y, 12, 12);
+        } else {
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y + 15);
+            ctx.lineTo(x + 35, y + 25);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+    
+    drawCactus(x, y) {
+        const ctx = this.ctx;
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00ff88';
+        ctx.fillRect(x + 5, y, 10, 30);
+        ctx.fillRect(x, y + 10, 20, 8);
+        ctx.fillRect(x, y + 20, 20, 8);
+        ctx.shadowBlur = 0;
+    }
+    
+    drawRock(x, y) {
+        const ctx = this.ctx;
+        ctx.fillStyle = '#888888';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = '#888888';
+        ctx.beginPath();
+        ctx.arc(x + 10, y + 15, 12, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('viking-loader');
+    if (canvas) {
+        const game = new VikingLoader(canvas);
+        game.start();
+    }
+});
+    </script>
+</body>
+</html>

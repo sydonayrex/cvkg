@@ -1,5 +1,5 @@
 # CVKG Production Revision Plan
-*Updated: v0.1.12 — April 2026*
+*Updated: v0.1.13 — April 2026*
 
 > Items marked ✅ are **fully implemented** in the current codebase and are retained here
 > as acceptance-criteria records. Items without a mark are open work.
@@ -197,7 +197,7 @@
 
 | Item | Completed | Notes |
 |---|---|---|
-| 1.1 `State<T>` / `Binding<T>` ArcSwap+STM | v0.1.12 | Lock-free reads, STM mutate, subscribers |
-| 1.2 `SYSTEM_STATE` / `KnowledgeState` global | v0.1.12 | `load_system_state`, `update_system_state`, `transact_system_state`, `transact_pair` |
-| 1.3 Asset manager cache migration | v0.1.12 | All three backends: Default, Native, Web |
-| 1.4 Dev-server `AppState` migration | v0.1.12 | `ArcSwap<Option<String>>` for snapshot field |
+| 1.1 `State<T>` / `Binding<T>` ArcSwap+STM | v0.1.13 | Lock-free reads, STM mutate, subscribers |
+| 1.2 `SYSTEM_STATE` / `KnowledgeState` global | v0.1.13 | `load_system_state`, `update_system_state`, `transact_system_state`, `transact_pair` |
+| 1.3 Asset manager cache migration | v0.1.13 | All three backends: Default, Native, Web |
+| 1.4 Dev-server `AppState` migration | v0.1.13 | `ArcSwap<Option<String>>` for snapshot field |

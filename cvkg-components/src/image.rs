@@ -52,10 +52,10 @@ impl<P: View> View for AsyncImage<P> {
             cvkg_core::AssetState::Loading => {
                 self.placeholder.render(renderer, rect);
             }
-            cvkg_core::AssetState::Ready(data) => {
-                renderer.load_image(&self.url, &data);
+cvkg_core::AssetState::Ready(data) => {
+                renderer.load_image(&self.url, data.as_ref().as_slice());
                 renderer.draw_image(&self.url, rect);
-            }
+             }
             cvkg_core::AssetState::Error(msg) => {
                 // For now, draw a red border to indicate error
                 renderer.stroke_rect(rect, [1.0, 0.0, 0.0, 1.0], 2.0);

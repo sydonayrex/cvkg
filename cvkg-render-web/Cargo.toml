@@ -4,12 +4,17 @@ version.workspace = true
 license.workspace = true
 repository.workspace = true
 description.workspace = true
-edition.workspace = true
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wgpu = { version = "29.0.1", features = ["webgpu"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+getrandom = { version = "0.3", features = ["wasm_js"] }
 log = "0.4"
 console_log = "1.0"
 bytemuck = { version = "1.14", features = ["derive"] }
@@ -18,7 +23,10 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Performance",
     "HtmlCanvasElement",
+    "Location",
     "CanvasRenderingContext2d",
+    "CanvasGradient",
+    "CanvasPattern",
     "Element",
     "Node",
     "TextMetrics",
@@ -26,10 +34,18 @@ web-sys = { version = "0.3", features = [
     "Headers",
     "Request",
     "RequestInit",
-    "RequestMode"
+    "RequestMode",
+    "WebSocket",
+    "BinaryType",
+    "MessageEvent",
+    "CloseEvent",
+    "ErrorEvent",
+    "PointerEvent",
+    "KeyboardEvent",
+    "WebGl2RenderingContext"
 ] }
-cvkg-core = { path = "../cvkg-core", version = "0.1.12" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.12" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.13" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.13" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Lock-free RCU for image/texture cache; arc-swap is wasm32-compatible (no pthreads)

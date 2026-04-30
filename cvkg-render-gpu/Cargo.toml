@@ -7,8 +7,8 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.12" }
-runic-text = { package = "cvkg-runic-text", path = "../cvkg-runic-text", version = "0.1.12" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.13" }
+runic-text = { package = "cvkg-runic-text", path = "../cvkg-runic-text", version = "0.1.13" }
 wgpu = { version = "29.0.1", features = ["spirv"] }
 winit = "0.30"
 swash = "0.2.7"

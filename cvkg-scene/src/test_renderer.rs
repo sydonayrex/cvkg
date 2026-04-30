@@ -22,7 +22,7 @@
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
 
-use cvkg_core::{FrameRenderer, Rect, Renderer};
+use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer};
 use serde::{Deserialize, Serialize};
 
 /// Command represents a single drawing operation recorded by the TestRenderer.
@@ -99,11 +99,23 @@ pub enum Command {
         saturation: f32,
         opacity: f32,
     },
+    Gungnir {
+        rect: Rect,
+        color: [f32; 4],
+        radius: f32,
+        intensity: f32,
+    },
     PushMjolnirSlice {
         angle: f32,
         offset: f32,
     },
     PopMjolnirSlice,
+    PushTransform {
+        translation: [f32; 2],
+        scale: [f32; 2],
+        rotation: f32,
+    },
+    PopTransform,
 }
 
 /// TestRenderer implements the Renderer trait but only records commands.
@@ -127,10 +139,17 @@ impl TestRenderer {
     }
 }
 
-impl Renderer for TestRenderer {
+impl ElapsedTime for TestRenderer {
     fn delta_time(&self) -> f32 {
         0.016 // Fixed 60fps for testing
     }
+
+    fn elapsed_time(&self) -> f32 {
+        0.0 // Constant 0 for test snapshots
+    }
+}
+
+impl Renderer for TestRenderer {
 
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.commands.push(Command::FillRect { rect, color });
@@ -249,6 +268,15 @@ impl Renderer for TestRenderer {
         });
     }
 
+    fn gungnir(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
+        self.commands.push(Command::Gungnir {
+            rect,
+            color,
+            radius,
+            intensity,
+        });
+    }
+
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
         self.commands
             .push(Command::PushMjolnirSlice { angle, offset });
@@ -256,6 +284,18 @@ impl Renderer for TestRenderer {
 
     fn pop_mjolnir_slice(&mut self) {
         self.commands.push(Command::PopMjolnirSlice);
+    }
+
+    fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
+        self.commands.push(Command::PushTransform {
+            translation,
+            scale,
+            rotation,
+        });
+    }
+
+    fn pop_transform(&mut self) {
+        self.commands.push(Command::PopTransform);
     }
 }
 

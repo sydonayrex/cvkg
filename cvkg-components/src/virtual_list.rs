@@ -51,38 +51,32 @@ where
         unreachable!()
     }
 
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Basic vertical virtualization
-        // We assume rect.y is the coordinate in the scrollable content.
-        // If we want to be truly virtual, we should probably know the scroll offset.
-        // For now, we'll just iterate and check bounds, which is O(N).
-        // A better way is O(visible) by calculating start/end index.
+fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Calculate visible range for O(visible) complexity
+        let start_idx = if rect.y > 0.0 {
+            // Content is scrolled down from top
+            (rect.y / self.item_height).floor() as usize
+        } else {
+            0 // Handle negative scroll (overscroll)
+        };
         
-        // Assuming rect.y is the offset of the visible window relative to the list top
-        // and rect.height is the window height.
-        // But in cvkg, render rect is usually the absolute drawing area.
+        let visible_count = ((rect.height / self.item_height).ceil() as usize).max(1);
+        let end_idx = (start_idx + visible_count + 1).min(self.data.len());
         
-        // Let's use a simple heuristic: if we are rendering at a very large negative Y,
-        // we are likely clipped by a parent ScrollView.
-        
-        for (idx, item) in self.data.iter().enumerate() {
-            let item_y = idx as f32 * self.item_height;
-            
-            // Only render if it intersects with the provided rect
-            // (Note: this rect is in local coordinates if the parent is a container)
-            if item_y + self.item_height < 0.0 || item_y > rect.height {
-                continue;
+        // Only iterate through visible items
+        for idx in start_idx..end_idx {
+            if let Some(item) = self.data.get(idx) {
+                let item_y = idx as f32 * self.item_height;
+                let item_rect = Rect {
+                    x: rect.x,
+                    y: rect.y + item_y,
+                    width: rect.width,
+                    height: self.item_height,
+                };
+                
+                let view = (self.view_builder)(item);
+                view.render(renderer, item_rect);
             }
-            
-            let item_rect = Rect {
-                x: rect.x,
-                y: rect.y + item_y,
-                width: rect.width,
-                height: self.item_height,
-            };
-            
-            let view = (self.view_builder)(item);
-            view.render(renderer, item_rect);
         }
     }
 

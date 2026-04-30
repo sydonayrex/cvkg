@@ -302,6 +302,11 @@ impl Shape {
             fill: Color::BLACK,
         }
     }
+
+    pub fn fill(mut self, color: Color) -> Self {
+        self.fill = color;
+        self
+    }
 }
 
 impl View for Shape {

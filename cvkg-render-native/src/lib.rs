@@ -41,6 +41,7 @@ use winit::{
 pub struct NativeRenderer {
     gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
     delta_time: f32,
+    elapsed_time: f32,
 }
 
 /// Custom events for the native application event loop
@@ -51,8 +52,8 @@ enum AppEvent {
 
 impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
-    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>, delta_time: f32) -> Self {
-        Self { gpu, delta_time }
+    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>, delta_time: f32, elapsed_time: f32) -> Self {
+        Self { gpu, delta_time, elapsed_time }
     }
 
 
@@ -70,6 +71,7 @@ impl NativeRenderer {
             gpu: None,
             asset_manager: std::sync::Arc::new(NativeAssetManager::new()),
             proxy: event_loop.create_proxy(),
+            start_time: std::time::Instant::now(),
         };
 
         event_loop.run_app(&mut app).expect("Event loop error");
@@ -91,6 +93,7 @@ struct App<V: cvkg_core::View> {
     gpu: Option<Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>>,
     asset_manager: std::sync::Arc<NativeAssetManager>,
     proxy: winit::event_loop::EventLoopProxy<AppEvent>,
+    start_time: std::time::Instant,
 }
 
 impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
@@ -203,9 +206,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 // GPU rendering
                 let draw_start = std::time::Instant::now();
                 let delta_time = redraw_start.duration_since(state.last_redraw_start).as_secs_f32();
+                let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
                 let mut gpu = gpu_arc.lock().unwrap();
                 let encoder = gpu.begin_frame(id);
-                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone(), delta_time);
+                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone(), delta_time, elapsed_time);
                 self.view.render(&mut renderer, rect);
                 let draw_end = std::time::Instant::now();
 
@@ -302,10 +306,17 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     }
 }
 
-impl cvkg_core::Renderer for NativeRenderer {
+impl cvkg_core::ElapsedTime for NativeRenderer {
     fn delta_time(&self) -> f32 {
         self.delta_time
     }
+
+    fn elapsed_time(&self) -> f32 {
+        self.elapsed_time
+    }
+}
+
+impl cvkg_core::Renderer for NativeRenderer {
 
     fn fill_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
         self.gpu.lock().unwrap().fill_rect(rect, color);
@@ -378,6 +389,15 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn pop_mjolnir_slice(&mut self) {
         self.gpu.lock().unwrap().pop_mjolnir_slice();
     }
+    fn mjolnir_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
+        self.gpu.lock().unwrap().mjolnir_shatter(rect, pieces, force, color);
+    }
+    fn mjolnir_fluid_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
+        self.gpu.lock().unwrap().mjolnir_fluid_shatter(rect, pieces, force, color);
+    }
+    fn draw_mjolnir_bolt(&mut self, from: [f32; 2], to: [f32; 2], color: [f32; 4]) {
+        self.gpu.lock().unwrap().draw_mjolnir_bolt(from, to, color);
+    }
     fn register_shared_element(&mut self, id: &str, rect: cvkg_core::Rect) {
         self.gpu.lock().unwrap().register_shared_element(id, rect);
     }
@@ -395,6 +415,14 @@ impl cvkg_core::Renderer for NativeRenderer {
     }
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
         self.gpu.lock().unwrap().telemetry.clone()
+    }
+
+    fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
+        self.gpu.lock().unwrap().push_transform(translation, scale, rotation);
+    }
+
+    fn pop_transform(&mut self) {
+        self.gpu.lock().unwrap().pop_transform();
     }
 }
 
