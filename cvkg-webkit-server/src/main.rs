@@ -189,7 +189,7 @@ async fn readiness_handler() -> &'static str {
 }
 
 /// Handler for serving the current system time.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct SystemTime {
     timestamp: u64,
 }
@@ -398,4 +398,33 @@ async fn main() -> anyhow::Result<()> {
 
     info!("CVKG Server shut down gracefully.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use axum::body::to_bytes;
+
+    #[tokio::test]
+    async fn test_liveness() {
+        let response = liveness_handler().await;
+        assert_eq!(response, "OK");
+    }
+
+    #[tokio::test]
+    async fn test_readiness() {
+        let response = readiness_handler().await;
+        assert_eq!(response, "READY");
+    }
+
+    #[tokio::test]
+    async fn test_system_time() {
+        let response = system_time_handler().await.into_response();
+        assert_eq!(response.status(), StatusCode::OK);
+        
+        let body = to_bytes(response.into_body(), 1024).await.unwrap();
+        let time: SystemTime = serde_json::from_slice(&body).unwrap();
+        assert!(time.timestamp > 0);
+    }
 }

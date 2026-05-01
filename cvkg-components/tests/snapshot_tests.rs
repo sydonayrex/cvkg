@@ -25,11 +25,11 @@ fn test_interactive_snapshots() {
     let _toggle = Toggle::new("Switch", false, |_| {});
     let _slider = Slider::new(0.5, 0.0..=1.0, |_| {});
     let _stepper = Stepper::new("Step", 0, |_| {});
-    let _text_field = TextField::new("Name", "", |_| {});
+    let _text_field = Input::new("Name").value("").on_change(|_| {});
     let _secure = SecureField::new("Pass", "", |_| {});
-    let _editor = TextEditor::new("Long", |_| {});
+    let _editor = Textarea::new("Long").on_change(|_| {});
     let _picker = Picker::new(0, vec!["A".into()], |_| {});
-    let _date = DatePicker::new(0, |_| {});
+    let _date = DatePicker::new(|_| {});
     let _color_picker = ColorPicker::new(Color::BLACK, |_| {});
 
     insta::assert_snapshot!(
@@ -44,8 +44,6 @@ fn test_container_snapshots() {
     let _split = NavigationSplitView::new(Text::new("Side"), Text::new("Detail"));
     let _tab = TabView::new(Text::new("Tab"));
     let _sheet = Sheet::new(Text::new("Content"), true);
-    let _alert = Alert::new("Warning", true);
-    let _confirm = ConfirmationDialog::new("Sure?", true);
     let _menu = Menu::new(Text::new("Item"));
     let _list = VStack::new(0.0).child(Text::new("Row"));
     let _table = Table::new(Text::new("Cell"));
@@ -59,7 +57,7 @@ fn test_container_snapshots() {
 
 #[test]
 fn test_visual_snapshots() {
-    let _progress = ProgressView::new(0.5, 1.0);
+    let _progress = Progress::new(0.5).max(1.0);
     let _gauge = Gauge::new(50.0, 0.0..=100.0);
 
     insta::assert_snapshot!(

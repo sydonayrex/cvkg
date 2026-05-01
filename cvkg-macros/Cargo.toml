@@ -13,3 +13,7 @@ syn = { version = "2.0", features = ["full"] }
 
 [lib]
 proc-macro = true
+
+[dev-dependencies]
+cvkg-core = { path = "../cvkg-core" }
+cvkg-components = { path = "../cvkg-components" }

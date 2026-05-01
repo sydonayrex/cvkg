@@ -388,3 +388,48 @@ impl Default for RunicTextEngine {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_shaping_basic() {
+        let mut engine = RunicTextEngine::new();
+        let shaped = engine.shape("Hello", "sans-serif", 16.0);
+        
+        assert!(!shaped.glyphs.is_empty());
+        assert!(shaped.width > 0.0);
+        assert_eq!(shaped.height, 16.0 * 1.2);
+    }
+
+    #[test]
+    fn test_hit_testing() {
+        let mut engine = RunicTextEngine::new();
+        let shaped = engine.shape("ABC", "sans-serif", 16.0);
+        
+        // Find center of first char 'A'
+        let first_glyph = &shaped.glyphs[0];
+        let mid_x = first_glyph.x + first_glyph.advance_x / 4.0;
+        let mid_y = first_glyph.y + first_glyph.line_height / 2.0;
+        
+        let index = shaped.hit_test(mid_x, mid_y);
+        assert_eq!(index, Some(0)); // Should be at start of 'A'
+        
+        // Find right side of 'A'
+        let mid_x_right = first_glyph.x + first_glyph.advance_x * 0.75;
+        let index_right = shaped.hit_test(mid_x_right, mid_y);
+        assert_eq!(index_right, Some(1)); // Should be after 'A'
+    }
+
+    #[test]
+    fn test_word_wrapping() {
+        let mut engine = RunicTextEngine::new();
+        // Force wrap by setting a small max_width
+        let spans = vec![TextSpan::new("Wrap this text", "sans-serif", 16.0)];
+        let shaped = engine.shape_layout(&spans, 50.0);
+        
+        // It should have multiple lines
+        assert!(shaped.height > 16.0 * 1.2 * 1.5);
+    }
+}

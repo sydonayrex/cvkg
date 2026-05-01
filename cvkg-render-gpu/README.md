@@ -14,6 +14,7 @@ The "Forge" that translates CVKG drawing commands into GPU draw calls.
 *   **Multi-Window Architecture**: Shared `wgpu::Device` and `Queue` across multiple window surfaces for resource efficiency.
 *   **Batching**: Efficiently batches primitives into high-throughput vertex buffers.
 *   **Telemetry**: Built-in tracking for frame times, draw calls, and vertex throughput.
+*   **Headless Support**: Hardened GPU pipeline for off-screen rendering and frame capture (Project Niflheim companion).
 
 ### Typography (Runic-Text)
 *   Integrates `cvkg-runic-text` for high-fidelity text layout.

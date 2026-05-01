@@ -446,6 +446,7 @@ pub trait ErasedView: Send {
     fn render_erased(&self, renderer: &mut dyn Renderer, rect: Rect);
     fn name(&self) -> &'static str;
     fn flex_weight_erased(&self) -> f32;
+    fn layout_erased(&self) -> Option<&dyn layout::LayoutView>;
 }
 
 impl<V: View + 'static> ErasedView for V {
@@ -459,6 +460,10 @@ impl<V: View + 'static> ErasedView for V {
 
     fn flex_weight_erased(&self) -> f32 {
         self.flex_weight()
+    }
+
+    fn layout_erased(&self) -> Option<&dyn layout::LayoutView> {
+        self.layout()
     }
 }
 
@@ -489,6 +494,10 @@ impl View for AnyView {
 
     fn flex_weight(&self) -> f32 {
         self.inner.flex_weight_erased()
+    }
+
+    fn layout(&self) -> Option<&dyn layout::LayoutView> {
+        self.inner.layout_erased()
     }
 }
 
@@ -1182,6 +1191,10 @@ impl<V: View, M: ViewModifier> View for ModifiedView<V, M> {
     fn flex_weight(&self) -> f32 {
         self.modifier.child_flex_weight(&self.view)
     }
+
+    fn layout(&self) -> Option<&dyn layout::LayoutView> {
+        self.modifier.layout().or_else(|| self.view.layout())
+    }
 }
 
 pub trait ViewModifier: Send + Clone {
@@ -1226,6 +1239,10 @@ pub trait ViewModifier: Send + Clone {
     /// Allows a modifier to override or pass through the child's flex weight.
     fn child_flex_weight<V: View>(&self, view: &V) -> f32 {
         view.flex_weight()
+    }
+
+    fn layout(&self) -> Option<&dyn layout::LayoutView> {
+        None
     }
 }
 
@@ -1311,6 +1328,10 @@ pub trait Renderer: ElapsedTime + Send {
     fn stroke_ellipse(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
     /// Draw a straight line from (x1,y1) to (x2,y2).
     fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4], stroke_width: f32);
+    /// Fill a polygon defined by a set of vertices.
+    fn fill_polygon(&mut self, _vertices: &[[f32; 2]], _color: [f32; 4]) {}
+    /// Stroke a polygon defined by a set of vertices.
+    fn stroke_polygon(&mut self, _vertices: &[[f32; 2]], _color: [f32; 4], _stroke_width: f32) {}
 
     // ── Text ─────────────────────────────────────────────────────────────
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
@@ -1657,6 +1678,9 @@ impl Mesh {
 /// It is typically implemented by the host windowing/rendering environment.
 pub trait FrameRenderer<E = ()>: Renderer {
     fn begin_frame(&mut self) -> E;
+    fn render_frame(&mut self) {
+        // Default implementation does nothing - override for custom frame rendering
+    }
     fn end_frame(&mut self, encoder: E);
 }
 use std::sync::Arc;
@@ -2815,6 +2839,10 @@ pub mod layout {
                 width: 0.0,
                 height: 0.0,
             }
+        }
+
+        pub fn contains(&self, x: f32, y: f32) -> bool {
+            x >= self.x && x <= self.x + self.width && y >= self.y && y <= self.y + self.height
         }
 
         pub fn size(&self) -> Size {

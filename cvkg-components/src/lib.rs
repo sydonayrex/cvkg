@@ -38,6 +38,9 @@ pub enum FontWeight {
 pub use cvkg_core::Color;
 
 // Re-export submodules
+pub mod calendar;
+pub mod card;
+pub mod command;
 pub mod container;
 pub mod devtools;
 pub mod error;
@@ -45,12 +48,20 @@ pub mod grid;
 pub mod image;
 pub mod interactive;
 pub mod memory;
+pub mod navigation;
 pub mod niflheim_demo;
 pub mod primitive;
 pub mod richtext;
-pub mod visual;
 pub mod virtual_list;
+pub mod virtual_table;
+pub mod shapes;
+pub mod effects;
+pub mod hud;
+pub mod visual;
 
+pub use calendar::*;
+pub use card::*;
+pub use command::*;
 pub use container::*;
 pub use devtools::*;
 pub use error::*;
@@ -58,11 +69,16 @@ pub use grid::*;
 pub use image::*;
 pub use interactive::*;
 pub use memory::*;
+pub use navigation::*;
 pub use niflheim_demo::*;
 pub use primitive::*;
 pub use richtext::*;
-pub use visual::*;
 pub use virtual_list::*;
+pub use virtual_table::*;
+pub use shapes::*;
+pub use effects::*;
+pub use hud::*;
+pub use visual::*;
 
 // Re-export layout components
 pub use cvkg_layout as layout;

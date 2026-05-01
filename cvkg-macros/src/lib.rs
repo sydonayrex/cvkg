@@ -109,13 +109,19 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 if let Some(ident) = &field.ident {
                     let ty = &field.ty;
                     fields.push(quote! { #ident: #ty });
-                    field_names.push(ident);
-                    field_types.push(ty);
+                    field_names.push(quote! { #ident });
+                    field_types.push(quote! { #ty });
                 }
             }
         }
-        syn::Fields::Unnamed(_) => {
-            // TODO: support tuple structs if needed
+        syn::Fields::Unnamed(fields_unnamed) => {
+            for (i, field) in fields_unnamed.unnamed.iter().enumerate() {
+                let ident = quote::format_ident!("_{}", i);
+                let ty = &field.ty;
+                fields.push(quote! { #ident: #ty });
+                field_names.push(quote! { #ident });
+                field_types.push(quote! { #ty });
+            }
         }
         syn::Fields::Unit => {
             // unit struct

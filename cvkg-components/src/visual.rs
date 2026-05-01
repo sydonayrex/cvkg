@@ -1,67 +1,101 @@
-use cvkg_core::{Never, View};
+use cvkg_core::{Never, Rect, Renderer, View};
 
-/// Linear or circular progress indicator
-#[allow(dead_code)]
-pub struct ProgressView {
+/// Progress indicator component.
+pub struct Progress {
     pub(crate) value: f32,
-    pub(crate) total: f32,
+    pub(crate) max: f32,
+    pub(crate) variant: ProgressVariant,
 }
 
-impl ProgressView {
-    /// Create a new ProgressView.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::ProgressView;
-    /// let progress = ProgressView::new(0.5, 1.0);
-    /// ```
-    pub fn new(value: f32, total: f32) -> Self {
-        Self { value, total }
+impl Progress {
+    pub fn new(value: f32) -> Self {
+        Self {
+            value,
+            max: 100.0,
+            variant: ProgressVariant::Linear,
+        }
+    }
+
+    pub fn max(mut self, max: f32) -> Self {
+        self.max = max;
+        self
+    }
+
+    pub fn variant(mut self, variant: ProgressVariant) -> Self {
+        self.variant = variant;
+        self
     }
 }
 
-impl View for ProgressView {
+pub enum ProgressVariant {
+    Linear,
+    Circular,
+}
+
+impl View for Progress {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        let track_h = 8.0;
-        let track_y = rect.y + (rect.height - track_h) / 2.0;
-        // Background track
-        renderer.fill_rounded_rect(
-            Rect {
-                x: rect.x,
-                y: track_y,
-                width: rect.width,
-                height: track_h,
-            },
-            track_h / 2.0,
-            [0.15, 0.15, 0.2, 1.0],
-        );
-        // Fill
-        let pct = if self.total > f32::EPSILON {
-            (self.value / self.total).clamp(0.0, 1.0)
+        let pct = if self.max > 0.0 {
+            (self.value / self.max).clamp(0.0, 1.0)
         } else {
             0.0
         };
-        renderer.fill_rounded_rect(
-            Rect {
-                x: rect.x,
-                y: track_y,
-                width: rect.width * pct,
-                height: track_h,
-            },
-            track_h / 2.0,
-            [0.0, 0.85, 1.0, 1.0],
-        );
+
+        match self.variant {
+            ProgressVariant::Linear => {
+                let track_h = rect.height.min(8.0);
+                let track_y = rect.y + (rect.height - track_h) / 2.0;
+                
+                // Track
+                renderer.fill_rounded_rect(
+                    Rect { x: rect.x, y: track_y, width: rect.width, height: track_h },
+                    track_h / 2.0,
+                    [0.15, 0.15, 0.2, 1.0],
+                );
+                
+                // Fill
+                renderer.fill_rounded_rect(
+                    Rect { x: rect.x, y: track_y, width: rect.width * pct, height: track_h },
+                    track_h / 2.0,
+                    [0.0, 0.85, 1.0, 1.0],
+                );
+            }
+            ProgressVariant::Circular => {
+                let dim = rect.width.min(rect.height);
+                let circ_rect = Rect {
+                    x: rect.x + (rect.width - dim) / 2.0,
+                    y: rect.y + (rect.height - dim) / 2.0,
+                    width: dim,
+                    height: dim,
+                };
+
+                // Background ring
+                renderer.stroke_ellipse(circ_rect, [0.1, 0.1, 0.15, 1.0], 4.0);
+                
+                // Progress ring (simulated with smaller ellipse for now)
+                let inset = 4.0;
+                let progress_rect = Rect {
+                    x: circ_rect.x + inset,
+                    y: circ_rect.y + inset,
+                    width: (circ_rect.width - 2.0 * inset) * pct,
+                    height: circ_rect.height - 2.0 * inset,
+                };
+                renderer.stroke_ellipse(progress_rect, [0.0, 1.0, 1.0, 1.0], 4.0);
+            }
+        }
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        cvkg_core::Size {
-            width: proposal.width.unwrap_or(100.0),
-            height: 12.0,
+        match self.variant {
+            ProgressVariant::Linear => cvkg_core::Size {
+                width: proposal.width.unwrap_or(100.0),
+                height: 12.0,
+            },
+            ProgressVariant::Circular => cvkg_core::Size { width: 40.0, height: 40.0 },
         }
     }
 }
@@ -74,13 +108,6 @@ pub struct Gauge {
 }
 
 impl Gauge {
-    /// Create a new Gauge.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::Gauge;
-    /// let gauge = Gauge::new(50.0, 0.0..=100.0);
-    /// ```
     pub fn new(value: f32, range: std::ops::RangeInclusive<f32>) -> Self {
         Self { value, range }
     }
@@ -93,9 +120,7 @@ impl View for Gauge {
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        // Outer ring
         renderer.stroke_ellipse(rect, [0.15, 0.15, 0.2, 1.0], 6.0);
-        // Arc fill — approximate with a coloured inner ellipse scaled by value
         let start = *self.range.start();
         let end = *self.range.end();
         let pct = if (end - start).abs() > f32::EPSILON {
@@ -116,45 +141,6 @@ impl View for Gauge {
     fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
         let size = proposal.width.unwrap_or(100.0).min(proposal.height.unwrap_or(100.0));
         cvkg_core::Size { width: size, height: size }
-    }
-}
-
-/// A circular progress ring
-pub struct ProgressRing {
-    pub value: f32,
-    pub total: f32,
-}
-
-impl ProgressRing {
-    pub fn new(value: f32, total: f32) -> Self {
-        Self { value, total }
-    }
-}
-
-impl View for ProgressRing {
-    type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
-
-    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        let pct = if self.total > 0.0 { (self.value / self.total).clamp(0.0, 1.0) } else { 0.0 };
-        
-        // Background ring
-        renderer.stroke_ellipse(rect, [0.1, 0.1, 0.15, 1.0], 4.0);
-        
-        // Progress ring (simulated with partial arc logic in Surtr or just a scaled ellipse)
-        // In CVKG, we'll use a specialized mode for arcs later, for now we draw a smaller ellipse
-        let inset = 4.0;
-        let progress_rect = Rect {
-            x: rect.x + inset,
-            y: rect.y + inset,
-            width: (rect.width - 2.0 * inset) * pct,
-            height: rect.height - 2.0 * inset,
-        };
-        renderer.stroke_ellipse(progress_rect, [0.0, 1.0, 1.0, 1.0], 4.0);
-    }
-
-    fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        cvkg_core::Size { width: 40.0, height: 40.0 }
     }
 }
 
@@ -189,7 +175,6 @@ impl View for StatusBar {
         }
     }
 }
-use cvkg_core::{Rect, Renderer};
 
 /// Chart types for tactical visualization
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,16 +193,14 @@ pub struct ChartView {
 }
 
 impl ChartView {
-    /// Create a new ChartView.
     pub fn new(chart_type: ChartType, data: Vec<f32>) -> Self {
         Self {
             chart_type,
             data,
-            color: [0.0, 1.0, 1.0, 1.0], // Default NiflCyan
+            color: [0.0, 1.0, 1.0, 1.0],
         }
     }
 
-    /// Set the chart color.
     pub fn color(mut self, color: [f32; 4]) -> Self {
         self.color = color;
         self
@@ -252,12 +235,7 @@ impl View for ChartView {
                     let x = rect.x + i as f32 * dx;
                     let y = rect.y + rect.height * (1.0 - val);
                     renderer.fill_rounded_rect(
-                        Rect {
-                            x: x - 3.0,
-                            y: y - 3.0,
-                            width: 6.0,
-                            height: 6.0,
-                        },
+                        Rect { x: x - 3.0, y: y - 3.0, width: 6.0, height: 6.0 },
                         3.0,
                         self.color,
                     );
@@ -288,7 +266,6 @@ impl View for ChartView {
                 let center_y = rect.y + rect.height / 2.0;
                 let max_radius = rect.width.min(rect.height) / 2.0;
 
-                // Draw background axes
                 let num_axes = self.data.len();
                 for i in 0..num_axes {
                     let angle = (i as f32 / num_axes as f32) * 2.0 * std::f32::consts::PI
@@ -298,7 +275,6 @@ impl View for ChartView {
                     renderer.draw_line(center_x, center_y, x, y, [0.3, 0.3, 0.4, 0.5], 1.0);
                 }
 
-                // Draw data polygon
                 for i in 0..num_axes {
                     let next_i = (i + 1) % num_axes;
                     let angle1 = (i as f32 / num_axes as f32) * 2.0 * std::f32::consts::PI
@@ -314,17 +290,9 @@ impl View for ChartView {
                     let x2 = center_x + angle2.cos() * r2;
                     let y2 = center_y + angle2.sin() * r2;
 
-                    // Draw the edge of the polygon
                     renderer.draw_line(x1, y1, x2, y2, self.color, 2.0);
-
-                    // Optional: draw small points at vertices
                     renderer.fill_rounded_rect(
-                        Rect {
-                            x: x1 - 2.0,
-                            y: y1 - 2.0,
-                            width: 4.0,
-                            height: 4.0,
-                        },
+                        Rect { x: x1 - 2.0, y: y1 - 2.0, width: 4.0, height: 4.0 },
                         2.0,
                         self.color,
                     );

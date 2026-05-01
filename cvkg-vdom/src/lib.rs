@@ -32,7 +32,7 @@ use std::collections::HashMap;
 pub struct NodeId(pub u64);
 
 /// Represents the computed layout bounds of a component in the Virtual DOM.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct LayoutRect {
     /// X coordinate
     pub x: f32,
@@ -584,6 +584,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             "text".to_string(),
             serde_json::Value::String(text.to_string()),
         );
+        let (w, h) = self.measure_text(text, size);
         self.add_node(VNode {
             id,
             key: None,
@@ -593,9 +594,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
             layout: LayoutRect {
                 x,
                 y,
-                width: 0.0,
-                height: size,
-            }, // Simplified text bounds
+                width: w,
+                height: h,
+            },
             children: Vec::new(),
             aria_role: "text".to_string(),
             aria_props: AriaProps {

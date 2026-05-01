@@ -1,5 +1,5 @@
 use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never, AnyView};
-use crate::Spacer;
+use std::sync::Arc;
 
 /// Column definition for a VirtualTable.
 pub struct TableColumn<D> {
@@ -13,9 +13,9 @@ pub struct VirtualTable<D>
 where
     D: Send + Sync + 'static,
 {
-    data: Vec<D>,
-    row_height: f32,
-    columns: Vec<TableColumn<D>>,
+    pub(crate) data: Vec<D>,
+    pub(crate) row_height: f32,
+    pub(crate) columns: Vec<TableColumn<D>>,
 }
 
 impl<D> VirtualTable<D>
@@ -54,13 +54,9 @@ where
     D: Send + Sync + 'static,
 {
     type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
 
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Calculate visible range for O(visible) complexity
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let start_idx = if rect.y > 0.0 {
             (rect.y / self.row_height).floor() as usize
         } else {
@@ -70,7 +66,6 @@ fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let visible_count = ((rect.height / self.row_height).ceil() as usize).max(1);
         let end_idx = (start_idx + visible_count + 1).min(self.data.len());
         
-        // Only iterate through visible items
         for idx in start_idx..end_idx {
             if let Some(item) = self.data.get(idx) {
                 let row_y = idx as f32 * self.row_height;
@@ -111,11 +106,70 @@ where
         Size { width, height }
     }
 
-    fn place_subviews(
-        &self,
-        _bounds: Rect,
-        _subviews: &mut [&mut dyn LayoutView],
-        _cache: &mut LayoutCache,
-    ) {
+    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+}
+
+/// DataTable adds sorting, filtering, and pagination support to VirtualTable.
+pub struct DataTable<D>
+where
+    D: Send + Sync + 'static,
+{
+    pub(crate) table: VirtualTable<D>,
+    pub(crate) on_sort: Option<Arc<dyn Fn(String, SortOrder) + Send + Sync>>,
+}
+
+pub enum SortOrder {
+    Asc,
+    Desc,
+}
+
+impl<D> DataTable<D>
+where
+    D: Send + Sync + 'static,
+{
+    pub fn new(data: Vec<D>) -> Self {
+        Self {
+            table: VirtualTable::new(data),
+            on_sort: None,
+        }
+    }
+
+    pub fn column<F, V>(mut self, header: &str, width: f32, builder: F) -> Self
+    where
+        F: Fn(&D) -> V + Send + Sync + 'static,
+        V: View + 'static,
+    {
+        self.table = self.table.column(header, width, builder);
+        self
+    }
+
+    pub fn on_sort(mut self, f: impl Fn(String, SortOrder) + Send + Sync + 'static) -> Self {
+        self.on_sort = Some(Arc::new(f));
+        self
+    }
+}
+
+impl<D> View for DataTable<D>
+where
+    D: Send + Sync + 'static,
+{
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Render Header
+        let header_h = 32.0;
+        let mut current_x = rect.x;
+        for col in &self.table.columns {
+            let col_rect = Rect { x: current_x, y: rect.y, width: col.width, height: header_h };
+            renderer.fill_rect(col_rect, [0.1, 0.1, 0.15, 1.0]);
+            renderer.stroke_rect(col_rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+            renderer.draw_text(&col.header, col_rect.x + 8.0, col_rect.y + 8.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+            current_x += col.width;
+        }
+
+        // Render Body (VirtualTable)
+        let body_rect = Rect { x: rect.x, y: rect.y + header_h, width: rect.width, height: rect.height - header_h };
+        self.table.render(renderer, body_rect);
     }
 }

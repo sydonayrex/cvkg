@@ -116,7 +116,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
     let x = f32(i32(vertex_index) / 2) * 4.0 - 1.0;
     let y = f32(i32(vertex_index) % 2) * 4.0 - 1.0;
-    out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
+    out.clip_position = vec4<f32>(x, y, 1.0, 1.0);
     out.uv = vec2<f32>((x + 1.0) * 0.5, (1.0 - y) * 0.5);
     // Fullscreen passes don't use per-vertex data; supply safe defaults so
     // fs_main's clip SDF and mode branches don't discard/misrender fragments.
@@ -422,7 +422,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_background(in: VertexOutput) -> @location(0) vec4<f32> {
     // 1. Screen-Space UV (Continuous across the whole field)
-    let uv = (in.clip_position.xy * 0.5 + 0.5);
+    let uv = in.uv;
     let time = scene.time;
     
     // 2. Global Center-Based Gradient (No more slabs)
@@ -491,12 +491,12 @@ fn fs_blur_v(in: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
-    let uv = (in.clip_position.xy * 0.5 + 0.5);
+    let uv_screen = in.uv;
     let scene_color = textureSample(t_diffuse, s_diffuse, in.uv);
     let bloom_color = textureSample(t_env, s_env, in.uv);
     
     // Berserker Glow Instability (Temporal + Spatial Pulse)
-    let flicker = 0.92 + sin(scene.time * 6.0 + uv.x * 10.0) * 0.08;
+    let flicker = 0.92 + sin(scene.time * 6.0 + uv_screen.x * 10.0) * 0.08;
     
     // Tonemapping & Bloom Fusion with Flicker
     let final_rgb = scene_color.rgb + (bloom_color.rgb * 1.5 * flicker);

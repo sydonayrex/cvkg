@@ -13,12 +13,6 @@ pub struct Text {
 
 impl Text {
     /// Create a new Text component with the given content.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::Text;
-    /// let label = Text::new("Hello World");
-    /// ```
     pub fn new(content: impl Into<String>) -> Self {
         Self {
             content: content.into(),
@@ -80,7 +74,6 @@ impl LayoutView for Text {
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {
-        // Rough estimation: width is length * fontSize * 0.6
         Size {
             width: self.content.len() as f32 * self.font_size * 0.6,
             height: self.font_size * 1.2,
@@ -105,13 +98,6 @@ pub struct Divider {
 }
 
 impl Divider {
-    /// Create a horizontal Divider.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::Divider;
-    /// let div = Divider::horizontal();
-    /// ```
     pub fn horizontal() -> Self {
         Self {
             orientation: Orientation::Horizontal,
@@ -172,13 +158,6 @@ pub struct Spacer {
 }
 
 impl Spacer {
-    /// Create a new Spacer with a minimum length.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::Spacer;
-    /// let spacer = Spacer::new(10.0);
-    /// ```
     pub fn new(min_length: f32) -> Self {
         Self { min_length }
     }
@@ -245,15 +224,6 @@ impl<F> Canvas<F>
 where
     F: Fn(&mut dyn Renderer, Rect) + Send + Sync + 'static,
 {
-    /// Create a new Canvas with a drawing closure.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::Canvas;
-    /// let canvas = Canvas::new(|renderer, rect| {
-    ///     renderer.draw_line(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height, [1.0, 1.0, 1.0, 1.0], 1.0);
-    /// });
-    /// ```
     pub fn new(draw_func: F) -> Self {
         Self { draw_func }
     }
@@ -289,13 +259,6 @@ pub struct Shape {
 }
 
 impl Shape {
-    /// Create a new rounded rectangle Shape.
-    ///
-    /// # Examples
-    /// ```
-    /// use cvkg_components::Shape;
-    /// let rect = Shape::rounded_rect(8.0);
-    /// ```
     pub fn rounded_rect(corner_radius: f32) -> Self {
         Self {
             shape_type: ShapeType::RoundedRectangle { corner_radius },
@@ -324,6 +287,125 @@ impl View for Shape {
             ShapeType::Circle => {
                 renderer.fill_ellipse(rect, self.fill.as_array());
             }
+        }
+    }
+}
+
+/// Badge component for displaying small status or category tags.
+pub struct Badge {
+    pub(crate) text: String,
+    pub(crate) variant: BadgeVariant,
+}
+
+impl Badge {
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            variant: BadgeVariant::Default,
+        }
+    }
+
+    pub fn variant(mut self, variant: BadgeVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+}
+
+pub enum BadgeVariant {
+    Default,
+    Secondary,
+    Destructive,
+    Outline,
+}
+
+impl View for Badge {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let (bg, text_color) = match self.variant {
+            BadgeVariant::Default => ([0.0, 0.8, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]),
+            BadgeVariant::Secondary => ([0.2, 0.2, 0.25, 1.0], [1.0, 1.0, 1.0, 1.0]),
+            BadgeVariant::Destructive => ([0.8, 0.1, 0.1, 1.0], [1.0, 1.0, 1.0, 1.0]),
+            BadgeVariant::Outline => ([0.0, 0.0, 0.0, 0.0], [0.0, 0.8, 1.0, 1.0]),
+        };
+
+        renderer.fill_rounded_rect(rect, rect.height / 2.0, bg);
+        if let BadgeVariant::Outline = self.variant {
+            renderer.stroke_rounded_rect(rect, rect.height / 2.0, text_color, 1.0);
+        }
+
+        let (tw, th) = renderer.measure_text(&self.text, 12.0);
+        renderer.draw_text(
+            &self.text,
+            rect.x + (rect.width - tw) / 2.0,
+            rect.y + (rect.height - th) / 2.0,
+            12.0,
+            text_color,
+        );
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        let (tw, th) = renderer.measure_text(&self.text, 12.0);
+        Size { width: tw + 16.0, height: th + 8.0 }
+    }
+}
+
+/// Skeleton component for displaying loading placeholders.
+pub struct Skeleton {
+    pub(crate) width: Option<f32>,
+    pub(crate) height: Option<f32>,
+    pub(crate) rounded: bool,
+}
+
+impl Skeleton {
+    pub fn new() -> Self {
+        Self {
+            width: None,
+            height: None,
+            rounded: true,
+        }
+    }
+
+    pub fn size(mut self, width: f32, height: f32) -> Self {
+        self.width = Some(width);
+        self.height = Some(height);
+        self
+    }
+
+    pub fn rounded(mut self, rounded: bool) -> Self {
+        self.rounded = rounded;
+        self
+    }
+}
+
+impl Default for Skeleton {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl View for Skeleton {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Shimmer effect simulation
+        let time = renderer.elapsed_time();
+        let shimmer = (time * 2.0).sin() * 0.1 + 0.2;
+        let color = [shimmer, shimmer, shimmer + 0.05, 1.0];
+
+        if self.rounded {
+            renderer.fill_rounded_rect(rect, 4.0, color);
+        } else {
+            renderer.fill_rect(rect, color);
+        }
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        Size {
+            width: self.width.or(proposal.width).unwrap_or(100.0),
+            height: self.height.or(proposal.height).unwrap_or(20.0),
         }
     }
 }

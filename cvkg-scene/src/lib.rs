@@ -118,7 +118,7 @@ impl SceneGraph {
                 p.children.push(id);
                 p.is_dirty = true;
             }
-        } else {
+        } else if self.root.is_none() {
             self.root = Some(id);
         }
         
@@ -232,6 +232,55 @@ impl SceneGraph {
             node.is_dirty = false;
         }
         self.dirty_regions.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scene_graph_culling() {
+        let mut scene = SceneGraph::new();
+        let id1 = scene.next_id();
+        let node1 = VNode::new(id1, "Rect", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        scene.add_node(node1, None);
+        
+        let id2 = scene.next_id();
+        let mut node2 = VNode::new(id2, "Rect", Rect { x: 150.0, y: 0.0, width: 50.0, height: 50.0 });
+        node2.layer_id = 1;
+        scene.add_node(node2, Some(id1));
+        
+        scene.update_transforms();
+        
+        // Culling with viewport that only sees node 1
+        let visible = scene.cull(Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        assert_eq!(visible.len(), 1);
+        assert_eq!(visible[0], id1);
+        
+        // Culling with viewport that sees both
+        let visible = scene.cull(Rect { x: 0.0, y: 0.0, width: 200.0, height: 100.0 });
+        assert_eq!(visible.len(), 2);
+        
+        // Batching
+        let batches = scene.batch(&visible);
+        assert_eq!(batches.len(), 2);
+        assert_eq!(batches.get(&0).unwrap().len(), 1);
+        assert_eq!(batches.get(&1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_scene_graph_dirty_tracking() {
+        let mut scene = SceneGraph::new();
+        let id = scene.next_id();
+        let rect = Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        scene.add_node(VNode::new(id, "Rect", rect), None);
+        
+        assert_eq!(scene.dirty_regions().len(), 1);
+        assert_eq!(scene.dirty_regions()[0], rect);
+        
+        scene.clear_dirty();
+        assert_eq!(scene.dirty_regions().len(), 0);
     }
 }
 

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adele Design Systems Explorer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #020205;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+        }
+        #cvkg-container {
+            position: relative;
+            width: 1024px;
+            height: 768px;
+            box-shadow: 0 0 50px rgba(0, 255, 255, 0.1);
+            border-radius: 4px;
+            background: rgba(5, 5, 10, 0.5);
+            backdrop-filter: blur(10px);
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #00FFFF;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="status">Adele UI // Active</div>
+    <div id="cvkg-root">
+        <div id="cvkg-container">
+            <canvas id="cvkg-canvas"></canvas>
+        </div>
+    </div>
+    <script type="module">
+        import init from './pkg/adele_web_demo.js';
+        async function run() {
+            try {
+                await init();
+                console.log("Adele UI Demo Started");
+            } catch (e) {
+                console.error("Failed to start Adele UI:", e);
+                document.getElementById('status').textContent = "Initialization Failed";
+                document.getElementById('status').style.color = "red";
+            }
+        }
+        run();
+    </script>
+</body>
+</html>

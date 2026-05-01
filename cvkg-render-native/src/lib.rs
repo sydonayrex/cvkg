@@ -246,37 +246,20 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
             }
             WindowEvent::MouseInput { state: mouse_state, .. } => {
                 if let Some(vdom) = &state.vdom {
-                    let event = match mouse_state {
-                        winit::event::ElementState::Pressed => {
-                            cvkg_core::Event::PointerDown {
-                                x: state.cursor_pos[0],
-                                y: state.cursor_pos[1],
-                            }
-                        }
-                        winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
-                            x: state.cursor_pos[0],
-                            y: state.cursor_pos[1],
-                        },
-                    };
+                    let event = convert_mouse_event(mouse_state, state.cursor_pos);
                     vdom.dispatch_event(event);
                 }
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(vdom) = &state.vdom
-                    && let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
-                        let key_str = format!("{:?}", code);
-                        let cvkg_event = if event.state == winit::event::ElementState::Pressed {
-                            cvkg_core::Event::KeyDown { key: key_str }
-                        } else {
-                            cvkg_core::Event::KeyUp { key: key_str }
-                        };
+                    && let Some(cvkg_event) = convert_keyboard_event(event) {
                         vdom.dispatch_event(cvkg_event);
                 }
             }
             WindowEvent::Ime(ime_event) => {
                 if let Some(vdom) = &state.vdom
-                    && let winit::event::Ime::Commit(string) = ime_event {
-                        vdom.dispatch_event(cvkg_core::Event::Ime(string));
+                    && let Some(cvkg_event) = convert_ime_event(ime_event) {
+                        vdom.dispatch_event(cvkg_event);
                 }
             }
             _ => {}
@@ -426,6 +409,36 @@ impl cvkg_core::Renderer for NativeRenderer {
     }
 }
 
+// ── Event Conversion Helpers ───────────────────────────────────────────
+
+fn convert_mouse_event(state: winit::event::ElementState, pos: [f32; 2]) -> cvkg_core::Event {
+    match state {
+        winit::event::ElementState::Pressed => cvkg_core::Event::PointerDown { x: pos[0], y: pos[1] },
+        winit::event::ElementState::Released => cvkg_core::Event::PointerUp { x: pos[0], y: pos[1] },
+    }
+}
+
+fn convert_keyboard_event(event: winit::event::KeyEvent) -> Option<cvkg_core::Event> {
+    if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+        let key_str = format!("{:?}", code);
+        if event.state == winit::event::ElementState::Pressed {
+            Some(cvkg_core::Event::KeyDown { key: key_str })
+        } else {
+            Some(cvkg_core::Event::KeyUp { key: key_str })
+        }
+    } else {
+        None
+    }
+}
+
+fn convert_ime_event(event: winit::event::Ime) -> Option<cvkg_core::Event> {
+    if let winit::event::Ime::Commit(string) = event {
+        Some(cvkg_core::Event::Ime(string))
+    } else {
+        None
+    }
+}
+
 // Platform-specific implementations for macOS, Windows, and Linux are handled by winit and AccessKit.
 
 struct ShieldWall {
@@ -517,5 +530,73 @@ impl cvkg_core::AssetManager for NativeAssetManager {
 
     fn preload_image(&self, _url: &str) {
         // Async preloading could be wired to a background thread here
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cvkg_core::AssetManager;
+    use std::io::Write;
+
+    #[test]
+    fn test_native_asset_manager_loading() {
+        let manager = NativeAssetManager::new();
+        let temp_file_path = "test_asset.png";
+        let test_data = b"fake-image-data";
+        
+        // Create a temporary file
+        let mut file = std::fs::File::create(temp_file_path).unwrap();
+        file.write_all(test_data).unwrap();
+        
+        // Test loading
+        let state = manager.load_image(temp_file_path);
+        if let cvkg_core::AssetState::Ready(data) = state {
+            assert_eq!(&*data, test_data);
+        } else {
+            panic!("Expected Ready state");
+        }
+        
+        // Test caching (fast path)
+        let state2 = manager.load_image(temp_file_path);
+        if let cvkg_core::AssetState::Ready(data) = state2 {
+            assert_eq!(&*data, test_data);
+        } else {
+            panic!("Expected Ready state (cached)");
+        }
+        
+        // Cleanup
+        let _ = std::fs::remove_file(temp_file_path);
+    }
+
+    #[test]
+    fn test_native_asset_manager_error() {
+        let manager = NativeAssetManager::new();
+        let state = manager.load_image("non_existent_file.png");
+        if let cvkg_core::AssetState::Error(_) = state {
+            // Success
+        } else {
+            panic!("Expected Error state");
+        }
+    }
+
+    #[test]
+    fn test_event_conversion() {
+        // Mouse event
+        let event = convert_mouse_event(winit::event::ElementState::Pressed, [10.0, 20.0]);
+        if let cvkg_core::Event::PointerDown { x, y } = event {
+            assert_eq!(x, 10.0);
+            assert_eq!(y, 20.0);
+        } else {
+            panic!("Expected PointerDown");
+        }
+
+        // IME event
+        let event = convert_ime_event(winit::event::Ime::Commit("hello".to_string()));
+        if let Some(cvkg_core::Event::Ime(s)) = event {
+            assert_eq!(s, "hello");
+        } else {
+            panic!("Expected Ime event");
+        }
     }
 }

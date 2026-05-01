@@ -16,6 +16,7 @@ An abstraction over the target platform (GPU, Web, Native Primitive).
 *   `push_vnode`: VDOM integration.
 *   `register_handler`: Event system integration.
 *   `get_telemetry`: Real-time performance metric harvesting.
+*   **Headless**: `capture_frame` for pixel readback and visual validation.
 *   `set_aria_role`, `set_aria_label`: Accessibility integration.
 
 ### State & Bindings

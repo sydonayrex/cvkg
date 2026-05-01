@@ -6,20 +6,12 @@ use std::path::PathBuf;
 /// Security: Test path validation prevents directory traversal
 #[test]
 fn test_validate_path_prevents_traversal() {
-    // This test validates the core security function
-    // The actual implementation in main_secure.rs uses canonicalize()
-    
-    let base = PathBuf::from("/safe/pkg");
+    let _base = PathBuf::from("/safe/pkg");
     let escape_attempt = PathBuf::from("/safe/pkg/../../../etc/passwd");
-    
-    // The function should reject paths that escape the base directory
-    // Since we can't easily test canonicalize in unit tests without temp dirs,
-    // we verify the logic structure
-    
     assert!(escape_attempt.iter().any(|p| p == ".."));
 }
 
-/// Security: Test subpath validation
+/// Security: Test subpath validation rejects traversal sequences
 #[test]
 fn test_validate_subpath_rejects_traversal_sequences() {
     let malicious_subpaths = vec![
@@ -60,14 +52,11 @@ fn test_validate_subpath_accepts_valid_paths() {
 #[test]
 fn test_cors_parsing_wildcard_security() {
     let permissive = "*";
-    
-    // Wildcard should trigger safe fallback
     let is_permissive = permissive == "*";
     assert!(is_permissive, "Should detect wildcard");
     
-    // Safe fallback should be localhost only
     let safe_origins = vec!["http://localhost:3000"];
-    assert!(!safe_origins.iter().any(|o| o == "*"));
+    assert!(!safe_origins.iter().any(|&o| o == "*"));
 }
 
 /// Security: Test CORS origin parsing accepts valid origins
@@ -87,9 +76,6 @@ fn test_cors_parsing_valid_origins() {
 /// Security: Test AppError variants
 #[test]
 fn test_app_error_display() {
-    use std::fmt::Display;
-    
-    // Test that error variants have appropriate messages
     let errors = vec![
         ("Invalid path", "Invalid path: access denied"),
         ("Unauthorized", "Unauthorized"),
@@ -142,15 +128,11 @@ fn test_malicious_path_detection() {
 #[test]
 fn test_path_validation_performance() {
     use std::time::Instant;
-    
     let start = Instant::now();
     
-    // Simulate 1000 path validations
     for i in 0..1000 {
-        let base = PathBuf::from("/pkg");
-        let target = PathBuf::from(format!("/pkg/subdir/{}", i));
-        
-        // Basic validation logic
+        let _base = PathBuf::from("/pkg");
+        let _target = PathBuf::from(format!("/pkg/subdir/{}", i));
         let is_valid = !format!("/pkg/subdir/{}", i).contains("..");
         assert!(is_valid);
     }

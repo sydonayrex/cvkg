@@ -29,6 +29,22 @@ mod stubs {
         fn end_frame(&mut self, _: ()) {}
     }
     pub fn get_render_tier_name() -> String { "None".to_string() }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_web_renderer_stub_lifecycle() {
+            let mut renderer = WebRenderer::new();
+            assert_eq!(renderer.tier(), RenderTier::Tier3Fallback);
+            
+            // Should not panic
+            renderer.fill_rect(Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 }, [1.0, 1.0, 1.0, 1.0]);
+            renderer.begin_frame();
+            renderer.end_frame(());
+        }
+    }
 }
 #[cfg(not(target_arch = "wasm32"))]
 pub use stubs::*;
@@ -1356,10 +1372,6 @@ impl WebRenderer {
             ctx.move_to(0.0, y);
             ctx.line_to(width, y);
             ctx.stroke();
-        }
-        // Silent render of children
-        for (_i, child) in node.children.iter().enumerate() {
-            child.render(renderer, rect);
         }
         
         ctx.restore();

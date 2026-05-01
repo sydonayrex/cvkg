@@ -10,6 +10,7 @@
 *   **Intrinsic Sizing**: Sophisticated content-aware layout negotiation system allowing components to define their natural dimensions.
 *   **Vector Iconography**: GPU-accelerated SVG tessellation engine (via lyon) for resolution-independent icons and paths.
 *   **Performance Telemetry**: Real-time monitoring of frame times, draw calls, and vertex counts directly in the UI.
+*   **Headless Rendering**: Hardened GPU pipeline for automated visual regression testing and server-side frame capture.
 *   **Cross-Platform**: Seamlessly targets Native (Desktop) and Web (WASM) via unified rendering traits.
 *   **Agent-Optimized**: Designed to be easily navigable and manipulatable by AI agents.
 *   **Accessibility**: Integrated Screen Reader support (AccessKit/Section 508) and IME functionality.

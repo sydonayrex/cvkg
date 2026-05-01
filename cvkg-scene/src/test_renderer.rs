@@ -116,6 +116,11 @@ pub enum Command {
         rotation: f32,
     },
     PopTransform,
+    PushVNode {
+        rect: Rect,
+        name: String,
+    },
+    PopVNode,
 }
 
 /// TestRenderer implements the Renderer trait but only records commands.
@@ -296,6 +301,17 @@ impl Renderer for TestRenderer {
 
     fn pop_transform(&mut self) {
         self.commands.push(Command::PopTransform);
+    }
+
+    fn push_vnode(&mut self, rect: Rect, name: &'static str) {
+        self.commands.push(Command::PushVNode {
+            rect,
+            name: name.to_string(),
+        });
+    }
+
+    fn pop_vnode(&mut self) {
+        self.commands.push(Command::PopVNode);
     }
 }
 

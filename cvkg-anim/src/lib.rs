@@ -218,3 +218,44 @@ impl AnimationValue for f32 {
     fn lerp(&self, other: &Self, t: f32) -> Self { self + (other - self) * t }
     fn distance(&self, other: &Self) -> f32 { (self - other).abs() }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rubber_band_solving() {
+        let rb = RubberBand::new(0.0, 100.0);
+        
+        // Inside bounds
+        assert_eq!(rb.solve(50.0), 50.0);
+        
+        // Above bounds
+        let over = rb.solve(150.0);
+        assert!(over > 100.0);
+        assert!(over < 150.0); // Resistance applied
+        
+        // Below bounds
+        let under = rb.solve(-50.0);
+        assert!(under < 0.0);
+        assert!(under > -50.0); // Resistance applied
+    }
+
+    #[test]
+    fn test_sleipnir_solver_convergence() {
+        let params = SleipnirParams::snappy();
+        let mut solver = SleipnirSolver::new(params, 100.0, 0.0);
+        
+        // Initial state
+        assert!(!solver.is_settled());
+        
+        // Simulate some ticks
+        for _ in 0..100 {
+            solver.tick(0.016);
+        }
+        
+        // Should eventually settle near target
+        assert!(solver.is_settled());
+        assert!((solver.state.x - 100.0).abs() < 0.01);
+    }
+}

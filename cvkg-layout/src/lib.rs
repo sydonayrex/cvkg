@@ -578,3 +578,68 @@ impl LayoutView for Grid {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct MockView {
+        size: Size,
+        flex: f32,
+    }
+
+    impl LayoutView for MockView {
+        fn size_that_fits(&self, _p: SizeProposal, _s: &[&dyn LayoutView], _c: &mut LayoutCache) -> Size {
+            self.size
+        }
+        fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {}
+        fn flex_weight(&self) -> f32 { self.flex }
+    }
+
+    #[test]
+    fn test_hstack_basic() {
+        let v1 = MockView { size: Size { width: 50.0, height: 50.0 }, flex: 0.0 };
+        let v2 = MockView { size: Size { width: 100.0, height: 100.0 }, flex: 0.0 };
+        let views: Vec<&dyn LayoutView> = vec![&v1, &v2];
+        let mut cache = LayoutCache::new();
+        let bounds = Rect { x: 0.0, y: 0.0, width: 300.0, height: 200.0 };
+        
+        let rects = HStack::compute_layout(10.0, Alignment::Center, Distribution::Leading, bounds, &views, &mut cache);
+        
+        assert_eq!(rects.len(), 2);
+        assert_eq!(rects[0], Rect { x: 0.0, y: 75.0, width: 50.0, height: 50.0 });
+        assert_eq!(rects[1], Rect { x: 60.0, y: 50.0, width: 100.0, height: 100.0 });
+    }
+
+    #[test]
+    fn test_vstack_flex() {
+        let v1 = MockView { size: Size { width: 100.0, height: 50.0 }, flex: 0.0 };
+        let v2 = MockView { size: Size { width: 100.0, height: 0.0 }, flex: 1.0 }; // Flex
+        let views: Vec<&dyn LayoutView> = vec![&v1, &v2];
+        let mut cache = LayoutCache::new();
+        let bounds = Rect { x: 0.0, y: 0.0, width: 200.0, height: 160.0 };
+        
+        let rects = VStack::compute_layout(10.0, Alignment::Leading, Distribution::Fill, bounds, &views, &mut cache);
+        
+        assert_eq!(rects.len(), 2);
+        assert_eq!(rects[0], Rect { x: 0.0, y: 0.0, width: 100.0, height: 50.0 });
+        assert_eq!(rects[1], Rect { x: 0.0, y: 60.0, width: 100.0, height: 100.0 }); // 160 - 50 - 10 = 100
+    }
+
+    #[test]
+    fn test_grid_layout() {
+        let v1 = MockView { size: Size::ZERO, flex: 0.0 };
+        let v2 = MockView { size: Size::ZERO, flex: 0.0 };
+        let v3 = MockView { size: Size::ZERO, flex: 0.0 };
+        let views: Vec<&dyn LayoutView> = vec![&v1, &v2, &v3];
+        let mut cache = LayoutCache::new();
+        let bounds = Rect { x: 0.0, y: 0.0, width: 210.0, height: 210.0 };
+        
+        let rects = Grid::compute_layout(2, 2, 10.0, bounds, &views, &mut cache);
+        
+        assert_eq!(rects.len(), 3);
+        assert_eq!(rects[0], Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        assert_eq!(rects[1], Rect { x: 110.0, y: 0.0, width: 100.0, height: 100.0 });
+        assert_eq!(rects[2], Rect { x: 0.0, y: 110.0, width: 100.0, height: 100.0 });
+    }
+}

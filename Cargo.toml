@@ -16,11 +16,12 @@ members = [
     "cvkg-themes",
     "cvkg-macros",
     "cvkg-runic-text", "cvkg-test",
-    "demos/niflheim-web", "temp-server",
+    "demos/niflheim-web", "demos/adele-web", "temp-server",
+    "cvkg-flow",
 ]
 
 [workspace.package]
-version = "0.1.13"
+version = "0.1.14"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/sydonayrex/cvkg"
