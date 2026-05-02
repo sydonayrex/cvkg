@@ -25,6 +25,9 @@
 use std::time::Duration;
 use std::sync::Arc;
 
+pub mod particles;
+pub use particles::*;
+
 /// Sleipnir spring parameters for the physics solver
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SleipnirParams {
@@ -209,6 +212,108 @@ impl SleipnirSolver {
     }
 }
 
+/// Active animation state tracker
+pub struct ActiveAnimation {
+    pub animation: Animation,
+    pub elapsed: Duration,
+    pub is_finished: bool,
+    pub current_value: f32,
+    
+    // Internal state for complex animations
+    solver: Option<SleipnirSolver>,
+    child_states: Vec<ActiveAnimation>,
+    current_index: usize,
+}
+
+impl ActiveAnimation {
+    pub fn new(animation: Animation) -> Self {
+        Self {
+            animation,
+            elapsed: Duration::ZERO,
+            is_finished: false,
+            current_value: 0.0,
+            solver: None,
+            child_states: Vec::new(),
+            current_index: 0,
+        }
+    }
+
+    pub fn update(&mut self, dt: Duration, start_val: f32, end_val: f32) -> f32 {
+        if self.is_finished { return end_val; }
+        
+        self.elapsed += dt;
+        let t = self.elapsed.as_secs_f32();
+        
+        match &self.animation {
+            Animation::Ginnungagap => {
+                self.is_finished = true;
+                self.current_value = end_val;
+            }
+            Animation::Linear { duration } => {
+                let d = duration.as_secs_f32();
+                if t >= d {
+                    self.is_finished = true;
+                    self.current_value = end_val;
+                } else {
+                    self.current_value = start_val + (end_val - start_val) * (t / d);
+                }
+            }
+            Animation::Sleipnir(params) => {
+                let solver = self.solver.get_or_insert_with(|| SleipnirSolver::new(*params, end_val, start_val));
+                self.current_value = solver.tick(dt.as_secs_f32());
+                if solver.is_settled() {
+                    self.is_finished = true;
+                }
+            }
+            Animation::Sequence(anims) => {
+                if self.current_index >= anims.len() {
+                    self.is_finished = true;
+                    self.current_value = end_val;
+                } else {
+                    if self.child_states.is_empty() {
+                        self.child_states = anims.iter().map(|a| ActiveAnimation::new(a.clone())).collect();
+                    }
+                    
+                    let child = &mut self.child_states[self.current_index];
+                    self.current_value = child.update(dt, start_val, end_val);
+                    
+                    if child.is_finished {
+                        self.current_index += 1;
+                        if self.current_index >= anims.len() {
+                            self.is_finished = true;
+                        }
+                    }
+                }
+            }
+            Animation::Parallel(anims) => {
+                if self.child_states.is_empty() {
+                    self.child_states = anims.iter().map(|a| ActiveAnimation::new(a.clone())).collect();
+                }
+                
+                let mut all_finished = true;
+                let mut sum_val = 0.0;
+                for child in &mut self.child_states {
+                    sum_val += child.update(dt, start_val, end_val);
+                    if !child.is_finished {
+                        all_finished = false;
+                    }
+                }
+                
+                self.current_value = if !anims.is_empty() { sum_val / anims.len() as f32 } else { end_val };
+                if all_finished {
+                    self.is_finished = true;
+                }
+            }
+            _ => {
+                // Fallback for complex variants (Stagger, Transitions)
+                self.is_finished = true;
+                self.current_value = end_val;
+            }
+        }
+        self.current_value
+    }
+}
+
 pub trait AnimationValue: Sized + Clone + PartialEq {
     fn lerp(&self, other: &Self, t: f32) -> Self;
     fn distance(&self, other: &Self) -> f32;
@@ -257,5 +362,28 @@ mod tests {
         // Should eventually settle near target
         assert!(solver.is_settled());
         assert!((solver.state.x - 100.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_animation_sequence_execution() {
+        let anims = vec![
+            Animation::Linear { duration: Duration::from_millis(100) },
+            Animation::Linear { duration: Duration::from_millis(100) },
+        ];
+        let mut active = ActiveAnimation::new(Animation::Sequence(anims));
+        
+        // Update first animation halfway
+        active.update(Duration::from_millis(50), 0.0, 100.0);
+        assert!(!active.is_finished);
+        assert_eq!(active.current_index, 0);
+        
+        // Complete first animation
+        active.update(Duration::from_millis(60), 0.0, 100.0);
+        assert!(!active.is_finished);
+        assert_eq!(active.current_index, 1);
+        
+        // Complete second animation
+        active.update(Duration::from_millis(100), 0.0, 100.0);
+        assert!(active.is_finished);
     }
 }

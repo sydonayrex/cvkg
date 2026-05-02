@@ -360,14 +360,43 @@ impl SurtrRenderer {
             .create_surface(window.clone())
             .expect("Failed to create surface");
 
-        let adapter = instance
+        // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
+        println!("[GPU] Requesting HighPerformance adapter...");
+        let mut adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
             .await
-            .expect("Failed to find a suitable GPU for Surtr");
+            .ok();
+
+        if adapter.is_none() {
+            println!("[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower...");
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: false,
+                })
+                .await
+                .ok();
+        }
+
+        if adapter.is_none() {
+            println!("[GPU] Hardware adapters failed, trying Software fallback...");
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: Some(&surface),
+                    force_fallback_adapter: true,
+                })
+                .await
+                .ok();
+        }
+
+        let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
+        println!("[GPU] Selected adapter: {:?}", adapter.get_info().name);
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -3282,14 +3311,43 @@ impl SurtrRenderer {
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
         });
 
-        let adapter = instance
+        // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
+        println!("[GPU] Requesting HighPerformance adapter...");
+        let mut adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
             })
             .await
-            .expect("Failed to find a suitable GPU for Surtr");
+            .ok();
+
+        if adapter.is_none() {
+            println!("[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower...");
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                })
+                .await
+                .ok();
+        }
+
+        if adapter.is_none() {
+            println!("[GPU] Hardware adapters failed, trying Software fallback...");
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: true,
+                })
+                .await
+                .ok();
+        }
+
+        let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
+        println!("[GPU] Selected adapter: {:?}", adapter.get_info().name);
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {

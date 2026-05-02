@@ -7,11 +7,11 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.14" }
-cvkg-layout = { path = "../cvkg-layout", version = "0.1.14" }
-cvkg-anim = { path = "../cvkg-anim", version = "0.1.14" }
-cvkg-themes = { path = "../cvkg-themes", version = "0.1.14" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.14" }
+cvkg-core = { path = "../cvkg-core" }
+cvkg-layout = { path = "../cvkg-layout" }
+cvkg-anim = { path = "../cvkg-anim" }
+cvkg-themes = { path = "../cvkg-themes" }
+cvkg-vdom = { path = "../cvkg-vdom" }
 log = "0.4"
 
 [dev-dependencies]

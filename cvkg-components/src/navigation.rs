@@ -87,27 +87,56 @@ impl View for Pagination {
         let spacing = 8.0;
         let mut current_x = rect.x;
 
+        let on_page_change = self.on_page_change.clone();
+        let current_page = self.current_page;
+
         // Previous button
         let prev_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+        renderer.push_vnode(prev_rect, "PaginationPrev");
         renderer.fill_rounded_rect(prev_rect, 4.0, [0.15, 0.15, 0.2, 1.0]);
-        renderer.draw_text("<", prev_rect.x + 10.0, prev_rect.y + 8.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text("<", prev_rect.x + 10.0, prev_rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        
+        let on_prev = on_page_change.clone();
+        renderer.register_handler("pointerclick", Arc::new(move |_| {
+            if current_page > 1 {
+                on_prev(current_page - 1);
+            }
+        }));
+        renderer.pop_vnode();
         current_x += btn_w + spacing;
 
         // Page numbers (simplified)
         for p in 1..=self.total_pages.min(5) {
             let page_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+            renderer.push_vnode(page_rect, "PaginationPage");
             let is_current = p == self.current_page;
             let bg = if is_current { [0.0, 0.6, 0.8, 1.0] } else { [0.1, 0.1, 0.12, 1.0] };
             renderer.fill_rounded_rect(page_rect, 4.0, bg);
             let p_str = p.to_string();
-            renderer.draw_text(&p_str, page_rect.x + 10.0, page_rect.y + 8.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(&p_str, page_rect.x + 10.0, page_rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+            
+            let on_p = on_page_change.clone();
+            renderer.register_handler("pointerclick", Arc::new(move |_| {
+                on_p(p);
+            }));
+            renderer.pop_vnode();
             current_x += btn_w + spacing;
         }
 
         // Next button
         let next_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+        renderer.push_vnode(next_rect, "PaginationNext");
         renderer.fill_rounded_rect(next_rect, 4.0, [0.15, 0.15, 0.2, 1.0]);
-        renderer.draw_text(">", next_rect.x + 10.0, next_rect.y + 8.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(">", next_rect.x + 10.0, next_rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        
+        let total = self.total_pages;
+        let on_next = on_page_change.clone();
+        renderer.register_handler("pointerclick", Arc::new(move |_| {
+            if current_page < total {
+                on_next(current_page + 1);
+            }
+        }));
+        renderer.pop_vnode();
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {

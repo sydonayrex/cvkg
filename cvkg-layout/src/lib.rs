@@ -29,7 +29,6 @@ pub struct HStack {
     spacing: f32,
     alignment: Alignment,
     distribution: Distribution,
-    children: Vec<Box<dyn LayoutView>>,
 }
 
 impl HStack {
@@ -39,13 +38,7 @@ impl HStack {
             spacing,
             alignment,
             distribution,
-            children: Vec::new(),
         }
-    }
-
-    /// Add a view to the HStack
-    pub fn add_view<V: LayoutView + 'static>(&mut self, view: V) {
-        self.children.push(Box::new(view));
     }
 
     /// Compute the layout rects for children without placing them.
@@ -194,7 +187,6 @@ pub struct VStack {
     spacing: f32,
     alignment: Alignment,
     distribution: Distribution,
-    children: Vec<Box<dyn LayoutView>>,
 }
 
 impl VStack {
@@ -204,13 +196,7 @@ impl VStack {
             spacing,
             alignment,
             distribution,
-            children: Vec::new(),
         }
-    }
-
-    /// Add a view to the VStack
-    pub fn add_view<V: LayoutView + 'static>(&mut self, view: V) {
-        self.children.push(Box::new(view));
     }
 
     /// Compute the layout rects for children without placing them.
@@ -355,7 +341,6 @@ impl LayoutView for VStack {
 
 /// ZStack - lays out children on top of each other
 pub struct ZStack {
-    children: Vec<Box<dyn LayoutView>>,
 }
 
 impl Default for ZStack {
@@ -368,13 +353,7 @@ impl ZStack {
     /// Create a new ZStack
     pub fn new() -> Self {
         Self {
-            children: Vec::new(),
         }
-    }
-
-    /// Add a view to the ZStack
-    pub fn add_view<V: LayoutView + 'static>(&mut self, view: V) {
-        self.children.push(Box::new(view));
     }
 }
 

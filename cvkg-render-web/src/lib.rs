@@ -1,3 +1,22 @@
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct SceneNode {
+    pub position: [f32; 2],
+    pub size: [f32; 2],
+    pub color: [f32; 4],
+    pub flags: u32,
+    pub animation_phase: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ComputeParams {
+    pub node_count: u32,
+    pub time: f32,
+    pub delta_time: f32,
+    pub _pad: f32,
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 mod stubs {
     use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer, RenderTier};
@@ -44,6 +63,15 @@ mod stubs {
             renderer.begin_frame();
             renderer.end_frame(());
         }
+
+        #[test]
+        fn test_compute_struct_layouts() {
+            use crate::{SceneNode, ComputeParams};
+            // SceneNode: [f32; 2] (8) + [f32; 2] (8) + [f32; 4] (16) + u32 (4) + f32 (4) = 40
+            assert_eq!(std::mem::size_of::<SceneNode>(), 40);
+            // ComputeParams: u32 (4) + f32 (4) + f32 (4) + f32 (4) = 16
+            assert_eq!(std::mem::size_of::<ComputeParams>(), 16);
+        }
     }
 }
 #[cfg(not(target_arch = "wasm32"))]
@@ -87,6 +115,7 @@ use wasm_bindgen::prelude::*;
 
 use cvkg_vdom::VDomPatch;
 use web_sys::*;
+use wasm_bindgen::JsCast;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -110,6 +139,10 @@ pub struct GpuContext {
     pub pipeline: wgpu::RenderPipeline,
     pub scene_bind_group: wgpu::BindGroup,
     pub scene_buffer: wgpu::Buffer,
+    pub compute_pipeline: wgpu::ComputePipeline,
+    pub compute_bind_group: wgpu::BindGroup,
+    pub node_buffer: wgpu::Buffer,
+    pub params_buffer: wgpu::Buffer,
 }
 
 /// Web renderer backend implementing the CvkgRenderer trait
@@ -136,6 +169,11 @@ pub struct WebRenderer {
     pub redraw_requested: bool,
     /// Bridge to the CVKG WebKit server for snapshots and HMR.
     pub bridge: Option<WebKitBridge>,
+    /// Berserker pipeline state
+    pub berserker_mode: cvkg_core::BerserkerMode,
+    pub rage: f32,
+    pub(crate) performance: Option<web_sys::Performance>,
+    pub shield_wall: Option<ShieldWall>,
 }
 
 // WebRenderer is only used on a single thread in WASM, but Renderer trait requires Send.
@@ -144,7 +182,10 @@ unsafe impl Send for WebRenderer {}
 impl WebRenderer {
     #[doc(hidden)]
     pub fn new() -> Self {
-        let now = web_sys::window().unwrap().performance().unwrap().now();
+        let window = web_sys::window();
+        let performance = window.as_ref().and_then(|w| w.performance());
+        let now = performance.as_ref().map(|p| p.now()).unwrap_or(0.0);
+        
         Self {
             canvas: None,
             canvas_context: None,
@@ -161,6 +202,10 @@ impl WebRenderer {
             delta_time: 0.016,
             redraw_requested: false,
             bridge: Some(WebKitBridge::new()),
+            berserker_mode: cvkg_core::BerserkerMode::Normal,
+            rage: 0.0,
+            performance,
+            shield_wall: Some(ShieldWall::new()),
         }
     }
 
@@ -173,6 +218,10 @@ impl WebRenderer {
     #[allow(dead_code)]
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
         self.telemetry.clone()
+    }
+
+    fn now(&self) -> f64 {
+        self.performance.as_ref().map(|p| p.now()).unwrap_or(0.0)
     }
 
     /// Get the canvas element.
@@ -207,7 +256,29 @@ impl WebRenderer {
                     log::info!("Initialized WebGPU context");
                 }
                 Err(e) => {
-                    log::warn!("WebGPU initialization failed: {:?}", e);
+                    log::warn!("WebGPU initialization failed: {:?}. Falling back to WebGL2...", e);
+                    match self.init_webgl2() {
+                        Ok(_) => {
+                            self.tier = RenderTier::Tier2WebGL2;
+                            log::info!("Initialized WebGL2 context");
+                        }
+                        Err(e2) => {
+                            log::warn!("WebGL2 initialization failed: {:?}. Using Tier 3 Canvas2D.", e2);
+                            self.tier = RenderTier::Tier3Fallback;
+                        }
+                    }
+                }
+            }
+        }
+        
+        #[cfg(not(feature = "webgpu"))]
+        {
+            match self.init_webgl2() {
+                Ok(_) => {
+                    self.tier = RenderTier::Tier2WebGL2;
+                }
+                Err(_) => {
+                    self.tier = RenderTier::Tier3Fallback;
                 }
             }
         }
@@ -530,7 +601,10 @@ impl WebRenderer {
             .iter()
             .find(|f| f.is_srgb())
             .copied()
-            .unwrap_or(surface_caps.formats[0]);
+            .or_else(|| surface_caps.formats.get(0).copied())
+            .ok_or_else(|| JsValue::from_str("No supported surface formats found"))?;
+
+        let alpha_mode = surface_caps.alpha_modes.get(0).copied().unwrap_or(wgpu::CompositeAlphaMode::Opaque);
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -538,7 +612,7 @@ impl WebRenderer {
             width: canvas_width,
             height: canvas_height,
             present_mode: wgpu::PresentMode::Fifo,
-            alpha_mode: surface_caps.alpha_modes[0],
+            alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
@@ -627,6 +701,79 @@ impl WebRenderer {
             cache: None,
         });
 
+        // Create compute resources
+        let node_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("CVKG Node Buffer"),
+            size: (1024 * std::mem::size_of::<SceneNode>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let params_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("CVKG Compute Params Buffer"),
+            size: std::mem::size_of::<ComputeParams>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let compute_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("CVKG Compute Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
+        let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("CVKG Compute Bind Group"),
+            layout: &compute_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: node_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: params_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let compute_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("CVKG Compute Pipeline Layout"),
+                bind_group_layouts: &[&compute_bind_group_layout],
+                immediate_size: 0,
+            });
+
+        let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("CVKG Compute Pipeline"),
+            layout: Some(&compute_pipeline_layout),
+            module: &shader,
+            entry_point: Some("cs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+
         // Store WebGPU context
         self.webgpu_context = Some(GpuContext {
             instance,
@@ -637,6 +784,10 @@ impl WebRenderer {
             pipeline: render_pipeline,
             scene_bind_group,
             scene_buffer,
+            compute_pipeline,
+            compute_bind_group,
+            node_buffer,
+            params_buffer,
         });
 
         self.tier = RenderTier::Tier1GPU;
@@ -1222,6 +1373,28 @@ fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {
             self.draw_neon_glow(gl, rect, color, intensity * (radius / 10.0));
         }
     }
+
+    fn set_berserker_mode(&mut self, state: cvkg_core::BerserkerMode) {
+        self.berserker_mode = state;
+    }
+
+    fn set_rage(&mut self, rage: f32) {
+        self.rage = rage;
+    }
+
+    fn set_aria_role(&mut self, role: &str) {
+        if let Some(ref mut sw) = self.shield_wall {
+            // This is a simplified sync; in a real update_vdom it would be more structured
+            // For now, we use the last vnode ID if available
+            // Note: This needs integration into the VDom traversal to be fully robust
+        }
+    }
+
+    fn set_aria_label(&mut self, label: &str) {
+        if let Some(ref mut sw) = self.shield_wall {
+             // Same as above
+        }
+    }
 }
 
 impl cvkg_core::ElapsedTime for WebRenderer {
@@ -1230,7 +1403,7 @@ impl cvkg_core::ElapsedTime for WebRenderer {
     }
 
     fn elapsed_time(&self) -> f32 {
-        ((web_sys::window().unwrap().performance().unwrap().now() - self.start_time) / 1000.0) as f32
+        ((self.now() - self.start_time) / 1000.0) as f32
     }
 }
 
@@ -1238,7 +1411,7 @@ impl cvkg_core::ElapsedTime for WebRenderer {
 impl FrameRenderer<()> for WebRenderer {
     fn begin_frame(&mut self) -> () {
         cvkg_core::begin_render_phase();
-        let now = web_sys::window().unwrap().performance().unwrap().now();
+        let now = self.now();
         self.delta_time = ((now - self.last_redraw_start) / 1000.0) as f32;
         self.last_redraw_start = now;
 
@@ -1270,7 +1443,7 @@ impl WebRenderer {
     /// When WebGL2 context exists but VDOM rendering is needed, renders to Canvas 2 D
     /// for consistency across tiers. This ensures the demo content is visible.
     fn render_webgl2(&mut self) -> Result<(), JsValue> {
-        let time = (web_sys::window().unwrap().performance().unwrap().now() / 1000.0) as f32;
+        let time = (self.now() / 1000.0) as f32;
         
         // Clear the screen with cyberpunk dark background
         if let Some(ref gl) = self.gl_context {
@@ -1278,14 +1451,13 @@ impl WebRenderer {
             gl.clear(web_sys::WebGl2RenderingContext::COLOR_BUFFER_BIT);
         }
         
-        // Render VDOM content using Canvas 2 D (WebGL2 shapes not yet implemented)
-        // This ensures the demo is visible regardless of WebGL2 status
+        // In Hybrid (WebGL2) mode, we draw the background into the GL context,
+        // and the UI stays in the Canvas2D context (which was drawn during the frame).
+        // WE MUST NOT CLEAR THE CANVAS2D CONTEXT HERE.
+        
         if let Some(ref ctx2d) = self.canvas_context {
             let width = ctx2d.canvas().map(|c| c.width()).unwrap_or(800) as f64;
             let height = ctx2d.canvas().map(|c| c.height()).unwrap_or(600) as f64;
-            
-            // Clear canvas
-            ctx2d.clear_rect(0.0, 0.0, width, height);
             
             // Draw deep space background gradient
             ctx2d.save();
@@ -1382,7 +1554,7 @@ impl WebRenderer {
             .as_mut()
             .ok_or_else(|| JsValue::from_str("WebGPU context missing"))?;
 
-        let current_time = web_sys::window().unwrap().performance().unwrap().now();
+        let current_time = self.now();
         let time = ((current_time - self.start_time) / 1000.0) as f32;
 
         let uniforms = SceneUniforms {
@@ -1407,34 +1579,32 @@ impl WebRenderer {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("CVKG Command Encoder"),
             });
 
-        // Compute pass for scene processing (node culling, animation updates)
-        // Note: In a full implementation, this would dispatch the compute shader
-        // defined in shader.wgsl (cs_main) to process scene nodes
-        // For now, the compute shaders are ready but require storage buffer setup
-        // { let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        //     label: Some("CVKG Scene Processing Pass"),
-        // });
-        // compute_pass.set_pipeline(&self.compute_pipeline);
-        // compute_pass.dispatch_workgroups(node_count / 64 + 1, 1, 1);
+        // 1. Compute Pass: Scene Processing
+        {
+            let compute_params = ComputeParams {
+                node_count: 0, // In real implementation, this would be vdom.node_count()
+                time,
+                delta_time: self.delta_time,
+                _pad: 0.0,
+            };
+            ctx.queue.write_buffer(&ctx.params_buffer, 0, bytemuck::cast_slice(&[compute_params]));
 
-        // Compute pass placeholder for scene processing
-        // TODO: Uncomment when storage buffer infrastructure is ready
-        /* {
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("CVKG Scene Processing Pass"),
                 timestamp_writes: None,
             });
-            compute_pass.set_pipeline(&self.compute_pipeline);
+            compute_pass.set_pipeline(&ctx.compute_pipeline);
+            compute_pass.set_bind_group(0, &ctx.compute_bind_group, &[]);
             compute_pass.dispatch_workgroups(1, 1, 1);
-        } */
+        }
 
+        // 2. Render Pass: Main UI Presentation
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("CVKG Render Pass"),
@@ -1462,6 +1632,7 @@ impl WebRenderer {
             render_pass.set_bind_group(0, &ctx.scene_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
+
         ctx.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -1822,6 +1993,87 @@ impl WebKitBridge {
         let _ = window.fetch_with_str_and_init("/snapshot", &opts);
     }
 }
+
+    /// ShieldWall manages a hidden DOM tree that mirrors the VDOM for accessibility.
+    /// This ensures that screen readers can navigate the custom-rendered GPU UI.
+    pub struct ShieldWall {
+        container: web_sys::HtmlElement,
+        nodes: std::collections::HashMap<u64, web_sys::Element>,
+    }
+
+    impl ShieldWall {
+        pub fn new() -> Self {
+            let window = web_sys::window().expect("No window found");
+            let document = window.document().expect("No document found");
+            
+            let container = document.create_element("div").unwrap().dyn_into::<web_sys::HtmlElement>().unwrap();
+            container.set_id("cvkg-shield-wall");
+            
+            // Visually hide but keep accessible
+            let style = container.style();
+            style.set_property("position", "absolute").ok();
+            style.set_property("width", "1px").ok();
+            style.set_property("height", "1px").ok();
+            style.set_property("padding", "0").ok();
+            style.set_property("margin", "-1px").ok();
+            style.set_property("overflow", "hidden").ok();
+            style.set_property("clip", "rect(0, 0, 0, 0)").ok();
+            style.set_property("white-space", "nowrap").ok();
+            style.set_property("border", "0").ok();
+            
+            document.body().unwrap().append_child(&container).unwrap();
+            
+            Self {
+                container,
+                nodes: std::collections::HashMap::new(),
+            }
+        }
+
+        pub fn sync_node(&mut self, id: u64, role: &str, label: &str, rect: Rect) {
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            
+            let el = self.nodes.entry(id).or_insert_with(|| {
+                let tag = match role {
+                    "button" => "button",
+                    "link" => "a",
+                    "input" => "input",
+                    "heading" => "h2",
+                    _ => "div",
+                };
+                let el = document.create_element(tag).unwrap();
+                self.container.append_child(&el).unwrap();
+                el
+            });
+
+            el.set_attribute("role", role).ok();
+            el.set_attribute("aria-label", label).ok();
+            
+            // Position it roughly where it is in the UI for spatial navigation
+            if let Ok(html_el) = el.clone().dyn_into::<web_sys::HtmlElement>() {
+                let style = html_el.style();
+                style.set_property("position", "absolute").ok();
+                style.set_property("left", &format!("{}px", rect.x)).ok();
+                style.set_property("top", &format!("{}px", rect.y)).ok();
+                style.set_property("width", &format!("{}px", rect.width)).ok();
+                style.set_property("height", &format!("{}px", rect.height)).ok();
+            }
+        }
+
+        pub fn clear_unused(&mut self, active_ids: &std::collections::HashSet<u64>) {
+            let to_remove: Vec<u64> = self.nodes.keys()
+                .filter(|id| !active_ids.contains(id))
+                .copied()
+                .collect();
+                
+            for id in to_remove {
+                if let Some(el) = self.nodes.remove(&id) {
+                    el.remove();
+                }
+            }
+        }
+    }
 }
 #[cfg(target_arch = "wasm32")]
 pub use wasm_impl::*;
+

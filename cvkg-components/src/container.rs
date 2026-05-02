@@ -2,26 +2,45 @@ use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 /// Navigation stack for push/pop navigation
-#[allow(dead_code)]
-pub struct NavigationStack<V> {
-    pub(crate) root: V,
+pub struct NavigationStack {
+    pub(crate) stack: Vec<cvkg_core::AnyView>,
 }
 
-impl<V: View> NavigationStack<V> {
-    pub fn new(root: V) -> Self {
-        Self { root }
+impl NavigationStack {
+    pub fn new<V: View + 'static>(root: V) -> Self {
+        Self { stack: vec![root.erase()] }
+    }
+
+    pub fn push<V: View + 'static>(&mut self, view: V) {
+        self.stack.push(view.erase());
+    }
+
+    pub fn pop(&mut self) -> Option<cvkg_core::AnyView> {
+        if self.stack.len() > 1 {
+            self.stack.pop()
+        } else {
+            None
+        }
     }
 }
 
-impl<V: View> View for NavigationStack<V> {
+impl View for NavigationStack {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "NavigationStack");
+        // Render the top-most view in the stack
+        if let Some(top) = self.stack.last() {
+            top.render(renderer, rect);
+        }
+        renderer.pop_vnode();
+    }
 }
 
 /// Navigation split view for sidebar layouts
-#[allow(dead_code)]
 pub struct NavigationSplitView<S, D> {
     pub(crate) sidebar: S,
     pub(crate) detail: D,
@@ -38,10 +57,33 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let sidebar_width = (rect.width * 0.3).min(300.0);
+        let sidebar_rect = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: sidebar_width,
+            height: rect.height,
+        };
+        let detail_rect = Rect {
+            x: rect.x + sidebar_width,
+            y: rect.y,
+            width: rect.width - sidebar_width,
+            height: rect.height,
+        };
+
+        // Render sidebar with a subtle background
+        renderer.fill_rect(sidebar_rect, [0.05, 0.05, 0.08, 1.0]);
+        renderer.stroke_rect(sidebar_rect, [0.2, 0.2, 0.3, 0.5], 1.0);
+        self.sidebar.render(renderer, sidebar_rect);
+
+        // Render detail area
+        self.detail.render(renderer, detail_rect);
+    }
 }
 
 /// Tab bar navigation view
-#[allow(dead_code)]
 pub struct TabView<V> {
     pub(crate) content: V,
 }
@@ -57,10 +99,33 @@ impl<V: View> View for TabView<V> {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let tab_bar_height = 50.0;
+        let content_rect = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height - tab_bar_height,
+        };
+        let tab_bar_rect = Rect {
+            x: rect.x,
+            y: rect.y + rect.height - tab_bar_height,
+            width: rect.width,
+            height: tab_bar_height,
+        };
+
+        // Render content
+        self.content.render(renderer, content_rect);
+
+        // Render tab bar background
+        renderer.bifrost(tab_bar_rect, 10.0, 1.2, 0.9);
+        renderer.fill_rect(tab_bar_rect, [0.0, 0.0, 0.0, 0.5]);
+        renderer.draw_line(tab_bar_rect.x, tab_bar_rect.y, tab_bar_rect.x + tab_bar_rect.width, tab_bar_rect.y, [0.3, 0.3, 0.4, 1.0], 1.0);
+    }
 }
 
 /// Modal bottom sheet or centered dialog
-#[allow(dead_code)]
 pub struct Sheet<V> {
     pub(crate) content: V,
     pub(crate) is_presented: bool,
@@ -377,7 +442,6 @@ impl View for AlertDialog {
 }
 
 /// Context menu dropdown
-#[allow(dead_code)]
 pub struct Menu<V> {
     pub(crate) content: V,
 }
@@ -393,10 +457,17 @@ impl<V: View> View for Menu<V> {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Render menu as a floating glass box
+        renderer.bifrost(rect, 15.0, 1.1, 0.95);
+        renderer.fill_rounded_rect(rect, 8.0, [0.1, 0.1, 0.15, 0.9]);
+        renderer.stroke_rounded_rect(rect, 8.0, [0.0, 0.8, 1.0, 0.4], 1.0);
+        self.content.render(renderer, rect);
+    }
 }
 
 /// Scrollable container for content that exceeds available space
-#[allow(dead_code)]
 pub struct ScrollView<V> {
     pub(crate) content: V,
     pub(crate) scroll_offset: f32,
@@ -436,7 +507,6 @@ impl<V: View> View for ScrollView<V> {
 }
 
 /// Multi-column table layout
-#[allow(dead_code)]
 pub struct Table<V> {
     pub(crate) content: V,
 }
@@ -452,10 +522,14 @@ impl<V: View> View for Table<V> {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Table layout logic would go here
+        self.content.render(renderer, rect);
+    }
 }
 
 /// Settings style grouped form layout
-#[allow(dead_code)]
 pub struct Form<V> {
     pub(crate) content: V,
 }
@@ -470,6 +544,11 @@ impl<V: View> View for Form<V> {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Grouped form layout logic
+        self.content.render(renderer, rect);
     }
 }
 

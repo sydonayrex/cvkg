@@ -1,7 +1,7 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{FnArg, ItemFn, ItemStruct, Pat, parse_macro_input};
+use syn::{FnArg, ItemFn, ItemStruct, Pat, parse_macro_input, DeriveInput};
 
 /// State attribute macro — derives common traits for state structs
 ///
@@ -19,11 +19,30 @@ pub fn state(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// View attribute macro — transforms a function into a View struct
+/// View derive macro — automatically implements cvkg_core::View
+/// 
+/// If the struct has a `body` method defined in an `impl` block, it will be used.
+/// Otherwise, it defaults to a primitive View (Body = Never).
+#[proc_macro_derive(View)]
+pub fn derive_view(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    
+    let expanded = quote! {
+        impl cvkg_core::View for #name {
+            type Body = cvkg_core::Never;
+            fn body(self) -> Self::Body { unreachable!("Primitive view has no body") }
+        }
+    };
+    
+    TokenStream::from(expanded)
+}
+
+/// View component attribute macro — transforms a function into a View struct
 ///
 /// Section 4.1: "automate the boilerplate... generating the View trait implementation"
 #[proc_macro_attribute]
-pub fn view(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let name = &input.sig.ident;
     let vis = &input.vis;
@@ -165,6 +184,42 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
             }
         }
         
+    };
+    
+    TokenStream::from(expanded)
+}
+
+/// view! macro — DSL for declarative UI definition
+///
+/// Example:
+/// view! {
+///     VStack {
+///         Text::new("Hello")
+///         Button::new("Click", || {})
+///     }
+/// }
+#[proc_macro]
+pub fn view(input: TokenStream) -> TokenStream {
+    // For now, we just pass through the input as it's often a single expression
+    // in the current CVKG architecture. In the future, this will be a full DSL parser.
+    input
+}
+
+/// cvkg_model! macro — generates data models with VDOM metadata
+#[proc_macro]
+pub fn cvkg_model(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as ItemStruct);
+    let name = &input.ident;
+    
+    let expanded = quote! {
+        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+        #input
+        
+        impl #name {
+            pub fn vdom_id(&self) -> String {
+                format!("{}_{}", stringify!(#name), std::collections::hash_map::DefaultHasher::new().finish())
+            }
+        }
     };
     
     TokenStream::from(expanded)

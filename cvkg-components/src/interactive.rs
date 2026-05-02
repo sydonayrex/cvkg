@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use std::sync::Arc;
 
 /// Button with action callback
 #[allow(dead_code)]
@@ -774,18 +775,29 @@ impl View for Textarea {
         renderer.stroke_rect(rect, [0.2, 0.2, 0.3, 1.0], 1.0);
 
         // Draw text
-        let lines: Vec<&str> = self.text.lines().collect();
-        for (i, line) in lines.iter().enumerate() {
+        if self.text.is_empty() {
             renderer.draw_text(
-                line,
+                &self.placeholder,
                 rect.x + 8.0,
-                rect.y + 8.0 + (i as f32 * 20.0),
+                rect.y + 8.0,
                 14.0,
-                [1.0, 1.0, 1.0, 1.0],
+                [0.4, 0.4, 0.45, 1.0],
             );
+        } else {
+            let lines: Vec<&str> = self.text.lines().collect();
+            for (i, line) in lines.iter().enumerate() {
+                renderer.draw_text(
+                    line,
+                    rect.x + 8.0,
+                    rect.y + 8.0 + (i as f32 * 20.0),
+                    14.0,
+                    [1.0, 1.0, 1.0, 1.0],
+                );
+            }
         }
 
         // Draw Cursor on last line
+        let lines: Vec<&str> = self.text.lines().collect();
         let last_line = lines.last().copied().unwrap_or("");
         let (tw, _) = renderer.measure_text(last_line, 14.0);
         let cursor_x = rect.x + 8.0 + tw;
@@ -1235,10 +1247,19 @@ impl<V: View + Clone> View for RadioGroup<V> {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "RadioGroup");
         for (idx, (label, _)) in self.options.iter().enumerate() {
+            let item_rect = Rect { x: rect.x, y: rect.y + idx as f32 * 24.0, width: rect.width, height: 24.0 };
+            renderer.push_vnode(item_rect, "RadioItem");
+            
             let dot_radius = if idx == self.selected_index { 5.0 } else { 4.0 };
-            renderer.fill_rounded_rect(Rect { x: rect.x + 9.0 - dot_radius, y: rect.y + idx as f32 * 24.0 + 9.0 - dot_radius, width: dot_radius * 2.0, height: dot_radius * 2.0 }, dot_radius, if idx == self.selected_index { [0.0, 0.8, 1.0, 1.0] } else { [0.15, 0.15, 0.2, 1.0] });
-            if idx != self.selected_index { renderer.stroke_rect(Rect { x: rect.x + 9.0 - dot_radius, y: rect.y + idx as f32 * 24.0 + 9.0 - dot_radius, width: dot_radius * 2.0, height: dot_radius * 2.0 }, [0.4, 0.4, 0.5, 1.0], 1.0); }
+            renderer.fill_rounded_rect(Rect { x: rect.x + 9.0 - dot_radius, y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius, width: dot_radius * 2.0, height: dot_radius * 2.0 }, dot_radius, if idx == self.selected_index { [0.0, 0.8, 1.0, 1.0] } else { [0.15, 0.15, 0.2, 1.0] });
+            if idx != self.selected_index { renderer.stroke_rect(Rect { x: rect.x + 9.0 - dot_radius, y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius, width: dot_radius * 2.0, height: dot_radius * 2.0 }, [0.4, 0.4, 0.5, 1.0], 1.0); }
             renderer.draw_text(label, rect.x + 22.0, rect.y + idx as f32 * 24.0 + 11.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+            
+            let on_change = self.on_change.clone();
+            renderer.register_handler("pointerclick", Arc::new(move |_| {
+                on_change(idx);
+            }));
+            renderer.pop_vnode();
         }
         renderer.pop_vnode();
     }

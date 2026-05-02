@@ -42,6 +42,8 @@ impl View for Vegvísir {
             return;
         }
         
+        renderer.push_vnode(rect, "Vegvísir");
+        
         let center_x = rect.x + rect.width / 2.0;
         let center_y = rect.y + rect.height / 2.0;
         let radius = (rect.width / 2.0).min(rect.height / 2.0) * 0.6;
@@ -61,5 +63,26 @@ impl View for Vegvísir {
             
             renderer.draw_text(&item.label, x - 20.0, y + 5.0, 10.0, [1.0, 1.0, 1.0, 1.0]);
         }
+
+        let on_select = self.on_select.clone();
+        let items_len = self.items.len();
+        
+        renderer.register_handler("pointerclick", Arc::new(move |event| {
+            if let cvkg_core::Event::PointerClick { x, y } = event {
+                let dx = x - center_x;
+                let dy = y - center_y;
+                let dist = (dx * dx + dy * dy).sqrt();
+                
+                if dist >= radius - 40.0 && dist <= radius + 40.0 {
+                    let mut angle = dy.atan2(dx) + std::f32::consts::PI / 2.0;
+                    if angle < 0.0 { angle += 2.0 * std::f32::consts::PI; }
+                    
+                    let idx = ((angle / segment_angle) + 0.5) as usize % items_len;
+                    on_select(idx);
+                }
+            }
+        }));
+
+        renderer.pop_vnode();
     }
 }

@@ -125,10 +125,10 @@ struct SceneNode {
     animation_phase: f32,
 }
 
-@group(0) @binding(0)
+@group(2) @binding(0)
 var<storage, read_write> nodes: array<SceneNode>;
 
-@group(0) @binding(1)
+@group(2) @binding(1)
 var<uniform> params: ComputeParams;
 
 @compute @workgroup_size(64)

@@ -8,3 +8,4 @@ edition.workspace = true
 
 [dependencies]
 cvkg-core = { path = "../cvkg-core", version = "0.1.14" }
+rand = "0.10.1"

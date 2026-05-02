@@ -42,6 +42,8 @@ pub struct NativeRenderer {
     gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
     delta_time: f32,
     elapsed_time: f32,
+    berserker_mode: cvkg_core::BerserkerMode,
+    rage: f32,
 }
 
 /// Custom events for the native application event loop
@@ -52,8 +54,8 @@ enum AppEvent {
 
 impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
-    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>, delta_time: f32, elapsed_time: f32) -> Self {
-        Self { gpu, delta_time, elapsed_time }
+    fn new(_window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>, delta_time: f32, elapsed_time: f32, berserker_mode: cvkg_core::BerserkerMode, rage: f32) -> Self {
+        Self { gpu, delta_time, elapsed_time, berserker_mode, rage }
     }
 
 
@@ -72,6 +74,8 @@ impl NativeRenderer {
             asset_manager: std::sync::Arc::new(NativeAssetManager::new()),
             proxy: event_loop.create_proxy(),
             start_time: std::time::Instant::now(),
+            berserker_mode: cvkg_core::BerserkerMode::Normal,
+            rage: 0.0,
         };
 
         event_loop.run_app(&mut app).expect("Event loop error");
@@ -94,6 +98,8 @@ struct App<V: cvkg_core::View> {
     asset_manager: std::sync::Arc<NativeAssetManager>,
     proxy: winit::event_loop::EventLoopProxy<AppEvent>,
     start_time: std::time::Instant,
+    berserker_mode: cvkg_core::BerserkerMode,
+    rage: f32,
 }
 
 impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
@@ -209,7 +215,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
                 let mut gpu = gpu_arc.lock().unwrap();
                 let encoder = gpu.begin_frame(id);
-                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone(), delta_time, elapsed_time);
+                let mut renderer = NativeRenderer::new(state.window.clone(), gpu_arc.clone(), delta_time, elapsed_time, self.berserker_mode, self.rage);
                 self.view.render(&mut renderer, rect);
                 let draw_end = std::time::Instant::now();
 
@@ -406,6 +412,16 @@ impl cvkg_core::Renderer for NativeRenderer {
 
     fn pop_transform(&mut self) {
         self.gpu.lock().unwrap().pop_transform();
+    }
+
+    fn set_berserker_mode(&mut self, state: cvkg_core::BerserkerMode) {
+        self.berserker_mode = state;
+        self.gpu.lock().unwrap().set_berserker_mode(state);
+    }
+
+    fn set_rage(&mut self, rage: f32) {
+        self.rage = rage;
+        self.gpu.lock().unwrap().set_rage(rage);
     }
 }
 

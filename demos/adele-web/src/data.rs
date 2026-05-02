@@ -139,6 +139,10 @@ impl FilterCriteria {
             if system_has_access != has_access { return false; }
         }
 
+        if let Some(ref js) = self.js_framework {
+            if !system.js.data.contains(js) { return false; }
+        }
+
         true
     }
 }

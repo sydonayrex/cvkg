@@ -25,3 +25,6 @@ thiserror = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # STM for composable atomic multi-field mutations; excluded from WASM (requires pthreads)
 stm = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { workspace = true }

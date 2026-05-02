@@ -55,7 +55,14 @@ impl View for Command {
         // Search input area
         let search_h = 45.0;
         let search_rect = Rect { x: palette_rect.x, y: palette_rect.y, width: palette_rect.width, height: search_h };
-        renderer.draw_text(&self.placeholder, search_rect.x + 16.0, search_rect.y + 14.0, 16.0, [0.5, 0.5, 0.6, 1.0]);
+        let search_display = if self.search_text.is_empty() {
+            self.placeholder.as_str()
+        } else {
+            self.search_text.as_str()
+        };
+        let search_color = if self.search_text.is_empty() { [0.5, 0.5, 0.6, 1.0] } else { [1.0, 1.0, 1.0, 1.0] };
+        
+        renderer.draw_text(search_display, search_rect.x + 16.0, search_rect.y + 14.0, 16.0, search_color);
         renderer.draw_line(search_rect.x, search_rect.y + search_h, search_rect.x + search_rect.width, search_rect.y + search_h, [0.2, 0.2, 0.3, 1.0], 1.0);
 
         // Items list
@@ -64,6 +71,7 @@ impl View for Command {
             let item_h = 36.0;
             let item_rect = Rect { x: palette_rect.x + 8.0, y: current_y, width: palette_rect.width - 16.0, height: item_h };
             
+            renderer.push_vnode(item_rect, "CommandItem");
             // Hover state simulation (just a subtle highlight for now)
             renderer.fill_rounded_rect(item_rect, 4.0, [0.1, 0.1, 0.15, 0.5]);
             
@@ -72,6 +80,12 @@ impl View for Command {
                 let (sw, _) = renderer.measure_text(shortcut, 12.0);
                 renderer.draw_text(shortcut, item_rect.x + item_rect.width - sw - 12.0, item_rect.y + 11.0, 12.0, [0.4, 0.4, 0.5, 1.0]);
             }
+            
+            let on_select = item.on_select.clone();
+            renderer.register_handler("pointerclick", Arc::new(move |_| {
+                on_select();
+            }));
+            renderer.pop_vnode();
             
             current_y += item_h + 4.0;
         }

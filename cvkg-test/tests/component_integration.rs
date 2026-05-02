@@ -1,6 +1,6 @@
 #![feature(impl_trait_in_assoc_type)]
 use cvkg_core::{View, Rect, Renderer};
-use cvkg_macros::view;
+use cvkg_macros::view_component;
 use cvkg_components::{Button, Text, VStack, Hvergelmir};
 
 struct MockRenderer {
@@ -45,8 +45,9 @@ impl Renderer for MockRenderer {
     }
 }
 
-#[view]
-fn ComplexDashboard(title: String, score: u32) -> impl View {
+#[allow(non_snake_case)]
+#[view_component]
+fn ComplexDashboard(title: String, score: u32) {
     VStack::new(10.0)
         .alignment(cvkg_core::Alignment::Center)
         .child(Text::new(title).font_size(24.0))

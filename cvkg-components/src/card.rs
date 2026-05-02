@@ -17,8 +17,8 @@ impl<V: View> Card<V> {
     ///
     /// # Examples
     /// ```
-    /// use cvkg_components::Card;
-    /// let card = Card::new();
+    /// use cvkg_components::{Card, Text};
+    /// let card: Card<Text> = Card::new();
     /// ```
     pub fn new() -> Self {
         Self {

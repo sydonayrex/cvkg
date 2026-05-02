@@ -1,4 +1,4 @@
-use cvkg_components::{Button, HStack, Slider, Spacer, Text, TextField, Toggle, VStack};
+use cvkg_components::{Button, HStack, Slider, Spacer, Text, Input, Toggle, VStack};
 use cvkg_core::{Color, View};
 use std::sync::{Arc, Mutex};
 
@@ -24,12 +24,16 @@ impl View for MainView {
                     .font_size(32.0)
                     .color(Color::CYAN),
             )
-            .child(TextField::new("Enter your name", &state.name, {
-                let state = self.state.clone();
-                move |new_name| {
-                    state.lock().unwrap().name = new_name;
-                }
-            }))
+            .child(
+                Input::new("Enter your name")
+                    .value(&state.name)
+                    .on_change({
+                        let state = self.state.clone();
+                        move |new_name| {
+                            state.lock().unwrap().name = new_name;
+                        }
+                    }),
+            )
             .child(
                 HStack::new(10.0)
                     .child(Text::new(format!(

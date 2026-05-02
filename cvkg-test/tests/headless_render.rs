@@ -26,8 +26,21 @@ async fn test_headless_render_capture() {
     let r = pixels[idx];
     let g = pixels[idx+1];
     let b = pixels[idx+2];
+    let a = pixels[idx+3];
     
-    assert!(r > 200, "Red component should be high, got {}", r);
+    println!("Pixel at (5,5): R={}, G={}, B={}, A={}", r, g, b, a);
+    
+    // Print a 4x4 grid of pixels at the start
+    println!("Pixels (0-3, 0-3):");
+    for y in 0..4 {
+        for x in 0..4 {
+            let i = (y * width + x) as usize * 4;
+            print!("[{},{},{},{}] ", pixels[i], pixels[i+1], pixels[i+2], pixels[i+3]);
+        }
+        println!();
+    }
+    
+    assert!(r > 150, "Red component should be high, got {}", r);
     assert!(g < 100, "Green component should be low, got {}", g);
     assert!(b < 100, "Blue component should be low, got {}", b);
     

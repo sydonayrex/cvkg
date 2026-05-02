@@ -1424,6 +1424,7 @@ pub trait Renderer: ElapsedTime + Send {
     // ── Berserker Pipeline State ─────────────────────────────────────────
     fn set_theme(&mut self, _theme: ColorTheme) {}
     fn set_rage(&mut self, _rage: f32) {}
+    fn set_berserker_mode(&mut self, _state: BerserkerMode) {}
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
 
     // ── Cyberpunk Effects ────────────────────────────────────────────────
@@ -1597,10 +1598,9 @@ pub struct SceneUniforms {
     pub shatter_time: f32,
     pub shatter_force: f32,
     pub berzerker_rage: f32,
+    pub berzerker_mode: u32,
     pub scroll_offset: f32,
     pub scale_factor: f32,
-    // Padding to ensure 16-byte alignment for GPU uniforms (47 f32s + 1 = 48)
-    pub _pad: [f32; 1],
 }
 impl SceneUniforms {
     pub fn new(width: f32, height: f32) -> Self {
@@ -1616,9 +1616,9 @@ impl SceneUniforms {
             shatter_time: -100.0,
             shatter_force: 0.0,
             berzerker_rage: 0.0,
+            berzerker_mode: 0,
             scroll_offset: 0.0,
             scale_factor: 1.0,
-            _pad: [0.0; 1],
         }
     }
 }
@@ -3005,27 +3005,49 @@ impl<T: Clone + Send + Sync + 'static> Suspense<T> {
         }
     }
 
-    pub fn new_async<F>(_future: F) -> Self
+    pub fn new_async<F>(future: F) -> Self
     where
         F: Future<Output = Result<T, String>> + Send + 'static,
     {
         let suspense = Self::new();
-        let _suspense_clone = suspense.clone();
+        let suspense_clone = suspense.clone();
         
         #[cfg(not(target_arch = "wasm32"))]
         {
-            std::thread::spawn(move || {
-                // Since native doesn't use Tokio by default, we block on the future in a separate thread.
-                // In a real Tokio app, this would use tokio::spawn.
-                // For cvkg-core, we execute synchronously in the spawned thread.
-                let _rt = std::sync::Arc::new(std::sync::Mutex::new(_future));
-                // We're stubbing execution to compile cleanly without heavy executor deps
-            });
+            // Try to use an existing tokio runtime, or fallback to a dedicated thread
+            if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                handle.spawn(async move {
+                    let result = future.await;
+                    match result {
+                        Ok(val) => suspense_clone.inner.set(AssetState::Ready(val)),
+                        Err(err) => suspense_clone.inner.set(AssetState::Error(err)),
+                    }
+                });
+            } else {
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+                    rt.block_on(async {
+                        let result = future.await;
+                        match result {
+                            Ok(val) => suspense_clone.inner.set(AssetState::Ready(val)),
+                            Err(err) => suspense_clone.inner.set(AssetState::Error(err)),
+                        }
+                    });
+                });
+            }
         }
         #[cfg(target_arch = "wasm32")]
         {
-            // wasm_bindgen_futures::spawn_local(async move { ... });
-            // Stubbed for compilation without wasm_bindgen_futures dependency in core
+            wasm_bindgen_futures::spawn_local(async move {
+                let result = future.await;
+                match result {
+                    Ok(val) => suspense_clone.inner.set(AssetState::Ready(val)),
+                    Err(err) => suspense_clone.inner.set(AssetState::Error(err)),
+                }
+            });
         }
         
         suspense
@@ -3111,3 +3133,21 @@ impl<T: Clone + Send + Sync + 'static> From<Result<T, String>> for Suspense<T> {
 
 #[cfg(test)]
 mod phase1_test;
+
+/// Berserker mode states for the rendering pipeline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BerserkerMode {
+    Normal,
+    Rage,     // Red tint, slight shake
+    Frenzy,   // Heavy red tint, motion blur, aggressive shake
+    GodMode,  // Golden aura, lightning arcs
+}
+
+/// Seer trait for AI-assisted UI components (inspired by Argmax OSS).
+/// Allows components to receive "prophecies" (predictions) from an AI backend.
+pub trait Seer: Send + Sync {
+    /// Provide a prediction for the next user action or content.
+    fn predict(&self, context: &str) -> String;
+    /// Stream real-time "whispers" (transcriptions/intent).
+    fn whispers(&self) -> Vec<String>;
+}

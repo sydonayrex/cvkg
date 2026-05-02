@@ -1,4 +1,4 @@
-use cvkg_core::{View, Rect, Renderer, Never, ElapsedTime};
+use cvkg_core::{View, Rect, Renderer, Never};
 
 /// Seiðr - Holographic projection effect with scanline animation (Norse magic)
 pub struct Seiðr {
@@ -135,5 +135,88 @@ impl View for MidgardLines {
             );
             y += self.density;
         }
+    }
+}
+
+/// NiflheimFrost - Thick refractive ice/glass effect (inspired by Glur)
+pub struct NiflheimFrost<V: View> {
+    pub content: V,
+    pub frost_intensity: f32,
+    pub blur_radius: f32,
+}
+
+impl<V: View> NiflheimFrost<V> {
+    pub fn new(content: V) -> Self {
+        Self {
+            content,
+            frost_intensity: 0.8,
+            blur_radius: 30.0,
+        }
+    }
+}
+
+impl<V: View> View for NiflheimFrost<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // 1. Apply thick Bifrost (refraction + blur)
+        renderer.bifrost(rect, self.blur_radius, 1.2, 0.95);
+        
+        // 2. Render frost 'crystal' overlay
+        let t = renderer.elapsed_time();
+        for i in 0..15 {
+            let x_off = ((t + i as f32) * 0.5).sin() * rect.width * 0.4;
+            let y_off = ((t + i as f32 * 1.5) * 0.4).cos() * rect.height * 0.4;
+            renderer.draw_line(
+                rect.x + rect.width / 2.0 + x_off,
+                rect.y + rect.height / 2.0 + y_off,
+                rect.x + rect.width / 2.0 + x_off + 10.0,
+                rect.y + rect.height / 2.0 + y_off + 10.0,
+                [1.0, 1.0, 1.0, 0.1 * self.frost_intensity],
+                1.0,
+            );
+        }
+
+        // 3. Render content
+        self.content.render(renderer, rect);
+    }
+}
+
+/// FutharkFlow - Animated runic power-lines connecting components (inspired by Arwes)
+pub struct FutharkFlow {
+    pub speed: f32,
+    pub color: [f32; 4],
+}
+
+impl Default for FutharkFlow {
+    fn default() -> Self {
+        Self {
+            speed: 3.0,
+            color: [0.0, 1.0, 1.0, 0.6],
+        }
+    }
+}
+
+impl View for FutharkFlow {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+        let runes = ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ'];
+        
+        let flow_pos = (t * self.speed).fract();
+        let rune_idx = ((t * self.speed).floor() as usize) % runes.len();
+        
+        // Draw the 'power line'
+        renderer.draw_line(rect.x, rect.y + rect.height / 2.0, rect.x + rect.width, rect.y + rect.height / 2.0, [0.0, 0.5, 0.8, 0.2], 1.0);
+        
+        // Draw the moving rune pulse
+        let rx = rect.x + flow_pos * rect.width;
+        let ry = rect.y + rect.height / 2.0;
+        
+        renderer.gungnir(Rect { x: rx - 10.0, y: ry - 10.0, width: 20.0, height: 20.0 }, self.color, 5.0, 0.8);
+        renderer.draw_text(&runes[rune_idx].to_string(), rx - 5.0, ry + 5.0, 14.0, self.color);
     }
 }

@@ -3,7 +3,7 @@ use cvkg_flow::node::FlowNode;
 use cvkg_flow::edge::FlowEdge;
 use cvkg_flow::port::FlowPort;
 use cvkg_flow::types::{NodeId, PortId, EdgeId, PortPosition, PortDirection};
-use cvkg_core::{Rect, Event};
+// No core imports needed for this basic test
 
 #[test]
 fn journey_node_connection_flow() {

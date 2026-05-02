@@ -233,6 +233,57 @@ impl SceneGraph {
         }
         self.dirty_regions.clear();
     }
+
+    /// Apply a retained scene graph patch.
+    /// Section 3.2: "Retained tree of rendered nodes for efficient differential updates."
+    pub fn apply_patch(&mut self, patch: Patch) {
+        match patch {
+            Patch::Create(node) => {
+                self.add_node(node, None); // Root case or handled by parent update
+            }
+            Patch::Remove(id) => {
+                if let Some(node) = self.nodes.remove(&id) {
+                    self.dirty_regions.push(node.world_rect);
+                    // Remove from parent's children
+                    for p in self.nodes.values_mut() {
+                        p.children.retain(|&c| c != id);
+                    }
+                }
+            }
+            Patch::Update { id, changes } => {
+                for change in changes {
+                    self.apply_change(id, change);
+                }
+            }
+            Patch::Move { id, new_parent, new_index } => {
+                // Remove from old parent
+                for p in self.nodes.values_mut() {
+                    p.children.retain(|&c| c != id);
+                }
+                // Add to new parent
+                if let Some(p) = self.nodes.get_mut(&new_parent) {
+                    p.children.insert(new_index.min(p.children.len()), id);
+                    p.is_dirty = true;
+                }
+            }
+        }
+    }
+
+    fn apply_change(&mut self, id: NodeId, change: Change) {
+        if let Some(node) = self.nodes.get_mut(&id) {
+            node.is_dirty = true;
+            match change {
+                Change::ComponentType(t) => node.component_type = t,
+                Change::Children(c) => node.children = c,
+                Change::LocalRect(r) => {
+                    self.dirty_regions.push(node.world_rect);
+                    node.local_rect = r;
+                }
+                Change::LayerId(l) => node.layer_id = l,
+                Change::ZIndex(z) => node.z_index = z,
+            }
+        }
+    }
 }
 
 #[cfg(test)]

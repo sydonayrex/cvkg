@@ -79,10 +79,12 @@ impl View for HitTestView {
         };
         let field_text = state.text.clone();
         let state_clone = self.state.clone();
-        cvkg_components::TextField::new("Enter command...", field_text, move |t| {
-            state_clone.lock().unwrap().text = t;
-        })
-        .render(renderer, field_rect);
+        cvkg_components::Input::new("Enter command...")
+            .value(field_text)
+            .on_change(move |t| {
+                state_clone.lock().unwrap().text = t;
+            })
+            .render(renderer, field_rect);
 
         // 3. Toggle Section
         let toggle_rect = Rect {
