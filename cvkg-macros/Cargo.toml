@@ -15,5 +15,5 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro = true
 
 [dev-dependencies]
-cvkg-core = { path = "../cvkg-core" }
-cvkg-components = { path = "../cvkg-components" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.15" }
+cvkg-components = { path = "../cvkg-components", version = "0.1.15" }

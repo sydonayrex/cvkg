@@ -7,16 +7,16 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core" }
-cvkg-scene = { path = "../cvkg-scene" }
-cvkg-layout = { path = "../cvkg-layout" }
-cvkg-anim = { path = "../cvkg-anim" }
-cvkg-render-gpu = { path = "../cvkg-render-gpu", optional = true }
-cvkg-render-native = { path = "../cvkg-render-native", optional = true }
-cvkg-render-web = { path = "../cvkg-render-web", optional = true }
-cvkg-components = { path = "../cvkg-components" }
-cvkg-themes = { path = "../cvkg-themes" }
-cvkg-macros = { path = "../cvkg-macros" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.15" }
+cvkg-scene = { path = "../cvkg-scene", version = "0.1.15" }
+cvkg-layout = { path = "../cvkg-layout", version = "0.1.15" }
+cvkg-anim = { path = "../cvkg-anim", version = "0.1.15" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu", optional = true, version = "0.1.15" }
+cvkg-render-native = { path = "../cvkg-render-native", optional = true, version = "0.1.15" }
+cvkg-render-web = { path = "../cvkg-render-web", optional = true, version = "0.1.15" }
+cvkg-components = { path = "../cvkg-components", version = "0.1.15" }
+cvkg-themes = { path = "../cvkg-themes", version = "0.1.15" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.1.15" }
 rand = "0.8"
 
 [features]

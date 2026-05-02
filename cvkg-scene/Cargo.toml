@@ -14,5 +14,5 @@ bincode = { workspace = true }
 
 [dev-dependencies]
 insta = { version = "1.34", features = ["json"] }
-cvkg-components = { path = "../cvkg-components" }
-cvkg-vdom = { path = "../cvkg-vdom" }
+cvkg-components = { path = "../cvkg-components", version = "0.1.15" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.15" }
