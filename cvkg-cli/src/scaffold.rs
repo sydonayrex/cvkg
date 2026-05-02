@@ -74,7 +74,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cvkg = {{ version = "0.1.12", features = ["native"] }}
+cvkg = {{ version = "0.1.15", features = ["native"] }}
+cvkg-core = {{ version = "0.1.15" }}
 tokio = {{ version = "1.0", features = ["full"] }}
 log = "0.4"
 "#,
@@ -88,56 +89,49 @@ log = "0.4"
         let content = match self.template {
             Template::Minimal => r#"use cvkg::prelude::*;
 
-#[derive(View)]
-struct App;
-
-impl App {
-    fn body(&self) -> impl View {
-        VStack::new()
-            .push(Text::new("Hello Cyber Viking"))
-            .push(Button::new("Click Me", || println!("Clicked!")))
-            .padding(20.0)
-            .background(Color::rgb(0.05, 0.05, 0.1))
-    }
+#[allow(non_snake_case)]
+#[view_component]
+fn App() {
+    VStack::new(20.0)
+        .child(Text::new("Hello Cyber Viking").font_size(32.0))
+        .child(Button::new("Click Me", || println!("Clicked!")))
 }
 
 fn main() {
-    cvkg::native::NativeRenderer::run(App);
+    cvkg::native::NativeRenderer::run(App());
 }
 "#,
             Template::Dashboard => r#"use cvkg::prelude::*;
 
-#[derive(View)]
-struct Dashboard;
+#[allow(non_snake_case)]
+#[view_component]
+fn Dashboard() {
+    HStack::new(0.0)
+        .child(Sidebar())
+        .child(MainContent())
+}
 
-impl Dashboard {
-    fn body(&self) -> impl View {
-        HStack::new()
-            .push(self.sidebar())
-            .push(self.main_content())
-            .background(Color::rgb(0.02, 0.02, 0.04))
-    }
+#[allow(non_snake_case)]
+#[view_component]
+fn Sidebar() {
+    VStack::new(16.0)
+        .child(Text::new("ULFᴴ").font_size(32.0).color(Color::new(0.0, 1.0, 1.0, 1.0)))
+        .child(Spacer::new())
+        .child(Button::new("Deploy", || println!("Deploying...")))
+        .background(Color::new(0.05, 0.05, 0.1, 1.0))
+}
 
-    fn sidebar(&self) -> impl View {
-        VStack::new()
-            .push(Text::new("ULFᴴ").size(32.0).color(Color::CYAN))
-            .push(Spacer::new())
-            .push(Button::new("Deploy", || println!("Deploying...")))
-            .padding(16.0)
-            .background(Color::rgb(0.05, 0.05, 0.1))
-            .border(Color::CYAN.with_alpha(0.3), 1.0)
-    }
-
-    fn main_content(&self) -> impl View {
-        VStack::new()
-            .push(Text::new("System Nominal").size(24.0))
-            .push(List::new(vec!["Engine 1: OK", "Shields: 100%"]))
-            .padding(32.0)
-    }
+#[allow(non_snake_case)]
+#[view_component]
+fn MainContent() {
+    VStack::new(32.0)
+        .child(Text::new("System Nominal").font_size(24.0))
+        .child(Text::new("Engine 1: OK"))
+        .child(Text::new("Shields: 100%"))
 }
 
 fn main() {
-    cvkg::native::NativeRenderer::run(Dashboard);
+    cvkg::native::NativeRenderer::run(Dashboard());
 }
 "#,
         };

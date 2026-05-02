@@ -78,7 +78,7 @@ impl Theme {
                 h2: 24.0,
                 body: 16.0,
                 caption: 12.0,
-                code: 14.0,
+                code: 12.0,
             },
             spacing: SpacingScale {
                 xs: 4.0,

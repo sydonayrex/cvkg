@@ -302,7 +302,7 @@ impl View for ChartView {
     }
 }
 
-/// A real-time performance telemetry display
+/// A real-time performance telemetry display with tactical aesthetics.
 pub struct TelemetryView;
 
 impl View for TelemetryView {
@@ -312,22 +312,55 @@ impl View for TelemetryView {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let stats = renderer.get_telemetry();
         
-        renderer.fill_rounded_rect(rect, 4.0, [0.0, 0.0, 0.0, 0.8]);
-        renderer.stroke_rect(rect, [0.0, 1.0, 0.5, 0.5], 1.0);
+        // Bifrost Glassmorphism
+        renderer.bifrost(rect, 20.0, 1.2, 0.85);
+        renderer.fill_rounded_rect(rect, 6.0, [0.02, 0.03, 0.05, 0.6]);
         
-        let lines = [
-            format!("FPS: {:.1}", 1000.0 / stats.frame_time_ms.max(0.1)),
-            format!("Frame: {:.2} ms", stats.frame_time_ms),
-            format!("Draw Calls: {}", stats.draw_calls),
-            format!("Vertices: {}", stats.vertices),
+        let accent_cyan = [0.0, 1.0, 1.0, 0.9];
+        let accent_gold = [1.0, 0.8, 0.0, 0.9];
+        let alert_red = [1.0, 0.2, 0.2, 1.0];
+        
+        let border_color = if stats.hardware_stall_detected { alert_red } else { accent_cyan };
+        renderer.stroke_rounded_rect(rect, 6.0, border_color, 1.5);
+        
+        // Tactical Header
+        renderer.fill_rect(
+            Rect { x: rect.x, y: rect.y, width: rect.width, height: 20.0 },
+            [border_color[0], border_color[1], border_color[2], 0.2]
+        );
+        renderer.draw_text("KVASIR TELEMETRY", rect.x + 8.0, rect.y + 4.0, 10.0, border_color);
+
+let lines = vec![
+            ("FPS", format!("{:.1}", 1000.0 / stats.frame_time_ms.max(0.1))),
+            ("FRAME", format!("{:.2} ms", stats.frame_time_ms)),
+            ("P99", format!("{:.2} ms", stats.p99_frame_time_ms)),
+            ("JITTER", format!("{:.2} ms", stats.frame_jitter_ms)),
+            ("DRAW", format!("{}", stats.draw_calls)),
+            ("VERT", format!("{}", stats.vertices)),
         ];
-        
-        for (i, line) in lines.iter().enumerate() {
-            renderer.draw_text(line, rect.x + 8.0, rect.y + 8.0 + i as f32 * 18.0, 12.0, [0.0, 1.0, 0.5, 1.0]);
+
+        let start_y = rect.y + 28.0;
+        for (i, (label, val)) in lines.iter().enumerate() {
+            let y = start_y + i as f32 * 18.0;
+            renderer.draw_text(label, rect.x + 8.0, y, 10.0, [0.7, 0.7, 0.8, 0.8]);
+            renderer.draw_text(val, rect.x + 60.0, y, 11.0, accent_gold);
         }
+
+        if stats.hardware_stall_detected {
+            renderer.fill_rounded_rect(
+                Rect { x: rect.x + 5.0, y: rect.y + rect.height - 25.0, width: rect.width - 10.0, height: 20.0 },
+                4.0,
+                [alert_red[0], alert_red[1], alert_red[2], 0.2]
+            );
+            renderer.draw_text("HARDWARE STALL DETECTED", rect.x + 12.0, rect.y + rect.height - 20.0, 10.0, alert_red);
+        }
+        
+        // Dynamic Scanning Line (Simulated with elapsed time if available)
+        // For now, just a static tactical divider
+        renderer.draw_line(rect.x + 5.0, rect.y + 24.0, rect.x + rect.width - 5.0, rect.y + 24.0, [1.0, 1.0, 1.0, 0.1], 1.0);
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        cvkg_core::Size { width: 140.0, height: 80.0 }
+        cvkg_core::Size { width: 180.0, height: 160.0 }
     }
 }

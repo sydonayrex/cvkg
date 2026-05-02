@@ -2,17 +2,19 @@
 
 **cvkg-anim** (Project Sleipnir) provides the physics-based animation engine for CVKG.
 
-## Features
+## 🚀 Quick Start
 
-*   **RK4 Solver**: Uses a Runge-Kutta 4th order integrator for ultra-smooth physics simulations.
-*   **Spring Physics**: Implements critically damped springs for natural-feeling UI transitions.
-*   **Stateless Animation Hooks**: Provides modifiers like `.animation()` that automatically transition property changes over time.
-*   **Reactive Binding Integration**: Can be bound to CVKG `Binding` types to animate state changes.
-
-## Usage
-Animations in CVKG are typically applied via modifiers:
 ```rust
-view.offset(x, y)
-    .animation(Spring::stiff())
-```
-The engine calculates the delta and applies the physical transformation during the rendering pass.
+use cvkg_anim::{runic_emitter::RunicEmitter, SleipnirSolver, SleipnirParams};
+use cvkg_core::{View, Rect};
+use std::time::Duration;
+
+// Create animation solver
+let params = SleipnirParams::snappy();
+let mut solver = SleipnirSolver::new(params, 1.0, 0.0);
+
+// Animate over time
+let dt = 0.016; // 60 FPS
+for _ in 0..60 {
+    let value = solver.tick(dt);
+    println!(

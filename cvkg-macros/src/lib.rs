@@ -46,6 +46,7 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let name = &input.sig.ident;
     let vis = &input.vis;
+    let attrs = &input.attrs;
     let inputs = &input.sig.inputs;
     let body = &input.block;
 
@@ -62,23 +63,28 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     }
 
-    let struct_name = quote::format_ident!("{}View", name);
+    let mut name_str = name.to_string();
+    if let Some(first) = name_str.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    let struct_name = quote::format_ident!("{}View", name_str);
 
     let expanded = quote! {
         #vis struct #struct_name {
             #(#fields),*
         }
 
-        impl cvkg_core::View for #struct_name {
-            type Body = impl cvkg_core::View;
+impl cvkg_core::View for #struct_name {
+            type Body = cvkg_core::AnyView;
 
             fn body(self) -> Self::Body {
                 // Map fields back to local variables for the body
-                #(let mut #field_names = self.#field_names;)*
-                #body
+                #(let #field_names = self.#field_names;)*
+                cvkg_core::AnyView::new(#body)
             }
         }
 
+        #(#attrs)*
         #vis fn #name(#inputs) -> #struct_name {
             #struct_name {
                 #(#field_names),*

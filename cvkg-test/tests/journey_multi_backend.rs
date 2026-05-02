@@ -1,13 +1,11 @@
-use cvkg_core::{Rect, Renderer, View, FrameRenderer, RenderTier};
-use cvkg_vdom::{VDom, VDomPatch};
+use cvkg_core::{Rect, RenderTier, View, FrameRenderer};
 use cvkg_components::ValkyrieIndicator;
 use cvkg_render_web::WebRenderer;
 use cvkg_render_gpu::SurtrRenderer;
-use std::sync::Arc;
 
 #[tokio::test]
 async fn test_journey_web_backend_stub() {
-    let mut renderer = WebRenderer::new();
+    let renderer = WebRenderer::new();
     
     // On non-wasm32, this should be Tier3Fallback
     #[cfg(not(target_arch = "wasm32"))]

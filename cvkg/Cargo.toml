@@ -16,6 +16,7 @@ cvkg-render-native = { path = "../cvkg-render-native", optional = true }
 cvkg-render-web = { path = "../cvkg-render-web", optional = true }
 cvkg-components = { path = "../cvkg-components" }
 cvkg-themes = { path = "../cvkg-themes" }
+cvkg-macros = { path = "../cvkg-macros" }
 rand = "0.8"
 
 [features]

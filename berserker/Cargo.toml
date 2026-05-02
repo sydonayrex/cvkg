@@ -1,9 +1,9 @@
 [package]
 name = "berserker"
-version = "0.1.0"
+version = "0.1.15"
 edition = "2024"
 
 [dependencies]
-cvkg = { version = "0.1.14", features = ["native"] }
+cvkg = { version = "0.1.15", features = ["native"] }
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4"

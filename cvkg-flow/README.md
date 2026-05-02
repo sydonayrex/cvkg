@@ -1,14 +1,15 @@
 # cvkg-flow
 
-**cvkg-flow** is the graph orchestration and node-based execution engine for the Cyber Viking Kvasir Graph.
+**cvkg-flow** provides flow graph visualization and interaction components for CVKG applications.
 
-## Features
+## 🚀 Quick Start
 
-- **Reactive Graph Model**: Nodes and edges with automatic change propagation.
-- **Agentic Integration**: Specifically designed for AI agents to reason about and manipulate graph states.
-- **Undo/Redo System**: Full session persistence and temporal navigation.
-- **Stateless Execution**: Pure functional transformation of graph data into UI representations.
+```rust
+use cvkg_flow::{FlowGraph, FlowNode, FlowEdge};
+use cvkg_components::{VStack, Text};
 
-## Usage
+// Create a flow graph
+let mut graph = FlowGraph::new();
 
-Check out the examples directory for demonstration of flow graph orchestration.
+// Add nodes
+let node1 = graph.add_node(

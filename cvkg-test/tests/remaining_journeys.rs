@@ -1,5 +1,5 @@
 use cvkg_anim::{RunicEmitter, SleipnirParams, SleipnirSolver};
-use cvkg_layout::{HStack, VStack};
+use cvkg_layout::HStack;
 use cvkg_core::{Rect, Size, SizeProposal, Alignment, Distribution, LayoutCache, LayoutView};
 use cvkg_vdom::{VDom, VDomPatch, VNode, NodeId, LayoutRect, AriaProps};
 use cvkg_flow::{FlowGraph, FlowNode, FlowEdge, NodeId as FlowNodeId, EdgeId, PortId, FlowPort, PortPosition, PortDirection};
@@ -27,7 +27,7 @@ fn test_journey_anim_runic_emitter() {
     emitter.update(Duration::from_millis(500)); // Should spawn some particles if spawn_rate=10
     
     // RunicEmitter spawn logic is based on spawn_timer and interval
-    assert!(emitter.particles.len() >= 0);
+    assert!(!emitter.particles.is_empty());
 }
 
 #[test]

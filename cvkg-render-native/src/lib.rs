@@ -89,6 +89,10 @@ struct WindowState {
     cursor_pos: [f32; 2],
     /// The instant the last redraw finished, used for measuring inter-frame timing.
     last_redraw_start: std::time::Instant,
+    /// Sliding window of frame times for tail latency (P99) calculation.
+    frame_history: std::collections::VecDeque<f32>,
+    /// Total frames rendered on this window.
+    frame_count: u64,
 }
 
 struct App<V: cvkg_core::View> {
@@ -135,6 +139,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 vdom: Some(cvkg_vdom::VDom::new()),
                 cursor_pos: [0.0, 0.0],
                 last_redraw_start: std::time::Instant::now(),
+                frame_history: std::collections::VecDeque::with_capacity(100),
+                frame_count: 0,
             });
 
             cvkg_core::env::insert::<cvkg_core::AssetKey>(self.asset_manager.clone());
@@ -234,7 +240,43 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 telemetry.gpu_submit_time_ms = gpu_submit_end.duration_since(gpu_submit_start).as_secs_f32() * 1000.0;
                 
                 // Total frame time
-                telemetry.frame_time_ms = gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
+                let frame_time_ms = gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
+                telemetry.frame_time_ms = frame_time_ms;
+                
+                // Tail Latency Tracking (P99 and Jitter)
+                state.frame_history.push_back(frame_time_ms);
+                if state.frame_history.len() > 100 {
+                    state.frame_history.pop_front();
+                }
+                
+                let mut sorted_frames: Vec<f32> = state.frame_history.iter().copied().collect();
+                sorted_frames.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                
+                if !sorted_frames.is_empty() {
+                    let p99_idx = (sorted_frames.len() as f32 * 0.99).floor() as usize;
+                    telemetry.p99_frame_time_ms = sorted_frames[p99_idx.min(sorted_frames.len() - 1)];
+                    
+                    // Jitter Calculation (Variance)
+                    let avg = sorted_frames.iter().sum::<f32>() / sorted_frames.len() as f32;
+                    let variance = sorted_frames.iter().map(|f| (f - avg).powi(2)).sum::<f32>() / sorted_frames.len() as f32;
+                    telemetry.frame_jitter_ms = variance.sqrt();
+                }
+
+                // Anti-Analysis Hardware Stall Detection
+                // If jitter is extreme, mark as a potential hardware stall (or VM intervention)
+                if telemetry.frame_jitter_ms > 20.0 {
+                    telemetry.hardware_stall_detected = true;
+                }
+
+                // Active Security Probes (every 60 frames)
+                state.frame_count += 1;
+                if state.frame_count % 60 == 0 {
+                    let risk = cvkg_core::security::EnvironmentShield::probe_analysis_risk();
+                    if risk > 0.1 {
+                        log::debug!("Analysis risk probe: {:.2}", risk);
+                        cvkg_core::security::EnvironmentShield::enforce_mitigation(risk);
+                    }
+                }
                 
                 gpu.telemetry = telemetry;
                 state.last_redraw_start = gpu_submit_end;
@@ -416,6 +458,23 @@ impl cvkg_core::Renderer for NativeRenderer {
 
     fn set_berserker_mode(&mut self, state: cvkg_core::BerserkerMode) {
         self.berserker_mode = state;
+        
+        // Berserker Determinism: Apply OS-level hints for GodMode
+        if state == cvkg_core::BerserkerMode::GodMode {
+            log::info!("ENTERING GOD MODE: Activating Berserker Determinism (High Priority)");
+            #[cfg(target_os = "linux")]
+            unsafe {
+                // Attempt to set high priority (requires permissions, fails gracefully)
+                // Note: In a real system, we might also use sched_setaffinity here.
+                let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
+            }
+        } else {
+            #[cfg(target_os = "linux")]
+            unsafe {
+                let _ = libc::setpriority(libc::PRIO_PROCESS, 0, 0);
+            }
+        }
+
         self.gpu.lock().unwrap().set_berserker_mode(state);
     }
 

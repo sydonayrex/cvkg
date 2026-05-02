@@ -43,6 +43,6 @@ pub use cvkg_render_web as web;
 pub mod prelude {
     pub use cvkg_components::Color;
     pub use cvkg_components::*;
-    pub use cvkg_core::{Binding, Rect, State, View};
-    pub use cvkg_layout::{HStack, VStack, ZStack};
+    pub use cvkg_core::{Binding, Rect, State, View, Never};
+    pub use cvkg_macros::view_component;
 }

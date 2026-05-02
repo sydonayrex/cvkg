@@ -14,7 +14,7 @@ wgpu = { version = "29.0.1", features = ["webgpu"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
 log = "0.4"
 console_log = "1.0"
 bytemuck = { version = "1.14", features = ["derive"] }
@@ -23,6 +23,9 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Performance",
     "HtmlCanvasElement",
+    "HtmlElement",
+    "HtmlDivElement",
+    "CssStyleDeclaration",
     "Location",
     "CanvasRenderingContext2d",
     "CanvasGradient",
@@ -42,10 +45,17 @@ web-sys = { version = "0.3", features = [
     "ErrorEvent",
     "PointerEvent",
     "KeyboardEvent",
-    "WebGl2RenderingContext"
+    "WebGl2RenderingContext",
+    "Gpu",
+    "GpuAdapter",
+    "GpuDevice",
+    "GpuCanvasContext",
+    "GpuTextureFormat",
+    "GpuCanvasConfiguration",
+    "DomRect"
 ] }
-cvkg-core = { path = "../cvkg-core", version = "0.1.14" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.14" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.15" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.15" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 # Lock-free RCU for image/texture cache; arc-swap is wasm32-compatible (no pthreads)

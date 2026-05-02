@@ -1,4 +1,3 @@
-#![feature(impl_trait_in_assoc_type)]
 use cvkg_macros::view_component;
 
 #[allow(non_snake_case)]

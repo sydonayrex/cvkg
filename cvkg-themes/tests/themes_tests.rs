@@ -122,6 +122,7 @@ fn test_theme_typography_journey() {
     assert!(body_size > caption_size);
 }
 
+#[test]
 fn test_theme_motion_journey() {
     let theme = Theme::dark();
     

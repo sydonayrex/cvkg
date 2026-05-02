@@ -111,6 +111,7 @@ mod wasm_impl {
 #![allow(deprecated)]
 
 use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer, View, RenderTier};
+use super::{SceneNode, ComputeParams};
 use wasm_bindgen::prelude::*;
 
 use cvkg_vdom::VDomPatch;
@@ -174,6 +175,8 @@ pub struct WebRenderer {
     pub rage: f32,
     pub(crate) performance: Option<web_sys::Performance>,
     pub shield_wall: Option<ShieldWall>,
+    /// Total frames rendered in this session.
+    pub frame_count: u64,
 }
 
 // WebRenderer is only used on a single thread in WASM, but Renderer trait requires Send.
@@ -206,6 +209,7 @@ impl WebRenderer {
             rage: 0.0,
             performance,
             shield_wall: Some(ShieldWall::new()),
+            frame_count: 0,
         }
     }
 
@@ -259,7 +263,7 @@ impl WebRenderer {
                     log::warn!("WebGPU initialization failed: {:?}. Falling back to WebGL2...", e);
                     match self.init_webgl2() {
                         Ok(_) => {
-                            self.tier = RenderTier::Tier2WebGL2;
+                            self.tier = RenderTier::Tier2GPU;
                             log::info!("Initialized WebGL2 context");
                         }
                         Err(e2) => {
@@ -275,7 +279,7 @@ impl WebRenderer {
         {
             match self.init_webgl2() {
                 Ok(_) => {
-                    self.tier = RenderTier::Tier2WebGL2;
+                    self.tier = RenderTier::Tier2GPU;
                 }
                 Err(_) => {
                     self.tier = RenderTier::Tier3Fallback;
@@ -761,7 +765,7 @@ impl WebRenderer {
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("CVKG Compute Pipeline Layout"),
-                bind_group_layouts: &[&compute_bind_group_layout],
+                bind_group_layouts: &[Some(&compute_bind_group_layout)],
                 immediate_size: 0,
             });
 
@@ -1382,16 +1386,16 @@ fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {
         self.rage = rage;
     }
 
-    fn set_aria_role(&mut self, role: &str) {
-        if let Some(ref mut sw) = self.shield_wall {
+    fn set_aria_role(&mut self, _role: &str) {
+        if let Some(ref mut _sw) = self.shield_wall {
             // This is a simplified sync; in a real update_vdom it would be more structured
             // For now, we use the last vnode ID if available
             // Note: This needs integration into the VDom traversal to be fully robust
         }
     }
 
-    fn set_aria_label(&mut self, label: &str) {
-        if let Some(ref mut sw) = self.shield_wall {
+    fn set_aria_label(&mut self, _label: &str) {
+        if let Some(ref mut _sw) = self.shield_wall {
              // Same as above
         }
     }
@@ -1434,6 +1438,17 @@ impl FrameRenderer<()> for WebRenderer {
                 // No-op: Canvas 2D draws immediately during Renderer calls.
             }
         }
+        
+        // Active Security Probes (every 60 frames)
+        self.frame_count += 1;
+        if self.frame_count % 60 == 0 {
+            let risk = cvkg_core::security::EnvironmentShield::probe_analysis_risk();
+            if risk > 0.1 {
+                log::debug!("Web Analysis risk probe: {:.2}", risk);
+                cvkg_core::security::EnvironmentShield::enforce_mitigation(risk);
+            }
+        }
+
         cvkg_core::end_render_phase();
     }
 }
@@ -1549,13 +1564,13 @@ impl WebRenderer {
         ctx.restore();
     }
     fn render_webgpu(&mut self) -> Result<(), JsValue> {
+        let current_time = self.now();
+        let time = ((current_time - self.start_time) / 1000.0) as f32;
+
         let ctx = self
             .webgpu_context
             .as_mut()
             .ok_or_else(|| JsValue::from_str("WebGPU context missing"))?;
-
-        let current_time = self.now();
-        let time = ((current_time - self.start_time) / 1000.0) as f32;
 
         let uniforms = SceneUniforms {
             resolution: [ctx.config.width as f32, ctx.config.height as f32],

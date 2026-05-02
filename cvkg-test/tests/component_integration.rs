@@ -1,4 +1,4 @@
-#![feature(impl_trait_in_assoc_type)]
+// No nightly features required
 use cvkg_core::{View, Rect, Renderer};
 use cvkg_macros::view_component;
 use cvkg_components::{Button, Text, VStack, Hvergelmir};

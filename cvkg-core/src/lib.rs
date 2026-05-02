@@ -1250,6 +1250,12 @@ pub trait ViewModifier: Send + Clone {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryData {
     pub frame_time_ms: f32,
+    /// 99th percentile frame time over the last window, used to detect tail latency.
+    pub p99_frame_time_ms: f32,
+    /// Statistical jitter (variance in frame timing).
+    pub frame_jitter_ms: f32,
+    /// Indicates if a hardware stall (DRAM refresh, thermal spike) was detected.
+    pub hardware_stall_detected: bool,
     
     // Pass timing
     pub input_time_ms: f32,

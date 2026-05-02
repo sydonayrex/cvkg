@@ -1,7 +1,5 @@
 //! # CVKG Agentic Development Guidelines (v1.2)
 //!
-//! All AI agents contributing to this crate MUST follow ALL seven rules:
-//!
 //! ── Karpathy Guidelines (1–4) ────────────────────────────────────────────
 //! 1. THINK FIRST     — State assumptions. Surface ambiguity. Push back on complexity.
 //! 2. STAY SIMPLE     — Minimum code. No speculative features. No unasked-for abstractions.
