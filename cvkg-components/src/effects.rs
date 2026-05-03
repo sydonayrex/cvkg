@@ -1,6 +1,7 @@
 use cvkg_core::{View, Rect, Renderer, Never};
 
 /// Seiðr - Holographic projection effect with scanline animation
+#[derive(Clone)]
 pub struct Seiðr {
     pub base_color: [f32; 4],
     pub scanline_speed: f32,
@@ -47,6 +48,7 @@ impl View for Seiðr {
 }
 
 /// LokiGlitch - Digital distortion text effect
+#[derive(Clone)]
 pub struct LokiGlitch {
     pub content: String,
     pub font_size: f32,
@@ -88,6 +90,7 @@ impl View for LokiGlitch {
 }
 
 /// MidgardLines - Standalone scanline overlay effect
+#[derive(Clone)]
 pub struct MidgardLines {
     pub speed: f32,
     pub density: f32,
@@ -122,6 +125,7 @@ impl View for MidgardLines {
 /// - Crystal overlay animation (frost particles)
 /// - Liquid Glass: morphing corners, dynamic edge highlights
 /// - Clean mode: disable frost particles for pure glass
+#[derive(Clone)]
 pub struct NiflheimFrost<V: View> {
     pub content: V,
     pub frost_intensity: f32,
@@ -237,6 +241,7 @@ impl<V: View> View for NiflheimFrost<V> {
 }
 
 /// FutharkFlow - Animated runic power-lines connecting components
+#[derive(Clone)]
 pub struct FutharkFlow {
     pub speed: f32,
     pub color: [f32; 4],
@@ -275,6 +280,7 @@ impl View for FutharkFlow {
 
 /// HeimdallSweep - A tactical radar sweep effect that reveals underlying content.
 /// Named after Heimdall, the all-seeing guardian of Bifrost.
+#[derive(Clone)]
 pub struct HeimdallSweep<V: View> {
     pub content: V,
     pub sweep_speed: f32, // Rotations per second

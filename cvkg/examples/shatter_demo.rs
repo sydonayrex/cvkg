@@ -156,6 +156,7 @@ impl ApplicationHandler for AppState {
     }
 }
 
+#[cfg(feature = "gpu")]
 fn main() {
     let event_loop = EventLoop::new().unwrap();
     let mut state = AppState {

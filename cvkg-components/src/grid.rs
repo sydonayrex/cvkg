@@ -20,7 +20,7 @@ impl Grid {
     }
 
     /// Add a child to the grid.
-    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+    pub fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
         self.children.push(view.erase());
         self
     }

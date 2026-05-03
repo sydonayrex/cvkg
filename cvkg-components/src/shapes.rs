@@ -1,6 +1,7 @@
 use cvkg_core::{View, Rect, Renderer, Never, SizeProposal, Size};
 
 /// Hvergelmir - A hexagonal shape primitive (Norse equivalent of Hexagon)
+#[derive(Clone)]
 pub struct Hvergelmir {
     pub size: f32,
     pub color: [f32; 4],
@@ -63,6 +64,7 @@ impl cvkg_core::layout::LayoutView for Hvergelmir {
 }
 
 /// Skjaldborg - A trapezoidal panel (Norse equivalent of Trapezoid / Shield Wall)
+#[derive(Clone)]
 pub struct Skjaldborg {
     pub color: [f32; 4],
 }
@@ -105,6 +107,7 @@ impl cvkg_core::layout::LayoutView for Skjaldborg {
 
 /// Idavoll - A tactical octagonal container (8-sided).
 /// Named after the plain in Asgard where the gods established their temples.
+#[derive(Clone)]
 pub struct Idavoll<V: View> {
     pub content: V,
     pub color: [f32; 4],
@@ -165,6 +168,7 @@ impl<V: View> View for Idavoll<V> {
 
 /// PolygonFrame - A geometric container with a specified number of sides.
 /// Supports Hexagons (6), Octagons (8), and other tactical shapes.
+#[derive(Clone)]
 pub struct PolygonFrame<V: View> {
     pub content: V,
     pub sides: u32,

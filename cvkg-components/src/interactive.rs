@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 /// Button with action callback
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Button {
     pub(crate) label: String,
     pub(crate) on_click: std::sync::Arc<dyn Fn() + Send + Sync>,
@@ -135,6 +136,7 @@ impl cvkg_core::layout::LayoutView for Button {
     }
 }
 
+#[derive(Clone)]
 pub struct Toggle {
     pub(crate) label: String,
     pub(crate) is_on: bool,
@@ -236,6 +238,7 @@ impl View for Toggle {
     }
 }
 
+#[derive(Clone)]
 pub struct Slider {
     pub(crate) value: f32,
     pub(crate) range: std::ops::RangeInclusive<f32>,
@@ -367,6 +370,7 @@ impl View for Slider {
 }
 
 /// Stepper for discrete increment/decrement
+#[derive(Clone)]
 pub struct Stepper {
     pub(crate) label: String,
     pub(crate) value: i32,
@@ -484,6 +488,7 @@ impl View for Stepper {
     }
 }
 
+#[derive(Clone)]
 pub struct Input {
     pub(crate) placeholder: String,
     pub(crate) text: String,
@@ -633,6 +638,7 @@ impl View for Input {
 }
 
 /// Secure password input
+#[derive(Clone)]
 pub struct SecureField {
     pub(crate) placeholder: String,
     pub(crate) text: String,
@@ -727,6 +733,7 @@ impl View for SecureField {
 }
 
 /// Multi-line text area
+#[derive(Clone)]
 pub struct Textarea {
     pub(crate) placeholder: String,
     pub(crate) text: String,
@@ -1008,6 +1015,7 @@ impl View for Dropdown {
 }
 
 /// Picker for selection from a list of options
+#[derive(Clone)]
 pub struct Picker {
     pub(crate) selection: usize,
     pub(crate) options: Vec<String>,
@@ -1182,6 +1190,7 @@ impl View for ColorPicker {
 
 
 /// Checkbox component for boolean input.
+#[derive(Clone)]
 pub struct Checkbox {
     pub(crate) is_checked: bool,
     pub(crate) label: Option<String>,
@@ -1226,6 +1235,7 @@ impl View for Checkbox {
 }
 
 /// Radio Group for exclusive selection.
+#[derive(Clone)]
 pub struct RadioGroup<V> {
     options: Vec<(String, V)>,
     selected_index: usize,
@@ -1270,6 +1280,7 @@ impl<V: View + Clone> View for RadioGroup<V> {
 }
 
 /// Tabs component for tabbed navigation.
+#[derive(Clone)]
 pub struct Tabs<V> {
     tabs: Vec<(String, V)>,
     selected_index: usize,
@@ -1308,6 +1319,7 @@ impl<V: View> View for Tabs<V> {
 }
 
 /// Select/Dropdown component.
+#[derive(Clone)]
 pub struct Select<V> {
     placeholder: String,
     options: Vec<(String, V)>,

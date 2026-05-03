@@ -2,12 +2,14 @@ use cvkg_core::{View, Rect, Renderer, Never};
 use std::sync::Arc;
 
 /// Vegvísir - A radial tactical menu (Norse compass)
+#[derive(Clone)]
 pub struct Vegvísir {
     pub items: Vec<VegvísirItem>,
     pub is_open: bool,
     pub on_select: Arc<dyn Fn(usize) + Send + Sync>,
 }
 
+#[derive(Clone)]
 pub struct VegvísirItem {
     pub icon: String,
     pub label: String,
@@ -88,6 +90,7 @@ impl View for Vegvísir {
 }
 
 /// TacticalGauge - A high-fidelity HUD gauge for monitoring real-time kinetics.
+#[derive(Clone)]
 pub struct TacticalGauge {
     pub label: String,
     pub value: f32, // [0.0, 1.0]

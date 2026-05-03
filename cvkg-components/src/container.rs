@@ -7,11 +7,11 @@ pub struct NavigationStack {
 }
 
 impl NavigationStack {
-    pub fn new<V: View + 'static>(root: V) -> Self {
+    pub fn new<V: View + Clone + 'static>(root: V) -> Self {
         Self { stack: vec![root.erase()] }
     }
 
-    pub fn push<V: View + 'static>(&mut self, view: V) {
+    pub fn push<V: View + Clone + 'static>(&mut self, view: V) {
         self.stack.push(view.erase());
     }
 
@@ -553,6 +553,7 @@ impl<V: View> View for Form<V> {
 }
 
 /// A vertical stack of views
+#[derive(Clone)]
 pub struct VStack {
     spacing: f32,
     alignment: cvkg_core::Alignment,
@@ -580,7 +581,7 @@ impl VStack {
         self
     }
 
-    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+    pub fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
         self.children.push(view.erase());
         self
     }
@@ -688,6 +689,7 @@ impl LayoutView for VStack {
 }
 
 /// A vertical stack that only renders visible children (efficient for long lists)
+#[derive(Clone)]
 pub struct LazyVStack {
     spacing: f32,
     children: Vec<cvkg_core::AnyView>,
@@ -701,7 +703,7 @@ impl LazyVStack {
         }
     }
 
-    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+    pub fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
         self.children.push(view.erase());
         self
     }
@@ -751,6 +753,7 @@ impl View for LazyVStack {
 }
 
 /// A horizontal stack of views
+#[derive(Clone)]
 pub struct HStack {
     spacing: f32,
     alignment: cvkg_core::Alignment,
@@ -778,7 +781,7 @@ impl HStack {
         self
     }
 
-    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+    pub fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
         self.children.push(view.erase());
         self
     }
@@ -898,7 +901,7 @@ impl FlexBox {
         }
     }
 
-    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+    pub fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
         self.children.push(view.erase());
         self
     }

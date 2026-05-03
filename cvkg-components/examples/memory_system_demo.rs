@@ -1,5 +1,4 @@
-// This example requires the GPU feature to be enabled
-#![cfg(feature = "gpu")]
+// Memory System Demo
 
 use cvkg_components::MemoryView;
 use cvkg_core::{KnowledgeFragment, KnowledgeState, Rect, Renderer, State, View};

@@ -1,5 +1,4 @@
-// This example requires the native renderer feature to be enabled
-#![cfg(feature = "native")]
+// Interactive Demo
 
 use cvkg_components::{Button, HStack, Slider, Spacer, Text, Input, Toggle, VStack};
 use cvkg_core::{Color, View};

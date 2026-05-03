@@ -1,5 +1,4 @@
-// This example requires the GPU feature to be enabled
-#![cfg(feature = "gpu")]
+// Forge Effects Demo
 
 use cvkg_core::{Rect, Renderer};
 use cvkg_render_gpu::{

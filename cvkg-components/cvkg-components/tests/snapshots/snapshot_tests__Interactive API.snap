@@ -1,0 +1,6 @@
+---
+source: cvkg-components/tests/snapshot_tests.rs
+assertion_line: 35
+expression: "\"All interactive components constructed successfully.\""
+---
+All interactive components constructed successfully.

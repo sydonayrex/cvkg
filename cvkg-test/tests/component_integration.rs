@@ -37,11 +37,18 @@ impl Renderer for MockRenderer {
     }
     fn measure_text(&mut self, _text: &str, _size: f32) -> (f32, f32) { (50.0, 20.0) }
     
-    fn push_vnode(&mut self, _rect: Rect, name: &str) {
+    fn push_vnode(&mut self, _rect: Rect, name: &'static str) {
         self.commands.push(format!("PushVNode({})", name));
     }
     fn pop_vnode(&mut self) {
         self.commands.push("PopVNode".to_string());
+    }
+    fn set_key(&mut self, _key: &str) {}
+    fn set_aria_role(&mut self, _role: &str) {}
+    fn set_aria_label(&mut self, _label: &str) {}
+    fn register_handler(&mut self, _event: &str, _handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>) {}
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
     }
 }
 

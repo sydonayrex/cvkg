@@ -1990,23 +1990,6 @@ impl SurtrRenderer {
 
     /// end_frame — Quench the blade by submitting the full Muspelheim multi-pass effect.
     pub fn end_frame(&mut self, mut encoder: wgpu::CommandEncoder) {
-        // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
-        // draw a 10px red border as a warning flash.
-        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
-            && let Some(window_id) = self.current_window
-            && let Some(surface_ctx) = self.surfaces.get(&window_id) {
-                let w = surface_ctx.config.width as f32;
-                let h = surface_ctx.config.height as f32;
-                let border_rect = Rect { x: 0.0, y: 0.0, width: w, height: h };
-                // Draw a thick red border to signal layout-thrashing
-                self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
-        }
-
-        self.queue
-            .write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
-        self.queue
-            .write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&self.indices));
-
         let (surface_texture, target_view, ctx_scene_texture, ctx_depth_texture_view, ctx_blur_env_bind_group_a, ctx_scene_texture_bind_group, ctx_blur_texture_a, ctx_blur_texture_b, _ctx_sampler, ctx_blur_bind_group_a, ctx_blur_bind_group_b) = if let Some(window_id) = self.current_window {
             let ctx = self.surfaces.get(&window_id).expect("Missing surface context");
             let frame = match ctx.surface.get_current_texture() {
@@ -3164,6 +3147,29 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         cvkg_core::begin_render_phase();
         let id = self.current_window.expect("No target window set for frame. Call set_target_window first.");
         self.begin_frame(id)
+    }
+
+    fn render_frame(&mut self) {
+        // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
+        // draw a 10px red border as a warning flash.
+        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
+            && let Some(window_id) = self.current_window
+            && let Some(surface_ctx) = self.surfaces.get(&window_id) {
+                let w = surface_ctx.config.width as f32;
+                let h = surface_ctx.config.height as f32;
+                let border_rect = cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h };
+                // Draw a thick red border to signal layout-thrashing
+                self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+        }
+
+        // Forge Submission: Sync all geometry and uniforms to GPU
+        self.queue.write_buffer(&self.vertex_buffer, 0, bytemuck::cast_slice(&self.vertices));
+        self.queue.write_buffer(&self.index_buffer, 0, bytemuck::cast_slice(&self.indices));
+        
+        // Update Time & Uniforms
+        self.current_scene.time = self.start_time.elapsed().as_secs_f32();
+        self.queue.write_buffer(&self.scene_buffer, 0, bytemuck::bytes_of(&self.current_scene));
+        self.queue.write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&self.current_theme));
     }
 
     fn end_frame(&mut self, encoder: wgpu::CommandEncoder) {

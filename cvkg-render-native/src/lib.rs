@@ -27,7 +27,7 @@
 //! This crate provides platform-specific rendering backends for native desktop targets
 //  using winit for window/event handling and AccessKit for accessibility tree integration.
 
-use cvkg_core::Renderer;
+use cvkg_core::{FrameRenderer, Renderer};
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -228,6 +228,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                 // Submission
                 let gpu_submit_start = std::time::Instant::now();
+                gpu.render_frame();
                 gpu.end_frame(encoder);
                 let gpu_submit_end = std::time::Instant::now();
 

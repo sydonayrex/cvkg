@@ -1,5 +1,4 @@
-// This example requires the GPU feature to be enabled
-#![cfg(feature = "gpu")]
+// Error Boundary Demo
 
 use cvkg_components::{Color, ErrorBoundary};
 use cvkg_core::{ComponentErrorState, Rect, Renderer, State, View};

@@ -7,10 +7,10 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.16" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.17" }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 log = "0.4"
 accesskit = "0.22"
 tracing = "0.1"
-cvkg-scene = { path = "../cvkg-scene", version = "0.1.16" }
+cvkg-scene = { path = "../cvkg-scene", version = "0.1.17" }

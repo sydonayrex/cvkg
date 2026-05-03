@@ -97,6 +97,20 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // Translation
     pos = pos + in.translation;
     
+    // ── Hardware Shatter Effect (Berserker Physics) ─────────────────────
+    let shatter_dt = scene.time - scene.shatter_time;
+    if (shatter_dt > 0.0 && shatter_dt < 2.0) {
+        // Calculate displacement from shatter origin
+        let dist = distance(pos, scene.shatter_origin);
+        let dir = normalize(pos - scene.shatter_origin + vec2<f32>(1e-5, 1e-5));
+        
+        // Force falloff: stronger near origin, decays over time
+        let explosion = (1.0 / (dist * 0.01 + 0.1)) * scene.shatter_force;
+        let expansion = explosion * shatter_dt * 100.0;
+        
+        pos += dir * expansion;
+    }
+    
     out.clip_position = scene.proj * scene.view * vec4<f32>(pos, in.position.z, 1.0);
     out.uv = in.uv;
     out.color = in.color;
@@ -240,15 +254,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
     let fw = length(vec2(dpdx(in.logical.x), dpdy(in.logical.y)));
     
-    // Global Clipping: Compare physical window coordinates to physical clip bounds.
+    // Temporarily disabled clipping
+    /*
     let p_clip_pos = in.clip.xy * scene.scale_factor;
     let p_clip_size = in.clip.zw * scene.scale_factor;
-    // Convert NDC (-1 to 1) to pixel coordinates
-    let pixel_pos = (in.clip_position.xy * 0.5 + 0.5) * scene.resolution * scene.scale_factor;
+    let pixel_pos = in.clip_position.xy;
     let clip_d = sd_box(pixel_pos - (p_clip_pos + p_clip_size * 0.5), p_clip_size * 0.5);
-    let clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d); // Sharper physical clip
+    let clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d); 
     color.a *= clip_alpha;
     if color.a <= 0.0 { discard; }
+    */
 
     if in.mode == 1u {
         // Neon Line
@@ -413,9 +428,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
     
     let rage = scene.berzerker_rage;
-    if rage > 0.1 {
-        let n = fbm(in.logical * 10.0 + vec2(scene.time, scene.time * 0.7));
-        color = mix(color, theme.ember_core, n * rage * 0.5);
+    if rage > 0.05 {
+        // Dynamic heat distortion and ember glow
+        let noise_coord = in.logical * 0.05 + vec2(scene.time * 0.5);
+        let n = fbm(noise_coord);
+        
+        // Pulsing glow based on rage level
+        let pulse = 0.5 + 0.5 * sin(scene.time * 10.0 * rage);
+        let rage_color = mix(theme.ember_core, theme.shatter_neon, pulse * 0.3);
+        
+        color = mix(color, rage_color, n * rage * 0.7);
+        
+        // Subtle chromatic aberration boost during rage
+        if rage > 0.8 {
+            color.r *= 1.1;
+            color.b *= 0.9;
+        }
     }
     if color.a <= 0.0 { discard; }
     return color;

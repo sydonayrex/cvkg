@@ -1,0 +1,6 @@
+---
+source: cvkg-components/tests/snapshot_tests.rs
+assertion_line: 52
+expression: "\"All container components constructed successfully.\""
+---
+All container components constructed successfully.

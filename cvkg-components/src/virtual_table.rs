@@ -38,7 +38,7 @@ where
     pub fn column<F, V>(mut self, header: &str, width: f32, builder: F) -> Self
     where
         F: Fn(&D) -> V + Send + Sync + 'static,
-        V: View + 'static,
+        V: View + Clone + 'static,
     {
         self.columns.push(TableColumn {
             header: header.to_string(),
@@ -137,7 +137,7 @@ where
     pub fn column<F, V>(mut self, header: &str, width: f32, builder: F) -> Self
     where
         F: Fn(&D) -> V + Send + Sync + 'static,
-        V: View + 'static,
+        V: View + Clone + 'static,
     {
         self.table = self.table.column(header, width, builder);
         self

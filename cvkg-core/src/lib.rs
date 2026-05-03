@@ -67,6 +67,7 @@ pub struct KnowledgeState {
     pub actions: Vec<String>,
     pub context: HashMap<String, String>,
     pub last_query_results: Vec<KnowledgeId>,
+    #[serde(alias = "items")]
     pub fragments: std::collections::HashMap<KnowledgeId, KnowledgeFragment>,
     /// The Temporal Graph nodes
     pub nodes: Vec<TemporalNode>,
@@ -578,7 +579,7 @@ pub trait View: Sized + Send {
     /// Type-erase this view into AnyView
     fn erase(self) -> AnyView
     where
-        Self: 'static,
+        Self: Clone + 'static,
     {
         AnyView::new(self)
     }
@@ -590,9 +591,10 @@ pub trait ErasedView: Send {
     fn name(&self) -> &'static str;
     fn flex_weight_erased(&self) -> f32;
     fn layout_erased(&self) -> Option<&dyn layout::LayoutView>;
+    fn clone_box(&self) -> Box<dyn ErasedView>;
 }
 
-impl<V: View + 'static> ErasedView for V {
+impl<V: View + Clone + 'static> ErasedView for V {
     fn render_erased(&self, renderer: &mut dyn Renderer, rect: Rect) {
         self.render(renderer, rect);
     }
@@ -607,6 +609,10 @@ impl<V: View + 'static> ErasedView for V {
 
     fn layout_erased(&self) -> Option<&dyn layout::LayoutView> {
         self.layout()
+    }
+
+    fn clone_box(&self) -> Box<dyn ErasedView> {
+        Box::new(self.clone())
     }
 }
 
@@ -650,8 +656,16 @@ pub struct AnyView {
     inner: Box<dyn ErasedView>,
 }
 
+impl Clone for AnyView {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone_box(),
+        }
+    }
+}
+
 impl AnyView {
-    pub fn new<V: View + 'static>(view: V) -> Self {
+    pub fn new<V: View + Clone + 'static>(view: V) -> Self {
         Self {
             inner: Box::new(view),
         }
@@ -1642,6 +1656,7 @@ impl View for EmptyView {
 /// A view that has been transformed by a modifier.
 ///
 /// Section 4.3: "Each modifier implements ViewModifier and produces a ModifiedView<Inner, Self>."
+#[derive(Clone)]
 pub struct ModifiedView<V, M> {
     view: V,
     modifier: M,

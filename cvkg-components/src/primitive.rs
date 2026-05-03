@@ -4,6 +4,7 @@ use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 /// Text view for displaying strings
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Text {
     pub(crate) content: String,
     pub(crate) font_size: f32,
@@ -91,6 +92,7 @@ impl LayoutView for Text {
 
 /// Divider for separating content
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Divider {
     pub(crate) orientation: Orientation,
     pub(crate) width: f32,
@@ -153,6 +155,7 @@ impl View for Divider {
 
 /// Spacer for flexible layout gaps
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Spacer {
     pub(crate) min_length: f32,
 }
@@ -213,16 +216,17 @@ impl LayoutView for Spacer {
 
 /// Canvas for custom drawing
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Canvas<F>
 where
-    F: Fn(&mut dyn Renderer, Rect) + Send + Sync + 'static,
+    F: Fn(&mut dyn Renderer, Rect) + Send + Sync + Clone + 'static,
 {
     pub(crate) draw_func: F,
 }
 
 impl<F> Canvas<F>
 where
-    F: Fn(&mut dyn Renderer, Rect) + Send + Sync + 'static,
+    F: Fn(&mut dyn Renderer, Rect) + Send + Sync + Clone + 'static,
 {
     pub fn new(draw_func: F) -> Self {
         Self { draw_func }
@@ -231,7 +235,7 @@ where
 
 impl<F> View for Canvas<F>
 where
-    F: Fn(&mut dyn Renderer, Rect) + Send + Sync + 'static,
+    F: Fn(&mut dyn Renderer, Rect) + Send + Sync + Clone + 'static,
 {
     type Body = Never;
     fn body(self) -> Self::Body {
@@ -253,6 +257,7 @@ pub enum ShapeType {
 
 /// A standard vector Shape
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Shape {
     pub(crate) shape_type: ShapeType,
     pub(crate) fill: Color,
@@ -292,6 +297,7 @@ impl View for Shape {
 }
 
 /// Badge component for displaying small status or category tags.
+#[derive(Clone)]
 pub struct Badge {
     pub(crate) text: String,
     pub(crate) variant: BadgeVariant,
@@ -311,6 +317,7 @@ impl Badge {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadgeVariant {
     Default,
     Secondary,
@@ -352,6 +359,7 @@ impl View for Badge {
 }
 
 /// Skeleton component for displaying loading placeholders.
+#[derive(Clone)]
 pub struct Skeleton {
     pub(crate) width: Option<f32>,
     pub(crate) height: Option<f32>,

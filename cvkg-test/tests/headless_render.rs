@@ -15,6 +15,8 @@ async fn test_headless_render_capture() {
         [1.0, 0.0, 0.0, 1.0]
     );
     
+    use cvkg_core::FrameRenderer;
+    renderer.render_frame();
     renderer.end_frame(encoder);
     
     let pixels = renderer.capture_frame().await;

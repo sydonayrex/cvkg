@@ -34,7 +34,7 @@ where
     pub fn view_builder<F, V>(mut self, builder: F) -> Self
     where
         F: Fn(&D) -> V + Send + Sync + 'static,
-        V: View + 'static,
+        V: View + Clone + 'static,
     {
         self.view_builder = Box::new(move |d| builder(d).erase());
         self

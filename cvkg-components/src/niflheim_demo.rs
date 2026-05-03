@@ -10,6 +10,7 @@ use crate::primitive::{Shape, Text, Canvas};
 use cvkg_core::{StyleResolver, View, Rect, Renderer, AnyView, Never, Color};
 
 /// A simple Z-ordered stack of views.
+#[derive(Clone)]
 struct ZStack {
     children: Vec<AnyView>,
 }
@@ -18,7 +19,7 @@ impl ZStack {
     fn new() -> Self {
         Self { children: Vec::new() }
     }
-    fn child<V: View + 'static>(mut self, view: V) -> Self {
+    fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
         self.children.push(AnyView::new(view));
         self
     }
@@ -39,7 +40,7 @@ impl View for ZStack {
 }
 
 /// Returns a view demonstrating the Niflheim/Bifrost aesthetic.
-pub fn niflheim_demo() -> impl View {
+pub fn niflheim_demo() -> impl View + Clone {
     // Resolve tokens from the Yggdrasil environment
     let nifl_cyan = StyleResolver::color("primary");
     let _muspel_magenta = StyleResolver::color("secondary");
@@ -53,7 +54,7 @@ pub fn niflheim_demo() -> impl View {
         .child(niflheim_card(nifl_cyan))
 }
 
-fn cyberpunk_background() -> impl View {
+fn cyberpunk_background() -> impl View + Clone {
     Canvas::new(|renderer, rect| {
         // Draw deep Ginnungagap nebula
         renderer.draw_radial_gradient(
@@ -74,7 +75,7 @@ fn cyberpunk_background() -> impl View {
     })
 }
 
-fn fresnel_boxes() -> impl View {
+fn fresnel_boxes() -> impl View + Clone {
     ZStack::new()
         .child(
             Shape::rounded_rect(32.0)
@@ -92,7 +93,7 @@ fn fresnel_boxes() -> impl View {
         )
 }
 
-fn lightning_arcs() -> impl View {
+fn lightning_arcs() -> impl View + Clone {
     Canvas::new(move |renderer, _rect| {
         let t = renderer.delta_time(); // In real app we'd use a cumulative time
         // Just a placeholder to ensure the lightning_arcs function signature matches
@@ -119,7 +120,7 @@ impl Lcg {
     }
 }
 
-fn floating_fire_ball() -> impl View {
+fn floating_fire_ball() -> impl View + Clone {
     let particles = Arc::new(Mutex::new(Vec::<Particle>::new()));
     let last_time = Arc::new(Mutex::new(0.0f32));
     let rng = Arc::new(Mutex::new(Lcg::new(42)));
@@ -188,7 +189,7 @@ fn floating_fire_ball() -> impl View {
     })
 }
 
-fn niflheim_card(color: String) -> impl View {
+fn niflheim_card(color: String) -> impl View + Clone {
     Shape::rounded_rect(24.0)
         .fill(Color::new(0.02, 0.02, 0.05, 0.3)) // Translucent glass base
         .bifrost(30.0, 1.3, 0.7) // Stronger Bifrost
@@ -198,7 +199,7 @@ fn niflheim_card(color: String) -> impl View {
 }
 
 /// A more complex composite demo
-pub fn berserker_card() -> impl View {
+pub fn berserker_card() -> impl View + Clone {
     let nifl_cyan = StyleResolver::color("primary");
 
     Text::new("BERSERKER PROTOCOL")
