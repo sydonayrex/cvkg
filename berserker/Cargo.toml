@@ -11,3 +11,17 @@ cvkg = { version = "0.1.16", features = ["native"] }
 cvkg-core = { path = "../cvkg-core", version = "0.1.16" }
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4"
+
+[package.metadata.deb]
+maintainer = "Sydonay Rex <sydonay@example.com>"
+copyright = "2026, Sydonay Rex"
+license-file = ["../LICENSE-MIT", "0"]
+extended-description = """
+Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework.
+Berserker is the primary GUI application for the CVKG framework.
+"""
+section = "utils"
+priority = "optional"
+assets = [
+    ["../target/release/berserker", "/usr/bin/berserker", "755"],
+]
