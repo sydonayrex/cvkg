@@ -36,7 +36,7 @@ backend-native = ["wgpu/metal", "wgpu/dx12", "wgpu/vulkan-portability"]
 
 [dependencies]
 # ── Server / transport ───────────────────────────────────────────────────────
-cvkg-cli       = { path = "../cvkg-cli", version = "0.1.15" }
+cvkg-cli       = { path = "../cvkg-cli", version = "0.1.16" }
 axum           = { version = "0.7", features = ["ws"] }
 tokio          = { workspace = true, features = ["macros", "rt-multi-thread", "process", "signal"] }
 tower-http     = { version = "0.5", features = ["cors", "fs", "set-header", "trace", "timeout", "limit", "compression-full"] }

@@ -1,3 +1,6 @@
+// This example requires the GPU feature to be enabled
+#![cfg(feature = "gpu")]
+
 use cvkg::render::SurtrRenderer;
 use cvkg_core::{Rect, Renderer, View};
 use std::sync::Arc;

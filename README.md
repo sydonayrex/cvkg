@@ -44,10 +44,25 @@
 
 ### Run a Demo
 
+### Run a Demo
+
 ```bash
-# Run the interactive UI demo
-cargo run --example interactive_demo -p cvkg-components
-```
+# Feature-gated examples (require renderer feature)
+# GPU renderer examples (requires --features gpu)
+# cargo run --example shatter_demo -p cvkg --features gpu
+# cargo run --example hit_test_demo -p cvkg --features gpu
+# cargo run --example berserker_fire_demo -p cvkg --features gpu
+# cargo run --example forge_effects_demo -p cvkg-components --features gpu
+# cargo run --example memory_system_demo -p cvkg-components --features gpu
+# cargo run --example interactive_demo -p cvkg-components --features native
+
+# Non-feature-gated examples (work with default features)
+# cargo run --example error_boundary_demo -p cvkg-components --no-default-features
+# cargo run --example niflheim_demo -p cvkg-components
+# cargo run --example component_feature_showcase -p cvkg-components
+
+# View all available examples
+cargo run --example --list
 
 ## 📜 License
 

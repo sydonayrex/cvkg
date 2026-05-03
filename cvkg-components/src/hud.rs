@@ -86,3 +86,64 @@ impl View for Vegvísir {
         renderer.pop_vnode();
     }
 }
+
+/// TacticalGauge - A high-fidelity HUD gauge for monitoring real-time kinetics.
+pub struct TacticalGauge {
+    pub label: String,
+    pub value: f32, // [0.0, 1.0]
+    pub color: [f32; 4],
+    pub warning_level: f32,
+    pub critical_level: f32,
+}
+
+impl TacticalGauge {
+    pub fn new(label: &str, value: f32) -> Self {
+        Self {
+            label: label.to_string(),
+            value: value.clamp(0.0, 1.0),
+            color: [1.0, 0.84, 0.0, 0.9], // Viking Gold
+            warning_level: 0.7,
+            critical_level: 0.9,
+        }
+    }
+}
+
+impl View for TacticalGauge {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+        
+        // 1. Label
+        renderer.draw_text(&self.label, rect.x, rect.y - 5.0, 10.0, [1.0, 1.0, 1.0, 0.8]);
+        
+        // 2. Background Track
+        renderer.fill_rect(
+            Rect { x: rect.x, y: rect.y, width: rect.width, height: 4.0 },
+            [0.1, 0.1, 0.15, 0.5]
+        );
+        
+        // 3. Fill
+        let mut color = self.color;
+        if self.value >= self.critical_level {
+            color = [1.0, 0.2, 0.2, 0.9]; // Critical Red
+        } else if self.value >= self.warning_level {
+            color = [1.0, 0.5, 0.0, 0.9]; // Warning Orange
+        }
+        
+        renderer.fill_rect(
+            Rect { x: rect.x, y: rect.y, width: rect.width * self.value, height: 4.0 },
+            color
+        );
+        
+        // 4. Kinetic Flicker (Micro-animation)
+        let flicker = (t * 20.0).sin() * 0.1 + 0.9;
+        if self.value > 0.0 {
+            renderer.fill_rect(
+                Rect { x: rect.x + rect.width * self.value - 2.0, y: rect.y - 2.0, width: 2.0, height: 8.0 },
+                [color[0], color[1], color[2], color[3] * flicker]
+            );
+        }
+    }
+}

@@ -27,6 +27,7 @@
 //! This crate provides platform-specific rendering backends for native desktop targets
 //  using winit for window/event handling and AccessKit for accessibility tree integration.
 
+use cvkg_core::Renderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -481,6 +482,10 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn set_rage(&mut self, rage: f32) {
         self.rage = rage;
         self.gpu.lock().unwrap().set_rage(rage);
+    }
+
+    fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        self.gpu.lock().unwrap().memoize(id, data_hash, render_fn);
     }
 }
 

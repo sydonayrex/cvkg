@@ -51,25 +51,29 @@ where
         unreachable!()
     }
 
-fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Calculate visible range for O(visible) complexity
-        let start_idx = if rect.y > 0.0 {
-            // Content is scrolled down from top
-            (rect.y / self.item_height).floor() as usize
-        } else {
-            0 // Handle negative scroll (overscroll)
-        };
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Calculate visible range for O(visible) complexity using current clip
+        let clip = renderer.current_clip_rect();
         
-        let visible_count = ((rect.height / self.item_height).ceil() as usize).max(1);
+        // Find intersection of list bounds and clip rect to determine viewport
+        let viewport_y = clip.y.max(rect.y);
+        let viewport_bottom = (clip.y + clip.height).min(rect.y + rect.height);
+        
+        if viewport_bottom <= viewport_y {
+            return; // Not visible
+        }
+
+        let start_idx = ((viewport_y - rect.y) / self.item_height).floor() as usize;
+        let visible_count = ((viewport_bottom - viewport_y) / self.item_height).ceil() as usize;
         let end_idx = (start_idx + visible_count + 1).min(self.data.len());
         
         // Only iterate through visible items
         for idx in start_idx..end_idx {
             if let Some(item) = self.data.get(idx) {
-                let item_y = idx as f32 * self.item_height;
+                let item_y = rect.y + idx as f32 * self.item_height;
                 let item_rect = Rect {
                     x: rect.x,
-                    y: rect.y + item_y,
+                    y: item_y,
                     width: rect.width,
                     height: self.item_height,
                 };

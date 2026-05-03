@@ -35,6 +35,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
 
+pub mod error_types;
+
 pub mod security;
 
 /// Error state for fault isolation at the component level.
@@ -66,9 +68,61 @@ pub struct KnowledgeState {
     pub context: HashMap<String, String>,
     pub last_query_results: Vec<KnowledgeId>,
     pub fragments: std::collections::HashMap<KnowledgeId, KnowledgeFragment>,
+    /// The Temporal Graph nodes
+    pub nodes: Vec<TemporalNode>,
+    /// The Temporal Graph edges
+    pub edges: Vec<TemporalEdge>,
+    /// The current operational Realm (Midgard/Asgard)
+    pub realm: Realm,
+    /// Last known pointer position (X, Y)
+    pub last_pointer_pos: [f32; 2],
+    /// Resolved pointer velocity (pixels per frame)
+    pub pointer_velocity: [f32; 2],
+    /// The current 'Focus' node ID (Odin's Eye focus)
+    pub odin_focus: Option<String>,
+    /// Agent attention heatmap (node_id -> intensity)
+    pub agent_attention: HashMap<String, f32>,
     // Component state storage for dynamic state
     #[serde(skip)]
     pub component_states: HashMap<u64, Arc<std::sync::RwLock<dyn std::any::Any + Send + Sync>>>,
+}
+
+impl KnowledgeState {
+    /// Apply activation decay to all temporal nodes and evolving components.
+    /// Nodes with weight below a threshold drift out of the primary context.
+    /// Components lose vitality (Fafnir's Decay) if not actively 'fed'.
+    pub fn apply_decay(&mut self, decay_factor: f32) {
+        for node in &mut self.nodes {
+            node.weight *= decay_factor;
+        }
+
+        // Fafnir's Decay: Components naturally revert to base state over time
+        for state in self.component_states.values() {
+            if let Ok(mut lock) = state.write() {
+                if let Some(v) = lock.downcast_mut::<f32>() {
+                    *v = (*v * decay_factor).max(1.0);
+                }
+            }
+        }
+    }
+
+    /// Increase the importance weight of nodes associated with a successful task.
+    pub fn reinforce(&mut self, node_ids: &[String], boost: f32) {
+        for node in &mut self.nodes {
+            if node_ids.contains(&node.id) {
+                node.weight += boost;
+            }
+        }
+    }
+
+    /// Update pointer kinematics based on a new position.
+    pub fn update_pointer(&mut self, new_pos: [f32; 2]) {
+        self.pointer_velocity = [
+            new_pos[0] - self.last_pointer_pos[0],
+            new_pos[1] - self.last_pointer_pos[1],
+        ];
+        self.last_pointer_pos = new_pos;
+    }
 }
 // Knowledge System Types
 /// Unique identifier for knowledge fragments
@@ -102,6 +156,60 @@ impl KnowledgeFragment {
             content: None,
         }
     }
+}
+
+/// Memory layers for the layered cognitive engine
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MemoryLayer {
+    /// Raw mission events (short-term)
+    Episodic,
+    /// Extracted facts and tactical intelligence (long-term)
+    Semantic,
+    /// Successful command sequences and tool chains
+    Procedural,
+}
+
+/// The operational Realm of the UI.
+/// Midgard: Classic, functional, 2D tactical UI for mortals.
+/// Asgard: High-fidelity, cognitive, shader-heavy UI for the Singularity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Realm {
+    Midgard,
+    Asgard,
+}
+
+impl Default for Realm {
+    fn default() -> Self {
+        Self::Asgard
+    }
+}
+
+/// A node in the Temporal Graph representing a cognitive anchor
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemporalNode {
+    /// Unique identifier for this node
+    pub id: String,
+    /// ID of the underlying knowledge fragment
+    pub fragment_id: KnowledgeId,
+    /// Timestamp of the event
+    pub timestamp: u64,
+    /// The memory layer this node belongs to
+    pub layer: MemoryLayer,
+    /// Importance weight for activation decay and retrieval
+    pub weight: f32,
+}
+
+/// An edge in the Temporal Graph representing a relationship between nodes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TemporalEdge {
+    /// Source node ID
+    pub source: String,
+    /// Target node ID
+    pub target: String,
+    /// Type of relationship (e.g. "causal", "semantic", "temporal")
+    pub relation: String,
+    /// Weight/strength of the connection
+    pub weight: f32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -350,6 +458,41 @@ pub trait View: Sized + Send {
         self.modifier(ElevationModifier { level })
     }
 
+    /// Add a magnetic effect that pulls the view towards the cursor.
+    fn magnetic(self, radius: f32, intensity: f32) -> ModifiedView<Self, MagneticModifier> {
+        self.modifier(MagneticModifier { radius, intensity })
+    }
+
+    /// Add a ManiGlow (Lunar Illuminator) effect that glows near the cursor.
+    fn mani_glow(self, color: [f32; 4], radius: f32) -> ModifiedView<Self, ManiGlowModifier> {
+        self.modifier(ManiGlowModifier { color, radius })
+    }
+
+    /// Theme this view based on a specific memory layer.
+    fn memory_layer(self, layer: MemoryLayer) -> ModifiedView<Self, BifrostLayerModifier> {
+        self.modifier(BifrostLayerModifier { layer })
+    }
+
+    /// Enable Fafnir's Evolution: The component grows and glows as it is used.
+    fn fafnir_evolve(self, id: u64) -> ModifiedView<Self, FafnirModifier> {
+        self.modifier(FafnirModifier { id })
+    }
+
+    /// Enable Mimir's Intent: The component anticipates user interaction via pointer kinematics.
+    fn mimir_intent(self) -> ModifiedView<Self, MimirIntentModifier> {
+        self.modifier(MimirIntentModifier)
+    }
+
+    /// Enable Kvasir's Vibes: Subconscious telemetry representing cognitive complexity.
+    fn kvasir_vibes(self, complexity: f32) -> ModifiedView<Self, KvasirVibeModifier> {
+        self.modifier(KvasirVibeModifier { complexity })
+    }
+
+    /// Bestow Odin's Eye: Global omniscient observability layer.
+    fn odins_eye(self) -> ModifiedView<Self, OdinsEyeModifier> {
+        self.modifier(OdinsEyeModifier)
+    }
+
     /// Trigger an action when the view appears
     fn on_appear<F: Fn() + Send + Sync + 'static>(
         self,
@@ -464,6 +607,41 @@ impl<V: View + 'static> ErasedView for V {
 
     fn layout_erased(&self) -> Option<&dyn layout::LayoutView> {
         self.layout()
+    }
+}
+
+/// A view that memoizes its rendering based on a stable ID and data hash.
+/// The renderer can use this to skip re-rendering the sub-tree if the data hasn't changed.
+pub struct MemoView<V, F> {
+    id: u64,
+    data_hash: u64,
+    builder: F,
+    _v: std::marker::PhantomData<V>,
+}
+
+impl<V: View, F: Fn() -> V + Send + Sync> MemoView<V, F> {
+    /// Create a new MemoView with a stable ID and a data hash.
+    pub fn new(id: u64, data_hash: u64, builder: F) -> Self {
+        Self {
+            id,
+            data_hash,
+            builder,
+            _v: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<V: View + 'static, F: Fn() -> V + Send + Sync + 'static> View for MemoView<V, F> {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!("MemoView does not have a body")
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.memoize(self.id, self.data_hash, &|r| {
+            let view = (self.builder)();
+            view.render(r, rect);
+        });
     }
 }
 
@@ -604,7 +782,12 @@ impl ViewModifier for BifrostModifier {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.bifrost(rect, self.blur, self.saturation, self.opacity);
+        if renderer.is_over_budget() {
+            // Degrade: Use lower quality (half blur) if over budget
+            renderer.bifrost(rect, self.blur * 0.5, self.saturation, self.opacity);
+        } else {
+            renderer.bifrost(rect, self.blur, self.saturation, self.opacity);
+        }
     }
 }
 
@@ -708,6 +891,294 @@ impl ViewModifier for GungnirPulseModifier {
 
         // Mode 1 neon glow with dynamic intensity
         renderer.stroke_rect(rect, color, self.radius);
+    }
+}
+
+/// MagneticModifier makes a view "magnetic", subtly leaning towards or pulling the cursor.
+/// Inspired by high-fidelity creative studio UIs.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MagneticModifier {
+    pub radius: f32,
+    pub intensity: f32,
+}
+
+impl ViewModifier for MagneticModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        let [px, py] = renderer.get_pointer_position();
+        let center_x = rect.x + rect.width / 2.0;
+        let center_y = rect.y + rect.height / 2.0;
+
+        let dx = px - center_x;
+        let dy = py - center_y;
+        let dist = (dx * dx + dy * dy).sqrt();
+
+        let mut offset_x = 0.0;
+        let mut offset_y = 0.0;
+
+        if dist < self.radius && dist > 0.0 {
+            let force = (1.0 - dist / self.radius) * self.intensity;
+            offset_x = dx * force;
+            offset_y = dy * force;
+        }
+
+        let magnetic_rect = Rect {
+            x: rect.x + offset_x,
+            y: rect.y + offset_y,
+            ..rect
+        };
+
+        view.render(renderer, magnetic_rect);
+    }
+}
+
+/// ManiGlowModifier adds a soft, lunar-like cursor glow to a view.
+/// Named after Máni, the personification of the Moon.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ManiGlowModifier {
+    pub color: [f32; 4],
+    pub radius: f32,
+}
+
+impl ViewModifier for ManiGlowModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        if crate::load_system_state().realm == Realm::Asgard {
+            renderer.mani_glow(rect, self.color, self.radius);
+        }
+        view.render(renderer, rect);
+    }
+}
+
+/// BifrostLayerModifier themes a view based on its cognitive memory layer.
+/// Episodic: Shifting aurora clouds.
+/// Semantic: Crystalline gold.
+/// Procedural: Heavy obsidian stone.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BifrostLayerModifier {
+    pub layer: MemoryLayer,
+}
+
+impl ViewModifier for BifrostLayerModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        let realm = crate::load_system_state().realm;
+        match self.layer {
+            MemoryLayer::Episodic => {
+                if realm == Realm::Asgard {
+                    renderer.bifrost(rect, 40.0, 1.2, 0.7);
+                } else {
+                    renderer.fill_rect(rect, [0.1, 0.12, 0.15, 0.8]);
+                }
+            }
+            MemoryLayer::Semantic => {
+                if realm == Realm::Asgard {
+                    renderer.gungnir(rect, [1.0, 0.84, 0.0, 1.0], 15.0, 0.6);
+                } else {
+                    renderer.stroke_rect(rect, [0.4, 0.4, 0.4, 1.0], 1.5);
+                }
+            }
+            MemoryLayer::Procedural => {
+                renderer.fill_rect(rect, [0.05, 0.05, 0.07, 0.95]);
+                let stroke_color = if realm == Realm::Asgard { [0.3, 0.3, 0.3, 1.0] } else { [0.2, 0.2, 0.2, 1.0] };
+                renderer.stroke_rect(rect, stroke_color, 2.0);
+            }
+        }
+        view.render(renderer, rect);
+    }
+}
+
+/// FafnirModifier enables self-evolving UI capabilities.
+/// Named after Fafnir, the dragon who grows in power based on the gold he hoards.
+/// In CVKG, 'Gold' is user attention/interaction.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FafnirModifier {
+    /// Unique ID for tracking this component's vitality across frames.
+    pub id: u64,
+}
+
+impl ViewModifier for FafnirModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        let state = crate::load_system_state();
+        let vitality = state.get_component_state::<f32>(self.id)
+            .map(|v| *v.read().unwrap())
+            .unwrap_or(1.0);
+
+        // Calculate evolutionary growth factors
+        // Max growth at vitality 5.0 (50% scale increase, strong glow)
+        let growth = (vitality - 1.0).clamp(0.0, 4.0);
+        let scale = 1.0 + growth * 0.12;
+        let glow_intensity = growth * 0.25;
+        
+        // Feed Fafnir: Register interaction to boost vitality
+        let id = self.id;
+        renderer.register_handler("pointermove", std::sync::Arc::new(move |_| {
+            crate::update_system_state(|s| {
+                let mut s = s.clone();
+                let v = s.get_component_state::<f32>(id)
+                    .map(|v| *v.read().unwrap())
+                    .unwrap_or(1.0);
+                s.set_component_state(id, (v + 0.05).min(5.0)); // Cap at 5.0
+                s
+            });
+        }));
+
+        if scale > 1.01 {
+            renderer.push_transform([0.0, 0.0], [scale, scale], 0.0);
+        }
+
+        if glow_intensity > 0.1 && state.realm == Realm::Asgard {
+            renderer.gungnir(rect, [1.0, 0.84, 0.0, 1.0], 15.0 * vitality, glow_intensity);
+        }
+
+        view.render(renderer, rect);
+
+        if scale > 1.01 {
+            renderer.pop_transform();
+        }
+    }
+}
+
+/// MimirIntentModifier anticipates user movement and manifests holographic ghosts.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MimirIntentModifier;
+
+impl ViewModifier for MimirIntentModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        let state = crate::load_system_state();
+        let pos = state.last_pointer_pos;
+        let vel = state.pointer_velocity;
+        
+        // Calculate if the cursor is moving towards this rect
+        let center = [rect.x + rect.width / 2.0, rect.y + rect.height / 2.0];
+        let dx = center[0] - pos[0];
+        let dy = center[1] - pos[1];
+        
+        // Dot product of velocity and direction to center
+        let dot = vel[0] * dx + vel[1] * dy;
+        let speed_sq = vel[0]*vel[0] + vel[1]*vel[1];
+        let dist_sq = dx*dx + dy*dy;
+        
+        if dot > 0.0 && dist_sq < 250.0*250.0 && speed_sq > 0.5 && state.realm == Realm::Asgard {
+            // Intent detected: render a subtle "ghost" reveal
+            let intent_strength = (dot / (speed_sq.sqrt() * dist_sq.sqrt())).clamp(0.0, 1.0);
+            renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 0.3 * intent_strength], 1.5);
+        }
+        
+        view.render(renderer, rect);
+    }
+}
+
+/// KvasirVibeModifier renders a cognitive telemetry cloud representing agent complexity.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KvasirVibeModifier {
+    pub complexity: f32,
+}
+
+impl ViewModifier for KvasirVibeModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        if crate::load_system_state().realm == Realm::Asgard {
+            let t = renderer.elapsed_time();
+            let c = self.complexity.clamp(0.0, 1.0);
+            
+            // 1. Core Cognitive Cloud (Bifrost)
+            // Turbulence increases with complexity
+            let blur = 20.0 + c * 40.0;
+            let turbulence_x = (t * (1.0 + c * 2.0)).sin() * 8.0 * c;
+            let turbulence_y = (t * (0.8 + c * 1.5)).cos() * 5.0 * c;
+            renderer.bifrost(rect.offset(turbulence_x, turbulence_y), blur, 0.8 + c * 0.4, 0.25);
+            
+            // 2. Synaptic Discharge (Gungnir pulses)
+            if c > 0.2 {
+                let pulse = (t * (3.0 + c * 5.0)).sin().abs() * c;
+                let color = [0.0, 0.9, 1.0, 0.4 * pulse]; // Cyan synaptic pulse
+                renderer.gungnir(rect, color, 12.0 + c * 24.0, 0.6 * pulse);
+            }
+            
+            // 3. Unstable Resonance (Magenta/Red shift for high complexity)
+            if c > 0.7 {
+                let instability = (t * 15.0).cos().abs() * (c - 0.7) * 3.3;
+                let warning_color = [1.0, 0.0, 0.4, 0.12 * instability];
+                renderer.fill_rect(rect, warning_color);
+                renderer.stroke_rect(rect, [1.0, 0.0, 0.2, 0.45 * instability], 1.8);
+            }
+        }
+        view.render(renderer, rect);
+    }
+}
+
+/// OdinsEyeModifier bestows omniscient observability over the entire scene graph.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OdinsEyeModifier;
+
+impl ViewModifier for OdinsEyeModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        let state = crate::load_system_state();
+        let t = renderer.elapsed_time();
+
+        // 1. Render Background content
+        view.render(renderer, rect);
+
+        if state.realm == Realm::Asgard {
+            // 2. Bestow Odin's Eye (Atmospheric Overlay)
+            // Soft, large circular pulse representing the 'Eye'
+            let eye_pulse = (t * 0.5).sin().abs() * 0.05;
+            renderer.draw_radial_gradient(
+                rect,
+                [0.0, 0.6, 0.8, 0.08 + eye_pulse], // Inner Cyan
+                [0.0, 0.0, 0.0, 0.0],              // Outer Black
+            );
+
+            // 3. Hugin (Thought) Telemetry - Left Side
+            let hugin_rect = Rect { x: rect.x + 20.0, y: rect.y + 40.0, width: 200.0, height: rect.height - 80.0 };
+            renderer.draw_text("HUGIN: THOUGHT", hugin_rect.x, hugin_rect.y, 10.0, [0.0, 1.0, 1.0, 0.6]);
+            for (i, thought) in state.thoughts.iter().rev().take(10).enumerate() {
+                renderer.draw_text(thought, hugin_rect.x, hugin_rect.y + 20.0 + i as f32 * 14.0, 9.0, [1.0, 1.0, 1.0, 0.4]);
+            }
+
+            // 4. Munin (Memory) Telemetry - Right Side
+            let munin_rect = Rect { x: rect.x + rect.width - 220.0, y: rect.y + 40.0, width: 200.0, height: rect.height - 80.0 };
+            renderer.draw_text("MUNIN: MEMORY", munin_rect.x, munin_rect.y, 10.0, [1.0, 0.84, 0.0, 0.6]);
+            for (i, node) in state.nodes.iter().take(10).enumerate() {
+                let opacity = (node.weight.min(1.0)) * 0.5;
+                renderer.draw_text(&node.id, munin_rect.x, munin_rect.y + 20.0 + i as f32 * 14.0, 9.0, [1.0, 1.0, 1.0, opacity]);
+            }
+
+            // 5. Omniscient Focus Beams (Gungnir Beams)
+            if let Some(focus_id) = &state.odin_focus {
+                // Visualize causal links to the focus node
+                renderer.draw_text(&format!("EYE FOCUS: {}", focus_id), rect.x + rect.width / 2.0 - 50.0, rect.y + 20.0, 12.0, [0.0, 1.0, 1.0, 0.8]);
+                
+                // In a real implementation, we would find the rect of the focus_id component.
+                // For the 'Eye', we manifest a central beam of wisdom.
+                renderer.gungnir(Rect { x: rect.x + rect.width / 2.0 - 1.0, y: rect.y, width: 2.0, height: rect.height }, [0.0, 1.0, 1.0, 1.0], 20.0, 0.4);
+            }
+        }
     }
 }
 
@@ -1155,6 +1626,19 @@ impl View for Never {
     }
 }
 
+/// EmptyView - A view that renders nothing and takes up no space.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EmptyView;
+
+impl View for EmptyView {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+    fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size { width: 0.0, height: 0.0 }
+    }
+}
+
 /// A view that has been transformed by a modifier.
 ///
 /// Section 4.3: "Each modifier implements ViewModifier and produces a ModifiedView<Inner, Self>."
@@ -1321,6 +1805,12 @@ pub trait Renderer: ElapsedTime + Send {
     /// Used for continuous animations.
     fn request_redraw(&mut self) {}
 
+    /// Returns true if the current frame is over the time budget.
+    /// This can be used to skip expensive visual effects.
+    fn is_over_budget(&self) -> bool {
+        false
+    }
+
     // ── Filled shapes ────────────────────────────────────────────────────
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
     fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]);
@@ -1351,6 +1841,11 @@ pub trait Renderer: ElapsedTime + Send {
     fn draw_image(&mut self, _image_name: &str, _rect: Rect) {}
     /// Load an image asset from memory.
     fn load_image(&mut self, _name: &str, _data: &[u8]) {}
+
+    /// Get the current pointer (mouse/touch) position.
+    fn get_pointer_position(&self) -> [f32; 2] {
+        [0.0, 0.0]
+    }
 
     // ── Data Visualization ───────────────────────────────────────────────
     /// Upload raw float data as a GPU texture for heatmap rendering.
@@ -1419,6 +1914,11 @@ pub trait Renderer: ElapsedTime + Send {
     fn push_clip_rect(&mut self, _rect: Rect) {}
     /// Pop the most recently pushed clip rectangle.
     fn pop_clip_rect(&mut self) {}
+    /// Get the current clip rectangle in screen coordinates.
+    /// Returns a rect covering the entire screen if no clip is active.
+    fn current_clip_rect(&self) -> Rect {
+        Rect::new(-10000.0, -10000.0, 20000.0, 20000.0)
+    }
 
     // ── Global opacity ───────────────────────────────────────────────────
     /// Set a global opacity multiplier applied to all subsequent draw calls
@@ -1438,9 +1938,15 @@ pub trait Renderer: ElapsedTime + Send {
     fn bifrost(&mut self, _rect: Rect, _blur: f32, _saturation: f32, _opacity: f32) {}
     /// Apply a Gungnir (Neon Glow) effect to the specified rect.
     fn gungnir(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
+    /// Apply a ManiGlow (Lunar Illuminator) effect.
+    fn mani_glow(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32) {}
     /// Push a Mjolnir Slice (geometric clipping).
     fn push_mjolnir_slice(&mut self, _angle: f32, _offset: f32) {}
     fn pop_mjolnir_slice(&mut self) {}
+    /// Execute a render function with memoization.
+    /// If the renderer supports caching and the `id` + `data_hash` match a previous run,
+    /// it may replay cached commands instead of executing the function.
+    fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer));
     /// Apply a Mjolnir Shatter effect (fragmentation) to the specified rect.
     fn mjolnir_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
     fn mjolnir_fluid_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
@@ -1515,6 +2021,29 @@ pub trait Renderer: ElapsedTime + Send {
         false
     }
 }
+
+/// Utility for accessibility compliance (WCAG 2.1).
+pub mod accessibility {
+    /// Calculate the relative luminance of an sRGB color.
+    pub fn relative_luminance(color: [f32; 4]) -> f32 {
+        let f = |c: f32| {
+            if c <= 0.03928 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        0.2126 * f(color[0]) + 0.7152 * f(color[1]) + 0.0722 * f(color[2])
+    }
+
+    /// Calculate the contrast ratio between two colors.
+    pub fn contrast_ratio(c1: [f32; 4], c2: [f32; 4]) -> f32 {
+        let l1 = relative_luminance(c1);
+        let l2 = relative_luminance(c2);
+        let (light, dark) = if l1 > l2 { (l1, l2) } else { (l2, l1) };
+        (light + 0.05) / (dark + 0.05)
+    }
+}
 /// Defines the hardware acceleration tier and feature set available to the renderer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum RenderTier {
@@ -1540,16 +2069,15 @@ pub struct ColorTheme {
     pub rune_glow: [f32; 4],
     pub ember_core: [f32; 4],
     pub background_deep: [f32; 4],
+    pub mani_glow: [f32; 4], // (R, G, B, radius)
     pub glass_blur_strength: f32,
     pub shatter_edge_width: f32,
     pub neon_bloom_radius: f32,
-    pub rune_opacity: f32, // 0.0–1.0, default 0.55
-    // Padding to ensure 16-byte alignment for GPU uniforms
-    pub _pad: [f32; 3], // align to 16 bytes
-    pub _pad2: f32,
+    pub rune_opacity: f32, 
 }
 impl ColorTheme {
-    pub fn cyberpunk_viking() -> Self {
+    /// Asgard Mode: The high-fidelity "Cyberpunk Viking" aesthetic.
+    pub fn asgard() -> Self {
         Self {
             primary_neon: [0.0, 1.0, 0.95, 1.2],
             shatter_neon: [1.0, 0.0, 0.75, 1.5],
@@ -1558,13 +2086,34 @@ impl ColorTheme {
             rune_glow: [0.75, 0.98, 1.0, 0.9],
             ember_core: [0.95, 0.12, 0.12, 1.0],
             background_deep: [0.01, 0.01, 0.03, 1.0],
+            mani_glow: [0.7, 0.9, 1.0, 0.05], 
             glass_blur_strength: 0.6,
             shatter_edge_width: 1.8,
             neon_bloom_radius: 0.022,
             rune_opacity: 0.55,
-            _pad: [0.0; 3],
-            _pad2: 0.0,
         }
+    }
+
+    /// Midgard Mode: A clean, functional tactical HUD for standard operations.
+    pub fn midgard() -> Self {
+        Self {
+            primary_neon: [0.2, 0.4, 0.6, 1.0], // Muted blue
+            shatter_neon: [0.5, 0.5, 0.5, 1.0], // Neutral gray
+            glass_base: [0.1, 0.12, 0.15, 1.0], // Solid slate
+            glass_edge: [0.3, 0.35, 0.4, 1.0], // Subtle border
+            rune_glow: [0.8, 0.8, 0.8, 0.0],    // Runes disabled
+            ember_core: [0.5, 0.5, 0.5, 1.0],
+            background_deep: [0.05, 0.05, 0.07, 1.0],
+            mani_glow: [0.0, 0.0, 0.0, 0.0],    // No cursor glow
+            glass_blur_strength: 0.0,           // No blur
+            shatter_edge_width: 1.0,
+            neon_bloom_radius: 0.0,
+            rune_opacity: 0.0,
+        }
+    }
+
+    pub fn cyberpunk_viking() -> Self {
+        Self::asgard()
     }
     pub fn vibrant_glass() -> Self {
         Self {
@@ -1575,12 +2124,11 @@ impl ColorTheme {
             rune_glow: [0.75, 0.98, 1.0, 0.9],
             ember_core: [1.0, 0.4, 0.1, 1.0],
             background_deep: [0.05, 0.05, 0.1, 1.0],
+            mani_glow: [0.7, 0.9, 1.0, 0.05],
             glass_blur_strength: 0.9,
             shatter_edge_width: 1.8,
             neon_bloom_radius: 0.022,
             rune_opacity: 0.55,
-            _pad: [0.0; 3],
-            _pad2: 0.0,
         }
     }
 }
@@ -2209,6 +2757,24 @@ impl Color {
         b: 1.0,
         a: 1.0,
     };
+    pub const VIKING_GOLD: Color = Color {
+        r: 1.0,
+        g: 0.84,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const MAGENTA_LIQUID: Color = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const TACTICAL_OBSIDIAN: Color = Color {
+        r: 0.05,
+        g: 0.05,
+        b: 0.07,
+        a: 1.0,
+    };
     /// Calculate the relative luminance of the color as defined by WCAG 2.x
     pub fn relative_luminance(&self) -> f32 {
         fn res(c: f32) -> f32 {
@@ -2835,6 +3401,23 @@ pub mod layout {
                 y,
                 width,
                 height,
+            }
+        }
+
+        pub fn inset(&self, amount: f32) -> Self {
+            Self {
+                x: self.x + amount,
+                y: self.y + amount,
+                width: (self.width - amount * 2.0).max(0.0),
+                height: (self.height - amount * 2.0).max(0.0),
+            }
+        }
+
+        pub fn offset(&self, dx: f32, dy: f32) -> Self {
+            Self {
+                x: self.x + dx,
+                y: self.y + dy,
+                ..*self
             }
         }
 

@@ -38,6 +38,9 @@ mod stubs {
         fn draw_line(&mut self, _: f32, _: f32, _: f32, _: f32, _: [f32; 4], _: f32) {}
         fn draw_text(&mut self, _: &str, _: f32, _: f32, _: f32, _: [f32; 4]) {}
         fn measure_text(&mut self, _: &str, _: f32) -> (f32, f32) { (0.0, 0.0) }
+        fn memoize(&mut self, _: u64, _: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+            render_fn(self);
+        }
     }
     impl ElapsedTime for WebRenderer {
         fn elapsed_time(&self) -> f32 { 0.0 }
@@ -1184,6 +1187,10 @@ fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {
         if let Some(ref gl) = self.canvas_context {
             gl.restore();
         }
+    }
+
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
     }
 
     fn push_opacity(&mut self, opacity: f32) {

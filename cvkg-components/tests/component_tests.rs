@@ -54,6 +54,9 @@ impl Renderer for MockRenderer {
     fn set_key(&mut self, _key: &str) {}
     fn set_aria_role(&mut self, _role: &str) {}
     fn set_aria_label(&mut self, _label: &str) {}
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
+    }
 }
 
 #[test]

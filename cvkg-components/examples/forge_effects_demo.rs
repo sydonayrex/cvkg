@@ -1,3 +1,6 @@
+// This example requires the GPU feature to be enabled
+#![cfg(feature = "gpu")]
+
 use cvkg_core::{Rect, Renderer};
 use cvkg_render_gpu::{
     ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role,

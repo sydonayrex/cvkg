@@ -269,4 +269,7 @@ impl Renderer for DummyRenderer {
     fn pop_transform(&mut self) {}
     fn push_shadow(&mut self, _radius: f32, _color: [f32; 4], _offset: [f32; 2]) {}
     fn pop_shadow(&mut self) {}
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
+    }
 }

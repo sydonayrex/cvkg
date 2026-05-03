@@ -1,3 +1,6 @@
+// This example requires a renderer feature to be enabled (gpu, native, or web)
+#![cfg(any(feature = "gpu", feature = "native", feature = "web"))]
+
 use cvkg::prelude::*;
 use cvkg_core::Renderer;
 use std::sync::{Arc, Mutex};
@@ -124,5 +127,5 @@ fn main() {
         text: String::new(),
         toggle: false,
     }));
-    cvkg_render_native::NativeRenderer::run(HitTestView { state });
+    cvkg::native::NativeRenderer::run(HitTestView { state });
 }

@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.15"
+version = "0.1.16"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -53,3 +53,17 @@ thiserror = "1.0"
 libc = "0.2"
 clap = { version = "4.5", features = ["derive"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
+
+[patch.crates-io]
+cvkg-core = { path = "cvkg-core" }
+cvkg-scene = { path = "cvkg-scene" }
+cvkg-layout = { path = "cvkg-layout" }
+cvkg-anim = { path = "cvkg-anim" }
+cvkg-render-native = { path = "cvkg-render-native" }
+cvkg-render-gpu = { path = "cvkg-render-gpu" }
+cvkg-render-web = { path = "cvkg-render-web" }
+cvkg-vdom = { path = "cvkg-vdom" }
+cvkg-components = { path = "cvkg-components" }
+cvkg-themes = { path = "cvkg-themes" }
+cvkg-macros = { path = "cvkg-macros" }
+cvkg = { path = "cvkg" }

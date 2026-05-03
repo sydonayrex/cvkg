@@ -1,3 +1,6 @@
+// This example requires a renderer feature to be enabled (gpu, native, or web)
+#![cfg(any(feature = "gpu", feature = "native", feature = "web"))]
+
 use cvkg::prelude::*;
 use cvkg_core::Renderer;
 use rand::Rng;

@@ -718,17 +718,24 @@ impl View for LazyVStack {
             return;
         }
 
+        let clip = renderer.current_clip_rect();
+        let viewport_y = clip.y.max(rect.y);
+        let viewport_bottom = (clip.y + clip.height).min(rect.y + rect.height);
+        
+        if viewport_bottom <= viewport_y {
+            return;
+        }
+
         let child_height = 40.0;
+        
+        // Calculate indices based on fixed height for simplicity in LazyVStack
+        let start_idx = ((viewport_y - rect.y) / (child_height + self.spacing)).floor() as usize;
+        let visible_count = ((viewport_bottom - viewport_y) / (child_height + self.spacing)).ceil() as usize;
+        let end_idx = (start_idx + visible_count + 1).min(self.children.len());
 
-        for (i, child) in self.children.iter().enumerate() {
-            let child_y = rect.y + i as f32 * (child_height + self.spacing);
-
-            if child_y + child_height < 0.0 {
-                continue;
-            }
-            if child_y > 2000.0 {
-                break;
-            }
+        for idx in start_idx..end_idx {
+            let child = &self.children[idx];
+            let child_y = rect.y + idx as f32 * (child_height + self.spacing);
 
             child.render(
                 renderer,

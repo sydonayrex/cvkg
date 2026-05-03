@@ -22,6 +22,11 @@ impl View for Seiðr {
     fn body(self) -> Self::Body { unreachable!() }
     
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.12, 0.15, 0.5]);
+            return;
+        }
+
         let t = renderer.elapsed_time();
         let flicker = 1.0 + (t * 13.0).sin() * self.flicker_intensity;
         let color = [
@@ -65,6 +70,11 @@ impl View for LokiGlitch {
     fn body(self) -> Self::Body { unreachable!() }
     
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            renderer.draw_text(&self.content, rect.x, rect.y, self.font_size, self.base_color);
+            return;
+        }
+
         let t = renderer.elapsed_time();
         renderer.draw_text(&self.content, rect.x, rect.y, self.font_size, self.base_color);
         
@@ -171,6 +181,13 @@ impl<V: View> View for NiflheimFrost<V> {
     fn body(self) -> Self::Body { unreachable!() }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            renderer.fill_rounded_rect(rect, 4.0, [0.08, 0.1, 0.12, 0.9]);
+            renderer.stroke_rounded_rect(rect, 4.0, [0.3, 0.35, 0.4, 0.8], 1.0);
+            self.content.render(renderer, rect);
+            return;
+        }
+
         renderer.bifrost(rect, self.blur_radius, 1.2, 0.95);
         
         if !self.clean_glass {
@@ -236,6 +253,11 @@ impl View for FutharkFlow {
     fn body(self) -> Self::Body { unreachable!() }
     
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            renderer.draw_line(rect.x, rect.y + rect.height / 2.0, rect.x + rect.width, rect.y + rect.height / 2.0, [0.3, 0.35, 0.4, 0.3], 1.0);
+            return;
+        }
+
         let t = renderer.elapsed_time();
         let runes = ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ'];
         let flow_pos = (t * self.speed).fract();
@@ -248,5 +270,60 @@ impl View for FutharkFlow {
         
         renderer.gungnir(Rect { x: rx - 10.0, y: ry - 10.0, width: 20.0, height: 20.0 }, self.color, 5.0, 0.8);
         renderer.draw_text(&runes[rune_idx].to_string(), rx - 5.0, ry + 5.0, 14.0, self.color);
+    }
+}
+
+/// HeimdallSweep - A tactical radar sweep effect that reveals underlying content.
+/// Named after Heimdall, the all-seeing guardian of Bifrost.
+pub struct HeimdallSweep<V: View> {
+    pub content: V,
+    pub sweep_speed: f32, // Rotations per second
+    pub glow_color: [f32; 4],
+}
+
+impl<V: View> HeimdallSweep<V> {
+    pub fn new(content: V) -> Self {
+        Self {
+            content,
+            sweep_speed: 0.25,
+            glow_color: [0.0, 1.0, 0.8, 0.6], // Bifrost Cyan
+        }
+    }
+}
+
+impl<V: View> View for HeimdallSweep<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            self.content.render(renderer, rect);
+            return;
+        }
+
+        let t = renderer.elapsed_time();
+        let angle = (t * self.sweep_speed * 2.0 * std::f32::consts::PI).fract();
+        
+        let center_x = rect.x + rect.width / 2.0;
+        let center_y = rect.y + rect.height / 2.0;
+        let radius = rect.width.max(rect.height) * 0.7;
+        
+        // 1. Render Content
+        self.content.render(renderer, rect);
+        
+        // 2. Render Sweep Line
+        let lx = center_x + radius * angle.cos();
+        let ly = center_y + radius * angle.sin();
+        
+        renderer.draw_line(center_x, center_y, lx, ly, self.glow_color, 2.0);
+        
+        // 3. Render Sweep Glow/Trail
+        for i in 1..10 {
+            let trail_angle = angle - (i as f32 * 0.05);
+            let alpha = self.glow_color[3] * (1.0 - (i as f32 / 10.0));
+            let tx = center_x + radius * trail_angle.cos();
+            let ty = center_y + radius * trail_angle.sin();
+            renderer.draw_line(center_x, center_y, tx, ty, [self.glow_color[0], self.glow_color[1], self.glow_color[2], alpha], 1.5);
+        }
     }
 }

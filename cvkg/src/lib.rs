@@ -44,5 +44,5 @@ pub mod prelude {
     pub use cvkg_components::Color;
     pub use cvkg_components::*;
     pub use cvkg_core::{Binding, Rect, State, View, Never};
-    pub use cvkg_macros::view_component;
+    pub use cvkg_macros::{view_component, View};
 }

@@ -313,6 +313,10 @@ impl Renderer for TestRenderer {
     fn pop_vnode(&mut self) {
         self.commands.push(Command::PopVNode);
     }
+
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
+    }
 }
 
 impl FrameRenderer<()> for TestRenderer {

@@ -61,11 +61,11 @@ impl Theme {
         Self {
             is_dark: true,
             colors: SemanticColors {
-                primary: Color { r: 0.0, g: 0.8, b: 1.0, a: 1.0 }, // Cyan Glow
-                secondary: Color { r: 0.5, g: 0.0, b: 1.0, a: 1.0 }, // Purple Haze
+                primary: Color::VIKING_GOLD,
+                secondary: Color::MAGENTA_LIQUID,
                 accent: Color { r: 1.0, g: 0.0, b: 0.4, a: 1.0 }, // Crimson Flash
                 background: Color { r: 0.02, g: 0.02, b: 0.05, a: 1.0 }, // Deep Void
-                surface: Color { r: 0.08, g: 0.08, b: 0.12, a: 1.0 }, // Obsidian
+                surface: Color::TACTICAL_OBSIDIAN,
                 error: Color { r: 1.0, g: 0.2, b: 0.2, a: 1.0 },
                 warning: Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 },
                 success: Color { r: 0.0, g: 1.0, b: 0.5, a: 1.0 },

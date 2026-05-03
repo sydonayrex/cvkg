@@ -7,6 +7,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
-cvkg = { version = "0.1.15", features = ["native"] }
+cvkg = { version = "0.1.16", features = ["native"] }
+cvkg-core = { path = "../cvkg-core", version = "0.1.16" }
 tokio = { version = "1.0", features = ["full"] }
 log = "0.4"

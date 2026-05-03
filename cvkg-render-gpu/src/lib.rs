@@ -2378,6 +2378,11 @@ impl cvkg_core::ElapsedTime for SurtrRenderer {
 }
 
 impl cvkg_core::Renderer for SurtrRenderer {
+    fn is_over_budget(&self) -> bool {
+        self.frame_budget.allow_degradation && 
+        self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
+    }
+
     /// fill_rect — Standard rectangle drawing method.
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.fill_rect_with_mode(rect, self.apply_opacity(color), 0, None);
@@ -2849,6 +2854,22 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn pop_clip_rect(&mut self) {
         self.clip_stack.pop();
+    }
+
+    fn current_clip_rect(&self) -> Rect {
+        self.clip_stack
+            .last()
+            .copied()
+            .unwrap_or(Rect::new(
+                0.0,
+                0.0,
+                self.current_width() as f32,
+                self.current_height() as f32,
+            ))
+    }
+
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
     }
 
     fn push_opacity(&mut self, opacity: f32) {

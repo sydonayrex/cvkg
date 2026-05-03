@@ -25,6 +25,7 @@
 //! Virtual DOM implementation for CVKG
 
 use serde::{Deserialize, Serialize};
+use cvkg_core::Renderer;
 use std::collections::HashMap;
 
 /// A unique identifier for a node within the Virtual DOM tree.
@@ -484,6 +485,7 @@ pub struct VNodeRenderer {
     event_handlers: HashMap<NodeId, HashMap<String, std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>>,
     next_id: u64,
     stack: Vec<NodeId>,
+    clip_stack: Vec<cvkg_core::Rect>,
     root: Option<NodeId>,
 }
 
@@ -501,6 +503,7 @@ impl VNodeRenderer {
             event_handlers: HashMap::new(),
             next_id: 1,
             stack: Vec::new(),
+            clip_stack: Vec::new(),
             root: None,
         }
     }
@@ -794,8 +797,21 @@ impl cvkg_core::Renderer for VNodeRenderer {
     }
 
     fn load_image(&mut self, _name: &str, _data: &[u8]) {}
-    fn push_clip_rect(&mut self, _rect: cvkg_core::Rect) {}
-    fn pop_clip_rect(&mut self) {}
+    fn push_clip_rect(&mut self, rect: cvkg_core::Rect) {
+        self.clip_stack.push(rect);
+    }
+    fn pop_clip_rect(&mut self) {
+        self.clip_stack.pop();
+    }
+    fn current_clip_rect(&self) -> cvkg_core::Rect {
+        self.clip_stack
+            .last()
+            .copied()
+            .unwrap_or(cvkg_core::Rect::new(-10000.0, -10000.0, 20000.0, 20000.0))
+    }
+    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        render_fn(self);
+    }
     fn push_opacity(&mut self, _opacity: f32) {}
     fn pop_opacity(&mut self) {}
     fn bifrost(&mut self, _rect: cvkg_core::Rect, _blur: f32, _sat: f32, _op: f32) {}
@@ -1431,5 +1447,50 @@ mod tests {
         } else {
             panic!("Expected Update patch");
         }
+    }
+
+    #[test]
+    fn test_vdom_to_accesskit_node() {
+        let node = VNode {
+            id: NodeId(1),
+            key: None,
+            component_type: "Button".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect {
+                x: 10.0,
+                y: 20.0,
+                width: 100.0,
+                height: 40.0,
+            },
+            children: Vec::new(),
+            aria_role: "button".to_string(),
+            aria_props: AriaProps {
+                label: Some("Click Me".to_string()),
+                ..Default::default()
+            },
+            portal_target: None,
+        };
+
+        let accesskit_node = node.to_accesskit_node();
+        assert_eq!(accesskit_node.role(), accesskit::Role::Button);
+    }
+
+    #[test]
+    fn test_vdom_focus_management() {
+        let mut vdom = VDom::new();
+        vdom.root = Some(NodeId(1));
+        vdom.nodes.insert(NodeId(1), dummy_node(1, "Button"));
+        
+        // Initial focus is None
+        assert!(vdom.focused_node.lock().unwrap().is_none());
+        
+        // PointerDown on node 1 should set focus
+        vdom.dispatch_event(cvkg_core::Event::PointerDown { x: 50.0, y: 50.0 });
+        assert_eq!(vdom.focused_node.lock().unwrap().unwrap(), NodeId(1));
+        
+        // PointerDown on empty space should clear focus
+        vdom.dispatch_event(cvkg_core::Event::PointerDown { x: 500.0, y: 500.0 });
+        assert!(vdom.focused_node.lock().unwrap().is_none());
     }
 }

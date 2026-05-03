@@ -310,6 +310,12 @@ impl View for TelemetryView {
     fn body(self) -> Self::Body { unreachable!() }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.12, 0.15, 0.1]);
+            renderer.stroke_rect(rect, [0.2, 0.2, 0.2, 1.0], 1.0);
+            return;
+        }
+
         let stats = renderer.get_telemetry();
         
         // Bifrost Glassmorphism
@@ -362,5 +368,272 @@ let lines = vec![
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
         cvkg_core::Size { width: 180.0, height: 160.0 }
+    }
+}
+
+use cvkg_core::{TemporalNode, TemporalEdge, MemoryLayer};
+
+/// MimirsWell - A dynamic, force-directed graph visualization for the Temporal Graph.
+pub struct MimirsWell {
+    pub nodes: Vec<TemporalNode>,
+    pub edges: Vec<TemporalEdge>,
+}
+
+impl MimirsWell {
+    pub fn new(nodes: Vec<TemporalNode>, edges: Vec<TemporalEdge>) -> Self {
+        Self { nodes, edges }
+    }
+}
+
+impl View for MimirsWell {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+        
+        // 1. Draw Bifrost Paths (Edges)
+        for edge in &self.edges {
+            let (x1, y1) = self.get_node_pos(&edge.source, rect, t);
+            let (x2, y2) = self.get_node_pos(&edge.target, rect, t);
+            
+            // Animated Glow-Path (Bifrost)
+            let alpha = 0.2 + (t * 3.0).sin().abs() * 0.2;
+            renderer.draw_line(x1, y1, x2, y2, [1.0, 0.0, 1.0, alpha], 1.0); // Magenta Liquid
+            
+            // Traveling Pulse
+            let progress = (t * 0.5 + (edge.source.len() as f32)).fract();
+            let px = x1 + (x2 - x1) * progress;
+            let py = y1 + (y2 - y1) * progress;
+            renderer.fill_ellipse(Rect { x: px - 1.5, y: py - 1.5, width: 3.0, height: 3.0 }, [1.0, 1.0, 1.0, 0.6]);
+        }
+        
+        // 2. Draw Nodes (Clipped-Corner / Tactical)
+        for node in &self.nodes {
+            let (nx, ny) = self.get_node_pos(&node.id, rect, t);
+            
+            // Neural Activity Pulsing (Inspired by VYOM)
+            let activity_pulse = (t * 4.0 + (node.weight * 10.0)).sin() * 0.15 + 0.85;
+            let size = (10.0 + node.weight * 15.0) * activity_pulse;
+            
+            let mut color = match node.layer {
+                MemoryLayer::Episodic => [0.0, 0.8, 1.0, 0.9], // Cyan
+                MemoryLayer::Semantic => [1.0, 0.84, 0.0, 0.9], // Viking Gold
+                MemoryLayer::Procedural => [1.0, 0.0, 1.0, 0.9], // Magenta Liquid
+            };
+            
+            // Boost brightness based on pulse
+            color[3] *= activity_pulse;
+            
+            // Draw Clipped-Corner Node
+            self.draw_clipped_node(renderer, nx, ny, size, color);
+            
+            // Label for high-weight nodes
+            if node.weight > 0.5 {
+                renderer.draw_text(&node.id, nx + size / 2.0 + 4.0, ny - 4.0, 9.0, [1.0, 1.0, 1.0, 0.5 * activity_pulse]);
+            }
+        }
+    }
+}
+
+impl MimirsWell {
+    fn get_node_pos(&self, id: &str, rect: Rect, t: f32) -> (f32, f32) {
+        let mut h = 0u32;
+        for b in id.bytes() { h = h.wrapping_mul(31).wrapping_add(b as u32); }
+        
+        let fx = (h % 1000) as f32 / 1000.0;
+        let fy = ((h / 1000) % 1000) as f32 / 1000.0;
+        
+        let dx = (t * 0.4 + fx * 20.0).sin() * 10.0;
+        let dy = (t * 0.6 + fy * 20.0).cos() * 10.0;
+        
+        (
+            rect.x + rect.width * 0.15 + rect.width * 0.7 * fx + dx,
+            rect.y + rect.height * 0.15 + rect.height * 0.7 * fy + dy
+        )
+    }
+
+    fn draw_clipped_node(&self, renderer: &mut dyn Renderer, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        let s = size / 2.0;
+        let c = s * 0.4;
+        
+        let points = [
+            (x - s + c, y - s), (x + s - c, y - s),
+            (x + s, y - s + c), (x + s, y + s - c),
+            (x + s - c, y + s), (x - s + c, y + s),
+            (x - s, y + s - c), (x - s, y - s + c),
+        ];
+        
+        let mut fill_color = color;
+        fill_color[3] *= 0.15;
+        renderer.fill_rect(Rect { x: x - s, y: y - s, width: size, height: size }, fill_color);
+        
+        for i in 0..8 {
+            let p1 = points[i];
+            let p2 = points[(i + 1) % 8];
+            renderer.draw_line(p1.0, p1.1, p2.0, p2.1, color, 1.2);
+        }
+    }
+}
+
+const RUNES: &[char] = &[
+    'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚾ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ',
+    'ᛏ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛞ', 'ᛟ',
+];
+
+/// RuneScript - A text component that reveals itself with a runic "deciphering" animation.
+/// Formerly ScanningText, renamed for Norse-themed tactical alignment.
+pub struct RuneScript {
+    pub text: String,
+    pub font_size: f32,
+    pub color: [f32; 4],
+    pub speed: f32, // Characters per second
+}
+
+impl RuneScript {
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            font_size: 14.0,
+            color: [0.0, 1.0, 1.0, 1.0], // Cyan
+            speed: 20.0,
+        }
+    }
+
+    pub fn font_size(mut self, size: f32) -> Self {
+        self.font_size = size;
+        self
+    }
+
+    pub fn color(mut self, color: [f32; 4]) -> Self {
+        self.color = color;
+        self
+    }
+}
+
+impl View for RuneScript {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+        let revealed_count = (t * self.speed) as usize;
+        let mut display_text = String::new();
+        
+        let chars: Vec<char> = self.text.chars().collect();
+        for i in 0..chars.len() {
+            if i < revealed_count {
+                display_text.push(chars[i]);
+            } else if i < revealed_count + 4 {
+                let rune_idx = ((t * 30.0 + i as f32) as usize) % RUNES.len();
+                display_text.push(RUNES[rune_idx]);
+            } else {
+                break;
+            }
+        }
+        
+        if !display_text.is_empty() {
+            renderer.draw_text(&display_text, rect.x, rect.y + self.font_size, self.font_size, self.color);
+        }
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        let (w, h) = renderer.measure_text(&self.text, self.font_size);
+        cvkg_core::Size { width: w, height: h }
+    }
+}
+
+/// SleipnirGait - A container that staggers the reveal of its children.
+/// Named after Odin's 8-legged horse, known for its rapid and coordinated gait.
+pub struct SleipnirGait {
+    pub children: Vec<cvkg_core::AnyView>,
+    pub stagger_delay: f32, // Delay between child reveals in seconds
+}
+
+impl SleipnirGait {
+    pub fn new(stagger_delay: f32) -> Self {
+        Self {
+            children: Vec::new(),
+            stagger_delay,
+        }
+    }
+
+    pub fn child<V: View + 'static>(mut self, view: V) -> Self {
+        self.children.push(view.erase());
+        self
+    }
+}
+
+impl View for SleipnirGait {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+        let child_height = rect.height / self.children.len().max(1) as f32;
+        
+        for (i, child) in self.children.iter().enumerate() {
+            let start_time = i as f32 * self.stagger_delay;
+            if t < start_time {
+                continue;
+            }
+            
+            // Apply reveal opacity based on how long since its start time
+            let opacity = ((t - start_time) * 4.0).min(1.0);
+            renderer.push_opacity(opacity);
+            
+            let child_rect = Rect {
+                x: rect.x,
+                y: rect.y + i as f32 * child_height,
+                width: rect.width,
+                height: child_height,
+            };
+            child.render(renderer, child_rect);
+            
+            renderer.pop_opacity();
+        }
+    }
+}
+
+/// VölvaScan - A container that renders "runic noise" before revealing its content.
+/// Named after the Völva (seers) who saw through the veil of time.
+pub struct VölvaScan<V: View> {
+    pub content: V,
+    pub duration: f32,
+}
+
+impl<V: View> VölvaScan<V> {
+    pub fn new(content: V) -> Self {
+        Self {
+            content,
+            duration: 1.5,
+        }
+    }
+}
+
+impl<V: View> View for VölvaScan<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+        
+        if t < self.duration {
+            // Render Runic Noise
+            let mut noise = String::new();
+            let char_count = (rect.width * rect.height / 200.0) as usize;
+            for i in 0..char_count {
+                let rune_idx = ((t * 50.0 + i as f32) as usize) % RUNES.len();
+                noise.push(RUNES[rune_idx]);
+                if i % 10 == 0 { noise.push('\n'); }
+            }
+            renderer.draw_text(&noise, rect.x, rect.y + 10.0, 10.0, [0.0, 1.0, 1.0, 0.4]);
+        } else {
+            // Reveal Content
+            let opacity = ((t - self.duration) * 2.0).min(1.0);
+            renderer.push_opacity(opacity);
+            self.content.render(renderer, rect);
+            renderer.pop_opacity();
+        }
     }
 }
