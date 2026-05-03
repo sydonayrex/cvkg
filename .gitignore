@@ -3,3 +3,5 @@ target/
 .a0proj/
 **/*.snap.new
 Cargo.lock
+"fix plans"/
+usr/
