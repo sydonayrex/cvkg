@@ -18,7 +18,6 @@ members = [
     "cvkg-runic-text", "cvkg-test",
     "demos/niflheim-web", "demos/adele-web", "temp-server",
     "cvkg-flow",
-    "berserker",
 ]
 
 [workspace.package]
