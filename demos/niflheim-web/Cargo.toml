@@ -1,7 +1,10 @@
 [package]
 name = "niflheim-web-demo"
 version = "0.1.17"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
 
 [features]
 webgpu = ["cvkg-render-web/webgpu"]
