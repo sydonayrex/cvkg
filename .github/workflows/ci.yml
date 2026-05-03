@@ -141,31 +141,13 @@ jobs:
         cargo build --release -p berserker
         cargo build --release -p cvkg-webkit-server
     
-    - name: Build Deb and AppImage (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        cargo install cargo-deb
-        cargo deb -p berserker --no-build
-        
-        # cargo-appimage might be slow to install, let's use a simpler method or check if we can skip it
-        # Actually, let's try to install it but with a cache or use a pre-built binary if possible
-        cargo install cargo-appimage
-        cargo appimage -p berserker
-        
-        # Move them to the assets folder
-        mkdir -p assets
-        cp target/debian/*.deb assets/
-        cp *.AppImage assets/ 2>/dev/null || cp target/appimage/*.AppImage assets/ 2>/dev/null || true
-    
     - name: Package Assets (Linux/macOS)
       if: runner.os != 'Windows'
       run: |
         mkdir -p assets
-        # Use common names with OS suffix
         cp target/release/cvkg assets/cvkg-${{ runner.os }}
         cp target/release/berserker assets/berserker-${{ runner.os }}
         cp target/release/cvkg-webkit-server assets/cvkg-webkit-server-${{ runner.os }}
-        
         cd assets && tar -czf ../cvkg-${{ runner.os }}.tar.gz *
     
     - name: Package Assets (Windows)
@@ -183,8 +165,6 @@ jobs:
         files: |
           cvkg-*.tar.gz
           cvkg-*.zip
-          assets/*.deb
-          assets/*.AppImage
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         generate_release_notes: true
