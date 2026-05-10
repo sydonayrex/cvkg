@@ -1,5 +1,7 @@
 # cvkg-components
 
+![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
+
 **cvkg-components** provides a high-fidelity tactical UI component library for CVKG, built with a strict **Cyberpunk Viking** aesthetic and GPU-native performance.
 
 ## Design Philosophy: Advanced Norse HUD Patterns

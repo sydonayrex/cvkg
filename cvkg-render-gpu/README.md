@@ -1,5 +1,7 @@
 # cvkg-render-gpu
 
+![GPU Shader Pipeline](../docs/images/gpu_shader_pipeline.png)
+
 **cvkg-render-gpu** (Project Surtr) is the primary GPU-accelerated renderer for CVKG, built on `wgpu`.
 
 ## What This Crate Does

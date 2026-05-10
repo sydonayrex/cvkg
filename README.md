@@ -1,5 +1,7 @@
 # CVKG: Cyber Viking Kvasir Graph
 
+![Berserker Tactical HUD](docs/images/berserker_hero_hud.png)
+
 **CVKG** is a high-fidelity agentic UI framework for building native and web applications with a Cyberpunk/Viking aesthetic using Rust.
 
 ## What Problem It Solves

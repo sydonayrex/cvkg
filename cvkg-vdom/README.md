@@ -1,5 +1,7 @@
 # cvkg-vdom
 
+![Reactive Agent VDOM Graph](../docs/images/vdom_agent_graph.png)
+
 **cvkg-vdom** provides a stateless Virtual DOM implementation for CVKG with differential updates, event handling, and accessibility tree generation.
 
 ## What This Crate Does
