@@ -153,53 +153,6 @@ class Canvas2DAdapter implements RenderBackendAdapter {
     }
 }
 
-/**
- * WebGPU adapter stub for the inspector overlay.
- *
- * The WGSL shaders for the main app render pass live in the WASM module.
- * The inspector overlay uses a separate WebGPU render pass that draws
- * coloured quads over node bounding boxes.
- *
- * NOTE: Full WebGPU overlay implementation requires a GPUDevice reference
- * from the main WASM module. This stub satisfies the interface contract;
- * wire `device` and `context` in from the WASM init callback.
- */
-export class WebGpuAdapter implements RenderBackendAdapter {
-    readonly label = "WebGPU / WGSL";
-    readonly backend: RenderBackend = "wgpu";
-
-    // Populated by `init(device, context)` after the WASM module initialises.
-    private device: GPUDevice | null = null;
-    private context: GPUCanvasContext | null = null;
-
-    /**
-     * Wires the WebGPU device and canvas context from the WASM init callback.
-     * Must be called before the first `drawHighlight`.
-     */
-    init(device: GPUDevice, context: GPUCanvasContext): void {
-        this.device = device;
-        this.context = context;
-    }
-
-    drawHighlight(node: VNode, _fill: string, _stroke: string): void {
-        if (!this.device || !this.context) {
-            console.warn("[CVKG Inspector] WebGPU device not yet initialised — skipping highlight.");
-            return;
-        }
-        // TODO: issue a WebGPU render pass that draws a coloured quad at node.layout.
-        // The quad pipeline is separate from the main WASM render pipeline so it
-        // composites on top without disturbing the frame graph.
-        void node;
-    }
-
-    clear(): void {
-        // WebGPU clear happens at the start of each render pass in the WASM module.
-    }
-
-    resize(_width: number, _height: number): void {
-        // The WASM module reconfigures the swap chain on resize.
-    }
-}
 
 /**
  * Factory: returns the correct `RenderBackendAdapter` for the negotiated backend.
@@ -213,15 +166,11 @@ export function createAdapter(
     overlayCtx: CanvasRenderingContext2D,
 ): RenderBackendAdapter {
     switch (backend) {
-        case "wgpu":
-            return new WebGpuAdapter();
-        case "webgl2":
-            return new Canvas2DAdapter(overlayCtx, "webgl2", "WebGL2");
-        case "wasm":
-            return new Canvas2DAdapter(overlayCtx, "wasm", "WASM Software");
-        case "native":
-            // Native wgpu — same stub approach as WebGPU; device wired from wry host.
-            return new WebGpuAdapter();
+    case "native":
+    case "wgpu":
+    case "webgl2":
+    case "wasm":
+        return new Canvas2DAdapter(overlayCtx, backend, backend.toUpperCase());
     }
 }
 
@@ -265,14 +214,6 @@ export class InspectorOverlay {
         console.log(`[CVKG Inspector] Overlay active — backend: ${this.adapter.label}`);
     }
 
-    /**
-     * Provides a `WebGpuAdapter` reference for the caller to call `.init()`
-     * once the WASM module provides the GPU device.  Returns `null` for
-     * non-WebGPU backends.
-     */
-    public getWebGpuAdapter(): WebGpuAdapter | null {
-        return this.adapter instanceof WebGpuAdapter ? this.adapter : null;
-    }
 
     private resize(): void {
         this.adapter.resize(window.innerWidth, window.innerHeight);

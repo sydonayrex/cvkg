@@ -1,26 +1,74 @@
 # cvkg-runic-text
 
-**cvkg-runic-text** is the natively integrated Cyber Viking text shaping and layout engine for CVKG. It provides a stateless, high-performance typography pipeline that replaces generic text libraries with a solution optimized for the CVKG execution model.
+**cvkg-runic-text** provides text shaping, layout, and font fallback for CVKG applications.
 
-## Features
+## What This Crate Does
 
-*   **Stateless Shaping**: Uses `rustybuzz` for high-fidelity text shaping.
-*   **Native Layout**: Implements word wrapping and line breaking using Unicode standards (`unicode-segmentation`, `unicode-linebreak`).
-*   **Global Font Fallback**: Automatically resolves missing glyphs (emojis, foreign characters) by scanning system fonts and splicing font runs.
-*   **Bidirectional Support (BiDi)**: Correctly handles mixed RTL (Arabic/Hebrew) and LTR text directionality.
-*   **Interactive Metrics**: Provides `hit_test` (Position-to-Index) and `cursor_position` (Index-to-Position) for building text editors and selectable labels.
-*   **Performance Optimized**: Includes an LRU cache for shaped text and supports subpixel positioning for maximum clarity.
+- Provides text shaping via rustybuzz (HarfBuzz subset)
+- Provides font loading and glyph cache management
+- Supports Global Font Fallback for missing glyphs
+- Provides BiDi (bidirectional text) support
 
-## Core API
+## What This Crate Does NOT Do
 
-### `RunicTextEngine`
-The main engine instance that manages `fontdb` and the shaping cache.
-*   `new()`: Initializes the engine with system fonts.
-*   `shape(text, font, size)`: Simple single-line shaping.
-*   `shape_layout(spans, max_width)`: Advanced multi-span layout with wrapping.
-*   `rasterize(cache_key)`: Generates a bitmap for a specific glyph.
+- Does not provide rendering (see cvkg-render-gpu)
+- Does not provide layout calculations (see cvkg-layout)
+- Does not provide font file discovery
 
-### `ShapedText`
-The result of a layout operation.
-*   `hit_test(x, y)`: Maps visual coordinates to string byte offsets.
-*   `cursor_position(index)`: Maps string offsets to visual coordinates.
+## Public API Overview
+
+### Shaper
+
+```rust
+/// Text shaper for converting Unicode text to positioned glyphs
+pub struct Shaper {
+    // private fields
+}
+impl Shaper {
+    /// Create a new shaper with default configuration
+    pub fn new() -> Self;
+    
+    /// Shape text using the given font and size
+    pub fn shape(&mut self, text: &str, font_id: u32, size: f32) -> Vec<GlyphInfo>;
+    
+    /// Register a font from data
+    pub fn register_font(&mut self, font_data: &[u8]) -> Result<u32, ShaperError>;
+}
+```
+
+### GlyphInfo
+
+```rust
+/// Positioned glyph from text shaping
+pub struct GlyphInfo {
+    pub glyph_id: u32,
+    pub x_offset: f32,
+    pub y_offset: f32,
+    pub x_advance: f32,
+    pub y_advance: f32,
+}```
+
+### Error Types
+
+```rust
+pub enum ShaperError {
+    InvalidFontData,
+    FontNotFound(u32),
+    OutOfMemory,
+}```
+
+## Usage Example
+
+```rust
+use cvkg_runic_text::{Shaper, GlyphInfo};
+
+let mut shaper = Shaper::new();
+let font_id = shaper.register_font(include_bytes!("font.ttf")).unwrap();
+glyphs = shaper.shape("Hello, World!", font_id, 16.0);
+```
+
+## Known Limitations
+
+- Font loading requires manual registration; no system font discovery
+- BiDi support is basic; complex scripts may have issues
+- Glyph cache is in-memory only; no persistence

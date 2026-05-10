@@ -80,7 +80,7 @@ struct AppState {
     /// Last captured VDOM snapshot for SEO / Initial Load.
     last_vdom_snapshot: ArcSwap<Option<String>>,
     /// Server configuration.
-    config: Config,
+    _config: Config,
 }
 
 /// Universal Build Orchestrator.
@@ -126,44 +126,42 @@ async fn capture_snapshot(
 /// Handler for serving the loading screen or the last snapshot.
 async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let snapshot_guard = state.last_vdom_snapshot.load();
+    let snapshot = snapshot_guard.as_ref().as_ref().map(|s| s.as_str()).unwrap_or("Loading Agent Ulfhednar...");
     
-    if let Some(snapshot) = snapshot_guard.as_deref() {
-        Html(format!(
-            r#"<!DOCTYPE html>
+    Html(format!(
+        r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CVKG</title>
+    <title>Agent Ulfhednar - Tactical Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body {{ margin: 0; background: #0a0a0c; color: #fff; font-family: 'Inter', sans-serif; }}
+        body {{ margin: 0; background: #0a0a0c; color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; }}
+        #cvkg-root {{ width: 100vw; height: 100vh; }}
     </style>
 </head>
 <body>
-    <div id="app">{}</div>
-    <script src='/pkg/app.js'></script>
+    <div id="cvkg-root">{}</div>
+    <script type="module">
+        import init from '/cvkg-webkit-server/pkg/berserker_fire_web_demo.js';
+        async function run() {{
+            try {{
+                console.log("Initializing Berserker Fire Demo...");
+                await init();
+                console.log("Berserker Fire Demo active.");
+            }} catch (e) {{
+                console.error("Berserker Fire Demo failure:", e);
+            }}
+        }}
+        run();
+    </script>
 </body>
 </html>"#,
-            snapshot
-        ))
-    } else {
-        // Serve cvkg-os.html as the default OS
-        let path = format!("{}/cvkg-os.html", state.config.static_dir);
-        match tokio::fs::read_to_string(&path).await {
-            Ok(content) => Html(content),
-            Err(e) => {
-                warn!("Failed to read {}: {}", path, e);
-                Html(format!(r#"<!DOCTYPE html>
-<html lang="en">
-<head><title>CVKG | Boot Error</title><style>body {{ background: #07070f; color: #00ffff; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: monospace; }}</style></head>
-<body><div>[ CRITICAL ERROR ]: FAILED TO LOAD CVKG OS<br>REASON: {}</div></body>
-</html>"#, e))
-            }
-        }
-    }
+        snapshot
+    ))
 }
 
 
@@ -330,7 +328,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = Arc::new(AppState {
         last_vdom_snapshot: ArcSwap::from_pointee(None),
-        config: config.clone(),
+        _config: config.clone(),
     });
 
     // Build the router with middleware layers.
@@ -358,7 +356,7 @@ async fn main() -> anyhow::Result<()> {
                 .layer(middleware::from_fn(metrics_middleware))
                 .layer(SetResponseHeaderLayer::overriding(
                     axum::http::header::CONTENT_SECURITY_POLICY,
-                    axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss: blob:; frame-src *;"),
+                    axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: blob:; frame-src *;"),
                 ))
                 .layer(SetResponseHeaderLayer::overriding(
                     axum::http::header::STRICT_TRANSPORT_SECURITY,

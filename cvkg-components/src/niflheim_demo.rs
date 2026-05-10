@@ -120,7 +120,7 @@ impl Lcg {
     }
 }
 
-fn floating_fire_ball() -> impl View + Clone {
+pub fn floating_fire_ball() -> impl View + Clone {
     let particles = Arc::new(Mutex::new(Vec::<Particle>::new()));
     let last_time = Arc::new(Mutex::new(0.0f32));
     let rng = Arc::new(Mutex::new(Lcg::new(42)));

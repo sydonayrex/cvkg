@@ -11,6 +11,12 @@ pub struct BreadcrumbItem {
     pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
+impl Default for Breadcrumb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Breadcrumb {
     pub fn new() -> Self {
         Self { items: Vec::new() }

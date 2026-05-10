@@ -21,6 +21,12 @@ pub struct ComputeParams {
 mod stubs {
     use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer, RenderTier};
     pub struct WebRenderer;
+    impl Default for WebRenderer {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl WebRenderer {
         pub fn new() -> Self { Self }
         pub async fn forge(&mut self) -> Result<RenderTier, String> { Ok(RenderTier::Tier3Fallback) }
@@ -41,13 +47,14 @@ mod stubs {
         fn memoize(&mut self, _: u64, _: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
             render_fn(self);
         }
+        fn prewarm_vram(&mut self, _: Vec<(String, Vec<u8>)>) {}
     }
     impl ElapsedTime for WebRenderer {
         fn elapsed_time(&self) -> f32 { 0.0 }
         fn delta_time(&self) -> f32 { 0.016 }
     }
     impl FrameRenderer<()> for WebRenderer {
-        fn begin_frame(&mut self) -> () { () }
+        fn begin_frame(&mut self) {  }
         fn end_frame(&mut self, _: ()) {}
     }
     pub fn get_render_tier_name() -> String { "None".to_string() }
@@ -113,7 +120,7 @@ mod wasm_impl {
 
 #![allow(deprecated)]
 
-use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer, View, RenderTier};
+use cvkg_core::{AssetManager, ElapsedTime, FrameRenderer, Rect, Renderer, View, RenderTier};
 use super::{SceneNode, ComputeParams};
 use wasm_bindgen::prelude::*;
 
@@ -180,6 +187,10 @@ pub struct WebRenderer {
     pub shield_wall: Option<ShieldWall>,
     /// Total frames rendered in this session.
     pub frame_count: u64,
+    /// Collected scene nodes for the current frame (WebGPU path)
+    pub nodes: Vec<SceneNode>,
+    /// Cache for HTML image elements (Tier 3)
+    pub image_cache: std::collections::HashMap<String, web_sys::HtmlImageElement>,
 }
 
 // WebRenderer is only used on a single thread in WASM, but Renderer trait requires Send.
@@ -213,6 +224,8 @@ impl WebRenderer {
             performance,
             shield_wall: Some(ShieldWall::new()),
             frame_count: 0,
+            nodes: Vec::with_capacity(1024),
+            image_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -420,6 +433,8 @@ impl WebRenderer {
         if let Some(ref mut bridge) = self.bridge {
             let _ = bridge.connect();
         }
+        
+        let _ = self.register_web_events();
         
         Ok(self.tier)
     }
@@ -654,6 +669,33 @@ impl WebRenderer {
                 }],
             });
 
+        let compute_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("CVKG Compute Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
         let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("CVKG Scene Bind Group"),
             layout: &scene_bind_group_layout,
@@ -666,7 +708,10 @@ impl WebRenderer {
             let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("CVKG Render Pipeline Layout"),
-                bind_group_layouts: &[Some(&scene_bind_group_layout)],
+                bind_group_layouts: &[
+                    Some(&scene_bind_group_layout),
+                    Some(&compute_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
 
@@ -723,32 +768,6 @@ impl WebRenderer {
             mapped_at_creation: false,
         });
 
-        let compute_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("CVKG Compute Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: false },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            });
 
         let compute_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("CVKG Compute Bind Group"),
@@ -768,7 +787,10 @@ impl WebRenderer {
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("CVKG Compute Pipeline Layout"),
-                bind_group_layouts: &[Some(&compute_bind_group_layout)],
+                bind_group_layouts: &[
+                    Some(&scene_bind_group_layout),
+                    Some(&compute_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
 
@@ -805,6 +827,17 @@ impl WebRenderer {
 
 impl Renderer for WebRenderer {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
+        // WebGPU path: Collect node for GPU upload
+        if self.tier == RenderTier::Tier1GPU {
+            self.nodes.push(SceneNode {
+                position: [rect.x, rect.y],
+                size: [rect.width, rect.height],
+                color,
+                flags: 0, // Rect
+                animation_phase: 0.0,
+            });
+        }
+
         if let Some(ref gl) = self.canvas_context {
             gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
                 "rgba({}, {}, {}, {})",
@@ -823,6 +856,17 @@ impl Renderer for WebRenderer {
     }
 
     fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]) {
+        // WebGPU path
+        if self.tier == RenderTier::Tier1GPU {
+            self.nodes.push(SceneNode {
+                position: [rect.x, rect.y],
+                size: [rect.width, rect.height],
+                color,
+                flags: 1, // Rounded Rect
+                animation_phase: radius, // Reuse phase for radius
+            });
+        }
+
         if let Some(ref gl) = self.canvas_context {
             gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
                 "rgba({}, {}, {}, {})",
@@ -854,6 +898,17 @@ impl Renderer for WebRenderer {
     }
 
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]) {
+        // WebGPU path
+        if self.tier == RenderTier::Tier1GPU {
+            self.nodes.push(SceneNode {
+                position: [rect.x, rect.y],
+                size: [rect.width, rect.height],
+                color,
+                flags: 2, // Ellipse
+                animation_phase: 0.0,
+            });
+        }
+
         if let Some(ref gl) = self.canvas_context {
             gl.set_fill_style(&wasm_bindgen::JsValue::from_str(&format!(
                 "rgba({}, {}, {}, {})",
@@ -1017,12 +1072,57 @@ fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {
         // GPU textures not applicable to 2D Canvas context
     }
 
-    fn draw_image(&mut self, _image_name: &str, _rect: Rect) {
-        // Image asset loading and drawing logic would go here
+    fn draw_image(&mut self, image_name: &str, rect: Rect) {
+        if let Some(ref ctx) = self.canvas_context {
+            let url = image_name.to_string();
+
+            // 1. Check local cache
+            if let Some(img) = self.image_cache.get(&url) {
+                if img.complete() {
+                    let _ = ctx.draw_image_with_html_image_element_and_dw_and_dh(
+                        img,
+                        rect.x as f64,
+                        rect.y as f64,
+                        rect.width as f64,
+                        rect.height as f64,
+                    );
+                } else {
+                    // Still loading, request another frame to check completion
+                    self.redraw_requested = true;
+                }
+                return;
+            }
+
+            // 2. Try to get from asset manager
+            match self.asset_manager.load_image(&url) {
+                cvkg_core::AssetState::Ready(data) => {
+                    let img = web_sys::HtmlImageElement::new().unwrap();
+                    
+                    let array = js_sys::Uint8Array::from(&data[..]);
+                    let blob_parts = js_sys::Array::new();
+                    blob_parts.push(&array);
+                    let blob = web_sys::Blob::new_with_u8_array_sequence(&blob_parts).unwrap();
+                    let url_blob = web_sys::Url::create_object_url_with_blob(&blob).unwrap();
+                    
+                    img.set_src(&url_blob);
+                    self.image_cache.insert(url, img);
+                    
+                    // Request redraw once loaded
+                    self.redraw_requested = true;
+                }
+                _ => {} // Loading or Error
+            }
+        }
     }
 
     fn load_image(&mut self, _name: &str, _data: &[u8]) {
-        // Image asset loading for Web targets
+        // Assets are primarily loaded via URL in the WebRenderer
+    }
+
+    fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
+        for (name, data) in assets {
+            self.load_image(&name, &data);
+        }
     }
 
     /// Draw a linear gradient between two colors at the specified angle.
@@ -1426,11 +1526,20 @@ impl FrameRenderer<()> for WebRenderer {
         self.delta_time = ((now - self.last_redraw_start) / 1000.0) as f32;
         self.last_redraw_start = now;
 
-        if let Some(ref gl) = self.canvas_context {
-            let width = gl.canvas().map(|c| c.width()).unwrap_or(800) as f64;
-            let height = gl.canvas().map(|c| c.height()).unwrap_or(600) as f64;
-            gl.clear_rect(0.0, 0.0, width, height);
+        if let Some(ref ctx2d) = self.canvas_context {
+            let width = ctx2d.canvas().map(|c| c.width()).unwrap_or(800) as f64;
+            let height = ctx2d.canvas().map(|c| c.height()).unwrap_or(600) as f64;
+            ctx2d.clear_rect(0.0, 0.0, width, height);
+
+            // Draw background early so UI is layered on top
+            if self.tier == RenderTier::Tier2GPU || self.tier == RenderTier::Tier3Fallback {
+                let time = self.elapsed_time();
+                self.draw_background(ctx2d, time);
+            }
         }
+        
+        // Clear nodes for the next WebGPU frame
+        self.nodes.clear();
     }
 
     fn end_frame(&mut self, _encoder: ()) {
@@ -1462,104 +1571,94 @@ impl FrameRenderer<()> for WebRenderer {
 
 impl WebRenderer {
     /// Renders VDOM elements using WebGL2 or Canvas 2 D fallback.
-    /// When WebGL2 context exists but VDOM rendering is needed, renders to Canvas 2 D
-    /// for consistency across tiers. This ensures the demo content is visible.
     fn render_webgl2(&mut self) -> Result<(), JsValue> {
-        let time = (self.now() / 1000.0) as f32;
-        
-        // Clear the screen with cyberpunk dark background
+        // Clear the GL context if it exists (for hybrid background effects)
         if let Some(ref gl) = self.gl_context {
             gl.clear_color(0.02, 0.01, 0.05, 1.0);
             gl.clear(web_sys::WebGl2RenderingContext::COLOR_BUFFER_BIT);
         }
         
-        // In Hybrid (WebGL2) mode, we draw the background into the GL context,
-        // and the UI stays in the Canvas2D context (which was drawn during the frame).
-        // WE MUST NOT CLEAR THE CANVAS2D CONTEXT HERE.
-        
         if let Some(ref ctx2d) = self.canvas_context {
-            let width = ctx2d.canvas().map(|c| c.width()).unwrap_or(800) as f64;
-            let height = ctx2d.canvas().map(|c| c.height()).unwrap_or(600) as f64;
-            
-            // Draw deep space background gradient
-            ctx2d.save();
-            let grad = ctx2d.create_linear_gradient(0.0, 0.0, 0.0, height);
-            grad.add_color_stop(0.0, "rgba(13, 13, 26, 1.0)").ok();
-            grad.add_color_stop(1.0, "rgba(2, 2, 5, 1.0)").ok();
-            ctx2d.set_fill_style(&grad);
-            ctx2d.fill_rect(0.0, 0.0, width, height);
-            ctx2d.restore();
-            
-            // Draw animated grid
-            ctx2d.save();
-            ctx2d.set_line_width(1.0);
-            let grid_spacing = 40.0_f64;
-            
-            // Horizontal lines with animation
-            for i in 0..((height / grid_spacing) as i32 + 1) {
-                let y = i as f64 * grid_spacing;
-                let alpha = 0.05 + 0.1 * ((time as f64 * 2.0 + y * 0.01).sin() * 0.5 + 0.5);
-                ctx2d.set_stroke_style(&wasm_bindgen::JsValue::from_str(
-                    &format!("rgba(0, 200, 255, {})", alpha)
-                ));
-                ctx2d.begin_path();
-                ctx2d.move_to(0.0, y);
-                ctx2d.line_to(width, y);
-                ctx2d.stroke();
-            }
-            
-            // Vertical lines
-            for i in 0..((width / grid_spacing) as i32 + 1) {
-                let x = i as f64 * grid_spacing;
-                ctx2d.set_stroke_style(&wasm_bindgen::JsValue::from_str(
-                    &format!("rgba(0, 200, 255, {})", 0.05 + 0.1)
-                ));
-                ctx2d.begin_path();
-                ctx2d.move_to(x, 0.0);
-                ctx2d.line_to(x, height);
-                ctx2d.stroke();
-            }
-            ctx2d.restore();
-            
-            // Draw VDOM overlay if available - this renders the actual demo content
-            if let Some(ref vdom) = self.vdom {
-                self.render_vdom_nodes(ctx2d, vdom, time);
-            }
+            let time = self.elapsed_time();
+            self.draw_foreground_effects(ctx2d, time);
         }
         
         Ok(())
     }
     
-    /// Renders VDOM nodes with cyberpunk styling for WebGL2 tier.
-    fn render_vdom_nodes(&self, ctx: &web_sys::CanvasRenderingContext2d, _vdom: &cvkg_vdom::VDom, time: f32) {
-        ctx.save();
-        
+    /// Internal helper to draw the animated cyberpunk background.
+    fn draw_background(&self, ctx: &web_sys::CanvasRenderingContext2d, time: f32) {
         let width = ctx.canvas().map(|c| c.width()).unwrap_or(800) as f64;
         let height = ctx.canvas().map(|c| c.height()).unwrap_or(600) as f64;
         
-        // Draw animated center pulse
+        ctx.save();
+        
+        // 1. Deep space background gradient
+        let grad = ctx.create_linear_gradient(0.0, 0.0, 0.0, height);
+        grad.add_color_stop(0.0, "rgba(13, 13, 26, 1.0)").ok();
+        grad.add_color_stop(1.0, "rgba(2, 2, 5, 1.0)").ok();
+        ctx.set_fill_style(&grad);
+        ctx.fill_rect(0.0, 0.0, width, height);
+        
+        // 2. Animated center pulse (Mead Hall Core)
         let center_x = width / 2.0;
         let center_y = height / 2.0;
         let pulse = (time as f64 * 3.0).sin() * 0.5 + 0.5;
         let radius = 60.0_f64 + pulse * 30.0_f64;
         
-        // Neon glow effect
-        for i in 0..5 {
-            let alpha = 0.15 * pulse / (i as f64 + 1.0);
+        for i in 0..3 {
+            let alpha = 0.1 * pulse / (i as f64 + 1.0);
             ctx.set_shadow_blur(radius * (i as f64 + 1.0) * 0.4);
             ctx.set_shadow_color(&format!("rgba(0, 200, 255, {})", alpha));
             ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str(
                 &format!("rgba(0, 200, 255, {})", alpha * 2.0)
             ));
-            ctx.set_line_width(2.0);
+            ctx.set_line_width(1.5);
             ctx.begin_path();
-            ctx.arc(center_x, center_y, radius + i as f64 * 15.0, 0.0, 2.0 * std::f64::consts::PI).ok();
+            let _ = ctx.arc(center_x, center_y, radius + i as f64 * 15.0, 0.0, 2.0 * std::f64::consts::PI);
+            ctx.stroke();
+        }
+
+        // 3. Animated grid
+        ctx.set_shadow_blur(0.0);
+        ctx.set_line_width(1.0);
+        let grid_spacing = 40.0_f64;
+        
+        for i in 0..((height / grid_spacing) as i32 + 1) {
+            let y = i as f64 * grid_spacing;
+            let alpha = 0.03 + 0.07 * ((time as f64 * 2.0 + y * 0.01).sin() * 0.5 + 0.5);
+            ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str(
+                &format!("rgba(0, 200, 255, {})", alpha)
+            ));
+            ctx.begin_path();
+            ctx.move_to(0.0, y);
+            ctx.line_to(width, y);
             ctx.stroke();
         }
         
-        // Draw scanlines
-        ctx.set_shadow_blur(0.0);
-        ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str("rgba(0, 200, 255, 0.1)"));
+        for i in 0..((width / grid_spacing) as i32 + 1) {
+            let x = i as f64 * grid_spacing;
+            ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str(
+                &format!("rgba(0, 200, 255, {})", 0.04)
+            ));
+            ctx.begin_path();
+            ctx.move_to(x, 0.0);
+            ctx.line_to(x, height);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+    }
+
+    /// Internal helper to draw post-processing effects (scanlines, etc.) on top of the UI.
+    fn draw_foreground_effects(&self, ctx: &web_sys::CanvasRenderingContext2d, _time: f32) {
+        let width = ctx.canvas().map(|c| c.width()).unwrap_or(800) as f64;
+        let height = ctx.canvas().map(|c| c.height()).unwrap_or(600) as f64;
+        
+        ctx.save();
+        
+        // Scanlines
+        ctx.set_stroke_style(&wasm_bindgen::JsValue::from_str("rgba(0, 200, 255, 0.03)"));
         ctx.set_line_width(1.0);
         for y in (0..((height / 4.0) as i32)).map(|i| i as f64 * 4.0) {
             ctx.begin_path();
@@ -1609,21 +1708,36 @@ impl WebRenderer {
 
         // 1. Compute Pass: Scene Processing
         {
+            let node_count = self.nodes.len().min(1024);
             let compute_params = ComputeParams {
-                node_count: 0, // In real implementation, this would be vdom.node_count()
+                node_count: node_count as u32,
                 time,
                 delta_time: self.delta_time,
                 _pad: 0.0,
             };
             ctx.queue.write_buffer(&ctx.params_buffer, 0, bytemuck::cast_slice(&[compute_params]));
 
+            if node_count > 0 {
+                ctx.queue.write_buffer(
+                    &ctx.node_buffer,
+                    0,
+                    bytemuck::cast_slice(&self.nodes[..node_count]),
+                );
+            }
+
             let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("CVKG Scene Processing Pass"),
                 timestamp_writes: None,
             });
             compute_pass.set_pipeline(&ctx.compute_pipeline);
-            compute_pass.set_bind_group(0, &ctx.compute_bind_group, &[]);
-            compute_pass.dispatch_workgroups(1, 1, 1);
+            compute_pass.set_bind_group(0, &ctx.scene_bind_group, &[]);
+            compute_pass.set_bind_group(1, &ctx.compute_bind_group, &[]);
+            
+            // Dispatch enough workgroups to cover all nodes
+            if node_count > 0 {
+                let workgroups = (node_count as u32 + 63) / 64;
+                compute_pass.dispatch_workgroups(workgroups, 1, 1);
+            }
         }
 
         // 2. Render Pass: Main UI Presentation
@@ -1652,6 +1766,7 @@ impl WebRenderer {
 
             render_pass.set_pipeline(&ctx.pipeline);
             render_pass.set_bind_group(0, &ctx.scene_bind_group, &[]);
+            render_pass.set_bind_group(1, &ctx.compute_bind_group, &[]);
             render_pass.draw(0..3, 0..1);
         }
 
@@ -1730,9 +1845,10 @@ impl WebRenderer {
             Ok(())
         };
 
-        on_pointer_event("pointerdown", |x, y| cvkg_core::Event::PointerDown { x, y })?;
-        on_pointer_event("pointerup", |x, y| cvkg_core::Event::PointerUp { x, y })?;
+        on_pointer_event("pointerdown", |x, y| cvkg_core::Event::PointerDown { x, y, button: 0 })?;
+        on_pointer_event("pointerup", |x, y| cvkg_core::Event::PointerUp { x, y, button: 0 })?;
         on_pointer_event("pointermove", |x, y| cvkg_core::Event::PointerMove { x, y })?;
+        on_pointer_event("click", |x, y| cvkg_core::Event::PointerClick { x, y, button: 0 })?;
 
         // Keyboard events
         let on_key_event = |event_type: &'static str| -> Result<(), JsValue> {

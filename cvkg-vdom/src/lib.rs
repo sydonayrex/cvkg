@@ -27,6 +27,13 @@
 use serde::{Deserialize, Serialize};
 use cvkg_core::Renderer;
 use std::collections::HashMap;
+use std::sync::Arc;
+
+/// A map of event names to their corresponding thread-safe handlers.
+pub type EventHandlerMap = HashMap<String, Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>;
+
+/// A map of node IDs to their respective event handler maps.
+pub type NodeEventHandlerMap = HashMap<NodeId, EventHandlerMap>;
 
 /// A unique identifier for a node within the Virtual DOM tree.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -198,7 +205,7 @@ pub enum VDomPatch {
         /// Updated children list
         children: Option<Vec<NodeId>>,
         /// Updated event handlers
-        handlers: Option<HashMap<String, std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>>,
+        handlers: Option<EventHandlerMap>,
     },
     /// Remove an existing node
     Remove(NodeId),
@@ -377,7 +384,7 @@ pub struct VDom {
     /// Currently hovered node for pointer events
     pub hovered_node: std::sync::Mutex<Option<NodeId>>,
     /// Centralized event handlers for efficient delegation
-    pub event_handlers: HashMap<NodeId, HashMap<String, std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>>,
+    pub event_handlers: NodeEventHandlerMap,
 }
 
 impl Default for VDom {
@@ -482,7 +489,7 @@ impl VDom {
 /// A specialized renderer that captures the component hierarchy as a Virtual DOM.
 pub struct VNodeRenderer {
     nodes: HashMap<NodeId, VNode>,
-    event_handlers: HashMap<NodeId, HashMap<String, std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>>,
+    event_handlers: NodeEventHandlerMap,
     next_id: u64,
     stack: Vec<NodeId>,
     clip_stack: Vec<cvkg_core::Rect>,
@@ -510,6 +517,7 @@ impl VNodeRenderer {
 
     /// Convert the captured nodes into a VDom instance.
     pub fn into_vdom(self) -> VDom {
+        log::info!("[VDOM] Built VDOM with {} nodes", self.nodes.len());
         let mut parents = HashMap::new();
         for (id, node) in &self.nodes {
             for child_id in &node.children {
@@ -535,6 +543,7 @@ impl VNodeRenderer {
 
     fn add_node(&mut self, node: VNode) -> NodeId {
         let id = node.id;
+        log::info!("[VDOM] Adding node {:?} ({}): {:?}", id, node.component_type, node.layout);
         if let Some(parent_id) = self.stack.last() {
             if let Some(parent) = self.nodes.get_mut(parent_id) {
                 parent.children.push(id);
@@ -617,6 +626,12 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
         let id = self.next_id();
+        let role = match name {
+            "CornerButton" => "button",
+            "BerserkerRoot" => "application",
+            _ => "group",
+        };
+        
         self.add_node(VNode {
             id,
             key: None,
@@ -630,7 +645,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
                 height: rect.height,
             },
             children: Vec::new(),
-            aria_role: "group".to_string(),
+            aria_role: role.to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
         });
@@ -671,6 +686,27 @@ impl cvkg_core::Renderer for VNodeRenderer {
             id,
             key: None,
             component_type: "Primitive::Ellipse".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+            },
+            children: Vec::new(),
+            aria_role: "presentation".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+        });
+    }
+
+    fn draw_3d_cube(&mut self, rect: cvkg_core::Rect, _color: [f32; 4], _rotation: [f32; 3]) {
+        let id = self.next_id();
+        self.add_node(VNode {
+            id,
+            key: None,
+            component_type: "Primitive::Cube3D".to_string(),
             props: HashMap::new(),
             state: None,
             layout: LayoutRect {
@@ -910,10 +946,11 @@ impl cvkg_core::Renderer for VNodeRenderer {
         event_type: &str,
         handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
     ) {
-        if let Some(id) = self.stack.last() {
+        if let Some(node_id) = self.stack.last() {
+            log::trace!("[VDOM] Registering handler '{}' on node {:?}", event_type, node_id);
             self.event_handlers
-                .entry(*id)
-                .or_default()
+                .entry(*node_id)
+                .or_insert_with(HashMap::new)
                 .insert(event_type.to_string(), handler);
         }
     }
@@ -1099,11 +1136,14 @@ impl VDom {
         let aria_role_changed = old_node.aria_role != new_node.aria_role;
         let children_changed = old_node.children != new_node.children;
 
+        let handlers_changed = other.event_handlers.contains_key(&new_id);
+        
         if props_changed
             || layout_changed
             || aria_props_changed
             || aria_role_changed
             || children_changed
+            || handlers_changed
         {
             patches.push(VDomPatch::Update {
                 id: old_id,
@@ -1113,7 +1153,7 @@ impl VDom {
                     None
                 },
                 layout: if layout_changed {
-                    Some(new_node.layout.clone())
+                    Some(new_node.layout)
                 } else {
                     None
                 },
@@ -1264,17 +1304,25 @@ impl VDom {
         let node = self.nodes.get(&node_id)?;
 
         // Check if coordinate is within bounds
-        if x < node.layout.x
-            || x > node.layout.x + node.layout.width
-            || y < node.layout.y
-            || y > node.layout.y + node.layout.height
-        {
+        let hit_self = x >= node.layout.x
+            && x <= node.layout.x + node.layout.width
+            && y >= node.layout.y
+            && y <= node.layout.y + node.layout.height;
+
+        if !hit_self {
             return None;
         }
 
         // Search children in reverse (front-to-back)
         for child_id in node.children.iter().rev() {
             if let Some(hit) = self.hit_test_recursive(*child_id, x, y) {
+                // If the child hit was a primitive/presentation node, and this node
+                // has handlers, this node is the real interactive target.
+                if let Some(child_node) = self.nodes.get(&hit) {
+                    if child_node.aria_role == "presentation" && self.event_handlers.contains_key(&node_id) {
+                        return Some(node_id);
+                    }
+                }
                 return Some(hit);
             }
         }
@@ -1285,13 +1333,18 @@ impl VDom {
     /// Dispatch an event to the VDOM by performing a hit test and calling the handler.
     pub fn dispatch_event(&self, event: cvkg_core::Event) -> cvkg_core::EventResponse {
         let _span = tracing::info_span!("vdom_dispatch_event").entered();
+        let event_name = event.name();
         
+        log::info!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
+
         let target_id = match event {
             cvkg_core::Event::PointerDown { x, y, .. } |
             cvkg_core::Event::PointerUp { x, y, .. } |
             cvkg_core::Event::PointerMove { x, y, .. } |
             cvkg_core::Event::PointerClick { x, y, .. } => {
+                log::info!("[VDOM] Hit testing at ({}, {})", x, y);
                 let id = self.hit_test(x, y);
+                log::info!("[VDOM] Hit test result: {:?}", id);
                 
                 // Update focus/capture/hover state
                 if let cvkg_core::Event::PointerDown { .. } = event {
@@ -1325,8 +1378,10 @@ impl VDom {
         };
 
         if let Some(id) = target_id {
+            log::info!("[VDOM] Dispatching {} to node {:?} ({})", event_name, id, self.nodes.get(&id).map(|n| n.component_type.as_str()).unwrap_or("UNKNOWN"));
             self.bubble_event(id, event)
         } else {
+            log::info!("[VDOM] No hit for event {} at {:?}", event_name, event);
             cvkg_core::EventResponse::Ignored
         }
     }
@@ -1337,9 +1392,13 @@ impl VDom {
         let mut processed = false;
 
         loop {
-            if let Some(handlers) = self.event_handlers.get(&current_id) && let Some(handler) = handlers.get(event_name) {
-                handler(event.clone());
-                processed = true;
+            if let Some(handlers) = self.event_handlers.get(&current_id) {
+                log::trace!("[VDOM] Checking node {:?} for handlers", current_id);
+                if let Some(handler) = handlers.get(event_name) {
+                    log::debug!("[VDOM] Executing handler for '{}' on node {:?}", event_name, current_id);
+                    handler(event.clone());
+                    processed = true;
+                }
             }
             
             if let Some(parent_id) = self.parents.get(&current_id) {
@@ -1486,11 +1545,11 @@ mod tests {
         assert!(vdom.focused_node.lock().unwrap().is_none());
         
         // PointerDown on node 1 should set focus
-        vdom.dispatch_event(cvkg_core::Event::PointerDown { x: 50.0, y: 50.0 });
+        vdom.dispatch_event(cvkg_core::Event::PointerDown { x: 50.0, y: 50.0, button: 0 });
         assert_eq!(vdom.focused_node.lock().unwrap().unwrap(), NodeId(1));
         
         // PointerDown on empty space should clear focus
-        vdom.dispatch_event(cvkg_core::Event::PointerDown { x: 500.0, y: 500.0 });
+        vdom.dispatch_event(cvkg_core::Event::PointerDown { x: 500.0, y: 500.0, button: 0 });
         assert!(vdom.focused_node.lock().unwrap().is_none());
     }
 }

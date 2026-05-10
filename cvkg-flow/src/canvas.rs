@@ -77,14 +77,12 @@ impl View for FlowCanvas {
         }
         
         // Render active connection line
-        if let Some(DragState::Connection { source_port, current_pos }) = state.interaction.drag_state {
-             if let Some(source_node) = state.graph.get_node_by_port(source_port) {
-                 if let Some(port) = source_node.ports.iter().find(|p| p.id == source_port) {
+        if let Some(DragState::Connection { source_port, current_pos }) = state.interaction.drag_state
+             && let Some(source_node) = state.graph.get_node_by_port(source_port)
+                 && let Some(port) = source_node.ports.iter().find(|p| p.id == source_port) {
                      let start = self.get_port_center(source_node, port);
                      self.render_bezier_edge(renderer, start, current_pos, port.position, PortPosition::Left, [1.0, 1.0, 1.0, 0.5]);
                  }
-             }
-        }
         
         renderer.pop_transform();
 
@@ -297,7 +295,7 @@ impl FlowCanvas {
 
     fn register_interaction_handlers(&self, renderer: &mut dyn Renderer, _rect: Rect, id_hash: u64, _state: FlowContainer) {
         renderer.register_handler("pointerdown", Arc::new(move |event| {
-            if let Event::PointerDown { x, y } = event {
+            if let Event::PointerDown { x, y, .. } = event {
                 cvkg_core::update_system_state(|s| {
                     let mut s = s.clone();
                     let mut state = s.get_component_state::<FlowContainer>(id_hash).unwrap().read().unwrap().clone();

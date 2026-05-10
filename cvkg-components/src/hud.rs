@@ -70,7 +70,7 @@ impl View for Vegvísir {
         let items_len = self.items.len();
         
         renderer.register_handler("pointerclick", Arc::new(move |event| {
-            if let cvkg_core::Event::PointerClick { x, y } = event {
+            if let cvkg_core::Event::PointerClick { x, y, .. } = event {
                 let dx = x - center_x;
                 let dy = y - center_y;
                 let dist = (dx * dx + dy * dy).sqrt();
@@ -148,5 +148,81 @@ impl View for TacticalGauge {
                 [color[0], color[1], color[2], color[3] * flicker]
             );
         }
+    }
+}
+/// GjallarAlert - A high-priority tactical notification (toast).
+/// Named after the Gjallarhorn, the loud horn used to signal danger or major events.
+/// 
+/// INSPIRED BY: Chakra UI (Toast) and ARWES (Notifications).
+#[derive(Clone)]
+pub struct GjallarAlert {
+    pub title: String,
+    pub message: String,
+    pub kind: AlertKind,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AlertKind {
+    Information,
+    Warning,
+    Critical,
+}
+
+impl GjallarAlert {
+    /// Creates a new GjallarAlert.
+    pub fn new(title: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            message: message.into(),
+            kind: AlertKind::Information,
+        }
+    }
+
+    /// Sets the alert severity level.
+    pub fn kind(mut self, kind: AlertKind) -> Self {
+        self.kind = kind;
+        self
+    }
+}
+
+impl View for GjallarAlert {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "GjallarAlert");
+        
+        let t = renderer.elapsed_time();
+        let accent_color = match self.kind {
+            AlertKind::Information => [0.0, 0.8, 1.0, 1.0], // Cyan
+            AlertKind::Warning => [1.0, 0.6, 0.0, 1.0],     // Orange
+            AlertKind::Critical => [1.0, 0.2, 0.2, 1.0],    // Red
+        };
+
+        // 1. Mimir's Refraction (Glass Depth)
+        // Simulate refractive thickness by layering bifrost with slight offsets
+        renderer.bifrost(rect, 15.0, 1.5, 0.95);
+        renderer.fill_rounded_rect(rect, 4.0, [0.05, 0.05, 0.08, 0.8]);
+        
+        // Secondary internal refraction line
+        let inner_rect = Rect { x: rect.x + 2.0, y: rect.y + 2.0, width: rect.width - 4.0, height: rect.height - 4.0 };
+        renderer.stroke_rounded_rect(inner_rect, 4.0, [accent_color[0], accent_color[1], accent_color[2], 0.2], 0.5);
+
+        // 2. Surtur's Reactive Materials (Kinetic Glow)
+        let pulse = (t * 4.0).sin() * 0.2 + 0.8;
+        let border_alpha = 0.4 * pulse;
+        renderer.stroke_rect(rect, [accent_color[0], accent_color[1], accent_color[2], border_alpha], 1.5);
+        
+        // 3. Gjallarhorn Signal Line (Side Bar)
+        renderer.fill_rect(
+            Rect { x: rect.x, y: rect.y, width: 4.0, height: rect.height },
+            accent_color
+        );
+
+        // 4. Text Content (Inscribed wisdom)
+        renderer.draw_text(&self.title, rect.x + 12.0, rect.y + 10.0, 14.0, accent_color);
+        renderer.draw_text(&self.message, rect.x + 12.0, rect.y + 28.0, 12.0, [1.0, 1.0, 1.0, 0.8]);
+
+        renderer.pop_vnode();
     }
 }

@@ -1,9 +1,11 @@
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{ElapsedTime, Never, Rect, Renderer, Size, View};
 
-/// Container component with header, content, and footer sections.
-/// Styled with glassmorphic design and subtle elevation.
-pub struct Card<V> {
+/// RunesCard - A container component with header, content, and footer sections.
+/// Named after the Runes, the ancient inscribed containers of meaning.
+/// 
+/// INSPIRED BY: HeroUI (Card) and Mantine (Card).
+pub struct RunesCard<V> {
     /// Optional header content
     header: Option<V>,
     /// Optional main content
@@ -12,13 +14,13 @@ pub struct Card<V> {
     footer: Option<V>,
 }
 
-impl<V: View> Card<V> {
-    /// Create a new empty Card.
+impl<V: View> RunesCard<V> {
+    /// Create a new empty RunesCard.
     ///
     /// # Examples
     /// ```
-    /// use cvkg_components::{Card, Text};
-    /// let card: Card<Text> = Card::new();
+    /// use cvkg_components::{RunesCard, Text};
+    /// let card: RunesCard<Text> = RunesCard::new();
     /// ```
     pub fn new() -> Self {
         Self {
@@ -47,13 +49,13 @@ impl<V: View> Card<V> {
     }
 }
 
-impl<V: View> Default for Card<V> {
+impl<V: View> Default for RunesCard<V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<V: View> View for Card<V> {
+impl<V: View> View for RunesCard<V> {
     type Body = Never;
 
     fn body(self) -> Self::Body {
@@ -61,7 +63,7 @@ impl<V: View> View for Card<V> {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Card");
+        renderer.push_vnode(rect, "RunesCard");
 
         // Render frosted glass background
         renderer.bifrost(rect, 20.0, 1.2, 0.9);
@@ -189,7 +191,7 @@ impl<V: View> View for Card<V> {
     }
 }
 
-impl<V: View> LayoutView for Card<V> {
+impl<V: View> LayoutView for RunesCard<V> {
     fn size_that_fits(
         &self,
         proposal: SizeProposal,

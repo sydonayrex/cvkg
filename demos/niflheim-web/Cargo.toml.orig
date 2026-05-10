@@ -1,0 +1,24 @@
+[package]
+name = "niflheim-web-demo"
+version = "0.1.17"
+edition = "2021"
+
+[features]
+webgpu = ["cvkg-render-web/webgpu"]
+default = ["webgpu"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+cvkg-core = { path = "../../cvkg-core", version = "0.1.17" }
+cvkg-render-web = { path = "../../cvkg-render-web", version = "0.1.17" }
+cvkg-vdom = { path = "../../cvkg-vdom", version = "0.1.17" }
+cvkg-components = { path = "../../cvkg-components", version = "0.1.17" }
+cvkg-themes = { path = "../../cvkg-themes", version = "0.1.17" }
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+console_error_panic_hook = "0.1"
+log = "0.4"
+console_log = "1.0"
+web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "Performance"] }

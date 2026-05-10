@@ -1,4 +1,4 @@
-use cvkg_core::{Never, Rect, Renderer, Size, View, SizeProposal};
+use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Never, Rect, Renderer, Size, View};
 use std::sync::Arc;
 
 /// Basic date structure for calendar components.
@@ -10,56 +10,72 @@ pub struct Date {
 }
 
 impl Date {
+    /// Returns today's date (mocked for simplicity).
     pub fn today() -> Self {
         // Mocking today's date for simplicity
         Self { year: 2026, month: 4, day: 30 }
     }
 
+    /// Formats the date as YYYY-MM-DD.
     pub fn format(&self) -> String {
         format!("{:04}-{:02}-{:02}", self.year, self.month, self.day)
     }
 }
 
-/// Calendar component for selecting dates.
-pub struct Calendar {
+/// A calendar component for selecting dates or date ranges.
+/// 
+/// INSPIRED BY: Mantine (DatePicker) and MUI X (DateRangePicker).
+pub struct TyrCalendar {
     pub(crate) selected_date: Date,
+    pub(crate) range_end: Option<Date>,
     pub(crate) on_date_select: Arc<dyn Fn(Date) + Send + Sync>,
     pub(crate) min_date: Option<Date>,
     pub(crate) max_date: Option<Date>,
 }
 
-impl Calendar {
+impl TyrCalendar {
+    /// Creates a new TyrCalendar with the given selection handler.
     pub fn new(on_date_select: impl Fn(Date) + Send + Sync + 'static) -> Self {
         Self {
             selected_date: Date::today(),
+            range_end: None,
             on_date_select: Arc::new(on_date_select),
             min_date: None,
             max_date: None,
         }
     }
 
+    /// Sets the selected date.
     pub fn selected_date(mut self, date: Date) -> Self {
         self.selected_date = date;
         self
     }
 
+    /// Sets the end of the selected date range.
+    pub fn range_end(mut self, date: Date) -> Self {
+        self.range_end = Some(date);
+        self
+    }
+
+    /// Sets the minimum selectable date.
     pub fn min_date(mut self, date: Date) -> Self {
         self.min_date = Some(date);
         self
     }
 
+    /// Sets the maximum selectable date.
     pub fn max_date(mut self, date: Date) -> Self {
         self.max_date = Some(date);
         self
     }
 }
 
-impl View for Calendar {
+impl View for TyrCalendar {
     type Body = Never;
     fn body(self) -> Self::Body { unreachable!() }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Calendar");
+        renderer.push_vnode(rect, "TyrCalendar");
         
         // Background
         renderer.fill_rounded_rect(rect, 8.0, [0.08, 0.08, 0.12, 1.0]);
@@ -102,8 +118,8 @@ impl View for Calendar {
                 let _date = Date { year: today.year, month: today.month, day: day_num as u32 };
                 let is_selected = day_num == self.selected_date.day as usize;
                 
-                let is_disabled = self.min_date.map_or(false, |min| day_num < min.day as usize && today.month == min.month && today.year == min.year)
-                    || self.max_date.map_or(false, |max| day_num > max.day as usize && today.month == max.month && today.year == max.year);
+                let is_disabled = self.min_date.is_some_and(|min| day_num < min.day as usize && today.month == min.month && today.year == min.year)
+                    || self.max_date.is_some_and(|max| day_num > max.day as usize && today.month == max.month && today.year == max.year);
 
                 if is_selected {
                     renderer.fill_rounded_rect(cell_rect, 4.0, [0.0, 0.8, 1.0, 0.4]);
@@ -125,15 +141,15 @@ impl View for Calendar {
         let rect_clone = rect;
         
         renderer.register_handler("pointerclick", Arc::new(move |event| {
-            if let cvkg_core::Event::PointerClick { x, y } = event {
+            if let cvkg_core::Event::PointerClick { x, y, .. } = event {
                 // Simplified hit testing for the grid
                 let local_x = x - rect_clone.x;
                 let local_y = y - (rect_clone.y + header_h + 25.0);
                 
-                if local_y >= 0.0 && local_y < 180.0 {
+                if (0.0..180.0).contains(&local_y) {
                     let col = (local_x / day_w) as i32;
                     let row = (local_y / 30.0) as i32;
-                    if col >= 0 && col < 7 && row >= 0 && row < 6 {
+                    if (0..7).contains(&col) && (0..6).contains(&row) {
                         let day = row * 7 + col + 1;
                         if day >= 1 && day <= days_in_month as i32 {
                             on_date_select(Date { year, month, day: day as u32 });
@@ -145,10 +161,19 @@ impl View for Calendar {
 
         renderer.pop_vnode();
     }
+}
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
-        Size { width: proposal.width.unwrap_or(250.0), height: 220.0 }
+impl LayoutView for TyrCalendar {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size { width: 250.0, height: 220.0 }
     }
+
+    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
 }
 
 fn month_name(m: u32) -> &'static str {
@@ -160,7 +185,7 @@ fn month_name(m: u32) -> &'static str {
     }
 }
 
-/// DatePicker component using a popover calendar.
+/// DatePicker component using a popover TyrCalendar.
 pub struct DatePicker {
     pub(crate) selected_date: Date,
     pub(crate) placeholder: String,
@@ -168,9 +193,10 @@ pub struct DatePicker {
 }
 
 impl DatePicker {
+    /// Creates a new DatePicker with the given change handler.
     pub fn new(on_date_change: impl Fn(Date) + Send + Sync + 'static) -> Self {
         Self {
-            selected_date: Date::today(),
+            selected_date: Date { year: 0, month: 0, day: 0 },
             placeholder: "Select date".into(),
             on_date_change: Arc::new(on_date_change),
         }
@@ -221,7 +247,7 @@ impl View for DatePicker {
             };
             renderer.set_z_index(100.0);
             let on_date_change_cal = self.on_date_change.clone();
-            let cal = Calendar::new(move |date| {
+            let cal = TyrCalendar::new(move |date| {
                 on_date_change_cal(date);
                 cvkg_core::update_system_state(|s| {
                     let mut s = s.clone();
@@ -242,8 +268,17 @@ impl View for DatePicker {
         }));
         renderer.pop_vnode();
     }
+}
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+impl LayoutView for DatePicker {
+    fn size_that_fits(
+        &self,
+        proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
         Size { width: proposal.width.unwrap_or(180.0), height: 32.0 }
     }
+
+    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
 }

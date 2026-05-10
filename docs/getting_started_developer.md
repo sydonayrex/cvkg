@@ -23,9 +23,23 @@ cvkg/
 └── cvkg-themes/        # Cyber Viking themes
 ```
 
+## Tactical Component Library
+
+The `cvkg-components` library provides a high-fidelity suite of Norse-themed UI elements designed for Cyberpunk Viking HUDs.
+
+### Key Components
+- **Data Display**: `RunesTable`, `YggdrasilTree`, `RunesCard`
+- **Interactive**: `ValkyrSelect`, `TyrCalendar`, `BifrostColorPicker`
+- **Feedback**: `HiminnModal`, `GjallarAlert`, `RunicTooltip`
+
+### Design Patterns
+All components leverage **Mimir's Refraction** (real-time glass distortion) and **Surtur's Reactive Materials** (kinetic glows).
+
 ## Setting Up a New Project
 
 ```toml
 # Cargo.toml
 [dependencies]
-cvkg = { version = 
+cvkg = "0.1.18"
+cvkg-components = "0.1.18"
+```

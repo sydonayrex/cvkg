@@ -65,11 +65,10 @@ impl View for BifrostTabs {
             let rect_w = tab_width;
             let idx = i;
             renderer.register_handler("pointerdown", Arc::new(move |ev| {
-                if let cvkg_core::Event::PointerDown { x, .. } = ev {
-                    if x >= rect_x && x <= rect_x + rect_w {
+                if let cvkg_core::Event::PointerDown { x, .. } = ev
+                    && x >= rect_x && x <= rect_x + rect_w {
                         on_select(idx);
                     }
-                }
             }));
         }
     }

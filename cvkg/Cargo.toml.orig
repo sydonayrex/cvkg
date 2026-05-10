@@ -1,0 +1,31 @@
+[package]
+name = "cvkg"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+cvkg-core = { path = "../cvkg-core", version = "0.1.17" }
+cvkg-scene = { path = "../cvkg-scene", version = "0.1.17" }
+cvkg-layout = { path = "../cvkg-layout", version = "0.1.17" }
+cvkg-anim = { path = "../cvkg-anim", version = "0.1.17" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu", optional = true, version = "0.1.17" }
+cvkg-render-native = { path = "../cvkg-render-native", optional = true, version = "0.1.17" }
+cvkg-render-web = { path = "../cvkg-render-web", optional = true, version = "0.1.17" }
+cvkg-components = { path = "../cvkg-components", version = "0.1.17" }
+cvkg-themes = { path = "../cvkg-themes", version = "0.1.17" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.1.17" }
+rand = "0.8"
+
+[features]
+default = []
+gpu = ["dep:cvkg-render-gpu"]
+native = ["dep:cvkg-render-native"]
+web = ["dep:cvkg-render-web"]
+
+[dev-dependencies]
+winit = "0.30"
+tokio = { version = "1.0", features = ["full"] }
+pollster = "0.4.0"

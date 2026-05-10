@@ -108,7 +108,8 @@ pub struct ConflictEvent {
     pub timestamp_ms: u64,
 }
 
-static CONFLICT_HANDLERS: once_cell::sync::Lazy<std::sync::Arc<std::sync::Mutex<Vec<Box<dyn Fn(ConflictEvent) + Send + Sync>>>>> =
+type ConflictHandlerList = std::sync::Arc<std::sync::Mutex<Vec<Box<dyn Fn(ConflictEvent) + Send + Sync>>>>;
+static CONFLICT_HANDLERS: once_cell::sync::Lazy<ConflictHandlerList> =
     once_cell::sync::Lazy::new(|| std::sync::Arc::new(std::sync::Mutex::new(Vec::new())));
 
 /// Register a global handler for agentic conflicts.

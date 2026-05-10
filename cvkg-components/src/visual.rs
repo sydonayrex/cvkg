@@ -185,14 +185,18 @@ pub enum ChartType {
     Radar,
 }
 
-/// A tactical chart for monitoring mission data
-pub struct ChartView {
-    chart_type: ChartType,
-    data: Vec<f32>,
-    color: [f32; 4],
+/// ValkyrieAnalytics - A tactical chart for monitoring mission data.
+/// Named after the Valkyries, who monitor and choose the course of battle.
+/// 
+/// INSPIRED BY: MUI X (Charts) and iOS 26 (Tactical Visualization).
+pub struct ValkyrieAnalytics {
+    pub chart_type: ChartType,
+    pub data: Vec<f32>,
+    pub color: [f32; 4],
 }
 
-impl ChartView {
+impl ValkyrieAnalytics {
+    /// Creates a new ValkyrieAnalytics with the given type and data.
     pub fn new(chart_type: ChartType, data: Vec<f32>) -> Self {
         Self {
             chart_type,
@@ -201,20 +205,23 @@ impl ChartView {
         }
     }
 
+    /// Sets the color of the chart elements.
     pub fn color(mut self, color: [f32; 4]) -> Self {
         self.color = color;
         self
     }
 }
 
-impl View for ChartView {
+impl View for ValkyrieAnalytics {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "ValkyrieAnalytics");
         if self.data.is_empty() {
+            renderer.pop_vnode();
             return;
         }
 
@@ -259,6 +266,7 @@ impl View for ChartView {
             }
             ChartType::Radar => {
                 if self.data.len() < 3 {
+                    renderer.pop_vnode();
                     return;
                 }
 
@@ -299,6 +307,7 @@ impl View for ChartView {
                 }
             }
         }
+        renderer.pop_vnode();
     }
 }
 
@@ -336,14 +345,12 @@ impl View for TelemetryView {
         );
         renderer.draw_text("KVASIR TELEMETRY", rect.x + 8.0, rect.y + 4.0, 10.0, border_color);
 
-let lines = vec![
-            ("FPS", format!("{:.1}", 1000.0 / stats.frame_time_ms.max(0.1))),
+let lines = [("FPS", format!("{:.1}", 1000.0 / stats.frame_time_ms.max(0.1))),
             ("FRAME", format!("{:.2} ms", stats.frame_time_ms)),
             ("P99", format!("{:.2} ms", stats.p99_frame_time_ms)),
             ("JITTER", format!("{:.2} ms", stats.frame_jitter_ms)),
             ("DRAW", format!("{}", stats.draw_calls)),
-            ("VERT", format!("{}", stats.vertices)),
-        ];
+            ("VERT", format!("{}", stats.vertices))];
 
         let start_y = rect.y + 28.0;
         for (i, (label, val)) in lines.iter().enumerate() {
@@ -635,5 +642,337 @@ impl<V: View> View for VölvaScan<V> {
             self.content.render(renderer, rect);
             renderer.pop_opacity();
         }
+    }
+}
+/// RunicTooltip - A contextual tooltip for providing hidden wisdom (information).
+/// Named after the Runes, which encode secret knowledge.
+/// 
+/// INSPIRED BY: Radix UI (Tooltip) and Mantine (Tooltip).
+pub struct RunicTooltip<V: View> {
+    pub content: V,
+    pub text: String,
+    pub is_visible: bool,
+}
+
+impl<V: View> RunicTooltip<V> {
+    /// Creates a new RunicTooltip wrapping the given content.
+    pub fn new(content: V, text: impl Into<String>) -> Self {
+        Self {
+            content,
+            text: text.into(),
+            is_visible: false,
+        }
+    }
+
+    /// Sets whether the tooltip is visible.
+    pub fn visible(mut self, visible: bool) -> Self {
+        self.is_visible = visible;
+        self
+    }
+}
+
+impl<V: View> View for RunicTooltip<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "RunicTooltip");
+        
+        // 1. Render Base Content
+        self.content.render(renderer, rect);
+
+        // 2. Render Tooltip if visible
+        if self.is_visible {
+            let (tw, th) = renderer.measure_text(&self.text, 12.0);
+            let tip_rect = Rect {
+                x: rect.x + (rect.width - (tw + 16.0)) / 2.0,
+                y: rect.y - th - 16.0,
+                width: tw + 16.0,
+                height: th + 8.0,
+            };
+
+            renderer.set_z_index(200.0);
+            renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
+            renderer.fill_rounded_rect(tip_rect, 4.0, [0.08, 0.08, 0.1, 0.9]);
+            renderer.stroke_rect(tip_rect, [0.0, 1.0, 1.0, 0.6], 1.0);
+            
+            renderer.draw_text(&self.text, tip_rect.x + 8.0, tip_rect.y + 6.0, 12.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.set_z_index(0.0);
+        }
+
+        renderer.pop_vnode();
+    }
+}
+
+/// EikonaAvatar - A user representation component with status indicators.
+/// Named after the hybrid concept of "form/image" (Eikona).
+/// 
+/// INSPIRED BY: HeroUI (Avatar) and Chakra UI (Avatar).
+pub struct EikonaAvatar {
+    pub src: Option<String>,
+    pub fallback: String,
+    pub status: Option<AvatarStatus>,
+}
+
+pub enum AvatarStatus {
+    Online,
+    Offline,
+    Busy,
+    Away,
+}
+
+impl EikonaAvatar {
+    /// Creates a new EikonaAvatar.
+    pub fn new(fallback: impl Into<String>) -> Self {
+        Self {
+            src: None,
+            fallback: fallback.into(),
+            status: None,
+        }
+    }
+
+    /// Sets the image source for the avatar.
+    pub fn src(mut self, src: impl Into<String>) -> Self {
+        self.src = Some(src.into());
+        self
+    }
+
+    /// Sets the online status indicator.
+    pub fn status(mut self, status: AvatarStatus) -> Self {
+        self.status = Some(status);
+        self
+    }
+}
+
+impl View for EikonaAvatar {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "EikonaAvatar");
+        
+        // 1. Base Circle
+        renderer.fill_ellipse(rect, [0.1, 0.1, 0.15, 1.0]);
+        renderer.stroke_ellipse(rect, [0.3, 0.4, 0.5, 0.6], 1.0);
+
+        // 2. Content
+        if let Some(src) = &self.src {
+            renderer.draw_image(src, rect);
+        } else {
+            let (tw, _) = renderer.measure_text(&self.fallback, 14.0);
+            renderer.draw_text(
+                &self.fallback,
+                rect.x + (rect.width - tw) / 2.0,
+                rect.y + (rect.height - 14.0) / 2.0,
+                14.0,
+                [1.0, 1.0, 1.0, 0.8]
+            );
+        }
+
+        // 3. Status Indicator
+        if let Some(status) = &self.status {
+            let status_size = rect.width * 0.25;
+            let status_rect = Rect {
+                x: rect.x + rect.width - status_size,
+                y: rect.y + rect.height - status_size,
+                width: status_size,
+                height: status_size,
+            };
+            
+            let color = match status {
+                AvatarStatus::Online => [0.0, 1.0, 0.0, 1.0],
+                AvatarStatus::Offline => [0.5, 0.5, 0.5, 1.0],
+                AvatarStatus::Busy => [1.0, 0.0, 0.0, 1.0],
+                AvatarStatus::Away => [1.0, 0.8, 0.0, 1.0],
+            };
+            
+            renderer.fill_ellipse(status_rect, color);
+            renderer.stroke_ellipse(status_rect, [0.0, 0.0, 0.0, 1.0], 1.5);
+        }
+
+        renderer.pop_vnode();
+    }
+}
+
+/// MerkiBadge - A status or count indicator component.
+/// Named after Merki, the Norse word for mark or sign.
+/// 
+/// INSPIRED BY: Chakra UI (Badge) and Mantine (Badge).
+pub struct MerkiBadge {
+    pub text: String,
+    pub color: [f32; 4],
+}
+
+impl MerkiBadge {
+    /// Creates a new MerkiBadge.
+    pub fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            color: [0.0, 0.8, 1.0, 1.0],
+        }
+    }
+
+    /// Sets the color of the badge.
+    pub fn color(mut self, color: [f32; 4]) -> Self {
+        self.color = color;
+        self
+    }
+}
+
+impl View for MerkiBadge {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "MerkiBadge");
+        
+        let mut bg = self.color;
+        bg[3] *= 0.2;
+        
+        renderer.fill_rounded_rect(rect, 4.0, bg);
+        renderer.stroke_rounded_rect(rect, 4.0, self.color, 1.0);
+        
+        let (tw, _) = renderer.measure_text(&self.text, 10.0);
+        renderer.draw_text(
+            &self.text,
+            rect.x + (rect.width - tw) / 2.0,
+            rect.y + (rect.height - 10.0) / 2.0,
+            10.0,
+            [1.0, 1.0, 1.0, 0.9]
+        );
+
+        renderer.pop_vnode();
+    }
+}
+
+/// UrdrTimeline - A chronological timeline of events (the past).
+/// Named after Urdr, the Norn of the Past.
+/// 
+/// INSPIRED BY: Mantine (Timeline) and Ant Design (Timeline).
+pub struct UrdrTimeline {
+    pub items: Vec<UrdrEvent>,
+}
+
+pub struct UrdrEvent {
+    pub title: String,
+    pub timestamp: String,
+    pub description: Option<String>,
+}
+
+impl UrdrTimeline {
+    /// Creates a new UrdrTimeline.
+    pub fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    /// Adds an event to the timeline.
+    pub fn event(mut self, title: impl Into<String>, timestamp: impl Into<String>) -> Self {
+        self.items.push(UrdrEvent {
+            title: title.into(),
+            timestamp: timestamp.into(),
+            description: None,
+        });
+        self
+    }
+}
+
+impl View for UrdrTimeline {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "UrdrTimeline");
+        
+        let t = renderer.elapsed_time();
+        let line_x = rect.x + 20.0;
+        renderer.draw_line(line_x, rect.y, line_x, rect.y + rect.height, [0.3, 0.3, 0.4, 0.5], 1.5);
+
+        let mut current_y = rect.y + 10.0;
+        let item_spacing = 50.0;
+
+        for (i, event) in self.items.iter().enumerate() {
+            // 1. Bifrost Resonance (Glowing Temporal Nodes)
+            let pulse = (t * 2.0 + i as f32).sin() * 0.2 + 0.8;
+            renderer.fill_ellipse(
+                Rect { x: line_x - 5.0, y: current_y - 1.0, width: 10.0, height: 10.0 },
+                [0.0, 1.0, 1.0, 0.3 * pulse]
+            );
+            renderer.fill_ellipse(
+                Rect { x: line_x - 3.0, y: current_y + 1.0, width: 6.0, height: 6.0 },
+                [0.0, 1.0, 1.0, 1.0]
+            );
+
+            // 2. Content
+            renderer.draw_text(&event.timestamp, line_x + 20.0, current_y - 2.0, 10.0, [0.6, 0.6, 0.7, 0.8]);
+            renderer.draw_text(&event.title, line_x + 20.0, current_y + 12.0, 13.0, [1.0, 1.0, 1.0, 0.9]);
+
+            current_y += item_spacing;
+        }
+
+        renderer.pop_vnode();
+    }
+}
+
+/// DraumaSkeleton - A shimmering skeleton loader for async content.
+/// Named after the dreams (Drauma) of content waiting to be born.
+/// 
+/// INSPIRED BY: Mantine (Skeleton) and MUI (Skeleton).
+pub struct DraumaSkeleton {
+    pub border_radius: f32,
+    pub shimmer: bool,
+}
+
+impl DraumaSkeleton {
+    /// Creates a new DraumaSkeleton.
+    pub fn new() -> Self {
+        Self {
+            border_radius: 4.0,
+            shimmer: true,
+        }
+    }
+
+    /// Sets the border radius of the skeleton.
+    pub fn border_radius(mut self, radius: f32) -> Self {
+        self.border_radius = radius;
+        self
+    }
+
+    /// Enables or disables the shimmer effect.
+    pub fn shimmer(mut self, enabled: bool) -> Self {
+        self.shimmer = enabled;
+        self
+    }
+}
+
+impl View for DraumaSkeleton {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "DraumaSkeleton");
+        
+        let t = renderer.elapsed_time();
+        
+        // 1. Mimir's Refraction (Skeletal Depth)
+        // Drauma represents a "spectral" presence of content
+        renderer.bifrost(rect, self.border_radius, 2.0, 0.8);
+        renderer.fill_rounded_rect(rect, self.border_radius, [0.1, 0.1, 0.15, 0.6]);
+
+        // 2. Kinetic Shimmer Effect
+        if self.shimmer {
+            let shimmer_pos = (t * 1.2).fract(); // Slower, more spectral shimmer
+            let shimmer_w = rect.width * 0.5;
+            let shimmer_rect = Rect {
+                x: rect.x - shimmer_w + (rect.width + shimmer_w * 2.0) * shimmer_pos,
+                y: rect.y,
+                width: shimmer_w,
+                height: rect.height,
+            };
+            
+            let shimmer_alpha = 0.15 * (1.0 - (shimmer_pos - 0.5).abs() * 2.0);
+            renderer.fill_rect(shimmer_rect, [0.0, 0.8, 1.0, shimmer_alpha]);
+        }
+
+        renderer.pop_vnode();
     }
 }

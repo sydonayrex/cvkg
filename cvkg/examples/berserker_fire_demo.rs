@@ -1,5 +1,6 @@
 // This example requires a renderer feature to be enabled (gpu, native, or web)
-#![cfg(any(feature = "gpu", feature = "native", feature = "web"))]
+#[cfg(any(feature = "gpu", feature = "native", feature = "web"))]
+mod demo {
 
 use cvkg::prelude::*;
 use cvkg_core::Renderer;
@@ -17,7 +18,7 @@ struct Particle {
 
 /// BerserkerFireDemo — A high-fidelity showcase of the Berserker rendering pipeline.
 /// Features macOS-style vibrant glassmorphism and dynamic particle physics.
-struct BerserkerFireDemo {
+pub struct BerserkerFireDemo {
     start_time: Instant,
     last_frame: RefCell<Instant>,
     particles: RefCell<Vec<Particle>>,
@@ -25,7 +26,7 @@ struct BerserkerFireDemo {
 }
 
 impl BerserkerFireDemo {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             start_time: Instant::now(),
             last_frame: RefCell::new(Instant::now()),
@@ -76,10 +77,8 @@ impl View for BerserkerFireDemo {
         let t = self.start_time.elapsed().as_secs_f32();
 
         // 1. Render Ginnungagap Nebula (Vibrant Background for glass blur)
-        // ... (rest of render)
         renderer.draw_linear_gradient(rect, [0.1, 0.0, 0.3, 1.0], [0.0, 0.1, 0.4, 1.0], t * 0.2);
 
-        // ... (Nebula glow logic)
         let neb_x = rect.width * 0.5 + (t * 0.5).cos() * 300.0;
         let neb_y = rect.height * 0.5 + (t * 0.7).sin() * 200.0;
         renderer.draw_radial_gradient(
@@ -218,7 +217,7 @@ impl View for BerserkerFireDemo {
             button_rect.x - 160.0,
             button_rect.y + 26.0,
             20.0,
-            [0.0, 1.0, 1.0, 1.0], // Cyan for contrast
+            [0.0, 1.0, 1.0, 1.0],
         );
 
         let count_clone = self.click_count.clone();
@@ -258,8 +257,6 @@ fn audit_event(msg: &str) {
         std::time::Instant::now().elapsed().as_secs_f32(),
         msg
     );
-    // Check if the log Vec already exists before deciding to insert or append.
-    // update_system_state takes a snapshot, mutates, and publishes atomically.
     let exists = cvkg_core::load_system_state()
         .get_component_state::<Vec<String>>(0x1337)
         .is_some();
@@ -284,7 +281,19 @@ fn audit_event(msg: &str) {
     }
 }
 
-fn main() {
+pub fn main() {
     println!("Forging Berserker Fire Demo (High-Fidelity Glass Pass)...");
     cvkg::native::NativeRenderer::run(BerserkerFireDemo::new());
+}
+
+}
+
+#[cfg(any(feature = "gpu", feature = "native", feature = "web"))]
+fn main() {
+    demo::main();
+}
+
+#[cfg(not(any(feature = "gpu", feature = "native", feature = "web")))]
+fn main() {
+    println!("BerserkerFireDemo requires one of: [gpu, native, web] features.");
 }

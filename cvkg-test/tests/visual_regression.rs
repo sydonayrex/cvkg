@@ -23,7 +23,7 @@ async fn test_visual_regression_basic() {
     );
     renderer.end_frame(encoder);
     
-    let pixels1 = renderer.capture_frame().await;
+    let pixels1 = renderer.capture_frame().await.expect("Capture 1 failed");
     
     // 2. Render Again
     let encoder = renderer.begin_frame_headless();
@@ -37,10 +37,20 @@ async fn test_visual_regression_basic() {
     );
     renderer.end_frame(encoder);
     
-    let pixels2 = renderer.capture_frame().await;
+    let pixels2 = renderer.capture_frame().await.expect("Capture 2 failed");
     
     // 3. Compare
     let comparator = VisualComparator::default();
+    
+    // Check that frame 1 is not just black/background
+    let mut non_background = 0;
+    for i in (0..pixels1.len()).step_by(4) {
+        if pixels1[i] > 50 || pixels1[i+1] > 50 || pixels1[i+2] > 100 {
+            non_background += 1;
+        }
+    }
+    assert!(non_background > 0, "Frame 1 appears to be empty or just background (non_background count: {})", non_background);
+
     let diff = comparator.compare(&pixels1, &pixels2);
     
     println!("Determinism diff: {}%", diff);

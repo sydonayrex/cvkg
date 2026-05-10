@@ -1,22 +1,70 @@
 # cvkg-test
 
-**cvkg-test** provides the integration testing harness and visual regression suites for the CVKG workspace.
+**cvkg-test** provides visual testing, benchmarking, and snapshot comparison utilities for CVKG applications.
 
-## Features
+## What This Crate Does
 
-- **Headless Integration Tests**: Specialized tests that use the hardened `Surtr` headless renderer to verify pixel data without requiring a windowing system.
-- **Component Unit Tests**: Isolated testing of UI components and their reactive state transitions.
-- **Completeness Audits**: Automated discovery of `TODO`, `FIXME`, and architectural placeholders to ensure workspace integrity.
-- **Visual Regression**: Automated frame capture and comparison against golden images (Project Niflheim).
+- Provides visual regression testing with snapshot comparison
+- Provides headless rendering for automated tests
+- Provides benchmarking utilities for performance measurement
+- Implements property-based state testing
 
-## Usage
+## What This Crate Does NOT Do
 
-Run all tests in the crate:
-```bash
-cargo test -p cvkg-test
+- Does not provide assertion macros for general use
+- Does not provide mocking frameworks
+- Does not handle CI configuration
+
+## Public API Overview
+
+### Test Harness
+
+```rust
+/// Set up a headless renderer for visual testing
+pub fn setup_headless_renderer(width: u32, height: u32) -> SurtrRenderer;
+
+/// Capture a frame from the renderer for comparison
+pub fn capture_frame(renderer: &mut SurtrRenderer) -> Vec<u8>;
+
+/// Compare two images for visual differences
+pub fn compare_images(expected: &[u8], actual: &[u8]) -> Result<(), VisualDiff>;
 ```
 
-Run headless rendering tests:
-```bash
-cargo test --test headless_render -p cvkg-test -- --nocapture
+### Visual Regression
+
+```rust
+/// Snapshot testing for visual components
+pub struct SnapshotTester {
+    snapshots_dir: PathBuf,
+}
+impl SnapshotTester {
+    pub fn new(snapshots_dir: impl Into<PathBuf>) -> Self;
+    pub fn assert_snapshot(&self, name: &str, image: &[u8]);
+}
 ```
+
+### Benchmarks
+
+```rust
+/// Performance benchmarks for rendering
+#[bench] fn bench_large_tree_render(b: &mut Bencher);
+#[bench] fn bench_vdom_diff(b: &mut Bencher);
+```
+
+## Usage Example
+
+```rust
+use cvkg_test::{setup_headless_renderer, compare_images};
+
+#[test]
+fn test_button_rendering() {
+    let mut renderer = setup_headless_renderer(800, 600);
+    // Render and compare
+}
+```
+
+## Known Limitations
+
+- Snapshot tests require GPU for headless rendering
+- Baselines must be updated manually when intentional changes are made
+- Performance tests are not deterministic; run multiple times for reliable results

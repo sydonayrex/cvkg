@@ -1,9 +1,11 @@
 // This example requires the GPU feature to be enabled
-#![cfg(feature = "gpu")]
-
-use cvkg::render::SurtrRenderer;
 use cvkg_core::{Rect, Renderer, View};
 use std::sync::Arc;
+
+#[cfg(feature = "gpu")]
+use cvkg::render::SurtrRenderer;
+
+#[cfg(feature = "gpu")]
 use winit::{
     application::ApplicationHandler,
     event::{ElementState, MouseButton, WindowEvent},
@@ -11,12 +13,14 @@ use winit::{
     window::{Window, WindowId},
 };
 
+#[cfg(feature = "gpu")]
 struct ShatterApp {
     shattered: bool,
     force: f32,
     strike_start: Option<std::time::Instant>,
 }
 
+#[cfg(feature = "gpu")]
 impl View for ShatterApp {
     type Body = cvkg_core::Never;
     fn body(self) -> Self::Body {
@@ -92,12 +96,14 @@ impl View for ShatterApp {
     }
 }
 
+#[cfg(feature = "gpu")]
 struct AppState {
     window: Option<Arc<Window>>,
     renderer: Option<SurtrRenderer>,
     app: ShatterApp,
 }
 
+#[cfg(feature = "gpu")]
 impl ApplicationHandler for AppState {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = Arc::new(
@@ -169,4 +175,9 @@ fn main() {
         },
     };
     event_loop.run_app(&mut state).unwrap();
+}
+
+#[cfg(not(feature = "gpu"))]
+fn main() {
+    println!("This example requires the 'gpu' feature to be enabled.");
 }

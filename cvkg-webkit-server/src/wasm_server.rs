@@ -62,13 +62,25 @@ impl NativeWasmServer {
         add_to_linker_sync(&mut linker, |s: &mut HostState| &mut s.wasi)?;
 
         // Build hardened WASI context for Preview 1
-        let wasi = WasiCtxBuilder::new()
+        let mut wasi_builder = WasiCtxBuilder::new();
+        wasi_builder
             .inherit_stdout()
             .inherit_stderr()
-            .inherit_stdin()
-            .inherit_args()
-            .inherit_env()
-            .build_p1();
+            .inherit_stdin();
+        
+        // Hardened: Preopen only the current working directory as a safe root.
+        // This prevents the WASM guest from accessing the entire host filesystem.
+        let safe_root = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        info!("[Native Wasm] Hardening WASI: Preopening safe root: {:?}", safe_root);
+        
+        wasi_builder.preopened_dir(
+            &safe_root,
+            ".",
+            wasmtime_wasi::DirPerms::all(),
+            wasmtime_wasi::FilePerms::all(),
+        ).map_err(|e| anyhow::anyhow!("Failed to preopen directory: {:?}", e))?;
+        
+        let wasi = wasi_builder.build_p1();
         
         let mut store = Store::new(&self.engine, HostState { 
             wasi,

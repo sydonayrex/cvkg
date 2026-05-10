@@ -181,6 +181,10 @@ impl SleipnirSolver {
         }
     }
 
+    pub fn set_target(&mut self, target: f32) {
+        self.target = target;
+    }
+
     /// Advance the simulation by dt seconds using RK4 integration.
     pub fn tick(&mut self, dt: f32) -> f32 {
         let a = self.evaluate(self.state, 0.0, SolverState { x: 0.0, v: 0.0 });

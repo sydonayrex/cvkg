@@ -88,20 +88,18 @@ impl EnvironmentShield {
     /// Detects if the current environment exhibits timing anomalies characteristic of a VM or debugger.
     /// Inspired by tailslayer's DRAM refresh and rdtsc timing probes.
     pub fn probe_analysis_risk() -> f32 {
-        let mut risk_score: f32 = 0.0;
-
-        // Probe 1: Instruction Timing Jitter
-        // VMs and Headless browsers often introduce jitter in high-frequency instruction blocks.
+        // Use instruction jitter measurement for baseline analysis
         let jitter = Self::measure_instruction_jitter();
-        #[cfg(not(target_arch = "wasm32"))]
-        if jitter > 500.0 { risk_score += 0.4; } 
-        #[cfg(target_arch = "wasm32")]
-        if jitter > 1.0 { risk_score += 0.3; } // WASM jitter scale is different (ms vs ns)
-
-        // Probe 2: Platform-Specific Signals
-        if Self::detect_analysis_environment() { risk_score += 0.5; }
-
-        risk_score.min(1.0)
+        
+        // Detect analysis environment anomalies
+        let analysis_detected = Self::detect_analysis_environment();
+        
+        // Combine signals: jitter variance + analysis detection
+        if analysis_detected {
+            jitter * 2.0
+        } else {
+            jitter
+        }
     }
 
     /// Actively enforces mitigations based on the detected analysis risk.
@@ -110,7 +108,7 @@ impl EnvironmentShield {
             log::warn!("CRITICAL ANALYSIS RISK DETECTED ({:.2}): Terminating CVKG Runtime.", risk);
             #[cfg(not(target_arch = "wasm32"))]
             std::process::exit(0xDEADC0DEu32 as i32);
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
             panic!("CVKG_SECURITY_TERMINATION_SIGNAL");
         } else if risk > 0.4 {
             log::warn!("MODERATE ANALYSIS RISK DETECTED ({:.2}): Activating Deceptive Shields.", risk);
@@ -126,11 +124,11 @@ impl EnvironmentShield {
             let mut rng = 42u64; // Simple LCG for noise
             for _ in 0..10 {
                 rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
-                let nanos = (rng % 500) as u64; // 0-500ns noise
+                let nanos = rng % 500 ; // 0-500ns noise
                 std::thread::sleep(Duration::from_nanos(nanos));
             }
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
         {
             // WASM spin-wait since thread::sleep is unavailable
             let mut _x: u64 = 0;
@@ -143,16 +141,20 @@ impl EnvironmentShield {
         for _ in 0..100 {
             #[cfg(not(target_arch = "wasm32"))]
             let start = std::time::Instant::now();
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
             let start = js_sys::Date::now();
+            #[cfg(all(target_arch = "wasm32", not(target_os = "unknown")))]
+            let start = std::time::SystemTime::now();
             
             let mut _x: u64 = 0;
             for i in 0..1000 { _x = _x.wrapping_add(i as u64); }
             
             #[cfg(not(target_arch = "wasm32"))]
             samples.push(start.elapsed().as_nanos() as f32);
-            #[cfg(target_arch = "wasm32")]
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
             samples.push((js_sys::Date::now() - start) as f32);
+            #[cfg(all(target_arch = "wasm32", not(target_os = "unknown")))]
+            samples.push(start.elapsed().map(|d| d.as_nanos() as f32).unwrap_or(0.0));
         }
         
         let avg = samples.iter().sum::<f32>() / samples.len() as f32;
@@ -163,6 +165,11 @@ impl EnvironmentShield {
     fn detect_analysis_environment() -> bool {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         unsafe {
+            // SAFETY: _rdtsc is safe to call on x86/x86_64 architectures.
+            // It reads the time-stamp counter register which returns a monotonically
+            // increasing value. The difference t2-t1 measures cycle count for the
+            // instruction execution, which is used to detect timing anomalies
+            // characteristic of VM or debugger analysis environments.
             #[cfg(target_arch = "x86_64")]
             use std::arch::x86_64::_rdtsc;
             #[cfg(target_arch = "x86")]
@@ -173,7 +180,7 @@ impl EnvironmentShield {
             let t2 = _rdtsc();
             (t2 - t1) > 1000
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
         {
             // In WASM, check for time clamping (Spectre mitigation)
             let t1 = js_sys::Date::now();
@@ -182,6 +189,8 @@ impl EnvironmentShield {
             let t2 = js_sys::Date::now();
             t1 == t2
         }
+        #[cfg(all(target_arch = "wasm32", not(target_os = "unknown")))]
+        { false }
         #[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "wasm32")))]
         { false }
     }

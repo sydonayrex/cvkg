@@ -29,8 +29,8 @@ fn test_interactive_snapshots() {
     let _secure = SecureField::new("Pass", "", |_| {});
     let _editor = Textarea::new("Long").on_change(|_| {});
     let _picker = Picker::new(0, vec!["A".into()], |_| {});
-    let _date = DatePicker::new(|_| {});
-    let _color_picker = ColorPicker::new(Color::BLACK, |_| {});
+    let _date = Calendar::new();
+    let _color_picker = BifrostColorPicker::new([0.0, 0.0, 0.0, 1.0]);
 
     insta::assert_snapshot!(
         "Interactive API",

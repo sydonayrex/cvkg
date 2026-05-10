@@ -16,13 +16,13 @@ members = [
     "cvkg-themes",
     "cvkg-macros",
     "cvkg-runic-text", "cvkg-test",
-    "demos/niflheim-web", "demos/adele-web", "temp-server",
+    "demos/niflheim-web", "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
     "cvkg-flow",
     "berserker",
 ]
 
 [workspace.package]
-version = "0.1.17"
+version = "0.1.18"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -53,6 +53,7 @@ thiserror = "1.0"
 libc = "0.2"
 clap = { version = "4.5", features = ["derive"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
+image = "0.25"
 
 [patch.crates-io]
 cvkg-core = { path = "cvkg-core" }
@@ -66,4 +67,9 @@ cvkg-vdom = { path = "cvkg-vdom" }
 cvkg-components = { path = "cvkg-components" }
 cvkg-themes = { path = "cvkg-themes" }
 cvkg-macros = { path = "cvkg-macros" }
+cvkg-runic-text = { path = "cvkg-runic-text" }
+cvkg-cli = { path = "cvkg-cli" }
+cvkg-webkit-server = { path = "cvkg-webkit-server" }
+cvkg-test = { path = "cvkg-test" }
+cvkg-flow = { path = "cvkg-flow" }
 cvkg = { path = "cvkg" }

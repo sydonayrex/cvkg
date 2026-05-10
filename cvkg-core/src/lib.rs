@@ -99,11 +99,10 @@ impl KnowledgeState {
 
         // Fafnir's Decay: Components naturally revert to base state over time
         for state in self.component_states.values() {
-            if let Ok(mut lock) = state.write() {
-                if let Some(v) = lock.downcast_mut::<f32>() {
+            if let Ok(mut lock) = state.write()
+                && let Some(v) = lock.downcast_mut::<f32>() {
                     *v = (*v * decay_factor).max(1.0);
                 }
-            }
         }
     }
 
@@ -174,16 +173,13 @@ pub enum MemoryLayer {
 /// Midgard: Classic, functional, 2D tactical UI for mortals.
 /// Asgard: High-fidelity, cognitive, shader-heavy UI for the Singularity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Default)]
 pub enum Realm {
     Midgard,
+    #[default]
     Asgard,
 }
 
-impl Default for Realm {
-    fn default() -> Self {
-        Self::Asgard
-    }
-}
 
 /// A node in the Temporal Graph representing a cognitive anchor
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1766,11 +1762,16 @@ pub struct TelemetryData {
     pub draw_calls: u32,
     pub vertices: u32,
     
+    /// Global Berserker Pipeline Intensity (0.0 - 1.0+)
+    pub berserker_rage: f32,
+    
     // Memory breakdown
     pub vram_usage_mb: f32,
     pub vram_textures_mb: f32,
     pub vram_buffers_mb: f32,
     pub vram_pipelines_mb: f32,
+    /// Indicates if the Mega-Atlas or VRAM pools are at capacity.
+    pub vram_exhausted: bool,
 }
 
 /// Configuration for render-loop frame timing and degradation strategies.
@@ -1799,7 +1800,7 @@ impl Default for FrameBudget {
 /// 1. Coordinate system is origin-top-left (0,0) with Y increasing downwards.
 /// 2. Colors are [R, G, B, A] in the [0.0, 1.0] range.
 /// 3. All operations must be batchable by the underlying backend.
-/// Trait providing timing information for the render loop.
+///    Trait providing timing information for the render loop.
 pub trait ElapsedTime {
     /// Returns the cumulative time since the renderer started in seconds.
     fn elapsed_time(&self) -> f32;
@@ -1832,6 +1833,10 @@ pub trait Renderer: ElapsedTime + Send {
     /// Fill an ellipse/circle that fits inside `rect`.
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]);
 
+    /// Draw a high-fidelity 3D cube inside the given rectangle using specialized shader logic.
+    /// `rotation` is [pitch, yaw, roll] in radians.
+    fn draw_3d_cube(&mut self, _rect: Rect, _color: [f32; 4], _rotation: [f32; 3]) {}
+
     // ── Stroked shapes ───────────────────────────────────────────────────
     fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
     fn stroke_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4], stroke_width: f32);
@@ -1856,6 +1861,9 @@ pub trait Renderer: ElapsedTime + Send {
     fn draw_image(&mut self, _image_name: &str, _rect: Rect) {}
     /// Load an image asset from memory.
     fn load_image(&mut self, _name: &str, _data: &[u8]) {}
+    /// Pre-warm the renderer with assets. Implementations can use this
+    /// to populate texture atlases or warm up shader caches.
+    fn prewarm_vram(&mut self, _assets: Vec<(String, Vec<u8>)>) {}
 
     /// Get the current pointer (mouse/touch) position.
     fn get_pointer_position(&self) -> [f32; 2] {
@@ -1947,6 +1955,16 @@ pub trait Renderer: ElapsedTime + Send {
     fn set_rage(&mut self, _rage: f32) {}
     fn set_berserker_mode(&mut self, _state: BerserkerMode) {}
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
+    /// Set the desktop scene preset (Aurora, Void, Nebula, Glitch, Yggdrasil).
+    fn set_scene(&mut self, _scene: &str) {}
+
+    // ── Export & Print ───────────────────────────────────────────────────
+    /// Capture the current frame as a PNG byte buffer.
+    fn capture_png(&mut self) -> Vec<u8> { Vec::new() }
+    /// Trigger a native print dialog or spooling operation.
+    fn print(&mut self) {}
+
+    fn set_scene_preset(&mut self, _preset: u32) {}
 
     // ── Cyberpunk Effects ────────────────────────────────────────────────
     /// Apply a Bifrost (Frosted Glass) effect to the specified rect.
@@ -2170,7 +2188,16 @@ pub struct SceneUniforms {
     pub berzerker_mode: u32,
     pub scroll_offset: f32,
     pub scale_factor: f32,
+    pub scene_type: u32,
+    pub _pad: [f32; 3], // Align to 16 bytes if needed, but current struct is 4x16 + 4x16 + 4x16 + ...
 }
+
+pub const SCENE_AURORA: u32 = 0;
+pub const SCENE_VOID: u32 = 1;
+pub const SCENE_NEBULA: u32 = 2;
+pub const SCENE_GLITCH: u32 = 3;
+pub const SCENE_YGGDRASIL: u32 = 4;
+
 impl SceneUniforms {
     pub fn new(width: f32, height: f32) -> Self {
         Self {
@@ -2188,6 +2215,8 @@ impl SceneUniforms {
             berzerker_mode: 0,
             scroll_offset: 0.0,
             scale_factor: 1.0,
+            scene_type: SCENE_AURORA,
+            _pad: [0.0; 3],
         }
     }
 }
@@ -2253,6 +2282,7 @@ pub trait FrameRenderer<E = ()>: Renderer {
     fn end_frame(&mut self, encoder: E);
 }
 use std::sync::Arc;
+type SubscriberList<T> = Arc<std::sync::Mutex<Vec<Box<dyn Fn(&T) + Send + Sync>>>>;
 /// State wrapper that owns a value and notifies subscribers when changed
 #[derive(Clone)]
 pub struct State<T: Clone + Send + Sync + 'static> {
@@ -2262,7 +2292,7 @@ pub struct State<T: Clone + Send + Sync + 'static> {
     tvar: Arc<stm::TVar<T>>,
     #[cfg(not(target_arch = "wasm32"))]
     metadata_tvar: Arc<stm::TVar<Option<agents::MutationMetadata>>>,
-    subscribers: Arc<std::sync::Mutex<Vec<Box<dyn Fn(&T) + Send + Sync>>>>,
+    subscribers: SubscriberList<T>,
     version: Arc<std::sync::atomic::AtomicU64>,
     resolution: agents::ConflictResolution,
 }
@@ -2422,7 +2452,8 @@ static KNOWLEDGE_TVAR: OnceLock<stm::TVar<KnowledgeState>> = OnceLock::new();
 static IS_BATCHING: AtomicBool = AtomicBool::new(false);
 pub static IS_RENDERING: AtomicBool = AtomicBool::new(false);
 pub static LAYOUT_DIRTY: AtomicBool = AtomicBool::new(false);
-static BATCH_QUEUE: OnceLock<std::sync::Mutex<Vec<Box<dyn FnOnce() + Send + Sync>>>> = OnceLock::new();
+type BatchQueue = OnceLock<std::sync::Mutex<Vec<Box<dyn FnOnce() + Send + Sync>>>>;
+static BATCH_QUEUE: BatchQueue = OnceLock::new();
 /// Returns true if state updates are currently being batched.
 pub fn is_batching() -> bool {
     IS_BATCHING.load(Ordering::Acquire)
@@ -3516,10 +3547,10 @@ pub trait AssetManager: Send + Sync {
 /// User input event types
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Event {
-    PointerDown { x: f32, y: f32 },
-    PointerUp { x: f32, y: f32 },
+    PointerDown { x: f32, y: f32, button: u32 },
+    PointerUp { x: f32, y: f32, button: u32 },
     PointerMove { x: f32, y: f32 },
-    PointerClick { x: f32, y: f32 },
+    PointerClick { x: f32, y: f32, button: u32 },
     PointerEnter,
     PointerLeave,
     KeyDown { key: String },
@@ -3554,8 +3585,9 @@ pub enum EventResponse {
 
 /// A basic implementation of AssetManager that can be overridden by platform backends.
 pub struct DefaultAssetManager {
-    cache: Arc<arc_swap::ArcSwap<HashMap<String, AssetState<Arc<Vec<u8>>>>>>,
+    cache: AssetCache,
 }
+type AssetCache = Arc<arc_swap::ArcSwap<HashMap<String, AssetState<Arc<Vec<u8>>>>>>;
 
 impl Default for DefaultAssetManager {
     fn default() -> Self {
@@ -3643,7 +3675,7 @@ impl<T: Clone + Send + Sync + 'static> Suspense<T> {
                 });
             }
         }
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
         {
             wasm_bindgen_futures::spawn_local(async move {
                 let result = future.await;

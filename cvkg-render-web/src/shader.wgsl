@@ -5,6 +5,21 @@ struct VertexOutput {
     @location(2) screen_pos: vec2<f32>,
 }
 
+struct ComputeParams {
+    node_count: u32,
+    time: f32,
+    delta_time: f32,
+    _pad: f32,
+}
+
+struct SceneNode {
+    position: vec2<f32>,
+    size: vec2<f32>,
+    color: vec4<f32>,
+    flags: u32,
+    animation_phase: f32,
+}
+
 struct SceneUniforms {
     resolution: vec2<f32>,
     time: f32,
@@ -13,6 +28,12 @@ struct SceneUniforms {
 
 @group(0) @binding(0)
 var<uniform> scene: SceneUniforms;
+
+@group(1) @binding(0)
+var<storage, read_write> nodes: array<SceneNode>;
+
+@group(1) @binding(1)
+var<uniform> params: ComputeParams;
 
 // Standard high-fidelity fullscreen triangle trick
 @vertex
@@ -32,6 +53,9 @@ fn vs_main(
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = in.uv;
+    let screen_pos = in.screen_pos;
+    
+    // 1. Draw animated background
     let pulse = 0.5 + 0.5 * sin(scene.time * 2.0);
     let grid_size = 40.0;
     let grid = step(0.98, fract(uv.x * grid_size)) + step(0.98, fract(uv.y * grid_size * (scene.resolution.y / scene.resolution.x)));
@@ -42,10 +66,40 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         uv.y
     );
     var color = base_color + grid * 0.05 + scanline;
-    let d = distance(uv, vec2<f32>(0.5, 0.5));
-    color *= 1.0 - smoothstep(0.4, 0.8, d);
+    let d_bg = distance(uv, vec2<f32>(0.5, 0.5));
+    color *= 1.0 - smoothstep(0.4, 0.8, d_bg);
     let glow = smoothstep(0.3, 0.0, abs(uv.y - 0.5 + sin(uv.x * 3.0 + scene.time) * 0.1)) * 0.1;
     color += vec4<f32>(0.0, 0.8, 1.0, 1.0) * glow * pulse;
+
+    // 2. Render Scene Nodes (SDF)
+    let node_count = params.node_count;
+    for (var i = 0u; i < node_count; i = i + 1u) {
+        let node = nodes[i];
+        let p = screen_pos - node.position - node.size * 0.5;
+        let b = node.size * 0.5;
+        
+        var d = 1e10;
+        if (node.flags == 0u) {
+            // Rect
+            let q = abs(p) - b;
+            d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0);
+        } else if (node.flags == 1u) {
+            // Rounded Rect
+            let r = node.animation_phase;
+            let q = abs(p) - b + r;
+            d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
+        } else if (node.flags == 2u) {
+            // Ellipse
+            let k0 = length(p / b);
+            let k1 = length(p / (b * b));
+            d = k0 * (k0 - 1.0) / k1;
+        }
+        
+        // Alpha blending
+        let s = smoothstep(1.0, -1.0, d);
+        color = mix(color, node.color, s * node.color.a);
+    }
+
     return color;
 }
 
@@ -109,27 +163,6 @@ fn fs_vdom_main(in: VertexOutput) -> @location(0) vec4<f32> {
 // ============================================
 // WEBGPU COMPUTE SHADER FOR SCENE PROCESSING
 // ============================================
-
-struct ComputeParams {
-    node_count: u32,
-    time: f32,
-    delta_time: f32,
-    _pad: f32,
-}
-
-struct SceneNode {
-    position: vec2<f32>,
-    size: vec2<f32>,
-    color: vec4<f32>,
-    flags: u32,
-    animation_phase: f32,
-}
-
-@group(2) @binding(0)
-var<storage, read_write> nodes: array<SceneNode>;
-
-@group(2) @binding(1)
-var<uniform> params: ComputeParams;
 
 @compute @workgroup_size(64)
 fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {

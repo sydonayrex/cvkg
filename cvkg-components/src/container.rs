@@ -1094,6 +1094,12 @@ pub struct Accordion<V> {
     pub(crate) items: Vec<AccordionItem<V>>,
 }
 
+impl<V: View> Default for Accordion<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<V: View> Accordion<V> {
     pub fn new() -> Self { Self { items: Vec::new() } }
     pub fn item(mut self, title: impl Into<String>, content: V) -> Self {
@@ -1153,5 +1159,177 @@ impl<V: View> View for Collapsible<V> {
         if self.is_open {
             self.content.render(renderer, rect);
         }
+    }
+}
+/// GjallarSplitter - A draggable split pane component.
+/// Named after the Gjallarhorn, which signals boundaries and transitions.
+/// 
+/// INSPIRED BY: Radix UI (Resizable) and VS Code (Split View).
+pub struct GjallarSplitter<V1: View, V2: View> {
+    pub first: V1,
+    pub second: V2,
+    pub split_ratio: f32, // 0.0 to 1.0
+    pub orientation: cvkg_core::Orientation,
+}
+
+impl<V1: View, V2: View> GjallarSplitter<V1, V2> {
+    /// Creates a new GjallarSplitter with the given views.
+    pub fn new(first: V1, second: V2) -> Self {
+        Self {
+            first,
+            second,
+            split_ratio: 0.5,
+            orientation: cvkg_core::Orientation::Horizontal,
+        }
+    }
+
+    /// Sets the split ratio.
+    pub fn split_ratio(mut self, ratio: f32) -> Self {
+        self.split_ratio = ratio.clamp(0.0, 1.0);
+        self
+    }
+
+    /// Sets the orientation of the split.
+    pub fn orientation(mut self, orientation: cvkg_core::Orientation) -> Self {
+        self.orientation = orientation;
+        self
+    }
+}
+
+impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "GjallarSplitter");
+        
+        let handle_size = 4.0;
+        let (first_rect, handle_rect, second_rect) = match self.orientation {
+            cvkg_core::Orientation::Horizontal => {
+                let w1 = rect.width * self.split_ratio - handle_size / 2.0;
+                let r1 = Rect { x: rect.x, y: rect.y, width: w1, height: rect.height };
+                let rh = Rect { x: rect.x + w1, y: rect.y, width: handle_size, height: rect.height };
+                let r2 = Rect { x: rect.x + w1 + handle_size, y: rect.y, width: rect.width - w1 - handle_size, height: rect.height };
+                (r1, rh, r2)
+            }
+            cvkg_core::Orientation::Vertical => {
+                let h1 = rect.height * self.split_ratio - handle_size / 2.0;
+                let r1 = Rect { x: rect.x, y: rect.y, width: rect.width, height: h1 };
+                let rh = Rect { x: rect.x, y: rect.y + h1, width: rect.width, height: handle_size };
+                let r2 = Rect { x: rect.x, y: rect.y + h1 + handle_size, width: rect.width, height: rect.height - h1 - handle_size };
+                (r1, rh, r2)
+            }
+        };
+
+        // 1. Render Views
+        self.first.render(renderer, first_rect);
+        self.second.render(renderer, second_rect);
+
+        // 2. Render Split Handle
+        renderer.fill_rect(handle_rect, [0.15, 0.15, 0.2, 1.0]);
+        renderer.stroke_rect(handle_rect, [0.0, 0.8, 1.0, 0.4], 1.0);
+        
+        // 3. Handle Center Glow (Mimir's Eye)
+        let center_x = handle_rect.x + handle_rect.width / 2.0;
+        let center_y = handle_rect.y + handle_rect.height / 2.0;
+        renderer.fill_rounded_rect(
+            Rect { x: center_x - 1.0, y: center_y - 10.0, width: 2.0, height: 20.0 },
+            1.0,
+            [0.0, 1.0, 1.0, 0.8]
+        );
+
+        renderer.pop_vnode();
+    }
+}
+
+/// SagaAccordion - A collapsible accordion component for revealing stories (data).
+/// Named after the Sagas, the epic narratives of the Norse.
+/// 
+/// INSPIRED BY: Radix UI (Accordion) and Mantine (Accordion).
+pub struct SagaAccordion<V: View> {
+    pub items: Vec<SagaItem<V>>,
+    pub allow_multiple: bool,
+}
+
+pub struct SagaItem<V: View> {
+    pub title: String,
+    pub content: V,
+    pub is_expanded: bool,
+}
+
+impl<V: View> SagaAccordion<V> {
+    /// Creates a new SagaAccordion.
+    pub fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            allow_multiple: false,
+        }
+    }
+
+    /// Adds an item to the accordion.
+    pub fn item(mut self, title: impl Into<String>, content: V) -> Self {
+        self.items.push(SagaItem {
+            title: title.into(),
+            content,
+            is_expanded: false,
+        });
+        self
+    }
+
+    /// Sets whether multiple items can be expanded at once.
+    pub fn allow_multiple(mut self, allow: bool) -> Self {
+        self.allow_multiple = allow;
+        self
+    }
+}
+
+impl<V: View> View for SagaAccordion<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "SagaAccordion");
+        
+        let t = renderer.elapsed_time();
+        let mut current_y = rect.y;
+        let item_h = 44.0; // Slightly larger for tactical feel
+
+        for (i, item) in self.items.iter().enumerate() {
+            let header_rect = Rect { x: rect.x, y: current_y, width: rect.width, height: item_h };
+            
+            // 1. Mimir's Refraction (Glass Header)
+            renderer.bifrost(header_rect, 4.0, 1.2, 0.9);
+            renderer.fill_rounded_rect(header_rect, 4.0, [0.1, 0.1, 0.15, 0.7]);
+            
+            // Surtur's Reactive Materials (Hover/Selection Glow)
+            if item.is_expanded {
+                let pulse = (t * 3.0 + i as f32).sin() * 0.1 + 0.9;
+                renderer.stroke_rounded_rect(header_rect, 4.0, [0.0, 0.8, 1.0, 0.4 * pulse], 1.5);
+            } else {
+                renderer.stroke_rounded_rect(header_rect, 4.0, [0.3, 0.3, 0.4, 0.3], 1.0);
+            }
+            
+            let arrow = if item.is_expanded { "▼" } else { "▶" };
+            let accent_color = if item.is_expanded { [0.0, 1.0, 1.0, 1.0] } else { [0.6, 0.6, 0.7, 1.0] };
+            
+            renderer.draw_text(arrow, header_rect.x + 12.0, header_rect.y + 14.0, 12.0, accent_color);
+            renderer.draw_text(&item.title, header_rect.x + 36.0, header_rect.y + 14.0, 14.0, [1.0, 1.0, 1.0, 0.95]);
+
+            current_y += item_h + 4.0;
+
+            // 2. Content (Unfolded Saga)
+            if item.is_expanded {
+                let content_h = 120.0; // Dynamic height would be better but keeping simple for now
+                let content_rect = Rect { x: rect.x + 12.0, y: current_y, width: rect.width - 24.0, height: content_h };
+                
+                // Subtle content background
+                renderer.fill_rounded_rect(content_rect, 4.0, [0.05, 0.05, 0.08, 0.3]);
+                item.content.render(renderer, content_rect);
+                
+                current_y += content_h + 8.0;
+            }
+        }
+
+        renderer.pop_vnode();
     }
 }

@@ -1,71 +1,64 @@
 # cvkg-components
 
-**cvkg-components** is the high-level UI library for CVKG, providing a suite of interactive and layout components with a Cyberpunk Viking aesthetic.
+**cvkg-components** provides a high-fidelity tactical UI component library for CVKG, built with a strict **Cyberpunk Viking** aesthetic and GPU-native performance.
 
-## 📦 Library Structure
+## Design Philosophy: Advanced Norse HUD Patterns
 
-### Layout Containers
+All components are designed with "Liquid Glass" aesthetics, leveraging three core rendering patterns:
+- **Mimir's Refraction**: Deep refractive lensing using `renderer.bifrost()` for simulated thickness and background distortion.
+- **Loki's Shape-shifting**: Coordinated state transitions and morphing geometry logic.
+- **Surtur's Reactive Materials**: Kinetic materials that react to tactical input with dynamic resonance and glows.
 
-| Component | Description |
-|-----------|-------------|
-| `HStack` | Horizontal linear layout container |
-| `VStack` | Vertical linear layout container |
-| `ZStack` | Overlapping layout container |
-| `List` | Efficient vertical scrollable container |
-| `Scrollable` | Arbitrary content scrolling |
+## Component Inventory
 
-### Interactive Components
+### Data Display (The Great Library of Runes)
+- `RunesTable`: Virtualized, sortable data grid with in-cell sparklines for mission telemetry.
+- `YggdrasilTree`: Hierarchical data display for command structures and file systems.
+- `RunesCard`: Tactically inscribed data containers with refractive glass depth.
+- `UrdrTimeline`: Chronological event sequence display (The Past).
 
-| Component | Description |
-|-----------|-------------|
-| `Button` | Clickable action element |
-| `Toggle` | Boolean state switch |
-| `Slider` | Linear value selector |
-| `TextField` | Single-line text input with full cursor and IME support |
-| `SecureField` | Password/Sensitive input |
-| `Picker` / `Dropdown` | Selection from a list of options with glassmorphic overlays |
+### Forms & Input (Input Manifests)
+- `EikonaForm`: Schema-driven form validation with tactical feedback.
+- `ValkyrSelect`: Searchable tactical chooser / Combobox.
+- `TyrCalendar`: Temporal date and range selection system.
+- `BifrostColorPicker`: Multi-realm color selection bridge.
+- `ValhallaRating`: Tactical quality assessment with star resonance.
 
-### Visual Elements
+### Feedback & Overlays (The Sky Realms)
+- `HiminnModal`: Elevated glassmorphic dialogs with refractive lensing.
+- `GjallarAlert`: High-priority tactical notifications (toasts) using the Gjallarhorn signal aesthetic.
+- `RunicTooltip`: Contextual information overlays with neon vibrancy.
+- `DraumaSkeleton`: Spectral shimmer placeholders for asynchronous content.
+- `SagaAccordion`: Multi-layered narrative content containers with collapsible flows.
+- `ValkyrieAnalytics`: Real-time tactical gauges and radar charts for combat monitoring.
 
-| Component | Description |
-|-----------|-------------|
-| `Text` | High-fidelity typography (Markdown-like spans supported) |
-| `Image` | GPU-accelerated image rendering |
-| `Shape` | Primitives (RoundedRect, Circle, etc.) with Berserker styling |
-| `ProgressRing` | Radial progress indicator with emissive glow |
-| `StatusBar` | Global status monitoring for mission-critical telemetry |
-| `TelemetryView` | Real-time HUD for GPU performance (FPS, Draw Calls) |
+### Layout & Navigation
+- `GjallarSplitter`: Resizable panel splitting with Mimir's Eye handle glow.
+- `HringrPagination`: Cyclic navigation for traversing data loops.
+- `MimirSpotlight`: Global command palette and tactical search bar.
 
-### Display & Navigation
-
-| Component | Description |
-|-----------|-------------|
-| `BifrostTabs` | Tabbed interface with frosted glass styling |
-| `Skjaldborg` | Modal dialog system with cyber aesthetic |
-| `Seiðr` | Wizard/stepper component |
-| `Hvergelmir` | Progress/loading visualization |
-| `ValkyrieIndicator` | Animated circular progress indicator |
-
-### Game Components
-
-| Component | Description |
-|-----------|-------------|
-| `MjöllnirFrame` | Animated button frame with lightning effects |
-| `RunestoneEditor` | Interactive text/code editor |
-| `RavenMessenger` | Chat/message interface |
-| `OracleOrb` | Predictive state visualization |
-| `WyrdHUD` | Runic text display system |
-
-## 🚀 Quick Start
-
-### Basic Usage
+## Usage Example
 
 ```rust
-use cvkg_components::{Text, VStack, Button, Hvergelmir};
+use cvkg_components::{VStack, RunesTable, EikonaForm, HiminnModal};
 use cvkg_core::View;
 
-// Create a simple UI
-let app = VStack::new(16.0)
-    .alignment(cvkg_core::Alignment::Center)
-    .child(
-        Text::new(
+fn tactical_dashboard() -> impl View {
+    VStack::new(20.0)
+        .child(
+            RunesTable::new(mission_data)
+                .sortable(true)
+                .on_row_click(|row| /* handle */)
+        )
+        .child(
+            HiminnModal::new("System Override")
+                .content(EikonaForm::new(override_schema))
+        )
+}
+```
+
+## Performance & Rendering
+
+- **GPU-Native**: Stateless functional views optimized for `wgpu` backends.
+- **Deterministic VDOM**: 60+ FPS maintained via `push_vnode`/`pop_vnode` tracking.
+- **Cross-Platform**: Consistent rendering across Native (Metal/DX12/Vulkan) and Web (WebGPU).

@@ -9,6 +9,12 @@ pub struct MjolnirFrame {
     pub glitch_intensity: f32,
 }
 
+impl Default for MjolnirFrame {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MjolnirFrame {
     pub fn new() -> Self {
         Self {
@@ -59,12 +65,12 @@ impl View for MjolnirFrame {
             let offset = (t * 10.0).sin() * self.glitch_intensity * 2.0;
             
             // Red Shift
-            let mut red_points = points.clone();
+            let mut red_points = points;
             for p in &mut red_points { p.0 += offset; }
             self.draw_beveled_path(renderer, &red_points, [1.0, 0.0, 0.0, 0.4], 1.0);
 
             // Blue Shift
-            let mut blue_points = points.clone();
+            let mut blue_points = points;
             for p in &mut blue_points { p.0 -= offset; }
             self.draw_beveled_path(renderer, &blue_points, [0.0, 0.0, 1.0, 0.4], 1.0);
         }

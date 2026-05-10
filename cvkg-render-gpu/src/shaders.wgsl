@@ -32,15 +32,18 @@ struct SceneUniforms {
     berzerker_rage:  f32,
     scroll_offset:   f32,
     scale_factor:    f32,
-    _pad:            f32,
+    scene_type:      u32,
+    _pad0:           f32,
+    _pad1:           f32,
+    _pad2:           f32,
 };
 
 // --- Group 2: Berserker Uniforms ---
 @group(2) @binding(0) var<uniform> theme: ColorTheme;
 @group(2) @binding(1) var<uniform> scene: SceneUniforms;
 
-// --- Group 0: Main Texture ---
-@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+// --- Group 0: Main Texture Array ---
+@group(0) @binding(0) var t_diffuse: binding_array<texture_2d<f32>, 256>;
 @group(0) @binding(1) var s_diffuse: sampler;
 
 // --- Group 1: Environment / Blur ---
@@ -62,6 +65,7 @@ struct VertexInput {
     @location(11) translation: vec2<f32>,
     @location(12) scale:       vec2<f32>,
     @location(13) rotation:    f32,
+    @location(14) tex_index:   u32,
 };
 
 struct VertexOutput {
@@ -76,6 +80,7 @@ struct VertexOutput {
     @location(7) screen:      vec2<f32>,
     @location(8) normal:      vec3<f32>,
     @location(9) clip:        vec4<f32>,
+    @location(10) @interpolate(flat) tex_index: u32,
 };
 
 @vertex
@@ -122,6 +127,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.screen = in.screen;
     out.normal = in.normal;
     out.clip = in.clip;
+    out.tex_index = in.tex_index;
+    
+    // Orthographic projection: [0, width] -> [-1, 1], [0, height] -> [1, -1]
     return out;
 }
 
@@ -139,6 +147,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.radius = 0.0;
     out.slice  = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     out.logical = vec2<f32>(0.0, 0.0);
+    out.tex_index = 0u;
     // Large sentinel so sd_box clip test always passes (clip_alpha → 1).
     out.clip   = vec4<f32>(-10000.0, -10000.0, 20000.0, 20000.0);
     out.size   = vec2<f32>(scene.resolution.x, scene.resolution.y);
@@ -222,6 +231,20 @@ fn heatmap_palette(t: f32) -> vec3<f32> {
     return mix(mix(low, mid, smoothstep(0.0, 0.5, t)), high, smoothstep(0.5, 1.0, t));
 }
 
+// ── 3D Rotation Helpers ──────────────────────────────────────────────────
+fn rotX(a: f32) -> mat3x3<f32> {
+    let s = sin(a); let c = cos(a);
+    return mat3x3<f32>(vec3(1.0, 0.0, 0.0), vec3(0.0, c, s), vec3(0.0, -s, c));
+}
+fn rotY(a: f32) -> mat3x3<f32> {
+    let s = sin(a); let c = cos(a);
+    return mat3x3<f32>(vec3(c, 0.0, -s), vec3(0.0, 1.0, 0.0), vec3(s, 0.0, c));
+}
+fn rotZ(a: f32) -> mat3x3<f32> {
+    let s = sin(a); let c = cos(a);
+    return mat3x3<f32>(vec3(c, s, 0.0), vec3(-s, c, 0.0), vec3(0.0, 0.0, 1.0));
+}
+
 // ── 3D SDF Library ──────────────────────────────────────────────────────────
 fn sd_sphere(p: vec3<f32>, s: f32) -> f32 { return length(p) - s; }
 fn sd_box_3d(p: vec3<f32>, b: vec3<f32>) -> f32 {
@@ -254,16 +277,19 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
     let fw = length(vec2(dpdx(in.logical.x), dpdy(in.logical.y)));
     
-    // Temporarily disabled clipping
-    /*
+    // ── High-Fidelity SDF Clipping ───────────────────────────────────────
     let p_clip_pos = in.clip.xy * scene.scale_factor;
     let p_clip_size = in.clip.zw * scene.scale_factor;
-    let pixel_pos = in.clip_position.xy;
+ let pixel_pos = (in.clip_position.xy * 0.5 + 0.5) * scene.resolution * scene.scale_factor;
+    
+    // Using a soft-edged box SDF for sub-pixel anti-aliased clipping
     let clip_d = sd_box(pixel_pos - (p_clip_pos + p_clip_size * 0.5), p_clip_size * 0.5);
-    let clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d); 
+    var clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d); 
+    
+    // Large sentinel check (e.g., -10000) to bypass clipping for global elements
+    if (in.clip.z > 15000.0) { clip_alpha = 1.0; }
     color.a *= clip_alpha;
-    if color.a <= 0.0 { discard; }
-    */
+    
 
     if in.mode == 1u {
         // Neon Line
@@ -271,11 +297,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     } else if in.mode == 3u {
         let half_size = in.size * 0.5;
         let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
-        color.a *= (1.0 - smoothstep(-fw, fw, d));
+        let aa = fwidth(d);
+        color.a *= 1.0 - smoothstep(0.0, aa, d);
     } else if in.mode == 4u {
-        // High-Fidelity Ellipse / Sphere SDF
-        let d = length((in.uv - 0.5) * 2.0) - 1.0;
-        color.a *= (1.0 - smoothstep(-fw, fw, d));
+    let half_size = in.size * 0.5;
+    let safe_half = max(half_size, vec2<f32>(0.001));
+    let d = length((in.logical - half_size) / safe_half) - 1.0;
+    let aa = fwidth(d);
+    color.a *= 1.0 - smoothstep(0.0, aa, d);
     } else if in.mode == 7u {
         // 1. Screen-Space UV & Hard Clipping
         let uv = in.uv; 
@@ -383,11 +412,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // Radial Gradient Logic
         let dist = length(in.uv - 0.5) * 2.0; // 0 at center, 1 at edge
         let t = clamp(dist, 0.0, 1.0);
-        let end_color = vec4<f32>(in.slice.rgb, in.color.a);
+        // FIX: Use in.slice.a (outer alpha) instead of forcing in.color.a. 
+        // This allows radial gradients to fade to transparency at the corners.
+        let end_color = vec4<f32>(in.slice.rgb, in.slice.a);
         color = mix(in.color, end_color, t);
-    } else if in.mode == 12u {
-        let val = textureSample(t_diffuse, s_diffuse, in.uv).r;
-        color = vec4<f32>(heatmap_palette(val), in.color.a);
     } else if in.mode == 14u {
         // Ray Marched Reflections
         let ro = vec3<f32>(in.uv.x - 0.5, in.uv.y - 0.5, -2.0);
@@ -423,8 +451,47 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         if (perimeter + scene.time * 20.0) % (max(in.slice.y, 1.0) + max(in.slice.z, 1.0)) > max(in.slice.y, 1.0) { alpha = 0.0; }
         color.a *= alpha;
     } else if in.mode == 2u || in.mode == 6u {
-        let tex_color = textureSample(t_diffuse, s_diffuse, in.uv);
-        if in.mode == 6u { color.a *= tex_color.r; } else { color *= tex_color; }
+        let tex_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
+        if in.mode == 6u {
+            // Premultiplied blending for single-channel font atlas
+            color = vec4<f32>(in.color.rgb, in.color.a * tex_color.a);
+        } else {
+            color *= tex_color;
+        }
+    } else if in.mode == 21u {
+        // High-Fidelity Raymarched Cube (Mode 21u)
+        let uv = (in.uv - 0.5) * 2.0;
+        let ro = vec3<f32>(0.0, 0.0, -2.5);
+        let rd = normalize(vec3<f32>(uv.x, uv.y, 1.5));
+        
+        let m = rotX(in.slice.x) * rotY(in.slice.y) * rotZ(in.slice.z);
+        
+        var t = 0.0;
+        var hit = false;
+        var d = 0.0;
+        for (var i = 0; i < 40; i++) {
+            let p = m * (ro + rd * t);
+            d = sd_box_3d(p, vec3(0.5, 0.5, 0.5));
+            if d < 0.001 { hit = true; break; }
+            t += d;
+            if t > 5.0 { break; }
+        }
+        
+        if hit {
+            let p = m * (ro + rd * t);
+            let eps = vec2(0.001, 0.0);
+            let n = normalize(vec3(
+                sd_box_3d(p + eps.xyy, vec3(0.5)) - sd_box_3d(p - eps.xyy, vec3(0.5)),
+                sd_box_3d(p + eps.yxy, vec3(0.5)) - sd_box_3d(p - eps.yxy, vec3(0.5)),
+                sd_box_3d(p + eps.yyx, vec3(0.5)) - sd_box_3d(p - eps.yyx, vec3(0.5))
+            ));
+            let light_dir = normalize(vec3(1.0, 1.0, -2.0));
+            let diff = max(dot(n, light_dir), 0.1);
+            let rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0) * 0.5;
+            color = vec4<f32>(in.color.rgb * diff + rim, in.color.a);
+        } else {
+            discard;
+        }
     }
     
     let rage = scene.berzerker_rage;
@@ -459,27 +526,59 @@ fn fs_background(in: VertexOutput) -> @location(0) vec4<f32> {
     let center = vec2<f32>(0.5, 0.5);
     let dist = distance(uv, center);
     
-    // 3. Cyberpunk Motion & Instability
-    let band = sin(uv.y * 20.0 + time * 0.5) * 0.02;
-    let n1 = fbm(uv * 3.0 + time * 0.1);
-    let n2 = vnoise(uv * 8.0) * 0.015;
-
-    // 4. Color Fusion
-    let glow_field = dist + band + n1 * 0.05;
-    var base = mix(theme.background_deep, theme.primary_neon * 0.3, clamp(glow_field, 0.0, 1.0));
+    var base = theme.background_deep;
     
-    // 5. Temporal Pulse (Breathe effect)
-    base *= (0.95 + sin(time * 0.5) * 0.02);
+    if scene.scene_type == 0u {
+        // --- AURORA BOREALIS ---
+        let band = sin(uv.y * 15.0 + time * 0.4) * 0.03;
+        let n1 = fbm(uv * 2.5 + time * 0.15);
+        let n2 = vnoise(uv * 10.0 + time * 0.1) * 0.02;
+        let glow_field = dist + band + n1 * 0.08 + n2;
+        base = mix(theme.background_deep, theme.primary_neon * 0.4, clamp(1.0 - glow_field, 0.0, 1.0));
+        base *= (0.96 + sin(time * 0.8) * 0.04);
+        
+    } else if scene.scene_type == 1u {
+        // --- VOID (Minimalist) ---
+        base = mix(theme.background_deep, vec4<f32>(0.02, 0.02, 0.03, 1.0), dist);
+        let stars = hash21(uv * 500.0);
+        if stars > 0.998 {
+            base += vec4<f32>(1.0, 1.0, 1.0, 0.8) * (0.5 + 0.5 * sin(time * 2.0 + stars * 100.0));
+        }
+        
+    } else if scene.scene_type == 2u {
+        // --- NEBULA ---
+        let n1 = fbm(uv * 1.5 + time * 0.05);
+        let n2 = fbm(uv * 4.0 - time * 0.03);
+        let nebula = mix(theme.primary_neon, theme.shatter_neon, n1);
+        base = mix(theme.background_deep, nebula * 0.5, n2 * n1);
+        
+    } else if scene.scene_type == 3u {
+        // --- GLITCH ---
+        var guv = uv;
+        let glitch = hash21(vec2(floor(time * 10.0), floor(uv.y * 40.0)));
+        if glitch > 0.95 {
+            guv.x += (glitch - 0.95) * 0.2;
+        }
+        base = mix(theme.background_deep, theme.shatter_neon * 0.3, fbm(guv * 10.0 + time));
+        if glitch > 0.98 {
+            base += vec4<f32>(0.0, 1.0, 1.0, 0.2);
+        }
+        
+    } else if scene.scene_type == 4u {
+        // --- YGGDRASIL (Tree of Life) ---
+        let n = fbm(uv * 2.0 + vec2(0.0, time * 0.1));
+        let root_glow = 1.0 - smoothstep(0.0, 0.8, abs(uv.x - 0.5 + 0.1 * sin(uv.y * 4.0 + time)));
+        base = mix(theme.background_deep, vec4<f32>(0.0, 0.8, 0.4, 1.0) * 0.3, root_glow * n);
+    }
     
     // 6. Global Vignette
-    let vignette = 1.0 - dist * 0.8;
-    
+    let vignette = 1.0 - dist * 0.85;
     return vec4<f32>(base.rgb * vignette, 1.0);
 }
 
 @fragment
 fn fs_bloom_extract(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = textureSample(t_diffuse, s_diffuse, in.uv);
+    let color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
     let brightness = dot(color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
     if brightness > 0.8 { return color; }
     return vec4<f32>(0.0, 0.0, 0.0, 1.0);
@@ -488,48 +587,58 @@ fn fs_bloom_extract(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_blur_h(in: VertexOutput) -> @location(0) vec4<f32> {
     var result = vec3<f32>(0.0);
-    let weight = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+    // High-Fidelity 9-tap Gaussian Blur
+    let weight = array<f32, 9>(0.153423, 0.143254, 0.117031, 0.081827, 0.049003, 0.025135, 0.010861, 0.00392, 0.0011);
     let tex_offset = 6.0 / scene.resolution.x;
-    result += textureSample(t_diffuse, s_diffuse, in.uv).rgb * weight[0];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 1.0, 0.0)).rgb * weight[1];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 1.0, 0.0)).rgb * weight[1];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 2.0, 0.0)).rgb * weight[2];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 2.0, 0.0)).rgb * weight[2];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 3.0, 0.0)).rgb * weight[3];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 3.0, 0.0)).rgb * weight[3];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(tex_offset * 4.0, 0.0)).rgb * weight[4];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(tex_offset * 4.0, 0.0)).rgb * weight[4];
+    
+    // Explicitly sample from index 0 of the texture array for post-process passes
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv).rgb * weight[0];
+    for (var i = 1; i < 9; i++) {
+        result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * f32(i), 0.0)).rgb * weight[i];
+        result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * f32(i), 0.0)).rgb * weight[i];
+    }
     return vec4<f32>(result, 1.0);
 }
 
 @fragment
 fn fs_blur_v(in: VertexOutput) -> @location(0) vec4<f32> {
     var result = vec3<f32>(0.0);
-    let weight = array<f32, 5>(0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+    // High-Fidelity 9-tap Gaussian Blur
+    let weight = array<f32, 9>(0.153423, 0.143254, 0.117031, 0.081827, 0.049003, 0.025135, 0.010861, 0.00392, 0.0011);
     let tex_offset = 6.0 / scene.resolution.y;
-    result += textureSample(t_diffuse, s_diffuse, in.uv).rgb * weight[0];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 1.0)).rgb * weight[1];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 1.0)).rgb * weight[1];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 2.0)).rgb * weight[2];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 2.0)).rgb * weight[2];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 3.0)).rgb * weight[3];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 3.0)).rgb * weight[3];
-    result += textureSample(t_diffuse, s_diffuse, in.uv + vec2(0.0, tex_offset * 4.0)).rgb * weight[4];
-    result += textureSample(t_diffuse, s_diffuse, in.uv - vec2(0.0, tex_offset * 4.0)).rgb * weight[4];
+    
+    // Explicitly sample from index 0 of the texture array for post-process passes
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv).rgb * weight[0];
+    for (var i = 1; i < 9; i++) {
+        result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * f32(i))).rgb * weight[i];
+        result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * f32(i))).rgb * weight[i];
+    }
     return vec4<f32>(result, 1.0);
+}
+
+fn aces_tonemap(x: vec3<f32>) -> vec3<f32> {
+    let a = 2.51;
+    let b = 0.03;
+    let c = 2.43;
+    let d = 0.59;
+    let e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), vec3<f32>(0.0), vec3<f32>(1.0));
 }
 
 @fragment
 fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv_screen = in.uv;
-    let scene_color = textureSample(t_diffuse, s_diffuse, in.uv);
+    let scene_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
     let bloom_color = textureSample(t_env, s_env, in.uv);
     
     // Berserker Glow Instability (Temporal + Spatial Pulse)
     let flicker = 0.92 + sin(scene.time * 6.0 + uv_screen.x * 10.0) * 0.08;
     
-    // Tonemapping & Bloom Fusion with Flicker
-    let final_rgb = scene_color.rgb + (bloom_color.rgb * 1.5 * flicker);
+    // HDR Bloom Fusion
+    let hdr_color = scene_color.rgb + (bloom_color.rgb * 1.5 * flicker);
     
-    return vec4<f32>(final_rgb, scene_color.a);
+    // ACES Filmic Tonemapping (Asgard Quality)
+    let ldr_color = aces_tonemap(hdr_color);
+    
+    return vec4<f32>(ldr_color, scene_color.a);
 }

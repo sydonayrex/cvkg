@@ -8,6 +8,12 @@ pub struct ScribingStone {
     pub strokes: Arc<Mutex<Vec<Vec<[f32; 2]>>>>,
 }
 
+impl Default for ScribingStone {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScribingStone {
     pub fn new() -> Self {
         Self {
@@ -37,7 +43,7 @@ impl View for ScribingStone {
         // 3. Interaction Handler
         let strokes_clone = self.strokes.clone();
         renderer.register_handler("pointerdown", Arc::new(move |ev| {
-            if let Event::PointerDown { x, y } = ev {
+            if let Event::PointerDown { x, y, .. } = ev {
                 let mut s = strokes_clone.lock().unwrap();
                 s.push(vec![[x, y]]);
             }

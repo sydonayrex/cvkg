@@ -1,6 +1,0 @@
-{
-  "artifactType":  "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
-  "summary":  "This implementation plan outlines the future development path for integrating advanced memory systems (TemporalGraph/Mnemosyne) and high-fidelity visual telemetry (BugHunter-AI style) into the CVKG and Ulfhednar ecosystems. It covers the transition to a 5-layer cognitive memory OS and the implementation of editorial-grade tactical HUD components.",
-  "updatedAt":  "2026-05-02T22:12:18.260169613Z",
-  "requestFeedback":  true
-}

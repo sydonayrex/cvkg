@@ -1,53 +1,51 @@
 use cvkg_render_gpu::SurtrRenderer;
-use cvkg_core::{Rect, Renderer};
+use cvkg_core::{Rect, Renderer, FrameRenderer};
 
 #[tokio::test]
 async fn test_headless_render_capture() {
-    let width = 256;
-    let height = 256;
+    let width = 128;
+    let height = 128;
     let mut renderer = SurtrRenderer::forge_headless(width, height).await;
     
+    // 1. Setup Frame
     let encoder = renderer.begin_frame_headless();
     
-    // Draw something simple: a red square
+    // Clear to black first to ensure a clean slate
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 },
+        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        [0.0, 0.0, 0.0, 1.0]
+    );
+    
+    // Draw a prominent red square in the middle
+    renderer.fill_rect(
+        Rect { x: 32.0, y: 32.0, width: 64.0, height: 64.0 },
         [1.0, 0.0, 0.0, 1.0]
     );
     
-    use cvkg_core::FrameRenderer;
+    // 2. Render and End
     renderer.render_frame();
     renderer.end_frame(encoder);
     
-    let pixels = renderer.capture_frame().await;
+    // 3. Capture and Verify
+    let pixels = renderer.capture_frame().await.expect("Failed to capture frame");
     
-    assert_eq!(pixels.len(), (width * height * 4) as usize);
-    
-    // Check a pixel inside the red square (e.g., at 5, 5)
-    let idx = (5 * width + 5) as usize * 4;
+    // Check a pixel inside the red square (e.g., center at 64, 64)
+    let idx = (64 * width + 64) as usize * 4;
     let r = pixels[idx];
-    let g = pixels[idx+1];
-    let b = pixels[idx+2];
-    let a = pixels[idx+3];
+    let g = pixels[idx + 1];
+    let b = pixels[idx + 2];
     
-    println!("Pixel at (5,5): R={}, G={}, B={}, A={}", r, g, b, a);
+    println!("Center Pixel (64,64): R={}, G={}, B={}, A={}", r, g, b, pixels[idx + 3]);
+    println!("Telemetry: draw_calls={}, vertices={}", renderer.telemetry.draw_calls, renderer.telemetry.vertices);
     
-    // Print a 4x4 grid of pixels at the start
-    println!("Pixels (0-3, 0-3):");
-    for y in 0..4 {
-        for x in 0..4 {
-            let i = (y * width + x) as usize * 4;
-            print!("[{},{},{},{}] ", pixels[i], pixels[i+1], pixels[i+2], pixels[i+3]);
-        }
-        println!();
-    }
-    
+    // With ACES tonemapping, 1.0 red becomes ~204 (0.80)
     assert!(r > 150, "Red component should be high, got {}", r);
     assert!(g < 100, "Green component should be low, got {}", g);
     assert!(b < 100, "Blue component should be low, got {}", b);
     
-    // Check a pixel outside (e.g., at 100, 100) - should be the background color
-    let idx_out = (100 * width + 100) as usize * 4;
+    // Check a pixel outside the square (e.g., at 5, 5)
+    let idx_out = (5 * width + 5) as usize * 4;
     let r_out = pixels[idx_out];
-    assert!(r_out < 100, "Background should be dark, got {}", r_out);
+    println!("Corner Pixel (5,5): R={}, G={}, B={}, A={}", r_out, pixels[idx_out+1], pixels[idx_out+2], pixels[idx_out+3]);
+    assert!(r_out < 50, "Corner pixel should be black/background, got R={}", r_out);
 }

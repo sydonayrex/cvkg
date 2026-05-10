@@ -488,3 +488,25 @@ agent framework
 distributed system
 operating system
 infrastructure runtime
+
+14. 🧪 Hardware-First Verification Guardrails (CRITICAL)
+14.1 🎯 The "Mock vs. Reality" Gap
+
+CVKG architecture is highly asynchronous and OS-dependent. Verification MUST NOT rely solely on mocks for:
+
+- Input interaction (Pointer events, Keyboard, IME)
+- Lifecycle transitions (Resumed, Suspended, RedrawRequested)
+- Hit-testing with complex VDOM hierarchies
+
+14.2 🚨 Prohibited Practices
+
+- **Declaring success based on `cargo test` if the test uses a MockRenderer.**
+- **Assuming VDOM `dispatch_event` logic works without hardware-level tracing.**
+- **Mocking Winit `ActiveEventLoop` state in integration tests.**
+
+14.3 ✅ Mandatory Verification Protocol
+
+1. **Hardware-Level Tracing**: Every input event MUST be traced from the `WindowEvent` (Native) to the `VNode` (VDOM) using explicit `log::trace` or `log::info`.
+2. **Lifecycle State-Sync**: Window state initialization MUST be verified as atomic. No "blocking" calls (e.g., `pollster::block_on`) should exist in a timing window where the OS might send events before the state map is populated.
+3. **Shadowing Audit**: Hit-testing MUST be audited for "Presentation Shadowing" where decorative child nodes block parent interactive containers.
+4. **Physical Loopback**: Interaction features MUST be verified by running the `berserker` demo and confirming `[VDOM_DISPATCH]` traces in the terminal. Logic-only passes are NOT sufficient for release.

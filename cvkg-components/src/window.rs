@@ -155,3 +155,80 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         }
     }
 }
+
+/// HiminnModal - An elevated, glassmorphic modal dialog.
+/// Named after the sky/heaven, it floats above Midgard (the main UI).
+/// 
+/// INSPIRED BY: iOS 26 Liquid Glass (Lensing) and Radix UI (Dialog).
+pub struct HiminnModal<V: View> {
+    pub content: V,
+    pub is_open: bool,
+    pub blur_radius: f32,
+    pub border_color: [f32; 4],
+}
+
+impl<V: View> HiminnModal<V> {
+    /// Creates a new HiminnModal with the given content.
+    pub fn new(content: V) -> Self {
+        Self {
+            content,
+            is_open: false,
+            blur_radius: 20.0,
+            border_color: [0.0, 0.8, 1.0, 0.8], // Bifrost Cyan
+        }
+    }
+
+    /// Sets whether the modal is open.
+    pub fn open(mut self, open: bool) -> Self {
+        self.is_open = open;
+        self
+    }
+
+    /// Sets the blur radius for the lensing effect.
+    pub fn blur_radius(mut self, radius: f32) -> Self {
+        self.blur_radius = radius;
+        self
+    }
+}
+
+impl<V: View> View for HiminnModal<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if !self.is_open {
+            return;
+        }
+
+        renderer.push_vnode(rect, "HiminnModal");
+        
+        // 1. Overlay (Darken background)
+        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.4]);
+
+        // 2. Modal Centering
+        let modal_width = 400.0;
+        let modal_height = 300.0;
+        let modal_rect = Rect {
+            x: rect.x + (rect.width - modal_width) / 2.0,
+            y: rect.y + (rect.height - modal_height) / 2.0,
+            width: modal_width,
+            height: modal_height,
+        };
+
+        // 3. Liquid Glass Lensing Effect
+        // INSPIRED BY: LiquidGlassReference (Lensing)
+        renderer.bifrost(modal_rect, self.blur_radius, 1.3, 0.85);
+        renderer.stroke_rounded_rect(modal_rect, 12.0, self.border_color, 1.5);
+
+        // 4. Content
+        let content_rect = Rect {
+            x: modal_rect.x + 16.0,
+            y: modal_rect.y + 16.0,
+            width: modal_rect.width - 32.0,
+            height: modal_rect.height - 32.0,
+        };
+        self.content.render(renderer, content_rect);
+
+        renderer.pop_vnode();
+    }
+}
