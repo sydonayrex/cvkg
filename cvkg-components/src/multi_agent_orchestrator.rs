@@ -632,7 +632,7 @@ pub struct OrchestratorState {
     pub is_paused: bool,
     pub step_mode: bool,
     pub message_log: Vec<AgentMessage>,
-    pub validation_errors: Vec<ValidationResult>,
+    pub validation_errors: Vec<ValidationError>,
     pub show_output_panel: bool,
     pub show_message_panel: bool,
     pub show_validation_panel: bool,
@@ -2292,6 +2292,10 @@ impl SkillRegistry {
             .sum::<u32>()
             .max(500)
     }
+
+    pub fn list_skills(&self) -> Vec<&SkillDef> {
+        self.skills.values().collect()
+    }
 }
 
 // === FEATURE: WebhookConfig ===
@@ -2394,9 +2398,14 @@ impl UndoRedo {
 
 // === FEATURE: ValidationResult ===
 #[derive(Debug, Clone, Default)]
+pub struct ValidationError {
+    pub message: String,
+    pub is_error: bool,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct ValidationResult {
-    pub errors: Vec<String>,
-    pub warnings: Vec<String>,
+    pub issues: Vec<ValidationError>,
     pub is_valid: bool,
 }
 
@@ -2409,14 +2418,12 @@ pub struct SearchState {
 }
 
 // === FEATURE: Workflow Validation ===
-pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge]) -> ValidationResult {
-    let mut result = ValidationResult::default();
-    result.is_valid = true;
+pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge]) -> Vec<ValidationError> {
+    let mut issues = Vec::new();
 
     if nodes.is_empty() {
-        result.errors.push("Workflow has no nodes".to_string());
-        result.is_valid = false;
-        return result;
+        issues.push(ValidationError { message: "Workflow has no nodes".to_string(), is_error: true });
+        return issues;
     }
 
     let connected_ids: std::collections::HashSet<&str> = edges.iter()
@@ -2425,7 +2432,7 @@ pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge])
 
     for node in nodes {
         if !connected_ids.contains(node.id.as_str()) {
-            result.warnings.push(format!("Node '{}' is disconnected", node.name));
+            issues.push(ValidationError { message: format!("Node '{}' is disconnected", node.name), is_error: false });
         }
     }
 
@@ -2461,8 +2468,7 @@ pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge])
     for node in nodes {
         if !visited.contains(node.id.as_str()) {
             if has_cycle(node.id.as_str(), &adj, &mut visited, &mut in_stack) {
-                result.errors.push("Workflow contains a cycle".to_string());
-                result.is_valid = false;
+                issues.push(ValidationError { message: "Workflow contains a cycle".to_string(), is_error: true });
                 break;
             }
         }
@@ -2477,10 +2483,10 @@ pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge])
         .collect();
 
     if start_nodes.is_empty() && !nodes.is_empty() {
-        result.warnings.push("No start node found (all nodes have inputs)".to_string());
+        issues.push(ValidationError { message: "No start node found (all nodes have inputs)".to_string(), is_error: false });
     }
 
-    result
+    issues
 }
 
 // === FEATURE: Zoom to fit ===
@@ -2743,7 +2749,7 @@ fn render_schedule_panel(
     if let Some(sel) = &state.selected_node {
         if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
             renderer.draw_text(&format!("Cron: {}", node.schedule_config.cron_expression), x + 12.0, y + 30.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
-            renderer.draw_text(&format!("Interval: {}s", node.schedule_config.interval_secs), x + 12.0, y + 48.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(&format!("Interval: {}s", node.schedule_config.interval_seconds), x + 12.0, y + 48.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
         }
     } else {
         renderer.draw_text("Select a schedule node.", x + 12.0, y + 30.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
@@ -2773,7 +2779,7 @@ fn render_recurring_panel(
     } else {
         let mut cy = y + 30.0;
         for run in &state.recurring_runs {
-            renderer.draw_text(&format!("Every {}s ({} runs)", run.interval_secs, run.run_count), x + 12.0, cy, 11.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(&format!("Every {}s ({} runs)", run.interval_seconds, run.run_count), x + 12.0, cy, 11.0, [0.7, 0.7, 0.8, 1.0]);
             cy += 18.0;
         }
     }
