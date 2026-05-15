@@ -1,66 +1,55 @@
 # cvkg-components
 
-![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-**cvkg-components** provides a high-fidelity tactical UI component library for CVKG, built with a strict **Cyberpunk Viking** aesthetic and GPU-native performance.
+`cvkg-components` is the standard library for the CVKG framework, providing a vast collection of atomic primitives and complex "Berserker" widgets.
 
-## Design Philosophy: Advanced Norse HUD Patterns
+## Boundaries and Responsibilities
 
-All components are designed with "Liquid Glass" aesthetics, leveraging three core rendering patterns:
-- **Mimir's Refraction**: Deep refractive lensing using `renderer.bifrost()` for simulated thickness and background distortion.
-- **Loki's Shape-shifting**: Coordinated state transitions and morphing geometry logic.
-- **Surtur's Reactive Materials**: Kinetic materials that react to tactical input with dynamic resonance and glows.
+This crate implements concrete UI elements using the `View` trait. It does NOT handle low-level rendering (delegated to `cvkg-core` and the active backend). Its responsibilities include:
+- Providing atomic building blocks (`Button`, `Toggle`, `Input`, `Slider`).
+- Implementing complex, stateful widgets like `RunestoneEditor`, `MimirSpotlight`, and `OracleOrb`.
+- Managing layout containers (`VStack`, `HStack`, `ZStack`, `Grid`).
+- Offering high-fidelity tactical HUD elements (`TacticalGauge`, `Vegvísir`, `WyrdHUD`).
+- Exposing the `ViewExt` trait for sheet and modal presentation.
 
-## Component Inventory
+## Public API Overview
 
-### Data Display (The Great Library of Runes)
-- `RunesTable`: Virtualized, sortable data grid with in-cell sparklines for mission telemetry.
-- `YggdrasilTree`: Hierarchical data display for command structures and file systems.
-- `RunesCard`: Tactically inscribed data containers with refractive glass depth.
-- `UrdrTimeline`: Chronological event sequence display (The Past).
+### Atomic Primitives
+- `Button`, `Toggle`, `Slider`, `Input`: Standard interactive controls.
+- `Text`, `Image`, `Shape`: Basic content display.
+- `Progress`, `Gauge`, `StatusBar`: Visualization components.
 
-### Forms & Input (Input Manifests)
-- `EikonaForm`: Schema-driven form validation with tactical feedback.
-- `ValkyrSelect`: Searchable tactical chooser / Combobox.
-- `TyrCalendar`: Temporal date and range selection system.
-- `BifrostColorPicker`: Multi-realm color selection bridge.
-- `ValhallaRating`: Tactical quality assessment with star resonance.
+### Tactical & Agentic Widgets
+- `MimirSpotlight`: A keyboard-driven command palette.
+- `OracleOrb`: An interactive, state-aware agentic status indicator.
+- `RunestoneEditor`: A high-performance code and text editor.
+- `VölvaScan`: Advanced diagnostic and telemetry visualization.
 
-### Feedback & Overlays (The Sky Realms)
-- `HiminnModal`: Elevated glassmorphic dialogs with refractive lensing.
-- `GjallarAlert`: High-priority tactical notifications (toasts) using the Gjallarhorn signal aesthetic.
-- `RunicTooltip`: Contextual information overlays with neon vibrancy.
-- `DraumaSkeleton`: Spectral shimmer placeholders for asynchronous content.
-- `SagaAccordion`: Multi-layered narrative content containers with collapsible flows.
-- `ValkyrieAnalytics`: Real-time tactical gauges and radar charts for combat monitoring.
-
-### Layout & Navigation
-- `GjallarSplitter`: Resizable panel splitting with Mimir's Eye handle glow.
-- `HringrPagination`: Cyclic navigation for traversing data loops.
-- `MimirSpotlight`: Global command palette and tactical search bar.
+### Layout & Containers
+- `NavigationStack`, `Tabview`, `ScrollView`: Structural navigation.
+- `GjallarSplitter`: Resizable split views.
+- `MjolnirFrame`: Specialized decorative and functional container frames.
 
 ## Usage Example
 
 ```rust
-use cvkg_components::{VStack, RunesTable, EikonaForm, HiminnModal};
-use cvkg_core::View;
+use cvkg_components::prelude::*;
 
-fn tactical_dashboard() -> impl View {
-    VStack::new(20.0)
-        .child(
-            RunesTable::new(mission_data)
-                .sortable(true)
-                .on_row_click(|row| /* handle */)
-        )
-        .child(
-            HiminnModal::new("System Override")
-                .content(EikonaForm::new(override_schema))
-        )
+fn MyComponent() -> impl View {
+    VStack::new(10.0) {
+        Text::new("Agentic Status: Active")
+            .foregroundColor(Color::VIKING_GOLD);
+            
+        OracleOrb::new(AgentState::Thinking);
+        
+        Button::new("Execute Protocol", || {
+            println!("Protocol Initialized");
+        });
+    }
 }
 ```
 
-## Performance & Rendering
-
-- **GPU-Native**: Stateless functional views optimized for `wgpu` backends.
-- **Deterministic VDOM**: 60+ FPS maintained via `push_vnode`/`pop_vnode` tracking.
-- **Cross-Platform**: Consistent rendering across Native (Metal/DX12/Vulkan) and Web (WebGPU).
+## Known Limitations
+- Complex widgets like `RunestoneEditor` require a GPU-accelerated backend for full feature support (e.g., syntax highlighting).
+- Component state is typically managed via the `Binding` system defined in `cvkg-core`.

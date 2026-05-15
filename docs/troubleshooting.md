@@ -1,131 +1,69 @@
-# Troubleshooting
+# Troubleshooting Guide
 
-This document lists common failure modes, their causes, and fixes.
+This guide addresses common issues encountered when building or running CVKG applications.
 
-## Build Failures
+## 1. Rendering Issues
 
-### Symptom
-`error: failed to run custom build command for 'cvkg-render-gpu'`
+### "GPU Device Not Found"
+- **Cause**: No compatible GPU adapter was found.
+- **Fix**: 
+  - Ensure your drivers are updated.
+  - On Linux, check if `vulkan-utils` reports a valid device.
+  - On Windows/macOS, ensure you are not running in a VM without GPU passthrough.
 
-### Cause
-Missing Vulkan SDK or `vulkan.h` header.
+### "Black Screen" (Native)
+- **Cause**: Often a Wayland/X11 mismatch or a missing font.
+- **Fix**:
+  - Try running with `WINIT_UNIX_BACKEND=x11` or `wayland`.
+  - Check the logs for `[GPU] Selected adapter`. If it shows `Software`, performance will be poor and some shaders may fail.
 
-### Fix
+### "Flickering Text"
+- **Cause**: Mega-Atlas exhaustion or subpixel rounding issues.
+- **Fix**:
+  - Increase the atlas size in `cvkg-render-gpu` (requires rebuild).
+  - Ensure you are using a consistent `scale_factor` (check HighDPI settings).
 
+## 2. Compilation Issues
+
+### "Cyclic Dependency"
+- **Cause**: Usually a circular link between `cvkg-core` and a rendering backend.
+- **Fix**:
+  - Ensure you only select **ONE** rendering feature in your `Cargo.toml`.
+  - Use `cargo tree -d` to identify the cycle.
+
+### "Missing Feature: 'native'"
+- **Cause**: The main `cvkg` crate was included without specifying a backend.
+- **Fix**:
+  ```toml
+  cvkg = { version = "0.1.18", features = ["native"] }
+  ```
+
+## 3. Platform Specifics
+
+### Linux (Wayland)
+If the application crashes on startup:
 ```bash
-# Ubuntu/Debian
-sudo apt-get install -y libvulkan-dev vulkan-sdk
-
-# macOS
-brew install vulkan-sdk
+# Force X11 backend if Wayland drivers are unstable
+export WINIT_UNIX_BACKEND=x11
+cargo run
 ```
 
----
+### WASM (Web)
+If the page is stuck on "Loading...":
+- Open Browser DevTools (F12).
+- Check for `WebGPU not supported` errors.
+- Ensure the `cvkg-webkit-server` is pointing to the correct `pkg/` directory.
 
-### Symptom
-`error: no renderer feature enabled`
+## 4. Performance Degressions
 
-### Cause
-Building without specifying a renderer feature.
+### High Jitter / Frame Drops
+- Check `cvkg inspect` for `VDom Diff` times. If high, simplify your view hierarchy.
+- Ensure you are not performing heavy I/O or calculations in the `body()` method.
+- Activate `GodMode` in the telemetry dashboard to prioritize the render thread.
 
-### Fix
+## 5. Reporting New Issues
 
-```bash
-cargo build --features gpu    # For GPU renderer
-cargo build --features web    # For web renderer
-cargo build --features native   # For native renderer
-```
-
----
-
-### Symptom
-`error: linking with `cc` failed` on Windows
-
-Cause
-Missing Visual Studio build tools or Windows SDK.
-
-Fix
-Install Visual Studio with "Desktop development with C++" workload.
-
----
-## Runtime Failures
-
-### Symptom
-Application panics with `no adapter found` or `no suitable GPU`
-
-Cause
-No compatible GPU or drivers.
-
-Fix
-Ensure Vulkan/Metal/DX12 capable GPU is available. For headless, use software adapter:
-
-```bash
-export WGPU_ADAPTER=mesa # Linux software rendering
-```
-
----
-### Symptom
-`panic!: layout cache overflow`
-
-Cause
-Too many unique layout configurations in a single frame.
-
-Fix
-Reduce the number of distinct sized views or increase the cache size in `cvkg-core`.
-
----
-### Symptom
-Text appears as boxes or question marks
-
-Cause
-Missing glyph in loaded fonts.
-
-Fix
-Register additional fonts with the shaper or verify font data is valid.
-
----
-## Panic Messages in Source
-
-The following panic!() calls are documented from the source code:
-
-### `View::body()` panic
-Symptom: `body must return Self::Body`
-Cause: Incorrect Body type implementation
-Fix: Ensure `body()` returns the correct associated type
-
-### Renderer initialization panic
-Symptom: `renderer not initialized`
-Cause: Calling render before setup complete
-Fix: Ensure window/surface creation succeeded before rendering
-
----
-## Environment Variables
-
-| Variable | Expected | Failure Mode if Missing |
-|----------|----------|------------------------|
-| `WGPU_ADAPTER` | `discrete`, `integrated`, or `mesa` | Runtime selects wrong GPU |
-| `RUST_BACKTRACE` | `1` | No stack trace on panic |
-| `WGPU_LOG` | `info` or `debug` | No GPU diagnostic output |
-
----
-## Error Types
-
-### `StateUpdateError`
-Cause: Concurrent state mutation during render
-Fix: Ensure state updates happen on main thread only
-
-### `FontLoadError`
-Cause: Invalid font data or unsupported format
-Fix: Verify font files are valid TTF/OTF
-
-### `ShaderCompileError`
-Cause: Invalid WGSL shader code
-Fix: Check shader syntax and feature support
-
----
-## Getting Help
-
-If the above does not resolve the issue:
-1. Run with `RUST_BACKTRACE=full` and include output
-2. File an issue at https://github.com/sydonayrex/cvkg/issues
-3. Include your GPU model and driver version
+If your problem is not listed:
+1. Run with `RUST_LOG=debug`.
+2. Capture a screenshot or trace.
+3. Open a GitHub Issue with your OS, GPU, and Rust version.

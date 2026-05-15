@@ -1,90 +1,45 @@
 # cvkg-render-native
 
-**cvkg-render-native** provides window management and event loop integration for CVKG on desktop platforms using winit.
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## What This Crate Does
+`cvkg-render-native` provides platform-native windowing and event loop integration for CVKG desktop applications using `winit` and `AccessKit`.
 
-- Creates native windows using winit
-- Integrates the GPU renderer with the native event loop
-- Handles input events (mouse, keyboard, IME)
-- Provides application lifecycle management
+## Boundaries and Responsibilities
 
-## What This Crate Does NOT Do
-
-- Does not provide WebGPU rendering (see cvkg-render-gpu)
-- Does not provide web bindings (see cvkg-render-web)
-- Does not handle HTTP requests
+This crate acts as the host environment for native applications. It does NOT implement low-level GPU drawing (delegated to `cvkg-render-gpu`). Its responsibilities include:
+- Managing the OS window lifecycle and event loop via `winit`.
+- Bridging the CVKG VDOM to the platform accessibility tree using `AccessKit`.
+- Dispatching native input events (Keyboard, Mouse, IME) into the CVKG event system.
+- Providing high-resolution frame timing and jitter telemetry for performance monitoring.
+- Managing "Berserker Mode" OS-level scheduler priorities for high-priority rendering.
 
 ## Public API Overview
 
-### NativeApp
+### Entry Points
+- `NativeRenderer::run<V: View>(view: V)`: The primary entry point for launching a CVKG desktop application.
 
-```rust
-/// The main application container for native platforms
-pub struct NativeApp {
-    // private fields
-}
+### Key Types
+- `NativeRenderer`: Implements the `Renderer` trait by wrapping a GPU-accelerated Surtr instance.
+- `App`: The internal `winit` application handler managing windows and GPU contexts.
+- `NativeAssetManager`: A concrete asset loader for the local filesystem using `arc-swap` for lock-free reads.
 
-impl NativeApp {
-    /// Create a new native application with the given dimensions
-    pub fn new(width: u32, height: u32, title: &str) -> Self;
-    
-    /// Run the application with the given view
-    pub fn run<V: View>(&mut self, view: V);
-    
-    /// Set the window title
-    pub fn set_title(&self, title: &str);
-    
-    /// Set whether the window is resizable
-    pub fn set_resizable(&self, resizable: bool);
-}```
-
-### run_app Function
-
-```rust
-/// Convenience function to initialize and run a CVKG application
-pub fn run_app<V: View + 'static>(width: u32, height: u32, title: &str, view_factory: impl FnOnce() -> V + 'static);
-```
-
-### Event Handling
-
-```rust
-/// Input events from the window system
-pub enum NativeEvent {
-    PointerDown { x: f32, y: f32, button: u32 },
-    PointerUp { x: f32, y: f32, button: u32 },
-    PointerMove { x: f32, y: f32 },
-    KeyDown { key: String, modifiers: ModifiersState },
-    KeyUp { key: String, modifiers: ModifiersState },
-    Resize { width: u32, height: u32 },
-    Close,
-}```
-
-## Feature Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `std` | true | Use standard library |
-| `x11` | false | Enable X11 support on Linux |
-| `wayland` | false | Enable Wayland support on Linux |
+### Critical Features
+- **Kinetic Injection**: Translates window movement into "Rage" telemetry for dynamic UI effects.
+- **ShieldWall Integration**: Automatic generation of accessibility trees from VNodes.
 
 ## Usage Example
 
 ```rust
-use cvkg_render_native::run_app;
-use cvkg_components::{VStack, Text, Button};
+use cvkg_render_native::NativeRenderer;
+use cvkg_core::View;
 
 fn main() {
-    run_app(800, 600, "My App", || {
-        VStack::new(16.0)
-            .child(Text::new("Hello, Native!").size(24.0))
-            .child(Button::new("Click Me"))
-    });
+    let app_view = MyApp::new();
+    NativeRenderer::run(app_view);
 }
 ```
 
 ## Known Limitations
-
-- Window decorations are platform-dependent
-- IME support requires platform-specific configuration
-- HiDPI scaling may not work correctly on all platforms
+- Multi-window support is implemented but experimental; focus management across windows is handled via the VDOM bridge.
+- Wayland support requires specific system dependencies (see root README).
+- Hardware verification is required; do not rely on mocks for this crate.

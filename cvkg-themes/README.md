@@ -1,96 +1,35 @@
 # cvkg-themes
 
-**cvkg-themes** manages the "Berserker" design system, including semantic colors, typography scales, and motion tokens.
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## What This Crate Does
+`cvkg-themes` defines the authoritative "Berserker Design System" tokens, enabling consistent aesthetics, rhythmic typography, and accessible color palettes across the CVKG ecosystem.
 
-- Provides `Theme` struct with semantic colors and design tokens
-- Defines `SemanticColors` for UI states (primary, secondary, background, error, etc.)
-- Provides `TypographyScale` for consistent text sizing
-- Provides `SpacingScale` for layout consistency
-- Provides `MotionScale` for standardized animation physics
+## Boundaries and Responsibilities
 
-## What This Crate Does NOT Do
-
-- Does not provide rendering functionality
-- Does not handle user preferences or system theme detection
-- Does not persist theme settings
+This crate provides the data structures for design tokens. It does NOT apply styles directly (delegated to components). Its responsibilities include:
+- Defining semantic color palettes (`Primary`, `Secondary`, `Accent`, `Surface`, `Background`).
+- Establishing typography scales for hero headers, body text, and captions.
+- Standardizing spacing and motion (animation physics) scales.
+- Providing built-in themes like the default "Norse Dark" mode.
+- Validating theme contrast against WCAG 2.1 accessibility standards.
 
 ## Public API Overview
 
-### Theme
+### Theme Structure
+- `Theme`: The root container for all design tokens.
+- `SemanticColors`: Context-aware color definitions.
+- `TypographyScale`: Rhythmic font sizes.
+- `SpacingScale`: Standardized padding and margin values.
+- `MotionScale`: Presets for Sleipnir animation solvers.
 
-```rust
-/// Semantic colors for the Berserker Design System
-pub struct SemanticColors {
-    pub primary: Color,
-    pub secondary: Color,
-    pub accent: Color,
-    pub background: Color,
-    pub surface: Color,
-    pub error: Color,
-    pub warning: Color,
-    pub success: Color,
-    pub text: Color,
-    pub text_dim: Color,
-}
+### Authoritative Tokens
+- `Color::VIKING_GOLD`: The primary brand color.
+- `Color::TACTICAL_OBSIDIAN`: The authoritative background for UI surfaces.
+- `Color::MAGENTA_LIQUID`: The primary accent color for active states.
 
-/// Typography scale for consistent rhythmic text
-pub struct TypographyScale {
-    pub hero: f32,
-    pub h1: f32,
-    pub h2: f32,
-    pub body: f32,
-    pub caption: f32,
-    pub code: f32,
-}
-
-/// Spacing scale for layout consistency
-pub struct SpacingScale {
-    pub xs: f32,
-    pub s: f32,
-    pub m: f32,
-    pub l: f32,
-    pub xl: f32,
-}
-
-/// Motion scale for standardized animation physics
-pub struct MotionScale {
-    pub snappy: SleipnirParams,
-    pub fluid: SleipnirParams,
-    pub heavy: SleipnirParams,
-    pub bouncy: SleipnirParams,
-}
-
-/// A resolved Theme instance
-pub struct Theme {
-    pub colors: SemanticColors,
-    pub typography: TypographyScale,
-    pub spacing: SpacingScale,
-    pub motion: MotionScale,
-}
-impl Theme {
-    /// Create a dark theme with Norse tokens
-    pub fn dark() -> Self;
-    
-    /// Check if theme is in dark mode
-    pub fn is_dark(&self) -> bool;
-    
-    /// Validate accessibility against WCAG 2.1
-    pub fn validate_accessibility(&self) -> Vec<String>;
-}
-```
-
-### Color Utilities
-
-```rust
-use cvkg_core::Color;
-
-// Color constants (defined in cvkg-core)
-Color::VIKING_GOLD
-Color::MAGENTA_LIQUID
-Color::TACTICAL_OBSIDIAN
-```
+### Methods
+- `Theme::dark()`: Returns the default high-fidelity dark theme.
+- `Theme::validate_accessibility()`: Checks for contrast violations and returns a list of warnings.
 
 ## Usage Example
 
@@ -98,20 +37,14 @@ Color::TACTICAL_OBSIDIAN
 use cvkg_themes::Theme;
 
 let theme = Theme::dark();
+let bg_color = theme.colors.background;
 
-println!("Primary color: {:?}", theme.colors.primary);
-println!("Body text size: {}", theme.typography.body);
-println!("Default spacing: {}", theme.spacing.m);
-
-// Validate accessibility
-let warnings = theme.validate_accessibility();
-for warning in warnings {
-    eprintln!("Accessibility warning: {}", warning);
+// Check for accessibility compliance
+for warning in theme.validate_accessibility() {
+    eprintln!("A11y Warning: {}", warning);
 }
 ```
 
 ## Known Limitations
-
-- Only dark theme is provided by default
-- Color contrast validation only checks primary/background, text/background, and text/surface combinations
-- No runtime theme switching support in core
+- Dynamic runtime theme switching requires state management at the application level (typically via `EnvironmentValue`).
+- Color validation is based on standard LTR contrast formulas; complex gradients require manual review.

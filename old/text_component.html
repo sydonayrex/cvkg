@@ -1,0 +1,139 @@
+
+<style>
+  h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  .section{margin-bottom:2rem}
+  .section-label{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-tertiary);margin:0 0 10px}
+  .grid{display:grid;gap:10px}
+  .g2{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+  .g3{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+  .card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px}
+  .card-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin:0 0 4px;display:flex;align-items:center;gap:8px}
+  .card-body{font-size:12px;color:var(--color-text-secondary);line-height:1.6;margin:0}
+  .badge{font-size:10px;padding:2px 8px;border-radius:999px;font-weight:500}
+  .b-purple{background:var(--color-background-info);color:var(--color-text-info)}
+  .b-teal{background:#E1F5EE;color:#0F6E56}
+  .b-amber{background:#FAEEDA;color:#854F0B}
+  .b-coral{background:#FAECE7;color:#993C1D}
+  .b-gray{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+  @media(prefers-color-scheme:dark){.b-teal{background:#04342C;color:#5DCAA5}.b-amber{background:#412402;color:#FAC775}.b-coral{background:#4A1B0C;color:#F0997B}}
+  .divider{border:none;border-top:0.5px solid var(--color-border-tertiary);margin:1.5rem 0}
+  .future-label{font-size:11px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px}
+  .future-card{background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px 16px;border-left:2.5px solid}
+  .fc-purple{border-left-color:#7F77DD}
+  .fc-teal{border-left-color:#1D9E75}
+  .fc-amber{border-left-color:#BA7517}
+  .fc-coral{border-left-color:#D85A30}
+  .fc-blue{border-left-color:#378ADD}
+  .fc-pink{border-left-color:#D4537E}
+  .tag-row{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .tag{font-size:10px;padding:2px 7px;border-radius:4px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary)}
+</style>
+<h2 class="sr-only">Text component advanced features in UI/UX design systems today, and likely requirements by 2028</h2>
+
+<div style="padding:1rem 0 0">
+
+  <div class="section">
+    <div class="section-label">Advanced features — current text components</div>
+    <div class="grid g2">
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-text-size" aria-hidden="true"></i> Typographic control <span class="badge b-purple">Core</span></div>
+        <div class="card-body">Variable font axes (weight, width, optical size), fluid type scales with <code>clamp()</code>, dynamic leading trim, tabular vs proportional number rendering, OpenType feature toggles (ligatures, small caps, fractions).</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-highlight" aria-hidden="true"></i> Inline formatting <span class="badge b-purple">Core</span></div>
+        <div class="card-body">Rich inline marks: code, kbd, mark, sup/sub, strikethrough, decorative underlines with color/offset/style props. Nested inline elements without z-index collisions. Separate foreground and decoration layer.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-vocabulary" aria-hidden="true"></i> Semantic variants <span class="badge b-teal">Semantic</span></div>
+        <div class="card-body">Heading hierarchy with landmark roles, label vs helper text vs error text separation, caption vs footnote vs legal copy tokens, display vs body vs mono scale, contextual intent props (danger, success, muted).</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-accessible" aria-hidden="true"></i> Accessibility layer <span class="badge b-teal">Semantic</span></div>
+        <div class="card-body">WCAG 3.0 APCA contrast, aria-describedby chaining, visually-hidden variants, announcer integration, reading order override, live region wrapping, focus-visible management on interactive text.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-world" aria-hidden="true"></i> Internationalization <span class="badge b-amber">Advanced</span></div>
+        <div class="card-body">BiDi auto-detection, CJK line-break rules, RTL-aware truncation, locale-aware number/date formatting, script-specific font stack fallbacks, ruby annotation support for East Asian scripts.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-cut" aria-hidden="true"></i> Overflow & truncation <span class="badge b-amber">Advanced</span></div>
+        <div class="card-body">Single-line ellipsis, multi-line clamp, start/middle/end truncation modes, expand-on-interaction, tooltip-on-overflow, container-query-aware line limits, balanced vs auto text wrapping.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-sparkles" aria-hidden="true"></i> Animated text <span class="badge b-coral">Motion</span></div>
+        <div class="card-body">Token-by-token streaming reveal, number counter transitions, scramble/decode effects, skeleton shimmer, reduced-motion fallbacks baked in. Content-aware duration scaling.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-link" aria-hidden="true"></i> Rich links & annotations <span class="badge b-coral">Motion</span></div>
+        <div class="card-body">Inline citation markers, footnote popovers, hover-preview cards, external vs internal link styling, definition tooltips on technical terms, bidirectional linking for knowledge graphs.</div>
+      </div>
+
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
+    <div class="future-label">Likely new component requirements — by 2028</div>
+    <div class="grid g2">
+
+      <div class="future-card fc-purple">
+        <div class="card-title"><i class="ti ti-brain" aria-hidden="true"></i> AI-generated text renderer</div>
+        <div class="card-body">A dedicated component for streaming AI output — handles partial markdown, token diffing, citation anchoring, uncertainty indicators (confidence tinting), and source attribution inline. Distinct from static rich text.</div>
+        <div class="tag-row"><span class="tag">streaming</span><span class="tag">citations</span><span class="tag">confidence UI</span><span class="tag">diff rendering</span></div>
+      </div>
+
+      <div class="future-card fc-teal">
+        <div class="card-title"><i class="ti ti-layers-intersect" aria-hidden="true"></i> Spatial / XR text</div>
+        <div class="card-body">Text that lives in 3D space — depth-aware legibility, gaze-adaptive sizing, billboard vs world-locked modes, halo & occlusion handling. Required for Apple Vision Pro, Meta Horizon, and WebXR surfaces.</div>
+        <div class="tag-row"><span class="tag">WebXR</span><span class="tag">3D anchoring</span><span class="tag">gaze tracking</span><span class="tag">depth layers</span></div>
+      </div>
+
+      <div class="future-card fc-amber">
+        <div class="card-title"><i class="ti ti-microphone" aria-hidden="true"></i> Voice-linked text</div>
+        <div class="card-body">Text synchronized with audio playback — word-level highlight follows TTS, tap-to-replay, transcript alignment with media timestamps. Required for podcast players, language learning apps, accessibility tools.</div>
+        <div class="tag-row"><span class="tag">TTS sync</span><span class="tag">word-level highlight</span><span class="tag">karaoke mode</span><span class="tag">SRT/VTT</span></div>
+      </div>
+
+      <div class="future-card fc-coral">
+        <div class="card-title"><i class="ti ti-eye" aria-hidden="true"></i> Adaptive legibility engine</div>
+        <div class="card-body">Real-time text rendering adjusted by context: ambient light sensor data, user visual acuity profiles, reading speed detection, dyslexia-friendly modes, per-user font preference memory persisted across sessions.</div>
+        <div class="tag-row"><span class="tag">sensor API</span><span class="tag">user profiles</span><span class="tag">a11y modes</span><span class="tag">APCA 3.0</span></div>
+      </div>
+
+      <div class="future-card fc-blue">
+        <div class="card-title"><i class="ti ti-code-circle" aria-hidden="true"></i> Executable text blocks</div>
+        <div class="card-body">Code and formula blocks that run inline — output rendered below, edit-and-rerun, sandboxed evaluation, dependency resolution, version pinning. Merges the doc and the REPL into one component.</div>
+        <div class="tag-row"><span class="tag">WASM sandbox</span><span class="tag">inline REPL</span><span class="tag">LaTeX eval</span><span class="tag">output diffing</span></div>
+      </div>
+
+      <div class="future-card fc-pink">
+        <div class="card-title"><i class="ti ti-language" aria-hidden="true"></i> Real-time translation layer</div>
+        <div class="card-body">Text components with built-in locale switching — content swaps without re-mount, glossary-aware term substitution, machine translation with human-review flagging, bidirectional diff to compare translations.</div>
+        <div class="tag-row"><span class="tag">i18n runtime</span><span class="tag">glossary API</span><span class="tag">MT confidence</span><span class="tag">locale switching</span></div>
+      </div>
+
+      <div class="future-card fc-purple">
+        <div class="card-title"><i class="ti ti-fingerprint" aria-hidden="true"></i> Provenance & authenticity</div>
+        <div class="card-body">Cryptographic authorship markers embedded in text components — C2PA metadata, AI-generated content labeling (per emerging EU AI Act requirements), edit history diffing, watermark-aware rendering for compliance.</div>
+        <div class="tag-row"><span class="tag">C2PA</span><span class="tag">EU AI Act</span><span class="tag">edit history</span><span class="tag">watermarking</span></div>
+      </div>
+
+      <div class="future-card fc-teal">
+        <div class="card-title"><i class="ti ti-writing" aria-hidden="true"></i> Collaborative text overlay</div>
+        <div class="card-body">Presence-aware inline editing — cursor multiplexing, comment threads anchored to character ranges (not just lines), suggestion/track-changes rendering, conflict resolution UI baked into the component spec.</div>
+        <div class="tag-row"><span class="tag">CRDTs</span><span class="tag">cursor presence</span><span class="tag">anchored comments</span><span class="tag">OT conflict UI</span></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>

@@ -1,27 +1,55 @@
-# CVKG - Cyber Viking Kvasir Graph
+# cvkg
 
-**High-fidelity agentic UI framework written in Rust**
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## Overview
+`cvkg` is the primary entry point and public facade for the Cyber Viking Kvasir Graph framework. It unifies the modular workspace crates into a single, cohesive API.
 
-CVKG is a cutting-edge UI framework that combines the power of high-performance rendering with agentic system design principles. It provides a declarative, reactive UI system with support for multiple rendering backends (native, web, GPU-accelerated).
+## Boundaries and Responsibilities
 
-## Features
+This crate does NOT contain implementation logic. Instead, it:
+- Orchestrates the feature-gated selection of rendering backends (`gpu`, `native`, `web`).
+- Re-exports core components, layout engines, and animation solvers.
+- Provides a `prelude` for streamlined application development.
 
-- **Multi-backend rendering**: Native (winit), Web (wasm-bindgen), GPU-accelerated (wgpu)
-- **Reactive state management**: STM-based transactions with ArcSwap for lock-free reads
-- **High-fidelity visuals**: Cyberpunk aesthetics with neon effects, particle systems, and custom shaders
-- **Component-based architecture**: Reusable, composable UI components
-- **Accessibility-first**: WCAG AA compliance built-in
-- **Animation system**: High-performance animations with Sleipnir solver
-- **Scene graph**: Efficient rendering with dirty tracking and culling
-- **Security**: Path validation and CORS handling
+## Public API Overview
 
-## Quick Start
+### Feature Flags
+You MUST select exactly one rendering feature for your application:
+- `gpu`: Enables direct `wgpu` rendering (Surtr).
+- `native`: Enables `winit` windowing and desktop integration.
+- `web`: Enables WASM/Browser deployment.
 
+### Re-exported Modules
+- `core`: Fundamental traits and types.
+- `layout`: Stacking and grid containers.
+- `anim`: Physics-based animation solvers.
+- `components`: Reusable UI elements.
+- `scene`: Retained scene graph management.
+- `themes`: Semantic design tokens.
+
+### The Prelude
 ```rust
 use cvkg::prelude::*;
+// Includes: View, State, Binding, Rect, view_component macro, etc.
+```
 
-fn app() -> impl View {
-    VStack::new()
-        .child(Button::new(
+## Usage Example
+
+```rust
+// Cargo.toml
+// cvkg = { version = "0.1.18", features = ["native"] }
+
+use cvkg::prelude::*;
+
+#[view_component]
+fn App() {
+    VStack::new(20.0, Alignment::Center, Distribution::Center) {
+        Text::new("Skål, Cyber Viking!")
+            .gungnir([1.0, 0.5, 0.0, 1.0], 10.0, 2.0)
+    }
+}
+```
+
+## Known Limitations
+- Mixing backend features (e.g., `native` and `web`) in a single target is unsupported and will lead to compilation conflicts.
+- Always check the root README for system-level prerequisites for your chosen backend.

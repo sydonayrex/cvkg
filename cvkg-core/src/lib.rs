@@ -2573,11 +2573,23 @@ impl KnowledgeState {
         id: u64,
     ) -> Option<Arc<std::sync::RwLock<T>>> {
         let lock = self.component_states.get(&id)?;
-        // Try to downcast the Arc<RwLock<dyn Any>> to Arc<RwLock<T>>
-let _inner: &std::sync::RwLock<dyn std::any::Any + Send + Sync> = lock;
-        // We cannot directly cast Arc<RwLock<dyn Any>> to Arc<RwLock<T>>
-        // Instead, return the raw state - this is a limitation of the design
-        None // Placeholder - proper implementation would need a different design
+        // Attempt to clone the Arc and downcast the inner RwLock<dyn Any> to RwLock<T>
+        // We use a two-step approach: check if the inner type matches via Any, then transmute the Arc
+        // SAFETY: We verify the type via Any::is::<T> before transmuting
+        let any_ref = lock.read().ok()?;
+        if any_ref.is::<T>() {
+            // Type matches — safe to transmute the Arc
+            drop(any_ref);
+            let cloned: Arc<std::sync::RwLock<dyn std::any::Any + Send + Sync>> = Arc::clone(lock);
+            // Transmute Arc<RwLock<dyn Any>> to Arc<RwLock<T>>
+            // This is safe because we just verified the inner type is T
+            Some(unsafe {
+                let raw = Arc::into_raw(cloned);
+                Arc::from_raw(raw as *const std::sync::RwLock<T>)
+            })
+        } else {
+            None
+        }
     }
     /// Add a new fragment to memory.
     pub fn remember(&mut self, fragment: KnowledgeFragment) {

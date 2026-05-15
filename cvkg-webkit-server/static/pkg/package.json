@@ -1,0 +1,16 @@
+{
+  "name": "ulfhednar",
+  "type": "module",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "ulfhednar_bg.wasm",
+    "ulfhednar.js",
+    "ulfhednar.d.ts"
+  ],
+  "main": "ulfhednar.js",
+  "types": "ulfhednar.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

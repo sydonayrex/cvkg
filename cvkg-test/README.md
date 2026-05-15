@@ -1,70 +1,45 @@
 # cvkg-test
 
-**cvkg-test** provides visual testing, benchmarking, and snapshot comparison utilities for CVKG applications.
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## What This Crate Does
+`cvkg-test` provides the authoritative testing utilities for the CVKG ecosystem, specializing in visual regression and high-fidelity UI validation.
 
-- Provides visual regression testing with snapshot comparison
-- Provides headless rendering for automated tests
-- Provides benchmarking utilities for performance measurement
-- Implements property-based state testing
+## Boundaries and Responsibilities
 
-## What This Crate Does NOT Do
-
-- Does not provide assertion macros for general use
-- Does not provide mocking frameworks
-- Does not handle CI configuration
+This crate focuses on quality assurance. Its responsibilities include:
+- **Visual Regression**: Comparing rendered pixel buffers to detect subtle UI changes.
+- **Tolerance Management**: Allowing for configurable pixel-level and total-image difference thresholds.
+- **Snapshot Infrastructure**: Providing the tools to capture and store "golden" images for CI/CD pipelines.
 
 ## Public API Overview
 
-### Test Harness
+### Core Types
+- `VisualComparator`: The primary engine for comparing RGBA pixel buffers.
+- `VisualTolerance`: Configuration for individual pixel variance and total percentage change.
 
-```rust
-/// Set up a headless renderer for visual testing
-pub fn setup_headless_renderer(width: u32, height: u32) -> SurtrRenderer;
-
-/// Capture a frame from the renderer for comparison
-pub fn capture_frame(renderer: &mut SurtrRenderer) -> Vec<u8>;
-
-/// Compare two images for visual differences
-pub fn compare_images(expected: &[u8], actual: &[u8]) -> Result<(), VisualDiff>;
-```
-
-### Visual Regression
-
-```rust
-/// Snapshot testing for visual components
-pub struct SnapshotTester {
-    snapshots_dir: PathBuf,
-}
-impl SnapshotTester {
-    pub fn new(snapshots_dir: impl Into<PathBuf>) -> Self;
-    pub fn assert_snapshot(&self, name: &str, image: &[u8]);
-}
-```
-
-### Benchmarks
-
-```rust
-/// Performance benchmarks for rendering
-#[bench] fn bench_large_tree_render(b: &mut Bencher);
-#[bench] fn bench_vdom_diff(b: &mut Bencher);
-```
+### Methods
+- `VisualComparator::compare(img1, img2)`: Returns the percentage of pixels that differ beyond the defined tolerance.
 
 ## Usage Example
 
 ```rust
-use cvkg_test::{setup_headless_renderer, compare_images};
+use cvkg_test::VisualComparator;
 
 #[test]
-fn test_button_rendering() {
-    let mut renderer = setup_headless_renderer(800, 600);
-    // Render and compare
+fn test_ui_snapshot() {
+    let comparator = VisualComparator {
+        pixel_tolerance: 0.02,
+        total_tolerance_percent: 0.1,
+    };
+    
+    let current_frame = capture_frame();
+    let golden_frame = load_golden("main_screen.png");
+    
+    let diff = comparator.compare(&current_frame, &golden_frame);
+    assert!(diff < comparator.total_tolerance_percent, "Visual regression detected: {}% diff", diff);
 }
 ```
 
 ## Known Limitations
-
-- Snapshot tests require GPU for headless rendering
-- Baselines must be updated manually when intentional changes are made
-- Performance tests are not deterministic; run multiple times for reliable results
+- Visual testing is highly sensitive to hardware differences (GPU drivers, subpixel rendering); use the `cvkg` Docker images for consistent CI results.
+- Large images (4K+) may incur significant CPU overhead during comparison.

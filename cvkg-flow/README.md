@@ -1,92 +1,47 @@
 # cvkg-flow
 
-**cvkg-flow** provides node-based graph (flow) UI components for CVKG applications.
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## What This Crate Does
+`cvkg-flow` is a high-fidelity visual node graph editing engine built on top of CVKG, designed for complex data-flow and logic orchestration.
 
-- Provides `FlowGraph` container for node-based UI
-- Provides `FlowNode` component for individual nodes
-- Provides `FlowEdge` component for connections between nodes
-- Handles node interaction events (select, move, connect)
+## Boundaries and Responsibilities
 
-## What This Crate Does NOT Do
-
-- Does not provide rendering (see cvkg-render-gpu)
-- Does not provide layout for non-flow content
-- Does not handle graph algorithms (topological sort, etc.)
+This crate provides the logic and UI components for node-based interfaces. It focuses on:
+- **Graph Topology**: Managing the relationship between nodes, ports, and edges.
+- **Infinite Canvas**: Providing a zoomable, pannable workspace for large-scale graphs.
+- **Interaction Logic**: Handling connection dragging, node selection, and group movements.
+- **Type Safety**: Ensuring port connections respect defined data types and flow directions.
 
 ## Public API Overview
 
-### FlowGraph
+### Core Types
+- `FlowGraph`: The authoritative data structure representing the entire node network.
+- `FlowNode`: An individual processing unit within the graph.
+- `FlowPort`: An input or output anchor on a node.
+- `FlowEdge`: A visual and logical connection between two ports.
 
-```rust
-/// Container for a node-based diagram
-pub struct FlowGraph {
-    nodes: Vec<FlowNode>,
-    edges: Vec<FlowEdge>,
-}
-impl FlowGraph {
-    /// Create a new empty flow graph
-    pub fn new() -> Self;
-    
-    /// Add a node to the graph
-    pub fn add_node(&mut self, node: FlowNode) -> usize;
-    
-    /// Add an edge between two nodes
-    pub fn add_edge(&mut self, edge: FlowEdge);
-    
-    /// Get a node by index
-    pub fn node(&self, index: usize) -> Option<&FlowNode>;
-}
-```
-
-### FlowNode
-
-```rust
-/// A node in the flow graph
-pub struct FlowNode {
-    id: String,
-    position: [f32; 2],
-    size: [f32; 2],
-    inputs: Vec<Port>,
-    outputs: Vec<Port>,
-}
-impl FlowNode {
-    /// Create a new node with the given ID and position
-    pub fn new(id: impl Into<String>, position: [f32; 2]) -> Self;
-    
-    /// Set the node size
-    pub fn size(mut self, size: [f32; 2]) -> Self;
-}
-```
-
-### FlowEdge
-
-```rust
-/// A connection between two nodes
-pub struct FlowEdge {
-    from_node: String,
-    from_port: usize,
-    to_node: String,
-    to_port: usize,
-}```
+### UI Components
+- `FlowCanvas`: The primary view component for rendering and interacting with a `FlowGraph`.
+- `FlowInteraction`: State manager for drag-and-drop and selection logic.
 
 ## Usage Example
 
 ```rust
-use cvkg_flow::{FlowGraph, FlowNode};
+use cvkg_flow::{FlowGraph, FlowNode, FlowCanvas};
 
-let mut graph = FlowGraph::new();
-
-let node1 = FlowNode::new("input", [100.0, 100.0]);
-let node2 = FlowNode::new("output", [300.0, 100.0]);
-
-graph.add_node(node1);
-graph.add_node(node2);
+fn MyNodeEditor() -> impl View {
+    let mut graph = FlowGraph::new();
+    let node_a = FlowNode::new("Input");
+    let node_b = FlowNode::new("Process");
+    
+    graph.add_node(node_a);
+    graph.add_node(node_b);
+    
+    FlowCanvas::new(graph)
+        .background(Color::TACTICAL_OBSIDIAN)
+}
 ```
 
 ## Known Limitations
-
-- Node positions are in screen coordinates, not grid units
-- No built-in serialization format
-- Port matching is not type-safe
+- The engine is currently optimized for directed acyclic graphs (DAGs); cyclic dependencies require manual resolution logic.
+- Performance in extremely large graphs (1000+ nodes) is dependent on the `cvkg-scene` culling efficiency.

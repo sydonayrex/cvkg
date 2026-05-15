@@ -1,26 +1,20 @@
 # CVKG: Cyber Viking Kvasir Graph
 
-![Berserker Tactical HUD](docs/images/berserker_hero_hud.png)
+![CVKG Hero HUD](docs/images/cvkg_hero.png)
 
-**CVKG** is a high-fidelity agentic UI framework for building native and web applications with a Cyberpunk/Viking aesthetic using Rust.
+CVKG is a high-fidelity, agentic UI framework for Rust designed for building visually stunning native and web applications.
 
-## What Problem It Solves
+## Problem and Audience
 
-CVKG provides a declarative, functional-reactive UI system for Rust with:
-- GPU-accelerated rendering with advanced visual effects (Bifrost frosting, Gungnir glow, Mjolnir clipping)
-- Stateless Virtual DOM for efficient updates
-- Multi-platform support (Native desktop, Web/WASM)
-- Agent-optimized architecture for AI-assisted development
-
-This framework is for UI developers building high-performance applications who need both visual fidelity and developer ergonomics.
+CVKG provides a declarative, functional-reactive UI system that delivers high-fidelity visual effects and smooth animations without sacrificing performance or developer ergonomics. This framework is for UI developers and creative technologists who need to build complex, high-performance interfaces with advanced graphical features like translucent frosting, glowing outlines, and physics-based animations.
 
 ## Prerequisites
 
-- **Rust toolchain**: Rust 1.81.0 or later (edition 2024)
-- **System dependencies**: GPU with Vulkan, Metal, or DX12 support for native GPU rendering
-- **Optional**: `wasm-pack` for web target builds
+- **Rust Toolchain**: Rust 1.85.0 or later (Edition 2024).
+- **System Dependencies**: Vulkan, Metal, or DX12 capable GPU. Linux users require `libfontconfig1-dev` and `pkg-config`.
+- **WASM Support**: `wasm-pack` is required for web builds.
 
-## Quick Start (5 Commands)
+## Quick Start
 
 ```bash
 # 1. Clone the repository
@@ -29,43 +23,42 @@ git clone https://github.com/sydonayrex/cvkg.git && cd cvkg
 # 2. Build the workspace
 cargo build --workspace
 
-# 3. Run a demo (requires GPU support)
+# 3. Run the shatter demo (requires GPU)
 cargo run --example shatter_demo -p cvkg --features gpu
 
-# 4. Run tests
+# 4. Run the full test suite
 cargo test --workspace
-
-# 5. Build for web (optional)
-cargo build --target wasm32-unknown-unknown --features web
 ```
 
 ## Workspace Crate Map
 
 | Crate | Role |
-|-------|------|
-| `cvkg-core` | Core traits (`View`, `Renderer`), types (`Rect`, `Size`), and fluent modifier API |
-| `cvkg-vdom` | Virtual DOM implementation (`VNode`, `VDiff`) and event system |
-| `cvkg-render-gpu` | WGPU-based GPU renderer (`SurtrRenderer`) with shader effects |
-| `cvkg-render-native` | winit window integration and native event loop |
-| `cvkg-render-web` | WASM/WebGPU bindings for browser deployment |
-| `cvkg-layout` | Flexbox-inspired layout engine (`HStack`, `VStack`) |
-| `cvkg-anim` | RK4 physics-based animation solver (`SleipnirSolver`) |
-| `cvkg-scene` | Retained scene graph with culling and batching |
-| `cvkg-components` | Reusable UI components (`Button`, `Text`, `Slider`) |
-| `cvkg-themes` | Semantic color and typography themes |
-| `cvkg-runic-text` | Text shaping and font fallback engine |
-| `cvkg-macros` | Procedural macros for view generation |
-| `cvkg-cli` | Development tools (`scaffold`, `build`, `serve`) |
-| `cvkg-test` | Visual regression and benchmarking utilities |
-| `cvkg-flow` | Node-based graph UI components |
-| `cvkg-webkit-server` | Development server with WebSocket hot-reload |
+| :--- | :--- |
+| `cvkg` | Entry point crate providing the public facade and feature-gated backend selection. |
+| `cvkg-core` | Core traits and types defining the View, Renderer, and fundamental geometry. |
+| `cvkg-vdom` | Virtual DOM implementation for stateless UI reconciliation and event handling. |
+| `cvkg-scene` | Retained scene graph for efficient rendering, culling, and batching. |
+| `cvkg-layout` | Flexbox-inspired layout engine supporting stacks and flexible positioning. |
+| `cvkg-anim` | RK4 physics-based animation solver for smooth, realistic UI transitions. |
+| `cvkg-render-gpu` | WGPU-based renderer implementation with advanced shader-based effects. |
+| `cvkg-render-native` | Native windowing and event loop integration using `winit`. |
+| `cvkg-render-web` | WASM and WebGPU/WebGL2 bindings for browser-based deployment. |
+| `cvkg-components` | Library of reusable UI components built on the CVKG core. |
+| `cvkg-themes` | Semantic styling system for consistent color, typography, and spacing. |
+| `cvkg-macros` | Procedural macros for simplifying view definitions and state management. |
+| `cvkg-runic-text` | High-performance text shaping and font rendering engine with runic support. |
+| `cvkg-cli` | Command-line tool for project scaffolding, building, and serving. |
+| `cvkg-webkit-server` | Development server providing WebSocket-based hot-reloading for web builds. |
+| `cvkg-flow` | Node-based graph UI components for building interactive data flows. |
+| `cvkg-test` | Specialized utilities for visual regression testing and UI benchmarking. |
+| `berserker` | Reference implementation of a tactical HUD application showcasing project capabilities. |
 
-## Documentation
+## Documentation Index
 
-- [Onboarding Guide](docs/onboarding.md) - Clone to running tests
-- [Architecture](docs/architecture.md) - How crates fit together
-- [How-To Guides](docs/howto/) - Task-specific instructions
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and fixes
+- [Onboarding Guide](docs/onboarding.md) - Step-by-step setup and development workflow.
+- [Architecture](docs/architecture.md) - Deep dive into the framework design and crate relationships.
+- [How-To: Creating Components](docs/howto/creating_components.md) - Task-specific instructions for building custom UI elements.
+- [Troubleshooting](docs/troubleshooting.md) - Solutions for common build and runtime issues.
 
 ## License
 

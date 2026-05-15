@@ -1,81 +1,74 @@
 # Onboarding Guide
 
-This guide walks through setting up a development environment for CVKG.
+Welcome to the Cyber Viking Kvasir Graph (CVKG) development environment. This guide will walk you through setting up your local machine and running your first "Berserker" application.
 
-## Prerequisites
+## 1. Prerequisites
 
-- **Rust**: Install Rust 1.81.0 or later
-- **GPU**: Vulkan, Metal, or DirectX 12 support for native rendering
-- **Git**: For cloning the repository
+### Rust Toolchain
+CVKG requires **Rust 1.85+** (Stable or Nightly). We use the 2024 Edition.
+```bash
+rustup update
+```
 
-## Step-by-Step Setup
+### System Dependencies (Linux)
+If you are on Linux, you need the following libraries for windowing and GPU support:
+```bash
+sudo apt-get install -y libwayland-dev libx11-dev libxkbcommon-dev libasound2-dev libfontconfig1-dev
+```
 
-### 1. Clone the Repository
+### GPU Support
+Ensure your drivers are up to date. CVKG uses `wgpu` and requires a GPU supporting Vulkan, Metal, or DX12.
 
+## 2. Workspace Setup
+
+Clone the repository and verify the workspace:
 ```bash
 git clone https://github.com/sydonayrex/cvkg.git
 cd cvkg
+cargo check
 ```
 
-### 2. Install Rust Toolchain
+## 3. Running the Demos
 
+The best way to see CVKG in action is to run the native demos:
+
+### Berserker Fire Demo
+A high-fidelity stress test of the GPU pipeline:
 ```bash
-rustup update stable
-rustup target add wasm32-unknown-unknown
+cargo run -p berserker
 ```
 
-### 3. Install System Dependencies
-
-On Ubuntu/Debian:
+### Ulfhednar IDE Prototype
+A demonstration of complex component composition:
 ```bash
-sudo apt-get install -y libvulkan-dev libxcb-shape0-dev libxcb-xfixes0-dev
+cargo run -p ulfhednar
 ```
 
-On macOS:
+## 4. Development Workflow
+
+### Creating a New Project
+Use the CVKG CLI to scaffold a new application:
 ```bash
-brew install vulkan-sdk
+cargo run -p cvkg-cli -- new my-app
 ```
 
-### 4. Build the Workspace
-
+### Starting the Dev Server
+For web development, start the WebKit server:
 ```bash
-cargo build --workspace
+cargo run -p cvkg-cli -- dev --target wasm
 ```
 
-### 5. Run the Full Test Suite
+## 5. Learning Path
 
-```bash
-cargo test --workspace
-```
+1. **Architecture**: Read [architecture.md](./architecture.md) to understand the rendering pipeline.
+2. **Components**: Explore [cvkg-components/README.md](../cvkg-components/README.md) for available UI elements.
+3. **Macros**: Learn how to write declarative UI in [cvkg-macros/README.md](../cvkg-macros/README.md).
+4. **Themes**: Customize your app's look in [cvkg-themes/README.md](../cvkg-themes/README.md).
 
-### 6. Run a Single Crate's Tests
+## 6. Community & Support
 
-```bash
-cargo test -p cvkg-core
-```
+- **Bugs**: Open an issue on GitHub.
+- **Discussions**: Use the GitHub Discussions tab for architectural questions.
+- **Contributions**: Follow the "CVKG Agentic Development Guidelines" (found in crate headers) for all pull requests.
 
-### 7. Run a Single Test by Name
-
-```bash
-cargo test -p cvkg-core test_view_trait
-```
-
-## Where to Find Things
-
-| Purpose | Location |
-|---------|----------|
-| Source code | `cvkg-core/src/`, `cvkg-components/src/`, etc. |
-| Tests | `cvkg-*/tests/` or `cvkg-*/src/` with `#[cfg(test)]` |
-| Config | `cvkg/Cargo.toml`, `cvkg-*/Cargo.toml` |
-| Examples | `cvkg-*/examples/` |
-
-## Making Changes
-
-1. Create a branch
-2. Make your changes
-3. Run `cargo test --workspace`
-4. Submit a pull request
-
-## Getting Help
-
-Maintainer: sydonayrex (https://github.com/sydonayrex)
+Skål!

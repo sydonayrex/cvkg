@@ -1,145 +1,56 @@
-# Architecture
+# Architecture Overview
 
-This document describes how the CVKG crates fit together.
+CVKG is a modular, high-performance UI framework built on the "Cyber-Viking" design philosophy. It separates logic, layout, and rendering into distinct stages to ensure maximum efficiency on both native and web targets.
 
-## Data Flow
+## The Rendering Pipeline
 
-```
-┌─────────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Application   │────▶│ View Bodies  │────▶│  VDOM Diff   │
-│  (cvkg crate)   │     │ (cvkg-core)  │     │(cvkg-vdom)    │
-└─────────────────┘     └──────────────┘     └──────────────┘
-                                                  │
-                                                  ▼
-┌─────────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Renderer      │◀────│ Scene Graph  │◀────│ Layout Pass  │
-│ (cvkg-render-*) │     │(cvkg-scene)  │     │(cvkg-layout)  │
-└─────────────────┘     └──────────────┘     └──────────────┘
-```
+The transformation from code to pixels follows a five-stage "Forge" process:
 
-## Dependency Graph
+### 1. The Body (Composition)
+You define UI using the `View` trait. This is a declarative stage where views are composed hierarchically.
+- **Primary Crate**: `cvkg-core`
+- **Mechanism**: The `body()` method returns a type-erased `impl View` tree.
 
-```mermaid
-graph TD
-    cvkg[CVKG Main]
-    core[CVKG Core]
-    vdom[CVKG VDOM]
-    scene[CVKG Scene]
-    layout[CVKG Layout]
-    anim[CVKG Anim]
-    render_gpu[CVKG Render GPU]
-    render_native[CVKG Render Native]
-    render_web[CVKG Render Web]
-    components[CVKG Components]
-    themes[CVKG Themes]
-    runic[CVKG Runic Text]
-    macros[CVKG Macros]
-    cli[CVKG CLI]
-    test[CVKG Test]
-    flow[CVKG Flow]
+### 2. The VDOM (Reconciliation)
+The view tree is captured into a stateless Virtual DOM. This stage handles state diffing and event mapping.
+- **Primary Crate**: `cvkg-vdom`
+- **Output**: A `VNode` tree and a set of `VDomPatch` mutations.
 
-    cvkg --> core
-    cvkg --> vdom
-    cvkg --> scene
-    cvkg --> layout
-    cvkg --> anim
-    cvkg --> render_native
-    cvkg --> render_gpu
-    cvkg --> render_web
-    cvkg --> components
-    cvkg --> themes
-    cvkg --> runic
-    cvkg --> macros
-    cvkg --> cli
-    cvkg --> test
-    cvkg --> flow
+### 3. The Layout (Spatial Distribution)
+The layout engine computes absolute bounds for every node based on flexbox-inspired rules.
+- **Primary Crate**: `cvkg-layout`
+- **Mechanism**: `HStack`, `VStack`, and `Grid` containers distribute space and resolve proposals.
 
-    components --> core
-    components --> layout
-    components --> anim
-    components --> themes
-    components --> runic
-    components --> flow
+### 4. The Scene Graph (Retained Geometry)
+Retained geometry is stored in a scene graph for efficient temporal updates and spatial queries.
+- **Primary Crate**: `cvkg-scene`
+- **Optimization**: Hierarchical AABB culling and dirty-region tracking.
 
-    render_native --> core
-    render_native --> render_gpu
-    render_gpu --> core
-    render_web --> core
+### 5. Surtr (GPU Rasterization)
+The final stage tessellates geometry and submits commands to the GPU.
+- **Primary Crate**: `cvkg-render-gpu`
+- **Mechanism**: `wgpu` pipelines, Muspelheim multi-pass effects, and Mega-Atlas batching.
 
-    layout --> core
-    scene --> core
-    anim --> core
-    vdom --> core
-    themes --> core
-    runic --> core
-    flow --> core
-    flow --> components
-```
+## State Management
 
-## Key Subsystems
+CVKG uses a reactive `Binding` system:
+- **State**: The authoritative source of truth.
+- **Binding**: A read/write reference to state that triggers a redraw on mutation.
+- **Environment**: Dependency injection for global resources like themes and asset managers.
 
-### View System (cvkg-core)
+## Modular Crate Map
 
-The `View` trait is the fundamental building block. Every UI component implements this trait:
+| Tier | Crates | Responsibility |
+| :--- | :--- | :--- |
+| **Logic** | `cvkg-core`, `cvkg-macros` | Traits, state, and DSL. |
+| **UI** | `cvkg-components`, `cvkg-flow` | Widgets and node-graph tools. |
+| **Geometry** | `cvkg-layout`, `cvkg-scene`, `cvkg-anim` | Positioning and motion. |
+| **Platform** | `cvkg-render-native`, `cvkg-render-web` | OS/Browser integration. |
+| **Backend** | `cvkg-render-gpu`, `cvkg-runic-text` | Shaders and typography. |
 
-```rust
-pub trait View: Sized + Send {
-    type Body: View;
-    fn body(self) -> Self::Body;
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect);
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size;
-}
-```
+## Design Philosophy: "Berserker"
 
-Modifier methods (`padding()`, `background()`, `on_click()`) are defined on the trait directly, returning `ModifiedView<Self, M>`.
-
-### Renderer Abstraction (cvkg-core)
-
-The `Renderer` trait abstracts drawing operations:
-
-```rust
-pub trait Renderer: ElapsedTime + Send {
-    fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
-    fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
-}
-```
-
-Implementors: `SurtrRenderer` (cvkg-render-gpu), concrete native renderer (cvkg-render-native), `WasmRenderer` (cvkg-render-web).
-
-### Virtual DOM (cvkg-vdom)
-
-The `VNode` struct represents a node in the virtual tree. `VBox::patch()` applies `VDomPatch` mutations to update the tree.
-
-### Layout Engine (cvkg-layout)
-
-`HStack` and `VStack` implement the `LayoutView` trait. They compute child positions using `size_that_fits()` and `place_subviews()`.
-
-### Scene Graph (cvkg-scene)
-
-`SceneGraph` manages `VNode` instances with world-space bounds, dirty tracking, and layer-based batching.
-
-### Animation System (cvkg-anim)
-
-`SleipnirSolver` implements RK4 integration for spring physics. `Animation` enum describes transition types.
-
-## Design Decisions
-
-### Why Stateless VDOM?
-
-The VDOM is stateless to enable efficient diffing. State lives in `State<T>` containers that implement `Clone`.
-
-### Why Trait Objects for Renderer?
-
-The `Renderer` trait uses `&mut dyn Renderer` for object safety. Concrete types like `SurtrRenderer` should use `&mut Self` internally for performance.
-
-### Why Separate Layout Crate?
-
-Layout algorithms are complex and platform-independent. Separating them allows reuse across renderers.
-
-## What is Intentionally Out of Scope
-
-- Web server framework (see cvkg-webkit-server for development server)
-- Database integration
-- Networking protocols beyond rendering context
-- Mobile platform support (iOS, Android)
+The architecture is built for speed and visual "rage":
+- **Deterministic**: Frame timings are strictly monitored for jitter.
+- **Retained**: Only changed regions are updated.
+- **Shader-First**: Effects like Bifrost (frosted glass) are first-class primitives, not expensive post-processes.

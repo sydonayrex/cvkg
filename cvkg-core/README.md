@@ -1,135 +1,56 @@
 # cvkg-core
 
-**cvkg-core** contains the fundamental traits, types, and modifiers that define the CVKG framework. It is the "glue" that allows the VDOM, renderers, and components to interoperate.
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## What This Crate Does
+`cvkg-core` defines the fundamental traits, types, and architectural guidelines that power the entire Cyber Viking Kvasir Graph (CVKG) ecosystem.
 
-- Defines the `View` trait for UI composition
-- Provides the `Renderer` trait for drawing operations
-- Contains geometric types (`Rect`, `Size`, `EdgeInsets`)
-- Implements fluent modifiers for visual effects
-- Provides reactive state management (`State`, `Binding`)
-## What This Crate Does NOT Do
+## Boundaries and Responsibilities
 
-- Does not provide concrete rendering implementations (see cvkg-render-gpu, cvkg-render-native)
-- Does not provide layout algorithms (see cvkg-layout)
-- Does not provide UI components (see cvkg-components)
+This crate provides the abstract definitions for the UI system but does NOT implement specific rendering backends or complex layout algorithms. It focuses on:
+- The `View` trait and its modifier-based composition system.
+- Core geometric types (`Rect`, `Point`, `Size`).
+- The `Renderer` trait facade.
+- Agentic development protocols and knowledge state structures.
 
 ## Public API Overview
 
 ### Core Traits
+- `View`: The primary building block. Every UI element implements `View`. It uses a declarative `body()` method for composition.
+- `Renderer`: A trait defining the drawing operations available to primitive views.
+- `ViewModifier`: Enables the extension of view behavior and appearance via composition.
 
-```rust
-// View trait - the primary building block of UI
-pub trait View: Sized + Send {
-    type Body: View;
-    fn body(self) -> Self::Body;
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect);
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size;
-}
-```
+### Key Structs
+- `Rect`, `Size`, `Point`: Fundamental geometry primitives.
+- `KnowledgeState`: Captures the cognitive state of the agentic system, including thoughts, actions, and temporal nodes.
+- `YggdrasilTokens`: Authoritative container for design tokens (colors, fonts, spacing).
+- `ModifiedView`: The type produced when a modifier is applied to a `View`.
 
-### Renderer Trait
-
-```rust
-pub trait Renderer: ElapsedTime + Send {
-    fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
-    fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
-    fn draw_image(&mut self, image_name: &str, rect: Rect);
-    fn push_clip_rect(&mut self, rect: Rect);
-    fn pop_clip_rect(&mut self);
-}
-```
-
-### Geometric Types
-
-```rust
-pub struct Rect { pub x: f32, pub y: f32, pub width: f32, pub height: f32 }
-pub struct Size { pub width: f32, pub height: f32 }
-pub struct EdgeInsets { pub top: f32, pub leading: f32, pub bottom: f32, pub trailing: f32 }
-```
-
-### State Management
-
-```rust
-pub struct State<T: Clone + Send + Sync + 'static> { /* ... */ }
-impl<T> State<T> {
-    pub fn new(initial: T) -> Self;
-    pub fn get(&self) -> T;
-    pub fn set(&self, value: T);
-}
-pub struct Binding<T> { /* ... */ }
-```
-
-### Fluent Modifiers
-
-```rust
-// Visual modifiers
-view.padding(16.0)
-view.background([0.0, 0.0, 0.0, 1.0])
-view.opacity(0.5)
-view.frame(Some(100.0), Some(50.0))
-view.clip_to_bounds()
-view.border([1.0, 1.0, 1.0, 1.0], 2.0)
-
-// Event modifiers
-view.on_click(|| println!("clicked"))
-view.on_pointer_enter(|| println!("enter"))
-view.on_pointer_leave(|| println!("leave"))
-view.on_appear(|| println!("appear"))
-
-// Cyber Viking visual effects
-view.bifrost(blur: 10.0, saturation: 1.5, opacity: 0.8)
-view.gungnir(color: "cyan", radius: 10.0, intensity: 0.8)
-view.mjolnir_slice(angle: 45.0, offset: 10.0)
-view.magnetic(radius: 100.0, intensity: 0.5)
-```
-
-### Enums and Constants
-
-```rust
-pub enum MemoryLayer { Episodic, Semantic, Procedural }
-pub enum Realm { Midgard, Asgard }
-pub enum RenderTier { Tier1GPU, Tier2GPU, Tier3Fallback }
-pub enum Alignment { Top, Center, Bottom, Leading, Trailing, Fill }
-pub enum Distribution { Leading, Center, Trailing, Fill, SpaceBetween }
-pub enum Orientation { Horizontal, Vertical }
-```
-
-### Feature Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `std` | true | Use standard library (disable for no_std) |
-
-## Known Limitations
-
-- The `Renderer` trait uses `&mut dyn Renderer` for object safety; concrete types should use `&mut Self` for performance
-- State updates trigger full re-renders by default; use `MemoView` for optimization
-- Some visual effects may not be supported by all renderer backends
+### Main Modifiers
+- `.bifrost()`: Applies frosted glass effects.
+- `.gungnir()`: Applies neon glow effects.
+- `.mjolnir_slice()`: Applies geometric clipping.
+- `.padding()`, `.background()`, `.frame()`: Standard layout and styling modifiers.
 
 ## Usage Example
 
 ```rust
-use cvkg_core::{View, Rect, Renderer};
+use cvkg_core::prelude::*;
 
-struct MyButton {
-    label: String,
-}
+struct MyComponent;
 
-impl View for MyButton {
-    type Body = Self;
+impl View for MyComponent {
+    type Body = impl View;
     
-    fn body(self) -> Self::Body { self }
-    
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.fill_rounded_rect(rect, 8.0, [0.2, 0.6, 1.0, 1.0]);
-        renderer.draw_text(&self.label, rect.x + 16.0, rect.y + 16.0, 16.0, [1.0, 1.0, 1.0, 1.0]);
-    }
-    
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        cvkg_core::Size { width: 120.0, height: 44.0 }
+    fn body(self) -> Self::Body {
+        Text::new("Skål!")
+            .padding(20.0)
+            .background([0.1, 0.1, 0.1, 1.0])
+            .bifrost(10.0, 1.0, 0.5)
+            .gungnir([0.0, 1.0, 1.0, 1.0], 5.0, 1.0)
     }
 }
 ```
+
+## Known Limitations
+- Modifier order matters; transformations are applied sequentially.
+- Recursive view bodies will cause a stack overflow at compile time or runtime if not type-erased.

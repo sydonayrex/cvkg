@@ -1,73 +1,38 @@
 # cvkg-webkit-server
 
-**cvkg-webkit-server** provides a development server with WebSocket support for CVKG applications.
+![CVKG Hero HUD](../docs/images/cvkg_hero.png)
 
-## What This Crate Does
+`cvkg-webkit-server` is a professional-grade development and preview server for CVKG applications, providing state-preserving hot reload, SEO pre-rendering, and real-time observability.
 
-- Serves static assets for CVKG applications
-- Provides WebSocket endpoint for hot-reload
-- Implements basic HTTP server with CORS support
-- Monitors file changes for automatic rebuild
+## Boundaries and Responsibilities
 
-## What This Crate Does NOT Do
-
-- Does not provide production-grade hosting
-- Does not handle HTTPS termination
-- Does not provide authentication or authorization
+This crate implements the backend for the development toolchain. Its responsibilities include:
+- **Universal Serving**: Hosting WASM, static assets, and package artifacts via high-performance `axum` routes.
+- **State-Preserving HMR**: Managing WebSocket connections for instant UI updates without losing application state.
+- **SEO Pre-rendering**: Capturing VDOM snapshots to serve meaningful HTML before WASM initialization.
+- **Observability**: Exposing Prometheus-compatible metrics and health check endpoints.
+- **Security**: Enforcing strict Content Security Policies (CSP) and security headers for dev environments.
 
 ## Public API Overview
 
-### Server
+### Server Components
+- `BuildOrchestrator`: Manages background compilation tasks with automatic retry logic.
+- `WebKitBridge`: The server-side implementation of the CVKG developer protocol.
+- `AppState`: Shared state for managing VDOM snapshots and server configuration.
 
-```rust
-/// Development server for CVKG applications
-pub struct Server {
-    addr: SocketAddr,
-    watcher: Option<RecommendedWatcher>,
-}
-
-impl Server {
-    /// Create a new server bound to the given address
-    pub fn new(addr: SocketAddr) -> Self;
-    
-    /// Start the server and serve content from the given directory
-    pub fn serve(&self, root: PathBuf) -> Result<(), ServerError>;
-    
-    /// Enable hot-reload for the given file paths
-    pub fn watch(&mut self, paths: Vec<PathBuf>);
-}```
-
-### Functions
-
-```rust
-/// Convenience function to start a development server
-pub fn serve(addr: SocketAddr, root: PathBuf, watch: Vec<PathBuf>);
-```
+### Observability Endpoints
+- `/health/liveness`: Returns `OK` when the server is running.
+- `/health/readiness`: Returns `READY` when assets and pkg directories are successfully pivoted.
+- `/metrics`: Standard Prometheus metrics output.
+- `/api/system/time`: Provides a synchronized timestamp for distributed state logs.
 
 ## Usage Example
 
-```rust
-use cvkg_webkit_server::{Server, serve};
-use std::net::SocketAddr;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    serve(
-        "127.0.0.1:8080".parse()?
-        PathBuf::from("./dist"),
-        vec![PathBuf::from("./src")],
-    )
-}
+```bash
+# Usually launched via cvkg-cli, but can be run directly:
+cargo run -p cvkg-webkit-server -- --addr 0.0.0.0:8080 --pkg-dir ./dist/pkg
 ```
 
-## Feature Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `std` | true | Use standard library |
-| `tls` | false | Enable HTTPS support |
-
 ## Known Limitations
-
-- Single-threaded event loop may block under heavy load
-- WebSocket keep-alive is not implemented; connections may timeout
-- File watching uses polling on some platforms
+- The server requires absolute paths for reliable execution across different working directories.
+- SEO snapshots are currently stored in-memory; high-frequency snapshotting may impact server performance in resource-constrained environments.
