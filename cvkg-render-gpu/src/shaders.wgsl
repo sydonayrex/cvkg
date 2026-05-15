@@ -587,32 +587,60 @@ fn fs_bloom_extract(in: VertexOutput) -> @location(0) vec4<f32> {
 @fragment
 fn fs_blur_h(in: VertexOutput) -> @location(0) vec4<f32> {
     var result = vec3<f32>(0.0);
-    // High-Fidelity 9-tap Gaussian Blur
-    let weight = array<f32, 9>(0.153423, 0.143254, 0.117031, 0.081827, 0.049003, 0.025135, 0.010861, 0.00392, 0.0011);
+    // High-Fidelity 9-tap Gaussian Blur (Unrolled to avoid dynamic indexing)
+    let w0 = 0.153423; let w1 = 0.143254; let w2 = 0.117031; let w3 = 0.081827;
+    let w4 = 0.049003; let w5 = 0.025135; let w6 = 0.010861; let w7 = 0.00392; let w8 = 0.0011;
     let tex_offset = 6.0 / scene.resolution.x;
     
-    // Explicitly sample from index 0 of the texture array for post-process passes
-    result += textureSample(t_diffuse[0], s_diffuse, in.uv).rgb * weight[0];
-    for (var i = 1; i < 9; i++) {
-        result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * f32(i), 0.0)).rgb * weight[i];
-        result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * f32(i), 0.0)).rgb * weight[i];
-    }
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv).rgb * w0;
+    
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 1.0, 0.0)).rgb * w1;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 1.0, 0.0)).rgb * w1;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 2.0, 0.0)).rgb * w2;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 2.0, 0.0)).rgb * w2;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 3.0, 0.0)).rgb * w3;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 3.0, 0.0)).rgb * w3;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 4.0, 0.0)).rgb * w4;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 4.0, 0.0)).rgb * w4;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 5.0, 0.0)).rgb * w5;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 5.0, 0.0)).rgb * w5;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 6.0, 0.0)).rgb * w6;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 6.0, 0.0)).rgb * w6;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 7.0, 0.0)).rgb * w7;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 7.0, 0.0)).rgb * w7;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(tex_offset * 8.0, 0.0)).rgb * w8;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(tex_offset * 8.0, 0.0)).rgb * w8;
+    
     return vec4<f32>(result, 1.0);
 }
 
 @fragment
 fn fs_blur_v(in: VertexOutput) -> @location(0) vec4<f32> {
     var result = vec3<f32>(0.0);
-    // High-Fidelity 9-tap Gaussian Blur
-    let weight = array<f32, 9>(0.153423, 0.143254, 0.117031, 0.081827, 0.049003, 0.025135, 0.010861, 0.00392, 0.0011);
+    // High-Fidelity 9-tap Gaussian Blur (Unrolled to avoid dynamic indexing)
+    let w0 = 0.153423; let w1 = 0.143254; let w2 = 0.117031; let w3 = 0.081827;
+    let w4 = 0.049003; let w5 = 0.025135; let w6 = 0.010861; let w7 = 0.00392; let w8 = 0.0011;
     let tex_offset = 6.0 / scene.resolution.y;
     
-    // Explicitly sample from index 0 of the texture array for post-process passes
-    result += textureSample(t_diffuse[0], s_diffuse, in.uv).rgb * weight[0];
-    for (var i = 1; i < 9; i++) {
-        result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * f32(i))).rgb * weight[i];
-        result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * f32(i))).rgb * weight[i];
-    }
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv).rgb * w0;
+    
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 1.0)).rgb * w1;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 1.0)).rgb * w1;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 2.0)).rgb * w2;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 2.0)).rgb * w2;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 3.0)).rgb * w3;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 3.0)).rgb * w3;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 4.0)).rgb * w4;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 4.0)).rgb * w4;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 5.0)).rgb * w5;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 5.0)).rgb * w5;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 6.0)).rgb * w6;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 6.0)).rgb * w6;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 7.0)).rgb * w7;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 7.0)).rgb * w7;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv + vec2(0.0, tex_offset * 8.0)).rgb * w8;
+    result += textureSample(t_diffuse[0], s_diffuse, in.uv - vec2(0.0, tex_offset * 8.0)).rgb * w8;
+    
     return vec4<f32>(result, 1.0);
 }
 

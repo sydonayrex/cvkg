@@ -51,6 +51,7 @@ impl BerserkerState {
 
 // --- Main Entry Point ---
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen(start)]
 pub async fn start() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
