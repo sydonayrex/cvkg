@@ -47,9 +47,9 @@ pub struct SessionInfo {
 
 /// Tyr Security system for enterprise protection
 pub struct TyrSecurity {
-    pub(crate) roles: Vec<SecurityRole>,
-    pub(crate) audit_log: Vec<AuditEntry>,
-    pub(crate) current_session: Option<SessionInfo>,
+    pub roles: Vec<SecurityRole>,
+    pub audit_log: Vec<AuditEntry>,
+    pub current_session: Option<SessionInfo>,
 }
 
 impl Default for TyrSecurity {

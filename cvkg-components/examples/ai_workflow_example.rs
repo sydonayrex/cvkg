@@ -5,9 +5,8 @@
 
 use cvkg_components::{
     AIExecutionDebugger, AIWorkflowBuilder, AgentStatus, MemoryGraphViewer, MultiAgentPanel,
-    NodeType, PromptChainVisualizer, PromptStatus, ReasoningTraceInspector, WorkflowNodeType,
+    NodeType, PromptChainVisualizer, ReasoningTraceInspector, WorkflowNodeType,
 };
-use cvkg_core::{Rect, Renderer};
 
 fn main() {
     println!("CVKG AI Workflow Builder Example");

@@ -253,10 +253,10 @@ impl<V: View> View for FocusTrap<V> {
                 renderer.register_handler(
                     "keydown",
                     Arc::new(move |event| {
-                        if let Event::KeyDown { key } = event {
-                            if key == "Escape" {
-                                on_escape();
-                            }
+                        if let Event::KeyDown { key } = event
+                            && key == "Escape"
+                        {
+                            on_escape();
                         }
                     }),
                 );
@@ -266,10 +266,10 @@ impl<V: View> View for FocusTrap<V> {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let Event::KeyDown { key } = event {
-                        if key == "Tab" {
-                            cycle_focus(true);
-                        }
+                    if let Event::KeyDown { key } = event
+                        && key == "Tab"
+                    {
+                        cycle_focus(true);
                     }
                 }),
             );

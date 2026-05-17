@@ -290,6 +290,30 @@ impl SceneGraph {
     }
 }
 
+/// A patch operation to apply to the retained scene graph.
+pub enum Patch {
+    Create(VNode),
+    Remove(NodeId),
+    Update {
+        id: NodeId,
+        changes: Vec<Change>,
+    },
+    Move {
+        id: NodeId,
+        new_parent: NodeId,
+        new_index: usize,
+    },
+}
+
+/// A change to a VNode's properties.
+pub enum Change {
+    ComponentType(String),
+    Children(Vec<NodeId>),
+    LocalRect(Rect),
+    LayerId(u32),
+    ZIndex(f32),
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,28 +394,4 @@ mod tests {
         scene.clear_dirty();
         assert_eq!(scene.dirty_regions().len(), 0);
     }
-}
-
-/// A patch operation to apply to the retained scene graph.
-pub enum Patch {
-    Create(VNode),
-    Remove(NodeId),
-    Update {
-        id: NodeId,
-        changes: Vec<Change>,
-    },
-    Move {
-        id: NodeId,
-        new_parent: NodeId,
-        new_index: usize,
-    },
-}
-
-/// A change to a VNode's properties.
-pub enum Change {
-    ComponentType(String),
-    Children(Vec<NodeId>),
-    LocalRect(Rect),
-    LayerId(u32),
-    ZIndex(f32),
 }

@@ -4,7 +4,7 @@
 // Run with: cargo run --example vanir_tools_example
 
 use cvkg_components::{
-    FreyrInspector, IdunnPersistence, NjordTheme, PropertyValue, ScriptNodeType, SkadiScripting,
+    FreyrInspector, IdunnPersistence, NjordTheme, ScriptNodeType, SkadiScripting,
 };
 use std::collections::HashMap;
 
@@ -44,8 +44,7 @@ fn main() {
         .node(2, "Process", ScriptNodeType::Process, 300.0, 200.0)
         .node(3, "Output", ScriptNodeType::Output, 500.0, 200.0)
         .connect(1, 2, "data")
-        .connect(2, 3, "result")
-        .state("running");
+        .connect(2, 3, "result");
 
     println!(
         "Skadi Scripting: {} nodes, {} connections",

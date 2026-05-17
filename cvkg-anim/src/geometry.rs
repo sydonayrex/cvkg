@@ -370,7 +370,7 @@ pub struct VegetationWind {
 fn hash_noise(x: f32, y: f32) -> f32 {
     let a = x * 127.1 + y * 311.7;
     let b = x * 269.5 + y * 183.3;
-    let v = (a.sin() * 43758.5453 + b.sin() * 22578.1459).fract();
+    let v = (a.sin() * 43_758.547 + b.sin() * 22_578.146).fract();
     v * 2.0 - 1.0
 }
 
@@ -425,9 +425,9 @@ impl VegetationWind {
             .enumerate()
             .map(|(i, &pos)| WindInstance {
                 position: pos,
-                phase_offset: (i as f32 * 1.6180339887) % (std::f32::consts::TAU),
+                phase_offset: (i as f32 * 1.618_034) % (std::f32::consts::TAU),
                 stiffness: stiffness.clamp(0.0, 1.0),
-                height: height,
+                height,
             })
             .collect();
         Self::new(params, instances)

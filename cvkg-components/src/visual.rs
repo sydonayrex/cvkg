@@ -1,6 +1,7 @@
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// Progress indicator component.
+#[derive(Clone)]
 pub struct Progress {
     pub(crate) value: f32,
     pub(crate) max: f32,
@@ -27,6 +28,7 @@ impl Progress {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProgressVariant {
     Linear,
     Circular,
@@ -119,6 +121,7 @@ impl View for Progress {
 
 /// Radial or linear gauge display
 #[allow(dead_code)]
+#[derive(Clone)]
 pub struct Gauge {
     pub(crate) value: f32,
     pub(crate) range: std::ops::RangeInclusive<f32>,
@@ -172,6 +175,7 @@ impl View for Gauge {
 }
 
 /// A horizontal status bar for system indicators
+#[derive(Clone)]
 pub struct StatusBar {
     pub text: String,
     pub color: [f32; 4],
@@ -236,6 +240,7 @@ pub enum ChartType {
 
 /// ValkyrieAnalytics - A tactical chart for monitoring mission data.
 /// Named after the Valkyries, who monitor and choose the course of battle.
+#[derive(Clone)]
 pub struct ValkyrieAnalytics {
     pub chart_type: ChartType,
     pub data: Vec<f32>,
@@ -369,6 +374,7 @@ impl View for ValkyrieAnalytics {
 }
 
 /// A real-time performance telemetry display with tactical aesthetics.
+#[derive(Clone, Copy)]
 pub struct TelemetryView;
 
 impl View for TelemetryView {
@@ -485,6 +491,7 @@ impl View for TelemetryView {
 use cvkg_core::{MemoryLayer, TemporalEdge, TemporalNode};
 
 /// MimirsWell - A dynamic, force-directed graph visualization for the Temporal Graph.
+#[derive(Clone)]
 pub struct MimirsWell {
     pub nodes: Vec<TemporalNode>,
     pub edges: Vec<TemporalEdge>,
@@ -630,6 +637,7 @@ const RUNES: &[char] = &[
 
 /// RuneScript - A text component that reveals itself with a runic "deciphering" animation.
 /// Formerly ScanningText, renamed for Norse-themed tactical alignment.
+#[derive(Clone)]
 pub struct RuneScript {
     pub text: String,
     pub font_size: f32,
@@ -707,6 +715,7 @@ impl View for RuneScript {
 
 /// SleipnirGait - A container that staggers the reveal of its children.
 /// Named after Odin's 8-legged horse, known for its rapid and coordinated gait.
+#[derive(Clone)]
 pub struct SleipnirGait {
     pub children: Vec<cvkg_core::AnyView>,
     pub stagger_delay: f32, // Delay between child reveals in seconds
@@ -761,6 +770,7 @@ impl View for SleipnirGait {
 
 /// VölvaScan - A container that renders "runic noise" before revealing its content.
 /// Named after the Völva (seers) who saw through the veil of time.
+#[derive(Clone)]
 pub struct VölvaScan<V: View> {
     pub content: V,
     pub duration: f32,
@@ -807,6 +817,7 @@ impl<V: View> View for VölvaScan<V> {
 }
 /// RunicTooltip - A contextual tooltip for providing hidden wisdom (information).
 /// Named after the Runes, which encode secret knowledge.
+#[derive(Clone)]
 pub struct RunicTooltip<V: View> {
     pub content: V,
     pub text: String,
@@ -873,12 +884,14 @@ impl<V: View> View for RunicTooltip<V> {
 
 /// EikonaAvatar - A user representation component with status indicators.
 /// Named after the hybrid concept of "form/image" (Eikona).
+#[derive(Clone)]
 pub struct EikonaAvatar {
     pub src: Option<String>,
     pub fallback: String,
     pub status: Option<AvatarStatus>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AvatarStatus {
     Online,
     Offline,
@@ -963,6 +976,7 @@ impl View for EikonaAvatar {
 
 /// MerkiBadge - A status or count indicator component.
 /// Named after Merki, the Norse word for mark or sign.
+#[derive(Clone)]
 pub struct MerkiBadge {
     pub text: String,
     pub color: [f32; 4],
@@ -1014,10 +1028,12 @@ impl View for MerkiBadge {
 
 /// UrdrTimeline - A chronological timeline of events (the past).
 /// Named after Urdr, the Norn of the Past.
+#[derive(Clone)]
 pub struct UrdrTimeline {
     pub items: Vec<UrdrEvent>,
 }
 
+#[derive(Clone)]
 pub struct UrdrEvent {
     pub title: String,
     pub timestamp: String,
@@ -1111,6 +1127,7 @@ impl View for UrdrTimeline {
 
 /// DraumaSkeleton - A shimmering skeleton loader for async content.
 /// Named after the dreams (Drauma) of content waiting to be born.
+#[derive(Clone)]
 pub struct DraumaSkeleton {
     pub border_radius: f32,
     pub shimmer: bool,

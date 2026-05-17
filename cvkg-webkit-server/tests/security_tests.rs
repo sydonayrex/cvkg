@@ -52,8 +52,8 @@ fn test_cors_parsing_wildcard_security() {
     let is_permissive = permissive == "*";
     assert!(is_permissive, "Should detect wildcard");
 
-    let safe_origins = vec!["http://localhost:3000"];
-    assert!(!safe_origins.iter().any(|&o| o == "*"));
+    let safe_origins = ["http://localhost:3000"];
+    assert!(!safe_origins.contains(&"*"));
 }
 
 /// Security: Test CORS origin parsing accepts valid origins

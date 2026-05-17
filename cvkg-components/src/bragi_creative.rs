@@ -48,8 +48,8 @@ pub enum SvgType {
 
 /// Bragi Creative Suite for rich content editing
 pub struct BragiCreative {
-    pub(crate) components: Vec<CreativeComponent>,
-    pub(crate) active_editor: Option<String>,
+    pub components: Vec<CreativeComponent>,
+    pub active_editor: Option<String>,
 }
 
 #[derive(Debug, Clone)]

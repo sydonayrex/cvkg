@@ -27,8 +27,8 @@ pub struct Property {
 
 /// Freyr Inspector for property editing
 pub struct FreyrInspector {
-    pub(crate) properties: Vec<Property>,
-    pub(crate) title: String,
+    pub properties: Vec<Property>,
+    pub title: String,
 }
 
 impl FreyrInspector {

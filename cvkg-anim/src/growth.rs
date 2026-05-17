@@ -278,10 +278,10 @@ impl LSystem {
                 state.angle -= turn;
             } else if ch == self.push_symbol {
                 stack.push(state);
-            } else if ch == self.pop_symbol {
-                if let Some(restored) = stack.pop() {
-                    state = restored;
-                }
+            } else if ch == self.pop_symbol
+                && let Some(restored) = stack.pop()
+            {
+                state = restored;
             }
             // All other symbols are no-ops (used as constants to control branching).
         }
@@ -498,11 +498,11 @@ impl VoronoiFracture {
         let mut results = Vec::with_capacity(self.cells.len());
 
         for cell in &self.cells {
-            if let Some(clipped) = Self::sutherland_hodgman(polygon, &cell.vertices) {
-                if clipped.len() >= 3 {
-                    let centroid = polygon_centroid(&clipped);
-                    results.push((clipped, centroid));
-                }
+            if let Some(clipped) = Self::sutherland_hodgman(polygon, &cell.vertices)
+                && clipped.len() >= 3
+            {
+                let centroid = polygon_centroid(&clipped);
+                results.push((clipped, centroid));
             }
         }
 
@@ -717,16 +717,15 @@ impl VoronoiFracture {
 
                 if current_inside {
                     output.push(current);
-                    if !next_inside {
-                        if let Some(inter) = line_intersection(current, next, edge_start, edge_end)
-                        {
-                            output.push(inter);
-                        }
-                    }
-                } else if next_inside {
-                    if let Some(inter) = line_intersection(current, next, edge_start, edge_end) {
+                    if !next_inside
+                        && let Some(inter) = line_intersection(current, next, edge_start, edge_end)
+                    {
                         output.push(inter);
                     }
+                } else if next_inside
+                    && let Some(inter) = line_intersection(current, next, edge_start, edge_end)
+                {
+                    output.push(inter);
                 }
             }
         }

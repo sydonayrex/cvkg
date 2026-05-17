@@ -38,9 +38,9 @@ pub struct ScriptNode {
 
 /// Skadi Visual Scripting System
 pub struct SkadiScripting {
-    pub(crate) nodes: Vec<ScriptNode>,
-    pub(crate) connections: Vec<ScriptConnection>,
-    pub(crate) selected_node: Option<usize>,
+    pub nodes: Vec<ScriptNode>,
+    pub connections: Vec<ScriptConnection>,
+    pub selected_node: Option<usize>,
 }
 
 impl Default for SkadiScripting {

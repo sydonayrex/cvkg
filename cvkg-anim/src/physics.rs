@@ -277,6 +277,12 @@ pub struct RigidBodyWorld {
     pub iterations: usize,
 }
 
+impl Default for RigidBodyWorld {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RigidBodyWorld {
     pub fn new() -> Self {
         Self {
@@ -333,22 +339,20 @@ impl RigidBodyWorld {
             for body in &mut self.bodies {
                 let ground_y = 0.0;
                 match body.shape {
-                    CollisionShape::Sphere { radius } => {
-                        if body.position.y - radius < ground_y {
-                            body.position.y = ground_y + radius;
-                            if body.velocity.y < 0.0 {
-                                body.velocity.y *= -body.restitution;
-                                body.velocity.x *= 1.0 - body.friction;
-                                body.velocity.z *= 1.0 - body.friction;
-                            }
+                    CollisionShape::Sphere { radius } if body.position.y - radius < ground_y => {
+                        body.position.y = ground_y + radius;
+                        if body.velocity.y < 0.0 {
+                            body.velocity.y *= -body.restitution;
+                            body.velocity.x *= 1.0 - body.friction;
+                            body.velocity.z *= 1.0 - body.friction;
                         }
                     }
-                    CollisionShape::Box { half_extents } => {
-                        if body.position.y - half_extents.y < ground_y {
-                            body.position.y = ground_y + half_extents.y;
-                            if body.velocity.y < 0.0 {
-                                body.velocity.y *= -body.restitution;
-                            }
+                    CollisionShape::Box { half_extents }
+                        if body.position.y - half_extents.y < ground_y =>
+                    {
+                        body.position.y = ground_y + half_extents.y;
+                        if body.velocity.y < 0.0 {
+                            body.velocity.y *= -body.restitution;
                         }
                     }
                     _ => {}
@@ -411,6 +415,12 @@ pub struct SoftBody {
     pub gravity: Vec3,
     pub damping: f32,
     pub iterations: usize,
+}
+
+impl Default for SoftBody {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SoftBody {
@@ -573,6 +583,12 @@ pub struct Cloth {
     pub damping: f32,
     pub wind: Vec3,
     pub iterations: usize,
+}
+
+impl Default for Cloth {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Cloth {
@@ -790,6 +806,12 @@ pub struct FluidSimulation {
     grid: std::collections::HashMap<(i32, i32, i32), Vec<usize>>,
 }
 
+impl Default for FluidSimulation {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FluidSimulation {
     pub fn new() -> Self {
         Self {
@@ -937,12 +959,7 @@ impl FluidSimulation {
             // Simple boundary (box 0..5 in all axes)
             let pos = &mut self.particles[i].position;
             for axis in [&mut pos.x, &mut pos.y, &mut pos.z] {
-                if *axis < 0.0 {
-                    *axis = 0.0;
-                }
-                if *axis > 5.0 {
-                    *axis = 5.0;
-                }
+                *axis = (*axis).clamp(0.0, 5.0);
             }
         }
     }
@@ -1165,6 +1182,12 @@ pub struct OceanWaves {
     pub time: f32,
 }
 
+impl Default for OceanWaves {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OceanWaves {
     pub fn new() -> Self {
         Self {
@@ -1224,7 +1247,7 @@ impl OceanWaves {
     pub fn normal(&self, pos: Vec3) -> Vec3 {
         let mut result = Vec3::UP;
         for wave in &self.waves {
-            result = result + wave.normal(pos, self.time);
+            result += wave.normal(pos, self.time);
         }
         result.normalized()
     }

@@ -161,16 +161,16 @@ impl<V: View> View for FormField<V> {
         self.content.render(renderer, content_rect);
 
         // --- Error message ---
-        if let Some(ref msg) = self.error_message {
-            if self.is_dirty {
-                renderer.draw_text(
-                    msg,
-                    rect.x,
-                    content_top + content_height + 2.0,
-                    11.0,
-                    [1.0, 0.2, 0.2, 1.0],
-                );
-            }
+        if let Some(ref msg) = self.error_message
+            && self.is_dirty
+        {
+            renderer.draw_text(
+                msg,
+                rect.x,
+                content_top + content_height + 2.0,
+                11.0,
+                [1.0, 0.2, 0.2, 1.0],
+            );
         }
 
         renderer.pop_vnode();
@@ -306,7 +306,7 @@ impl Form {
     /// Updates the error_message on each field so the UI reflects errors.
     pub fn validate_all(&mut self) -> bool {
         let mut all_valid = true;
-        for (i, field) in self.fields.iter().enumerate() {
+        for (i, _field) in self.fields.iter().enumerate() {
             // We cannot call validate on erased views directly.
             // Instead, the field_states are managed externally by the
             // application logic that owns the FormField values before

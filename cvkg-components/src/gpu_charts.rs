@@ -10,6 +10,12 @@ pub struct LineChart {
     pub(crate) show_grid: bool,
 }
 
+impl Default for LineChart {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LineChart {
     pub fn new() -> Self {
         Self {
@@ -127,6 +133,12 @@ pub struct BarChart {
     pub(crate) color: [f32; 4],
 }
 
+impl Default for BarChart {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BarChart {
     pub fn new() -> Self {
         Self {
@@ -219,6 +231,12 @@ pub struct ScatterPlot {
     pub(crate) color: [f32; 4],
 }
 
+impl Default for ScatterPlot {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScatterPlot {
     pub fn new() -> Self {
         Self {
@@ -295,6 +313,12 @@ pub struct Histogram {
     pub(crate) data: Vec<f32>,
     pub(crate) bins: usize,
     pub(crate) color: [f32; 4],
+}
+
+impl Default for Histogram {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Histogram {
@@ -400,6 +424,12 @@ pub struct RadarChart {
     pub(crate) color: [f32; 4],
 }
 
+impl Default for RadarChart {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RadarChart {
     pub fn new() -> Self {
         Self {
@@ -460,7 +490,7 @@ impl View for RadarChart {
             // Label
             let label_x = center_x + (radius + 20.0) * (angle).cos();
             let label_y = center_y + (radius + 20.0) * (angle).sin();
-            if let Some(ref label) = self.labels.get(i) {
+            if let Some(label) = self.labels.get(i) {
                 renderer.draw_text(
                     label,
                     label_x - 10.0,

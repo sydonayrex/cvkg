@@ -1,3 +1,10 @@
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::new_without_default,
+    clippy::type_complexity
+)]
+
 use cvkg_components::{Badge, BadgeVariant, Button};
 use cvkg_core::{Never, Rect, Renderer, View};
 use wasm_bindgen::prelude::*;

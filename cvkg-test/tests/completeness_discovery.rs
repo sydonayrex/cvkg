@@ -1,3 +1,5 @@
+#![allow(clippy::unnecessary_map_or)]
+
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;

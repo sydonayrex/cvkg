@@ -4,12 +4,15 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
+/// Mutex to serialize the execution of these tests and prevent race conditions on INSTANCE_COUNT.
+static TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Track component instances for leak detection
 static INSTANCE_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 /// Mock component for testing creation/destruction
 struct TestComponent {
-    id: usize,
+    _id: usize,
     data: Vec<u8>,
 }
 
@@ -17,7 +20,7 @@ impl TestComponent {
     fn new(size: usize) -> Self {
         INSTANCE_COUNT.fetch_add(1, Ordering::SeqCst);
         Self {
-            id: INSTANCE_COUNT.load(Ordering::SeqCst),
+            _id: INSTANCE_COUNT.load(Ordering::SeqCst),
             data: vec![0; size],
         }
     }
@@ -43,6 +46,7 @@ fn reset_instance_count() {
 /// Test: Repeated component creation/destruction
 #[test]
 fn test_repeated_component_creation_destruction() {
+    let _lock = TEST_MUTEX.lock().unwrap();
     reset_instance_count();
     let initial_count = INSTANCE_COUNT.load(Ordering::SeqCst);
 
@@ -63,6 +67,7 @@ fn test_repeated_component_creation_destruction() {
 /// Test: Memory growth tracking over multiple cycles
 #[test]
 fn test_memory_growth_tracking() {
+    let _lock = TEST_MUTEX.lock().unwrap();
     reset_instance_count();
 
     for cycle in 0..10 {
@@ -87,6 +92,7 @@ fn test_memory_growth_tracking() {
 /// Test: Verify no retained references after unmount
 #[test]
 fn test_no_retained_references() {
+    let _lock = TEST_MUTEX.lock().unwrap();
     reset_instance_count();
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -110,6 +116,7 @@ fn test_no_retained_references() {
 /// Test: Stress test with 10k cycles
 #[test]
 fn test_10k_cycle_stress() {
+    let _lock = TEST_MUTEX.lock().unwrap();
     reset_instance_count();
     let start = Instant::now();
 

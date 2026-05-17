@@ -1,3 +1,5 @@
+#![allow(clippy::assertions_on_constants)]
+
 use cvkg_components::ValkyrieIndicator;
 use cvkg_core::{FrameRenderer, Rect, RenderTier, View};
 use cvkg_render_gpu::SurtrRenderer;

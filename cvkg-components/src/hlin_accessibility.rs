@@ -46,10 +46,10 @@ pub struct FocusState {
 
 /// Hlin Accessibility Infrastructure for inclusive design
 pub struct HlinAccessibility {
-    pub(crate) tree: Vec<A11yNode>,
-    pub(crate) focus_state: FocusState,
-    pub(crate) high_contrast: bool,
-    pub(crate) reduced_motion: bool,
+    pub tree: Vec<A11yNode>,
+    pub focus_state: FocusState,
+    pub high_contrast: bool,
+    pub reduced_motion: bool,
 }
 
 impl Default for HlinAccessibility {

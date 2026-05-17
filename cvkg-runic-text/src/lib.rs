@@ -11,6 +11,11 @@
 //   - Text overflow modes (clip, ellipsis, visible, word-wrap)
 //   - OpenType features and variable font axes
 //   - TextStyle with weight, stretch, style, color, spacing, decorations
+#![allow(
+    clippy::too_many_arguments,
+    clippy::needless_range_loop,
+    clippy::ptr_arg
+)]
 
 use std::collections::HashMap;
 
@@ -97,7 +102,7 @@ impl LineHeight {
 }
 
 /// Text overflow handling mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TextOverflow {
     /// Clip text at the boundary.
     Clip,
@@ -106,13 +111,8 @@ pub enum TextOverflow {
     /// Let text overflow visibly.
     Visible,
     /// Wrap words that exceed the width.
+    #[default]
     WordWrap,
-}
-
-impl Default for TextOverflow {
-    fn default() -> Self {
-        TextOverflow::WordWrap
-    }
 }
 
 /// Text alignment within a line.
@@ -811,11 +811,10 @@ impl RunicTextEngine {
         self.db.load_font_data(data.clone());
         for face in self.db.faces() {
             let id = face.id;
-            if !self.font_data.contains_key(&id) {
+            self.font_data.entry(id).or_insert_with(|| {
                 let face_index = face.index;
-                self.font_data
-                    .insert(id, FontData::new(data.clone(), face_index));
-            }
+                FontData::new(data.clone(), face_index)
+            });
         }
     }
     /// Get or load FontData for a fontdb ID.
@@ -852,41 +851,40 @@ impl RunicTextEngine {
                 style: style.style,
             };
 
-            if let Some(id) = self.db.query(&query) {
-                if let Some(data) = self.get_font_data(id) {
-                    if let Some(mut resolved) = ResolvedFont::from_data(data.clone()) {
-                        // Load fallbacks - collect IDs first to avoid borrow issues
-                        let fallback_ids: Vec<fontdb::ID> = self
-                            .db
-                            .faces()
-                            .filter(|f| f.id != id)
-                            .map(|f| f.id)
-                            .collect();
-                        for fb_id in fallback_ids {
-                            if let Some(fb_data) = self.get_font_data(fb_id) {
-                                resolved.fallbacks.push(fb_data);
-                            }
-                        }
-                        return Ok(resolved);
+            if let Some(id) = self.db.query(&query)
+                && let Some(data) = self.get_font_data(id)
+                && let Some(mut resolved) = ResolvedFont::from_data(data.clone())
+            {
+                // Load fallbacks - collect IDs first to avoid borrow issues
+                let fallback_ids: Vec<fontdb::ID> = self
+                    .db
+                    .faces()
+                    .filter(|f| f.id != id)
+                    .map(|f| f.id)
+                    .collect();
+                for fb_id in fallback_ids {
+                    if let Some(fb_data) = self.get_font_data(fb_id) {
+                        resolved.fallbacks.push(fb_data);
                     }
                 }
+                return Ok(resolved);
             }
         }
 
         // Last resort: any font
         let all_ids: Vec<fontdb::ID> = self.db.faces().map(|f| f.id).collect();
         for id in &all_ids {
-            if let Some(data) = self.get_font_data(*id) {
-                if let Some(mut resolved) = ResolvedFont::from_data(data) {
-                    for fb_id in &all_ids {
-                        if *fb_id != *id {
-                            if let Some(fb_data) = self.get_font_data(*fb_id) {
-                                resolved.fallbacks.push(fb_data);
-                            }
-                        }
+            if let Some(data) = self.get_font_data(*id)
+                && let Some(mut resolved) = ResolvedFont::from_data(data)
+            {
+                for fb_id in &all_ids {
+                    if *fb_id != *id
+                        && let Some(fb_data) = self.get_font_data(*fb_id)
+                    {
+                        resolved.fallbacks.push(fb_data);
                     }
-                    return Ok(resolved);
                 }
+                return Ok(resolved);
             }
         }
 
@@ -999,7 +997,7 @@ impl RunicTextEngine {
     fn is_space_cluster(text: &str, cluster: u32) -> bool {
         text.chars()
             .nth(cluster as usize)
-            .map_or(false, |c| c.is_ascii_whitespace())
+            .is_some_and(|c| c.is_ascii_whitespace())
     }
 
     /// Apply font fallback for glyphs with ID 0 (missing).
@@ -1037,14 +1035,14 @@ impl RunicTextEngine {
                         let infos = output.glyph_infos();
                         let positions = output.glyph_positions();
 
-                        if let (Some(info), Some(pos)) = (infos.first(), positions.first()) {
-                            if info.glyph_id != 0 {
-                                let scale = style.font_size / (resolved.units_per_em as f32);
-                                glyphs[i].glyph_id = info.glyph_id as u16;
-                                glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
-                                glyphs[i].y = (pos.y_offset as f32) * scale;
-                                break;
-                            }
+                        if let (Some(info), Some(pos)) = (infos.first(), positions.first())
+                            && info.glyph_id != 0
+                        {
+                            let scale = style.font_size / (resolved.units_per_em as f32);
+                            glyphs[i].glyph_id = info.glyph_id as u16;
+                            glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
+                            glyphs[i].y = (pos.y_offset as f32) * scale;
+                            break;
                         }
                     }
                 }
@@ -1054,11 +1052,11 @@ impl RunicTextEngine {
 
     /// Insert into cache with LRU eviction.
     fn insert_cache(&mut self, key: CacheKey, value: Vec<GlyphInstance>) {
-        if self.cache.len() >= MAX_CACHE_SIZE {
-            if let Some(oldest) = self.cache_order.first().cloned() {
-                self.cache.remove(&oldest);
-                self.cache_order.remove(0);
-            }
+        if self.cache.len() >= MAX_CACHE_SIZE
+            && let Some(oldest) = self.cache_order.first().cloned()
+        {
+            self.cache.remove(&oldest);
+            self.cache_order.remove(0);
         }
 
         self.cache.insert(key, value);
@@ -1358,30 +1356,30 @@ impl RunicTextEngine {
         }
 
         // Handle text overflow ellipsis
-        if overflow == TextOverflow::Ellipsis {
-            if let Some(max_w) = max_width {
-                for line_idx in 0..lines.len() {
-                    let line = &lines[line_idx];
-                    if line.width > max_w {
-                        // Find how many glyphs fit
-                        let mut trunc_width = 0.0f32;
-                        let mut trunc_glyph_end = line.glyph_start;
-                        // Approximate ellipsis width
-                        let ellipsis_w = line_height_px * 0.6 * 3.0;
+        if overflow == TextOverflow::Ellipsis
+            && let Some(max_w) = max_width
+        {
+            for line_idx in 0..lines.len() {
+                let line = &lines[line_idx];
+                if line.width > max_w {
+                    // Find how many glyphs fit
+                    let mut trunc_width = 0.0f32;
+                    let mut trunc_glyph_end = line.glyph_start;
+                    // Approximate ellipsis width
+                    let ellipsis_w = line_height_px * 0.6 * 3.0;
 
-                        for gi in line.glyph_start..line.glyph_end {
-                            if gi < glyphs.len() {
-                                trunc_width += glyphs[gi].advance_width;
-                                if trunc_width + ellipsis_w > max_w {
-                                    break;
-                                }
-                                trunc_glyph_end = gi + 1;
+                    for gi in line.glyph_start..line.glyph_end {
+                        if gi < glyphs.len() {
+                            trunc_width += glyphs[gi].advance_width;
+                            if trunc_width + ellipsis_w > max_w {
+                                break;
                             }
+                            trunc_glyph_end = gi + 1;
                         }
-
-                        lines[line_idx].glyph_end = trunc_glyph_end;
-                        lines[line_idx].width = trunc_width;
                     }
+
+                    lines[line_idx].glyph_end = trunc_glyph_end;
+                    lines[line_idx].width = trunc_width;
                 }
             }
         }
@@ -1440,7 +1438,7 @@ impl RunicTextEngine {
 
         let render = Render::new(&[SwashSource::Outline]);
 
-        if let Some(image) = render.render(&mut scaler, glyph_id as u16) {
+        if let Some(image) = render.render(&mut scaler, glyph_id) {
             return Ok(GlyphImage {
                 glyph_id,
                 width: image.placement.width,
@@ -1460,7 +1458,7 @@ impl RunicTextEngine {
                     .builder(font_ref)
                     .size(style.font_size)
                     .build();
-                if let Some(image) = render.render(&mut scaler, glyph_id as u16) {
+                if let Some(image) = render.render(&mut scaler, glyph_id) {
                     return Ok(GlyphImage {
                         glyph_id,
                         width: image.placement.width,

@@ -19,6 +19,19 @@
 //! Sources:
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
+#![allow(
+    clippy::too_many_arguments,
+    clippy::new_without_default,
+    clippy::needless_range_loop,
+    clippy::large_enum_variant,
+    clippy::manual_clamp,
+    clippy::doc_lazy_continuation,
+    clippy::needless_borrow,
+    ambiguous_glob_reexports,
+    dead_code,
+    clippy::type_complexity,
+    clippy::unusual_byte_groupings
+)]
 
 //! Built-in component library for CVKG
 //!
@@ -151,7 +164,7 @@ pub use valkyrie_indicator::ValkyrieIndicator;
 pub use virtual_list::*;
 pub use virtual_table::*;
 pub use visual::{
-    AvatarStatus, DraumaSkeleton, EikonaAvatar, Gauge, MerkiBadge, MimirsWell, Progress,
+    AvatarStatus, ChartType, DraumaSkeleton, EikonaAvatar, Gauge, MerkiBadge, MimirsWell, Progress,
     RuneScript, RunicTooltip, SleipnirGait, StatusBar, TelemetryView, UrdrTimeline,
     ValkyrieAnalytics, VölvaScan,
 };
@@ -175,6 +188,8 @@ pub use eir_motion::*;
 pub use hlin_accessibility::*;
 pub use transitions::*;
 pub use tyr_security::*;
+pub use autocomplete::*;
+pub use toast::*;
 // Re-export layout components
 pub use cvkg_layout as layout;
 

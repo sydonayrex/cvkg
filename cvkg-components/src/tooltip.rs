@@ -3,19 +3,14 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 /// Tooltip position relative to the content.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TooltipPosition {
     Top,
     Bottom,
     Left,
     Right,
+    #[default]
     Auto,
-}
-
-impl Default for TooltipPosition {
-    fn default() -> Self {
-        TooltipPosition::Auto
-    }
 }
 
 /// Tooltip - A contextual popup that reveals information on hover.
@@ -47,7 +42,8 @@ impl<V: View> Tooltip<V> {
     ///
     /// # Examples
     /// ```
-    /// use cvkg_components::{Tooltip, Text};
+    /// use cvkg_components::Text;
+    /// use cvkg_components::tooltip::Tooltip;
     /// let tooltip = Tooltip::new(Text::new("Hover me"), "Helpful information");
     /// ```
     pub fn new(content: V, text: impl Into<String>) -> Self {
@@ -140,7 +136,7 @@ impl<V: View> Tooltip<V> {
         &self,
         renderer: &mut dyn Renderer,
         tip_rect: Rect,
-        content_rect: Rect,
+        _content_rect: Rect,
         pos: TooltipPosition,
     ) {
         let arrow_color = [0.05, 0.05, 0.1, 0.9];
@@ -340,20 +336,20 @@ impl<V: View> View for Tooltip<V> {
                     let mut next = s.clone();
                     // Only update if currently hovered; use a placeholder time.
                     // The actual elapsed_time is captured during render.
-                    if let Some(lock) = next.get_component_state::<HoverState>(id_hash_move) {
-                        if let Ok(state) = lock.read() {
-                            if state.is_hovered && state.hover_start_time == 0.0 {
-                                // Mark that we've seen movement while hovered.
-                                // We use a negative sentinel to indicate "waiting for render time".
-                                next.set_component_state(
-                                    id_hash_move,
-                                    HoverState {
-                                        is_hovered: true,
-                                        hover_start_time: -1.0,
-                                    },
-                                );
-                            }
-                        }
+                    if let Some(lock) = next.get_component_state::<HoverState>(id_hash_move)
+                        && let Ok(state) = lock.read()
+                        && state.is_hovered
+                        && state.hover_start_time == 0.0
+                    {
+                        // Mark that we've seen movement while hovered.
+                        // We use a negative sentinel to indicate "waiting for render time".
+                        next.set_component_state(
+                            id_hash_move,
+                            HoverState {
+                                is_hovered: true,
+                                hover_start_time: -1.0,
+                            },
+                        );
                     }
                     next
                 });

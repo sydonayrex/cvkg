@@ -29,9 +29,9 @@ pub struct SessionRestore {
 
 /// Idunn Persistence for workspace state management
 pub struct IdunnPersistence {
-    pub(crate) snapshots: Vec<WorkspaceSnapshot>,
-    pub(crate) active_session: Option<SessionRestore>,
-    pub(crate) auto_restore: bool,
+    pub snapshots: Vec<WorkspaceSnapshot>,
+    pub active_session: Option<SessionRestore>,
+    pub auto_restore: bool,
 }
 
 impl Default for IdunnPersistence {

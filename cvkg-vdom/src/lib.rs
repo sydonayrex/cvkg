@@ -992,7 +992,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             );
             self.event_handlers
                 .entry(*node_id)
-                .or_insert_with(HashMap::new)
+                .or_default()
                 .insert(event_type.to_string(), handler);
         }
     }
@@ -1368,12 +1368,11 @@ impl VDom {
             if let Some(hit) = self.hit_test_recursive(*child_id, x, y) {
                 // If the child hit was a primitive/presentation node, and this node
                 // has handlers, this node is the real interactive target.
-                if let Some(child_node) = self.nodes.get(&hit) {
-                    if child_node.aria_role == "presentation"
-                        && self.event_handlers.contains_key(&node_id)
-                    {
-                        return Some(node_id);
-                    }
+                if let Some(child_node) = self.nodes.get(&hit)
+                    && child_node.aria_role == "presentation"
+                    && self.event_handlers.contains_key(&node_id)
+                {
+                    return Some(node_id);
                 }
                 return Some(hit);
             }

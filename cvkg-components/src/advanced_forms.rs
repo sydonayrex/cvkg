@@ -10,6 +10,12 @@ pub struct DatePicker {
     pub(crate) on_date_change: Option<Arc<dyn Fn(Option<(u32, u32, u32)>) + Send + Sync>>,
 }
 
+impl Default for DatePicker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DatePicker {
     pub fn new() -> Self {
         Self {
@@ -94,6 +100,12 @@ pub struct TimePicker {
     pub(crate) on_time_change: Option<Arc<dyn Fn(Option<(u32, u32)>) + Send + Sync>>,
 }
 
+impl Default for TimePicker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TimePicker {
     pub fn new() -> Self {
         Self {
@@ -173,6 +185,12 @@ pub struct Calendar {
     pub(crate) current_month: u32,
     pub(crate) current_year: u32,
     pub(crate) _selected_date: Option<(u32, u32, u32)>,
+}
+
+impl Default for Calendar {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Calendar {
@@ -288,6 +306,12 @@ pub struct Autocomplete {
     pub(crate) on_select: Option<Arc<dyn Fn(String) + Send + Sync>>,
 }
 
+impl Default for Autocomplete {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Autocomplete {
     pub fn new() -> Self {
         Self {
@@ -390,6 +414,12 @@ pub struct Combobox {
     pub(crate) on_change: Option<Arc<dyn Fn(Option<String>) + Send + Sync>>,
 }
 
+impl Default for Combobox {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Combobox {
     pub fn new() -> Self {
         Self {
@@ -474,6 +504,12 @@ pub struct MultiSelect {
     pub(crate) selected: Vec<String>,
 }
 
+impl Default for MultiSelect {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MultiSelect {
     pub fn new() -> Self {
         Self {
@@ -551,6 +587,12 @@ impl LayoutView for MultiSelect {
 pub struct TagInput {
     pub(crate) tags: Vec<String>,
     pub(crate) _text: String,
+}
+
+impl Default for TagInput {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TagInput {
@@ -670,10 +712,10 @@ impl EikonaForm {
     pub fn validate(&self, fields: &std::collections::HashMap<String, String>) -> Vec<String> {
         let mut errors = Vec::new();
         for rule in &self.rules {
-            if let Some(value) = fields.get(&rule.field) {
-                if !(rule.validator)(value) {
-                    errors.push(rule.error_message.clone());
-                }
+            if let Some(value) = fields.get(&rule.field)
+                && !(rule.validator)(value)
+            {
+                errors.push(rule.error_message.clone());
             }
         }
         errors

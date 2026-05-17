@@ -1830,11 +1830,13 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
 
 /// SagaAccordion - A collapsible accordion component for revealing stories (data).
 /// Named after the Sagas, the epic narratives of the Norse.
+#[derive(Clone)]
 pub struct SagaAccordion<V: View> {
     pub items: Vec<SagaItem<V>>,
     pub allow_multiple: bool,
 }
 
+#[derive(Clone)]
 pub struct SagaItem<V: View> {
     pub title: String,
     pub content: V,

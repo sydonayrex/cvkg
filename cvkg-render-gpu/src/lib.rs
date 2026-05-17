@@ -21,6 +21,7 @@
 //! Sources:
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
+#![allow(clippy::type_complexity, clippy::unwrap_or_default)]
 
 //! # Surtr Render Pipeline
 //!

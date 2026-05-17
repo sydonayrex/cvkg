@@ -124,6 +124,16 @@ impl TacticalGauge {
             critical_level: 0.9,
         }
     }
+
+    pub fn warning_level(mut self, warning_level: f32) -> Self {
+        self.warning_level = warning_level;
+        self
+    }
+
+    pub fn critical_level(mut self, critical_level: f32) -> Self {
+        self.critical_level = critical_level;
+        self
+    }
 }
 
 impl View for TacticalGauge {

@@ -145,7 +145,7 @@ impl Boids {
     /// world bounds. Each boid gets a random velocity with speed up to
     /// `max_speed`.
     pub fn new(count: usize, world_width: f32, world_height: f32) -> Self {
-        let mut rng = FastRng::new(0xDEADBEEF_CAFE_BABE);
+        let mut rng = FastRng::new(0xDEAD_BEEF_CAFE_BABE);
         let mut boids = Vec::with_capacity(count);
         for _ in 0..count {
             let px = rng.range(0.0, world_width);
@@ -581,7 +581,7 @@ impl CrowdSimulation {
             let diff = result - *point;
             if diff.dot(n) < 0.0 {
                 // Project onto the plane boundary
-                result = result - n * diff.dot(n);
+                result -= n * diff.dot(n);
             }
         }
 

@@ -1,3 +1,5 @@
+#![allow(dead_code, clippy::approx_constant)]
+
 use cvkg::prelude::*;
 use std::sync::{Arc, Mutex};
 

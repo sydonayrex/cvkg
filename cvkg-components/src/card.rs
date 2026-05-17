@@ -3,6 +3,7 @@ use cvkg_core::{ElapsedTime, Never, Rect, Renderer, Size, View};
 
 /// RunesCard - A container component with header, content, and footer sections.
 /// Named after the Runes, the ancient inscribed containers of meaning.
+#[derive(Clone)]
 pub struct RunesCard<V> {
     /// Optional header content
     header: Option<V>,

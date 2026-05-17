@@ -17,6 +17,11 @@
 //! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
+#![allow(
+    clippy::needless_range_loop,
+    clippy::too_many_arguments,
+    clippy::manual_range_contains
+)]
 
 //! # Sleipnir Animation Engine
 //!

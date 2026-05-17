@@ -197,12 +197,12 @@ impl CcdSolver {
                     cross.normalize()
                 } else {
                     // Vectors are parallel, pick arbitrary perpendicular
-                    let perp = if to_end.x.abs() < 0.9 {
+
+                    if to_end.x.abs() < 0.9 {
                         Vec3::X.cross(to_end).normalize()
                     } else {
                         Vec3::Y.cross(to_end).normalize()
-                    };
-                    perp
+                    }
                 };
 
                 let rot = Quat::from_axis_angle(axis, angle);

@@ -1,5 +1,5 @@
 use cvkg_components::*;
-use cvkg_core::{Rect, Renderer, View};
+use cvkg_core::View;
 
 #[test]
 fn test_tactical_component_rendering() {

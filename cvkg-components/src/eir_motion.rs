@@ -47,9 +47,9 @@ pub struct PhysicsMotion {
 
 /// Eir Motion Engine for animations
 pub struct EirMotion {
-    pub(crate) animations: Vec<Animation>,
-    pub(crate) physics: Vec<PhysicsMotion>,
-    pub(crate) state_machine: StateMachine,
+    pub animations: Vec<Animation>,
+    pub physics: Vec<PhysicsMotion>,
+    pub state_machine: StateMachine,
 }
 
 /// State machine for animations

@@ -11,8 +11,8 @@ use cvkg_core::{
 /// Multi-agent orchestration panel for managing agent workflows
 /// Displays agent tasks with status visualization and progress tracking
 pub struct MultiAgentPanel {
-    pub(crate) agents: Vec<AgentInfo>,
-    pub(crate) title: String,
+    pub agents: Vec<AgentInfo>,
+    pub title: String,
 }
 
 /// Agent information for orchestration display
@@ -185,8 +185,8 @@ impl LayoutView for MultiAgentPanel {
 
 /// Prompt chain visualizer for displaying prompt sequences
 pub struct PromptChainVisualizer {
-    pub(crate) prompts: Vec<PromptStep>,
-    pub(crate) _current_step: usize,
+    pub prompts: Vec<PromptStep>,
+    pub _current_step: usize,
 }
 
 /// A single prompt step in a chain
@@ -206,6 +206,12 @@ pub enum PromptStatus {
     Running,
     Completed,
     Failed,
+}
+
+impl Default for PromptChainVisualizer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PromptChainVisualizer {
@@ -321,8 +327,8 @@ impl LayoutView for PromptChainVisualizer {
 
 /// Memory graph viewer for visualizing memory relationships
 pub struct MemoryGraphViewer {
-    pub(crate) nodes: Vec<MemoryNode>,
-    pub(crate) edges: Vec<MemoryEdge>,
+    pub nodes: Vec<MemoryNode>,
+    pub edges: Vec<MemoryEdge>,
 }
 
 /// Memory node in the graph
@@ -346,6 +352,12 @@ pub enum NodeType {
     Entity,
     Relation,
     Context,
+}
+
+impl Default for MemoryGraphViewer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemoryGraphViewer {
@@ -452,8 +464,8 @@ impl LayoutView for MemoryGraphViewer {
 
 /// Token streaming viewer for real-time token visualization
 pub struct TokenStreamViewer {
-    pub(crate) tokens: Vec<TokenInfo>,
-    pub(crate) is_streaming: bool,
+    pub tokens: Vec<TokenInfo>,
+    pub is_streaming: bool,
 }
 
 /// Individual token information
@@ -468,6 +480,12 @@ pub enum TokenType {
     Punctuation,
     Space,
     NewLine,
+}
+
+impl Default for TokenStreamViewer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TokenStreamViewer {
@@ -542,7 +560,7 @@ impl LayoutView for TokenStreamViewer {
 
 /// Reasoning trace inspector for debugging AI decision paths
 pub struct ReasoningTraceInspector {
-    pub(crate) steps: Vec<ReasoningStep>,
+    pub steps: Vec<ReasoningStep>,
 }
 
 /// A single reasoning step
@@ -551,6 +569,12 @@ pub struct ReasoningStep {
     pub description: String,
     pub confidence: f32,
     pub conclusion: String,
+}
+
+impl Default for ReasoningTraceInspector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ReasoningTraceInspector {
@@ -644,7 +668,7 @@ impl LayoutView for ReasoningTraceInspector {
 
 /// Tool invocation inspector for monitoring tool calls
 pub struct ToolInvocationInspector {
-    pub(crate) invocations: Vec<ToolInvocation>,
+    pub invocations: Vec<ToolInvocation>,
 }
 
 /// A tool invocation record
@@ -654,6 +678,12 @@ pub struct ToolInvocation {
     pub parameters: Vec<(String, String)>,
     pub result_preview: String,
     pub duration_ms: f32,
+}
+
+impl Default for ToolInvocationInspector {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ToolInvocationInspector {
@@ -751,8 +781,8 @@ impl LayoutView for ToolInvocationInspector {
 
 /// AI workflow builder for constructing agent workflows
 pub struct AIWorkflowBuilder {
-    pub(crate) nodes: Vec<WorkflowNode>,
-    pub(crate) edges: Vec<WorkflowEdge>,
+    pub nodes: Vec<WorkflowNode>,
+    pub edges: Vec<WorkflowEdge>,
 }
 
 /// Workflow node
@@ -902,8 +932,8 @@ impl LayoutView for AIWorkflowBuilder {
 
 /// AI execution debugger for step-by-step debugging
 pub struct AIExecutionDebugger {
-    pub(crate) breakpoints: Vec<String>,
-    pub(crate) _current_line: Option<String>,
+    pub breakpoints: Vec<String>,
+    pub _current_line: Option<String>,
 }
 
 impl Default for AIExecutionDebugger {

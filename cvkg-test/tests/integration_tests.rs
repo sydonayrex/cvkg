@@ -1,3 +1,5 @@
+#![allow(clippy::assertions_on_constants)]
+
 // Backend Integration Tests
 // Testing Native, Web, and GPU renderer integration
 

@@ -19,5 +19,5 @@ pub extern "C" fn cvkg_render() {
     // However, we can use a "Null" or "Command-Recording" renderer to verify the View tree works.
 
     // For this verification, we'll just ensure the demo view can be instantiated.
-    let _Body = demo;
+    let _body = demo;
 }

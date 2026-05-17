@@ -264,17 +264,17 @@ impl RichText {
     }
 
     /// Append an inline image with default size (16x16).
-    pub fn image_small(mut self, path: impl Into<String>) -> Self {
+    pub fn image_small(self, path: impl Into<String>) -> Self {
         self.image(path, 16.0, 16.0)
     }
 
     /// Append an inline image with medium size (24x24).
-    pub fn image_medium(mut self, path: impl Into<String>) -> Self {
+    pub fn image_medium(self, path: impl Into<String>) -> Self {
         self.image(path, 24.0, 24.0)
     }
 
     /// Append an inline image with large size (40x40).
-    pub fn image_large(mut self, path: impl Into<String>) -> Self {
+    pub fn image_large(self, path: impl Into<String>) -> Self {
         self.image(path, 40.0, 40.0)
     }
 
@@ -299,7 +299,7 @@ impl RichText {
     }
 
     /// Append a square inline image at 1x text height.
-    pub fn inline_image_small(mut self, path: impl Into<String>) -> Self {
+    pub fn inline_image_small(self, path: impl Into<String>) -> Self {
         self.inline_image(path, 1.0, None)
     }
 
@@ -512,6 +512,17 @@ impl View for RichText {
     }
 }
 
+// Helper trait impl for tests
+trait RichTextExt {
+    fn text_content(&self) -> Option<&str>;
+}
+
+impl RichTextExt for RichText {
+    fn text_content(&self) -> Option<&str> {
+        self.segments.first().and_then(|s| s.text_content())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,7 +634,7 @@ mod tests {
             .wrap(true)
             .wrap_line_gap(4.0);
 
-        assert_eq!(rt.segments.len(), 13);
+        assert_eq!(rt.segments.len(), 14);
         assert_eq!(rt.align, TextAlign::Center);
         assert_eq!(rt.text_size, 16.0);
         assert_eq!(rt.line_height, 24.0);
@@ -640,7 +651,7 @@ mod tests {
             .image("photo.png", 40.0, 40.0);
 
         assert_eq!(rt.segments.len(), 3);
-        assert_eq!(rt.text_content(), None); // RichText itself doesn't have text_content
+        assert_eq!(rt.text_content(), Some("hello world"));
     }
 
     #[test]
@@ -661,16 +672,5 @@ mod tests {
             align: None,
         };
         assert_eq!(rt.effective_align(&seg_no_align), TextAlign::Right);
-    }
-}
-
-// Helper trait impl for tests
-trait RichTextExt {
-    fn text_content(&self) -> Option<&str>;
-}
-
-impl RichTextExt for RichText {
-    fn text_content(&self) -> Option<&str> {
-        self.segments.first().and_then(|s| s.text_content())
     }
 }

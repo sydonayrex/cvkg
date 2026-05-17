@@ -33,6 +33,12 @@ pub enum PanelPosition {
     },
 }
 
+impl Default for DockingWorkspace {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DockingWorkspace {
     pub fn new() -> Self {
         Self {
@@ -115,9 +121,9 @@ impl View for DockingWorkspace {
         let mut current_y = sidebar_rect.y + 8.0;
         for panel in &self.panels {
             if !panel.is_docked || matches!(panel.position, PanelPosition::Left) {
-                let is_active = self.active_panel.map_or(false, |idx| {
-                    self.panels.get(idx).map_or(false, |p| p.id == panel.id)
-                });
+                let is_active = self
+                    .active_panel
+                    .is_some_and(|idx| self.panels.get(idx).is_some_and(|p| p.id == panel.id));
 
                 let text_color = if is_active {
                     [0.9, 0.95, 1.0, 1.0]
@@ -316,6 +322,12 @@ pub struct Tab {
     pub content: AnyView,
 }
 
+impl Default for WorkspaceTabs {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorkspaceTabs {
     pub fn new() -> Self {
         Self {
@@ -353,7 +365,7 @@ impl View for WorkspaceTabs {
         let tab_width = rect.width / self.tabs.len() as f32;
 
         for (i, tab) in self.tabs.iter().enumerate() {
-            let is_active = self.active_tab.map_or(false, |active| active == i);
+            let is_active = self.active_tab == Some(i);
             let tab_rect = Rect {
                 x: rect.x + i as f32 * tab_width,
                 y: rect.y,
@@ -381,16 +393,16 @@ impl View for WorkspaceTabs {
         }
 
         // Render active tab content
-        if let Some(active_idx) = self.active_tab {
-            if let Some(tab) = self.tabs.get(active_idx) {
-                let content_rect = Rect {
-                    x: rect.x,
-                    y: rect.y + tab_height,
-                    width: rect.width,
-                    height: rect.height - tab_height,
-                };
-                tab.content.render(renderer, content_rect);
-            }
+        if let Some(active_idx) = self.active_tab
+            && let Some(tab) = self.tabs.get(active_idx)
+        {
+            let content_rect = Rect {
+                x: rect.x,
+                y: rect.y + tab_height,
+                width: rect.width,
+                height: rect.height - tab_height,
+            };
+            tab.content.render(renderer, content_rect);
         }
     }
 }

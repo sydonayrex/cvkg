@@ -444,7 +444,7 @@ pub mod helpers {
 
     /// Creates a ToastManager with a dismissal callback that is invoked
     /// whenever a toast's close button is clicked.
-    pub fn toast_manager_with_dismiss<F>(mut manager: ToastManager, on_dismiss: F) -> ToastManager
+    pub fn toast_manager_with_dismiss<F>(manager: ToastManager, on_dismiss: F) -> ToastManager
     where
         F: Fn(u64) + Send + Sync + 'static,
     {

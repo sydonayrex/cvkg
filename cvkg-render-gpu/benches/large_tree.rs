@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Benchmark suite for large component trees
 // Tests performance for 100+, 1000+, 10000+ component configurations
 // Target: <16ms render time for 60fps smoothness

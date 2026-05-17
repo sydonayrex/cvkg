@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static POPOVER_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Popover position relative to the trigger element.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PopoverPosition {
     /// Popover appears above the trigger.
     Top,
@@ -18,13 +18,8 @@ pub enum PopoverPosition {
     /// Popover appears to the right of the trigger.
     Right,
     /// Automatically choose the best position based on available space.
+    #[default]
     Auto,
-}
-
-impl Default for PopoverPosition {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Popover - A floating content container anchored to a trigger element.
@@ -37,7 +32,8 @@ impl Default for PopoverPosition {
 /// * `C` - The content view type.
 /// # Examples
 /// ```
-/// use cvkg_components::{Popover, Text, PopoverPosition};
+/// use cvkg_components::Text;
+/// use cvkg_components::popover::{Popover, PopoverPosition};
 /// let popover = Popover::new(
 ///     Text::new("Click me"),
 ///     Text::new("Hello from popover!"),
@@ -272,20 +268,20 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if tr.contains(x, y) {
-                        let current = {
-                            let s = load_system_state();
-                            s.get_component_state::<bool>(id)
-                                .map(|v| *v.read().unwrap())
-                                .unwrap_or(false)
-                        };
-                        update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id, !current);
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && tr.contains(x, y)
+                {
+                    let current = {
+                        let s = load_system_state();
+                        s.get_component_state::<bool>(id)
+                            .map(|v| *v.read().unwrap())
+                            .unwrap_or(false)
+                    };
+                    update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id, !current);
+                        s
+                    });
                 }
             }),
         );
@@ -329,14 +325,15 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
             renderer.register_handler(
                 "pointerclick",
                 Arc::new(move |event: Event| {
-                    if let Event::PointerClick { x, y, .. } = event {
-                        if !pr.contains(x, y) && !tr2.contains(x, y) {
-                            update_system_state(move |s| {
-                                let mut s = s.clone();
-                                s.set_component_state(id, false);
-                                s
-                            });
-                        }
+                    if let Event::PointerClick { x, y, .. } = event
+                        && !pr.contains(x, y)
+                        && !tr2.contains(x, y)
+                    {
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id, false);
+                            s
+                        });
                     }
                 }),
             );

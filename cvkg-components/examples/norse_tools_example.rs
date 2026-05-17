@@ -3,11 +3,10 @@
 //
 // Run with: cargo run --example norse_tools_example
 
+use cvkg_components::eir_motion::Easing;
 use cvkg_components::{
-    A11yRole, BragiCreative, CreativeType, Easing, EirMotion, HlinAccessibility, PermissionLevel,
-    TyrSecurity,
+    A11yRole, BragiCreative, EirMotion, HlinAccessibility, PermissionLevel, TyrSecurity,
 };
-use std::collections::HashMap;
 
 fn main() {
     println!("CVKG Norse Tools Example");

@@ -17,6 +17,8 @@
 //! [VERIFICATION]: File system writes are active and confirmed.
 //! Features: Universal Build Pipeline, State-Preserving HMR, SEO Pre-rendering, Production Hardening.
 
+#![allow(unused_imports, deprecated)]
+
 use arc_swap::ArcSwap;
 use axum::{
     Router,

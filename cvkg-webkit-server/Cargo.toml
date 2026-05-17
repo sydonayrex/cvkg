@@ -6,6 +6,10 @@ repository.workspace = true
 description.workspace = true
 edition.workspace = true
 
+[lib]
+name = "cvkg_webkit_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "cvkg-webkit-server"
 path = "src/main.rs"

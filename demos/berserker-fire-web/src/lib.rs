@@ -1,3 +1,10 @@
+#![allow(
+    dead_code,
+    unused_imports,
+    clippy::approx_constant,
+    clippy::manual_clamp
+)]
+
 use cvkg_core::{ElapsedTime, FrameRenderer, Rect, Renderer};
 use cvkg_render_web::WebRenderer;
 use std::cell::RefCell;

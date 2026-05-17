@@ -12,11 +12,10 @@
 //! - Run comparison and agent metrics dashboard
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use cvkg_core::{
-    Event, Renderer, Size, View,
+    Renderer, Size, View,
     layout::{LayoutCache, LayoutView, Rect, SizeProposal},
 };
 
@@ -760,7 +759,7 @@ pub enum ExecutionStep {
 /// It processes nodes in topological order, handles retries with exponential
 /// backoff, enforces timeouts, and produces a stream of `ExecutionStep` events
 /// that the UI consumes to render real-time progress.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ExecutionEngine {
     /// The pending steps in the simulation.
     steps: Vec<ExecutionStep>,
@@ -768,16 +767,6 @@ pub struct ExecutionEngine {
     current_step: usize,
     /// Whether the engine has been initialized.
     initialized: bool,
-}
-
-impl Default for ExecutionEngine {
-    fn default() -> Self {
-        Self {
-            steps: Vec::new(),
-            current_step: 0,
-            initialized: false,
-        }
-    }
 }
 
 impl ExecutionEngine {
@@ -1337,47 +1326,45 @@ impl MultiAgentOrchestrator {
             width: btn_w,
             height: btn_h,
         };
-        let run_state = state.clone();
+        let _run_state = state.clone();
         renderer.register_handler(
             "pointerdown:runstop",
             std::sync::Arc::new(move |event| {
-                if let cvkg_core::Event::PointerDown { x, y, .. } = event {
-                    if x >= btn_rect.x
-                        && x <= btn_rect.x + btn_rect.width
-                        && y >= btn_rect.y
-                        && y <= btn_rect.y + btn_rect.height
-                    {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            if let Some(guard) =
-                                s.get_component_state::<OrchestratorState>(instance_id)
-                            {
-                                let mut new_state = guard.read().unwrap().clone();
-                                if new_state.is_executing {
-                                    new_state.is_executing = false;
-                                } else {
-                                    new_state.is_executing = true;
-                                    new_state.run_counter += 1;
-                                    new_state.active_run_id =
-                                        Some(format!("run-{}", new_state.run_counter));
-                                }
-                                *guard.write().unwrap() = new_state;
+                if let cvkg_core::Event::PointerDown { x, y, .. } = event
+                    && x >= btn_rect.x
+                    && x <= btn_rect.x + btn_rect.width
+                    && y >= btn_rect.y
+                    && y <= btn_rect.y + btn_rect.height
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let s = s.clone();
+                        if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
+                        {
+                            let mut new_state = guard.read().unwrap().clone();
+                            if new_state.is_executing {
+                                new_state.is_executing = false;
+                            } else {
+                                new_state.is_executing = true;
+                                new_state.run_counter += 1;
+                                new_state.active_run_id =
+                                    Some(format!("run-{}", new_state.run_counter));
                             }
-                            s
-                        });
-                    }
+                            *guard.write().unwrap() = new_state;
+                        }
+                        s
+                    });
                 }
             }),
         );
 
         // ── Log panel toggle ────────────────────────────────────────────
-        let log_state = state.clone();
+        let _log_state = state.clone();
         renderer.register_handler(
             "pointerdown:togglelog",
             std::sync::Arc::new(move |event| {
                 if let cvkg_core::Event::PointerDown { .. } = event {
                     cvkg_core::update_system_state(move |s| {
-                        let mut s = s.clone();
+                        let s = s.clone();
                         if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
                         {
                             let mut new_state = guard.read().unwrap().clone();
@@ -1391,13 +1378,13 @@ impl MultiAgentOrchestrator {
         );
 
         // ── Metrics panel toggle ────────────────────────────────────────
-        let metrics_state = state.clone();
+        let _metrics_state = state.clone();
         renderer.register_handler(
             "pointerdown:togglemetrics",
             std::sync::Arc::new(move |event| {
                 if let cvkg_core::Event::PointerDown { .. } = event {
                     cvkg_core::update_system_state(move |s| {
-                        let mut s = s.clone();
+                        let s = s.clone();
                         if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
                         {
                             let mut new_state = guard.read().unwrap().clone();
@@ -1691,19 +1678,19 @@ impl MultiAgentOrchestrator {
         renderer.draw_text(&node.name, nx + 28.0, ny + 7.0, 12.0, [0.1, 0.1, 0.15, 1.0]);
 
         // Status indicator (if running)
-        if let Some(ref run) = self.state.current_run {
-            if let Some(node_state) = run.node_states.get(&node.id) {
-                let status_color = node_state.status.color();
-                let status_label = node_state.status.label();
-                let tw = renderer.measure_text(status_label, 9.0);
-                renderer.draw_text(
-                    status_label,
-                    nx + nw - tw.0 - 8.0,
-                    ny + 9.0,
-                    9.0,
-                    status_color,
-                );
-            }
+        if let Some(ref run) = self.state.current_run
+            && let Some(node_state) = run.node_states.get(&node.id)
+        {
+            let status_color = node_state.status.color();
+            let status_label = node_state.status.label();
+            let tw = renderer.measure_text(status_label, 9.0);
+            renderer.draw_text(
+                status_label,
+                nx + nw - tw.0 - 8.0,
+                ny + 9.0,
+                9.0,
+                status_color,
+            );
         }
 
         // Separator line
@@ -2681,14 +2668,14 @@ pub fn validate_workflow(
     }
 
     for node in nodes {
-        if !visited.contains(node.id.as_str()) {
-            if has_cycle(node.id.as_str(), &adj, &mut visited, &mut in_stack) {
-                issues.push(ValidationError {
-                    message: "Workflow contains a cycle".to_string(),
-                    is_error: true,
-                });
-                break;
-            }
+        if !visited.contains(node.id.as_str())
+            && has_cycle(node.id.as_str(), &adj, &mut visited, &mut in_stack)
+        {
+            issues.push(ValidationError {
+                message: "Workflow contains a cycle".to_string(),
+                is_error: true,
+            });
+            break;
         }
     }
 

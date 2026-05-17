@@ -25,9 +25,9 @@ pub struct ThemeVariant {
 
 /// Njord Theme Engine for dynamic theming
 pub struct NjordTheme {
-    pub(crate) tokens: Vec<DesignToken>,
-    pub(crate) variants: Vec<ThemeVariant>,
-    pub(crate) active_variant: String,
+    pub tokens: Vec<DesignToken>,
+    pub variants: Vec<ThemeVariant>,
+    pub active_variant: String,
 }
 
 impl Default for NjordTheme {

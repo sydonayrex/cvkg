@@ -17,6 +17,12 @@ pub struct SemanticMemoryExplorer {
     pub(crate) highlighted: Option<String>,
 }
 
+impl Default for SemanticMemoryExplorer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SemanticMemoryExplorer {
     pub fn new() -> Self {
         Self {

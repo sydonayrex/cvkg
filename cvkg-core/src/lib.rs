@@ -2566,6 +2566,9 @@ pub static IS_RENDERING: AtomicBool = AtomicBool::new(false);
 pub static LAYOUT_DIRTY: AtomicBool = AtomicBool::new(false);
 type BatchQueue = OnceLock<std::sync::Mutex<Vec<Box<dyn FnOnce() + Send + Sync>>>>;
 static BATCH_QUEUE: BatchQueue = OnceLock::new();
+/// Global write lock to serialize updates to SYSTEM_STATE and KNOWLEDGE_TVAR,
+/// preventing parallel race conditions between STM transactions and the lock-free reader state.
+static STATE_WRITE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 /// Returns true if state updates are currently being batched.
 pub fn is_batching() -> bool {
     IS_BATCHING.load(Ordering::Acquire)
@@ -2624,6 +2627,7 @@ pub fn update_system_state<F>(f: F)
 where
     F: Fn(&KnowledgeState) -> KnowledgeState,
 {
+    let _lock = STATE_WRITE_MUTEX.lock().unwrap();
     if is_rendering() {
         log::warn!(
             "LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance."
@@ -2644,6 +2648,7 @@ pub fn transact_system_state<F>(f: F)
 where
     F: Fn(&KnowledgeState) -> KnowledgeState,
 {
+    let _lock = STATE_WRITE_MUTEX.lock().unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
         if is_rendering() {

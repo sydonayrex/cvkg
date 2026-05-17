@@ -1891,6 +1891,7 @@ impl View for HringrPagination {
 
 /// ValhallaRating - A tactical rating component for assessing quality.
 /// Named after Valhalla, where the chosen are assessed for their worth.
+#[derive(Clone, Copy)]
 pub struct ValhallaRating {
     pub value: f32,
     pub max: usize,
@@ -1957,6 +1958,7 @@ impl View for ValhallaRating {
 
 /// BifrostColorPicker - A color selection component.
 /// Named after the Bifrost, the rainbow bridge connecting the realms.
+#[derive(Clone, Copy)]
 pub struct BifrostColorPicker {
     pub color: [f32; 4],
 }

@@ -314,22 +314,22 @@ impl View for AutoComplete {
                                 });
                             }
                             "Enter" | "Return" => {
-                                if let Some(sel_idx) = st.selection {
-                                    if let Some(&opt_idx) = st.filtered_indices.get(sel_idx) {
-                                        let selected = options_kd[opt_idx].clone();
-                                        if let Ok(mut guard) = text_kd.lock() {
-                                            *guard = selected.clone();
-                                        }
-                                        (on_select_kd)(selected);
-                                        st.is_open = false;
-                                        st.selection = None;
-                                        let saved = st.clone();
-                                        cvkg_core::update_system_state(move |sys| {
-                                            let mut next = sys.clone();
-                                            next.set_component_state(id, saved.clone());
-                                            next
-                                        });
+                                if let Some(sel_idx) = st.selection
+                                    && let Some(&opt_idx) = st.filtered_indices.get(sel_idx)
+                                {
+                                    let selected = options_kd[opt_idx].clone();
+                                    if let Ok(mut guard) = text_kd.lock() {
+                                        *guard = selected.clone();
                                     }
+                                    (on_select_kd)(selected);
+                                    st.is_open = false;
+                                    st.selection = None;
+                                    let saved = st.clone();
+                                    cvkg_core::update_system_state(move |sys| {
+                                        let mut next = sys.clone();
+                                        next.set_component_state(id, saved.clone());
+                                        next
+                                    });
                                 }
                             }
                             "Escape" => {
@@ -367,25 +367,24 @@ impl View for AutoComplete {
                         if let Some(st) = sys
                             .get_component_state::<AutoCompleteState>(id)
                             .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
+                            && !st.is_open
                         {
-                            if !st.is_open {
-                                let mut new_st = st.clone();
-                                new_st.is_open = true;
-                                if new_st.filtered_indices.is_empty() {
-                                    new_st.filtered_indices = (0..options_click.len()).collect();
-                                }
-                                new_st.selection = if new_st.filtered_indices.is_empty() {
-                                    None
-                                } else {
-                                    Some(0)
-                                };
-                                let saved = new_st.clone();
-                                cvkg_core::update_system_state(move |sys| {
-                                    let mut next = sys.clone();
-                                    next.set_component_state(id, saved.clone());
-                                    next
-                                });
+                            let mut new_st = st.clone();
+                            new_st.is_open = true;
+                            if new_st.filtered_indices.is_empty() {
+                                new_st.filtered_indices = (0..options_click.len()).collect();
                             }
+                            new_st.selection = if new_st.filtered_indices.is_empty() {
+                                None
+                            } else {
+                                Some(0)
+                            };
+                            let saved = new_st.clone();
+                            cvkg_core::update_system_state(move |sys| {
+                                let mut next = sys.clone();
+                                next.set_component_state(id, saved.clone());
+                                next
+                            });
                         }
                         return;
                     }
@@ -399,24 +398,23 @@ impl View for AutoComplete {
                         if let Some(st) = sys
                             .get_component_state::<AutoCompleteState>(id)
                             .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
+                            && let Some(&opt_idx) = st.filtered_indices.get(vis_idx)
                         {
-                            if let Some(&opt_idx) = st.filtered_indices.get(vis_idx) {
-                                let selected = options_click[opt_idx].clone();
-                                if let Ok(mut guard) = text_click.lock() {
-                                    *guard = selected.clone();
-                                }
-                                (on_select_click)(selected);
-
-                                let mut new_st = st.clone();
-                                new_st.is_open = false;
-                                new_st.selection = None;
-                                let saved = new_st.clone();
-                                cvkg_core::update_system_state(move |sys| {
-                                    let mut next = sys.clone();
-                                    next.set_component_state(id, saved.clone());
-                                    next
-                                });
+                            let selected = options_click[opt_idx].clone();
+                            if let Ok(mut guard) = text_click.lock() {
+                                *guard = selected.clone();
                             }
+                            (on_select_click)(selected);
+
+                            let mut new_st = st.clone();
+                            new_st.is_open = false;
+                            new_st.selection = None;
+                            let saved = new_st.clone();
+                            cvkg_core::update_system_state(move |sys| {
+                                let mut next = sys.clone();
+                                next.set_component_state(id, saved.clone());
+                                next
+                            });
                         }
                     }
                 }

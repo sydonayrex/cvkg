@@ -42,7 +42,7 @@ fn days_in_month(month: u32, year: u32) -> u32 {
 
 /// Return true if the given year is a leap year.
 fn is_leap_year(year: u32) -> bool {
-    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400)
 }
 
 /// Compute the day of the week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
@@ -56,7 +56,7 @@ fn day_of_week(year: u32, month: u32, day: u32) -> u32 {
     }
     let k = y % 100;
     let j = y / 100;
-    let h = (day as u32 + (13 * (m as u32 + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
+    let h = (day + (13 * (m + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
     // h: 0=Sat, 1=Sun, 2=Mon, ... 6=Fri
     // Convert to 0=Sun, 1=Mon, ... 6=Sat
     (h + 6) % 7
@@ -81,7 +81,7 @@ fn today_date() -> (u32, u32, u32) {
 ///
 /// # Examples
 /// ```
-/// use cvkg_components::DatePicker;
+/// use cvkg_components::datepicker::DatePicker;
 /// let picker = DatePicker::new(|day, month, year| {
 ///     println!("Selected: {}/{}/{}", day, month, year);
 /// })
@@ -327,14 +327,14 @@ impl DatePicker {
         // Day grid: up to 6 rows
         let grid_start_y = sep_y + 4.0;
         let total_cells = first_dow as usize + num_days as usize;
-        let num_rows = ((total_cells + 6) / 7).min(6);
+        let num_rows = total_cells.div_ceil(7).min(6);
 
         for row in 0..num_rows {
             for col in 0..7 {
                 let cell_idx = row * 7 + col;
                 let cell_x = pop_rect.x + col as f32 * cell_w;
                 let cell_y = grid_start_y + row as f32 * cell_h;
-                let cell_rect = Rect {
+                let _cell_rect = Rect {
                     x: cell_x,
                     y: cell_y,
                     width: cell_w,
@@ -438,15 +438,15 @@ impl DatePicker {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if prev_r.contains(x, y) {
-                        let (new_m, new_y) = if dm == 1 { (12, dy - 1) } else { (dm - 1, dy) };
-                        update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id + 1, (new_m, new_y));
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && prev_r.contains(x, y)
+                {
+                    let (new_m, new_y) = if dm == 1 { (12, dy - 1) } else { (dm - 1, dy) };
+                    update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id + 1, (new_m, new_y));
+                        s
+                    });
                 }
             }),
         );
@@ -458,19 +458,19 @@ impl DatePicker {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if next_r.contains(x, y) {
-                        let (new_m, new_y) = if dm2 == 12 {
-                            (1, dy2 + 1)
-                        } else {
-                            (dm2 + 1, dy2)
-                        };
-                        update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id + 1, (new_m, new_y));
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && next_r.contains(x, y)
+                {
+                    let (new_m, new_y) = if dm2 == 12 {
+                        (1, dy2 + 1)
+                    } else {
+                        (dm2 + 1, dy2)
+                    };
+                    update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id + 1, (new_m, new_y));
+                        s
+                    });
                 }
             }),
         );
@@ -496,15 +496,15 @@ impl DatePicker {
                         renderer.register_handler(
                             "pointerclick",
                             Arc::new(move |event: Event| {
-                                if let Event::PointerClick { x, y, .. } = event {
-                                    if cell_rect.contains(x, y) {
-                                        (oc)(d, display_month, display_year);
-                                        update_system_state(move |s| {
-                                            let mut s = s.clone();
-                                            s.set_component_state(id2, false);
-                                            s
-                                        });
-                                    }
+                                if let Event::PointerClick { x, y, .. } = event
+                                    && cell_rect.contains(x, y)
+                                {
+                                    (oc)(d, display_month, display_year);
+                                    update_system_state(move |s| {
+                                        let mut s = s.clone();
+                                        s.set_component_state(id2, false);
+                                        s
+                                    });
                                 }
                             }),
                         );
@@ -517,14 +517,15 @@ impl DatePicker {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if !pr.contains(x, y) && !ar.contains(x, y) {
-                        update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id, false);
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && !pr.contains(x, y)
+                    && !ar.contains(x, y)
+                {
+                    update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id, false);
+                        s
+                    });
                 }
             }),
         );
@@ -554,20 +555,20 @@ impl View for DatePicker {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if tr.contains(x, y) {
-                        let current = {
-                            let s = load_system_state();
-                            s.get_component_state::<bool>(id)
-                                .map(|v| *v.read().unwrap())
-                                .unwrap_or(false)
-                        };
-                        update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id, !current);
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && tr.contains(x, y)
+                {
+                    let current = {
+                        let s = load_system_state();
+                        s.get_component_state::<bool>(id)
+                            .map(|v| *v.read().unwrap())
+                            .unwrap_or(false)
+                    };
+                    update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id, !current);
+                        s
+                    });
                 }
             }),
         );

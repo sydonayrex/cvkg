@@ -24,6 +24,15 @@
 //! Sources:
 //! Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //! CVKG Extended: Section 14 of the CVKG Design Specification (v1.3)
+#![allow(
+    unused_imports,
+    clippy::single_component_path_imports,
+    dead_code,
+    clippy::items_after_test_module,
+    clippy::field_reassign_with_default,
+    clippy::collapsible_if,
+    clippy::unnecessary_map_or
+)]
 
 //! Platform-native widget delegation using winit and AccessKit
 //!

@@ -20,6 +20,12 @@ pub struct CanvasItem {
     pub height: f32,
 }
 
+impl Default for InfiniteCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InfiniteCanvas {
     pub fn new() -> Self {
         Self {

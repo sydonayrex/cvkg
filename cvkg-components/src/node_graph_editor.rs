@@ -548,11 +548,11 @@ impl View for NodeGraphEditor {
                                 .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
                                 .unwrap_or_default();
 
-                            if let Some(ref node_id) = i.dragging_node {
-                                if let Some(node) = p.nodes.iter_mut().find(|n| &n.id == node_id) {
-                                    node.x = x - i.drag_offset[0];
-                                    node.y = y - i.drag_offset[1];
-                                }
+                            if let Some(ref node_id) = i.dragging_node
+                                && let Some(node) = p.nodes.iter_mut().find(|n| &n.id == node_id)
+                            {
+                                node.x = x - i.drag_offset[0];
+                                node.y = y - i.drag_offset[1];
                             }
 
                             if let Some(ref mut pending) = i.pending_edge {
@@ -686,28 +686,26 @@ impl View for NodeGraphEditor {
         }
 
         // ── Draw pending edge ───────────────────────────────────────────
-        if let Some(ref pending) = interaction.pending_edge {
-            if let Some(from_node) = persistent_nodes.iter().find(|n| n.id == pending.from_node) {
-                if let Some(from_port) = from_node
-                    .output_ports
-                    .iter()
-                    .find(|p| p.id == pending.from_port)
-                {
-                    let from_pos = from_node.port_position(from_port);
-                    let to_pos = [pending.cursor_x, pending.cursor_y];
-                    self.draw_dashed_bezier(renderer, from_pos, to_pos, [0.0, 0.8, 1.0, 0.6]);
-                    // Start point indicator
-                    renderer.fill_ellipse(
-                        Rect {
-                            x: from_pos[0] - 6.0,
-                            y: from_pos[1] - 6.0,
-                            width: 12.0,
-                            height: 12.0,
-                        },
-                        [0.0, 0.8, 1.0, 0.8],
-                    );
-                }
-            }
+        if let Some(ref pending) = interaction.pending_edge
+            && let Some(from_node) = persistent_nodes.iter().find(|n| n.id == pending.from_node)
+            && let Some(from_port) = from_node
+                .output_ports
+                .iter()
+                .find(|p| p.id == pending.from_port)
+        {
+            let from_pos = from_node.port_position(from_port);
+            let to_pos = [pending.cursor_x, pending.cursor_y];
+            self.draw_dashed_bezier(renderer, from_pos, to_pos, [0.0, 0.8, 1.0, 0.6]);
+            // Start point indicator
+            renderer.fill_ellipse(
+                Rect {
+                    x: from_pos[0] - 6.0,
+                    y: from_pos[1] - 6.0,
+                    width: 12.0,
+                    height: 12.0,
+                },
+                [0.0, 0.8, 1.0, 0.8],
+            );
         }
 
         // ── Draw nodes ──────────────────────────────────────────────────
@@ -797,7 +795,7 @@ impl View for NodeGraphEditor {
                 let is_hovered = interaction
                     .hovered_port
                     .as_ref()
-                    .map_or(false, |(nid, pid)| nid == &node.id && pid == &port.id);
+                    .is_some_and(|(nid, pid)| nid == &node.id && pid == &port.id);
 
                 let port_color = if is_hovered {
                     [0.0, 0.9, 1.0, 1.0]
@@ -835,7 +833,7 @@ impl View for NodeGraphEditor {
                 let is_hovered = interaction
                     .hovered_port
                     .as_ref()
-                    .map_or(false, |(nid, pid)| nid == &node.id && pid == &port.id);
+                    .is_some_and(|(nid, pid)| nid == &node.id && pid == &port.id);
 
                 let port_color = if is_hovered {
                     [0.0, 0.9, 1.0, 1.0]
