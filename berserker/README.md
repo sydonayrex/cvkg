@@ -93,4 +93,4 @@ let theme = BerserkerTheme {
 
 ## 📜 License
 
-MIT License - see [LICENSE-MIT](../LICENSE-MIT)
+Mozilla Public License 2.0 - see [LICENSE](../LICENSE)

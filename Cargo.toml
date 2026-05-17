@@ -24,7 +24,7 @@ members = [
 [workspace.package]
 version = "0.1.20"
 edition = "2024"
-license = "MIT"
+license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 [workspace.dependencies]

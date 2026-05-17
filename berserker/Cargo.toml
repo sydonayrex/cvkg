@@ -21,7 +21,7 @@ autotests = false
 autobenches = false
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 readme = "README.md"
-license = "MIT"
+license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 resolver = "2"
 
