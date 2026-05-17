@@ -3451,10 +3451,22 @@ impl ViewModifier for ElevationModifier {
 pub mod layout {
     use super::*;
 
+    /// Key used to identify a cached layout entry.
+    /// Combines a view hash with a generation counter for cache invalidation.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct LayoutKey {
+        pub view_hash: u64,
+        pub generation: u64,
+    }
+
     // Layout pass scratch space
     pub struct LayoutCache {
         pub safe_area: SafeArea,
         size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
+        /// Monotonically increasing generation counter for cache invalidation.
+        /// When a view tree changes, bumping the generation causes stale entries
+        /// to be treated as invalid without eagerly clearing the entire cache.
+        generation: u64,
     }
 
     impl Default for LayoutCache {
@@ -3468,7 +3480,26 @@ pub mod layout {
             Self {
                 safe_area: SafeArea::default(),
                 size_cache: HashMap::new(),
+                generation: 0,
             }
+        }
+
+        /// Returns the current generation counter.
+        pub fn generation(&self) -> u64 {
+            self.generation
+        }
+
+        /// Bump the generation counter, logically invalidating all cached entries
+        /// without eagerly clearing them. Subsequent lookups with the old generation
+        /// will miss until re-populated.
+        pub fn invalidate(&mut self) {
+            self.generation = self.generation.wrapping_add(1);
+        }
+
+        /// Check whether a cached entry for the given key is still valid
+        /// against the current generation.
+        pub fn is_valid(&self, key: LayoutKey, current_gen: u64) -> bool {
+            key.generation == current_gen && key.generation == self.generation
         }
 
         pub fn clear(&mut self) {
@@ -3556,6 +3587,13 @@ pub mod layout {
         /// Returns the flex weight of this view (default is 0.0, which means fixed/intrinsic)
         fn flex_weight(&self) -> f32 {
             0.0
+        }
+
+        /// Return a debug representation of this layout subtree.
+        /// The `indent` parameter controls the indentation level for nested display.
+        fn debug_layout(&self, indent: usize) -> String {
+            let prefix = " ".repeat(indent);
+            format!("{}LayoutView", prefix)
         }
     }
     /// Edge insets for padding, margins, and safe areas
@@ -3684,13 +3722,16 @@ pub mod layout {
 }
 
 // Re-export layout items for convenience
-pub use layout::{LayoutCache, LayoutView, Rect, SizeProposal};
+pub use layout::{LayoutCache, LayoutKey, LayoutView, Rect, SizeProposal};
 // Size and FrameRenderer are pub items in this module; no re-export alias needed.
 
 pub mod agents;
+pub mod animation;
+pub mod gpu;
 pub mod material;
 pub mod runtime;
 pub mod scene_graph;
+pub mod sdf_shadow;
 
 pub use scene_graph::{NodeId, bifrost_registry};
 
@@ -3777,6 +3818,24 @@ pub enum Event {
     Paste(String),
     /// Input Method Editor event (e.g. CJK character composition)
     Ime(String),
+    /// Touch began at the given position.
+    TouchStart {
+        x: f32,
+        y: f32,
+        touch_id: u64,
+    },
+    /// Touch moved to a new position.
+    TouchMove {
+        x: f32,
+        y: f32,
+        touch_id: u64,
+    },
+    /// Touch ended at the given position.
+    TouchEnd {
+        x: f32,
+        y: f32,
+        touch_id: u64,
+    },
 }
 
 impl Event {
@@ -3802,6 +3861,9 @@ impl Event {
             Self::Cut => "cut",
             Self::Paste(_) => "paste",
             Self::Ime(_) => "ime",
+            Self::TouchStart { .. } => "touchstart",
+            Self::TouchMove { .. } => "touchmove",
+            Self::TouchEnd { .. } => "touchend",
         }
     }
 }

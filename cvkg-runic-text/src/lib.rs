@@ -23,6 +23,8 @@ use fontdb::{Database, Family, Query, Source, Stretch, Style, Weight};
 use rustybuzz::{Direction, Feature, UnicodeBuffer};
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source as SwashSource};
+use unicode_bidi::BidiInfo;
+use unicode_segmentation::UnicodeSegmentation;
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -129,6 +131,20 @@ pub enum TextAlign {
     Justify,
 }
 
+/// Glyph rasterization mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RenderMode {
+    /// Standard grayscale anti-aliased rendering.
+    #[default]
+    Grayscale,
+    /// LCD subpixel anti-aliased rendering (3-channel horizontal mask).
+    Subpixel,
+    /// Color emoji / layered vector font rendering (COLR/CPAL, SVG, sbix).
+    Color,
+    /// Multi-channel signed distance field rendering (resolution-independent).
+    Msdf,
+}
+
 /// A variable font axis setting.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct VariableAxis {
@@ -232,6 +248,10 @@ pub struct TextStyle {
     pub extra_features: Vec<OpenTypeFeature>,
     /// Variable font axis settings.
     pub variable_axes: Vec<VariableAxis>,
+    /// Whether to synthesize bold/italic when the variant font is missing.
+    pub synthesize_styles: bool,
+    /// Rendering mode for glyph rasterization.
+    pub render_mode: RenderMode,
 }
 
 impl Default for TextStyle {
@@ -254,6 +274,8 @@ impl Default for TextStyle {
             decorations: TextDecorations::default(),
             extra_features: vec![],
             variable_axes: vec![],
+            synthesize_styles: false,
+            render_mode: RenderMode::default(),
         }
     }
 }
@@ -528,6 +550,8 @@ pub struct ShapedText {
     pub descent: f32,
     /// Font line gap for the primary font.
     pub line_gap: f32,
+    /// Precomputed grapheme cluster boundaries (byte offsets into `text`).
+    pub grapheme_boundaries: Vec<usize>,
 }
 
 impl ShapedText {
@@ -649,36 +673,15 @@ impl ShapedText {
 
     /// Get the byte position for a cluster index.
     fn byte_pos_for_cluster(&self, cluster: u32) -> usize {
-        // Walk the text to find the byte position for this cluster.
-        // Each UTF-8 character maps to one cluster.
-        let mut byte_pos = 0;
-        let mut cluster_idx = 0u32;
-        let text_bytes = self.text.as_bytes();
-
-        while byte_pos < text_bytes.len() && cluster_idx < cluster {
-            byte_pos += Self::utf8_char_len(text_bytes[byte_pos]);
-            cluster_idx += 1;
-        }
-
-        byte_pos
+        self.grapheme_boundaries
+            .get(cluster as usize)
+            .copied()
+            .unwrap_or(self.text.len())
     }
 
     /// Total number of clusters in the text.
     fn total_clusters(&self) -> u32 {
-        self.text.chars().count() as u32
-    }
-
-    /// Get the UTF-8 character length from the first byte.
-    fn utf8_char_len(first_byte: u8) -> usize {
-        if first_byte < 0x80 {
-            1
-        } else if first_byte < 0xE0 {
-            2
-        } else if first_byte < 0xF0 {
-            3
-        } else {
-            4
-        }
+        self.grapheme_boundaries.len() as u32
     }
 }
 
@@ -723,6 +726,9 @@ struct ResolvedFont {
     ascent: f32,
     descent: f32,
     line_gap: f32,
+    x_height: f32,
+    cap_height: f32,
+    has_colr: bool,
 }
 
 impl ResolvedFont {
@@ -743,6 +749,15 @@ impl ResolvedFont {
         let descent = ttf_face.descender().abs() as f32;
         let line_gap = ttf_face.line_gap() as f32;
 
+        let (os2_xh, os2_ch) = ttf_face
+            .x_height()
+            .and_then(|xh| ttf_face.capital_height().map(|ch| (xh as f32, ch as f32)))
+            .unwrap_or((0.0, 0.0));
+        let has_colr = ttf_face
+            .raw_face()
+            .table(rustybuzz::ttf_parser::Tag(u32::from_be_bytes(*b"COLR")))
+            .is_some();
+
         Some(ResolvedFont {
             primary: data,
             fallbacks: vec![],
@@ -751,6 +766,9 @@ impl ResolvedFont {
             ascent,
             descent,
             line_gap,
+            x_height: os2_xh,
+            cap_height: os2_ch,
+            has_colr,
         })
     }
 
@@ -1083,6 +1101,7 @@ impl RunicTextEngine {
                 ascent: 0.0,
                 descent: 0.0,
                 line_gap: 0.0,
+                grapheme_boundaries: vec![],
             });
         }
 
@@ -1147,6 +1166,7 @@ impl RunicTextEngine {
         let lines = self.layout_lines(
             &mut all_glyphs,
             &full_text,
+            &bidi,
             max_width,
             align,
             overflow,
@@ -1166,6 +1186,11 @@ impl RunicTextEngine {
             }
         }
 
+        let grapheme_boundaries: Vec<usize> = full_text
+            .grapheme_indices(true)
+            .map(|(offset, _)| offset)
+            .collect();
+
         Ok(ShapedText {
             glyphs: all_glyphs,
             lines,
@@ -1177,6 +1202,7 @@ impl RunicTextEngine {
             ascent: primary_metrics.0,
             descent: primary_metrics.1,
             line_gap: primary_metrics.2,
+            grapheme_boundaries,
         })
     }
 
@@ -1185,6 +1211,7 @@ impl RunicTextEngine {
         &self,
         glyphs: &mut Vec<GlyphInstance>,
         text: &str,
+        bidi: &BidiInfo,
         max_width: Option<f32>,
         align: TextAlign,
         overflow: TextOverflow,
@@ -1304,13 +1331,14 @@ impl RunicTextEngine {
                     .map(|g| g.advance_width)
                     .sum();
 
+                let glyph_end = glyphs.len();
                 let x_offset = Self::compute_x_offset(
                     align,
                     max_w,
                     line_width,
                     glyphs,
                     line_start_glyph,
-                    glyphs.len(),
+                    glyph_end,
                 );
 
                 let mut x = x_offset;
@@ -1355,6 +1383,17 @@ impl RunicTextEngine {
             });
         }
 
+        // Reorder glyphs within each line for BiDi
+        for line_idx in 0..lines.len() {
+            let line = &lines[line_idx];
+            if line.glyph_start < line.glyph_end && line.glyph_end <= glyphs.len() {
+                let level = line_bidi_level(bidi, line.byte_offset);
+                if level.is_rtl() {
+                    reorder_line_rtl(glyphs, line.glyph_start, line.glyph_end);
+                }
+            }
+        }
+
         // Handle text overflow ellipsis
         if overflow == TextOverflow::Ellipsis
             && let Some(max_w) = max_width
@@ -1392,15 +1431,37 @@ impl RunicTextEngine {
         align: TextAlign,
         max_w: f32,
         line_width: f32,
-        _glyphs: &[GlyphInstance],
-        _start: usize,
-        _end: usize,
+        glyphs: &mut [GlyphInstance],
+        start: usize,
+        end: usize,
     ) -> f32 {
         match align {
             TextAlign::Start => 0.0,
             TextAlign::End => (max_w - line_width).max(0.0),
             TextAlign::Center => ((max_w - line_width) / 2.0).max(0.0),
-            TextAlign::Justify => 0.0, // Basic: no justification (would need space distribution)
+            TextAlign::Justify => {
+                if end <= start + 1 || max_w <= line_width {
+                    return 0.0;
+                }
+                let extra = max_w - line_width;
+                let space_count = glyphs[start..end]
+                    .iter()
+                    .filter(|g| g.glyph_id == 3)
+                    .count();
+                if space_count > 0 {
+                    let add_per_space = extra / space_count as f32;
+                    let mut x = 0.0f32;
+                    for i in start..end {
+                        glyphs[i].x = x;
+                        if glyphs[i].glyph_id == 3 {
+                            x += glyphs[i].advance_width + add_per_space;
+                        } else {
+                            x += glyphs[i].advance_width;
+                        }
+                    }
+                }
+                0.0
+            }
         }
     }
 
@@ -1436,7 +1497,24 @@ impl RunicTextEngine {
             .size(style.font_size)
             .build();
 
-        let render = Render::new(&[SwashSource::Outline]);
+        let use_color = resolved.has_colr && style.render_mode == RenderMode::Color;
+        let use_subpixel = style.render_mode == RenderMode::Subpixel;
+
+        let sources: Vec<SwashSource> = if use_color {
+            vec![SwashSource::ColorOutline(glyph_id), SwashSource::Outline]
+        } else {
+            vec![SwashSource::Outline]
+        };
+
+        let mut render = Render::new(&sources);
+
+        if use_subpixel {
+            render.format(swash::zeno::Format::Subpixel);
+        }
+
+        if style.synthesize_styles && style.weight >= Weight(700) {
+            render.embolden(0.04);
+        }
 
         if let Some(image) = render.render(&mut scaler, glyph_id) {
             return Ok(GlyphImage {
@@ -1488,8 +1566,8 @@ impl RunicTextEngine {
             descent,
             line_gap,
             units_per_em: resolved.units_per_em,
-            x_height: 0.0,   // Would need to read from OS/2 table
-            cap_height: 0.0, // Would need to read from OS/2 table
+            x_height: resolved.x_height * style.font_size / resolved.units_per_em as f32,
+            cap_height: resolved.cap_height * style.font_size / resolved.units_per_em as f32,
         })
     }
 
@@ -1530,6 +1608,7 @@ impl RunicTextEngine {
                 ascent: 0.0,
                 descent: 0.0,
                 line_gap: 0.0,
+                grapheme_boundaries: vec![],
             })
     }
 
@@ -1547,6 +1626,33 @@ impl RunicTextEngine {
         })?;
         let style = TextStyle::new("Jupiteroid", 16.0);
         self.rasterize_glyph(glyph_id, &style).ok()
+    }
+}
+
+fn byte_offset_level(bidi: &BidiInfo, byte_offset: usize) -> unicode_bidi::Level {
+    if let Some(para) = bidi.paragraphs.first() {
+        let relative = byte_offset.saturating_sub(para.range.start);
+        if relative < bidi.levels.len() {
+            return bidi.levels[relative];
+        }
+    }
+    unicode_bidi::Level::ltr()
+}
+
+fn line_bidi_level(bidi: &BidiInfo, byte_offset: usize) -> unicode_bidi::Level {
+    byte_offset_level(bidi, byte_offset)
+}
+
+fn reorder_line_rtl(glyphs: &mut [GlyphInstance], start: usize, end: usize) {
+    if end <= start {
+        return;
+    }
+    let slice = &mut glyphs[start..end];
+    slice.reverse();
+    let mut x = 0.0f32;
+    for g in slice.iter_mut() {
+        g.x = x;
+        x += g.advance_width;
     }
 }
 
@@ -1574,6 +1680,24 @@ pub struct FontMetrics {
     /// Cap height.
     pub cap_height: f32,
 }
+
+// ── Tests ────────────────────────────────────────────────────────────────────
+
+// ── MSDF Glyph Rendering ────────────────────────────────────────────────────
+
+pub mod msdf;
+
+// ── Knuth-Plass Line Breaking ───────────────────────────────────────────────
+
+pub mod knuth_plass;
+
+// ── Color Emoji Atlas ───────────────────────────────────────────────────────
+
+pub mod emoji;
+
+// ── Subpixel LCD Positioning ────────────────────────────────────────────────
+
+pub mod subpixel;
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 

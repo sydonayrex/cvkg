@@ -1,687 +1,578 @@
+use crate::edge::FlowEdge;
 use crate::graph::FlowGraph;
-use crate::interaction::{DragState, FlowContainer, FlowSettings, InteractionState};
-use crate::types::{EdgePath, PortPosition};
-use cvkg_core::{Event, Never, Rect, Renderer, View};
+use crate::node::FlowNode;
+use crate::ribbon::{RibbonBatch, build_ribbon_batch};
+use crate::types::{EdgeId, NodeId};
+use cvkg_core::Rect;
+use glam::Vec2;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
-/// Infinite canvas viewport with pan/zoom
+/// Camera transform for pan and zoom.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Camera {
+    /// Pan offset in canvas space.
+    pub offset: Vec2,
+    /// Zoom level. 1.0 = 100%, 0.5 = 50%, 2.0 = 200%.
+    pub zoom: f32,
+    /// Minimum allowed zoom level.
+    pub min_zoom: f32,
+    /// Maximum allowed zoom level.
+    pub max_zoom: f32,
+}
+
+impl Camera {
+    /// Creates a new camera at origin with 1:1 zoom.
+    pub fn new() -> Self {
+        Self {
+            offset: Vec2::ZERO,
+            zoom: 1.0,
+            min_zoom: 0.1,
+            max_zoom: 10.0,
+        }
+    }
+
+    /// Sets the pan offset.
+    pub fn with_offset(mut self, offset: Vec2) -> Self {
+        self.offset = offset;
+        self
+    }
+
+    /// Sets the zoom level.
+    pub fn with_zoom(mut self, zoom: f32) -> Self {
+        self.zoom = zoom.clamp(self.min_zoom, self.max_zoom);
+        self
+    }
+
+    /// Transforms a point from screen space to canvas space.
+    pub fn screen_to_canvas(&self, screen_point: Vec2) -> Vec2 {
+        (screen_point - self.offset) / self.zoom
+    }
+
+    /// Transforms a point from canvas space to screen space.
+    pub fn canvas_to_screen(&self, canvas_point: Vec2) -> Vec2 {
+        canvas_point * self.zoom + self.offset
+    }
+
+    /// Transforms a rectangle from canvas space to screen space.
+    pub fn canvas_rect_to_screen(&self, rect: Rect) -> Rect {
+        let tl = self.canvas_to_screen(Vec2::new(rect.x, rect.y));
+        Rect {
+            x: tl.x,
+            y: tl.y,
+            width: rect.width * self.zoom,
+            height: rect.height * self.zoom,
+        }
+    }
+
+    /// Zooms toward a specific screen point (keeps that point stationary).
+    pub fn zoom_at(&mut self, screen_point: Vec2, new_zoom: f32) {
+        let new_zoom = new_zoom.clamp(self.min_zoom, self.max_zoom);
+        let canvas_point = self.screen_to_canvas(screen_point);
+        self.zoom = new_zoom;
+        self.offset = screen_point - canvas_point * self.zoom;
+    }
+
+    /// Pans the camera by the given screen-space delta.
+    pub fn pan(&mut self, delta: Vec2) {
+        self.offset += delta;
+    }
+
+    /// Returns the visible canvas rectangle in canvas space.
+    pub fn visible_canvas_rect(&self, screen_width: f32, screen_height: f32) -> Rect {
+        let tl = self.screen_to_canvas(Vec2::ZERO);
+        let br = self.screen_to_canvas(Vec2::new(screen_width, screen_height));
+        Rect {
+            x: tl.x,
+            y: tl.y,
+            width: br.x - tl.x,
+            height: br.y - tl.y,
+        }
+    }
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The main flow canvas that owns the graph, camera, and rendering state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlowCanvas {
-    pub id: String,
-    pub initial_graph: FlowGraph,
-    pub min_scale: f32,
-    pub max_scale: f32,
+    /// The flow graph containing nodes and edges.
+    pub graph: FlowGraph,
+    /// Camera transform for pan and zoom.
+    pub camera: Camera,
+    /// Pre-built ribbon batch for GPU-instanced edge rendering.
+    #[serde(skip)]
+    pub ribbon_batch: RibbonBatch,
+    /// Whether the ribbon batch needs to be rebuilt.
+    pub ribbon_dirty: bool,
+    /// Screen width in pixels.
+    pub screen_width: f32,
+    /// Screen height in pixels.
+    pub screen_height: f32,
+    /// Background color as RGBA.
+    pub background_color: [f32; 4],
+    /// Grid snap enabled.
+    pub snap_to_grid: bool,
+    /// Grid cell size in canvas space.
+    pub grid_size: f32,
+    /// Whether to show the grid.
+    pub show_grid: bool,
+    /// Grid color as RGBA.
+    pub grid_color: [f32; 4],
 }
 
 impl FlowCanvas {
-    pub fn new(id: impl Into<String>, graph: FlowGraph) -> Self {
+    /// Creates a new flow canvas with default settings.
+    pub fn new() -> Self {
         Self {
-            id: id.into(),
-            initial_graph: graph,
-            min_scale: 0.1,
-            max_scale: 5.0,
+            graph: FlowGraph::new(),
+            camera: Camera::new(),
+            ribbon_batch: RibbonBatch::new(),
+            ribbon_dirty: true,
+            screen_width: 1280.0,
+            screen_height: 720.0,
+            background_color: [0.08, 0.09, 0.12, 1.0],
+            snap_to_grid: false,
+            grid_size: 20.0,
+            show_grid: true,
+            grid_color: [0.15, 0.16, 0.2, 0.5],
         }
     }
 
-    fn get_state_hash(&self) -> u64 {
-        use std::hash::{Hash, Hasher};
-        let mut s = std::collections::hash_map::DefaultHasher::new();
-        self.id.hash(&mut s);
-        s.finish()
-    }
-}
-
-impl View for FlowCanvas {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
+    /// Sets the screen dimensions.
+    pub fn with_screen_size(mut self, width: f32, height: f32) -> Self {
+        self.screen_width = width;
+        self.screen_height = height;
+        self
     }
 
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "FlowCanvas");
-
-        let id_hash = self.get_state_hash();
-
-        // Load or initialize state
-        let state = {
-            let s = cvkg_core::load_system_state();
-            s.get_component_state::<FlowContainer>(id_hash)
-                .map(|v| v.read().unwrap().clone())
-                .unwrap_or_else(|| FlowContainer {
-                    graph: self.initial_graph.clone(),
-                    interaction: InteractionState::default(),
-                    settings: FlowSettings::default(),
-                    offset: (0.0, 0.0),
-                    scale: 1.0,
-                    ..Default::default()
-                })
-        };
-
-        // Background grid
-        if state.settings.show_grid {
-            self.render_grid(
-                renderer,
-                rect,
-                state.offset,
-                state.scale,
-                state.settings.grid_size,
-            );
-        }
-
-        // Push transform for pan/zoom
-        renderer.push_transform(
-            [state.offset.0, state.offset.1],
-            [state.scale, state.scale],
-            0.0,
-        );
-
-        // Render edges
-        for edge in state.graph.edges.values() {
-            self.render_edge(renderer, &state.graph, edge);
-        }
-
-        // Render nodes
-        for node in state.graph.nodes.values() {
-            self.render_node(renderer, node);
-        }
-
-        // Render active connection line
-        if let Some(DragState::Connection {
-            source_port,
-            current_pos,
-        }) = state.interaction.drag_state
-            && let Some(source_node) = state.graph.get_node_by_port(source_port)
-            && let Some(port) = source_node.ports.iter().find(|p| p.id == source_port)
-        {
-            let start = self.get_port_center(source_node, port);
-            self.render_bezier_edge(
-                renderer,
-                start,
-                current_pos,
-                port.position,
-                PortPosition::Left,
-                [1.0, 1.0, 1.0, 0.5],
-            );
-        }
-
-        renderer.pop_transform();
-
-        // Render Selection Box (Marquee)
-        if let Some(DragState::SelectionBox {
-            start_pos,
-            current_pos,
-        }) = state.interaction.drag_state
-        {
-            let sel_rect = Rect {
-                x: start_pos.0.min(current_pos.0),
-                y: start_pos.1.min(current_pos.1),
-                width: (current_pos.0 - start_pos.0).abs(),
-                height: (current_pos.1 - start_pos.1).abs(),
-            };
-            renderer.fill_rect(sel_rect, [0.0, 0.8, 1.0, 0.1]);
-            renderer.stroke_rect(sel_rect, [0.0, 0.9, 1.0, 0.5], 1.0);
-        }
-
-        // Render Mini-map
-        self.render_minimap(renderer, rect, &state);
-
-        // Register handlers
-        self.register_interaction_handlers(renderer, rect, id_hash, state);
-
-        renderer.pop_vnode();
-    }
-}
-
-impl FlowCanvas {
-    fn render_grid(
-        &self,
-        renderer: &mut dyn Renderer,
-        rect: Rect,
-        offset: (f32, f32),
-        scale: f32,
-        grid_size: f32,
-    ) {
-        let spacing = grid_size * scale;
-        let off_x = offset.0 % spacing;
-        let off_y = offset.1 % spacing;
-
-        for x in (0..((rect.width / spacing) as i32 + 2)).map(|i| i as f32 * spacing + off_x) {
-            for y in (0..((rect.height / spacing) as i32 + 2)).map(|i| i as f32 * spacing + off_y) {
-                renderer.fill_ellipse(
-                    Rect {
-                        x: rect.x + x - 1.0,
-                        y: rect.y + y - 1.0,
-                        width: 2.0,
-                        height: 2.0,
-                    },
-                    [0.2, 0.2, 0.3, 0.5],
-                );
-            }
-        }
+    /// Sets the background color.
+    pub fn with_background(mut self, color: [f32; 4]) -> Self {
+        self.background_color = color;
+        self
     }
 
-    fn render_node(&self, renderer: &mut dyn Renderer, node: &crate::node::FlowNode) {
-        let node_rect = Rect {
-            x: node.position.0,
-            y: node.position.1,
-            width: node.size.0,
-            height: node.size.1,
-        };
+    /// Enables or disables grid snapping.
+    pub fn with_snap_to_grid(mut self, enabled: bool) -> Self {
+        self.snap_to_grid = enabled;
+        self
+    }
 
-        renderer.bifrost(node_rect, 12.0, 1.2, 0.9);
-        renderer.fill_rounded_rect(node_rect, 8.0, [0.05, 0.05, 0.1, 0.8]);
+    /// Sets the grid size.
+    pub fn with_grid_size(mut self, size: f32) -> Self {
+        self.grid_size = size.max(1.0);
+        self
+    }
 
-        let border_color = if node.selected {
-            [0.0, 0.9, 1.0, 1.0]
+    /// Handles a pointer wheel (scroll) event for zooming.
+    ///
+    /// The `delta` parameter is the scroll delta (positive = zoom in, negative = zoom out).
+    /// The `screen_x` and `screen_y` parameters are the pointer position in screen space.
+    pub fn handle_scroll(&mut self, screen_x: f32, screen_y: f32, delta: f32) {
+        let zoom_factor = if delta > 0.0 {
+            1.1
+        } else if delta < 0.0 {
+            0.9
         } else {
-            [0.2, 0.2, 0.3, 0.6]
+            1.0
         };
-        renderer.stroke_rounded_rect(node_rect, 8.0, border_color, 1.5);
+        let new_zoom = self.camera.zoom * zoom_factor;
+        self.camera.zoom_at(Vec2::new(screen_x, screen_y), new_zoom);
+    }
 
-        renderer.draw_text(
-            &node.label,
-            node_rect.x + 15.0,
-            node_rect.y + 12.0,
-            14.0,
-            [1.0, 1.0, 1.0, 1.0],
-        );
+    /// Handles a pan gesture (middle-click drag or two-finger scroll).
+    pub fn handle_pan(&mut self, dx: f32, dy: f32) {
+        self.camera.pan(Vec2::new(dx, dy));
+    }
 
-        for port in &node.ports {
-            self.render_port(renderer, node_rect, port);
+    /// Resets the camera to origin with 1:1 zoom.
+    pub fn reset_camera(&mut self) {
+        self.camera = Camera::new();
+    }
+
+    /// Fits all nodes in view.
+    pub fn fit_to_content(&mut self) {
+        if self.graph.nodes.is_empty() {
+            return;
         }
-    }
-
-    fn render_port(
-        &self,
-        renderer: &mut dyn Renderer,
-        node_rect: Rect,
-        port: &crate::port::FlowPort,
-    ) {
-        let port_size = 10.0;
-        let (px, py) = match port.position {
-            PortPosition::Top => (node_rect.x + node_rect.width / 2.0, node_rect.y),
-            PortPosition::Bottom => (
-                node_rect.x + node_rect.width / 2.0,
-                node_rect.y + node_rect.height,
-            ),
-            PortPosition::Left => (node_rect.x, node_rect.y + node_rect.height / 2.0),
-            PortPosition::Right => (
-                node_rect.x + node_rect.width,
-                node_rect.y + node_rect.height / 2.0,
-            ),
-        };
-
-        let port_rect = Rect {
-            x: px - port_size / 2.0,
-            y: py - port_size / 2.0,
-            width: port_size,
-            height: port_size,
-        };
-
-        renderer.fill_ellipse(port_rect, [0.0, 0.8, 1.0, 1.0]);
-        renderer.stroke_ellipse(port_rect, [1.0, 1.0, 1.0, 0.5], 1.0);
-    }
-
-    fn render_edge(
-        &self,
-        renderer: &mut dyn Renderer,
-        graph: &FlowGraph,
-        edge: &crate::edge::FlowEdge,
-    ) {
-        let mut source_pos = None;
-        let mut target_pos = None;
-        let mut source_dir = PortPosition::Right;
-        let mut target_dir = PortPosition::Left;
-
-        for node in graph.nodes.values() {
-            for port in &node.ports {
-                if port.id == edge.source {
-                    source_pos = Some(self.get_port_center(node, port));
-                    source_dir = port.position;
-                }
-                if port.id == edge.target {
-                    target_pos = Some(self.get_port_center(node, port));
-                    target_dir = port.position;
-                }
-            }
-        }
-
-        if let (Some(s), Some(t)) = (source_pos, target_pos) {
-            let color = if edge.selected {
-                [0.0, 0.9, 1.0, 1.0]
-            } else {
-                [0.4, 0.4, 0.5, 0.8]
-            };
-            match edge.path {
-                EdgePath::Bezier => {
-                    self.render_bezier_edge(renderer, s, t, source_dir, target_dir, color)
-                }
-                EdgePath::Straight => renderer.draw_line(s.0, s.1, t.0, t.1, color, 2.0),
-                EdgePath::Step => renderer.draw_line(s.0, s.1, t.0, t.1, color, 2.0),
-            }
-        }
-    }
-
-    fn render_bezier_edge(
-        &self,
-        renderer: &mut dyn Renderer,
-        s: (f32, f32),
-        t: (f32, f32),
-        s_dir: PortPosition,
-        t_dir: PortPosition,
-        color: [f32; 4],
-    ) {
-        let dx = (t.0 - s.0).abs();
-        let dy = (t.1 - s.1).abs();
-        let handle_dist = (dx.max(dy) * 0.5).max(30.0);
-
-        let get_handle = |pos: (f32, f32), dir: PortPosition| match dir {
-            PortPosition::Top => (pos.0, pos.1 - handle_dist),
-            PortPosition::Bottom => (pos.0, pos.1 + handle_dist),
-            PortPosition::Left => (pos.0 - handle_dist, pos.1),
-            PortPosition::Right => (pos.0 + handle_dist, pos.1),
-        };
-
-        let h1 = get_handle(s, s_dir);
-        let h2 = get_handle(t, t_dir);
-
-        let segments = 20;
-        let mut prev = s;
-        for i in 1..=segments {
-            let f = i as f32 / segments as f32;
-            let current = self.cubic_bezier(s, h1, h2, t, f);
-            renderer.draw_line(prev.0, prev.1, current.0, current.1, color, 2.0);
-            prev = current;
-        }
-    }
-
-    fn cubic_bezier(
-        &self,
-        p0: (f32, f32),
-        p1: (f32, f32),
-        p2: (f32, f32),
-        p3: (f32, f32),
-        t: f32,
-    ) -> (f32, f32) {
-        let mt = 1.0 - t;
-        let mt2 = mt * mt;
-        let mt3 = mt2 * mt;
-        let t2 = t * t;
-        let t3 = t2 * t;
-        (
-            mt3 * p0.0 + 3.0 * mt2 * t * p1.0 + 3.0 * mt * t2 * p2.0 + t3 * p3.0,
-            mt3 * p0.1 + 3.0 * mt2 * t * p1.1 + 3.0 * mt * t2 * p2.1 + t3 * p3.1,
-        )
-    }
-
-    fn get_port_center(
-        &self,
-        node: &crate::node::FlowNode,
-        port: &crate::port::FlowPort,
-    ) -> (f32, f32) {
-        match port.position {
-            PortPosition::Top => (node.position.0 + node.size.0 / 2.0, node.position.1),
-            PortPosition::Bottom => (
-                node.position.0 + node.size.0 / 2.0,
-                node.position.1 + node.size.1,
-            ),
-            PortPosition::Left => (node.position.0, node.position.1 + node.size.1 / 2.0),
-            PortPosition::Right => (
-                node.position.0 + node.size.0,
-                node.position.1 + node.size.1 / 2.0,
-            ),
-        }
-    }
-
-    fn render_minimap(
-        &self,
-        renderer: &mut dyn Renderer,
-        canvas_rect: Rect,
-        state: &FlowContainer,
-    ) {
-        let mm_w = 200.0;
-        let mm_h = 150.0;
-        let mm_rect = Rect {
-            x: canvas_rect.x + canvas_rect.width - mm_w - 20.0,
-            y: canvas_rect.y + canvas_rect.height - mm_h - 20.0,
-            width: mm_w,
-            height: mm_h,
-        };
-
-        renderer.bifrost(mm_rect, 10.0, 1.0, 0.8);
-        renderer.fill_rounded_rect(mm_rect, 4.0, [0.02, 0.02, 0.05, 0.7]);
-        renderer.stroke_rounded_rect(mm_rect, 4.0, [0.2, 0.2, 0.3, 0.5], 1.0);
 
         let mut min_x = f32::MAX;
         let mut min_y = f32::MAX;
         let mut max_x = f32::MIN;
         let mut max_y = f32::MIN;
 
-        if state.graph.nodes.is_empty() {
-            return;
-        }
-
-        for node in state.graph.nodes.values() {
+        for node in self.graph.nodes.values() {
             min_x = min_x.min(node.position.0);
             min_y = min_y.min(node.position.1);
             max_x = max_x.max(node.position.0 + node.size.0);
             max_y = max_y.max(node.position.1 + node.size.1);
         }
 
-        let graph_w = (max_x - min_x).max(1000.0);
-        let graph_h = (max_y - min_y).max(1000.0);
-        let padding = 20.0;
-        let scale_x = (mm_w - padding * 2.0) / graph_w;
-        let scale_y = (mm_h - padding * 2.0) / graph_h;
-        let scale = scale_x.min(scale_y);
+        let content_width = max_x - min_x;
+        let content_height = max_y - min_y;
+        let padding = 40.0;
 
-        let center_off_x = (mm_w - graph_w * scale) / 2.0;
-        let center_off_y = (mm_h - graph_h * scale) / 2.0;
+        if content_width > 0.0 && content_height > 0.0 {
+            let zoom_x = (self.screen_width - padding * 2.0) / content_width;
+            let zoom_y = (self.screen_height - padding * 2.0) / content_height;
+            let zoom = zoom_x
+                .min(zoom_y)
+                .clamp(self.camera.min_zoom, self.camera.max_zoom);
 
-        for node in state.graph.nodes.values() {
-            let nx = mm_rect.x + center_off_x + (node.position.0 - min_x) * scale;
-            let ny = mm_rect.y + center_off_y + (node.position.1 - min_y) * scale;
-            let nw = node.size.0 * scale;
-            let nh = node.size.1 * scale;
-            renderer.fill_rect(
-                Rect {
-                    x: nx,
-                    y: ny,
-                    width: nw,
-                    height: nh,
-                },
-                [0.0, 0.8, 1.0, 0.6],
+            self.camera.zoom = zoom;
+            self.camera.offset = Vec2::new(
+                (self.screen_width - content_width * zoom) / 2.0 - min_x * zoom,
+                (self.screen_height - content_height * zoom) / 2.0 - min_y * zoom,
             );
         }
+    }
 
-        let v_x = mm_rect.x + center_off_x + ((-state.offset.0 / state.scale) - min_x) * scale;
-        let v_y = mm_rect.y + center_off_y + ((-state.offset.1 / state.scale) - min_y) * scale;
-        let v_w = (canvas_rect.width / state.scale) * scale;
-        let v_h = (canvas_rect.height / state.scale) * scale;
-        renderer.stroke_rect(
-            Rect {
-                x: v_x,
-                y: v_y,
-                width: v_w,
-                height: v_h,
-            },
-            [1.0, 1.0, 1.0, 0.8],
-            1.0,
+    /// Rebuilds the ribbon batch from the current graph state.
+    ///
+    /// This should be called before rendering whenever edges or nodes
+    /// have moved. The batch is stored in `self.ribbon_batch` and can
+    /// be submitted to the GPU renderer.
+    pub fn rebuild_ribbons(&mut self) {
+        let edges: Vec<FlowEdge> = self.graph.edges.values().cloned().collect();
+        let nodes = self.graph.nodes.clone();
+        self.ribbon_batch = build_ribbon_batch(&edges, &nodes);
+        self.ribbon_dirty = false;
+    }
+
+    /// Marks the ribbon batch as dirty (needs rebuild).
+    pub fn invalidate_ribbons(&mut self) {
+        self.ribbon_dirty = true;
+    }
+
+    /// Returns a reference to the current ribbon batch, rebuilding if necessary.
+    pub fn ribbons(&mut self) -> &RibbonBatch {
+        if self.ribbon_dirty {
+            self.rebuild_ribbons();
+        }
+        &self.ribbon_batch
+    }
+
+    /// Returns the ribbon batch vertex count (for GPU buffer sizing).
+    pub fn ribbon_vertex_count(&self) -> usize {
+        self.ribbon_batch.vertices.len()
+    }
+
+    /// Returns the ribbon batch index count (for GPU buffer sizing).
+    pub fn ribbon_index_count(&self) -> usize {
+        self.ribbon_batch.indices.len()
+    }
+
+    /// Adds a node to the canvas.
+    pub fn add_node(&mut self, node: FlowNode) {
+        self.graph.add_node(node);
+        self.invalidate_ribbons();
+    }
+
+    /// Removes a node from the canvas by ID.
+    pub fn remove_node(&mut self, id: NodeId) {
+        self.graph.nodes.remove(&id);
+        self.invalidate_ribbons();
+    }
+
+    /// Adds an edge to the canvas.
+    pub fn add_edge(&mut self, edge: FlowEdge) {
+        self.graph.add_edge(edge);
+        self.invalidate_ribbons();
+    }
+
+    /// Removes an edge from the canvas by ID.
+    pub fn remove_edge(&mut self, edge_id: u64) {
+        self.graph.edges.remove(&EdgeId(edge_id));
+        self.invalidate_ribbons();
+    }
+
+    /// Returns the node at the given screen position, if any.
+    pub fn node_at_screen(&self, screen_x: f32, screen_y: f32) -> Option<NodeId> {
+        let canvas_pos = self.camera.screen_to_canvas(Vec2::new(screen_x, screen_y));
+        self.graph
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                canvas_pos.x >= node.position.0
+                    && canvas_pos.x <= node.position.0 + node.size.0
+                    && canvas_pos.y >= node.position.1
+                    && canvas_pos.y <= node.position.1 + node.size.1
+            })
+            .map(|(id, _)| *id)
+    }
+
+    /// Returns nodes within the given screen-space rectangle.
+    pub fn nodes_in_screen_rect(
+        &self,
+        screen_x: f32,
+        screen_y: f32,
+        screen_w: f32,
+        screen_h: f32,
+    ) -> Vec<NodeId> {
+        let tl = self.camera.screen_to_canvas(Vec2::new(screen_x, screen_y));
+        let br = self
+            .camera
+            .screen_to_canvas(Vec2::new(screen_x + screen_w, screen_y + screen_h));
+        self.graph
+            .nodes_in_rect(tl.x, tl.y, br.x - tl.x, br.y - tl.y)
+    }
+
+    /// Returns nodes near the given screen point within a screen-space radius.
+    pub fn nodes_near_screen_point(
+        &self,
+        screen_x: f32,
+        screen_y: f32,
+        screen_radius: f32,
+    ) -> Vec<NodeId> {
+        let canvas_point = self.camera.screen_to_canvas(Vec2::new(screen_x, screen_y));
+        let canvas_radius = screen_radius / self.camera.zoom;
+        self.graph.nodes_near_point(canvas_point, canvas_radius)
+    }
+
+    /// Updates edge animations. Call once per frame with delta time.
+    pub fn tick_animations(&mut self, dt: f32) -> bool {
+        let mut any_animating = false;
+        for edge in self.graph.edges.values_mut() {
+            if edge.tick_animation(dt) {
+                any_animating = true;
+            }
+        }
+        if any_animating {
+            self.invalidate_ribbons();
+        }
+        any_animating
+    }
+
+    /// Returns the visible canvas rectangle for culling.
+    pub fn visible_rect(&self) -> Rect {
+        self.camera
+            .visible_canvas_rect(self.screen_width, self.screen_height)
+    }
+}
+
+impl Default for FlowCanvas {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::edge::FlowEdge;
+
+    #[test]
+    fn test_canvas_creation() {
+        let canvas = FlowCanvas::new();
+        assert_eq!(canvas.screen_width, 1280.0);
+        assert_eq!(canvas.screen_height, 720.0);
+        assert_eq!(canvas.camera.zoom, 1.0);
+        assert!(canvas.ribbon_dirty);
+    }
+
+    #[test]
+    fn test_camera_screen_to_canvas() {
+        let mut cam = Camera::new();
+        assert_eq!(
+            cam.screen_to_canvas(Vec2::new(100.0, 200.0)),
+            Vec2::new(100.0, 200.0)
+        );
+
+        cam.offset = Vec2::new(50.0, 50.0);
+        assert_eq!(
+            cam.screen_to_canvas(Vec2::new(100.0, 200.0)),
+            Vec2::new(50.0, 150.0)
+        );
+
+        cam.zoom = 2.0;
+        cam.offset = Vec2::ZERO;
+        assert_eq!(
+            cam.screen_to_canvas(Vec2::new(100.0, 200.0)),
+            Vec2::new(50.0, 100.0)
         );
     }
 
-    fn register_interaction_handlers(
-        &self,
-        renderer: &mut dyn Renderer,
-        _rect: Rect,
-        id_hash: u64,
-        _state: FlowContainer,
-    ) {
-        renderer.register_handler(
-            "pointerdown",
-            Arc::new(move |event| {
-                if let Event::PointerDown { x, y, .. } = event {
-                    cvkg_core::update_system_state(|s| {
-                        let mut s = s.clone();
-                        let mut state = s
-                            .get_component_state::<FlowContainer>(id_hash)
-                            .unwrap()
-                            .read()
-                            .unwrap()
-                            .clone();
+    #[test]
+    fn test_camera_canvas_to_screen() {
+        let mut cam = Camera::new();
+        cam.zoom = 2.0;
+        cam.offset = Vec2::new(10.0, 20.0);
+        let screen = cam.canvas_to_screen(Vec2::new(50.0, 60.0));
+        assert!((screen.x - 110.0).abs() < 0.001);
+        assert!((screen.y - 140.0).abs() < 0.001);
+    }
 
-                        let cx = (x - state.offset.0) / state.scale;
-                        let cy = (y - state.offset.1) / state.scale;
+    #[test]
+    fn test_camera_zoom_at() {
+        let mut cam = Camera::new();
+        cam.zoom_at(Vec2::new(100.0, 100.0), 2.0);
+        assert!((cam.zoom - 2.0).abs() < 0.001);
+        let before = Vec2::new(100.0, 100.0);
+        let canvas_before = (before - Vec2::ZERO) / 1.0;
+        let canvas_after = cam.screen_to_canvas(before);
+        assert!((canvas_before.x - canvas_after.x).abs() < 0.001);
+        assert!((canvas_before.y - canvas_after.y).abs() < 0.001);
+    }
 
-                        let mut hit = false;
-                        for node in state.graph.nodes.values_mut() {
-                            let nr = Rect {
-                                x: node.position.0,
-                                y: node.position.1,
-                                width: node.size.0,
-                                height: node.size.1,
-                            };
-                            if nr.contains(cx, cy) {
-                                for port in &node.ports {
-                                    let pc = match port.position {
-                                        PortPosition::Top => (nr.x + nr.width / 2.0, nr.y),
-                                        PortPosition::Bottom => {
-                                            (nr.x + nr.width / 2.0, nr.y + nr.height)
-                                        }
-                                        PortPosition::Left => (nr.x, nr.y + nr.height / 2.0),
-                                        PortPosition::Right => {
-                                            (nr.x + nr.width, nr.y + nr.height / 2.0)
-                                        }
-                                    };
-                                    let dist = ((cx - pc.0).powi(2) + (cy - pc.1).powi(2)).sqrt();
-                                    if dist < 10.0 {
-                                        state.interaction.drag_state =
-                                            Some(DragState::Connection {
-                                                source_port: port.id,
-                                                current_pos: (cx, cy),
-                                            });
-                                        hit = true;
-                                        break;
-                                    }
-                                }
+    #[test]
+    fn test_camera_pan() {
+        let mut cam = Camera::new();
+        cam.pan(Vec2::new(10.0, -5.0));
+        assert_eq!(cam.offset, Vec2::new(10.0, -5.0));
+    }
 
-                                if !hit {
-                                    state.interaction.drag_state = Some(DragState::Node {
-                                        id: node.id,
-                                        start_pos: node.position,
-                                        mouse_start: (cx, cy),
-                                    });
-                                    node.selected = true;
-                                    hit = true;
-                                }
-                                break;
-                            } else {
-                                node.selected = false;
-                            }
-                        }
+    #[test]
+    fn test_camera_visible_rect() {
+        let cam = Camera::new();
+        let rect = cam.visible_canvas_rect(800.0, 600.0);
+        assert_eq!(rect.x, 0.0);
+        assert_eq!(rect.y, 0.0);
+        assert_eq!(rect.width, 800.0);
+        assert_eq!(rect.height, 600.0);
+    }
 
-                        if !hit {
-                            state.interaction.drag_state = Some(DragState::Canvas {
-                                start_offset: state.offset,
-                                mouse_start: (x, y),
-                            });
-                        }
+    #[test]
+    fn test_camera_clamp_zoom() {
+        let mut cam = Camera::new();
+        cam.zoom_at(Vec2::ZERO, 100.0);
+        assert_eq!(cam.zoom, 10.0);
 
-                        s.set_component_state(id_hash, state);
-                        s
-                    });
-                }
-            }),
-        );
+        cam.zoom_at(Vec2::ZERO, 0.001);
+        assert_eq!(cam.zoom, 0.1);
+    }
 
-        renderer.register_handler(
-            "pointermove",
-            Arc::new(move |event| {
-                if let Event::PointerMove { x, y } = event {
-                    cvkg_core::update_system_state(|s| {
-                        let mut s = s.clone();
-                        let mut state = s
-                            .get_component_state::<FlowContainer>(id_hash)
-                            .unwrap()
-                            .read()
-                            .unwrap()
-                            .clone();
+    #[test]
+    fn test_canvas_scroll_zoom() {
+        let mut canvas = FlowCanvas::new();
+        let initial_zoom = canvas.camera.zoom;
 
-                        match state.interaction.drag_state {
-                            Some(DragState::Node {
-                                id,
-                                start_pos,
-                                mouse_start,
-                            }) => {
-                                let cx = (x - state.offset.0) / state.scale;
-                                let cy = (y - state.offset.1) / state.scale;
-                                if let Some(node) = state.graph.nodes.get_mut(&id) {
-                                    let mut nx = start_pos.0 + (cx - mouse_start.0);
-                                    let mut ny = start_pos.1 + (cy - mouse_start.1);
-                                    if state.settings.grid_snapping {
-                                        nx = (nx / state.settings.grid_size).round()
-                                            * state.settings.grid_size;
-                                        ny = (ny / state.settings.grid_size).round()
-                                            * state.settings.grid_size;
-                                    }
-                                    node.position = (nx, ny);
-                                }
-                            }
-                            Some(DragState::Canvas {
-                                start_offset,
-                                mouse_start,
-                            }) => {
-                                state.offset = (
-                                    start_offset.0 + (x - mouse_start.0),
-                                    start_offset.1 + (y - mouse_start.1),
-                                );
-                            }
-                            Some(DragState::Connection {
-                                source_port: _,
-                                ref mut current_pos,
-                            }) => {
-                                *current_pos = (
-                                    (x - state.offset.0) / state.scale,
-                                    (y - state.offset.1) / state.scale,
-                                );
-                            }
-                            Some(DragState::SelectionBox {
-                                start_pos: _,
-                                ref mut current_pos,
-                            }) => {
-                                *current_pos = (x, y);
-                            }
-                            _ => {}
-                        }
+        canvas.handle_scroll(400.0, 300.0, 1.0);
+        assert!(canvas.camera.zoom > initial_zoom);
 
-                        s.set_component_state(id_hash, state);
-                        s
-                    });
-                }
-            }),
-        );
+        canvas.handle_scroll(400.0, 300.0, -1.0);
+        assert!(canvas.camera.zoom < initial_zoom * 1.1);
+    }
 
-        renderer.register_handler(
-            "pointerup",
-            Arc::new(move |_| {
-                cvkg_core::update_system_state(|s| {
-                    let mut s = s.clone();
-                    let mut state = s
-                        .get_component_state::<FlowContainer>(id_hash)
-                        .unwrap()
-                        .read()
-                        .unwrap()
-                        .clone();
+    #[test]
+    fn test_canvas_pan() {
+        let mut canvas = FlowCanvas::new();
+        canvas.handle_pan(50.0, -30.0);
+        assert_eq!(canvas.camera.offset, Vec2::new(50.0, -30.0));
+    }
 
-                    let mut target_port_id = None;
-                    let mut source_port_id = None;
+    #[test]
+    fn test_canvas_reset_camera() {
+        let mut canvas = FlowCanvas::new();
+        canvas.handle_pan(100.0, 200.0);
+        canvas.handle_scroll(400.0, 300.0, 5.0);
+        canvas.reset_camera();
+        assert_eq!(canvas.camera.zoom, 1.0);
+        assert_eq!(canvas.camera.offset, Vec2::ZERO);
+    }
 
-                    if let Some(DragState::Connection {
-                        source_port,
-                        current_pos,
-                    }) = state.interaction.drag_state
-                    {
-                        source_port_id = Some(source_port);
-                        for node in state.graph.nodes.values() {
-                            for port in &node.ports {
-                                let nr = Rect {
-                                    x: node.position.0,
-                                    y: node.position.1,
-                                    width: node.size.0,
-                                    height: node.size.1,
-                                };
-                                let pc = match port.position {
-                                    PortPosition::Top => (nr.x + nr.width / 2.0, nr.y),
-                                    PortPosition::Bottom => {
-                                        (nr.x + nr.width / 2.0, nr.y + nr.height)
-                                    }
-                                    PortPosition::Left => (nr.x, nr.y + nr.height / 2.0),
-                                    PortPosition::Right => {
-                                        (nr.x + nr.width, nr.y + nr.height / 2.0)
-                                    }
-                                };
-                                let dist = ((current_pos.0 - pc.0).powi(2)
-                                    + (current_pos.1 - pc.1).powi(2))
-                                .sqrt();
-                                if dist < 15.0 && port.id != source_port {
-                                    target_port_id = Some(port.id);
-                                }
-                            }
-                        }
-                    }
+    #[test]
+    fn test_canvas_fit_to_content() {
+        let mut canvas = FlowCanvas::new().with_screen_size(800.0, 600.0);
 
-                    if let Some(target_port) = target_port_id {
-                        if let Some(source_port) = source_port_id {
-                            state.push_history();
-                            let edge_id = crate::types::EdgeId(rand::random());
-                            state.graph.edges.insert(
-                                edge_id,
-                                crate::edge::FlowEdge::new(edge_id, source_port, target_port),
-                            );
-                        }
-                    } else if let Some(DragState::Node { .. }) = state.interaction.drag_state {
-                        state.push_history();
-                    } else if let Some(DragState::SelectionBox {
-                        start_pos,
-                        current_pos,
-                    }) = state.interaction.drag_state
-                    {
-                        let sel_rect = Rect {
-                            x: start_pos.0.min(current_pos.0),
-                            y: start_pos.1.min(current_pos.1),
-                            width: (current_pos.0 - start_pos.0).abs(),
-                            height: (current_pos.1 - start_pos.1).abs(),
-                        };
-                        for node in state.graph.nodes.values_mut() {
-                            let nx = state.offset.0 + node.position.0 * state.scale;
-                            let ny = state.offset.1 + node.position.1 * state.scale;
-                            if sel_rect.contains(nx, ny) {
-                                node.selected = true;
-                            }
-                        }
-                    }
+        let mut n1 = FlowNode::new(NodeId(1), "A", (100.0, 100.0));
+        n1.size = (200.0, 100.0);
+        let mut n2 = FlowNode::new(NodeId(2), "B", (400.0, 300.0));
+        n2.size = (200.0, 100.0);
 
-                    state.interaction.drag_state = None;
-                    s.set_component_state(id_hash, state);
-                    s
-                });
-            }),
-        );
+        canvas.add_node(n1);
+        canvas.add_node(n2);
+        canvas.fit_to_content();
 
-        renderer.register_handler(
-            "keydown",
-            Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
-                    if key == "z" {
-                        cvkg_core::update_system_state(|s| {
-                            let mut s = s.clone();
-                            let mut state = s
-                                .get_component_state::<FlowContainer>(id_hash)
-                                .unwrap()
-                                .read()
-                                .unwrap()
-                                .clone();
-                            state.undo();
-                            s.set_component_state(id_hash, state);
-                            s
-                        });
-                    } else if key == "y" {
-                        cvkg_core::update_system_state(|s| {
-                            let mut s = s.clone();
-                            let mut state = s
-                                .get_component_state::<FlowContainer>(id_hash)
-                                .unwrap()
-                                .read()
-                                .unwrap()
-                                .clone();
-                            state.redo();
-                            s.set_component_state(id_hash, state);
-                            s
-                        });
-                    }
-                }
-            }),
-        );
+        assert!(canvas.camera.zoom > 0.0);
+    }
+
+    #[test]
+    fn test_canvas_fit_to_content_empty() {
+        let mut canvas = FlowCanvas::new().with_screen_size(800.0, 600.0);
+        canvas.fit_to_content();
+        assert_eq!(canvas.camera.zoom, 1.0);
+    }
+
+    #[test]
+    fn test_canvas_add_node_invalidates_ribbons() {
+        let mut canvas = FlowCanvas::new();
+        canvas.ribbon_dirty = false;
+        let node = FlowNode::new(NodeId(1), "Test", (0.0, 0.0));
+        canvas.add_node(node);
+        assert!(canvas.ribbon_dirty);
+    }
+
+    #[test]
+    fn test_canvas_node_at_screen() {
+        let mut canvas = FlowCanvas::new();
+        let mut node = FlowNode::new(NodeId(1), "Test", (100.0, 100.0));
+        node.size = (150.0, 80.0);
+        canvas.add_node(node);
+
+        let found = canvas.node_at_screen(150.0, 120.0);
+        assert_eq!(found, Some(NodeId(1)));
+
+        let found = canvas.node_at_screen(50.0, 50.0);
+        assert_eq!(found, None);
+    }
+
+    #[test]
+    fn test_canvas_nodes_in_screen_rect() {
+        let mut canvas = FlowCanvas::new();
+        canvas.add_node(FlowNode::new(NodeId(1), "A", (50.0, 50.0)));
+        canvas.add_node(FlowNode::new(NodeId(2), "B", (500.0, 500.0)));
+
+        let found = canvas.nodes_in_screen_rect(0.0, 0.0, 200.0, 200.0);
+        assert!(found.contains(&NodeId(1)));
+        assert!(!found.contains(&NodeId(2)));
+    }
+
+    #[test]
+    fn test_canvas_tick_animations() {
+        let mut canvas = FlowCanvas::new();
+
+        let n1 = FlowNode::new(NodeId(1), "A", (0.0, 0.0));
+        let n2 = FlowNode::new(NodeId(2), "B", (200.0, 0.0));
+        canvas.add_node(n1);
+        canvas.add_node(n2);
+
+        let mut edge = FlowEdge::new(1, NodeId(1), 0, NodeId(2), 0);
+        edge.restart_animation();
+        canvas.add_edge(edge);
+
+        assert!(canvas.tick_animations(0.016));
+
+        for _ in 0..200 {
+            canvas.tick_animations(0.016);
+        }
+        assert!(!canvas.tick_animations(0.016));
+    }
+
+    #[test]
+    fn test_canvas_visible_rect() {
+        let canvas = FlowCanvas::new().with_screen_size(800.0, 600.0);
+        let rect = canvas.visible_rect();
+        assert_eq!(rect.x, 0.0);
+        assert_eq!(rect.y, 0.0);
+        assert_eq!(rect.width, 800.0);
+        assert_eq!(rect.height, 600.0);
+    }
+
+    #[test]
+    fn test_canvas_ribbons_rebuild() {
+        let mut canvas = FlowCanvas::new();
+        canvas.add_node(FlowNode::new(NodeId(1), "A", (0.0, 0.0)));
+        canvas.add_node(FlowNode::new(NodeId(2), "B", (200.0, 0.0)));
+
+        let edge = FlowEdge::new(1, NodeId(1), 0, NodeId(2), 0);
+        canvas.add_edge(edge);
+
+        let batch = canvas.ribbons();
+        assert!(!batch.is_empty());
+        assert!(canvas.ribbon_vertex_count() > 0);
+        assert!(canvas.ribbon_index_count() > 0);
     }
 }

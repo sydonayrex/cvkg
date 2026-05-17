@@ -32,3 +32,7 @@ walkdir = "2.5.0"
 tokio-tungstenite = "0.29.0"
 indicatif = "0.18.4"
 console = "0.16.3"
+
+[package.metadata.packager]
+identifier = "com.sydonayrex.cvkg.cli"
+publisher = "SydonayRex"

@@ -282,15 +282,21 @@ impl serde::Serialize for VDomPatch {
                 aria_props,
                 aria_role,
                 children,
-                handlers: _,
+                handlers,
             } => {
-                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 6)?;
+                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 7)?;
                 state.serialize_field("id", id)?;
                 state.serialize_field("props", props)?;
                 state.serialize_field("layout", layout)?;
                 state.serialize_field("aria_props", aria_props)?;
                 state.serialize_field("aria_role", aria_role)?;
                 state.serialize_field("children", children)?;
+                state.serialize_field(
+                    "handlers",
+                    &handlers
+                        .as_ref()
+                        .map(|h| h.keys().cloned().collect::<Vec<String>>()),
+                )?;
                 state.end()
             }
             Self::Remove(id) => serializer.serialize_newtype_variant("VDomPatch", 2, "Remove", id),
@@ -329,6 +335,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 aria_props: Option<AriaProps>,
                 aria_role: Option<String>,
                 children: Option<Vec<NodeId>>,
+                handlers: Option<Vec<String>>,
             },
             Remove(NodeId),
             Replace {
@@ -352,6 +359,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 aria_props,
                 aria_role,
                 children,
+                handlers,
             } => VDomPatch::Update {
                 id,
                 props,
@@ -359,7 +367,20 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 aria_props,
                 aria_role,
                 children,
-                handlers: None,
+                handlers: handlers.map(|keys| {
+                    let mut map: EventHandlerMap = HashMap::new();
+                    for key in keys {
+                        // Handlers are serialized as key names only;
+                        // on deserialization we create placeholder entries.
+                        // The actual handler closures cannot be serialized.
+                        map.insert(
+                            key,
+                            Arc::new(|_event: cvkg_core::Event| {})
+                                as Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
+                        );
+                    }
+                    map
+                }),
             },
             VDomPatchInternal::Remove(id) => VDomPatch::Remove(id),
             VDomPatchInternal::Replace { id, node } => VDomPatch::Replace { id, node },
@@ -1429,10 +1450,10 @@ impl VDom {
 
                     if old_hover != id {
                         if let Some(old_id) = old_hover {
-                            self.bubble_event(old_id, cvkg_core::Event::PointerLeave);
+                            self.bubble_event(old_id, &cvkg_core::Event::PointerLeave);
                         }
                         if let Some(new_id) = id {
-                            self.bubble_event(new_id, cvkg_core::Event::PointerEnter);
+                            self.bubble_event(new_id, &cvkg_core::Event::PointerEnter);
                         }
                     }
                 }
@@ -1459,15 +1480,42 @@ impl VDom {
                     .map(|n| n.component_type.as_str())
                     .unwrap_or("UNKNOWN")
             );
-            self.bubble_event(id, event)
+            self.bubble_event_response(id, event)
         } else {
             log::info!("[VDOM] No hit for event {} at {:?}", event_name, event);
             cvkg_core::EventResponse::Ignored
         }
     }
 
-    /// Internal helper to bubble an event up the tree using centralized delegation.
-    fn bubble_event(
+    /// Bubble an event up the tree from a target node to the root.
+    ///
+    /// Walks the parent chain from `target` to root, calling any matching
+    /// event handlers at each level. Returns `true` if at least one handler
+    /// processed the event, `false` if it bubbled to the root unhandled.
+    pub fn bubble_event(&self, target: NodeId, event: &cvkg_core::Event) -> bool {
+        let event_name = event.name();
+        let mut current_id = target;
+        let mut processed = false;
+
+        loop {
+            if let Some(handlers) = self.event_handlers.get(&current_id)
+                && let Some(handler) = handlers.get(event_name) {
+                    handler(event.clone());
+                    processed = true;
+                }
+
+            if let Some(parent_id) = self.parents.get(&current_id) {
+                current_id = *parent_id;
+            } else {
+                break;
+            }
+        }
+
+        processed
+    }
+
+    /// Internal helper that dispatches and converts to EventResponse.
+    fn bubble_event_response(
         &self,
         mut current_id: NodeId,
         event: cvkg_core::Event,
@@ -1500,6 +1548,179 @@ impl VDom {
             cvkg_core::EventResponse::Handled
         } else {
             cvkg_core::EventResponse::Ignored
+        }
+    }
+
+    /// Set the focused node by ID.
+    pub fn focus_node(&self, id: NodeId) {
+        if let Ok(mut focus) = self.focused_node.lock() {
+            *focus = Some(id);
+        }
+    }
+
+    /// Clear the current focus.
+    pub fn blur_node(&self) {
+        if let Ok(mut focus) = self.focused_node.lock() {
+            *focus = None;
+        }
+    }
+
+    /// Build the document-order (DFS pre-order) list of node IDs.
+    fn build_focus_order(&self) -> Vec<NodeId> {
+        let mut order = Vec::new();
+        if let Some(root_id) = self.root {
+            self.dfs_pre_order(root_id, &mut order);
+        }
+        order
+    }
+
+    fn dfs_pre_order(&self, node_id: NodeId, order: &mut Vec<NodeId>) {
+        order.push(node_id);
+        if let Some(node) = self.nodes.get(&node_id) {
+            for child_id in &node.children {
+                self.dfs_pre_order(*child_id, order);
+            }
+        }
+    }
+
+    /// Move focus to the next node in document order (DFS pre-order).
+    pub fn focus_next(&self) {
+        let order = self.build_focus_order();
+        if order.is_empty() {
+            return;
+        }
+
+        let current = self.focused_node.lock().ok().and_then(|f| *f);
+        match current {
+            None => {
+                if let Ok(mut focus) = self.focused_node.lock() {
+                    *focus = Some(order[0]);
+                }
+            }
+            Some(cur_id) => {
+                if let Some(pos) = order.iter().position(|id| *id == cur_id) {
+                    let next = (pos + 1) % order.len();
+                    if let Ok(mut focus) = self.focused_node.lock() {
+                        *focus = Some(order[next]);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Move focus to the previous node in document order (DFS pre-order).
+    pub fn focus_prev(&self) {
+        let order = self.build_focus_order();
+        if order.is_empty() {
+            return;
+        }
+
+        let current = self.focused_node.lock().ok().and_then(|f| *f);
+        match current {
+            None => {
+                if let Ok(mut focus) = self.focused_node.lock() {
+                    *focus = Some(order[order.len() - 1]);
+                }
+            }
+            Some(cur_id) => {
+                if let Some(pos) = order.iter().position(|id| *id == cur_id) {
+                    let prev = if pos == 0 { order.len() - 1 } else { pos - 1 };
+                    if let Ok(mut focus) = self.focused_node.lock() {
+                        *focus = Some(order[prev]);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Build a complete AccessKit tree update from the current VDOM state.
+    ///
+    /// Generates a `TreeUpdate` containing all nodes with proper parent-child
+    /// relationships, roles, labels, descriptions, bounds, and states.
+    pub fn build_accesskit_tree(&self) -> accesskit::TreeUpdate {
+        let mut nodes: Vec<(accesskit::NodeId, accesskit::Node)> = Vec::new();
+
+        if let Some(root_id) = self.root {
+            self.build_accesskit_node(root_id, &mut nodes);
+        }
+
+        accesskit::TreeUpdate {
+            nodes,
+            tree: Some(accesskit::Tree::new(accesskit::NodeId(0))),
+            focus: self
+                .focused_node
+                .lock()
+                .ok()
+                .and_then(|f| *f)
+                .map(|id| accesskit::NodeId(id.0))
+                .unwrap_or(accesskit::NodeId(0)),
+        }
+    }
+
+    fn build_accesskit_node(
+        &self,
+        node_id: NodeId,
+        output: &mut Vec<(accesskit::NodeId, accesskit::Node)>,
+    ) {
+        if let Some(node) = self.nodes.get(&node_id) {
+            let mut ak_node = accesskit::Node::new(match node.aria_role.as_str() {
+                "button" => accesskit::Role::Button,
+                "checkbox" => accesskit::Role::CheckBox,
+                "text" => accesskit::Role::Label,
+                "group" => accesskit::Role::Group,
+                "window" => accesskit::Role::Window,
+                "textbox" => accesskit::Role::TextInput,
+                "password" => accesskit::Role::TextInput,
+                "switch" => accesskit::Role::Switch,
+                "slider" => accesskit::Role::Slider,
+                "spinbutton" => accesskit::Role::SpinButton,
+                "combobox" => accesskit::Role::ComboBox,
+                "grid" => accesskit::Role::Grid,
+                "colorwell" => accesskit::Role::ColorWell,
+                "application" => accesskit::Role::Application,
+                "presentation" => accesskit::Role::GenericContainer,
+                _ => accesskit::Role::GenericContainer,
+            });
+
+            if let Some(label) = &node.aria_props.label {
+                ak_node.set_label(label.clone());
+            }
+
+            if let Some(desc) = &node.aria_props.description {
+                ak_node.set_description(desc.clone());
+            }
+
+            if let Some(val) = &node.aria_props.value {
+                ak_node.set_value(val.clone());
+            }
+
+            if node.aria_props.disabled {
+                ak_node.set_disabled();
+            }
+
+            if node.aria_props.hidden {
+                ak_node.set_hidden();
+            }
+
+            ak_node.set_bounds(accesskit::Rect {
+                x0: node.layout.x as f64,
+                y0: node.layout.y as f64,
+                x1: (node.layout.x + node.layout.width) as f64,
+                y1: (node.layout.y + node.layout.height) as f64,
+            });
+
+            let child_ids: Vec<accesskit::NodeId> = node
+                .children
+                .iter()
+                .map(|id| accesskit::NodeId(id.0))
+                .collect();
+            ak_node.set_children(child_ids);
+
+            output.push((accesskit::NodeId(node_id.0), ak_node));
+
+            for child_id in &node.children {
+                self.build_accesskit_node(*child_id, output);
+            }
         }
     }
 }

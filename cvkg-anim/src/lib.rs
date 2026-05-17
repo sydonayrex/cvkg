@@ -29,6 +29,7 @@
 
 use std::sync::Arc;
 use std::time::Duration;
+pub mod advanced_particles;
 pub mod behavior;
 pub mod geometry;
 pub mod growth;

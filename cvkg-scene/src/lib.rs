@@ -26,7 +26,10 @@ pub mod test_renderer;
 
 use cvkg_core::Rect;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+
+/// Default cell size for the spatial hash grid.
+const DEFAULT_CELL_SIZE: f32 = 64.0;
 
 /// Unique identifier for a node in the retained scene graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -81,6 +84,12 @@ pub struct SceneGraph {
 
     /// Next available unique ID
     next_id: u64,
+
+    /// Spatial hash grid for fast AABB queries
+    spatial_grid: HashMap<(u32, u32), Vec<NodeId>>,
+
+    /// Cell size for the spatial hash grid
+    cell_size: f32,
 }
 
 impl Default for SceneGraph {
@@ -97,6 +106,8 @@ impl SceneGraph {
             root: None,
             dirty_regions: Vec::new(),
             next_id: 1,
+            spatial_grid: HashMap::new(),
+            cell_size: DEFAULT_CELL_SIZE,
         }
     }
 
@@ -127,11 +138,13 @@ impl SceneGraph {
 
     /// Update the world-space bounds of all nodes (Recursive).
     /// This should be called after any local changes to ensure culling is accurate.
+    /// Also rebuilds the spatial hash index for fast AABB queries.
     pub fn update_transforms(&mut self) {
         if let Some(root_id) = self.root {
             let root_rect = self.nodes.get(&root_id).unwrap().local_rect;
             self.update_node_transform(root_id, root_rect);
         }
+        self.rebuild_spatial_hash();
     }
 
     fn update_node_transform(&mut self, id: NodeId, parent_world_rect: Rect) {
@@ -172,13 +185,92 @@ impl SceneGraph {
 
     fn cull_node(&self, id: NodeId, viewport: Rect, visible: &mut Vec<NodeId>) {
         if let Some(node) = self.nodes.get(&id) {
-            // Check if node's world bounds intersect the viewport
-            if self.intersects(node.world_rect, viewport) {
-                visible.push(id);
+            // Early exit: if node is fully outside viewport, skip entire subtree
+            if self.is_fully_outside(node.world_rect, viewport) {
+                return;
+            }
 
-                // Recurse to children
-                for child_id in &node.children {
-                    self.cull_node(*child_id, viewport, visible);
+            // Fast path: if node is fully inside, add it and all descendants
+            if self.is_fully_inside(node.world_rect, viewport) {
+                self.add_all_descendants(id, visible);
+                return;
+            }
+
+            // Partial overlap: add this node and check children individually
+            visible.push(id);
+            for child_id in &node.children {
+                self.cull_node(*child_id, viewport, visible);
+            }
+        }
+    }
+
+    /// Check if rect a is fully outside rect b (no overlap at all).
+    fn is_fully_outside(&self, a: Rect, b: Rect) -> bool {
+        a.x + a.width <= b.x
+            || a.x >= b.x + b.width
+            || a.y + a.height <= b.y
+            || a.y >= b.y + b.height
+    }
+
+    /// Check if rect a is fully inside rect b.
+    fn is_fully_inside(&self, a: Rect, b: Rect) -> bool {
+        a.x >= b.x
+            && a.y >= b.y
+            && a.x + a.width <= b.x + b.width
+            && a.y + a.height <= b.y + b.height
+    }
+
+    /// Add a node and all its descendants to the visible list (fast path for fully-inside nodes).
+    fn add_all_descendants(&self, id: NodeId, visible: &mut Vec<NodeId>) {
+        if let Some(node) = self.nodes.get(&id) {
+            visible.push(id);
+            for child_id in &node.children {
+                self.add_all_descendants(*child_id, visible);
+            }
+        }
+    }
+
+    /// Query the spatial hash for nodes that might overlap the given rect.
+    /// Returns candidates that need further AABB testing.
+    pub fn query_region(&self, rect: Rect) -> Vec<NodeId> {
+        let mut candidates = Vec::new();
+        let min_cell_x = (rect.x / self.cell_size).floor() as u32;
+        let min_cell_y = (rect.y / self.cell_size).floor() as u32;
+        let max_cell_x = ((rect.x + rect.width) / self.cell_size).floor() as u32;
+        let max_cell_y = ((rect.y + rect.height) / self.cell_size).floor() as u32;
+
+        for cx in min_cell_x..=max_cell_x {
+            for cy in min_cell_y..=max_cell_y {
+                if let Some(cell) = self.spatial_grid.get(&(cx, cy)) {
+                    for id in cell {
+                        if let Some(node) = self.nodes.get(id)
+                            && self.intersects(node.world_rect, rect) {
+                                candidates.push(*id);
+                            }
+                    }
+                }
+            }
+        }
+        candidates
+    }
+
+    /// Rebuild the spatial hash index from all node world rects.
+    fn rebuild_spatial_hash(&mut self) {
+        self.spatial_grid.clear();
+        for (id, node) in &self.nodes {
+            let min_cell_x = (node.world_rect.x / self.cell_size).floor() as u32;
+            let min_cell_y = (node.world_rect.y / self.cell_size).floor() as u32;
+            let max_cell_x =
+                ((node.world_rect.x + node.world_rect.width) / self.cell_size).floor() as u32;
+            let max_cell_y =
+                ((node.world_rect.y + node.world_rect.height) / self.cell_size).floor() as u32;
+
+            for cx in min_cell_x..=max_cell_x {
+                for cy in min_cell_y..=max_cell_y {
+                    self.spatial_grid
+                        .entry((cx, cy))
+                        .or_default()
+                        .push(*id);
                 }
             }
         }
@@ -190,15 +282,26 @@ impl SceneGraph {
 
     /// Perform Automatic Layering (Batching).
     /// Groups visible nodes into discrete layers for optimized GPU rendering.
-    pub fn batch(&self, visible_nodes: &[NodeId]) -> HashMap<u32, Vec<NodeId>> {
-        let mut layers = HashMap::new();
+    /// Returns a BTreeMap so layers are always iterated in order.
+    /// Nodes within each layer are sorted by z_index.
+    pub fn batch(&self, visible_nodes: &[NodeId]) -> BTreeMap<u32, Vec<NodeId>> {
+        let mut layers: BTreeMap<u32, Vec<NodeId>> = BTreeMap::new();
         for id in visible_nodes {
             if let Some(node) = self.nodes.get(id) {
                 layers
                     .entry(node.layer_id)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(*id);
             }
+        }
+        // Sort nodes within each layer by z_index for correct draw order
+        for nodes in layers.values_mut() {
+            nodes.sort_by_key(|id| {
+                self.nodes
+                    .get(id)
+                    .map(|n| (n.z_index * 1000.0) as i64)
+                    .unwrap_or(0)
+            });
         }
         layers
     }
@@ -217,7 +320,9 @@ impl SceneGraph {
             nodes,
             root,
             dirty_regions: Vec::new(),
-            next_id: 0, // Should be re-calculated or preserved if needed
+            next_id: 0,
+            cell_size: DEFAULT_CELL_SIZE,
+            spatial_grid: HashMap::new(),
         })
     }
 
@@ -228,10 +333,39 @@ impl SceneGraph {
 
     /// Clear dirty flags and regions after a successful render.
     pub fn clear_dirty(&mut self) {
+        // Merge overlapping dirty regions before clearing
+        self.merge_dirty_regions();
         for node in self.nodes.values_mut() {
             node.is_dirty = false;
         }
         self.dirty_regions.clear();
+    }
+
+    /// Merge overlapping dirty rects to reduce the number of regions.
+    /// Uses iterative O(n^2) merge: while any pair overlaps, replace with union.
+    fn merge_dirty_regions(&mut self) {
+        let mut changed = true;
+        while changed {
+            changed = false;
+            let len = self.dirty_regions.len();
+            'outer: for i in 0..len {
+                for j in (i + 1)..len {
+                    if let Some(union) = rect_union(self.dirty_regions[i], self.dirty_regions[j]) {
+                        self.dirty_regions[i] = union;
+                        self.dirty_regions.remove(j);
+                        changed = true;
+                        break 'outer;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Apply multiple patches in sequence.
+    pub fn apply_patches(&mut self, patches: &[Patch]) {
+        for patch in patches {
+            self.apply_patch(patch.clone());
+        }
     }
 
     /// Apply a retained scene graph patch.
@@ -291,6 +425,7 @@ impl SceneGraph {
 }
 
 /// A patch operation to apply to the retained scene graph.
+#[derive(Clone)]
 pub enum Patch {
     Create(VNode),
     Remove(NodeId),
@@ -306,12 +441,36 @@ pub enum Patch {
 }
 
 /// A change to a VNode's properties.
+#[derive(Clone)]
 pub enum Change {
     ComponentType(String),
     Children(Vec<NodeId>),
     LocalRect(Rect),
     LayerId(u32),
     ZIndex(f32),
+}
+
+/// Compute the union (bounding box) of two rects.
+/// Returns None if the rects don't overlap or touch.
+fn rect_union(a: Rect, b: Rect) -> Option<Rect> {
+    if !rects_overlap(a, b) {
+        return None;
+    }
+    let x = a.x.min(b.x);
+    let y = a.y.min(b.y);
+    let x2 = (a.x + a.width).max(b.x + b.width);
+    let y2 = (a.y + a.height).max(b.y + b.height);
+    Some(Rect {
+        x,
+        y,
+        width: x2 - x,
+        height: y2 - y,
+    })
+}
+
+/// Check if two rects overlap (including edge-touching).
+fn rects_overlap(a: Rect, b: Rect) -> bool {
+    a.x <= b.x + b.width && a.x + a.width >= b.x && a.y <= b.y + b.height && a.y + a.height >= b.y
 }
 
 #[cfg(test)]

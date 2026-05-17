@@ -41,3 +41,7 @@ version = "0.4"
 
 [dependencies.env_logger]
 version = "0.10"
+
+[package.metadata.packager]
+identifier = "com.sydonayrex.berserker"
+publisher = "SydonayRex"

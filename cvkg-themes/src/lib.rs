@@ -1,5 +1,213 @@
 use cvkg_core::Color;
 
+// =============================================================================
+// OKLCH COLOR MODEL
+// =============================================================================
+
+/// A color in the perceptually uniform OKLCH color space.
+///
+/// OKLCH (Lightness, Chroma, Hue) provides perceptually uniform color
+/// manipulation -- adjusting lightness produces visually consistent results
+/// across all hues, unlike HSL or raw RGB.
+///
+/// Fields:
+/// - `l`: Lightness, range [0.0, 1.0] (black to white)
+/// - `c`: Chroma, range [0.0, ~0.4] (gray to fully saturated)
+/// - `h`: Hue angle in degrees, range [0.0, 360.0)
+/// - `a`: Alpha opacity, range [0.0, 1.0]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct OklchColor {
+    pub l: f32,
+    pub c: f32,
+    pub h: f32,
+    pub a: f32,
+}
+
+impl OklchColor {
+    /// Creates a new OKLCH color from individual components.
+    pub fn new(l: f32, c: f32, h: f32, a: f32) -> Self {
+        Self { l, c, h, a }
+    }
+
+    /// Converts sRGB (r, g, b) values in [0.0, 1.0] to an OKLCH color.
+    ///
+    /// Pipeline: sRGB -> linear RGB -> OKLab -> OKLCH
+    pub fn from_rgb(r: f32, g: f32, b: f32) -> Self {
+        // sRGB to linear RGB
+        let to_linear = |c: f32| -> f32 {
+            if c <= 0.04045 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        };
+
+        let r_lin = to_linear(r);
+        let g_lin = to_linear(g);
+        let b_lin = to_linear(b);
+
+        // Linear RGB to OKLab (using the standard OKLab matrix)
+        // l_ = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b
+        // m_ = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b
+        // s_ = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b
+        let l_ = 0.412_221_46 * r_lin + 0.536_332_55 * g_lin + 0.051_445_995 * b_lin;
+        let m_ = 0.211_903_5 * r_lin + 0.680_699_5 * g_lin + 0.107_396_96 * b_lin;
+        let s_ = 0.088_302_46 * r_lin + 0.281_718_85 * g_lin + 0.629_978_7 * b_lin;
+
+        // Cube root
+        let l_cbrt = l_.cbrt();
+        let m_cbrt = m_.cbrt();
+        let s_cbrt = s_.cbrt();
+
+        // OKLab coordinates
+        let l = 0.210_454_26 * l_cbrt + 0.793_617_8 * m_cbrt - 0.004_072_047 * s_cbrt;
+        let a = 1.977_998_5 * l_cbrt - 2.428_592_2 * m_cbrt + 0.450_593_7 * s_cbrt;
+        let b = 0.025_904_037 * l_cbrt + 0.782_771_77 * m_cbrt - 0.808_675_77 * s_cbrt;
+
+        // OKLab to OKLCH
+        let c = (a * a + b * b).sqrt();
+        let h = b.atan2(a).to_degrees();
+        let h = if h < 0.0 { h + 360.0 } else { h };
+
+        Self {
+            l: l.clamp(0.0, 1.0),
+            c: c.clamp(0.0, 0.4),
+            h,
+            a: 1.0,
+        }
+    }
+
+    /// Converts this OKLCH color back to an sRGB `Color`.
+    ///
+    /// Pipeline: OKLCH -> OKLab -> linear RGB -> sRGB
+    pub fn to_rgba(&self) -> Color {
+        // OKLCH to OKLab
+        let h_rad = self.h.to_radians();
+        let a = self.c * h_rad.cos();
+        let b = self.c * h_rad.sin();
+
+        // OKLab to linear RGB
+        let l = self.l + 0.396_337_78 * a + 0.215_803_76 * b;
+        let m = self.l - 0.105_561_346 * a - 0.063_854_17 * b;
+        let s = self.l - 0.089_484_18 * a - 1.291_485_5 * b;
+
+        // Cube
+        let l_cubed = l * l * l;
+        let m_cubed = m * m * m;
+        let s_cubed = s * s * s;
+
+        // Linear RGB
+        let r_lin = 4.076_741_7 * l_cubed - 3.307_711_6 * m_cubed + 0.230_969_94 * s_cubed;
+        let g_lin = -1.268_438 * l_cubed + 2.609_757_4 * m_cubed - 0.341_319_38 * s_cubed;
+        let b_lin = -0.0041960863 * l_cubed - 0.703_418_6 * m_cubed + 1.707_614_7 * s_cubed;
+
+        // Linear RGB to sRGB
+        let to_srgb = |c: f32| -> f32 {
+            let c = c.clamp(0.0, 1.0);
+            if c <= 0.0031308 {
+                12.92 * c
+            } else {
+                1.055 * c.powf(1.0 / 2.4) - 0.055
+            }
+        };
+
+        Color::new(
+            to_srgb(r_lin),
+            to_srgb(g_lin),
+            to_srgb(b_lin),
+            self.a.clamp(0.0, 1.0),
+        )
+    }
+
+    /// Returns a new color with lightness increased by `amount`.
+    pub fn lighten(&self, amount: f32) -> Self {
+        Self {
+            l: (self.l + amount).clamp(0.0, 1.0),
+            ..*self
+        }
+    }
+
+    /// Returns a new color with lightness decreased by `amount`.
+    pub fn darken(&self, amount: f32) -> Self {
+        Self {
+            l: (self.l - amount).clamp(0.0, 1.0),
+            ..*self
+        }
+    }
+
+    /// Returns a new color with chroma increased by `amount`.
+    pub fn saturate(&self, amount: f32) -> Self {
+        Self {
+            c: (self.c + amount).clamp(0.0, 0.4),
+            ..*self
+        }
+    }
+
+    /// Returns a new color with hue rotated by `degrees`.
+    pub fn rotate_hue(&self, degrees: f32) -> Self {
+        let mut new_h = self.h + degrees;
+        while new_h < 0.0 {
+            new_h += 360.0;
+        }
+        while new_h >= 360.0 {
+            new_h -= 360.0;
+        }
+        Self { h: new_h, ..*self }
+    }
+
+    /// Computes the sRGB relative luminance (Y) of this color.
+    ///
+    /// Uses the WCAG 2.x relative luminance formula on the converted sRGB values.
+    pub fn relative_luminance(&self) -> f32 {
+        self.to_rgba().relative_luminance()
+    }
+}
+
+// =============================================================================
+// GLASSMORPHIC MATERIAL TOKENS
+// =============================================================================
+
+/// A glassmorphic material descriptor for frosted-glass UI surfaces.
+///
+/// Encapsulates all visual properties needed to render a physically-plausible
+/// glass panel: backdrop blur, refraction, frost noise, tint, and edge glow.
+#[derive(Debug, Clone)]
+pub struct GlassMaterial {
+    /// Backdrop blur radius in logical pixels.
+    pub backdrop_blur_radius: f32,
+    /// Snell's law refraction index (1.0 = air, ~1.5 = glass).
+    pub refraction_index: f32,
+    /// Frost noise intensity in the range [0.0, 1.0].
+    pub frost_intensity: f32,
+    /// Tint color applied over the refracted backdrop.
+    pub tint_color: OklchColor,
+    /// Opacity of the tint layer in [0.0, 1.0].
+    pub tint_opacity: f32,
+    /// Color of the neon border glow.
+    pub border_glow_color: OklchColor,
+    /// Spread radius of the border glow in logical pixels.
+    pub border_glow_radius: f32,
+}
+
+impl GlassMaterial {
+    /// Returns a sensible default glass material with subtle dark tint.
+    pub fn default_glass() -> Self {
+        Self {
+            backdrop_blur_radius: 20.0,
+            refraction_index: 1.15,
+            frost_intensity: 0.03,
+            tint_color: OklchColor::new(0.05, 0.01, 260.0, 1.0),
+            tint_opacity: 0.12,
+            border_glow_color: OklchColor::new(0.8, 0.05, 200.0, 0.6),
+            border_glow_radius: 8.0,
+        }
+    }
+}
+
+// =============================================================================
+// SEMANTIC COLORS
+// =============================================================================
+
 /// Semantic colors for the Berserker Design System
 #[derive(Debug, Clone)]
 pub struct SemanticColors {
@@ -14,6 +222,37 @@ pub struct SemanticColors {
     pub text: Color,
     pub text_dim: Color,
 }
+
+// =============================================================================
+// APCA CONTRAST
+// =============================================================================
+
+/// Result of an APCA contrast evaluation.
+#[derive(Debug, Clone)]
+pub struct ApcaResult {
+    /// The computed APCA contrast value (Lc), typically in the range 0-100+.
+    pub contrast: f32,
+    /// Whether the contrast meets the required threshold for the given context.
+    pub passes: bool,
+    /// A human-readable level label: "fail", "large-only", or "pass".
+    pub level: &'static str,
+}
+
+impl std::fmt::Display for ApcaResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "APCA Lc={:.1} — {} ({})",
+            self.contrast,
+            if self.passes { "PASS" } else { "FAIL" },
+            self.level
+        )
+    }
+}
+
+// =============================================================================
+// TYPOGRAPHY, SPACING, MOTION
+// =============================================================================
 
 /// Typography scale for consistent rhythmic text
 #[derive(Debug, Clone)]
@@ -45,6 +284,10 @@ pub struct MotionScale {
     pub bouncy: cvkg_anim::SleipnirParams,
 }
 
+// =============================================================================
+// THEME
+// =============================================================================
+
 /// A resolved Theme instance, providing concrete values for the current mode
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -52,6 +295,7 @@ pub struct Theme {
     pub typography: TypographyScale,
     pub spacing: SpacingScale,
     pub motion: MotionScale,
+    pub materials: Vec<GlassMaterial>,
     is_dark: bool,
 }
 
@@ -128,6 +372,73 @@ impl Theme {
                 heavy: cvkg_anim::SleipnirParams::heavy(),
                 bouncy: cvkg_anim::SleipnirParams::bouncy(),
             },
+            materials: vec![GlassMaterial::default_glass()],
+        }
+    }
+
+    /// Generate a complete theme from a single seed color using OKLCH color science.
+    ///
+    /// The entire `SemanticColors` palette is procedurally derived from the
+    /// `seed_color` by rotating hue, adjusting lightness, and modulating chroma
+    /// in the perceptually uniform OKLCH space.
+    pub fn from_seed(seed_color: OklchColor) -> Theme {
+        let is_dark = seed_color.l < 0.5;
+
+        let primary = seed_color;
+        let secondary = seed_color.rotate_hue(120.0);
+        let accent = seed_color.rotate_hue(60.0).saturate(0.1);
+
+        let (bg_l, surf_l, text_l) = if is_dark {
+            (0.02, 0.08, 0.95)
+        } else {
+            (0.98, 0.95, 0.05)
+        };
+
+        let background = OklchColor::new(bg_l, seed_color.c * 0.1, seed_color.h, 1.0);
+        let surface = OklchColor::new(surf_l, seed_color.c * 0.15, seed_color.h, 1.0);
+        let text = OklchColor::new(text_l, seed_color.c * 0.05, seed_color.h, 1.0);
+        let text_dim = text.darken(if is_dark { 0.35 } else { 0.30 });
+
+        let error = OklchColor::new(0.65, 0.15, 25.0, 1.0);
+        let warning = OklchColor::new(0.85, 0.12, 90.0, 1.0);
+        let success = OklchColor::new(0.75, 0.12, 145.0, 1.0);
+
+        Self {
+            is_dark,
+            colors: SemanticColors {
+                primary: primary.to_rgba(),
+                secondary: secondary.to_rgba(),
+                accent: accent.to_rgba(),
+                background: background.to_rgba(),
+                surface: surface.to_rgba(),
+                error: error.to_rgba(),
+                warning: warning.to_rgba(),
+                success: success.to_rgba(),
+                text: text.to_rgba(),
+                text_dim: text_dim.to_rgba(),
+            },
+            typography: TypographyScale {
+                hero: 48.0,
+                h1: 32.0,
+                h2: 24.0,
+                body: 16.0,
+                caption: 12.0,
+                code: 12.0,
+            },
+            spacing: SpacingScale {
+                xs: 4.0,
+                s: 8.0,
+                m: 16.0,
+                l: 24.0,
+                xl: 32.0,
+            },
+            motion: MotionScale {
+                snappy: cvkg_anim::SleipnirParams::snappy(),
+                fluid: cvkg_anim::SleipnirParams::fluid(),
+                heavy: cvkg_anim::SleipnirParams::heavy(),
+                bouncy: cvkg_anim::SleipnirParams::bouncy(),
+            },
+            materials: vec![GlassMaterial::default_glass()],
         }
     }
 
@@ -136,38 +447,387 @@ impl Theme {
         self.is_dark
     }
 
-    /// Validate the theme against WCAG 2.1 accessibility standards
-    /// Returns a list of strings describing any contrast failures
-    pub fn validate_accessibility(&self) -> Vec<String> {
-        let mut warnings = Vec::new();
+    /// Evaluate APCA (Advanced Perceptual Contrast Algorithm) for text on background.
+    ///
+    /// Computes the sRGB relative luminance Y for both colors, then applies the
+    /// APCA formula: `Lc = |Y_bg^0.56 - Y_text^0.62| * 100`.
+    ///
+    /// The required threshold is scaled by font size and weight:
+    /// - Normal text (16px, weight 400): Lc >= 60
+    /// - Large text (24px+, weight 400): Lc >= 45
+    /// - Heavier fonts reduce the threshold (bold text needs less contrast)
+    pub fn validate_accessibility_apca(
+        &self,
+        font_size_px: f32,
+        font_weight: u16,
+    ) -> Vec<ApcaResult> {
+        let mut results = Vec::new();
 
-        // Primary on Background (Minimum 4.5:1 for normal text)
-        let primary_bg = self.colors.primary.contrast_ratio(&self.colors.background);
-        if primary_bg < 4.5 {
-            warnings.push(format!(
-                "Primary color contrast ratio too low: {:.2}:1 (Background)",
-                primary_bg
+        // Base threshold: 60 for normal text, 45 for large text
+        let base_threshold = if font_size_px >= 24.0 { 45.0 } else { 60.0 };
+
+        // Scale threshold by font weight: heavier fonts need less contrast
+        // weight 400 (normal) -> factor 1.0, weight 700 (bold) -> factor ~0.75
+        let weight_factor = 1.0 - ((font_weight as f32 - 400.0) / 400.0).clamp(0.0, 0.25);
+        let threshold = base_threshold * weight_factor;
+
+        // Evaluate text on background
+        results.push(Self::apca_check(
+            self.colors.text.relative_luminance(),
+            self.colors.background.relative_luminance(),
+            threshold,
+            "text on background",
+        ));
+
+        // Evaluate text on surface
+        results.push(Self::apca_check(
+            self.colors.text.relative_luminance(),
+            self.colors.surface.relative_luminance(),
+            threshold,
+            "text on surface",
+        ));
+
+        // Evaluate primary on background
+        results.push(Self::apca_check(
+            self.colors.primary.relative_luminance(),
+            self.colors.background.relative_luminance(),
+            threshold,
+            "primary on background",
+        ));
+
+        // Evaluate text_dim on background (uses a relaxed threshold)
+        results.push(Self::apca_check(
+            self.colors.text_dim.relative_luminance(),
+            self.colors.background.relative_luminance(),
+            threshold * 0.75,
+            "text_dim on background",
+        ));
+
+        results
+    }
+
+    /// Compute APCA contrast between a text luminance and a background luminance.
+    fn apca_check(y_text: f32, y_bg: f32, threshold: f32, _label: &str) -> ApcaResult {
+        let y_text_clamped = y_text.clamp(0.0, 1.0);
+        let y_bg_clamped = y_bg.clamp(0.0, 1.0);
+
+        let lc = (y_bg_clamped.powf(0.56) - y_text_clamped.powf(0.62)).abs() * 100.0;
+
+        let passes = lc >= threshold;
+        let level = if passes {
+            "pass"
+        } else if lc >= threshold * 0.75 {
+            "large-only"
+        } else {
+            "fail"
+        };
+
+        ApcaResult {
+            contrast: lc,
+            passes,
+            level,
+        }
+    }
+
+    /// Validate the theme against APCA accessibility standards.
+    ///
+    /// Uses default body text parameters (16px, weight 400).
+    /// Returns a list of `ApcaResult` describing each contrast check.
+    pub fn validate_accessibility(&self) -> Vec<ApcaResult> {
+        self.validate_accessibility_apca(16.0, 400)
+    }
+}
+
+// =============================================================================
+// INTERACTIVE STATE AUTO-SYNTHESIS
+// =============================================================================
+
+/// Interactive state variants for a UI component.
+///
+/// Each state is derived from a base color by adjusting lightness and chroma
+/// in the perceptually uniform OKLCH space, ensuring visual consistency across
+/// all hues.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum InteractiveState {
+    /// Default resting state.
+    Default,
+    /// Pointer is hovering over the component.
+    Hover,
+    /// Component is being actively pressed/clicked.
+    Active,
+    /// Component has keyboard focus.
+    Focus,
+    /// Component is disabled and non-interactive.
+    Disabled,
+    /// Component is in an error state.
+    Error,
+    /// Component is in a success/confirmed state.
+    Success,
+}
+
+/// A complete set of interactive state colors derived from a single base color.
+///
+/// Use `StateColors::from_base()` to auto-synthesize all states from one color,
+/// or construct manually for full control.
+#[derive(Debug, Clone)]
+pub struct StateColors {
+    /// The base (default) color.
+    pub default: Color,
+    /// Hover state color (slightly lighter, slightly more saturated).
+    pub hover: Color,
+    /// Active/pressed state color (darker, more saturated).
+    pub active: Color,
+    /// Focus state color (same as default with focus ring).
+    pub focus: Color,
+    /// Disabled state color (desaturated, reduced opacity).
+    pub disabled: Color,
+    /// Focus ring/border color.
+    pub focus_ring: Color,
+    /// Text color that meets APCA contrast requirements against the default background.
+    pub text: Color,
+    /// Text color for use on the hover background.
+    pub text_on_hover: Color,
+    /// Text color for use on the active background.
+    pub text_on_active: Color,
+}
+
+impl StateColors {
+    /// Auto-synthesizes a complete set of interactive state colors from a single base color.
+    ///
+    /// The derivation follows these rules in OKLCH space:
+    /// - **Hover**: Lightness +0.08, Chroma +0.02
+    /// - **Active**: Lightness -0.10, Chroma +0.04
+    /// - **Focus**: Same as default (focus ring provides the visual cue)
+    /// - **Disabled**: Lightness shifted toward 0.5, Chroma *0.1, Alpha *0.38
+    /// - **Focus ring**: Lightness +0.15, Chroma +0.05, Alpha 0.7
+    /// - **Text**: Computed to meet APCA Lc >= 60 against the default background
+    /// - **Text on hover/active**: Adjusted for contrast against respective backgrounds
+    pub fn from_base(base: OklchColor) -> Self {
+        let base_rgba = base.to_rgba();
+
+        // Hover: lighter and slightly more saturated
+        let hover = base.lighten(0.08).saturate(0.02).to_rgba();
+
+        // Active: darker and more saturated
+        let active = base.darken(0.10).saturate(0.04).to_rgba();
+
+        // Focus: same as default
+        let focus = base_rgba;
+
+        // Disabled: desaturated, shifted toward mid-gray, reduced opacity
+        let disabled = OklchColor::new(
+            base.l * 0.3 + 0.35, // Push toward mid-gray
+            base.c * 0.1,        // Drastically reduce chroma
+            base.h,
+            0.38, // Reduced opacity
+        )
+        .to_rgba();
+
+        // Focus ring: lighter, more saturated, semi-transparent
+        let focus_ring = base.lighten(0.15).saturate(0.05);
+        let focus_ring = OklchColor::new(focus_ring.l, focus_ring.c, focus_ring.h, 0.7).to_rgba();
+
+        // Text: compute a color with sufficient APCA contrast against default bg
+        let text = Self::compute_contrasting_text(base, base);
+
+        // Text on hover: contrast against hover bg
+        let hover_base = base.lighten(0.08).saturate(0.02);
+        let text_on_hover = Self::compute_contrasting_text(hover_base, hover_base);
+
+        // Text on active: contrast against active bg
+        let active_base = base.darken(0.10).saturate(0.04);
+        let text_on_active = Self::compute_contrasting_text(active_base, active_base);
+
+        Self {
+            default: base_rgba,
+            hover,
+            active,
+            focus,
+            disabled,
+            focus_ring,
+            text,
+            text_on_hover,
+            text_on_active,
+        }
+    }
+
+    /// Auto-synthesizes state colors from an sRGB base color.
+    pub fn from_rgb(r: f32, g: f32, b: f32) -> Self {
+        Self::from_base(OklchColor::from_rgb(r, g, b))
+    }
+
+    /// Returns the color for a given interactive state.
+    pub fn color_for(&self, state: InteractiveState) -> Color {
+        match state {
+            InteractiveState::Default => self.default,
+            InteractiveState::Hover => self.hover,
+            InteractiveState::Active => self.active,
+            InteractiveState::Focus => self.focus,
+            InteractiveState::Disabled => self.disabled,
+            InteractiveState::Error => Color::new(0.9, 0.2, 0.2, 1.0),
+            InteractiveState::Success => Color::new(0.2, 0.8, 0.4, 1.0),
+        }
+    }
+
+    /// Computes a text color that meets APCA Lc >= 60 against the given background.
+    ///
+    /// Tries white first, then black, then adjusts lightness in OKLCH space
+    /// until the contrast requirement is met.
+    fn compute_contrasting_text(bg: OklchColor, _bg_for_luminance: OklchColor) -> Color {
+        let bg_lum = bg.to_rgba().relative_luminance();
+
+        // Try white text
+        let white_lum = 1.0f32;
+        let white_contrast = Self::apca_contrast(white_lum, bg_lum);
+        if white_contrast >= 60.0 {
+            return Color::new(1.0, 1.0, 1.0, 1.0);
+        }
+
+        // Try black text
+        let black_lum = 0.0f32;
+        let black_contrast = Self::apca_contrast(black_lum, bg_lum);
+        if black_contrast >= 60.0 {
+            return Color::new(0.0, 0.0, 0.0, 1.0);
+        }
+
+        // Neither pure white nor black works -- find a lightness that does
+        // Binary search for the lightness that gives Lc >= 60
+        let mut lo = 0.0f32;
+        let mut hi = 1.0f32;
+        for _ in 0..20 {
+            let mid = (lo + hi) / 2.0;
+            let text_lum = OklchColor::new(mid, 0.0, bg.h, 1.0)
+                .to_rgba()
+                .relative_luminance();
+            let contrast = Self::apca_contrast(text_lum, bg_lum);
+            if contrast >= 60.0 {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        OklchColor::new(hi, 0.0, bg.h, 1.0).to_rgba()
+    }
+
+    /// Computes APCA contrast between two relative luminance values.
+    fn apca_contrast(y_text: f32, y_bg: f32) -> f32 {
+        let y_text = y_text.clamp(0.0, 1.0);
+        let y_bg = y_bg.clamp(0.0, 1.0);
+        (y_bg.powf(0.56) - y_text.powf(0.62)).abs() * 100.0
+    }
+
+    /// Validates that all text/background combinations meet APCA requirements.
+    ///
+    /// Returns a vector of results for each state combination.
+    pub fn validate_contrast(&self) -> Vec<(InteractiveState, ApcaResult)> {
+        let mut results = Vec::new();
+
+        let states = [
+            (InteractiveState::Default, self.text, self.default),
+            (InteractiveState::Hover, self.text_on_hover, self.hover),
+            (InteractiveState::Active, self.text_on_active, self.active),
+        ];
+
+        for (state, text_color, bg_color) in &states {
+            let text_lum = text_color.relative_luminance();
+            let bg_lum = bg_color.relative_luminance();
+            let lc = Self::apca_contrast(text_lum, bg_lum);
+            let passes = lc >= 60.0;
+            let level = if passes {
+                "pass"
+            } else if lc >= 45.0 {
+                "large-only"
+            } else {
+                "fail"
+            };
+            results.push((
+                *state,
+                ApcaResult {
+                    contrast: lc,
+                    passes,
+                    level,
+                },
             ));
         }
 
-        // Text on Background (Minimum 4.5:1)
-        let text_bg = self.colors.text.contrast_ratio(&self.colors.background);
-        if text_bg < 4.5 {
-            warnings.push(format!(
-                "Text color contrast ratio too low: {:.2}:1 (Background)",
-                text_bg
-            ));
-        }
+        results
+    }
+}
 
-        // Text on Surface (Minimum 4.5:1)
-        let text_surface = self.colors.text.contrast_ratio(&self.colors.surface);
-        if text_surface < 4.5 {
-            warnings.push(format!(
-                "Text color contrast ratio too low: {:.2}:1 (Surface)",
-                text_surface
-            ));
-        }
+#[cfg(test)]
+mod state_color_tests {
+    use super::*;
 
-        warnings
+    #[test]
+    fn state_colors_from_base() {
+        let base = OklchColor::new(0.55, 0.12, 200.0, 1.0);
+        let states = StateColors::from_base(base);
+
+        // Hover should be lighter
+        assert!(states.hover.relative_luminance() > states.default.relative_luminance());
+
+        // Active should be darker
+        assert!(states.active.relative_luminance() < states.default.relative_luminance());
+
+        // Disabled should have reduced alpha
+        assert!(states.disabled.a < 0.5);
+
+        // Focus ring should be visible
+        assert!(states.focus_ring.a > 0.5);
+    }
+
+    #[test]
+    fn state_colors_from_rgb() {
+        let states = StateColors::from_rgb(0.2, 0.4, 0.8);
+        assert!(states.default.a > 0.0);
+        assert!(states.hover.a > 0.0);
+        assert!(states.active.a > 0.0);
+    }
+
+    #[test]
+    fn color_for_states() {
+        let states = StateColors::from_rgb(0.5, 0.5, 0.5);
+        let _default = states.color_for(InteractiveState::Default);
+        let _hover = states.color_for(InteractiveState::Hover);
+        let _active = states.color_for(InteractiveState::Active);
+        let _focus = states.color_for(InteractiveState::Focus);
+        let _disabled = states.color_for(InteractiveState::Disabled);
+        let _error = states.color_for(InteractiveState::Error);
+        let _success = states.color_for(InteractiveState::Success);
+    }
+
+    #[test]
+    fn validate_contrast_returns_results() {
+        let states = StateColors::from_rgb(0.2, 0.3, 0.7);
+        let results = states.validate_contrast();
+        assert_eq!(results.len(), 3);
+        // Default state should have a result
+        assert_eq!(results[0].0, InteractiveState::Default);
+    }
+
+    #[test]
+    fn dark_base_produces_light_text() {
+        let dark_base = OklchColor::new(0.2, 0.1, 250.0, 1.0);
+        let states = StateColors::from_base(dark_base);
+        // Text on dark background should be light
+        let text_lum = states.text.relative_luminance();
+        assert!(
+            text_lum > 0.5,
+            "text luminance {} should be > 0.5 for dark bg",
+            text_lum
+        );
+    }
+
+    #[test]
+    fn light_base_produces_dark_text() {
+        let light_base = OklchColor::new(0.85, 0.1, 250.0, 1.0);
+        let states = StateColors::from_base(light_base);
+        // Text on light background should be dark
+        let text_lum = states.text.relative_luminance();
+        assert!(
+            text_lum < 0.5,
+            "text luminance {} should be < 0.5 for light bg",
+            text_lum
+        );
     }
 }

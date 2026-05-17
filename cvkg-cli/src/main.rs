@@ -38,6 +38,7 @@ pub mod agent_replay;
 pub mod asset_pipeline;
 pub mod build_pipeline;
 pub mod dev_runtime;
+pub mod devtools_dashboard;
 pub mod patch_engine;
 pub mod runtime_connection;
 pub mod scaffold;
@@ -154,6 +155,15 @@ enum Commands {
         /// Output RS file for generated theme
         #[arg(long)]
         output: PathBuf,
+    },
+    /// Launch the DevTools Dashboard (graph inspector, theme preview, event log)
+    Dashboard {
+        /// Port to run the dashboard on
+        #[arg(long, default_value_t = 9731)]
+        port: u16,
+        /// Do not open the browser automatically
+        #[arg(long)]
+        no_open: bool,
     },
 }
 
@@ -460,6 +470,26 @@ fn main() {
 
             std::fs::write(&output, rs_content).expect("Failed to write theme RS file");
             println!("Theme generation successful.");
+        }
+        Commands::Dashboard { port, no_open } => {
+            use console::style;
+            println!("{} Starting CVKG DevTools Dashboard...", style("🔧").cyan());
+            let config = devtools_dashboard::DashboardConfig {
+                port,
+                open_browser: !no_open,
+                graph_state: std::sync::Arc::new(std::sync::Mutex::new(
+                    devtools_dashboard::GraphState::default(),
+                )),
+            };
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap_or_else(|e| panic!("Failed to build runtime: {}", e))
+                .block_on(async {
+                    if let Err(e) = devtools_dashboard::start_dashboard(config).await {
+                        eprintln!("{} Dashboard error: {}", style("❌").red(), e);
+                    }
+                });
         }
     }
 }
