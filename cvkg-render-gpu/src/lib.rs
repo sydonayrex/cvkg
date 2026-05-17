@@ -244,7 +244,7 @@ pub struct SurtrRenderer {
     mega_atlas_view: wgpu::TextureView,
     _mega_atlas_sampler: wgpu::Sampler,
     mega_atlas_bind_group: wgpu::BindGroup,
-    text_cache: LruCache<runic_text::CacheKey, (Rect, f32, f32)>,
+    text_cache: LruCache<u64, (Rect, f32, f32)>,
     atlas_packer: ShelfPacker,
     image_uv_registry: LruCache<String, Rect>,
     texture_registry: std::collections::HashMap<String, u32>,
