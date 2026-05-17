@@ -1,6 +1,6 @@
 # cvkg-test
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![Berserker Hero HUD](../docs/images/berserker_hero_hud.png)
 
 `cvkg-test` provides the authoritative testing utilities for the CVKG ecosystem, specializing in visual regression and high-fidelity UI validation.
 

@@ -105,7 +105,7 @@ impl View for TelemetryOverlay {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let telemetry = renderer.get_telemetry();
-        
+
         let panel_width = 240.0;
         let panel_height = 280.0;
         let panel_rect = Rect {
@@ -129,35 +129,101 @@ impl View for TelemetryOverlay {
         y += 25.0;
 
         // Frame timing
-        renderer.draw_text(&format!("FRAME: {:.2} ms", telemetry.frame_time_ms), x, y, 12.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(
+            &format!("FRAME: {:.2} ms", telemetry.frame_time_ms),
+            x,
+            y,
+            12.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
         y += line_h;
-        
+
         // Pass timing breakdown
-        renderer.draw_text(&format!("  INPUT:  {:.2} ms", telemetry.input_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        renderer.draw_text(
+            &format!("  INPUT:  {:.2} ms", telemetry.input_time_ms),
+            x,
+            y,
+            10.0,
+            [0.7, 0.7, 0.8, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("  LAYOUT: {:.2} ms", telemetry.layout_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        renderer.draw_text(
+            &format!("  LAYOUT: {:.2} ms", telemetry.layout_time_ms),
+            x,
+            y,
+            10.0,
+            [0.7, 0.7, 0.8, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("  STATE:  {:.2} ms", telemetry.state_flush_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        renderer.draw_text(
+            &format!("  STATE:  {:.2} ms", telemetry.state_flush_time_ms),
+            x,
+            y,
+            10.0,
+            [0.7, 0.7, 0.8, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("  DRAW:   {:.2} ms", telemetry.draw_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        renderer.draw_text(
+            &format!("  DRAW:   {:.2} ms", telemetry.draw_time_ms),
+            x,
+            y,
+            10.0,
+            [0.7, 0.7, 0.8, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("  SUBMIT: {:.2} ms", telemetry.gpu_submit_time_ms), x, y, 10.0, [0.7, 0.7, 0.8, 1.0]);
+        renderer.draw_text(
+            &format!("  SUBMIT: {:.2} ms", telemetry.gpu_submit_time_ms),
+            x,
+            y,
+            10.0,
+            [0.7, 0.7, 0.8, 1.0],
+        );
         y += 25.0;
 
         // GPU Stats
         renderer.draw_text("GPU_RESOURCES", x, y, 12.0, [1.0, 0.6, 0.0, 1.0]);
         y += 20.0;
-        renderer.draw_text(&format!("VRAM_TOTAL: {:.2} MB", telemetry.vram_usage_mb), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(
+            &format!("VRAM_TOTAL: {:.2} MB", telemetry.vram_usage_mb),
+            x,
+            y,
+            11.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("  TEX: {:.2} MB", telemetry.vram_textures_mb), x, y, 10.0, [0.6, 0.6, 0.7, 1.0]);
+        renderer.draw_text(
+            &format!("  TEX: {:.2} MB", telemetry.vram_textures_mb),
+            x,
+            y,
+            10.0,
+            [0.6, 0.6, 0.7, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("  BUF: {:.2} MB", telemetry.vram_buffers_mb), x, y, 10.0, [0.6, 0.6, 0.7, 1.0]);
+        renderer.draw_text(
+            &format!("  BUF: {:.2} MB", telemetry.vram_buffers_mb),
+            x,
+            y,
+            10.0,
+            [0.6, 0.6, 0.7, 1.0],
+        );
         y += 25.0;
 
         // Draw calls & Vertices
-        renderer.draw_text(&format!("DRAW_CALLS: {}", telemetry.draw_calls), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(
+            &format!("DRAW_CALLS: {}", telemetry.draw_calls),
+            x,
+            y,
+            11.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
         y += line_h;
-        renderer.draw_text(&format!("VERTICES:   {}", telemetry.vertices), x, y, 11.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(
+            &format!("VERTICES:   {}", telemetry.vertices),
+            x,
+            y,
+            11.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
     }
 }
 
@@ -180,7 +246,7 @@ impl Default for ConstraintOverlay {
         Self {
             enabled: true,
             constraint_color: [0.0, 1.0, 1.0, 0.8], // Cyan
-            padding_color: [1.0, 0.0, 1.0, 0.3],     // Magenta (semi-transparent)
+            padding_color: [1.0, 0.0, 1.0, 0.3],    // Magenta (semi-transparent)
             show_margins: true,
             show_padding: true,
         }
@@ -197,49 +263,85 @@ impl View for ConstraintOverlay {
         if !self.enabled {
             return;
         }
-        
+
         // Draw main constraint boundary
-        renderer.stroke_rect(
-            rect,
-            self.constraint_color,
-            1.0,
-        );
-        
+        renderer.stroke_rect(rect, self.constraint_color, 1.0);
+
         // Draw corner markers for precise alignment
         let marker_size = 8.0;
-        
+
         // Top-left
         renderer.fill_rect(
-            Rect { x: rect.x - marker_size/2.0, y: rect.y - marker_size/2.0, width: marker_size, height: marker_size },
+            Rect {
+                x: rect.x - marker_size / 2.0,
+                y: rect.y - marker_size / 2.0,
+                width: marker_size,
+                height: marker_size,
+            },
             self.constraint_color,
         );
-        
+
         // Top-right
         renderer.fill_rect(
-            Rect { x: rect.x + rect.width - marker_size/2.0, y: rect.y - marker_size/2.0, width: marker_size, height: marker_size },
+            Rect {
+                x: rect.x + rect.width - marker_size / 2.0,
+                y: rect.y - marker_size / 2.0,
+                width: marker_size,
+                height: marker_size,
+            },
             self.constraint_color,
         );
-        
+
         // Bottom-left
         renderer.fill_rect(
-            Rect { x: rect.x - marker_size/2.0, y: rect.y + rect.height - marker_size/2.0, width: marker_size, height: marker_size },
+            Rect {
+                x: rect.x - marker_size / 2.0,
+                y: rect.y + rect.height - marker_size / 2.0,
+                width: marker_size,
+                height: marker_size,
+            },
             self.constraint_color,
         );
-        
+
         // Bottom-right
         renderer.fill_rect(
-            Rect { x: rect.x + rect.width - marker_size/2.0, y: rect.y + rect.height - marker_size/2.0, width: marker_size, height: marker_size },
+            Rect {
+                x: rect.x + rect.width - marker_size / 2.0,
+                y: rect.y + rect.height - marker_size / 2.0,
+                width: marker_size,
+                height: marker_size,
+            },
             self.constraint_color,
         );
-        
+
         // Center crosshairs
         renderer.fill_rect(
-            Rect { x: rect.x + rect.width/2.0 - 0.5, y: rect.y, width: 1.0, height: rect.height },
-            [self.constraint_color[0], self.constraint_color[1], self.constraint_color[2], 0.4],
+            Rect {
+                x: rect.x + rect.width / 2.0 - 0.5,
+                y: rect.y,
+                width: 1.0,
+                height: rect.height,
+            },
+            [
+                self.constraint_color[0],
+                self.constraint_color[1],
+                self.constraint_color[2],
+                0.4,
+            ],
         );
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y + rect.height/2.0 - 0.5, width: rect.width, height: 1.0 },
-            [self.constraint_color[0], self.constraint_color[1], self.constraint_color[2], 0.4],
+            Rect {
+                x: rect.x,
+                y: rect.y + rect.height / 2.0 - 0.5,
+                width: rect.width,
+                height: 1.0,
+            },
+            [
+                self.constraint_color[0],
+                self.constraint_color[1],
+                self.constraint_color[2],
+                0.4,
+            ],
         );
     }
 }
@@ -249,19 +351,19 @@ impl ConstraintOverlay {
     pub fn new() -> Self {
         Self::default()
     }
-    
+
     /// Enable or disable the overlay.
     pub fn enabled(mut self, enabled: bool) -> Self {
         self.enabled = enabled;
         self
     }
-    
+
     /// Set the constraint color.
     pub fn constraint_color(mut self, color: [f32; 4]) -> Self {
         self.constraint_color = color;
         self
     }
-    
+
     /// Set the padding visualization color.
     pub fn padding_color(mut self, color: [f32; 4]) -> Self {
         self.padding_color = color;

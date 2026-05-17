@@ -4,10 +4,7 @@
 // Run with: cargo run --example vanir_tools_example
 
 use cvkg_components::{
-    FreyrInspector, PropertyValue,
-    NjordTheme,
-    SkadiScripting, ScriptNodeType,
-    IdunnPersistence,
+    FreyrInspector, IdunnPersistence, NjordTheme, PropertyValue, ScriptNodeType, SkadiScripting,
 };
 use std::collections::HashMap;
 
@@ -35,7 +32,11 @@ fn main() {
         .variant("dark", colors)
         .active("dark");
 
-    println!("Njord Theme: {} tokens, {} variants", njord.tokens.len(), njord.variants.len());
+    println!(
+        "Njord Theme: {} tokens, {} variants",
+        njord.tokens.len(),
+        njord.variants.len()
+    );
 
     // Skadi Scripting - Visual scripting
     let skadi = SkadiScripting::new()
@@ -46,7 +47,11 @@ fn main() {
         .connect(2, 3, "result")
         .state("running");
 
-    println!("Skadi Scripting: {} nodes, {} connections", skadi.nodes.len(), skadi.connections.len());
+    println!(
+        "Skadi Scripting: {} nodes, {} connections",
+        skadi.nodes.len(),
+        skadi.connections.len()
+    );
 
     // Idunn Persistence - Workspace persistence
     let idunn = IdunnPersistence::new()

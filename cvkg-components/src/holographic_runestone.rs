@@ -1,6 +1,6 @@
 use cvkg_core::{Never, Rect, Renderer, View};
 
-/// A floating, semi-transparent 3D runic element (inspired by Holo).
+/// A floating, semi-transparent 3D runic element.
 /// Section 4.8: "Volumetric projections for ethereal data visualization."
 pub struct HolographicRunestone {
     pub rune: char,
@@ -15,7 +15,9 @@ impl HolographicRunestone {
 
 impl View for HolographicRunestone {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
@@ -37,7 +39,7 @@ impl View for HolographicRunestone {
             let alpha = 0.6 / (i + 1) as f32;
             let mut c = color;
             c[3] *= alpha;
-            
+
             renderer.draw_text(
                 &self.rune.to_string(),
                 center_x - (self.size / 2.0) + offset,

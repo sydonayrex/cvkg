@@ -1,4 +1,7 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never, AnyView};
+use cvkg_core::{
+    AnyView, Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// A docking workspace with sidebar navigation, split panes, and floating panels.
 pub struct DockingWorkspace {
@@ -22,7 +25,12 @@ pub enum PanelPosition {
     Right,
     Bottom,
     Center,
-    Floating { x: f32, y: f32, width: f32, height: f32 },
+    Floating {
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    },
 }
 
 impl DockingWorkspace {
@@ -40,7 +48,13 @@ impl DockingWorkspace {
         self
     }
 
-    pub fn panel(mut self, id: &str, title: &str, content: impl View + Clone + 'static, position: PanelPosition) -> Self {
+    pub fn panel(
+        mut self,
+        id: &str,
+        title: &str,
+        content: impl View + Clone + 'static,
+        position: PanelPosition,
+    ) -> Self {
         self.panels.push(Panel {
             id: id.to_string(),
             title: title.to_string(),
@@ -62,7 +76,9 @@ impl DockingWorkspace {
 
 impl View for DockingWorkspace {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if self.panels.is_empty() {
@@ -78,7 +94,13 @@ impl View for DockingWorkspace {
         };
         renderer.fill_rect(header_rect, [0.08, 0.08, 0.12, 1.0]);
         renderer.stroke_rect(header_rect, [0.3, 0.5, 0.8, 1.0], 1.0);
-        renderer.draw_text("Docking Workspace", header_rect.x + 12.0, header_rect.y + 14.0, 16.0, [0.9, 0.95, 1.0, 1.0]);
+        renderer.draw_text(
+            "Docking Workspace",
+            header_rect.x + 12.0,
+            header_rect.y + 14.0,
+            16.0,
+            [0.9, 0.95, 1.0, 1.0],
+        );
 
         // Render sidebar
         let sidebar_rect = Rect {
@@ -97,8 +119,18 @@ impl View for DockingWorkspace {
                     self.panels.get(idx).map_or(false, |p| p.id == panel.id)
                 });
 
-                let text_color = if is_active { [0.9, 0.95, 1.0, 1.0] } else { [0.5, 0.5, 0.6, 1.0] };
-                renderer.draw_text(&panel.title, sidebar_rect.x + 12.0, current_y, 13.0, text_color);
+                let text_color = if is_active {
+                    [0.9, 0.95, 1.0, 1.0]
+                } else {
+                    [0.5, 0.5, 0.6, 1.0]
+                };
+                renderer.draw_text(
+                    &panel.title,
+                    sidebar_rect.x + 12.0,
+                    current_y,
+                    13.0,
+                    text_color,
+                );
 
                 if is_active {
                     let indicator_rect = Rect {
@@ -145,7 +177,13 @@ impl LayoutView for DockingWorkspace {
         Size { width, height }
     }
 
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// SplitPane divides the workspace into resizable sections.
@@ -159,7 +197,11 @@ pub struct SplitPane {
 pub use cvkg_core::Orientation;
 
 impl SplitPane {
-    pub fn new(orientation: Orientation, first: impl View + Clone + 'static, second: impl View + Clone + 'static) -> Self {
+    pub fn new(
+        orientation: Orientation,
+        first: impl View + Clone + 'static,
+        second: impl View + Clone + 'static,
+    ) -> Self {
         Self {
             orientation,
             first: first.erase(),
@@ -176,35 +218,63 @@ impl SplitPane {
 
 impl View for SplitPane {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if self.orientation == Orientation::Horizontal {
             let first_w = rect.width * self.split_ratio;
-            let first_rect = Rect { x: rect.x, y: rect.y, width: first_w, height: rect.height };
-            let second_rect = Rect { x: rect.x + first_w, y: rect.y, width: rect.width - first_w, height: rect.height };
+            let first_rect = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: first_w,
+                height: rect.height,
+            };
+            let second_rect = Rect {
+                x: rect.x + first_w,
+                y: rect.y,
+                width: rect.width - first_w,
+                height: rect.height,
+            };
 
             // Divider
             let divider_x = rect.x + first_w;
             renderer.draw_line(
-                divider_x, rect.y,
-                divider_x, rect.y + rect.height,
-                [0.3, 0.4, 0.6, 1.0], 2.0
+                divider_x,
+                rect.y,
+                divider_x,
+                rect.y + rect.height,
+                [0.3, 0.4, 0.6, 1.0],
+                2.0,
             );
 
             self.first.render(renderer, first_rect);
             self.second.render(renderer, second_rect);
         } else {
             let first_h = rect.height * self.split_ratio;
-            let first_rect = Rect { x: rect.x, y: rect.y, width: rect.width, height: first_h };
-            let second_rect = Rect { x: rect.x, y: rect.y + first_h, width: rect.width, height: rect.height - first_h };
+            let first_rect = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: first_h,
+            };
+            let second_rect = Rect {
+                x: rect.x,
+                y: rect.y + first_h,
+                width: rect.width,
+                height: rect.height - first_h,
+            };
 
             // Divider
             let divider_y = rect.y + first_h;
             renderer.draw_line(
-                rect.x, divider_y,
-                rect.x + rect.width, divider_y,
-                [0.3, 0.4, 0.6, 1.0], 2.0
+                rect.x,
+                divider_y,
+                rect.x + rect.width,
+                divider_y,
+                [0.3, 0.4, 0.6, 1.0],
+                2.0,
             );
 
             self.first.render(renderer, first_rect);
@@ -220,10 +290,19 @@ impl LayoutView for SplitPane {
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {
-        Size { width: 400.0, height: 300.0 }
+        Size {
+            width: 400.0,
+            height: 300.0,
+        }
     }
 
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// WorkspaceTabs provides tabbed interface for workspace panels.
@@ -239,7 +318,10 @@ pub struct Tab {
 
 impl WorkspaceTabs {
     pub fn new() -> Self {
-        Self { tabs: Vec::new(), active_tab: None }
+        Self {
+            tabs: Vec::new(),
+            active_tab: None,
+        }
     }
 
     pub fn tab(mut self, label: impl Into<String>, content: impl View + Clone + 'static) -> Self {
@@ -258,7 +340,9 @@ impl WorkspaceTabs {
 
 impl View for WorkspaceTabs {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if self.tabs.is_empty() {
@@ -277,10 +361,18 @@ impl View for WorkspaceTabs {
                 height: tab_height,
             };
 
-            let bg = if is_active { [0.1, 0.2, 0.3, 1.0] } else { [0.06, 0.06, 0.1, 1.0] };
+            let bg = if is_active {
+                [0.1, 0.2, 0.3, 1.0]
+            } else {
+                [0.06, 0.06, 0.1, 1.0]
+            };
             renderer.fill_rounded_rect(tab_rect, 4.0, bg);
 
-            let color = if is_active { [1.0, 1.0, 1.0, 1.0] } else { [0.5, 0.5, 0.6, 1.0] };
+            let color = if is_active {
+                [1.0, 1.0, 1.0, 1.0]
+            } else {
+                [0.5, 0.5, 0.6, 1.0]
+            };
             renderer.draw_text(&tab.label, tab_rect.x + 8.0, tab_rect.y + 10.0, 13.0, color);
 
             if is_active {
@@ -311,8 +403,17 @@ impl LayoutView for WorkspaceTabs {
         _cache: &mut LayoutCache,
     ) -> Size {
         let width = (self.tabs.len() as f32 * 120.0).max(200.0);
-        Size { width, height: 200.0 }
+        Size {
+            width,
+            height: 200.0,
+        }
     }
 
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

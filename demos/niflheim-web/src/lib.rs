@@ -1,10 +1,10 @@
 #![cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
-use cvkg_render_web::WebRenderer;
 use cvkg_components::niflheim_demo;
 use cvkg_core::{FrameRenderer, View};
-use std::rc::Rc;
+use cvkg_render_web::WebRenderer;
 use std::cell::RefCell;
+use std::rc::Rc;
+use wasm_bindgen::prelude::*;
 
 pub use cvkg_render_web::get_render_tier_name;
 
@@ -36,22 +36,22 @@ pub async fn start() -> Result<(), JsValue> {
     }
 
     log::info!("Niflheim Web Demo Ready. Starting render loop...");
-    
+
     // Wrap renderer for the loop
     let renderer = Rc::new(RefCell::new(renderer));
-    
+
     // Simple render loop using request_animation_frame
     let f = Rc::new(RefCell::new(None::<Closure<dyn FnMut()>>));
     let g = f.clone();
 
     let window = web_sys::window().unwrap();
-    
+
     *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
         let mut r = renderer.borrow_mut();
-        
+
         // Begin frame (clears canvas, updates delta_time)
         r.begin_frame();
-        
+
         // Get viewport size from canvas
         let (width, height) = if let Some(canvas) = r.canvas() {
             (canvas.width() as f32, canvas.height() as f32)
@@ -67,20 +67,21 @@ pub async fn start() -> Result<(), JsValue> {
             width: demo_width,
             height: demo_height,
         };
-        
+
         // Render the demo view directly
         niflheim_demo().render(&mut *r, rect);
-        
+
         // End frame (flushes to GPU if needed)
         r.end_frame(());
-        
+
         // Schedule next frame
-        web_sys::window().unwrap()
+        web_sys::window()
+            .unwrap()
             .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref())
             .expect("should register `requestAnimationFrame` OK");
     }) as Box<dyn FnMut()>));
 
     window.request_animation_frame(g.borrow().as_ref().unwrap().as_ref().unchecked_ref())?;
-    
+
     Ok(())
 }

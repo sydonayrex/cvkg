@@ -1,6 +1,6 @@
 use cvkg_core::{Never, Rect, Renderer, View};
 
-/// A top/bottom notification system (inspired by SwiftMessages).
+/// A top/bottom notification system.
 /// Represents 'Thought' (Huginn) and 'Memory' (Muninn).
 /// Section 4.4: "Avian messaging protocols for high-priority alerts."
 pub struct RavenMessenger {
@@ -29,11 +29,13 @@ impl RavenMessenger {
 
 impl View for RavenMessenger {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
-        
+
         // 1. Sliding Animation
         let offset = (t * 2.0).min(1.0).sin(); // Slide in
         let y = if self.is_huginn {

@@ -47,5 +47,5 @@ pub mod prelude {
         AssetKey, AssetState, Binding, ComponentErrorState, KnowledgeState, Never, Rect, State,
         View,
     };
-    pub use cvkg_macros::{view_component, View};
+    pub use cvkg_macros::{View, view_component};
 }

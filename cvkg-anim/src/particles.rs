@@ -1,6 +1,6 @@
 use cvkg_core::{Rect, Renderer};
-use std::time::Duration;
 use rand::RngExt;
+use std::time::Duration;
 
 /// A single glowing rune particle.
 #[derive(Clone, Debug)]
@@ -14,7 +14,7 @@ pub struct RunicParticle {
     pub rotation_speed: f32,
 }
 
-/// High-performance emitter for Runic particles (inspired by Vortex/Arwes).
+/// High-performance emitter for Runic particles.
 /// Section 3.4: "Animated particles for magical/digital artifacts."
 pub struct RunicEmitter {
     pub particles: Vec<RunicParticle>,
@@ -38,7 +38,7 @@ impl RunicEmitter {
     /// Update particle state.
     pub fn update(&mut self, dt: Duration) {
         let dt_secs = dt.as_secs_f32();
-        
+
         // Update existing particles
         for p in &mut self.particles {
             p.position[0] += p.velocity[0] * dt_secs;
@@ -62,11 +62,13 @@ impl RunicEmitter {
     }
 
     fn spawn_one(&mut self) {
-        
         let mut rng = rand::rng();
-        
+
         // Elder Futhark runes range: 0x16A0 - 0x16F0
-        let runes = ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚻ', 'ᚼ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ', 'ᛏ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛟ', 'ᛞ'];
+        let runes = [
+            'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚻ', 'ᚼ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ',
+            'ᛏ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛟ', 'ᛞ',
+        ];
         let rune = runes[rng.random_range(0..runes.len())];
 
         let x = rng.random_range(self.bounds.x..(self.bounds.x + self.bounds.width));
@@ -74,7 +76,10 @@ impl RunicEmitter {
 
         self.particles.push(RunicParticle {
             position: [x, y],
-            velocity: [rng.random_range(-20.0..20.0), rng.random_range(-60.0..-30.0)],
+            velocity: [
+                rng.random_range(-20.0..20.0),
+                rng.random_range(-60.0..-30.0),
+            ],
             rune,
             life: 1.0,
             color: [0.0, 0.8, 1.0, 1.0], // Cyan glow
@@ -88,7 +93,7 @@ impl RunicEmitter {
         for p in &self.particles {
             let mut color = p.color;
             color[3] *= p.life; // Apply fade
-            
+
             // Draw glowing rune
             renderer.draw_text(
                 &p.rune.to_string(),

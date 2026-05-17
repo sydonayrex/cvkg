@@ -1,6 +1,6 @@
 # cvkg-cli
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![VDOM Agent Graph](../docs/images/vdom_agent_graph.png)
 
 `cvkg-cli` is the authoritative command-line toolchain for the CVKG ecosystem, managing the lifecycle of applications from scaffolding to production deployment.
 

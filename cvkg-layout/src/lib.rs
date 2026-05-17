@@ -22,7 +22,7 @@
 //   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //   CVKG Extended: Section 2 of the CVKG Design Specification
 
-use cvkg_core::{LayoutCache, LayoutView, Rect, Size, SizeProposal, Alignment, Distribution};
+use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
 
 /// HStack - lays out children horizontally
 pub struct HStack {
@@ -51,7 +51,9 @@ impl HStack {
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
         let n = subviews.len();
-        if n == 0 { return Vec::new(); }
+        if n == 0 {
+            return Vec::new();
+        }
 
         let mut rects = vec![Rect::zero(); n];
         let mut child_sizes = Vec::with_capacity(n);
@@ -68,9 +70,9 @@ impl HStack {
                 child_sizes.push(Size::ZERO); // Placeholder
             } else {
                 let desired = child.size_that_fits(
-                    SizeProposal::new(Some(bounds.width), Some(bounds.height)), 
-                    &[], 
-                    cache
+                    SizeProposal::new(Some(bounds.width), Some(bounds.height)),
+                    &[],
+                    cache,
                 );
                 child_sizes.push(desired);
                 total_fixed_width += desired.width;
@@ -87,7 +89,7 @@ impl HStack {
             let desired = subviews[idx].size_that_fits(
                 SizeProposal::new(Some(flex_width), Some(bounds.height)),
                 &[],
-                cache
+                cache,
             );
             // Flexible children take the width assigned by flex, but height can still be intrinsic or frame-constrained
             child_sizes[idx] = Size {
@@ -103,12 +105,18 @@ impl HStack {
         } + total_spacing;
 
         let (mut x, actual_spacing) = match distribution {
-            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => (bounds.x, spacing),
+            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => {
+                (bounds.x, spacing)
+            }
             Distribution::Leading | Distribution::Fill => (bounds.x, spacing),
             Distribution::Trailing => (bounds.x + bounds.width - content_width, spacing),
             Distribution::Center => (bounds.x + (bounds.width - content_width) / 2.0, spacing),
             Distribution::SpaceBetween => {
-                let s = if n > 1 { (bounds.width - (total_fixed_width + available_for_flex)) / (n - 1) as f32 } else { 0.0 };
+                let s = if n > 1 {
+                    (bounds.width - (total_fixed_width + available_for_flex)) / (n - 1) as f32
+                } else {
+                    0.0
+                };
                 (bounds.x, s)
             }
             _ => (bounds.x, spacing), // Simplification for mixed flex/distribution
@@ -154,7 +162,7 @@ impl LayoutView for HStack {
             }
         }
 
-        Size { 
+        Size {
             width: proposal.width.unwrap_or(width),
             height: proposal.height.unwrap_or(height),
         }
@@ -166,7 +174,8 @@ impl LayoutView for HStack {
         subviews: &mut [&mut dyn LayoutView],
         cache: &mut LayoutCache,
     ) {
-        let views: Vec<&dyn LayoutView> = subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
+        let views: Vec<&dyn LayoutView> =
+            subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
         let rects = Self::compute_layout(
             self.spacing,
             self.alignment,
@@ -209,7 +218,9 @@ impl VStack {
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
         let n = subviews.len();
-        if n == 0 { return Vec::new(); }
+        if n == 0 {
+            return Vec::new();
+        }
 
         let mut rects = vec![Rect::zero(); n];
         let mut child_sizes = Vec::with_capacity(n);
@@ -226,9 +237,9 @@ impl VStack {
                 child_sizes.push(Size::ZERO); // Placeholder
             } else {
                 let desired = child.size_that_fits(
-                    SizeProposal::new(Some(bounds.width), Some(bounds.height)), 
-                    &[], 
-                    cache
+                    SizeProposal::new(Some(bounds.width), Some(bounds.height)),
+                    &[],
+                    cache,
                 );
                 child_sizes.push(desired);
                 total_fixed_height += desired.height;
@@ -245,7 +256,7 @@ impl VStack {
             let desired = subviews[idx].size_that_fits(
                 SizeProposal::new(Some(bounds.width), Some(flex_height)),
                 &[],
-                cache
+                cache,
             );
             child_sizes[idx] = Size {
                 width: desired.width,
@@ -260,12 +271,18 @@ impl VStack {
         } + total_spacing;
 
         let (mut y, actual_spacing) = match distribution {
-            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => (bounds.y, spacing),
+            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => {
+                (bounds.y, spacing)
+            }
             Distribution::Leading | Distribution::Fill => (bounds.y, spacing),
             Distribution::Trailing => (bounds.y + bounds.height - content_height, spacing),
             Distribution::Center => (bounds.y + (bounds.height - content_height) / 2.0, spacing),
             Distribution::SpaceBetween => {
-                let s = if n > 1 { (bounds.height - (total_fixed_height + available_for_flex)) / (n - 1) as f32 } else { 0.0 };
+                let s = if n > 1 {
+                    (bounds.height - (total_fixed_height + available_for_flex)) / (n - 1) as f32
+                } else {
+                    0.0
+                };
                 (bounds.y, s)
             }
             _ => (bounds.y, spacing),
@@ -311,7 +328,7 @@ impl LayoutView for VStack {
             }
         }
 
-        Size { 
+        Size {
             width: proposal.width.unwrap_or(width),
             height: proposal.height.unwrap_or(height),
         }
@@ -323,7 +340,8 @@ impl LayoutView for VStack {
         subviews: &mut [&mut dyn LayoutView],
         cache: &mut LayoutCache,
     ) {
-        let views: Vec<&dyn LayoutView> = subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
+        let views: Vec<&dyn LayoutView> =
+            subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
         let rects = Self::compute_layout(
             self.spacing,
             self.alignment,
@@ -340,8 +358,7 @@ impl LayoutView for VStack {
 }
 
 /// ZStack - lays out children on top of each other
-pub struct ZStack {
-}
+pub struct ZStack {}
 
 impl Default for ZStack {
     fn default() -> Self {
@@ -352,8 +369,7 @@ impl Default for ZStack {
 impl ZStack {
     /// Create a new ZStack
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 }
 
@@ -494,7 +510,11 @@ pub struct Grid {
 
 impl Grid {
     pub fn new(rows: usize, cols: usize, spacing: f32) -> Self {
-        Self { rows, cols, spacing }
+        Self {
+            rows,
+            cols,
+            spacing,
+        }
     }
 
     pub fn compute_layout(
@@ -517,7 +537,9 @@ impl Grid {
             let r = i / cols;
             let c = i % cols;
 
-            if r >= rows { break; }
+            if r >= rows {
+                break;
+            }
 
             rects.push(Rect {
                 x: bounds.x + c as f32 * (item_width + spacing),
@@ -549,7 +571,8 @@ impl LayoutView for Grid {
         subviews: &mut [&mut dyn LayoutView],
         cache: &mut LayoutCache,
     ) {
-        let views: Vec<&dyn LayoutView> = subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
+        let views: Vec<&dyn LayoutView> =
+            subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
         let rects = Self::compute_layout(self.rows, self.cols, self.spacing, bounds, &views, cache);
 
         for (child, rect) in subviews.iter_mut().zip(rects) {
@@ -568,57 +591,182 @@ mod tests {
     }
 
     impl LayoutView for MockView {
-        fn size_that_fits(&self, _p: SizeProposal, _s: &[&dyn LayoutView], _c: &mut LayoutCache) -> Size {
+        fn size_that_fits(
+            &self,
+            _p: SizeProposal,
+            _s: &[&dyn LayoutView],
+            _c: &mut LayoutCache,
+        ) -> Size {
             self.size
         }
         fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {}
-        fn flex_weight(&self) -> f32 { self.flex }
+        fn flex_weight(&self) -> f32 {
+            self.flex
+        }
     }
 
     #[test]
     fn test_hstack_basic() {
-        let v1 = MockView { size: Size { width: 50.0, height: 50.0 }, flex: 0.0 };
-        let v2 = MockView { size: Size { width: 100.0, height: 100.0 }, flex: 0.0 };
+        let v1 = MockView {
+            size: Size {
+                width: 50.0,
+                height: 50.0,
+            },
+            flex: 0.0,
+        };
+        let v2 = MockView {
+            size: Size {
+                width: 100.0,
+                height: 100.0,
+            },
+            flex: 0.0,
+        };
         let views: Vec<&dyn LayoutView> = vec![&v1, &v2];
         let mut cache = LayoutCache::new();
-        let bounds = Rect { x: 0.0, y: 0.0, width: 300.0, height: 200.0 };
-        
-        let rects = HStack::compute_layout(10.0, Alignment::Center, Distribution::Leading, bounds, &views, &mut cache);
-        
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 300.0,
+            height: 200.0,
+        };
+
+        let rects = HStack::compute_layout(
+            10.0,
+            Alignment::Center,
+            Distribution::Leading,
+            bounds,
+            &views,
+            &mut cache,
+        );
+
         assert_eq!(rects.len(), 2);
-        assert_eq!(rects[0], Rect { x: 0.0, y: 75.0, width: 50.0, height: 50.0 });
-        assert_eq!(rects[1], Rect { x: 60.0, y: 50.0, width: 100.0, height: 100.0 });
+        assert_eq!(
+            rects[0],
+            Rect {
+                x: 0.0,
+                y: 75.0,
+                width: 50.0,
+                height: 50.0
+            }
+        );
+        assert_eq!(
+            rects[1],
+            Rect {
+                x: 60.0,
+                y: 50.0,
+                width: 100.0,
+                height: 100.0
+            }
+        );
     }
 
     #[test]
     fn test_vstack_flex() {
-        let v1 = MockView { size: Size { width: 100.0, height: 50.0 }, flex: 0.0 };
-        let v2 = MockView { size: Size { width: 100.0, height: 0.0 }, flex: 1.0 }; // Flex
+        let v1 = MockView {
+            size: Size {
+                width: 100.0,
+                height: 50.0,
+            },
+            flex: 0.0,
+        };
+        let v2 = MockView {
+            size: Size {
+                width: 100.0,
+                height: 0.0,
+            },
+            flex: 1.0,
+        }; // Flex
         let views: Vec<&dyn LayoutView> = vec![&v1, &v2];
         let mut cache = LayoutCache::new();
-        let bounds = Rect { x: 0.0, y: 0.0, width: 200.0, height: 160.0 };
-        
-        let rects = VStack::compute_layout(10.0, Alignment::Leading, Distribution::Fill, bounds, &views, &mut cache);
-        
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 160.0,
+        };
+
+        let rects = VStack::compute_layout(
+            10.0,
+            Alignment::Leading,
+            Distribution::Fill,
+            bounds,
+            &views,
+            &mut cache,
+        );
+
         assert_eq!(rects.len(), 2);
-        assert_eq!(rects[0], Rect { x: 0.0, y: 0.0, width: 100.0, height: 50.0 });
-        assert_eq!(rects[1], Rect { x: 0.0, y: 60.0, width: 100.0, height: 100.0 }); // 160 - 50 - 10 = 100
+        assert_eq!(
+            rects[0],
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 50.0
+            }
+        );
+        assert_eq!(
+            rects[1],
+            Rect {
+                x: 0.0,
+                y: 60.0,
+                width: 100.0,
+                height: 100.0
+            }
+        ); // 160 - 50 - 10 = 100
     }
 
     #[test]
     fn test_grid_layout() {
-        let v1 = MockView { size: Size::ZERO, flex: 0.0 };
-        let v2 = MockView { size: Size::ZERO, flex: 0.0 };
-        let v3 = MockView { size: Size::ZERO, flex: 0.0 };
+        let v1 = MockView {
+            size: Size::ZERO,
+            flex: 0.0,
+        };
+        let v2 = MockView {
+            size: Size::ZERO,
+            flex: 0.0,
+        };
+        let v3 = MockView {
+            size: Size::ZERO,
+            flex: 0.0,
+        };
         let views: Vec<&dyn LayoutView> = vec![&v1, &v2, &v3];
         let mut cache = LayoutCache::new();
-        let bounds = Rect { x: 0.0, y: 0.0, width: 210.0, height: 210.0 };
-        
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 210.0,
+            height: 210.0,
+        };
+
         let rects = Grid::compute_layout(2, 2, 10.0, bounds, &views, &mut cache);
-        
+
         assert_eq!(rects.len(), 3);
-        assert_eq!(rects[0], Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
-        assert_eq!(rects[1], Rect { x: 110.0, y: 0.0, width: 100.0, height: 100.0 });
-        assert_eq!(rects[2], Rect { x: 0.0, y: 110.0, width: 100.0, height: 100.0 });
+        assert_eq!(
+            rects[0],
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0
+            }
+        );
+        assert_eq!(
+            rects[1],
+            Rect {
+                x: 110.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0
+            }
+        );
+        assert_eq!(
+            rects[2],
+            Rect {
+                x: 0.0,
+                y: 110.0,
+                width: 100.0,
+                height: 100.0
+            }
+        );
     }
 }

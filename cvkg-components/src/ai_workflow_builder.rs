@@ -3,7 +3,10 @@
 //! This module provides tools for building, monitoring, and debugging AI workflows
 //! including multi-agent orchestration, prompt chains, and execution tracing.
 
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Multi-agent orchestration panel for managing agent workflows
 /// Displays agent tasks with status visualization and progress tracking
@@ -63,21 +66,39 @@ impl MultiAgentPanel {
 
 impl View for MultiAgentPanel {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Header
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y, width: rect.width, height: 32.0 },
-            [0.08, 0.06, 0.12, 1.0]
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: 32.0,
+            },
+            [0.08, 0.06, 0.12, 1.0],
         );
-        renderer.draw_text(&self.title, rect.x + 12.0, rect.y + 11.0, 14.0, [0.8, 0.7, 1.0, 1.0]);
+        renderer.draw_text(
+            &self.title,
+            rect.x + 12.0,
+            rect.y + 11.0,
+            14.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
 
         // Agent list
         let row_h = 44.0;
         let mut current_y = rect.y + 38.0;
         for agent in &self.agents {
-            let agent_rect = Rect { x: rect.x, y: current_y, width: rect.width, height: row_h };
+            let agent_rect = Rect {
+                x: rect.x,
+                y: current_y,
+                width: rect.width,
+                height: row_h,
+            };
 
             // Background
             let bg = match agent.status {
@@ -90,17 +111,34 @@ impl View for MultiAgentPanel {
             renderer.fill_rect(agent_rect, bg);
 
             // Agent name
-            renderer.draw_text(&agent.name, agent_rect.x + 12.0, agent_rect.y + 8.0, 12.0, [0.8, 0.8, 0.9, 1.0]);
+            renderer.draw_text(
+                &agent.name,
+                agent_rect.x + 12.0,
+                agent_rect.y + 8.0,
+                12.0,
+                [0.8, 0.8, 0.9, 1.0],
+            );
 
             // Progress bar
             let progress_w = (agent_rect.width - 140.0) * agent.progress;
             renderer.fill_rect(
-                Rect { x: agent_rect.x + 12.0, y: agent_rect.y + 28.0, width: progress_w.max(0.0), height: 4.0 },
-                [0.0, 0.8, 1.0, 1.0]
+                Rect {
+                    x: agent_rect.x + 12.0,
+                    y: agent_rect.y + 28.0,
+                    width: progress_w.max(0.0),
+                    height: 4.0,
+                },
+                [0.0, 0.8, 1.0, 1.0],
             );
             renderer.stroke_rect(
-                Rect { x: agent_rect.x + 12.0, y: agent_rect.y + 28.0, width: agent_rect.width - 140.0, height: 4.0 },
-                [0.3, 0.4, 0.5, 1.0], 1.0
+                Rect {
+                    x: agent_rect.x + 12.0,
+                    y: agent_rect.y + 28.0,
+                    width: agent_rect.width - 140.0,
+                    height: 4.0,
+                },
+                [0.3, 0.4, 0.5, 1.0],
+                1.0,
             );
 
             // Status indicator
@@ -111,7 +149,13 @@ impl View for MultiAgentPanel {
                 AgentStatus::Failed => "✗",
                 AgentStatus::Waiting => "…",
             };
-            renderer.draw_text(status_text, agent_rect.x + agent_rect.width - 20.0, agent_rect.y + 24.0, 14.0, [0.6, 0.8, 1.0, 1.0]);
+            renderer.draw_text(
+                status_text,
+                agent_rect.x + agent_rect.width - 20.0,
+                agent_rect.y + 24.0,
+                14.0,
+                [0.6, 0.8, 1.0, 1.0],
+            );
 
             current_y += row_h;
         }
@@ -119,10 +163,24 @@ impl View for MultiAgentPanel {
 }
 
 impl LayoutView for MultiAgentPanel {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 320.0, height: 40.0 + self.agents.len() as f32 * 44.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 320.0,
+            height: 40.0 + self.agents.len() as f32 * 44.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Prompt chain visualizer for displaying prompt sequences
@@ -190,12 +248,14 @@ impl PromptChainVisualizer {
 
 impl View for PromptChainVisualizer {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         for (i, step) in self.prompts.iter().enumerate() {
             let y = rect.y + 30.0 + i as f32 * 36.0;
-            
+
             let color = match step.status {
                 PromptStatus::Pending => [0.4, 0.4, 0.5, 1.0],
                 PromptStatus::Running => [0.0, 0.8, 1.0, 1.0],
@@ -204,16 +264,34 @@ impl View for PromptChainVisualizer {
             };
 
             renderer.fill_rounded_rect(
-                Rect { x: rect.x, y, width: rect.width, height: 30.0 },
-                4.0, color
+                Rect {
+                    x: rect.x,
+                    y,
+                    width: rect.width,
+                    height: 30.0,
+                },
+                4.0,
+                color,
             );
 
-            renderer.draw_text(&step.name, rect.x + 8.0, y + 9.0, 11.0, [0.95, 0.95, 1.0, 1.0]);
-            
+            renderer.draw_text(
+                &step.name,
+                rect.x + 8.0,
+                y + 9.0,
+                11.0,
+                [0.95, 0.95, 1.0, 1.0],
+            );
+
             if step.status == PromptStatus::Completed {
                 renderer.draw_text(
-                    &format!("out: {} tok, {}ms", step.output_tokens, step.latency_ms as i32),
-                    rect.x + rect.width - 120.0, y + 9.0, 9.0, [0.7, 0.8, 0.9, 1.0]
+                    &format!(
+                        "out: {} tok, {}ms",
+                        step.output_tokens, step.latency_ms as i32
+                    ),
+                    rect.x + rect.width - 120.0,
+                    y + 9.0,
+                    9.0,
+                    [0.7, 0.8, 0.9, 1.0],
                 );
             }
         }
@@ -221,10 +299,24 @@ impl View for PromptChainVisualizer {
 }
 
 impl LayoutView for PromptChainVisualizer {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 280.0, height: 10.0 + self.prompts.len() as f32 * 36.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 280.0,
+            height: 10.0 + self.prompts.len() as f32 * 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Memory graph viewer for visualizing memory relationships
@@ -275,21 +367,27 @@ impl MemoryGraphViewer {
     }
 
     pub fn edge(mut self, from: &str, to: &str, strength: f32) -> Self {
-        self.edges.push(MemoryEdge { from: from.to_string(), to: to.to_string(), strength });
+        self.edges.push(MemoryEdge {
+            from: from.to_string(),
+            to: to.to_string(),
+            strength,
+        });
         self
     }
 }
 
 impl View for MemoryGraphViewer {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Draw edges
         for edge in &self.edges {
             if let (Some(from_idx), Some(to_idx)) = (
                 self.nodes.iter().position(|n| n.id == edge.from),
-                self.nodes.iter().position(|n| n.id == edge.to)
+                self.nodes.iter().position(|n| n.id == edge.to),
             ) {
                 let x1 = rect.x + 50.0 + from_idx as f32 * 60.0;
                 let y1 = rect.y + rect.height / 2.0;
@@ -312,19 +410,44 @@ impl View for MemoryGraphViewer {
                 NodeType::Context => [0.8, 0.4, 0.8, 1.0],
             };
 
-            let node_rect = Rect { x: cx - radius, y: cy - radius, width: radius * 2.0, height: radius * 2.0 };
+            let node_rect = Rect {
+                x: cx - radius,
+                y: cy - radius,
+                width: radius * 2.0,
+                height: radius * 2.0,
+            };
             renderer.fill_ellipse(node_rect, color);
             renderer.stroke_ellipse(node_rect, [0.9, 0.9, 1.0, 0.8], 2.0);
-            renderer.draw_text(&node.label, cx - 20.0, cy + radius + 4.0, 10.0, [0.8, 0.8, 0.9, 1.0]);
+            renderer.draw_text(
+                &node.label,
+                cx - 20.0,
+                cy + radius + 4.0,
+                10.0,
+                [0.8, 0.8, 0.9, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for MemoryGraphViewer {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 400.0, height: 200.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 400.0,
+            height: 200.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Token streaming viewer for real-time token visualization
@@ -371,7 +494,9 @@ impl TokenStreamViewer {
 
 impl View for TokenStreamViewer {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let mut current_x = rect.x + 10.0;
@@ -395,10 +520,24 @@ impl View for TokenStreamViewer {
 }
 
 impl LayoutView for TokenStreamViewer {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 400.0, height: 40.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 400.0,
+            height: 40.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Reasoning trace inspector for debugging AI decision paths
@@ -416,9 +555,7 @@ pub struct ReasoningStep {
 
 impl ReasoningTraceInspector {
     pub fn new() -> Self {
-        Self {
-            steps: Vec::new(),
-        }
+        Self { steps: Vec::new() }
     }
 
     pub fn step(mut self, id: &str, description: &str, confidence: f32, conclusion: &str) -> Self {
@@ -434,37 +571,75 @@ impl ReasoningTraceInspector {
 
 impl View for ReasoningTraceInspector {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         for (i, step) in self.steps.iter().enumerate() {
             let y = rect.y + 25.0 + i as f32 * 50.0;
-            
+
             // Step header
             renderer.fill_rect(
-                Rect { x: rect.x, y, width: rect.width, height: 20.0 },
-                [0.08, 0.08, 0.12, 1.0]
+                Rect {
+                    x: rect.x,
+                    y,
+                    width: rect.width,
+                    height: 20.0,
+                },
+                [0.08, 0.08, 0.12, 1.0],
             );
-            renderer.draw_text(&step.description, rect.x + 8.0, y + 6.0, 11.0, [0.7, 0.8, 1.0, 1.0]);
+            renderer.draw_text(
+                &step.description,
+                rect.x + 8.0,
+                y + 6.0,
+                11.0,
+                [0.7, 0.8, 1.0, 1.0],
+            );
 
             // Confidence bar
             let conf_w = (rect.width - 20.0) * step.confidence;
             renderer.fill_rect(
-                Rect { x: rect.x + 8.0, y: y + 30.0, width: conf_w, height: 4.0 },
-                [0.0, 0.8, 0.4, 1.0]
+                Rect {
+                    x: rect.x + 8.0,
+                    y: y + 30.0,
+                    width: conf_w,
+                    height: 4.0,
+                },
+                [0.0, 0.8, 0.4, 1.0],
             );
 
             // Conclusion
-            renderer.draw_text(&step.conclusion, rect.x + 8.0, y + 42.0, 10.0, [0.5, 0.6, 0.7, 1.0]);
+            renderer.draw_text(
+                &step.conclusion,
+                rect.x + 8.0,
+                y + 42.0,
+                10.0,
+                [0.5, 0.6, 0.7, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for ReasoningTraceInspector {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 300.0, height: 10.0 + self.steps.len() as f32 * 50.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 300.0,
+            height: 10.0 + self.steps.len() as f32 * 50.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Tool invocation inspector for monitoring tool calls
@@ -509,29 +684,69 @@ impl ToolInvocationInspector {
 
 impl View for ToolInvocationInspector {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         for (i, inv) in self.invocations.iter().enumerate() {
             let y = rect.y + 30.0 + i as f32 * 40.0;
-            
+
             renderer.fill_rounded_rect(
-                Rect { x: rect.x, y, width: rect.width, height: 34.0 },
-                3.0, [0.06, 0.08, 0.12, 1.0]
+                Rect {
+                    x: rect.x,
+                    y,
+                    width: rect.width,
+                    height: 34.0,
+                },
+                3.0,
+                [0.06, 0.08, 0.12, 1.0],
             );
 
-            renderer.draw_text(&format!("🔧 {}", inv.tool_name), rect.x + 10.0, y + 8.0, 11.0, [0.8, 0.9, 1.0, 1.0]);
-            renderer.draw_text(&format!("{}ms", inv.duration_ms as i32), rect.x + rect.width - 50.0, y + 8.0, 10.0, [0.5, 0.6, 0.7, 1.0]);
-            renderer.draw_text(&inv.result_preview, rect.x + 10.0, y + 22.0, 9.0, [0.6, 0.7, 0.8, 1.0]);
+            renderer.draw_text(
+                &format!("🔧 {}", inv.tool_name),
+                rect.x + 10.0,
+                y + 8.0,
+                11.0,
+                [0.8, 0.9, 1.0, 1.0],
+            );
+            renderer.draw_text(
+                &format!("{}ms", inv.duration_ms as i32),
+                rect.x + rect.width - 50.0,
+                y + 8.0,
+                10.0,
+                [0.5, 0.6, 0.7, 1.0],
+            );
+            renderer.draw_text(
+                &inv.result_preview,
+                rect.x + 10.0,
+                y + 22.0,
+                9.0,
+                [0.6, 0.7, 0.8, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for ToolInvocationInspector {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 280.0, height: 10.0 + self.invocations.len() as f32 * 40.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 280.0,
+            height: 10.0 + self.invocations.len() as f32 * 40.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// AI workflow builder for constructing agent workflows
@@ -577,7 +792,13 @@ impl AIWorkflowBuilder {
         }
     }
 
-    pub fn node(mut self, id: &str, title: &str, node_type: WorkflowNodeType, pos: (f32, f32)) -> Self {
+    pub fn node(
+        mut self,
+        id: &str,
+        title: &str,
+        node_type: WorkflowNodeType,
+        pos: (f32, f32),
+    ) -> Self {
         self.nodes.push(WorkflowNode {
             id: id.to_string(),
             title: title.to_string(),
@@ -588,20 +809,25 @@ impl AIWorkflowBuilder {
     }
 
     pub fn edge(mut self, from: &str, to: &str) -> Self {
-        self.edges.push(WorkflowEdge { from: from.to_string(), to: to.to_string() });
+        self.edges.push(WorkflowEdge {
+            from: from.to_string(),
+            to: to.to_string(),
+        });
         self
     }
 }
 
 impl View for AIWorkflowBuilder {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         for edge in &self.edges {
             if let (Some(from), Some(to)) = (
                 self.nodes.iter().find(|n| n.id == edge.from),
-                self.nodes.iter().find(|n| n.id == edge.to)
+                self.nodes.iter().find(|n| n.id == edge.to),
             ) {
                 let x1 = rect.x + from.position.0;
                 let y1 = rect.y + from.position.1;
@@ -622,25 +848,56 @@ impl View for AIWorkflowBuilder {
 
             let cx = rect.x + node.position.0;
             let cy = rect.y + node.position.1;
-            
+
             renderer.fill_rect(
-                Rect { x: cx - 40.0, y: cy - 15.0, width: 80.0, height: 30.0 },
-                color
+                Rect {
+                    x: cx - 40.0,
+                    y: cy - 15.0,
+                    width: 80.0,
+                    height: 30.0,
+                },
+                color,
             );
             renderer.stroke_rect(
-                Rect { x: cx - 40.0, y: cy - 15.0, width: 80.0, height: 30.0 },
-                [0.9, 0.9, 1.0, 0.8], 1.0
+                Rect {
+                    x: cx - 40.0,
+                    y: cy - 15.0,
+                    width: 80.0,
+                    height: 30.0,
+                },
+                [0.9, 0.9, 1.0, 0.8],
+                1.0,
             );
-            renderer.draw_text(&node.title, cx - 35.0, cy - 2.0, 10.0, [0.95, 0.95, 1.0, 1.0]);
+            renderer.draw_text(
+                &node.title,
+                cx - 35.0,
+                cy - 2.0,
+                10.0,
+                [0.95, 0.95, 1.0, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for AIWorkflowBuilder {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 600.0, height: 400.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 600.0,
+            height: 400.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// AI execution debugger for step-by-step debugging
@@ -671,26 +928,59 @@ impl AIExecutionDebugger {
 
 impl View for AIExecutionDebugger {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, [0.05, 0.05, 0.08, 1.0]);
-        renderer.draw_text("AI Execution Debugger", rect.x + 10.0, rect.y + 20.0, 14.0, [0.8, 0.9, 1.0, 1.0]);
-        
+        renderer.draw_text(
+            "AI Execution Debugger",
+            rect.x + 10.0,
+            rect.y + 20.0,
+            14.0,
+            [0.8, 0.9, 1.0, 1.0],
+        );
+
         let y = rect.y + 45.0;
         for bp in &self.breakpoints {
             renderer.fill_rect(
-                Rect { x: rect.x + 10.0, y, width: rect.width - 20.0, height: 22.0 },
-                [0.1, 0.1, 0.15, 1.0]
+                Rect {
+                    x: rect.x + 10.0,
+                    y,
+                    width: rect.width - 20.0,
+                    height: 22.0,
+                },
+                [0.1, 0.1, 0.15, 1.0],
             );
-            renderer.draw_text(&format!("● {}", bp), rect.x + 15.0, y + 15.0, 11.0, [0.7, 0.8, 0.9, 1.0]);
+            renderer.draw_text(
+                &format!("● {}", bp),
+                rect.x + 15.0,
+                y + 15.0,
+                11.0,
+                [0.7, 0.8, 0.9, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for AIExecutionDebugger {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 300.0, height: 100.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 300.0,
+            height: 100.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

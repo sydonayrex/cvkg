@@ -3,7 +3,10 @@
 //! Bragi the skaldic god governs poetry and creative expression - this suite
 //! provides rich text, markdown, and vector editing capabilities.
 
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Rich text editor state
 #[derive(Debug, Clone)]
@@ -113,16 +116,36 @@ impl BragiCreative {
 
 impl View for BragiCreative {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, [0.08, 0.06, 0.12, 1.0]);
-        renderer.draw_text("Bragi Creative Suite", rect.x + 10.0, rect.y + 20.0, 14.0, [0.8, 0.7, 1.0, 1.0]);
+        renderer.draw_text(
+            "Bragi Creative Suite",
+            rect.x + 10.0,
+            rect.y + 20.0,
+            14.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
 
         let mut y = rect.y + 45.0;
         for comp in &self.components {
-            let bg = if self.active_editor.as_deref() == Some(&comp.name) { [0.1, 0.12, 0.15, 1.0] } else { [0.08, 0.08, 0.1, 1.0] };
-            renderer.fill_rect(Rect { x: rect.x + 10.0, y, width: rect.width - 20.0, height: 30.0 }, bg);
+            let bg = if self.active_editor.as_deref() == Some(&comp.name) {
+                [0.1, 0.12, 0.15, 1.0]
+            } else {
+                [0.08, 0.08, 0.1, 1.0]
+            };
+            renderer.fill_rect(
+                Rect {
+                    x: rect.x + 10.0,
+                    y,
+                    width: rect.width - 20.0,
+                    height: 30.0,
+                },
+                bg,
+            );
 
             let icon = match comp.component_type {
                 CreativeType::RichText => "📝",
@@ -130,15 +153,35 @@ impl View for BragiCreative {
                 CreativeType::Svg => "⚡",
                 CreativeType::Texture => "🎨",
             };
-            renderer.draw_text(&format!("{} {}", icon, comp.name), rect.x + 15.0, y + 8.0, 11.0, [0.8, 0.9, 1.0, 1.0]);
+            renderer.draw_text(
+                &format!("{} {}", icon, comp.name),
+                rect.x + 15.0,
+                y + 8.0,
+                11.0,
+                [0.8, 0.9, 1.0, 1.0],
+            );
             y += 35.0;
         }
     }
 }
 
 impl LayoutView for BragiCreative {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 280.0, height: 70.0 + self.components.len() as f32 * 35.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 280.0,
+            height: 70.0 + self.components.len() as f32 * 35.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

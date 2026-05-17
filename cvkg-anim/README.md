@@ -1,6 +1,6 @@
 # cvkg-anim
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![GPU Shader Pipeline](../docs/images/gpu_shader_pipeline.png)
 
 `cvkg-anim` provides the Sleipnir animation engine, a high-fidelity physics-based motion system for CVKG using RK4 integration for superior stability and responsiveness.
 

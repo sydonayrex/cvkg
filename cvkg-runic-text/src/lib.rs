@@ -3,20 +3,20 @@
 //! Natively integrated Cyber Viking text shaping and layout engine for CVKG.
 //! This crate provides a stateless, high-performance text pipeline.
 
+pub use fontdb;
 pub use rustybuzz;
 pub use swash;
-pub use fontdb;
 
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use fontdb::Database;
-use rustybuzz::{Face, UnicodeBuffer, Direction};
-use swash::scale::{ScaleContext, Render};
-use unicode_segmentation::UnicodeSegmentation;
-use unicode_bidi::BidiInfo;
 use lru::LruCache;
+use rustybuzz::{Direction, Face, UnicodeBuffer};
+use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
+use swash::scale::{Render, ScaleContext};
+use unicode_bidi::BidiInfo;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// CacheKey uniquely identifies a glyph in the atlas.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
@@ -79,16 +79,23 @@ impl RunicTextEngine {
         let mut found_id = None;
         for face_info in self.db.faces() {
             let id = face_info.id;
-            let supports = self.db.with_face_data(id, |data, index| {
-                if let Some(face) = Face::from_slice(data, index) {
-                    let mut buffer = UnicodeBuffer::new();
-                    buffer.push_str(&c.to_string());
-                    let output = rustybuzz::shape(&face, &[], buffer);
-                    output.glyph_infos().first().map(|i| i.glyph_id != 0).unwrap_or(false)
-                } else {
-                    false
-                }
-            }).unwrap_or(false);
+            let supports = self
+                .db
+                .with_face_data(id, |data, index| {
+                    if let Some(face) = Face::from_slice(data, index) {
+                        let mut buffer = UnicodeBuffer::new();
+                        buffer.push_str(&c.to_string());
+                        let output = rustybuzz::shape(&face, &[], buffer);
+                        output
+                            .glyph_infos()
+                            .first()
+                            .map(|i| i.glyph_id != 0)
+                            .unwrap_or(false)
+                    } else {
+                        false
+                    }
+                })
+                .unwrap_or(false);
 
             if supports {
                 found_id = Some(id);
@@ -128,14 +135,21 @@ impl RunicTextEngine {
 
         for span in spans {
             let query = fontdb::Query {
-                families: &[fontdb::Family::Name(span.font_family), fontdb::Family::SansSerif],
+                families: &[
+                    fontdb::Family::Name(span.font_family),
+                    fontdb::Family::SansSerif,
+                ],
                 weight: fontdb::Weight::NORMAL,
                 stretch: fontdb::Stretch::Normal,
                 style: fontdb::Style::Normal,
             };
 
             let primary_font_id = self.db.query(&query).unwrap_or_else(|| {
-                self.db.faces().next().map(|f| f.id).expect("No fonts found in system")
+                self.db
+                    .faces()
+                    .next()
+                    .map(|f| f.id)
+                    .expect("No fonts found in system")
             });
 
             current_line_max_height = current_line_max_height.max(span.line_height);
@@ -153,14 +167,14 @@ impl RunicTextEngine {
                 let bidi_info = BidiInfo::new(line, None);
                 let mut line_byte_offset = 0;
                 let words = line.split_word_bounds();
-                
+
                 for word in words {
                     let level = if line_byte_offset < bidi_info.levels.len() {
                         bidi_info.levels[line_byte_offset]
                     } else {
                         unicode_bidi::Level::ltr()
                     };
-                    
+
                     let is_rtl = level.is_rtl();
                     let word_start_global = global_byte_offset + line_byte_offset;
 
@@ -177,7 +191,11 @@ impl RunicTextEngine {
                                 let mut buf = UnicodeBuffer::new();
                                 buf.push_str(&c.to_string());
                                 let out = rustybuzz::shape(&face, &[], buf);
-                                if out.glyph_infos().first().is_some_and(|info| info.glyph_id == 0 && !c.is_whitespace()) {
+                                if out
+                                    .glyph_infos()
+                                    .first()
+                                    .is_some_and(|info| info.glyph_id == 0 && !c.is_whitespace())
+                                {
                                     needs_fallback = true;
                                 }
                             }
@@ -190,7 +208,11 @@ impl RunicTextEngine {
                         };
 
                         if target_font != current_font_id && !current_chunk.is_empty() {
-                            chunks.push((current_chunk.clone(), current_font_id, chunk_start_offset));
+                            chunks.push((
+                                current_chunk.clone(),
+                                current_font_id,
+                                chunk_start_offset,
+                            ));
                             chunk_start_offset += current_chunk.len();
                             current_chunk.clear();
                         }
@@ -223,7 +245,10 @@ impl RunicTextEngine {
                     }
 
                     // Wrap if needed
-                    if current_x + word_width > max_width && current_x > 0.0 && !word.trim().is_empty() {
+                    if current_x + word_width > max_width
+                        && current_x > 0.0
+                        && !word.trim().is_empty()
+                    {
                         current_y += current_line_max_height;
                         current_x = 0.0;
                     }
@@ -253,7 +278,8 @@ impl RunicTextEngine {
 
                                     // Subpixel positioning is maintained natively by keeping exact f32 floats
                                     // rather than rounding advances.
-                                    let glyph_global_cluster = word_start_global + chunk_offset + info.cluster as usize;
+                                    let glyph_global_cluster =
+                                        word_start_global + chunk_offset + info.cluster as usize;
 
                                     glyphs.push(GlyphInstance {
                                         id: info.glyph_id,
@@ -288,28 +314,32 @@ impl RunicTextEngine {
 
     /// Rasterize a glyph into a bitmap.
     pub fn rasterize(&mut self, key: CacheKey) -> Option<GlyphImage> {
-        self.db.with_face_data(key.font_id, |data, index| {
-            let font = swash::FontRef::from_index(data, index as usize)?;
-            // Use subpixel metrics in the scaler by avoiding aggressive hinting
-            let mut scaler = self.scale_context.builder(font)
-                .size(key.size as f32 / 64.0)
-                .hint(false) 
-                .build();
-            
-            let image = Render::new(&[
-                swash::scale::Source::ColorOutline(0),
-                swash::scale::Source::Outline,
-            ])
-            .render(&mut scaler, swash::GlyphId::from(key.glyph_id as u16))?;
+        self.db
+            .with_face_data(key.font_id, |data, index| {
+                let font = swash::FontRef::from_index(data, index as usize)?;
+                // Use subpixel metrics in the scaler by avoiding aggressive hinting
+                let mut scaler = self
+                    .scale_context
+                    .builder(font)
+                    .size(key.size as f32 / 64.0)
+                    .hint(false)
+                    .build();
 
-            Some(GlyphImage {
-                data: image.data,
-                width: image.placement.width,
-                height: image.placement.height,
-                left: image.placement.left,
-                top: image.placement.top,
+                let image = Render::new(&[
+                    swash::scale::Source::ColorOutline(0),
+                    swash::scale::Source::Outline,
+                ])
+                .render(&mut scaler, swash::GlyphId::from(key.glyph_id as u16))?;
+
+                Some(GlyphImage {
+                    data: image.data,
+                    width: image.placement.width,
+                    height: image.placement.height,
+                    left: image.placement.left,
+                    top: image.placement.top,
+                })
             })
-        }).flatten()
+            .flatten()
     }
 }
 
@@ -353,14 +383,14 @@ impl ShapedText {
                     if x < glyph.x + (glyph.advance_x / 2.0) {
                         return Some(glyph.cluster);
                     } else {
-                        // Return the next index (naively assuming +1, 
+                        // Return the next index (naively assuming +1,
                         // in a full engine we'd need the next cluster offset)
                         return Some(glyph.cluster + 1);
                     }
                 }
             }
         }
-        
+
         // If out of bounds, maybe return the end of the string.
         self.glyphs.last().map(|g| g.cluster + 1)
     }
@@ -373,12 +403,12 @@ impl ShapedText {
                 return Some((glyph.x, glyph.y));
             }
         }
-        
+
         // If index is past the end, place cursor at the end of the last glyph
         if let Some(last) = self.glyphs.last() {
             return Some((last.x + last.advance_x, last.y));
         }
-        
+
         Some((0.0, 0.0))
     }
 }
@@ -397,7 +427,7 @@ mod tests {
     fn test_shaping_basic() {
         let mut engine = RunicTextEngine::new();
         let shaped = engine.shape("Hello", "sans-serif", 16.0);
-        
+
         assert!(!shaped.glyphs.is_empty());
         assert!(shaped.width > 0.0);
         assert_eq!(shaped.height, 16.0 * 1.2);
@@ -407,15 +437,15 @@ mod tests {
     fn test_hit_testing() {
         let mut engine = RunicTextEngine::new();
         let shaped = engine.shape("ABC", "sans-serif", 16.0);
-        
+
         // Find center of first char 'A'
         let first_glyph = &shaped.glyphs[0];
         let mid_x = first_glyph.x + first_glyph.advance_x / 4.0;
         let mid_y = first_glyph.y + first_glyph.line_height / 2.0;
-        
+
         let index = shaped.hit_test(mid_x, mid_y);
         assert_eq!(index, Some(0)); // Should be at start of 'A'
-        
+
         // Find right side of 'A'
         let mid_x_right = first_glyph.x + first_glyph.advance_x * 0.75;
         let index_right = shaped.hit_test(mid_x_right, mid_y);
@@ -428,7 +458,7 @@ mod tests {
         // Force wrap by setting a small max_width
         let spans = vec![TextSpan::new("Wrap this text", "sans-serif", 16.0)];
         let shaped = engine.shape_layout(&spans, 50.0);
-        
+
         // It should have multiple lines
         assert!(shaped.height > 16.0 * 1.2 * 1.5);
     }

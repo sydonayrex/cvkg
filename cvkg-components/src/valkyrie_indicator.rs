@@ -1,6 +1,6 @@
 use cvkg_core::{Never, Rect, Renderer, View};
 
-/// A spinning runic activity indicator (inspired by SwiftUIX).
+/// A spinning runic activity indicator.
 /// Section 4.5: "Kinetic runic pulses for background processing."
 #[derive(Clone)]
 pub struct ValkyrieIndicator {
@@ -19,7 +19,9 @@ impl ValkyrieIndicator {
 
 impl View for ValkyrieIndicator {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
@@ -33,11 +35,11 @@ impl View for ValkyrieIndicator {
             let angle = t * 3.0 + (i as f32 * std::f32::consts::PI * 2.0 / runes.len() as f32);
             let rx = center_x + angle.cos() * radius;
             let ry = center_y + angle.sin() * radius;
-            
+
             let alpha = 0.2 + (angle.sin() * 0.5 + 0.5) * 0.8;
             let mut c = self.color;
             c[3] *= alpha;
-            
+
             renderer.draw_text(&rune.to_string(), rx - 5.0, ry + 5.0, 12.0, c);
         }
 

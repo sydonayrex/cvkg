@@ -92,20 +92,24 @@ mod tests {
     #[test]
     fn test_undo_redo() {
         let mut container = FlowContainer::default();
-        container.graph.add_node(FlowNode::new(NodeId(1), "Initial", (0.0, 0.0)));
-        
+        container
+            .graph
+            .add_node(FlowNode::new(NodeId(1), "Initial", (0.0, 0.0)));
+
         // Push state
         container.push_history();
-        
+
         // Modify
-        container.graph.add_node(FlowNode::new(NodeId(2), "Modified", (100.0, 100.0)));
+        container
+            .graph
+            .add_node(FlowNode::new(NodeId(2), "Modified", (100.0, 100.0)));
         assert_eq!(container.graph.nodes.len(), 2);
-        
+
         // Undo
         container.undo();
         assert_eq!(container.graph.nodes.len(), 1);
         assert!(container.graph.nodes.contains_key(&NodeId(1)));
-        
+
         // Redo
         container.redo();
         assert_eq!(container.graph.nodes.len(), 2);

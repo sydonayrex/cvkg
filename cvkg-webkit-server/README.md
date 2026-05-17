@@ -1,6 +1,6 @@
 # cvkg-webkit-server
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![VDOM Agent Graph](../docs/images/vdom_agent_graph.png)
 
 `cvkg-webkit-server` is a professional-grade development and preview server for CVKG applications, providing state-preserving hot reload, SEO pre-rendering, and real-time observability.
 

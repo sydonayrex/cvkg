@@ -22,7 +22,7 @@ impl VisualComparator {
         if img1.len() != img2.len() {
             return 100.0; // Completely different if sizes don't match
         }
-        
+
         if img1.is_empty() {
             return 0.0;
         }
@@ -33,8 +33,9 @@ impl VisualComparator {
         for i in 0..total_pixels {
             let base = i * 4;
             let mut pixel_diff = false;
-            
-            for j in 0..3 { // Check R, G, B
+
+            for j in 0..3 {
+                // Check R, G, B
                 let v1 = img1[base + j] as f32 / 255.0;
                 let v2 = img2[base + j] as f32 / 255.0;
                 if (v1 - v2).abs() > self.pixel_tolerance {
@@ -42,7 +43,7 @@ impl VisualComparator {
                     break;
                 }
             }
-            
+
             if pixel_diff {
                 diff_count += 1;
             }
@@ -68,7 +69,7 @@ mod tests {
         let img1 = vec![255; 400];
         let mut img2 = vec![255; 400];
         img2[0] = 0; // Change one pixel
-        
+
         let comp = VisualComparator::default();
         let diff = comp.compare(&img1, &img2);
         assert!(diff > 0.0);

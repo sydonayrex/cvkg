@@ -1,7 +1,7 @@
 use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
-/// Liquid glass tabs with chromatic aberration (inspired by liquid_glass_widgets).
+/// Liquid glass tabs with chromatic aberration.
 /// Section 4.7: "Tactile realm-switching navigation with fluid feedback."
 pub struct BifrostTabs {
     pub options: Vec<String>,
@@ -10,7 +10,11 @@ pub struct BifrostTabs {
 }
 
 impl BifrostTabs {
-    pub fn new(options: Vec<String>, selected: usize, on_select: impl Fn(usize) + Send + Sync + 'static) -> Self {
+    pub fn new(
+        options: Vec<String>,
+        selected: usize,
+        on_select: impl Fn(usize) + Send + Sync + 'static,
+    ) -> Self {
         Self {
             options,
             selected_index: selected,
@@ -21,7 +25,9 @@ impl BifrostTabs {
 
 impl View for BifrostTabs {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
@@ -33,7 +39,7 @@ impl View for BifrostTabs {
 
         // 2. Liquid Selection Indicator (The Bifrost bridge)
         let target_x = rect.x + (self.selected_index as f32 * tab_width);
-        
+
         // Animated indicator with "jelly" physics (sinusoidal wobble)
         let wobble = (t * 4.0).sin() * 2.0;
         let indicator_rect = Rect {
@@ -50,7 +56,7 @@ impl View for BifrostTabs {
         for (i, option) in self.options.iter().enumerate() {
             let x = rect.x + (i as f32 * tab_width);
             let alpha = if i == self.selected_index { 1.0 } else { 0.6 };
-            
+
             renderer.draw_text(
                 option,
                 x + tab_width / 2.0 - 20.0,
@@ -64,12 +70,17 @@ impl View for BifrostTabs {
             let rect_x = x;
             let rect_w = tab_width;
             let idx = i;
-            renderer.register_handler("pointerdown", Arc::new(move |ev| {
-                if let cvkg_core::Event::PointerDown { x, .. } = ev
-                    && x >= rect_x && x <= rect_x + rect_w {
+            renderer.register_handler(
+                "pointerdown",
+                Arc::new(move |ev| {
+                    if let cvkg_core::Event::PointerDown { x, .. } = ev
+                        && x >= rect_x
+                        && x <= rect_x + rect_w
+                    {
                         on_select(idx);
                     }
-            }));
+                }),
+            );
         }
     }
 }

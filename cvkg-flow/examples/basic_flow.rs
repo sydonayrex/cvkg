@@ -6,12 +6,22 @@ pub fn create_basic_flow() -> FlowGraph {
 
     // Create Source Node
     let mut node1 = FlowNode::new(NodeId(1), "Source Agent", (100.0, 100.0));
-    node1.add_port(FlowPort::new(PortId(101), NodeId(1), PortPosition::Right, PortDirection::Output));
+    node1.add_port(FlowPort::new(
+        PortId(101),
+        NodeId(1),
+        PortPosition::Right,
+        PortDirection::Output,
+    ));
     graph.add_node(node1);
 
     // Create Target Node
     let mut node2 = FlowNode::new(NodeId(2), "Target Processor", (400.0, 150.0));
-    node2.add_port(FlowPort::new(PortId(201), NodeId(2), PortPosition::Left, PortDirection::Input));
+    node2.add_port(FlowPort::new(
+        PortId(201),
+        NodeId(2),
+        PortPosition::Left,
+        PortDirection::Input,
+    ));
     graph.add_node(node2);
 
     // Create Edge connecting the ports
@@ -22,5 +32,9 @@ pub fn create_basic_flow() -> FlowGraph {
 
 fn main() {
     let graph = create_basic_flow();
-    println!("Created graph with {} nodes and {} edges", graph.nodes.len(), graph.edges.len());
+    println!(
+        "Created graph with {} nodes and {} edges",
+        graph.nodes.len(),
+        graph.edges.len()
+    );
 }

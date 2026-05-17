@@ -155,7 +155,6 @@ impl ElapsedTime for TestRenderer {
 }
 
 impl Renderer for TestRenderer {
-
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.commands.push(Command::FillRect { rect, color });
     }

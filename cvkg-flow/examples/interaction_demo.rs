@@ -4,10 +4,10 @@ use cvkg_flow::*;
 pub fn setup_interactive_flow() -> FlowCanvas {
     let graph = FlowGraph::new();
     let canvas = FlowCanvas::new("interactive_demo", graph);
-    
+
     // Configure settings for the session
     // These would typically be updated via update_system_state in a real app
-    
+
     // In a real application, you would initialize the system state with these settings:
     // let container = FlowContainer {
     //     graph: FlowGraph::new(),

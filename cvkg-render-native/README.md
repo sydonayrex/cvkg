@@ -1,6 +1,6 @@
 # cvkg-render-native
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![Berserker Hero HUD](../docs/images/berserker_hero_hud.png)
 
 `cvkg-render-native` provides platform-native windowing and event loop integration for CVKG desktop applications using `winit` and `AccessKit`.
 

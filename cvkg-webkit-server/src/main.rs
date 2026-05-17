@@ -19,11 +19,14 @@
 
 use arc_swap::ArcSwap;
 use axum::{
-    extract::{ws::{WebSocket, WebSocketUpgrade}, State, DefaultBodyLimit, Request},
+    Router,
+    extract::{
+        DefaultBodyLimit, Request, State,
+        ws::{WebSocket, WebSocketUpgrade},
+    },
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
-    Router,
 };
 use clap::Parser;
 use futures_util::StreamExt;
@@ -32,13 +35,10 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::CorsLayer,
-    services::ServeDir,
-    set_header::SetResponseHeaderLayer,
+    cors::CorsLayer, services::ServeDir, set_header::SetResponseHeaderLayer, timeout::TimeoutLayer,
     trace::TraceLayer,
-    timeout::TimeoutLayer,
 };
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use validator::Validate;
 
 /// Configuration for the CVKG Server.
@@ -55,11 +55,19 @@ struct Config {
     pub pkg_dir: String,
 
     /// Directory for assets.
-    #[arg(long, env = "CVKG_ASSETS_DIR", default_value = "cvkg-webkit-server/assets")]
+    #[arg(
+        long,
+        env = "CVKG_ASSETS_DIR",
+        default_value = "cvkg-webkit-server/assets"
+    )]
     pub assets_dir: String,
 
     /// Directory for static files.
-    #[arg(long, env = "CVKG_STATIC_DIR", default_value = "cvkg-webkit-server/static")]
+    #[arg(
+        long,
+        env = "CVKG_STATIC_DIR",
+        default_value = "cvkg-webkit-server/static"
+    )]
     pub static_dir: String,
 
     /// Rate limit: requests per second.
@@ -91,9 +99,12 @@ impl BuildOrchestrator {
     pub async fn trigger_universal_build() -> anyhow::Result<()> {
         let mut attempts = 0;
         let max_attempts = 3;
-        
+
         while attempts < max_attempts {
-            info!("[CVKG Build] Starting universal build pipeline (attempt {})...", attempts + 1);
+            info!(
+                "[CVKG Build] Starting universal build pipeline (attempt {})...",
+                attempts + 1
+            );
             // Simulate build work
             match Self::perform_build().await {
                 Ok(_) => return Ok(()),
@@ -105,7 +116,10 @@ impl BuildOrchestrator {
                 Err(e) => return Err(e),
             }
         }
-        Err(anyhow::anyhow!("Build failed after {} attempts", max_attempts))
+        Err(anyhow::anyhow!(
+            "Build failed after {} attempts",
+            max_attempts
+        ))
     }
 
     async fn perform_build() -> anyhow::Result<()> {
@@ -115,10 +129,7 @@ impl BuildOrchestrator {
 }
 
 /// Handler for capturing VDOM snapshots.
-async fn capture_snapshot(
-    State(state): State<Arc<AppState>>,
-    body: String,
-) -> impl IntoResponse {
+async fn capture_snapshot(State(state): State<Arc<AppState>>, body: String) -> impl IntoResponse {
     state.last_vdom_snapshot.store(Arc::new(Some(body)));
     "Snapshot captured"
 }
@@ -126,8 +137,12 @@ async fn capture_snapshot(
 /// Handler for serving the loading screen or the last snapshot.
 async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let snapshot_guard = state.last_vdom_snapshot.load();
-    let snapshot = snapshot_guard.as_ref().as_ref().map(|s| s.as_str()).unwrap_or("Loading Agent Ulfhednar...");
-    
+    let snapshot = snapshot_guard
+        .as_ref()
+        .as_ref()
+        .map(|s| s.as_str())
+        .unwrap_or("Loading Agent Ulfhednar...");
+
     Html(format!(
         r#"<!DOCTYPE html>
 <html lang="en">
@@ -164,14 +179,16 @@ async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl IntoRe
     ))
 }
 
-
 /// Handler for triggering a manual build.
 async fn trigger_build_handler() -> impl IntoResponse {
     match BuildOrchestrator::trigger_universal_build().await {
         Ok(_) => (axum::http::StatusCode::OK, "Build successful".to_string()),
         Err(e) => {
             error!("Build failed: {}", e);
-            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Build failed: {}", e))
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Build failed: {}", e),
+            )
         }
     }
 }
@@ -194,7 +211,9 @@ struct SystemTime {
 
 async fn system_time_handler() -> impl IntoResponse {
     let now = std::time::SystemTime::now();
-    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+    let duration = now
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
     axum::Json(SystemTime {
         timestamp: duration.as_secs(),
     })
@@ -225,15 +244,15 @@ async fn metrics_middleware(req: Request, next: Next) -> Response {
     let start = Instant::now();
     let method = req.method().to_string();
     let path = req.uri().path().to_string();
-    
+
     let response = next.run(req).await;
-    
+
     let latency = start.elapsed().as_secs_f64();
     let status = response.status().as_u16().to_string();
-    
+
     metrics::counter!("http_requests_total", "method" => method, "path" => path.clone(), "status" => status).increment(1);
     metrics::histogram!("http_request_duration_seconds", "method" => path).record(latency);
-    
+
     response
 }
 
@@ -278,8 +297,14 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse configuration.
     let mut config = Config::parse();
-    info!("Starting Professional CVKG Server on http://{}...", config.addr);
-    info!("[CVKG] Current Working Directory: {:?}", std::env::current_dir().unwrap_or_default());
+    info!(
+        "Starting Professional CVKG Server on http://{}...",
+        config.addr
+    );
+    info!(
+        "[CVKG] Current Working Directory: {:?}",
+        std::env::current_dir().unwrap_or_default()
+    );
 
     // Auto-resolve paths to handle root-relative vs crate-relative execution
     if !std::path::Path::new(&config.pkg_dir).exists() {
@@ -389,10 +414,13 @@ async fn main() -> anyhow::Result<()> {
         );
 
     let listener = tokio::net::TcpListener::bind(config.addr).await?;
-    
-    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     info!("CVKG Server shut down gracefully.");
     Ok(())
@@ -401,8 +429,8 @@ async fn main() -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::StatusCode;
     use axum::body::to_bytes;
+    use axum::http::StatusCode;
 
     #[tokio::test]
     async fn test_liveness() {
@@ -420,7 +448,7 @@ mod tests {
     async fn test_system_time() {
         let response = system_time_handler().await.into_response();
         assert_eq!(response.status(), StatusCode::OK);
-        
+
         let body = to_bytes(response.into_body(), 1024).await.unwrap();
         let time: SystemTime = serde_json::from_slice(&body).unwrap();
         assert!(time.timestamp > 0);

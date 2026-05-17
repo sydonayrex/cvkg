@@ -4,10 +4,8 @@
 // Run with: cargo run --example norse_tools_example
 
 use cvkg_components::{
-    BragiCreative, CreativeType,
-    HlinAccessibility, A11yRole,
-    EirMotion, Easing,
-    TyrSecurity, PermissionLevel,
+    A11yRole, BragiCreative, CreativeType, Easing, EirMotion, HlinAccessibility, PermissionLevel,
+    TyrSecurity,
 };
 use std::collections::HashMap;
 
@@ -48,12 +46,20 @@ fn main() {
     // Tyr Security - Security system
     let tyr = TyrSecurity::new()
         .role("viewer", PermissionLevel::User, vec!["read", "comment"])
-        .role("editor", PermissionLevel::Admin, vec!["read", "write", "delete"])
+        .role(
+            "editor",
+            PermissionLevel::Admin,
+            vec!["read", "write", "delete"],
+        )
         .audit("alice", "edit_document", "doc_123", true)
         .audit("bob", "delete_file", "file_456", false)
         .session("sess_abc", "workspace_1", 24.0);
 
-    println!("Tyr Security: {} roles, {} audit entries", tyr.roles.len(), tyr.audit_log.len());
+    println!(
+        "Tyr Security: {} roles, {} audit entries",
+        tyr.roles.len(),
+        tyr.audit_log.len()
+    );
 
     println!("\n=== Norse Tools Components Created Successfully ===");
 }

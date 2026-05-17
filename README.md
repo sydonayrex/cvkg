@@ -2,63 +2,92 @@
 
 ![CVKG Hero HUD](docs/images/cvkg_hero.png)
 
-CVKG is a high-fidelity, agentic UI framework for Rust designed for building visually stunning native and web applications.
+CVKG is a high-fidelity graphic user interface framework for Rust, enabling developers to build visually intense, hardware-accelerated desktop and web applications.
 
-## Problem and Audience
+## Problem and Target Audience
 
-CVKG provides a declarative, functional-reactive UI system that delivers high-fidelity visual effects and smooth animations without sacrificing performance or developer ergonomics. This framework is for UI developers and creative technologists who need to build complex, high-performance interfaces with advanced graphical features like translucent frosting, glowing outlines, and physics-based animations.
+Modern application developers frequently face a choice between high-performance but low-fidelity native GUI tools, or heavy web-tech runtimes. CVKG addresses this challenge by providing a declarative UI system that compiles directly to GPU pipelines (Vulkan, Metal, DirectX 12) and browser WebGPU/WebGL canvases, delivering sub-millisecond drawing times and spring-physics animations without sacrificing performance. This framework is tailored for creative engineers and system designers building custom interfaces, tactical widgets, and node-based dashboards.
+
+---
 
 ## Prerequisites
 
-- **Rust Toolchain**: Rust 1.85.0 or later (Edition 2024).
-- **System Dependencies**: Vulkan, Metal, or DX12 capable GPU. Linux users require `libfontconfig1-dev` and `pkg-config`.
-- **WASM Support**: `wasm-pack` is required for web builds.
+- **Rust Compiler**: Rust 1.85.0 or later (Edition 2024).
+- **GPU Drivers**: Vulkan, Metal, or DX12 compatible hardware.
+- **Linux Tools**: System packages `libfontconfig1-dev`, `pkg-config`, and windowing libraries (`libx11-dev`, `libwayland-dev`) are required.
+- **WebAssembly Compiler**: `wasm-pack` is required for web build pipelines.
 
-## Quick Start
+---
+
+## Quick Start (Five Commands)
 
 ```bash
-# 1. Clone the repository
+# 1. Clone the project repository
 git clone https://github.com/sydonayrex/cvkg.git && cd cvkg
 
-# 2. Build the workspace
+# 2. Add WASM target library
+rustup target add wasm32-unknown-unknown
+
+# 3. Compile the workspace packages
 cargo build --workspace
 
-# 3. Run the shatter demo (requires GPU)
-cargo run --example shatter_demo -p cvkg --features gpu
-
-# 4. Run the full test suite
+# 4. Execute the unit testing suite
 cargo test --workspace
+
+# 5. Run the native tactical HUD launcher application
+cargo run -p berserker
 ```
+
+---
 
 ## Workspace Crate Map
 
-| Crate | Role |
+| Crate Path | Role / Responsibility |
 | :--- | :--- |
-| `cvkg` | Entry point crate providing the public facade and feature-gated backend selection. |
-| `cvkg-core` | Core traits and types defining the View, Renderer, and fundamental geometry. |
-| `cvkg-vdom` | Virtual DOM implementation for stateless UI reconciliation and event handling. |
-| `cvkg-scene` | Retained scene graph for efficient rendering, culling, and batching. |
-| `cvkg-layout` | Flexbox-inspired layout engine supporting stacks and flexible positioning. |
-| `cvkg-anim` | RK4 physics-based animation solver for smooth, realistic UI transitions. |
-| `cvkg-render-gpu` | WGPU-based renderer implementation with advanced shader-based effects. |
-| `cvkg-render-native` | Native windowing and event loop integration using `winit`. |
-| `cvkg-render-web` | WASM and WebGPU/WebGL2 bindings for browser-based deployment. |
-| `cvkg-components` | Library of reusable UI components built on the CVKG core. |
-| `cvkg-themes` | Semantic styling system for consistent color, typography, and spacing. |
-| `cvkg-macros` | Procedural macros for simplifying view definitions and state management. |
-| `cvkg-runic-text` | High-performance text shaping and font rendering engine with runic support. |
-| `cvkg-cli` | Command-line tool for project scaffolding, building, and serving. |
-| `cvkg-webkit-server` | Development server providing WebSocket-based hot-reloading for web builds. |
-| `cvkg-flow` | Node-based graph UI components for building interactive data flows. |
-| `cvkg-test` | Specialized utilities for visual regression testing and UI benchmarking. |
-| `berserker` | Reference implementation of a tactical HUD application showcasing project capabilities. |
+| [cvkg](file:///D/rex/projects/cvkg/cvkg) | Main public entry point facade selecting native or web backends. |
+| [cvkg-core](file:///D/rex/projects/cvkg/cvkg-core) | Core traits defining view composition, renderers, and geometry types. |
+| [cvkg-vdom](file:///D/rex/projects/cvkg/cvkg-vdom) | Stateless Virtual DOM implementation managing tree diffs and updates. |
+| [cvkg-scene](file:///D/rex/projects/cvkg/cvkg-scene) | Retained scene graph utilizing bounding box acceleration for culling. |
+| [cvkg-layout](file:///D/rex/projects/cvkg/cvkg-layout) | Coordinate layout engines distributing spacer proposed bounds. |
+| [cvkg-anim](file:///D/rex/projects/cvkg/cvkg-anim) | Physics-based RK4 Sleipnir spring motion solver system. |
+| [cvkg-render-gpu](file:///D/rex/projects/cvkg/cvkg-render-gpu) | Surtr graphics pipeline rendering custom GPU shader pipelines. |
+| [cvkg-render-native](file:///D/rex/projects/cvkg/cvkg-render-native) | Desktop platform windowing and event loops wrapping `winit`. |
+| [cvkg-render-web](file:///D/rex/projects/cvkg/cvkg-render-web) | Browser canvas drawing wrapper executing on WebGPU or WebGL2. |
+| [cvkg-components](file:///D/rex/projects/cvkg/cvkg-components) | Base widget library housing inputs, buttons, sliders, and diagnostic gauges. |
+| [cvkg-themes](file:///D/rex/projects/cvkg/cvkg-themes) | System token catalog managing semantic color mappings. |
+| [cvkg-macros](file:///D/rex/projects/cvkg/cvkg-macros) | Procedural compiler macros scaffolding DSL views and reactive bindings. |
+| [cvkg-runic-text](file:///D/rex/projects/cvkg/cvkg-runic-text) | Font-discovery, word-wrapping, and HarfBuzz text shaper. |
+| [cvkg-cli](file:///D/rex/projects/cvkg/cvkg-cli) | Scaffolding command line interface managing development pipelines. |
+| [cvkg-webkit-server](file:///D/rex/projects/cvkg/cvkg-webkit-server) | Headless WebSocket dev server handling local bundle reloading. |
+| [cvkg-flow](file:///D/rex/projects/cvkg/cvkg-flow) | Interactive node and flow-chart visual editor component. |
+| [cvkg-test](file:///D/rex/projects/cvkg/cvkg-test) | Pixel comparison engine executing visual regression testing. |
+| [berserker](file:///D/rex/projects/cvkg/berserker) | Native tactical HUD application showcasing layout and graphics. |
+| [demos/adele-web](file:///D/rex/projects/cvkg/demos/adele-web) | Web design system explorer and matrix comparison layout. |
+| [demos/niflheim-web](file:///D/rex/projects/cvkg/demos/niflheim-web) | WebAssembly showcase executing the standard components suite. |
+| [demos/niflheim-wasi](file:///D/rex/projects/cvkg/demos/niflheim-wasi) | Headless server-side WASI target checking view validation. |
+| [demos/berserker-fire-web](file:///D/rex/projects/cvkg/demos/berserker-fire-web) | Highly visual web stress-test drawing procedural fires and lightning. |
+
+---
 
 ## Documentation Index
 
-- [Onboarding Guide](docs/onboarding.md) - Step-by-step setup and development workflow.
-- [Architecture](docs/architecture.md) - Deep dive into the framework design and crate relationships.
-- [How-To: Creating Components](docs/howto/creating_components.md) - Task-specific instructions for building custom UI elements.
-- [Troubleshooting](docs/troubleshooting.md) - Solutions for common build and runtime issues.
+Explore our guides to understand CVKG's capabilities:
+
+- [Onboarding Guide](docs/onboarding.md) — Step-by-step setup and local development workflow.
+- [Architecture Guide](docs/architecture.md) — System topology, subsystem specs, and crate graph.
+- [Troubleshooting Guide](docs/troubleshooting.md) — Compilation errors, runtime crashes, and graphics resolution.
+
+### How-To Guides
+
+- [How to Run a Demo](docs/howto/run-demo.md) — Run native and web-based graphic previews.
+- [How to Run Tests](docs/howto/run-tests.md) — Run workspace tests, single packages, or visual regressions.
+- [How to Build for Web](docs/howto/build-for-web.md) — Bundle, target, and serve WebAssembly applications.
+- [How to Create a Component (Manual)](docs/howto/create-component.md) — Write custom primitive drawings implementing `View` manually.
+- [How to Create Components (Macros)](docs/howto/creating_components.md) — Author interactive components utilizing state macros.
+- [How to Use the CVKG CLI](docs/howto/using-cli.md) — Scaffold projects, start dev servers, and run telemetry streams.
+- [How to Generate a Theme](docs/howto/generate-theme.md) — Compile Rust style constants from JSON color tokens.
+
+---
 
 ## License
 

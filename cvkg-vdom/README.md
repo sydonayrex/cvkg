@@ -1,6 +1,6 @@
 # cvkg-vdom
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![VDOM Agent Graph](../docs/images/vdom_agent_graph.png)
 
 `cvkg-vdom` provides a stateless Virtual DOM implementation for CVKG, enabling efficient UI reconciliation and platform-independent event handling.
 

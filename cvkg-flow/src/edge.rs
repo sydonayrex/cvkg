@@ -1,4 +1,4 @@
-use crate::types::{EdgeId, PortId, EdgePath};
+use crate::types::{EdgeId, EdgePath, PortId};
 use serde::{Deserialize, Serialize};
 
 /// Connection between two ports

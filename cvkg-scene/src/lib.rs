@@ -39,18 +39,18 @@ pub struct VNode {
     pub id: NodeId,
     pub component_type: String,
     pub children: Vec<NodeId>,
-    
+
     /// Local bounds relative to parent
     pub local_rect: Rect,
     /// Absolute world-space bounds (computed during layout pass)
     pub world_rect: Rect,
-    
+
     /// Whether this node or its children have changed since the last frame
     pub is_dirty: bool,
-    
+
     /// Layer identifier for GPU batching (0 = default UI, 100 = Glass, etc.)
     pub layer_id: u32,
-    
+
     /// Z-index for depth sorting
     pub z_index: f32,
 }
@@ -75,10 +75,10 @@ impl VNode {
 pub struct SceneGraph {
     pub nodes: HashMap<NodeId, VNode>,
     pub root: Option<NodeId>,
-    
+
     /// Accumulated dirty regions for the current frame
     dirty_regions: Vec<Rect>,
-    
+
     /// Next available unique ID
     next_id: u64,
 }
@@ -112,7 +112,7 @@ impl SceneGraph {
         let id = node.id;
         node.is_dirty = true;
         self.dirty_regions.push(node.world_rect);
-        
+
         if let Some(parent_id) = parent {
             if let Some(p) = self.nodes.get_mut(&parent_id) {
                 p.children.push(id);
@@ -121,7 +121,7 @@ impl SceneGraph {
         } else if self.root.is_none() {
             self.root = Some(id);
         }
-        
+
         self.nodes.insert(id, node);
     }
 
@@ -136,7 +136,7 @@ impl SceneGraph {
 
     fn update_node_transform(&mut self, id: NodeId, parent_world_rect: Rect) {
         let node = self.nodes.get_mut(&id).unwrap();
-        
+
         // Compute new world rect based on parent offset
         let old_world_rect = node.world_rect;
         node.world_rect = Rect {
@@ -154,7 +154,7 @@ impl SceneGraph {
 
         let children = node.children.clone();
         let world_rect = node.world_rect;
-        
+
         for child_id in children {
             self.update_node_transform(child_id, world_rect);
         }
@@ -175,7 +175,7 @@ impl SceneGraph {
             // Check if node's world bounds intersect the viewport
             if self.intersects(node.world_rect, viewport) {
                 visible.push(id);
-                
+
                 // Recurse to children
                 for child_id in &node.children {
                     self.cull_node(*child_id, viewport, visible);
@@ -185,10 +185,7 @@ impl SceneGraph {
     }
 
     fn intersects(&self, a: Rect, b: Rect) -> bool {
-        a.x < b.x + b.width &&
-        a.x + a.width > b.x &&
-        a.y < b.y + b.height &&
-        a.y + a.height > b.y
+        a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
     }
 
     /// Perform Automatic Layering (Batching).
@@ -197,7 +194,10 @@ impl SceneGraph {
         let mut layers = HashMap::new();
         for id in visible_nodes {
             if let Some(node) = self.nodes.get(id) {
-                layers.entry(node.layer_id).or_insert_with(Vec::new).push(*id);
+                layers
+                    .entry(node.layer_id)
+                    .or_insert_with(Vec::new)
+                    .push(*id);
             }
         }
         layers
@@ -206,7 +206,7 @@ impl SceneGraph {
     /// Binary Serialization using bincode for sub-millisecond sync.
     pub fn serialize_binary(&self) -> Result<Vec<u8>, bincode::Error> {
         // We only serialize the nodes and root to keep the payload minimal
-        let data = ( &self.nodes, &self.root );
+        let data = (&self.nodes, &self.root);
         bincode::serialize(&data)
     }
 
@@ -255,7 +255,11 @@ impl SceneGraph {
                     self.apply_change(id, change);
                 }
             }
-            Patch::Move { id, new_parent, new_index } => {
+            Patch::Move {
+                id,
+                new_parent,
+                new_index,
+            } => {
                 // Remove from old parent
                 for p in self.nodes.values_mut() {
                     p.children.retain(|&c| c != id);
@@ -294,25 +298,53 @@ mod tests {
     fn test_scene_graph_culling() {
         let mut scene = SceneGraph::new();
         let id1 = scene.next_id();
-        let node1 = VNode::new(id1, "Rect", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        let node1 = VNode::new(
+            id1,
+            "Rect",
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+        );
         scene.add_node(node1, None);
-        
+
         let id2 = scene.next_id();
-        let mut node2 = VNode::new(id2, "Rect", Rect { x: 150.0, y: 0.0, width: 50.0, height: 50.0 });
+        let mut node2 = VNode::new(
+            id2,
+            "Rect",
+            Rect {
+                x: 150.0,
+                y: 0.0,
+                width: 50.0,
+                height: 50.0,
+            },
+        );
         node2.layer_id = 1;
         scene.add_node(node2, Some(id1));
-        
+
         scene.update_transforms();
-        
+
         // Culling with viewport that only sees node 1
-        let visible = scene.cull(Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        let visible = scene.cull(Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 50.0,
+            height: 50.0,
+        });
         assert_eq!(visible.len(), 1);
         assert_eq!(visible[0], id1);
-        
+
         // Culling with viewport that sees both
-        let visible = scene.cull(Rect { x: 0.0, y: 0.0, width: 200.0, height: 100.0 });
+        let visible = scene.cull(Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 100.0,
+        });
         assert_eq!(visible.len(), 2);
-        
+
         // Batching
         let batches = scene.batch(&visible);
         assert_eq!(batches.len(), 2);
@@ -324,12 +356,17 @@ mod tests {
     fn test_scene_graph_dirty_tracking() {
         let mut scene = SceneGraph::new();
         let id = scene.next_id();
-        let rect = Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         scene.add_node(VNode::new(id, "Rect", rect), None);
-        
+
         assert_eq!(scene.dirty_regions().len(), 1);
         assert_eq!(scene.dirty_regions()[0], rect);
-        
+
         scene.clear_dirty();
         assert_eq!(scene.dirty_regions().len(), 0);
     }

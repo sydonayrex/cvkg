@@ -16,8 +16,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use cvkg_core::{
-    layout::{LayoutCache, LayoutView, Rect, SizeProposal},
     Event, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, Rect, SizeProposal},
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -139,11 +139,7 @@ impl NodeExecutionStatus {
     pub fn is_terminal(&self) -> bool {
         matches!(
             self,
-            Self::Completed
-                | Self::Failed
-                | Self::Skipped
-                | Self::TimedOut
-                | Self::Cancelled
+            Self::Completed | Self::Failed | Self::Skipped | Self::TimedOut | Self::Cancelled
         )
     }
 
@@ -808,7 +804,8 @@ impl ExecutionEngine {
             // Activate incoming edges.
             for edge in &state.edges {
                 if edge.target_node == *node_id {
-                    self.steps.push(ExecutionStep::ActivateEdge(edge.id.clone()));
+                    self.steps
+                        .push(ExecutionStep::ActivateEdge(edge.id.clone()));
                 }
             }
 
@@ -819,14 +816,12 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Agent '{}' starting execution...", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
 
                     // Simulate token usage.
                     let input_tokens = 150 + (node.name.len() as u64 * 10);
                     let output_tokens = 300 + (node.name.len() as u64 * 20);
-                    let cost = (input_tokens as f64 * 0.00003)
-                        + (output_tokens as f64 * 0.00006);
+                    let cost = (input_tokens as f64 * 0.00003) + (output_tokens as f64 * 0.00006);
 
                     self.steps.push(ExecutionStep::Log(
                         node.id.clone(),
@@ -865,8 +860,7 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Evaluating condition at '{}'...", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(300)));
                     self.steps.push(ExecutionStep::CompleteNode(
@@ -880,8 +874,7 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Starting loop '{}' (3 iterations)...", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     for i in 1..=3 {
                         self.steps.push(ExecutionStep::Log(
                             node.id.clone(),
@@ -900,13 +893,9 @@ impl ExecutionEngine {
                     self.steps.push(ExecutionStep::Log(
                         node.id.clone(),
                         LogLevel::Info,
-                        format!(
-                            "Parallel execution '{}' — fanning out...",
-                            node.name
-                        ),
+                        format!("Parallel execution '{}' — fanning out...", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(500)));
                     self.steps.push(ExecutionStep::Log(
@@ -925,8 +914,7 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Webhook '{}' triggered.", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(100)));
                     self.steps.push(ExecutionStep::CompleteNode(
@@ -940,8 +928,7 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Schedule '{}' triggered.", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(100)));
                     self.steps.push(ExecutionStep::CompleteNode(
@@ -955,8 +942,7 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Loading data from '{}'...", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(200)));
                     self.steps.push(ExecutionStep::CompleteNode(
@@ -970,8 +956,7 @@ impl ExecutionEngine {
                         LogLevel::Info,
                         format!("Writing output to '{}'...", node.name),
                     ));
-                    self.steps
-                        .push(ExecutionStep::StartNode(node.id.clone()));
+                    self.steps.push(ExecutionStep::StartNode(node.id.clone()));
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(200)));
                     self.steps.push(ExecutionStep::CompleteNode(
@@ -1024,10 +1009,7 @@ impl ExecutionEngine {
     }
 
     /// Topological sort of nodes based on edges.
-    fn topological_sort(
-        nodes: &[OrchestratorNode],
-        edges: &[OrchestratorEdge],
-    ) -> Vec<String> {
+    fn topological_sort(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge]) -> Vec<String> {
         let mut in_degree: HashMap<String, usize> = HashMap::new();
         let mut adj: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -1275,8 +1257,16 @@ impl View for MultiAgentOrchestrator {
         renderer.fill_rect(rect, [0.04, 0.03, 0.06, 1.0]);
 
         // ── Layout: graph canvas (left) + side panels (right) ──────────
-        let log_panel_w = if self.state.show_log_panel { 320.0 } else { 0.0 };
-        let metrics_panel_w = if self.state.show_metrics_panel { 260.0 } else { 0.0 };
+        let log_panel_w = if self.state.show_log_panel {
+            320.0
+        } else {
+            0.0
+        };
+        let metrics_panel_w = if self.state.show_metrics_panel {
+            260.0
+        } else {
+            0.0
+        };
         let graph_w = rect.width - log_panel_w - metrics_panel_w;
 
         let graph_rect = Rect {
@@ -1341,25 +1331,35 @@ impl MultiAgentOrchestrator {
         let btn_y = rect.y + 6.0;
         let btn_w = 88.0;
         let btn_h = 24.0;
-        let btn_rect = Rect { x: btn_x, y: btn_y, width: btn_w, height: btn_h };
+        let btn_rect = Rect {
+            x: btn_x,
+            y: btn_y,
+            width: btn_w,
+            height: btn_h,
+        };
         let run_state = state.clone();
         renderer.register_handler(
             "pointerdown:runstop",
             std::sync::Arc::new(move |event| {
                 if let cvkg_core::Event::PointerDown { x, y, .. } = event {
-                    if x >= btn_rect.x && x <= btn_rect.x + btn_rect.width
-                        && y >= btn_rect.y && y <= btn_rect.y + btn_rect.height
+                    if x >= btn_rect.x
+                        && x <= btn_rect.x + btn_rect.width
+                        && y >= btn_rect.y
+                        && y <= btn_rect.y + btn_rect.height
                     {
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
-                            if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id) {
+                            if let Some(guard) =
+                                s.get_component_state::<OrchestratorState>(instance_id)
+                            {
                                 let mut new_state = guard.read().unwrap().clone();
                                 if new_state.is_executing {
                                     new_state.is_executing = false;
                                 } else {
                                     new_state.is_executing = true;
                                     new_state.run_counter += 1;
-                                    new_state.active_run_id = Some(format!("run-{}", new_state.run_counter));
+                                    new_state.active_run_id =
+                                        Some(format!("run-{}", new_state.run_counter));
                                 }
                                 *guard.write().unwrap() = new_state;
                             }
@@ -1378,7 +1378,8 @@ impl MultiAgentOrchestrator {
                 if let cvkg_core::Event::PointerDown { .. } = event {
                     cvkg_core::update_system_state(move |s| {
                         let mut s = s.clone();
-                        if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id) {
+                        if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
+                        {
                             let mut new_state = guard.read().unwrap().clone();
                             new_state.show_log_panel = !new_state.show_log_panel;
                             *guard.write().unwrap() = new_state;
@@ -1397,7 +1398,8 @@ impl MultiAgentOrchestrator {
                 if let cvkg_core::Event::PointerDown { .. } = event {
                     cvkg_core::update_system_state(move |s| {
                         let mut s = s.clone();
-                        if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id) {
+                        if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
+                        {
                             let mut new_state = guard.read().unwrap().clone();
                             new_state.show_metrics_panel = !new_state.show_metrics_panel;
                             *guard.write().unwrap() = new_state;
@@ -1541,7 +1543,13 @@ impl MultiAgentOrchestrator {
                     3.0,
                     [0.08, 0.06, 0.12, 0.85],
                 );
-                renderer.draw_text(cond, mid_x - tw.0 / 2.0, mid_y + 3.0, 9.0, [0.7, 0.8, 0.9, 0.9]);
+                renderer.draw_text(
+                    cond,
+                    mid_x - tw.0 / 2.0,
+                    mid_y + 3.0,
+                    9.0,
+                    [0.7, 0.8, 0.9, 0.9],
+                );
             }
         }
     }
@@ -1782,7 +1790,13 @@ impl MultiAgentOrchestrator {
                 1.0,
             );
             let tw = renderer.measure_text(port_name, 9.0);
-            renderer.draw_text(port_name, px - 10.0 - tw.0, py - 4.0, 9.0, [0.6, 0.8, 0.7, 0.9]);
+            renderer.draw_text(
+                port_name,
+                px - 10.0 - tw.0,
+                py - 4.0,
+                9.0,
+                [0.6, 0.8, 0.7, 0.9],
+            );
         }
     }
 
@@ -1844,7 +1858,13 @@ impl MultiAgentOrchestrator {
         );
 
         // Title
-        renderer.draw_text("Orchestrator", rect.x + 12.0, rect.y + 10.0, 14.0, [0.8, 0.7, 1.0, 1.0]);
+        renderer.draw_text(
+            "Orchestrator",
+            rect.x + 12.0,
+            rect.y + 10.0,
+            14.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
 
         // Run/Stop button
         let btn_x = rect.x + rect.width - 100.0;
@@ -1863,7 +1883,13 @@ impl MultiAgentOrchestrator {
                 4.0,
                 [0.8, 0.2, 0.2, 0.9],
             );
-            renderer.draw_text("■ Stop", btn_x + 12.0, btn_y + 6.0, 11.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(
+                "■ Stop",
+                btn_x + 12.0,
+                btn_y + 6.0,
+                11.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
         } else {
             renderer.fill_rounded_rect(
                 Rect {
@@ -1875,7 +1901,13 @@ impl MultiAgentOrchestrator {
                 4.0,
                 [0.0, 0.7, 0.4, 0.9],
             );
-            renderer.draw_text("▶ Run", btn_x + 16.0, btn_y + 6.0, 11.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(
+                "▶ Run",
+                btn_x + 16.0,
+                btn_y + 6.0,
+                11.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
         }
 
         // Execution progress
@@ -1946,7 +1978,13 @@ impl MultiAgentOrchestrator {
             },
             [0.08, 0.06, 0.12, 1.0],
         );
-        renderer.draw_text("Execution Log", rect.x + 10.0, rect.y + 9.0, 13.0, [0.8, 0.7, 1.0, 1.0]);
+        renderer.draw_text(
+            "Execution Log",
+            rect.x + 10.0,
+            rect.y + 9.0,
+            13.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
         renderer.draw_line(
             rect.x,
             rect.y + header_h,
@@ -2021,7 +2059,13 @@ impl MultiAgentOrchestrator {
             },
             [0.08, 0.06, 0.12, 1.0],
         );
-        renderer.draw_text("Metrics", rect.x + 10.0, rect.y + 9.0, 13.0, [0.8, 0.7, 1.0, 1.0]);
+        renderer.draw_text(
+            "Metrics",
+            rect.x + 10.0,
+            rect.y + 9.0,
+            13.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
         renderer.draw_line(
             rect.x,
             rect.y + header_h,
@@ -2062,7 +2106,10 @@ impl MultiAgentOrchestrator {
 
             renderer.draw_text("Nodes:", rect.x + 10.0, y, 11.0, [0.6, 0.6, 0.7, 0.9]);
             y += line_h;
-            let node_summary = format!("{} total, {} done, {} running, {} failed", total_nodes, completed, running, failed);
+            let node_summary = format!(
+                "{} total, {} done, {} running, {} failed",
+                total_nodes, completed, running, failed
+            );
             renderer.draw_text(&node_summary, rect.x + 16.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
             y += line_h + 6.0;
 
@@ -2071,7 +2118,9 @@ impl MultiAgentOrchestrator {
             y += line_h;
             let token_text = format!(
                 "In: {}  Out: {}  Total: {}",
-                run.total_usage.input_tokens, run.total_usage.output_tokens, run.total_usage.total_tokens
+                run.total_usage.input_tokens,
+                run.total_usage.output_tokens,
+                run.total_usage.total_tokens
             );
             renderer.draw_text(&token_text, rect.x + 16.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
             y += line_h;
@@ -2095,7 +2144,9 @@ impl MultiAgentOrchestrator {
                     let status_color = node_state.status.color();
                     let line = format!(
                         "{}: {} ({}toks)",
-                        node.name, node_state.status.label(), node_state.token_usage.total_tokens
+                        node.name,
+                        node_state.status.label(),
+                        node_state.token_usage.total_tokens
                     );
                     renderer.draw_text(&line, rect.x + 16.0, y, 9.0, status_color);
                     y += line_h;
@@ -2123,36 +2174,99 @@ impl MultiAgentOrchestrator {
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
 
         // Panel
-        let panel_rect = Rect { x: panel_x, y: panel_y, width: panel_w, height: panel_h };
+        let panel_rect = Rect {
+            x: panel_x,
+            y: panel_y,
+            width: panel_w,
+            height: panel_h,
+        };
         renderer.fill_rounded_rect(panel_rect, 8.0, [0.08, 0.06, 0.12, 0.95]);
         renderer.stroke_rounded_rect(panel_rect, 8.0, [0.2, 0.15, 0.3, 0.8], 1.0);
 
         // Title
-        renderer.draw_text("Template Library", panel_x + 16.0, panel_y + 14.0, 14.0, [0.8, 0.7, 1.0, 1.0]);
-        renderer.draw_line(panel_x, panel_y + 32.0, panel_x + panel_w, panel_y + 32.0, [0.15, 0.12, 0.2, 0.6], 1.0);
+        renderer.draw_text(
+            "Template Library",
+            panel_x + 16.0,
+            panel_y + 14.0,
+            14.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
+        renderer.draw_line(
+            panel_x,
+            panel_y + 32.0,
+            panel_x + panel_w,
+            panel_y + 32.0,
+            [0.15, 0.12, 0.2, 0.6],
+            1.0,
+        );
 
         // Template list
         let templates = &self.state.templates;
         if templates.is_empty() {
-            renderer.draw_text("No templates saved yet.", panel_x + 16.0, panel_y + 50.0, 11.0, [0.5, 0.5, 0.6, 0.8]);
-            renderer.draw_text("Save your current workflow as a template.", panel_x + 16.0, panel_y + 66.0, 10.0, [0.4, 0.4, 0.5, 0.7]);
+            renderer.draw_text(
+                "No templates saved yet.",
+                panel_x + 16.0,
+                panel_y + 50.0,
+                11.0,
+                [0.5, 0.5, 0.6, 0.8],
+            );
+            renderer.draw_text(
+                "Save your current workflow as a template.",
+                panel_x + 16.0,
+                panel_y + 66.0,
+                10.0,
+                [0.4, 0.4, 0.5, 0.7],
+            );
         } else {
             let mut y = panel_y + 42.0;
             for template in templates.iter().take(20) {
                 // Template card
-                let card_rect = Rect { x: panel_x + 10.0, y, width: panel_w - 20.0, height: 52.0 };
+                let card_rect = Rect {
+                    x: panel_x + 10.0,
+                    y,
+                    width: panel_w - 20.0,
+                    height: 52.0,
+                };
                 renderer.fill_rounded_rect(card_rect, 4.0, [0.1, 0.08, 0.15, 0.9]);
-                renderer.draw_text(&template.name, card_rect.x + 8.0, card_rect.y + 10.0, 11.0, [0.8, 0.8, 0.9, 0.9]);
-                let desc = if template.description.len() > 40 { &template.description[..40] } else { &template.description };
-                renderer.draw_text(desc, card_rect.x + 8.0, card_rect.y + 26.0, 9.0, [0.5, 0.5, 0.6, 0.8]);
+                renderer.draw_text(
+                    &template.name,
+                    card_rect.x + 8.0,
+                    card_rect.y + 10.0,
+                    11.0,
+                    [0.8, 0.8, 0.9, 0.9],
+                );
+                let desc = if template.description.len() > 40 {
+                    &template.description[..40]
+                } else {
+                    &template.description
+                };
+                renderer.draw_text(
+                    desc,
+                    card_rect.x + 8.0,
+                    card_rect.y + 26.0,
+                    9.0,
+                    [0.5, 0.5, 0.6, 0.8],
+                );
                 let meta = format!("v{} · {} nodes", template.version, template.nodes.len());
-                renderer.draw_text(&meta, card_rect.x + 8.0, card_rect.y + 38.0, 8.0, [0.4, 0.4, 0.5, 0.7]);
+                renderer.draw_text(
+                    &meta,
+                    card_rect.x + 8.0,
+                    card_rect.y + 38.0,
+                    8.0,
+                    [0.4, 0.4, 0.5, 0.7],
+                );
                 y += 58.0;
             }
         }
 
         // Close hint
-        renderer.draw_text("Click outside to close", panel_x + 16.0, panel_y + panel_h - 16.0, 9.0, [0.4, 0.4, 0.5, 0.6]);
+        renderer.draw_text(
+            "Click outside to close",
+            panel_x + 16.0,
+            panel_y + panel_h - 16.0,
+            9.0,
+            [0.4, 0.4, 0.5, 0.6],
+        );
     }
 
     /// Render the run comparison overlay panel.
@@ -2166,26 +2280,68 @@ impl MultiAgentOrchestrator {
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
 
         // Panel
-        let panel_rect = Rect { x: panel_x, y: panel_y, width: panel_w, height: panel_h };
+        let panel_rect = Rect {
+            x: panel_x,
+            y: panel_y,
+            width: panel_w,
+            height: panel_h,
+        };
         renderer.fill_rounded_rect(panel_rect, 8.0, [0.08, 0.06, 0.12, 0.95]);
         renderer.stroke_rounded_rect(panel_rect, 8.0, [0.2, 0.15, 0.3, 0.8], 1.0);
 
         // Title
-        renderer.draw_text("Run Comparison", panel_x + 16.0, panel_y + 14.0, 14.0, [0.8, 0.7, 1.0, 1.0]);
-        renderer.draw_line(panel_x, panel_y + 32.0, panel_x + panel_w, panel_y + 32.0, [0.15, 0.12, 0.2, 0.6], 1.0);
+        renderer.draw_text(
+            "Run Comparison",
+            panel_x + 16.0,
+            panel_y + 14.0,
+            14.0,
+            [0.8, 0.7, 1.0, 1.0],
+        );
+        renderer.draw_line(
+            panel_x,
+            panel_y + 32.0,
+            panel_x + panel_w,
+            panel_y + 32.0,
+            [0.15, 0.12, 0.2, 0.6],
+            1.0,
+        );
 
         let history = &self.state.run_history;
         if history.len() < 2 {
-            renderer.draw_text("Need at least 2 runs to compare.", panel_x + 16.0, panel_y + 50.0, 11.0, [0.5, 0.5, 0.6, 0.8]);
-            renderer.draw_text("Run the workflow multiple times.", panel_x + 16.0, panel_y + 66.0, 10.0, [0.4, 0.4, 0.5, 0.7]);
+            renderer.draw_text(
+                "Need at least 2 runs to compare.",
+                panel_x + 16.0,
+                panel_y + 50.0,
+                11.0,
+                [0.5, 0.5, 0.6, 0.8],
+            );
+            renderer.draw_text(
+                "Run the workflow multiple times.",
+                panel_x + 16.0,
+                panel_y + 66.0,
+                10.0,
+                [0.4, 0.4, 0.5, 0.7],
+            );
         } else {
             let mut y = panel_y + 42.0;
             // Compare last two runs
             let run_a = &history[history.len() - 2];
             let run_b = &history[history.len() - 1];
 
-            renderer.draw_text("Run A (previous)", panel_x + 16.0, y, 11.0, [0.6, 0.8, 0.6, 0.9]);
-            renderer.draw_text("Run B (latest)", panel_x + 260.0, y, 11.0, [0.6, 0.8, 1.0, 0.9]);
+            renderer.draw_text(
+                "Run A (previous)",
+                panel_x + 16.0,
+                y,
+                11.0,
+                [0.6, 0.8, 0.6, 0.9],
+            );
+            renderer.draw_text(
+                "Run B (latest)",
+                panel_x + 260.0,
+                y,
+                11.0,
+                [0.6, 0.8, 1.0, 0.9],
+            );
             y += 20.0;
 
             // Duration comparison
@@ -2213,16 +2369,30 @@ impl MultiAgentOrchestrator {
             y += 24.0;
 
             // Per-node comparison
-            renderer.draw_text("Per-node token usage:", panel_x + 16.0, y, 10.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text(
+                "Per-node token usage:",
+                panel_x + 16.0,
+                y,
+                10.0,
+                [0.6, 0.6, 0.7, 0.9],
+            );
             y += 16.0;
 
             for (node_id, state_a) in &run_a.node_states {
                 if let Some(state_b) = run_b.node_states.get(node_id) {
                     let tok_a = state_a.token_usage.total_tokens;
                     let tok_b = state_b.token_usage.total_tokens;
-                    let diff = if tok_b > tok_a { format!("+{}", tok_b - tok_a) } else { format!("{}", tok_b - tok_a) };
+                    let diff = if tok_b > tok_a {
+                        format!("+{}", tok_b - tok_a)
+                    } else {
+                        format!("{}", tok_b - tok_a)
+                    };
                     let line = format!("  {}: {} → {} ({})", node_id, tok_a, tok_b, diff);
-                    let color = if tok_b > tok_a { [0.9, 0.5, 0.3, 0.9] } else { [0.5, 0.9, 0.5, 0.9] };
+                    let color = if tok_b > tok_a {
+                        [0.9, 0.5, 0.3, 0.9]
+                    } else {
+                        [0.5, 0.9, 0.5, 0.9]
+                    };
                     renderer.draw_text(&line, panel_x + 16.0, y, 9.0, color);
                     y += 14.0;
                 }
@@ -2230,11 +2400,15 @@ impl MultiAgentOrchestrator {
         }
 
         // Close hint
-        renderer.draw_text("Click outside to close", panel_x + 16.0, panel_y + panel_h - 16.0, 9.0, [0.4, 0.4, 0.5, 0.6]);
+        renderer.draw_text(
+            "Click outside to close",
+            panel_x + 16.0,
+            panel_y + panel_h - 16.0,
+            9.0,
+            [0.4, 0.4, 0.5, 0.6],
+        );
     }
 }
-
-
 
 // === FEATURE: SkillRegistry ===
 #[derive(Debug, Clone, Default)]
@@ -2253,24 +2427,33 @@ pub struct SkillDef {
 impl SkillRegistry {
     pub fn new() -> Self {
         let mut skills = std::collections::HashMap::new();
-        skills.insert("text_generation".to_string(), SkillDef {
-            name: "text_generation".to_string(),
-            base_token_cost: 1500,
-            base_duration_ms: 2000,
-            description: "General text generation".to_string(),
-        });
-        skills.insert("code_analysis".to_string(), SkillDef {
-            name: "code_analysis".to_string(),
-            base_token_cost: 3000,
-            base_duration_ms: 4000,
-            description: "Analyze and review code".to_string(),
-        });
-        skills.insert("summarization".to_string(), SkillDef {
-            name: "summarization".to_string(),
-            base_token_cost: 800,
-            base_duration_ms: 1500,
-            description: "Summarize long text".to_string(),
-        });
+        skills.insert(
+            "text_generation".to_string(),
+            SkillDef {
+                name: "text_generation".to_string(),
+                base_token_cost: 1500,
+                base_duration_ms: 2000,
+                description: "General text generation".to_string(),
+            },
+        );
+        skills.insert(
+            "code_analysis".to_string(),
+            SkillDef {
+                name: "code_analysis".to_string(),
+                base_token_cost: 3000,
+                base_duration_ms: 4000,
+                description: "Analyze and review code".to_string(),
+            },
+        );
+        skills.insert(
+            "summarization".to_string(),
+            SkillDef {
+                name: "summarization".to_string(),
+                base_token_cost: 800,
+                base_duration_ms: 1500,
+                description: "Summarize long text".to_string(),
+            },
+        );
         Self { skills }
     }
 
@@ -2279,14 +2462,16 @@ impl SkillRegistry {
     }
 
     pub fn token_cost_for(&self, skill_names: &[String]) -> u32 {
-        skill_names.iter()
+        skill_names
+            .iter()
             .filter_map(|n| self.get(n))
             .map(|s| s.base_token_cost)
             .sum()
     }
 
     pub fn duration_for(&self, skill_names: &[String]) -> u32 {
-        skill_names.iter()
+        skill_names
+            .iter()
             .filter_map(|n| self.get(n))
             .map(|s| s.base_duration_ms)
             .sum::<u32>()
@@ -2365,11 +2550,23 @@ impl Default for RecurringRun {
 // === FEATURE: Undo/Redo ===
 #[derive(Debug, Clone)]
 pub enum GraphAction {
-    AddNode { node: OrchestratorNode },
-    RemoveNode { node_id: u64 },
-    MoveNode { node_id: u64, old_x: f32, old_y: f32 },
-    AddEdge { edge: OrchestratorEdge },
-    RemoveEdge { edge_id: u64 },
+    AddNode {
+        node: OrchestratorNode,
+    },
+    RemoveNode {
+        node_id: u64,
+    },
+    MoveNode {
+        node_id: u64,
+        old_x: f32,
+        old_y: f32,
+    },
+    AddEdge {
+        edge: OrchestratorEdge,
+    },
+    RemoveEdge {
+        edge_id: u64,
+    },
 }
 
 #[derive(Debug, Clone, Default)]
@@ -2392,8 +2589,12 @@ impl UndoRedo {
         self.redo_stack.pop()
     }
 
-    pub fn can_undo(&self) -> bool { !self.undo_stack.is_empty() }
-    pub fn can_redo(&self) -> bool { !self.redo_stack.is_empty() }
+    pub fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+    pub fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
 }
 
 // === FEATURE: ValidationResult ===
@@ -2418,27 +2619,39 @@ pub struct SearchState {
 }
 
 // === FEATURE: Workflow Validation ===
-pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge]) -> Vec<ValidationError> {
+pub fn validate_workflow(
+    nodes: &[OrchestratorNode],
+    edges: &[OrchestratorEdge],
+) -> Vec<ValidationError> {
     let mut issues = Vec::new();
 
     if nodes.is_empty() {
-        issues.push(ValidationError { message: "Workflow has no nodes".to_string(), is_error: true });
+        issues.push(ValidationError {
+            message: "Workflow has no nodes".to_string(),
+            is_error: true,
+        });
         return issues;
     }
 
-    let connected_ids: std::collections::HashSet<&str> = edges.iter()
+    let connected_ids: std::collections::HashSet<&str> = edges
+        .iter()
         .flat_map(|e| vec![e.source_node.as_str(), e.target_node.as_str()])
         .collect();
 
     for node in nodes {
         if !connected_ids.contains(node.id.as_str()) {
-            issues.push(ValidationError { message: format!("Node '{}' is disconnected", node.name), is_error: false });
+            issues.push(ValidationError {
+                message: format!("Node '{}' is disconnected", node.name),
+                is_error: false,
+            });
         }
     }
 
     let mut adj: std::collections::HashMap<&str, Vec<&str>> = std::collections::HashMap::new();
     for edge in edges {
-        adj.entry(edge.source_node.as_str()).or_default().push(edge.target_node.as_str());
+        adj.entry(edge.source_node.as_str())
+            .or_default()
+            .push(edge.target_node.as_str());
     }
 
     let mut visited = std::collections::HashSet::new();
@@ -2455,7 +2668,9 @@ pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge])
         if let Some(neighbors) = adj.get(node) {
             for &n in neighbors {
                 if !visited.contains(n) {
-                    if has_cycle(n, adj, visited, in_stack) { return true; }
+                    if has_cycle(n, adj, visited, in_stack) {
+                        return true;
+                    }
                 } else if in_stack.contains(n) {
                     return true;
                 }
@@ -2468,42 +2683,68 @@ pub fn validate_workflow(nodes: &[OrchestratorNode], edges: &[OrchestratorEdge])
     for node in nodes {
         if !visited.contains(node.id.as_str()) {
             if has_cycle(node.id.as_str(), &adj, &mut visited, &mut in_stack) {
-                issues.push(ValidationError { message: "Workflow contains a cycle".to_string(), is_error: true });
+                issues.push(ValidationError {
+                    message: "Workflow contains a cycle".to_string(),
+                    is_error: true,
+                });
                 break;
             }
         }
     }
 
-    let has_input: std::collections::HashSet<&str> = edges.iter()
-        .map(|e| e.target_node.as_str())
-        .collect();
+    let has_input: std::collections::HashSet<&str> =
+        edges.iter().map(|e| e.target_node.as_str()).collect();
 
-    let start_nodes: Vec<_> = nodes.iter()
+    let start_nodes: Vec<_> = nodes
+        .iter()
         .filter(|n| !has_input.contains(n.id.as_str()))
         .collect();
 
     if start_nodes.is_empty() && !nodes.is_empty() {
-        issues.push(ValidationError { message: "No start node found (all nodes have inputs)".to_string(), is_error: false });
+        issues.push(ValidationError {
+            message: "No start node found (all nodes have inputs)".to_string(),
+            is_error: false,
+        });
     }
 
     issues
 }
 
 // === FEATURE: Zoom to fit ===
-pub fn zoom_to_fit(nodes: &[OrchestratorNode], viewport_w: f32, viewport_h: f32) -> (f32, f32, f32) {
-    if nodes.is_empty() { return (0.0, 0.0, 1.0); }
-    let min_x = nodes.iter().map(|n| n.position.0).fold(f32::INFINITY, f32::min);
-    let max_x = nodes.iter().map(|n| n.position.0 + n.size.0).fold(f32::NEG_INFINITY, f32::max);
-    let min_y = nodes.iter().map(|n| n.position.1).fold(f32::INFINITY, f32::min);
-    let max_y = nodes.iter().map(|n| n.position.1 + n.size.1).fold(f32::NEG_INFINITY, f32::max);
+pub fn zoom_to_fit(
+    nodes: &[OrchestratorNode],
+    viewport_w: f32,
+    viewport_h: f32,
+) -> (f32, f32, f32) {
+    if nodes.is_empty() {
+        return (0.0, 0.0, 1.0);
+    }
+    let min_x = nodes
+        .iter()
+        .map(|n| n.position.0)
+        .fold(f32::INFINITY, f32::min);
+    let max_x = nodes
+        .iter()
+        .map(|n| n.position.0 + n.size.0)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let min_y = nodes
+        .iter()
+        .map(|n| n.position.1)
+        .fold(f32::INFINITY, f32::min);
+    let max_y = nodes
+        .iter()
+        .map(|n| n.position.1 + n.size.1)
+        .fold(f32::NEG_INFINITY, f32::max);
     let content_w = max_x - min_x + 80.0;
     let content_h = max_y - min_y + 80.0;
-    let zoom = (viewport_w / content_w).min(viewport_h / content_h).min(2.0).max(0.1);
+    let zoom = (viewport_w / content_w)
+        .min(viewport_h / content_h)
+        .min(2.0)
+        .max(0.1);
     let offset_x = (viewport_w - content_w * zoom) / 2.0 - min_x * zoom + 40.0 * zoom;
     let offset_y = (viewport_h - content_h * zoom) / 2.0 - min_y * zoom + 40.0 * zoom;
     (offset_x, offset_y, zoom)
 }
-
 
 // ============================================================
 // AgentMessage — inter-agent message passing visualization
@@ -2571,7 +2812,12 @@ pub struct NodeMetrics {
 // Helper: make a Rect
 // ============================================================
 fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
-    Rect { x, y, width: w, height: h }
+    Rect {
+        x,
+        y,
+        width: w,
+        height: h,
+    }
 }
 
 // ============================================================
@@ -2602,7 +2848,13 @@ fn render_output_panel(
             renderer.draw_text(output_text, x + 12.0, y + 30.0, 12.0, [0.7, 0.7, 0.8, 1.0]);
         }
     } else {
-        renderer.draw_text("Select a node to inspect output.", x + 12.0, y + 30.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+        renderer.draw_text(
+            "Select a node to inspect output.",
+            x + 12.0,
+            y + 30.0,
+            12.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
     }
 }
 
@@ -2623,7 +2875,13 @@ fn render_message_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Agent Messages", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
+    renderer.draw_text(
+        "Agent Messages",
+        x + 12.0,
+        y + 8.0,
+        14.0,
+        [0.9, 0.9, 1.0, 1.0],
+    );
     let mut cy = y + 30.0;
     for msg in state.message_log.iter().rev().take(20) {
         let color = match msg.message_type {
@@ -2632,7 +2890,10 @@ fn render_message_panel(
             MessageType::Error => [1.0, 0.3, 0.3, 1.0],
             MessageType::Info => [0.7, 0.7, 0.8, 1.0],
         };
-        let label = format!("[{}] {} -> {}", msg.message_type, msg.from_node, msg.to_node);
+        let label = format!(
+            "[{}] {} -> {}",
+            msg.message_type, msg.from_node, msg.to_node
+        );
         renderer.draw_text(&label, x + 12.0, cy, 11.0, color);
         cy += 16.0;
         renderer.draw_text(&msg.content, x + 20.0, cy, 10.0, [0.6, 0.6, 0.7, 1.0]);
@@ -2662,11 +2923,21 @@ fn render_validation_panel(
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
     renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
     if state.validation_errors.is_empty() {
-        renderer.draw_text("No issues found.", x + 12.0, y + 30.0, 12.0, [0.3, 1.0, 0.5, 1.0]);
+        renderer.draw_text(
+            "No issues found.",
+            x + 12.0,
+            y + 30.0,
+            12.0,
+            [0.3, 1.0, 0.5, 1.0],
+        );
     } else {
         let mut cy = y + 30.0;
         for err in &state.validation_errors {
-            let color = if err.is_error { [1.0, 0.3, 0.3, 1.0] } else { [1.0, 0.8, 0.2, 1.0] };
+            let color = if err.is_error {
+                [1.0, 0.3, 0.3, 1.0]
+            } else {
+                [1.0, 0.8, 0.2, 1.0]
+            };
             renderer.draw_text(&err.message, x + 12.0, cy, 11.0, color);
             cy += 18.0;
         }
@@ -2690,13 +2961,33 @@ fn render_skills_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Skills Configuration", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
-    renderer.draw_text("Available skills:", x + 12.0, y + 30.0, 12.0, [0.7, 0.7, 0.8, 1.0]);
+    renderer.draw_text(
+        "Skills Configuration",
+        x + 12.0,
+        y + 8.0,
+        14.0,
+        [0.9, 0.9, 1.0, 1.0],
+    );
+    renderer.draw_text(
+        "Available skills:",
+        x + 12.0,
+        y + 30.0,
+        12.0,
+        [0.7, 0.7, 0.8, 1.0],
+    );
     let mut cy = y + 50.0;
     for skill in state.skill_registry.list_skills() {
-        renderer.draw_text(&format!("• {}", skill.name), x + 20.0, cy, 11.0, [0.6, 0.8, 1.0, 1.0]);
+        renderer.draw_text(
+            &format!("• {}", skill.name),
+            x + 20.0,
+            cy,
+            11.0,
+            [0.6, 0.8, 1.0, 1.0],
+        );
         cy += 16.0;
-        if cy > y + h - 20.0 { break; }
+        if cy > y + h - 20.0 {
+            break;
+        }
     }
 }
 
@@ -2717,14 +3008,38 @@ fn render_webhook_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Webhook Configuration", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
+    renderer.draw_text(
+        "Webhook Configuration",
+        x + 12.0,
+        y + 8.0,
+        14.0,
+        [0.9, 0.9, 1.0, 1.0],
+    );
     if let Some(sel) = &state.selected_node {
         if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
-            renderer.draw_text(&format!("URL: {}", node.webhook_config.url), x + 12.0, y + 30.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
-            renderer.draw_text(&format!("Method: {}", node.webhook_config.method), x + 12.0, y + 48.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(
+                &format!("URL: {}", node.webhook_config.url),
+                x + 12.0,
+                y + 30.0,
+                11.0,
+                [0.7, 0.7, 0.8, 1.0],
+            );
+            renderer.draw_text(
+                &format!("Method: {}", node.webhook_config.method),
+                x + 12.0,
+                y + 48.0,
+                11.0,
+                [0.7, 0.7, 0.8, 1.0],
+            );
         }
     } else {
-        renderer.draw_text("Select a webhook node.", x + 12.0, y + 30.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+        renderer.draw_text(
+            "Select a webhook node.",
+            x + 12.0,
+            y + 30.0,
+            12.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
     }
 }
 
@@ -2745,14 +3060,38 @@ fn render_schedule_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Schedule Configuration", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
+    renderer.draw_text(
+        "Schedule Configuration",
+        x + 12.0,
+        y + 8.0,
+        14.0,
+        [0.9, 0.9, 1.0, 1.0],
+    );
     if let Some(sel) = &state.selected_node {
         if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
-            renderer.draw_text(&format!("Cron: {}", node.schedule_config.cron_expression), x + 12.0, y + 30.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
-            renderer.draw_text(&format!("Interval: {}s", node.schedule_config.interval_seconds), x + 12.0, y + 48.0, 11.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(
+                &format!("Cron: {}", node.schedule_config.cron_expression),
+                x + 12.0,
+                y + 30.0,
+                11.0,
+                [0.7, 0.7, 0.8, 1.0],
+            );
+            renderer.draw_text(
+                &format!("Interval: {}s", node.schedule_config.interval_seconds),
+                x + 12.0,
+                y + 48.0,
+                11.0,
+                [0.7, 0.7, 0.8, 1.0],
+            );
         }
     } else {
-        renderer.draw_text("Select a schedule node.", x + 12.0, y + 30.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+        renderer.draw_text(
+            "Select a schedule node.",
+            x + 12.0,
+            y + 30.0,
+            12.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
     }
 }
 
@@ -2773,13 +3112,31 @@ fn render_recurring_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Recurring Runs", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
+    renderer.draw_text(
+        "Recurring Runs",
+        x + 12.0,
+        y + 8.0,
+        14.0,
+        [0.9, 0.9, 1.0, 1.0],
+    );
     if state.recurring_runs.is_empty() {
-        renderer.draw_text("No recurring runs configured.", x + 12.0, y + 30.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+        renderer.draw_text(
+            "No recurring runs configured.",
+            x + 12.0,
+            y + 30.0,
+            12.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
     } else {
         let mut cy = y + 30.0;
         for run in &state.recurring_runs {
-            renderer.draw_text(&format!("Every {}s ({} runs)", run.interval_seconds, run.run_count), x + 12.0, cy, 11.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(
+                &format!("Every {}s ({} runs)", run.interval_seconds, run.run_count),
+                x + 12.0,
+                cy,
+                11.0,
+                [0.7, 0.7, 0.8, 1.0],
+            );
             cy += 18.0;
         }
     }
@@ -2808,7 +3165,11 @@ fn render_minimap(
         let ny = y + node.position.1 * scale;
         let nw = node.size.0 * scale;
         let nh = node.size.1 * scale;
-        renderer.fill_rounded_rect(r(nx, ny, nw.max(2.0), nh.max(2.0)), 1.0, [0.4, 0.4, 0.6, 0.8]);
+        renderer.fill_rounded_rect(
+            r(nx, ny, nw.max(2.0), nh.max(2.0)),
+            1.0,
+            [0.4, 0.4, 0.6, 0.8],
+        );
     }
     let vp_x = x + state.viewport_offset.0 * scale;
     let vp_y = y + state.viewport_offset.1 * scale;

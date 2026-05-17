@@ -30,7 +30,11 @@ pub struct Scaffolder {
 impl Scaffolder {
     /// Create a new Scaffolder for a project name.
     pub fn new(name: String, template: Template, init_git: bool) -> Self {
-        Self { name, template, init_git }
+        Self {
+            name,
+            template,
+            init_git,
+        }
     }
 
     /// Execute the scaffolding process.
@@ -87,7 +91,8 @@ log = "0.4"
 
     fn gen_main_rs(&self, root: &Path) -> Result<()> {
         let content = match self.template {
-            Template::Minimal => r#"use cvkg::prelude::*;
+            Template::Minimal => {
+                r#"use cvkg::prelude::*;
 
 #[allow(non_snake_case)]
 #[view_component]
@@ -100,8 +105,10 @@ fn App() {
 fn main() {
     cvkg::native::NativeRenderer::run(App());
 }
-"#,
-            Template::Dashboard => r#"use cvkg::prelude::*;
+"#
+            }
+            Template::Dashboard => {
+                r#"use cvkg::prelude::*;
 
 #[allow(non_snake_case)]
 #[view_component]
@@ -133,7 +140,8 @@ fn MainContent() {
 fn main() {
     cvkg::native::NativeRenderer::run(Dashboard());
 }
-"#,
+"#
+            }
         };
         fs::write(root.join("src/main.rs"), content).context("Failed to write src/main.rs")
     }

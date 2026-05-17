@@ -3,7 +3,10 @@
 //! Gerd the Vanir giantess represents fierce protection and boundary defense -
 //! this telemetry system monitors and protects system boundaries with reactive insights.
 
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Telemetry data point
 #[derive(Debug, Clone)]
@@ -69,7 +72,10 @@ impl GerdTelemetry {
     pub fn point(mut self, series_name: &str, value: f64, unit: &str) -> Self {
         if let Some(s) = self.series.iter_mut().find(|s| s.name == series_name) {
             s.points.push(TelemetryPoint {
-                timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64(),
                 metric: series_name.to_string(),
                 value,
                 unit: unit.to_string(),
@@ -82,7 +88,10 @@ impl GerdTelemetry {
         self.alerts.push(Alert {
             message: message.to_string(),
             severity,
-            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs_f64(),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs_f64(),
         });
         self
     }
@@ -90,15 +99,28 @@ impl GerdTelemetry {
 
 impl View for GerdTelemetry {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Header
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y, width: rect.width, height: 28.0 },
-            [0.08, 0.04, 0.08, 1.0]
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: 28.0,
+            },
+            [0.08, 0.04, 0.08, 1.0],
         );
-        renderer.draw_text("Gerd Telemetry Dashboard", rect.x + 10.0, rect.y + 9.0, 13.0, [0.9, 0.6, 0.9, 1.0]);
+        renderer.draw_text(
+            "Gerd Telemetry Dashboard",
+            rect.x + 10.0,
+            rect.y + 9.0,
+            13.0,
+            [0.9, 0.6, 0.9, 1.0],
+        );
 
         // Alerts section
         let alert_y = rect.y + 35.0;
@@ -109,10 +131,21 @@ impl View for GerdTelemetry {
                 AlertSeverity::Critical => [0.9, 0.3, 0.3, 1.0],
             };
             renderer.fill_rect(
-                Rect { x: rect.x + 10.0, y: alert_y, width: rect.width - 20.0, height: 20.0 },
-                [0.1, 0.1, 0.12, 1.0]
+                Rect {
+                    x: rect.x + 10.0,
+                    y: alert_y,
+                    width: rect.width - 20.0,
+                    height: 20.0,
+                },
+                [0.1, 0.1, 0.12, 1.0],
             );
-            renderer.draw_text(&format!("⚠ {}", alert.message), rect.x + 15.0, alert_y + 5.0, 10.0, color);
+            renderer.draw_text(
+                &format!("⚠ {}", alert.message),
+                rect.x + 15.0,
+                alert_y + 5.0,
+                10.0,
+                color,
+            );
         }
 
         // Series visualization
@@ -125,30 +158,61 @@ impl View for GerdTelemetry {
 
             // Draw trend line
             if series.points.len() > 1 {
-                let max_val = series.points.iter().map(|p| p.value).fold(0.0f64, f64::max).max(1.0);
+                let max_val = series
+                    .points
+                    .iter()
+                    .map(|p| p.value)
+                    .fold(0.0f64, f64::max)
+                    .max(1.0);
                 let min_val = series.points.iter().map(|p| p.value).fold(0.0, f64::min);
                 let val_range = (max_val - min_val).max(1.0);
 
                 for j in 0..series.points.len() - 1 {
-                    let x1 = rect.x + 20.0 + (j as f32 / series.points.len() as f32) * (rect.width - 40.0);
-                    let y1 = series_y + series_h - ((series.points[j].value - min_val) / val_range) as f32 * series_h;
-                    let x2 = rect.x + 20.0 + ((j + 1) as f32 / series.points.len() as f32) * (rect.width - 40.0);
-                    let y2 = series_y + series_h - ((series.points[j + 1].value - min_val) / val_range) as f32 * series_h;
+                    let x1 = rect.x
+                        + 20.0
+                        + (j as f32 / series.points.len() as f32) * (rect.width - 40.0);
+                    let y1 = series_y + series_h
+                        - ((series.points[j].value - min_val) / val_range) as f32 * series_h;
+                    let x2 = rect.x
+                        + 20.0
+                        + ((j + 1) as f32 / series.points.len() as f32) * (rect.width - 40.0);
+                    let y2 = series_y + series_h
+                        - ((series.points[j + 1].value - min_val) / val_range) as f32 * series_h;
                     renderer.draw_line(x1, y1, x2, y2, series.color, 2.0);
                 }
             }
 
             renderer.draw_text(&series.name, rect.x + 10.0, series_y, 10.0, series.color);
             if let Some(last) = series.points.last() {
-                renderer.draw_text(&format!("{:.1}{}", last.value, last.unit), rect.x + rect.width - 60.0, series_y, 10.0, [0.7, 0.8, 0.9, 1.0]);
+                renderer.draw_text(
+                    &format!("{:.1}{}", last.value, last.unit),
+                    rect.x + rect.width - 60.0,
+                    series_y,
+                    10.0,
+                    [0.7, 0.8, 0.9, 1.0],
+                );
             }
         }
     }
 }
 
 impl LayoutView for GerdTelemetry {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 320.0, height: 200.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 320.0,
+            height: 200.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

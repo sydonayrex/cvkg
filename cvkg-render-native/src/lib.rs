@@ -18,7 +18,7 @@
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
 //! 8. HARDWARE VERIFIED — NEVER declare success based on mock data/rendering for native crates.
-//!                      Any change to input, rendering, or lifecycle MUST be verified via physical 
+//!                      Any change to input, rendering, or lifecycle MUST be verified via physical
 //!                      loopback (e.g., cargo run -p berserker) and signal path tracing.
 //!
 //! Sources:
@@ -31,16 +31,16 @@
 //  using winit for window/event handling and AccessKit for accessibility tree integration.
 
 use cvkg_core::{FrameRenderer, Renderer};
+use image;
 // FIX #10: Wayland import gated to Linux only — was unconditional, broke macOS/Windows builds.
 #[cfg(target_os = "linux")]
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
-    event::{DeviceId, DeviceEvent, WindowEvent},
+    event::{DeviceEvent, DeviceId, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
-
 
 /// Native renderer backend implementing the Renderer trait.
 /// It wraps a shared SurtrRenderer for high-performance GPU drawing.
@@ -61,8 +61,22 @@ enum AppEvent {
 
 impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
-    fn new(window: Arc<Window>, gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>, delta_time: f32, elapsed_time: f32, berserker_mode: cvkg_core::BerserkerMode, rage: f32) -> Self {
-        Self { gpu, delta_time, elapsed_time, berserker_mode, rage, window }
+    fn new(
+        window: Arc<Window>,
+        gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
+        delta_time: f32,
+        elapsed_time: f32,
+        berserker_mode: cvkg_core::BerserkerMode,
+        rage: f32,
+    ) -> Self {
+        Self {
+            gpu,
+            delta_time,
+            elapsed_time,
+            berserker_mode,
+            rage,
+            window,
+        }
     }
 
     /// Start the CVKG native application with the given view.
@@ -121,7 +135,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.gpu.is_none() {
             log::info!("[Native] App instance (resumed): {:p}", self);
-            
+
             let window_attrs = Window::default_attributes()
                 .with_title("CVKG Berserker")
                 .with_visible(true)
@@ -134,27 +148,31 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     .create_window(window_attrs)
                     .expect("Failed to create window"),
             );
-            
+
             let window_id = window.id();
-            let vdom = cvkg_vdom::VDom::build(&self.view, cvkg_core::Rect::new(0.0, 0.0, 1280.0, 720.0));
-            
+            let vdom =
+                cvkg_vdom::VDom::build(&self.view, cvkg_core::Rect::new(0.0, 0.0, 1280.0, 720.0));
+
             log::info!("[Native] INSERTING window ID: {:?}", window_id);
-            
-            self.windows.insert(window_id, WindowState {
-                window: window.clone(),
-                accesskit_adapter: None,
-                vdom: Some(vdom),
-                cursor_pos: [0.0, 0.0],
-                last_redraw_start: std::time::Instant::now(),
-                frame_history: std::collections::VecDeque::with_capacity(60),
-                frame_count: 0,
-                last_pos: None,
-            });
+
+            self.windows.insert(
+                window_id,
+                WindowState {
+                    window: window.clone(),
+                    accesskit_adapter: None,
+                    vdom: Some(vdom),
+                    cursor_pos: [0.0, 0.0],
+                    last_redraw_start: std::time::Instant::now(),
+                    frame_history: std::collections::VecDeque::with_capacity(60),
+                    frame_count: 0,
+                    last_pos: None,
+                },
+            );
 
             // Immediately set self.gpu to prevent re-entry
             let gpu = pollster::block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
             self.gpu = Some(Arc::new(std::sync::Mutex::new(gpu)));
-            
+
             log::info!("[Native] Initialization complete.");
             window.request_redraw();
         }
@@ -162,13 +180,18 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: winit::event::StartCause) {
         if matches!(cause, winit::event::StartCause::Poll) {
-             // Too noisy
+            // Too noisy
         } else {
-             log::debug!("[Native] Event Loop Wake: {:?}", cause);
+            log::debug!("[Native] Event Loop Wake: {:?}", cause);
         }
     }
 
-    fn device_event(&mut self, _event_loop: &ActiveEventLoop, _device_id: winit::event::DeviceId, event: winit::event::DeviceEvent) {
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
         if matches!(event, winit::event::DeviceEvent::MouseMotion { .. }) {
             // log::trace!("[Native] Raw Mouse Motion");
         } else {
@@ -177,21 +200,27 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
-        if !matches!(event, WindowEvent::RedrawRequested) && !matches!(event, WindowEvent::CursorMoved { .. }) {
-            log::info!("[Native] App instance: {:p} | WINDOW EVENT: {:?}", self, event);
+        if !matches!(event, WindowEvent::RedrawRequested)
+            && !matches!(event, WindowEvent::CursorMoved { .. })
+        {
+            log::info!(
+                "[Native] App instance: {:p} | WINDOW EVENT: {:?}",
+                self,
+                event
+            );
         }
-        
-        let gpu_arc = if let Some(g) = &self.gpu { 
-            g.clone() 
-        } else { 
+
+        let gpu_arc = if let Some(g) = &self.gpu {
+            g.clone()
+        } else {
             log::warn!("[Native] DROPPING EVENT: GPU not initialized yet");
-            return; 
+            return;
         };
-        
-        let state = if let Some(s) = self.windows.get_mut(&id) { 
-            s 
-        } else { 
-            return; 
+
+        let state = if let Some(s) = self.windows.get_mut(&id) {
+            s
+        } else {
+            return;
         };
 
         match event {
@@ -199,13 +228,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 let dx = state.last_pos.map_or(0, |last| pos.x - last[0]);
                 let dy = state.last_pos.map_or(0, |last| pos.y - last[1]);
                 let speed = ((dx.pow(2) + dy.pow(2)) as f32).sqrt();
-                
+
                 if speed > 0.1 {
                     // Significant kinetic injection
                     self.rage = (self.rage + 0.2).min(1.0);
                     log::info!("[Native] Kinetic Injection! Rage: {}", self.rage);
                 }
-                
+
                 state.last_pos = Some([pos.x, pos.y]);
                 state.window.request_redraw();
             }
@@ -220,12 +249,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 // lock().expect("...") providing actionable context on panic. The GPU
                 // mutex should never be poisoned under correct usage; expect() surfaces
                 // the failure clearly rather than producing an opaque unwrap panic.
-                gpu_arc.lock().expect("GPU mutex poisoned during resize").resize(
-                    id,
-                    physical_size.width,
-                    physical_size.height,
-                    state.window.scale_factor() as f32,
-                );
+                gpu_arc
+                    .lock()
+                    .expect("GPU mutex poisoned during resize")
+                    .resize(
+                        id,
+                        physical_size.width,
+                        physical_size.height,
+                        state.window.scale_factor() as f32,
+                    );
                 state.window.request_redraw();
             }
             WindowEvent::Focused(focused) => {
@@ -265,10 +297,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let patches = prev_vdom.diff(&new_vdom);
                     let mut nodes = Vec::new();
                     for patch in &patches {
-                        if let cvkg_vdom::VDomPatch::Create(node) | cvkg_vdom::VDomPatch::Replace { node, .. } = patch {
+                        if let cvkg_vdom::VDomPatch::Create(node)
+                        | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
+                        {
                             nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
                         } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
-                            && let Some(node) = new_vdom.nodes.get(id) {
+                            && let Some(node) = new_vdom.nodes.get(id)
+                        {
                             nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
                         }
                     }
@@ -291,7 +326,9 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 let draw_start = std::time::Instant::now();
                 let delta_time = redraw_start.duration_since(last_redraw_start).as_secs_f32();
                 let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
-                let mut gpu = gpu_arc.lock().expect("GPU mutex poisoned during frame begin");
+                let mut gpu = gpu_arc
+                    .lock()
+                    .expect("GPU mutex poisoned during frame begin");
                 let encoder = gpu.begin_frame(id);
                 let mut renderer = NativeRenderer::new(
                     state.window.clone(),
@@ -310,7 +347,9 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                 // Re-acquire to submit the frame
                 let gpu_submit_start = std::time::Instant::now();
-                let mut gpu = gpu_arc.lock().expect("GPU mutex poisoned during frame submit");
+                let mut gpu = gpu_arc
+                    .lock()
+                    .expect("GPU mutex poisoned during frame submit");
                 gpu.render_frame();
                 gpu.end_frame(encoder);
                 let gpu_submit_end = std::time::Instant::now();
@@ -320,14 +359,23 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 // to start of this one), not input dispatch latency. The field name is defined
                 // in cvkg_core::TelemetryData and kept as-is to match that struct.
                 let mut telemetry = cvkg_core::TelemetryData::default();
-                telemetry.input_time_ms = redraw_start.duration_since(last_redraw_start).as_secs_f32() * 1000.0;
-                telemetry.layout_time_ms = layout_end.duration_since(layout_start).as_secs_f32() * 1000.0;
-                telemetry.state_flush_time_ms = state_flush_end.duration_since(state_flush_start).as_secs_f32() * 1000.0;
+                telemetry.input_time_ms =
+                    redraw_start.duration_since(last_redraw_start).as_secs_f32() * 1000.0;
+                telemetry.layout_time_ms =
+                    layout_end.duration_since(layout_start).as_secs_f32() * 1000.0;
+                telemetry.state_flush_time_ms = state_flush_end
+                    .duration_since(state_flush_start)
+                    .as_secs_f32()
+                    * 1000.0;
                 telemetry.draw_time_ms = draw_end.duration_since(draw_start).as_secs_f32() * 1000.0;
-                telemetry.gpu_submit_time_ms = gpu_submit_end.duration_since(gpu_submit_start).as_secs_f32() * 1000.0;
+                telemetry.gpu_submit_time_ms = gpu_submit_end
+                    .duration_since(gpu_submit_start)
+                    .as_secs_f32()
+                    * 1000.0;
 
                 // Total frame time from redraw request to GPU submission complete
-                let frame_time_ms = gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
+                let frame_time_ms =
+                    gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
                 telemetry.frame_time_ms = frame_time_ms;
 
                 // Tail Latency Tracking (P99 and Jitter) over a 100-frame sliding window.
@@ -341,7 +389,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                 if !sorted_frames.is_empty() {
                     let p99_idx = (sorted_frames.len() as f32 * 0.99).floor() as usize;
-                    telemetry.p99_frame_time_ms = sorted_frames[p99_idx.min(sorted_frames.len() - 1)];
+                    telemetry.p99_frame_time_ms =
+                        sorted_frames[p99_idx.min(sorted_frames.len() - 1)];
 
                     // Jitter: standard deviation of frame times over the sliding window.
                     let avg = sorted_frames.iter().sum::<f32>() / sorted_frames.len() as f32;
@@ -384,7 +433,12 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
             WindowEvent::CursorMoved { position, .. } => {
                 let scale = state.window.scale_factor();
                 let logical = position.to_logical::<f32>(scale);
-                log::info!("[Native] Cursor Moved: Physical={:?} Logical={:?} Scale={}", position, logical, scale);
+                log::info!(
+                    "[Native] Cursor Moved: Physical={:?} Logical={:?} Scale={}",
+                    position,
+                    logical,
+                    scale
+                );
                 state.cursor_pos = [logical.x, logical.y];
                 if let Some(vdom) = &state.vdom {
                     vdom.dispatch_event(cvkg_core::Event::PointerMove {
@@ -395,8 +449,17 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 // FIX #12: Always request redraw on movement to ensure hover effects respond immediately.
                 state.window.request_redraw();
             }
-            WindowEvent::MouseInput { state: mouse_state, button, .. } => {
-                log::info!("[Native] MOUSE INPUT: {:?} button={:?} pos={:?}", mouse_state, button, state.cursor_pos);
+            WindowEvent::MouseInput {
+                state: mouse_state,
+                button,
+                ..
+            } => {
+                log::info!(
+                    "[Native] MOUSE INPUT: {:?} button={:?} pos={:?}",
+                    mouse_state,
+                    button,
+                    state.cursor_pos
+                );
                 if let Some(vdom) = &state.vdom {
                     let btn_id = match button {
                         winit::event::MouseButton::Left => 0,
@@ -430,18 +493,37 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     log::warn!("[Native] Mouse input received but state.vdom is None!");
                 }
             }
+            WindowEvent::MouseWheel { delta, .. } => {
+                if let Some(vdom) = &state.vdom {
+                    let (dx, dy) = match delta {
+                        winit::event::MouseScrollDelta::LineDelta(x, y) => (x * 10.0, y * 10.0),
+                        winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                            (pos.x as f32, pos.y as f32)
+                        }
+                    };
+                    vdom.dispatch_event(cvkg_core::Event::PointerWheel {
+                        x: state.cursor_pos[0],
+                        y: state.cursor_pos[1],
+                        delta_x: dx,
+                        delta_y: dy,
+                    });
+                    state.window.request_redraw();
+                }
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let Some(vdom) = &state.vdom
-                    && let Some(cvkg_event) = convert_keyboard_event(event) {
-                        vdom.dispatch_event(cvkg_event);
-                        state.window.request_redraw();
+                    && let Some(cvkg_event) = convert_keyboard_event(event)
+                {
+                    vdom.dispatch_event(cvkg_event);
+                    state.window.request_redraw();
                 }
             }
             WindowEvent::Ime(ime_event) => {
                 if let Some(vdom) = &state.vdom
-                    && let Some(cvkg_event) = convert_ime_event(ime_event) {
-                        vdom.dispatch_event(cvkg_event);
-                        state.window.request_redraw();
+                    && let Some(cvkg_event) = convert_ime_event(ime_event)
+                {
+                    vdom.dispatch_event(cvkg_event);
+                    state.window.request_redraw();
                 }
             }
             _ => {}
@@ -457,7 +539,9 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
         // rather than routing to the arbitrary first window (HashMap iteration order is
         // non-deterministic and would silently misroute actions in multi-window layouts).
         let target_state = self.windows.values_mut().find(|s| {
-            s.vdom.as_ref().map_or(false, |v| v.nodes.contains_key(&node_id))
+            s.vdom
+                .as_ref()
+                .map_or(false, |v| v.nodes.contains_key(&node_id))
         });
 
         if let Some(state) = target_state
@@ -481,7 +565,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
         // Frame Throttling: 60FPS target (16.6ms)
         let now = std::time::Instant::now();
         let target_interval = std::time::Duration::from_millis(16);
-        
+
         if now.duration_since(self.last_frame_time) >= target_interval {
             if self.rage > 0.01 {
                 // Only log heartbeat when there is kinetic activity
@@ -491,9 +575,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
             for window_state in self.windows.values() {
                 window_state.window.request_redraw();
             }
-            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(now + target_interval));
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                now + target_interval,
+            ));
         } else {
-            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(self.last_frame_time + target_interval));
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
+                self.last_frame_time + target_interval,
+            ));
         }
     }
 }
@@ -509,18 +597,29 @@ impl cvkg_core::ElapsedTime for NativeRenderer {
 }
 
 impl cvkg_core::Renderer for NativeRenderer {
-
     fn fill_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: fill_rect").fill_rect(rect, color);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_rect")
+            .fill_rect(rect, color);
     }
     fn fill_rounded_rect(&mut self, rect: cvkg_core::Rect, radius: f32, color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: fill_rounded_rect").fill_rounded_rect(rect, radius, color);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_rounded_rect")
+            .fill_rounded_rect(rect, radius, color);
     }
     fn fill_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: fill_ellipse").fill_ellipse(rect, color);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_ellipse")
+            .fill_ellipse(rect, color);
     }
     fn stroke_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: stroke_rect").stroke_rect(rect, color, stroke_width);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: stroke_rect")
+            .stroke_rect(rect, color, stroke_width);
     }
     fn stroke_rounded_rect(
         &mut self,
@@ -529,10 +628,16 @@ impl cvkg_core::Renderer for NativeRenderer {
         color: [f32; 4],
         stroke_width: f32,
     ) {
-        self.gpu.lock().expect("GPU mutex poisoned: stroke_rounded_rect").stroke_rounded_rect(rect, radius, color, stroke_width);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: stroke_rounded_rect")
+            .stroke_rounded_rect(rect, radius, color, stroke_width);
     }
     fn stroke_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: stroke_ellipse").stroke_ellipse(rect, color, stroke_width);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: stroke_ellipse")
+            .stroke_ellipse(rect, color, stroke_width);
     }
     fn draw_line(
         &mut self,
@@ -543,106 +648,227 @@ impl cvkg_core::Renderer for NativeRenderer {
         color: [f32; 4],
         stroke_width: f32,
     ) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_line").draw_line(x1, y1, x2, y2, color, stroke_width);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_line")
+            .draw_line(x1, y1, x2, y2, color, stroke_width);
     }
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_text").draw_text(text, x, y, size, color);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_text")
+            .draw_text(text, x, y, size, color);
     }
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: measure_text").measure_text(text, size)
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: measure_text")
+            .measure_text(text, size)
     }
-    fn draw_linear_gradient(&mut self, rect: cvkg_core::Rect, start_color: [f32; 4], end_color: [f32; 4], angle: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_linear_gradient").draw_linear_gradient(rect, start_color, end_color, angle);
+    fn draw_linear_gradient(
+        &mut self,
+        rect: cvkg_core::Rect,
+        start_color: [f32; 4],
+        end_color: [f32; 4],
+        angle: f32,
+    ) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_linear_gradient")
+            .draw_linear_gradient(rect, start_color, end_color, angle);
     }
-    fn draw_radial_gradient(&mut self, rect: cvkg_core::Rect, inner_color: [f32; 4], outer_color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_radial_gradient").draw_radial_gradient(rect, inner_color, outer_color);
+    fn draw_radial_gradient(
+        &mut self,
+        rect: cvkg_core::Rect,
+        inner_color: [f32; 4],
+        outer_color: [f32; 4],
+    ) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_radial_gradient")
+            .draw_radial_gradient(rect, inner_color, outer_color);
     }
     fn draw_texture(&mut self, texture_id: u32, rect: cvkg_core::Rect) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_texture").draw_texture(texture_id, rect);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_texture")
+            .draw_texture(texture_id, rect);
     }
     fn draw_image(&mut self, image_name: &str, rect: cvkg_core::Rect) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_image").draw_image(image_name, rect);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_image")
+            .draw_image(image_name, rect);
     }
     fn load_image(&mut self, name: &str, data: &[u8]) {
-        self.gpu.lock().expect("GPU mutex poisoned: load_image").load_image(name, data);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: load_image")
+            .load_image(name, data);
     }
     fn push_clip_rect(&mut self, rect: cvkg_core::Rect) {
-        self.gpu.lock().expect("GPU mutex poisoned: push_clip_rect").push_clip_rect(rect);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_clip_rect")
+            .push_clip_rect(rect);
     }
     fn pop_clip_rect(&mut self) {
-        self.gpu.lock().expect("GPU mutex poisoned: pop_clip_rect").pop_clip_rect();
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: pop_clip_rect")
+            .pop_clip_rect();
     }
     fn push_opacity(&mut self, opacity: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: push_opacity").push_opacity(opacity);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_opacity")
+            .push_opacity(opacity);
     }
     fn draw_3d_cube(&mut self, rect: cvkg_core::Rect, color: [f32; 4], rotation: [f32; 3]) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_3d_cube").draw_3d_cube(rect, color, rotation);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_3d_cube")
+            .draw_3d_cube(rect, color, rotation);
     }
     fn pop_opacity(&mut self) {
-        self.gpu.lock().expect("GPU mutex poisoned: pop_opacity").pop_opacity();
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: pop_opacity")
+            .pop_opacity();
     }
     fn bifrost(&mut self, rect: cvkg_core::Rect, blur: f32, saturation: f32, opacity: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: bifrost").bifrost(rect, blur, saturation, opacity);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: bifrost")
+            .bifrost(rect, blur, saturation, opacity);
     }
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: push_mjolnir_slice").push_mjolnir_slice(angle, offset);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_mjolnir_slice")
+            .push_mjolnir_slice(angle, offset);
     }
     fn pop_mjolnir_slice(&mut self) {
-        self.gpu.lock().expect("GPU mutex poisoned: pop_mjolnir_slice").pop_mjolnir_slice();
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: pop_mjolnir_slice")
+            .pop_mjolnir_slice();
     }
     fn mjolnir_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: mjolnir_shatter").mjolnir_shatter(rect, pieces, force, color);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: mjolnir_shatter")
+            .mjolnir_shatter(rect, pieces, force, color);
     }
-    fn mjolnir_fluid_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: mjolnir_fluid_shatter").mjolnir_fluid_shatter(rect, pieces, force, color);
+    fn mjolnir_fluid_shatter(
+        &mut self,
+        rect: cvkg_core::Rect,
+        pieces: u32,
+        force: f32,
+        color: [f32; 4],
+    ) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: mjolnir_fluid_shatter")
+            .mjolnir_fluid_shatter(rect, pieces, force, color);
     }
     fn draw_mjolnir_bolt(&mut self, from: [f32; 2], to: [f32; 2], color: [f32; 4]) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_mjolnir_bolt").draw_mjolnir_bolt(from, to, color);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_mjolnir_bolt")
+            .draw_mjolnir_bolt(from, to, color);
     }
     fn gungnir(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32, intensity: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: gungnir").gungnir(rect, color, radius, intensity);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: gungnir")
+            .gungnir(rect, color, radius, intensity);
     }
     fn mani_glow(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: mani_glow").mani_glow(rect, color, radius);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: mani_glow")
+            .mani_glow(rect, color, radius);
     }
-    fn register_handler(&mut self, event_type: &str, handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>) {
-        self.gpu.lock().expect("GPU mutex poisoned: register_handler").register_handler(event_type, handler);
+    fn register_handler(
+        &mut self,
+        event_type: &str,
+        handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
+    ) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: register_handler")
+            .register_handler(event_type, handler);
     }
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
-        self.gpu.lock().expect("GPU mutex poisoned: push_vnode").push_vnode(rect, name);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_vnode")
+            .push_vnode(rect, name);
     }
     fn pop_vnode(&mut self) {
-        self.gpu.lock().expect("GPU mutex poisoned: pop_vnode").pop_vnode();
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: pop_vnode")
+            .pop_vnode();
     }
     // FIX #1: Removed duplicate definitions of set_z_index and get_z_index.
     // They appeared twice in this impl block (after pop_vnode and after register_shared_element),
     // which is a hard compiler error. Exactly one definition of each is kept here.
     fn set_z_index(&mut self, z: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: set_z_index").set_z_index(z);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: set_z_index")
+            .set_z_index(z);
     }
     fn get_z_index(&self) -> f32 {
-        self.gpu.lock().expect("GPU mutex poisoned: get_z_index").get_z_index()
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: get_z_index")
+            .get_z_index()
     }
     fn register_shared_element(&mut self, id: &str, rect: cvkg_core::Rect) {
-        self.gpu.lock().expect("GPU mutex poisoned: register_shared_element").register_shared_element(id, rect);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: register_shared_element")
+            .register_shared_element(id, rect);
     }
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
-        self.gpu.lock().expect("GPU mutex poisoned: load_svg").load_svg(name, svg_data);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: load_svg")
+            .load_svg(name, svg_data);
     }
     fn draw_svg(&mut self, name: &str, rect: cvkg_core::Rect) {
-        self.gpu.lock().expect("GPU mutex poisoned: draw_svg").draw_svg(name, rect, None, 0);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_svg")
+            .draw_svg(name, rect, None, 0);
     }
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
-        self.gpu.lock().expect("GPU mutex poisoned: get_telemetry").telemetry.clone()
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: get_telemetry")
+            .telemetry
+            .clone()
     }
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
-        self.gpu.lock().expect("GPU mutex poisoned: prewarm_vram").prewarm_vram(assets);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: prewarm_vram")
+            .prewarm_vram(assets);
     }
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
-        self.gpu.lock().expect("GPU mutex poisoned: push_transform").push_transform(translation, scale, rotation);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_transform")
+            .push_transform(translation, scale, rotation);
     }
     fn pop_transform(&mut self) {
-        self.gpu.lock().expect("GPU mutex poisoned: pop_transform").pop_transform();
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: pop_transform")
+            .pop_transform();
     }
 
     fn set_berserker_mode(&mut self, state: cvkg_core::BerserkerMode) {
@@ -665,16 +891,25 @@ impl cvkg_core::Renderer for NativeRenderer {
             }
         }
 
-        self.gpu.lock().expect("GPU mutex poisoned: set_berserker_mode").set_berserker_mode(state);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: set_berserker_mode")
+            .set_berserker_mode(state);
     }
 
     fn set_rage(&mut self, rage: f32) {
         self.rage = rage;
-        self.gpu.lock().expect("GPU mutex poisoned: set_rage").set_rage(rage);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: set_rage")
+            .set_rage(rage);
     }
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        self.gpu.lock().expect("GPU mutex poisoned: memoize").memoize(id, data_hash, render_fn);
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: memoize")
+            .memoize(id, data_hash, render_fn);
     }
     fn request_redraw(&mut self) {
         self.window.request_redraw();
@@ -711,7 +946,6 @@ impl cvkg_core::Renderer for NativeRenderer {
 
 // ── Event Conversion Helpers ───────────────────────────────────────────
 
-
 fn convert_keyboard_event(event: winit::event::KeyEvent) -> Option<cvkg_core::Event> {
     if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
         let key_str = format!("{:?}", code);
@@ -730,6 +964,25 @@ fn convert_ime_event(event: winit::event::Ime) -> Option<cvkg_core::Event> {
         Some(cvkg_core::Event::Ime(string))
     } else {
         None
+    }
+}
+
+fn convert_mouse_event(
+    state: winit::event::ElementState,
+    position: [f32; 2],
+    button: u32,
+) -> cvkg_core::Event {
+    match state {
+        winit::event::ElementState::Pressed => cvkg_core::Event::PointerDown {
+            x: position[0],
+            y: position[1],
+            button,
+        },
+        winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
+            x: position[0],
+            y: position[1],
+            button,
+        },
     }
 }
 
@@ -765,7 +1018,8 @@ impl accesskit::DeactivationHandler for ShieldWall {
     fn deactivate_accessibility(&mut self) {}
 }
 
-type AssetCacheMap = std::collections::HashMap<String, cvkg_core::AssetState<std::sync::Arc<Vec<u8>>>>;
+type AssetCacheMap =
+    std::collections::HashMap<String, cvkg_core::AssetState<std::sync::Arc<Vec<u8>>>>;
 
 /// A concrete AssetManager for native desktop targets that loads from the local filesystem.
 ///
@@ -1003,7 +1257,10 @@ fn load_icon() -> Option<winit::window::Icon> {
     // unwrap_or_default() produced an empty PathBuf silently, making all subsequent
     // icon path lookups silently fail with no diagnostic output.
     let base = std::env::current_dir().unwrap_or_else(|e| {
-        log::warn!("[Native] Failed to get current directory for icon search: {}", e);
+        log::warn!(
+            "[Native] Failed to get current directory for icon search: {}",
+            e
+        );
         std::path::PathBuf::new()
     });
 
@@ -1018,16 +1275,17 @@ fn load_icon() -> Option<winit::window::Icon> {
 
     // Also search relative to the executable directory
     if let Ok(exe_path) = std::env::current_exe()
-        && let Some(exe_dir) = exe_path.parent() {
-            candidates.push(exe_dir.join("icons/icon.png"));
-            candidates.push(exe_dir.join("assets/icon.png"));
-            candidates.push(exe_dir.join("icon.png"));
-            if let Some(parent) = exe_dir.parent() {
-                candidates.push(parent.join("icons/icon.png"));
-                candidates.push(parent.join("assets/icon.png"));
-                candidates.push(parent.join("icon.png"));
-            }
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        candidates.push(exe_dir.join("icons/icon.png"));
+        candidates.push(exe_dir.join("assets/icon.png"));
+        candidates.push(exe_dir.join("icon.png"));
+        if let Some(parent) = exe_dir.parent() {
+            candidates.push(parent.join("icons/icon.png"));
+            candidates.push(parent.join("assets/icon.png"));
+            candidates.push(parent.join("icon.png"));
         }
+    }
 
     for path in candidates {
         if !path.exists() {
@@ -1055,6 +1313,9 @@ fn load_icon() -> Option<winit::window::Icon> {
         }
     }
 
-    log::warn!("[Native] Failed to find icon.png in any search path (CWD: {:?})", base);
+    log::warn!(
+        "[Native] Failed to find icon.png in any search path (CWD: {:?})",
+        base
+    );
     None
 }

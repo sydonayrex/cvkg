@@ -1,6 +1,6 @@
 # cvkg-render-web
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![VDOM Agent Graph](../docs/images/vdom_agent_graph.png)
 
 `cvkg-render-web` provides a multi-tier rendering strategy for CVKG applications running in the browser via WebAssembly, supporting everything from WebGPU to Canvas2D fallbacks.
 

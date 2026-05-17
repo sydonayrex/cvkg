@@ -28,18 +28,20 @@ impl BuildPipeline {
         release: bool,
         features: &[String],
     ) -> CompiledArtifact {
-        use indicatif::{ProgressBar, ProgressStyle};
         use console::style;
+        use indicatif::{ProgressBar, ProgressStyle};
 
         // Clear terminal for a fresh build output
         print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
         println!("{} CVKG Forge: Rebuilding project...", style("🚀").cyan());
-        
+
         let pb = ProgressBar::new_spinner();
-        pb.set_style(ProgressStyle::default_spinner()
-            .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
-            .template("{spinner:.green} [{elapsed_precise}] {msg}")
-            .unwrap());
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ")
+                .template("{spinner:.green} [{elapsed_precise}] {msg}")
+                .unwrap(),
+        );
         pb.set_message("Compiling target...".to_string());
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
@@ -67,7 +69,11 @@ impl BuildPipeline {
         match output {
             Ok(out) if out.status.success() => {
                 let duration = start_time.elapsed();
-                pb.finish_with_message(format!("{} Build Success in {:.2?}", style("✅").green(), duration));
+                pb.finish_with_message(format!(
+                    "{} Build Success in {:.2?}",
+                    style("✅").green(),
+                    duration
+                ));
                 CompiledArtifact {
                     root_id: 1,
                     view: super::patch_engine::SerializedView {
@@ -91,7 +97,11 @@ impl BuildPipeline {
                 }
             }
             Err(e) => {
-                pb.finish_with_message(format!("{} Failed to execute cargo: {}", style("💥").red(), e));
+                pb.finish_with_message(format!(
+                    "{} Failed to execute cargo: {}",
+                    style("💥").red(),
+                    e
+                ));
                 CompiledArtifact {
                     root_id: 0,
                     view: super::patch_engine::SerializedView {
@@ -110,8 +120,8 @@ impl BuildPipeline {
         F: FnMut(CompiledArtifact) + Send + 'static,
     {
         use notify::{Config, RecursiveMode, Watcher};
-        use std::sync::{Arc, Mutex};
         use std::sync::mpsc::RecvTimeoutError;
+        use std::sync::{Arc, Mutex};
 
         let path = project_path.as_ref().to_path_buf();
         let (tx, rx) = std::sync::mpsc::channel();
@@ -132,7 +142,10 @@ impl BuildPipeline {
 
         std::thread::spawn(move || {
             let _watcher = watcher;
-            println!("{} CVKG Hot-Reload Engine watching for changes...", console::style("👀").cyan());
+            println!(
+                "{} CVKG Hot-Reload Engine watching for changes...",
+                console::style("👀").cyan()
+            );
 
             let debounce_duration = Duration::from_millis(300);
             let mut pending_build = false;
@@ -149,10 +162,12 @@ impl BuildPipeline {
                         // Filter events
                         let is_relevant = event.paths.iter().any(|p| {
                             // Ignore target directory and git
-                            if p.components().any(|c| c.as_os_str() == "target" || c.as_os_str() == ".git") {
+                            if p.components()
+                                .any(|c| c.as_os_str() == "target" || c.as_os_str() == ".git")
+                            {
                                 return false;
                             }
-                            
+
                             let ext = p.extension().and_then(|e| e.to_str()).unwrap_or("");
                             matches!(ext, "rs" | "wgsl" | "toml" | "json")
                         });

@@ -164,8 +164,14 @@ mod tests {
             children: vec![],
         };
 
-        let artifact1 = CompiledArtifact { root_id: 1, view: view.clone() };
-        let artifact2 = CompiledArtifact { root_id: 1, view: view.clone() };
+        let artifact1 = CompiledArtifact {
+            root_id: 1,
+            view: view.clone(),
+        };
+        let artifact2 = CompiledArtifact {
+            root_id: 1,
+            view: view.clone(),
+        };
 
         engine.generate_patch(artifact1);
         let patch = engine.generate_patch(artifact2);

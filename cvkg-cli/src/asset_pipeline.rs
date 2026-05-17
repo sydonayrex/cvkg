@@ -2,8 +2,8 @@
 //! Handles validation and optimization of static assets like shaders, fonts, and images.
 
 use anyhow::Result;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 /// Configures and executes the asset pipeline
 pub struct AssetPipeline;
@@ -13,7 +13,10 @@ impl AssetPipeline {
     pub fn run<P: AsRef<Path>>(asset_dir: P) -> Result<()> {
         let dir = asset_dir.as_ref();
         if !dir.exists() {
-            println!("No assets directory found at {:?}. Skipping asset pipeline.", dir);
+            println!(
+                "No assets directory found at {:?}. Skipping asset pipeline.",
+                dir
+            );
             return Ok(());
         }
 
@@ -22,25 +25,32 @@ impl AssetPipeline {
         let mut shader_count = 0;
         let mut image_count = 0;
 
-        for entry in walkdir::WalkDir::new(dir).into_iter().filter_map(|e| e.ok()) {
+        for entry in walkdir::WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             let path = entry.path();
             if path.is_file()
-                && let Some(ext) = path.extension() {
-                    match ext.to_str().unwrap_or("") {
-                        "wgsl" | "glsl" => {
-                            Self::validate_shader(path)?;
-                            shader_count += 1;
-                        }
-                        "png" | "jpg" | "jpeg" => {
-                            Self::optimize_image(path)?;
-                            image_count += 1;
-                        }
-                        _ => {}
+                && let Some(ext) = path.extension()
+            {
+                match ext.to_str().unwrap_or("") {
+                    "wgsl" | "glsl" => {
+                        Self::validate_shader(path)?;
+                        shader_count += 1;
                     }
+                    "png" | "jpg" | "jpeg" => {
+                        Self::optimize_image(path)?;
+                        image_count += 1;
+                    }
+                    _ => {}
+                }
             }
         }
 
-        println!("✅ Asset Pipeline complete: Validated {} shaders, optimized {} images.", shader_count, image_count);
+        println!(
+            "✅ Asset Pipeline complete: Validated {} shaders, optimized {} images.",
+            shader_count, image_count
+        );
         Ok(())
     }
 
@@ -60,7 +70,11 @@ impl AssetPipeline {
         // using the `image` crate to reduce bundle size.
         let metadata = fs::metadata(path)?;
         if metadata.len() > 1024 * 1024 {
-            log::warn!("Image {:?} is quite large ({:.2} MB). Consider compressing it.", path, metadata.len() as f64 / 1024.0 / 1024.0);
+            log::warn!(
+                "Image {:?} is quite large ({:.2} MB). Consider compressing it.",
+                path,
+                metadata.len() as f64 / 1024.0 / 1024.0
+            );
         }
         Ok(())
     }

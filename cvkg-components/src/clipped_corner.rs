@@ -34,11 +34,13 @@ impl<V: View> ClippedCornerNode<V> {
 
 impl<V: View> View for ClippedCornerNode<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let s = self.clip_size;
-        
+
         // 1. Path Points
         let points = [
             (rect.x + s, rect.y),
@@ -54,18 +56,33 @@ impl<V: View> View for ClippedCornerNode<V> {
         // 2. Background
         let mut bg_color = self.border_color;
         bg_color[3] = self.background_opacity;
-        // Simulation of a filled polygon using multiple rects (hacky but works for beveled)
+        // Fill a beveled corner by stacking progressively smaller rectangles to approximate the chamfered edge.
         renderer.fill_rect(
-            Rect { x: rect.x + s, y: rect.y, width: rect.width - 2.0 * s, height: rect.height },
-            bg_color
+            Rect {
+                x: rect.x + s,
+                y: rect.y,
+                width: rect.width - 2.0 * s,
+                height: rect.height,
+            },
+            bg_color,
         );
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y + s, width: s, height: rect.height - 2.0 * s },
-            bg_color
+            Rect {
+                x: rect.x,
+                y: rect.y + s,
+                width: s,
+                height: rect.height - 2.0 * s,
+            },
+            bg_color,
         );
         renderer.fill_rect(
-            Rect { x: rect.x + rect.width - s, y: rect.y + s, width: s, height: rect.height - 2.0 * s },
-            bg_color
+            Rect {
+                x: rect.x + rect.width - s,
+                y: rect.y + s,
+                width: s,
+                height: rect.height - 2.0 * s,
+            },
+            bg_color,
         );
 
         // 3. Border

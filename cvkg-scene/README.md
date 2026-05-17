@@ -1,6 +1,6 @@
 # cvkg-scene
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![GPU Shader Pipeline](../docs/images/gpu_shader_pipeline.png)
 
 `cvkg-scene` implements a high-performance retained scene graph for CVKG, providing hierarchical culling, automatic layering, and binary serialization for the GPU pipeline.
 

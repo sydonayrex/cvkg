@@ -1,6 +1,6 @@
 # cvkg-layout
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
 
 `cvkg-layout` provides a high-performance, flexbox-inspired layout engine for CVKG, supporting complex hierarchical positioning with minimal overhead.
 

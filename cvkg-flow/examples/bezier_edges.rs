@@ -6,13 +6,28 @@ pub fn create_bezier_demo() -> FlowGraph {
 
     // Setup nodes
     let mut n1 = FlowNode::new(NodeId(1), "Start", (100.0, 100.0));
-    n1.add_port(FlowPort::new(PortId(11), NodeId(1), PortPosition::Right, PortDirection::Output));
-    
+    n1.add_port(FlowPort::new(
+        PortId(11),
+        NodeId(1),
+        PortPosition::Right,
+        PortDirection::Output,
+    ));
+
     let mut n2 = FlowNode::new(NodeId(2), "Bezier End", (400.0, 50.0));
-    n2.add_port(FlowPort::new(PortId(21), NodeId(2), PortPosition::Left, PortDirection::Input));
+    n2.add_port(FlowPort::new(
+        PortId(21),
+        NodeId(2),
+        PortPosition::Left,
+        PortDirection::Input,
+    ));
 
     let mut n3 = FlowNode::new(NodeId(3), "Straight End", (400.0, 200.0));
-    n3.add_port(FlowPort::new(PortId(31), NodeId(3), PortPosition::Left, PortDirection::Input));
+    n3.add_port(FlowPort::new(
+        PortId(31),
+        NodeId(3),
+        PortPosition::Left,
+        PortDirection::Input,
+    ));
 
     graph.add_node(n1);
     graph.add_node(n2);

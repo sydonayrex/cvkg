@@ -63,14 +63,49 @@ impl Theme {
             colors: SemanticColors {
                 primary: Color::VIKING_GOLD,
                 secondary: Color::MAGENTA_LIQUID,
-                accent: Color { r: 1.0, g: 0.0, b: 0.4, a: 1.0 }, // Crimson Flash
-                background: Color { r: 0.02, g: 0.02, b: 0.05, a: 1.0 }, // Deep Void
+                accent: Color {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.4,
+                    a: 1.0,
+                }, // Crimson Flash
+                background: Color {
+                    r: 0.02,
+                    g: 0.02,
+                    b: 0.05,
+                    a: 1.0,
+                }, // Deep Void
                 surface: Color::TACTICAL_OBSIDIAN,
-                error: Color { r: 1.0, g: 0.2, b: 0.2, a: 1.0 },
-                warning: Color { r: 1.0, g: 0.8, b: 0.0, a: 1.0 },
-                success: Color { r: 0.0, g: 1.0, b: 0.5, a: 1.0 },
-                text: Color { r: 0.95, g: 0.95, b: 1.0, a: 1.0 },
-                text_dim: Color { r: 0.6, g: 0.6, b: 0.7, a: 1.0 },
+                error: Color {
+                    r: 1.0,
+                    g: 0.2,
+                    b: 0.2,
+                    a: 1.0,
+                },
+                warning: Color {
+                    r: 1.0,
+                    g: 0.8,
+                    b: 0.0,
+                    a: 1.0,
+                },
+                success: Color {
+                    r: 0.0,
+                    g: 1.0,
+                    b: 0.5,
+                    a: 1.0,
+                },
+                text: Color {
+                    r: 0.95,
+                    g: 0.95,
+                    b: 1.0,
+                    a: 1.0,
+                },
+                text_dim: Color {
+                    r: 0.6,
+                    g: 0.6,
+                    b: 0.7,
+                    a: 1.0,
+                },
             },
             typography: TypographyScale {
                 hero: 48.0,
@@ -105,23 +140,32 @@ impl Theme {
     /// Returns a list of strings describing any contrast failures
     pub fn validate_accessibility(&self) -> Vec<String> {
         let mut warnings = Vec::new();
-        
+
         // Primary on Background (Minimum 4.5:1 for normal text)
         let primary_bg = self.colors.primary.contrast_ratio(&self.colors.background);
         if primary_bg < 4.5 {
-            warnings.push(format!("Primary color contrast ratio too low: {:.2}:1 (Background)", primary_bg));
+            warnings.push(format!(
+                "Primary color contrast ratio too low: {:.2}:1 (Background)",
+                primary_bg
+            ));
         }
 
         // Text on Background (Minimum 4.5:1)
         let text_bg = self.colors.text.contrast_ratio(&self.colors.background);
         if text_bg < 4.5 {
-            warnings.push(format!("Text color contrast ratio too low: {:.2}:1 (Background)", text_bg));
+            warnings.push(format!(
+                "Text color contrast ratio too low: {:.2}:1 (Background)",
+                text_bg
+            ));
         }
 
         // Text on Surface (Minimum 4.5:1)
         let text_surface = self.colors.text.contrast_ratio(&self.colors.surface);
         if text_surface < 4.5 {
-            warnings.push(format!("Text color contrast ratio too low: {:.2}:1 (Surface)", text_surface));
+            warnings.push(format!(
+                "Text color contrast ratio too low: {:.2}:1 (Surface)",
+                text_surface
+            ));
         }
 
         warnings

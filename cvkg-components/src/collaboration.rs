@@ -1,4 +1,7 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Participant in a collaboration session
 pub struct Participant {
@@ -50,21 +53,39 @@ impl CollaborationEngine {
 
 impl View for CollaborationEngine {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Session header
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y, width: rect.width, height: 32.0 },
-            [0.08, 0.08, 0.12, 1.0]
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: 32.0,
+            },
+            [0.08, 0.08, 0.12, 1.0],
         );
-        renderer.draw_text(&self.session_name, rect.x + 8.0, rect.y + 12.0, 14.0, [0.8, 0.9, 1.0, 1.0]);
+        renderer.draw_text(
+            &self.session_name,
+            rect.x + 8.0,
+            rect.y + 12.0,
+            14.0,
+            [0.8, 0.9, 1.0, 1.0],
+        );
 
         // Participants list
         let item_h = 40.0;
         let mut current_y = rect.y + 40.0;
         for p in &self.participants {
-            let part_rect = Rect { x: rect.x, y: current_y, width: rect.width, height: item_h };
+            let part_rect = Rect {
+                x: rect.x,
+                y: current_y,
+                width: rect.width,
+                height: item_h,
+            };
 
             let status_color = match p.status {
                 ParticipantStatus::Online => [0.0, 0.8, 0.2, 1.0],
@@ -72,16 +93,30 @@ impl View for CollaborationEngine {
                 ParticipantStatus::Offline => [0.4, 0.4, 0.4, 1.0],
             };
 
-            let status_rect = Rect { x: part_rect.x + 10.0, y: part_rect.y + 14.0, width: 12.0, height: 12.0 };
+            let status_rect = Rect {
+                x: part_rect.x + 10.0,
+                y: part_rect.y + 14.0,
+                width: 12.0,
+                height: 12.0,
+            };
             renderer.fill_ellipse(status_rect, status_color);
             renderer.stroke_ellipse(status_rect, [0.0, 0.0, 0.0, 0.5], 1.0);
-            renderer.draw_text(&p.name, part_rect.x + 28.0, part_rect.y + 14.0, 12.0, [0.8, 0.8, 0.9, 1.0]);
+            renderer.draw_text(
+                &p.name,
+                part_rect.x + 28.0,
+                part_rect.y + 14.0,
+                12.0,
+                [0.8, 0.8, 0.9, 1.0],
+            );
 
             // Draw cursor position if present
             if let Some((cx, cy)) = p.cursor {
                 renderer.draw_text(
                     &format!("📍 ({}, {})", cx as i32, cy as i32),
-                    part_rect.x + 28.0, part_rect.y + 28.0, 10.0, [0.5, 0.6, 0.7, 1.0]
+                    part_rect.x + 28.0,
+                    part_rect.y + 28.0,
+                    10.0,
+                    [0.5, 0.6, 0.7, 1.0],
                 );
             }
             current_y += item_h;
@@ -90,8 +125,22 @@ impl View for CollaborationEngine {
 }
 
 impl LayoutView for CollaborationEngine {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 200.0, height: 40.0 + self.participants.len() as f32 * 40.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 200.0,
+            height: 40.0 + self.participants.len() as f32 * 40.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

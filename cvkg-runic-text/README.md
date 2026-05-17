@@ -1,6 +1,6 @@
 # cvkg-runic-text
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
 
 `cvkg-runic-text` is the authoritative text shaping and layout engine for CVKG, providing high-performance, stateless processing of multi-lingual and rich text.
 

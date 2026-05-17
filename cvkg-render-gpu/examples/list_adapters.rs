@@ -1,5 +1,5 @@
-use wgpu;
 use pollster;
+use wgpu;
 
 fn main() {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
@@ -9,11 +9,14 @@ fn main() {
         display: None,
         memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
     });
-    
+
     let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
     println!("Found {} adapters:", adapters.len());
     for adapter in adapters {
         let info = adapter.get_info();
-        println!(" - {:?}: {:?} ({:?})", info.backend, info.name, info.device_type);
+        println!(
+            " - {:?}: {:?} ({:?})",
+            info.backend, info.name, info.device_type
+        );
     }
 }

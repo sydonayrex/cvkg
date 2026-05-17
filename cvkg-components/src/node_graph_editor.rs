@@ -9,8 +9,8 @@
 //! - Two-layer state: persistent (nodes/edges) + interaction (drag/hover/pending)
 
 use cvkg_core::{
+    Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
-    Event, Rect, Renderer, Size, View, Never,
 };
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -152,13 +152,7 @@ pub struct GraphEdge {
 }
 
 impl GraphEdge {
-    pub fn new(
-        id: &str,
-        from_node: &str,
-        from_port: &str,
-        to_node: &str,
-        to_port: &str,
-    ) -> Self {
+    pub fn new(id: &str, from_node: &str, from_port: &str, to_node: &str, to_port: &str) -> Self {
         Self {
             id: id.to_string(),
             from_node: from_node.to_string(),
@@ -250,13 +244,7 @@ impl NodeGraphEditor {
     // ── Bézier drawing ─────────────────────────────────────────────────
 
     /// Evaluate a cubic Bézier at parameter t.
-    fn bezier_point(
-        p0: [f32; 2],
-        p1: [f32; 2],
-        p2: [f32; 2],
-        p3: [f32; 2],
-        t: f32,
-    ) -> [f32; 2] {
+    fn bezier_point(p0: [f32; 2], p1: [f32; 2], p2: [f32; 2], p3: [f32; 2], t: f32) -> [f32; 2] {
         let mt = 1.0 - t;
         let mt2 = mt * mt;
         let mt3 = mt2 * mt;
@@ -269,19 +257,17 @@ impl NodeGraphEditor {
     }
 
     /// Evaluate the tangent of a cubic Bézier at parameter t.
-    fn bezier_tangent(
-        p0: [f32; 2],
-        p1: [f32; 2],
-        p2: [f32; 2],
-        p3: [f32; 2],
-        t: f32,
-    ) -> [f32; 2] {
+    fn bezier_tangent(p0: [f32; 2], p1: [f32; 2], p2: [f32; 2], p3: [f32; 2], t: f32) -> [f32; 2] {
         let mt = 1.0 - t;
         let mt2 = mt * mt;
         let t2 = t * t;
         [
-            3.0 * mt2 * (p1[0] - p0[0]) + 6.0 * mt * t * (p2[0] - p1[0]) + 3.0 * t2 * (p3[0] - p2[0]),
-            3.0 * mt2 * (p1[1] - p0[1]) + 6.0 * mt * t * (p2[1] - p1[1]) + 3.0 * t2 * (p3[1] - p2[1]),
+            3.0 * mt2 * (p1[0] - p0[0])
+                + 6.0 * mt * t * (p2[0] - p1[0])
+                + 3.0 * t2 * (p3[0] - p2[0]),
+            3.0 * mt2 * (p1[1] - p0[1])
+                + 6.0 * mt * t * (p2[1] - p1[1])
+                + 3.0 * t2 * (p3[1] - p2[1]),
         ]
     }
 
@@ -425,10 +411,7 @@ impl View for NodeGraphEditor {
             s.get_component_state::<NodeGraphPersistentState>(persistent_hash)
                 .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
                 .unwrap_or_else(|| {
-                    NodeGraphPersistentState::new(
-                        self.nodes.clone(),
-                        self.edges.clone(),
-                    )
+                    NodeGraphPersistentState::new(self.nodes.clone(), self.edges.clone())
                 })
         };
 
@@ -470,10 +453,7 @@ impl View for NodeGraphEditor {
                                 .get_component_state::<NodeGraphPersistentState>(ph)
                                 .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
                                 .unwrap_or_else(|| {
-                                    NodeGraphPersistentState::new(
-                                        (*pn).clone(),
-                                        (*pe).clone(),
-                                    )
+                                    NodeGraphPersistentState::new((*pn).clone(), (*pe).clone())
                                 });
 
                             let mut i: GraphInteractionState = s2
@@ -484,8 +464,7 @@ impl View for NodeGraphEditor {
                             // Check if clicking on a port first
                             let mut hit_port = false;
                             for node in &p.nodes {
-                                for port in
-                                    node.input_ports.iter().chain(node.output_ports.iter())
+                                for port in node.input_ports.iter().chain(node.output_ports.iter())
                                 {
                                     let [px, py] = node.port_position(port);
                                     let dx = x - px;
@@ -561,10 +540,7 @@ impl View for NodeGraphEditor {
                                 .get_component_state::<NodeGraphPersistentState>(ph)
                                 .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
                                 .unwrap_or_else(|| {
-                                    NodeGraphPersistentState::new(
-                                        (*pn).clone(),
-                                        (*pe).clone(),
-                                    )
+                                    NodeGraphPersistentState::new((*pn).clone(), (*pe).clone())
                                 });
 
                             let mut i: GraphInteractionState = s2
@@ -573,9 +549,7 @@ impl View for NodeGraphEditor {
                                 .unwrap_or_default();
 
                             if let Some(ref node_id) = i.dragging_node {
-                                if let Some(node) =
-                                    p.nodes.iter_mut().find(|n| &n.id == node_id)
-                                {
+                                if let Some(node) = p.nodes.iter_mut().find(|n| &n.id == node_id) {
                                     node.x = x - i.drag_offset[0];
                                     node.y = y - i.drag_offset[1];
                                 }
@@ -589,15 +563,13 @@ impl View for NodeGraphEditor {
                             // Update hovered port
                             i.hovered_port = None;
                             for node in &p.nodes {
-                                for port in
-                                    node.input_ports.iter().chain(node.output_ports.iter())
+                                for port in node.input_ports.iter().chain(node.output_ports.iter())
                                 {
                                     let [px, py] = node.port_position(port);
                                     let dx = x - px;
                                     let dy = y - py;
                                     if dx * dx + dy * dy <= 64.0 {
-                                        i.hovered_port =
-                                            Some((node.id.clone(), port.id.clone()));
+                                        i.hovered_port = Some((node.id.clone(), port.id.clone()));
                                         break;
                                     }
                                 }
@@ -630,10 +602,7 @@ impl View for NodeGraphEditor {
                                 .get_component_state::<NodeGraphPersistentState>(ph)
                                 .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
                                 .unwrap_or_else(|| {
-                                    NodeGraphPersistentState::new(
-                                        (*pn).clone(),
-                                        (*pe).clone(),
-                                    )
+                                    NodeGraphPersistentState::new((*pn).clone(), (*pe).clone())
                                 });
 
                             let mut i: GraphInteractionState = s2
@@ -686,10 +655,7 @@ impl View for NodeGraphEditor {
         // ── Drawing ─────────────────────────────────────────────────────
 
         // Background
-        renderer.fill_rect(
-            rect,
-            [0.04, 0.04, 0.08, 1.0],
-        );
+        renderer.fill_rect(rect, [0.04, 0.04, 0.08, 1.0]);
 
         // Grid
         self.draw_grid(renderer, rect);
@@ -700,10 +666,7 @@ impl View for NodeGraphEditor {
             let to_node = persistent_nodes.iter().find(|n| n.id == edge.to_node);
 
             if let (Some(from), Some(to)) = (from_node, to_node) {
-                let from_port = from
-                    .output_ports
-                    .iter()
-                    .find(|p| p.id == edge.from_port);
+                let from_port = from.output_ports.iter().find(|p| p.id == edge.from_port);
                 let to_port = to.input_ports.iter().find(|p| p.id == edge.to_port);
 
                 if let (Some(fp), Some(tp)) = (from_port, to_port) {
@@ -713,21 +676,9 @@ impl View for NodeGraphEditor {
                     let edge_color = [0.3, 0.5, 0.8, 0.8];
 
                     // Glow layer
-                    self.draw_bezier_tube(
-                        renderer,
-                        from_pos,
-                        to_pos,
-                        [0.2, 0.4, 0.8, 0.2],
-                        6.0,
-                    );
+                    self.draw_bezier_tube(renderer, from_pos, to_pos, [0.2, 0.4, 0.8, 0.2], 6.0);
                     // Main tube
-                    self.draw_bezier_tube(
-                        renderer,
-                        from_pos,
-                        to_pos,
-                        edge_color,
-                        2.0,
-                    );
+                    self.draw_bezier_tube(renderer, from_pos, to_pos, edge_color, 2.0);
                     // Arrow head
                     self.draw_arrow_head(renderer, from_pos, to_pos, edge_color);
                 }
@@ -736,8 +687,7 @@ impl View for NodeGraphEditor {
 
         // ── Draw pending edge ───────────────────────────────────────────
         if let Some(ref pending) = interaction.pending_edge {
-            if let Some(from_node) = persistent_nodes.iter().find(|n| n.id == pending.from_node)
-            {
+            if let Some(from_node) = persistent_nodes.iter().find(|n| n.id == pending.from_node) {
                 if let Some(from_port) = from_node
                     .output_ports
                     .iter()
@@ -745,12 +695,7 @@ impl View for NodeGraphEditor {
                 {
                     let from_pos = from_node.port_position(from_port);
                     let to_pos = [pending.cursor_x, pending.cursor_y];
-                    self.draw_dashed_bezier(
-                        renderer,
-                        from_pos,
-                        to_pos,
-                        [0.0, 0.8, 1.0, 0.6],
-                    );
+                    self.draw_dashed_bezier(renderer, from_pos, to_pos, [0.0, 0.8, 1.0, 0.6]);
                     // Start point indicator
                     renderer.fill_ellipse(
                         Rect {
@@ -849,13 +794,10 @@ impl View for NodeGraphEditor {
             // Input ports (left side)
             for port in &node.input_ports {
                 let [px, py] = node.port_position(port);
-                let is_hovered =
-                    interaction
-                        .hovered_port
-                        .as_ref()
-                        .map_or(false, |(nid, pid)| {
-                            nid == &node.id && pid == &port.id
-                        });
+                let is_hovered = interaction
+                    .hovered_port
+                    .as_ref()
+                    .map_or(false, |(nid, pid)| nid == &node.id && pid == &port.id);
 
                 let port_color = if is_hovered {
                     [0.0, 0.9, 1.0, 1.0]
@@ -890,13 +832,10 @@ impl View for NodeGraphEditor {
             // Output ports (right side)
             for port in &node.output_ports {
                 let [px, py] = node.port_position(port);
-                let is_hovered =
-                    interaction
-                        .hovered_port
-                        .as_ref()
-                        .map_or(false, |(nid, pid)| {
-                            nid == &node.id && pid == &port.id
-                        });
+                let is_hovered = interaction
+                    .hovered_port
+                    .as_ref()
+                    .map_or(false, |(nid, pid)| nid == &node.id && pid == &port.id);
 
                 let port_color = if is_hovered {
                     [0.0, 0.9, 1.0, 1.0]
@@ -926,7 +865,13 @@ impl View for NodeGraphEditor {
 
                 // Port label (right-aligned)
                 let (tw, _) = renderer.measure_text(&port.label, 9.0);
-                renderer.draw_text(&port.label, px - 10.0 - tw, py - 4.0, 9.0, [0.6, 0.7, 0.8, 0.9]);
+                renderer.draw_text(
+                    &port.label,
+                    px - 10.0 - tw,
+                    py - 4.0,
+                    9.0,
+                    [0.6, 0.7, 0.8, 0.9],
+                );
             }
         }
     }
@@ -941,11 +886,7 @@ impl LayoutView for NodeGraphEditor {
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {
-        let max_x = self
-            .nodes
-            .iter()
-            .map(|n| n.x + n.width)
-            .fold(0.0, f32::max);
+        let max_x = self.nodes.iter().map(|n| n.x + n.width).fold(0.0, f32::max);
         let max_y = self
             .nodes
             .iter()

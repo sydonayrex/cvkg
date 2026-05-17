@@ -1,8 +1,8 @@
 // Property-Based Testing for State Management
 // Tests state transitions, VDOM patches, and component behavior using proptest
 
+use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VNode};
 use proptest::prelude::*;
-use cvkg_vdom::{VNode, NodeId, LayoutRect, AriaProps};
 use std::collections::HashMap;
 
 // Strategy for generating valid NodeId values

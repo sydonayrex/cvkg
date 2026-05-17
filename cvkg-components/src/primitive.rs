@@ -60,7 +60,10 @@ impl View for Text {
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
         let (w, h) = renderer.measure_text(&self.content, self.font_size);
-        Size { width: w, height: h }
+        Size {
+            width: w,
+            height: h,
+        }
     }
 
     fn layout(&self) -> Option<&dyn LayoutView> {
@@ -327,7 +330,9 @@ pub enum BadgeVariant {
 
 impl View for Badge {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let (bg, text_color) = match self.variant {
@@ -354,7 +359,10 @@ impl View for Badge {
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
         let (tw, th) = renderer.measure_text(&self.text, 12.0);
-        Size { width: tw + 16.0, height: th + 8.0 }
+        Size {
+            width: tw + 16.0,
+            height: th + 8.0,
+        }
     }
 }
 
@@ -395,7 +403,9 @@ impl Default for Skeleton {
 
 impl View for Skeleton {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Shimmer effect simulation

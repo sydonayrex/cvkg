@@ -14,8 +14,8 @@ path = "src/main.rs"
 path = "src/lib.rs"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.17" }
-cvkg-macros = { path = "../cvkg-macros", version = "0.1.17" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.20" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.1.20" }
 clap = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.7", features = ["ws"] }

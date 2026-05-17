@@ -1,5 +1,8 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never, AnyView};
 use crate::Spacer;
+use cvkg_core::{
+    AnyView, Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// A virtualized list that only renders items in the visible viewport.
 pub struct VirtualList<D>
@@ -54,11 +57,11 @@ where
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Calculate visible range for O(visible) complexity using current clip
         let clip = renderer.current_clip_rect();
-        
+
         // Find intersection of list bounds and clip rect to determine viewport
         let viewport_y = clip.y.max(rect.y);
         let viewport_bottom = (clip.y + clip.height).min(rect.y + rect.height);
-        
+
         if viewport_bottom <= viewport_y {
             return; // Not visible
         }
@@ -66,7 +69,7 @@ where
         let start_idx = ((viewport_y - rect.y) / self.item_height).floor() as usize;
         let visible_count = ((viewport_bottom - viewport_y) / self.item_height).ceil() as usize;
         let end_idx = (start_idx + visible_count + 1).min(self.data.len());
-        
+
         // Only iterate through visible items
         for idx in start_idx..end_idx {
             if let Some(item) = self.data.get(idx) {
@@ -77,7 +80,7 @@ where
                     width: rect.width,
                     height: self.item_height,
                 };
-                
+
                 let view = (self.view_builder)(item);
                 view.render(renderer, item_rect);
             }
@@ -99,7 +102,7 @@ where
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {
-        let width = proposal.width.unwrap_or(0.0); 
+        let width = proposal.width.unwrap_or(0.0);
         let height = self.data.len() as f32 * self.item_height;
         Size { width, height }
     }

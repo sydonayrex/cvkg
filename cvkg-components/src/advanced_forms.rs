@@ -1,4 +1,7 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 use std::sync::Arc;
 
 /// Date picker component
@@ -20,7 +23,10 @@ impl DatePicker {
         self
     }
 
-    pub fn on_change(mut self, f: impl Fn(Option<(u32, u32, u32)>) + Send + Sync + 'static) -> Self {
+    pub fn on_change(
+        mut self,
+        f: impl Fn(Option<(u32, u32, u32)>) + Send + Sync + 'static,
+    ) -> Self {
         self.on_date_change = Some(Arc::new(f));
         self
     }
@@ -28,7 +34,9 @@ impl DatePicker {
 
 impl View for DatePicker {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = [0.08, 0.08, 0.12, 1.0];
@@ -49,15 +57,35 @@ impl View for DatePicker {
         );
 
         // Calendar icon
-        renderer.draw_text("📅", rect.x + 8.0, rect.y + 10.0, 14.0, [0.6, 0.8, 1.0, 1.0]);
+        renderer.draw_text(
+            "📅",
+            rect.x + 8.0,
+            rect.y + 10.0,
+            14.0,
+            [0.6, 0.8, 1.0, 1.0],
+        );
     }
 }
 
 impl LayoutView for DatePicker {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 160.0, height: 36.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 160.0,
+            height: 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Time picker component
@@ -87,7 +115,9 @@ impl TimePicker {
 
 impl View for TimePicker {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = [0.08, 0.08, 0.12, 1.0];
@@ -107,15 +137,35 @@ impl View for TimePicker {
             [0.8, 0.8, 0.9, 1.0],
         );
 
-        renderer.draw_text("🕐", rect.x + 8.0, rect.y + 10.0, 14.0, [0.6, 0.8, 1.0, 1.0]);
+        renderer.draw_text(
+            "🕐",
+            rect.x + 8.0,
+            rect.y + 10.0,
+            14.0,
+            [0.6, 0.8, 1.0, 1.0],
+        );
     }
 }
 
 impl LayoutView for TimePicker {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 140.0, height: 36.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 140.0,
+            height: 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Calendar component
@@ -147,7 +197,9 @@ impl Calendar {
 
 impl View for Calendar {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let header_h = 32.0;
@@ -178,7 +230,13 @@ impl View for Calendar {
                 width: grid_w,
                 height: 24.0,
             };
-            renderer.draw_text(day, day_rect.x + 4.0, day_rect.y + 6.0, 11.0, [0.5, 0.5, 0.6, 1.0]);
+            renderer.draw_text(
+                day,
+                day_rect.x + 4.0,
+                day_rect.y + 6.0,
+                11.0,
+                [0.5, 0.5, 0.6, 1.0],
+            );
         }
 
         // Render days (simplified - just first week)
@@ -191,16 +249,36 @@ impl View for Calendar {
                 height: 32.0,
             };
             renderer.fill_rounded_rect(day_rect, 4.0, [0.06, 0.06, 0.1, 1.0]);
-            renderer.draw_text(&i.to_string(), day_rect.x + 4.0, day_rect.y + 10.0, 12.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(
+                &i.to_string(),
+                day_rect.x + 4.0,
+                day_rect.y + 10.0,
+                12.0,
+                [0.7, 0.7, 0.8, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for Calendar {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 280.0, height: 220.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 280.0,
+            height: 220.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Autocomplete component
@@ -237,7 +315,9 @@ impl Autocomplete {
 
 impl View for Autocomplete {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = [0.08, 0.08, 0.12, 1.0];
@@ -253,7 +333,9 @@ impl View for Autocomplete {
         );
 
         // Show matching suggestions
-        let filtered: Vec<_> = self.suggestions.iter()
+        let filtered: Vec<_> = self
+            .suggestions
+            .iter()
             .filter(|s| s.to_lowercase().contains(&self.text.to_lowercase()))
             .take(5)
             .collect();
@@ -268,17 +350,37 @@ impl View for Autocomplete {
                     height: 28.0,
                 };
                 renderer.fill_rounded_rect(sug_rect, 4.0, [0.06, 0.08, 0.12, 1.0]);
-                renderer.draw_text(sug, sug_rect.x + 8.0, sug_rect.y + 10.0, 12.0, [0.6, 0.7, 0.8, 1.0]);
+                renderer.draw_text(
+                    sug,
+                    sug_rect.x + 8.0,
+                    sug_rect.y + 10.0,
+                    12.0,
+                    [0.6, 0.7, 0.8, 1.0],
+                );
             }
         }
     }
 }
 
 impl LayoutView for Autocomplete {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 200.0, height: 36.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 200.0,
+            height: 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Combobox component
@@ -315,7 +417,9 @@ impl Combobox {
 
 impl View for Combobox {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = [0.08, 0.08, 0.12, 1.0];
@@ -326,16 +430,42 @@ impl View for Combobox {
             None => "Select...".to_string(),
         };
 
-        renderer.draw_text(&display, rect.x + 8.0, rect.y + (rect.height - 14.0) / 2.0, 13.0, [0.8, 0.8, 0.9, 1.0]);
-        renderer.draw_text("▼", rect.x + rect.width - 20.0, rect.y + 10.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+        renderer.draw_text(
+            &display,
+            rect.x + 8.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            13.0,
+            [0.8, 0.8, 0.9, 1.0],
+        );
+        renderer.draw_text(
+            "▼",
+            rect.x + rect.width - 20.0,
+            rect.y + 10.0,
+            12.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
     }
 }
 
 impl LayoutView for Combobox {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 180.0, height: 36.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 180.0,
+            height: 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// MultiSelect component
@@ -365,13 +495,17 @@ impl MultiSelect {
 
 impl View for MultiSelect {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = [0.08, 0.08, 0.12, 1.0];
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
-        let selected_display: Vec<_> = self.selected.iter()
+        let selected_display: Vec<_> = self
+            .selected
+            .iter()
             .filter(|s| self.options.contains(s))
             .cloned()
             .collect();
@@ -382,15 +516,35 @@ impl View for MultiSelect {
             selected_display.join(", ")
         };
 
-        renderer.draw_text(&text, rect.x + 8.0, rect.y + (rect.height - 14.0) / 2.0, 12.0, [0.8, 0.8, 0.9, 1.0]);
+        renderer.draw_text(
+            &text,
+            rect.x + 8.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            12.0,
+            [0.8, 0.8, 0.9, 1.0],
+        );
     }
 }
 
 impl LayoutView for MultiSelect {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 200.0, height: 36.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 200.0,
+            height: 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// TagInput component
@@ -401,7 +555,10 @@ pub struct TagInput {
 
 impl TagInput {
     pub fn new() -> Self {
-        Self { tags: Vec::new(), _text: String::new() }
+        Self {
+            tags: Vec::new(),
+            _text: String::new(),
+        }
     }
 
     pub fn tags(mut self, items: Vec<&str>) -> Self {
@@ -412,7 +569,9 @@ impl TagInput {
 
 impl View for TagInput {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = [0.08, 0.08, 0.12, 1.0];
@@ -428,18 +587,38 @@ impl View for TagInput {
                 height: rect.height - 12.0,
             };
             renderer.fill_rounded_rect(tag_rect, 4.0, [0.1, 0.2, 0.4, 1.0]);
-            renderer.draw_text(tag, current_x + 4.0, rect.y + 12.0, 11.0, [0.9, 0.95, 1.0, 1.0]);
+            renderer.draw_text(
+                tag,
+                current_x + 4.0,
+                rect.y + 12.0,
+                11.0,
+                [0.9, 0.95, 1.0, 1.0],
+            );
             current_x += tag_w + 6.0;
         }
     }
 }
 
 impl LayoutView for TagInput {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
         let width = (self.tags.len() as f32 * 60.0 + 80.0).max(200.0);
-        Size { width, height: 36.0 }
+        Size {
+            width,
+            height: 36.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Validation framework
@@ -461,8 +640,6 @@ impl std::fmt::Debug for ValidationRule {
 
 /// EikonaForm - A schema-based form validation system.
 /// Named after the hybrid concept of "form/image" (Eikona).
-/// 
-/// INSPIRED BY: MUI (Form Validation) and Ant Design (Form).
 pub struct EikonaForm {
     pub(crate) rules: Vec<ValidationRule>,
     pub(crate) _errors: Vec<String>,
@@ -471,7 +648,10 @@ pub struct EikonaForm {
 impl EikonaForm {
     /// Creates a new EikonaForm.
     pub fn new() -> Self {
-        Self { rules: Vec::new(), _errors: Vec::new() }
+        Self {
+            rules: Vec::new(),
+            _errors: Vec::new(),
+        }
     }
 
     /// Adds a validation rule to the form.

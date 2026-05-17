@@ -38,12 +38,14 @@ impl MjolnirFrame {
 
 impl View for MjolnirFrame {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
         let bevel = self.bevel_size;
-        
+
         // 1. Calculate path points for a beveled rectangle
         // TL, TR, BR, BL with slices
         let points = [
@@ -63,26 +65,44 @@ impl View for MjolnirFrame {
         // 3. Chromatic Aberration (Glitch)
         if self.glitch_intensity > 0.0 {
             let offset = (t * 10.0).sin() * self.glitch_intensity * 2.0;
-            
+
             // Red Shift
             let mut red_points = points;
-            for p in &mut red_points { p.0 += offset; }
+            for p in &mut red_points {
+                p.0 += offset;
+            }
             self.draw_beveled_path(renderer, &red_points, [1.0, 0.0, 0.0, 0.4], 1.0);
 
             // Blue Shift
             let mut blue_points = points;
-            for p in &mut blue_points { p.0 -= offset; }
+            for p in &mut blue_points {
+                p.0 -= offset;
+            }
             self.draw_beveled_path(renderer, &blue_points, [0.0, 0.0, 1.0, 0.4], 1.0);
         }
 
         // 4. Inner "Scanline" Glow
         let alpha = (t * 2.0).sin().abs() * 0.1 + 0.05;
-        renderer.fill_rect(rect, [self.border_color[0], self.border_color[1], self.border_color[2], alpha]);
+        renderer.fill_rect(
+            rect,
+            [
+                self.border_color[0],
+                self.border_color[1],
+                self.border_color[2],
+                alpha,
+            ],
+        );
     }
 }
 
 impl MjolnirFrame {
-    fn draw_beveled_path(&self, renderer: &mut dyn Renderer, points: &[(f32, f32); 8], color: [f32; 4], width: f32) {
+    fn draw_beveled_path(
+        &self,
+        renderer: &mut dyn Renderer,
+        points: &[(f32, f32); 8],
+        color: [f32; 4],
+        width: f32,
+    ) {
         for i in 0..8 {
             let p1 = points[i];
             let p2 = points[(i + 1) % 8];

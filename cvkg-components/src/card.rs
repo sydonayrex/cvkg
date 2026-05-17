@@ -3,8 +3,6 @@ use cvkg_core::{ElapsedTime, Never, Rect, Renderer, Size, View};
 
 /// RunesCard - A container component with header, content, and footer sections.
 /// Named after the Runes, the ancient inscribed containers of meaning.
-/// 
-/// INSPIRED BY: HeroUI (Card) and Mantine (Card).
 pub struct RunesCard<V> {
     /// Optional header content
     header: Option<V>,
@@ -126,11 +124,24 @@ impl<V: View> View for RunesCard<V> {
 
         let content_rect = Rect {
             x: rect.x + padding,
-            y: rect.y + if has_header { padding + header_height + 8.0 } else { padding },
+            y: rect.y
+                + if has_header {
+                    padding + header_height + 8.0
+                } else {
+                    padding
+                },
             width: rect.width - 2.0 * padding,
             height: rect.height
-                - if has_header { padding + header_height + 8.0 } else { padding }
-                - if has_footer { padding + footer_height + 8.0 } else { padding },
+                - if has_header {
+                    padding + header_height + 8.0
+                } else {
+                    padding
+                }
+                - if has_footer {
+                    padding + footer_height + 8.0
+                } else {
+                    padding
+                },
         };
 
         // Render header
@@ -154,15 +165,18 @@ impl<V: View> View for RunesCard<V> {
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
         let padding = 32.0; // 16 * 2
 
-        let header_height = self.header.as_ref().map_or(0.0, |h| {
-            h.intrinsic_size(renderer, proposal).height
-        });
-        let footer_height = self.footer.as_ref().map_or(0.0, |f| {
-            f.intrinsic_size(renderer, proposal).height
-        });
-        let content_height = self.content.as_ref().map_or(0.0, |c| {
-            c.intrinsic_size(renderer, proposal).height
-        });
+        let header_height = self
+            .header
+            .as_ref()
+            .map_or(0.0, |h| h.intrinsic_size(renderer, proposal).height);
+        let footer_height = self
+            .footer
+            .as_ref()
+            .map_or(0.0, |f| f.intrinsic_size(renderer, proposal).height);
+        let content_height = self
+            .content
+            .as_ref()
+            .map_or(0.0, |c| c.intrinsic_size(renderer, proposal).height);
 
         let spacing = if self.header.is_some() && self.content.is_some() {
             8.0
@@ -175,10 +189,20 @@ impl<V: View> View for RunesCard<V> {
         };
 
         let total_height = header_height + content_height + footer_height + spacing + padding;
-        let max_width = self.header.as_ref()
+        let max_width = self
+            .header
+            .as_ref()
             .map_or(0.0, |h| h.intrinsic_size(renderer, proposal).width)
-            .max(self.content.as_ref().map_or(0.0, |c| c.intrinsic_size(renderer, proposal).width))
-            .max(self.footer.as_ref().map_or(0.0, |f| f.intrinsic_size(renderer, proposal).width));
+            .max(
+                self.content
+                    .as_ref()
+                    .map_or(0.0, |c| c.intrinsic_size(renderer, proposal).width),
+            )
+            .max(
+                self.footer
+                    .as_ref()
+                    .map_or(0.0, |f| f.intrinsic_size(renderer, proposal).width),
+            );
 
         Size {
             width: max_width + padding,
@@ -254,7 +278,8 @@ impl Renderer for DummyRenderer {
     fn stroke_rect(&mut self, _rect: Rect, _color: [f32; 4], _width: f32) {}
     fn stroke_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4], _width: f32) {}
     fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _width: f32) {}
-    fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _color: [f32; 4], _width: f32) {}
+    fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _color: [f32; 4], _width: f32) {
+    }
     fn draw_text(&mut self, _text: &str, _x: f32, _y: f32, _size: f32, _color: [f32; 4]) {}
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         // Rough estimation: width is length * fontSize * 0.6
@@ -262,7 +287,12 @@ impl Renderer for DummyRenderer {
     }
     fn draw_image(&mut self, _path: &str, _rect: Rect) {}
     fn bifrost(&mut self, _rect: Rect, _radius: f32, _sigma: f32, _alpha: f32) {}
-    fn register_handler(&mut self, _event: &str, _handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>) {}
+    fn register_handler(
+        &mut self,
+        _event: &str,
+        _handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
+    ) {
+    }
     fn push_clip_rect(&mut self, _rect: Rect) {}
     fn pop_clip_rect(&mut self) {}
     fn push_opacity(&mut self, _opacity: f32) {}

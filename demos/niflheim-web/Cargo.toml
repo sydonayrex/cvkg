@@ -12,7 +12,7 @@
 [package]
 edition = "2021"
 name = "niflheim-web-demo"
-version = "0.1.18"
+version = "0.1.20"
 build = false
 autolib = false
 autobins = false
@@ -42,19 +42,19 @@ version = "0.1"
 version = "1.0"
 
 [dependencies.cvkg-components]
-version = "0.1.18"
+version = "0.1.20"
 
 [dependencies.cvkg-core]
-version = "0.1.18"
+version = "0.1.20"
 
 [dependencies.cvkg-render-web]
-version = "0.1.18"
+version = "0.1.20"
 
 [dependencies.cvkg-themes]
-version = "0.1.18"
+version = "0.1.20"
 
 [dependencies.cvkg-vdom]
-version = "0.1.18"
+version = "0.1.20"
 
 [dependencies.log]
 version = "0.4"

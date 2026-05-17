@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::clipped_corner::ClippedCornerNode;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// YggdrasilWindow - A tactical, draggable, resizable window container.
 /// Named after the World Tree, the central pillar of the Norse cosmos.
@@ -28,20 +28,22 @@ impl<V: View> YggdrasilWindow<V> {
 
 impl<V: View> View for YggdrasilWindow<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let header_height = 28.0;
-        
+
         // 1. Background (Bifrost Frost)
         renderer.bifrost(rect, 20.0, 1.2, 0.9);
-        
+
         // 2. Main Frame (Clipped Corner)
         let frame = ClippedCornerNode::new(cvkg_core::EmptyView)
             .border_color(self.border_color)
             .clip_size(10.0);
         frame.render(renderer, rect);
-        
+
         // 3. Header
         let header_rect = Rect {
             x: rect.x,
@@ -49,12 +51,33 @@ impl<V: View> View for YggdrasilWindow<V> {
             width: rect.width,
             height: header_height,
         };
-        renderer.fill_rect(header_rect, [self.border_color[0], self.border_color[1], self.border_color[2], 0.2]);
-        renderer.draw_text(&self.title, rect.x + 12.0, rect.y + 18.0, 12.0, [1.0, 1.0, 1.0, 0.9]);
-        
+        renderer.fill_rect(
+            header_rect,
+            [
+                self.border_color[0],
+                self.border_color[1],
+                self.border_color[2],
+                0.2,
+            ],
+        );
+        renderer.draw_text(
+            &self.title,
+            rect.x + 12.0,
+            rect.y + 18.0,
+            12.0,
+            [1.0, 1.0, 1.0, 0.9],
+        );
+
         // Header Underline
-        renderer.draw_line(rect.x, rect.y + header_height, rect.x + rect.width, rect.y + header_height, self.border_color, 1.0);
-        
+        renderer.draw_line(
+            rect.x,
+            rect.y + header_height,
+            rect.x + rect.width,
+            rect.y + header_height,
+            self.border_color,
+            1.0,
+        );
+
         // 4. Content
         if !self.is_minimized {
             let content_rect = Rect {
@@ -98,7 +121,9 @@ impl<V1: View, V2: View> GinnungagapWindow<V1, V2> {
 
 impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let p = self.fold_progress.clamp(0.0, 1.0);
@@ -108,12 +133,38 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         // 1. Base Background & Border
         renderer.bifrost(rect, 30.0, 1.1, 0.95);
         renderer.stroke_rounded_rect(rect, 8.0, self.border_color, 1.5);
-        
+
         // Header
-        let header_rect = Rect { x: rect.x, y: rect.y, width: rect.width, height: header_height };
-        renderer.fill_rect(header_rect, [self.border_color[0], self.border_color[1], self.border_color[2], 0.2]);
-        renderer.draw_text(&self.title, rect.x + 12.0, rect.y + 18.0, 12.0, [1.0, 1.0, 1.0, 0.9]);
-        renderer.draw_line(rect.x, rect.y + header_height, rect.x + rect.width, rect.y + header_height, self.border_color, 1.0);
+        let header_rect = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: header_height,
+        };
+        renderer.fill_rect(
+            header_rect,
+            [
+                self.border_color[0],
+                self.border_color[1],
+                self.border_color[2],
+                0.2,
+            ],
+        );
+        renderer.draw_text(
+            &self.title,
+            rect.x + 12.0,
+            rect.y + 18.0,
+            12.0,
+            [1.0, 1.0, 1.0, 0.9],
+        );
+        renderer.draw_line(
+            rect.x,
+            rect.y + header_height,
+            rect.x + rect.width,
+            rect.y + header_height,
+            self.border_color,
+            1.0,
+        );
 
         let content_rect = Rect {
             x: rect.x + 4.0,
@@ -125,8 +176,11 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         // 2. Realm-Dependent Rendering
         if realm == cvkg_core::Realm::Midgard {
             // Midgard: Simple cross-fade switch
-            if p < 0.5 { self.primary.render(renderer, content_rect); }
-            else { self.secondary.render(renderer, content_rect); }
+            if p < 0.5 {
+                self.primary.render(renderer, content_rect);
+            } else {
+                self.secondary.render(renderer, content_rect);
+            }
             return;
         }
 
@@ -134,7 +188,7 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         // Calculate the slice and transform for the 'fold' effect
         // Left Half (Primary plane folding back)
         renderer.push_transform([0.0, 0.0], [1.0 - p * 0.5, 1.0], -p * 0.15);
-        renderer.push_mjolnir_slice(0.0, -content_rect.width * 0.25); 
+        renderer.push_mjolnir_slice(0.0, -content_rect.width * 0.25);
         self.primary.render(renderer, content_rect);
         renderer.pop_mjolnir_slice();
         renderer.pop_transform();
@@ -145,21 +199,36 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         self.secondary.render(renderer, content_rect);
         renderer.pop_mjolnir_slice();
         renderer.pop_transform();
-        
+
         // Dimensional Rift (Center Line Glow)
         if p > 0.05 && p < 0.95 {
             let cx = content_rect.x + content_rect.width / 2.0;
             let rift_opacity = (1.0 - (p - 0.5).abs() * 2.0).powf(2.0);
-            renderer.draw_line(cx, content_rect.y, cx, content_rect.y + content_rect.height, [0.0, 1.0, 1.0, 0.8 * rift_opacity], 2.0);
-            renderer.gungnir(Rect { x: cx - 2.0, y: content_rect.y, width: 4.0, height: content_rect.height }, [0.0, 1.0, 1.0, 1.0], 15.0, 0.6 * rift_opacity);
+            renderer.draw_line(
+                cx,
+                content_rect.y,
+                cx,
+                content_rect.y + content_rect.height,
+                [0.0, 1.0, 1.0, 0.8 * rift_opacity],
+                2.0,
+            );
+            renderer.gungnir(
+                Rect {
+                    x: cx - 2.0,
+                    y: content_rect.y,
+                    width: 4.0,
+                    height: content_rect.height,
+                },
+                [0.0, 1.0, 1.0, 1.0],
+                15.0,
+                0.6 * rift_opacity,
+            );
         }
     }
 }
 
 /// HiminnModal - An elevated, glassmorphic modal dialog.
 /// Named after the sky/heaven, it floats above Midgard (the main UI).
-/// 
-/// INSPIRED BY: iOS 26 Liquid Glass (Lensing) and Radix UI (Dialog).
 pub struct HiminnModal<V: View> {
     pub content: V,
     pub is_open: bool,
@@ -193,7 +262,9 @@ impl<V: View> HiminnModal<V> {
 
 impl<V: View> View for HiminnModal<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.is_open {
@@ -201,7 +272,7 @@ impl<V: View> View for HiminnModal<V> {
         }
 
         renderer.push_vnode(rect, "HiminnModal");
-        
+
         // 1. Overlay (Darken background)
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.4]);
 
@@ -216,7 +287,7 @@ impl<V: View> View for HiminnModal<V> {
         };
 
         // 3. Liquid Glass Lensing Effect
-        // INSPIRED BY: LiquidGlassReference (Lensing)
+        //)
         renderer.bifrost(modal_rect, self.blur_radius, 1.3, 0.85);
         renderer.stroke_rounded_rect(modal_rect, 12.0, self.border_color, 1.5);
 

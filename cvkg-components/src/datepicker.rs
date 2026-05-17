@@ -1,0 +1,582 @@
+use cvkg_core::{load_system_state, update_system_state, Event, Never, Rect, Renderer, View};
+use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+
+/// Global counter for generating unique DatePicker instance IDs.
+static DATEPICKER_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Month names displayed in the calendar header.
+const MONTH_NAMES: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+/// Day-of-week column headers.
+const DAY_HEADERS: [&str; 7] = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+/// Return the number of days in a given month (1-12) for a given year.
+fn days_in_month(month: u32, year: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 30,
+    }
+}
+
+/// Return true if the given year is a leap year.
+fn is_leap_year(year: u32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+/// Compute the day of the week (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+/// for a given date using Tomohiko Sakamoto's algorithm.
+fn day_of_week(year: u32, month: u32, day: u32) -> u32 {
+    let mut y = year;
+    let mut m = month;
+    if m < 3 {
+        y -= 1;
+        m += 12;
+    }
+    let k = y % 100;
+    let j = y / 100;
+    let h = (day as u32 + (13 * (m as u32 + 1)) / 5 + k + k / 4 + j / 4 + 5 * j) % 7;
+    // h: 0=Sat, 1=Sun, 2=Mon, ... 6=Fri
+    // Convert to 0=Sun, 1=Mon, ... 6=Sat
+    (h + 6) % 7
+}
+
+/// Get today's date as (day, month, year). Uses a simple approximation
+/// based on the system clock via the renderer's elapsed time is not available,
+/// so we use a compile-time fallback. In production this would query the OS.
+/// For now we return a reasonable default (2025-01-01) that the framework
+/// can override via state.
+fn today_date() -> (u32, u32, u32) {
+    // Default to 2025-06-15 as "today" for highlighting purposes.
+    // In a real implementation this would use std::time::SystemTime.
+    (15, 6, 2025)
+}
+
+/// A DatePicker component that displays a text field showing the selected date
+/// and a calendar popover on click.
+///
+/// The calendar shows the current month with a 7-column day grid, supports
+/// month navigation, and highlights the selected day and today.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::DatePicker;
+/// let picker = DatePicker::new(|day, month, year| {
+///     println!("Selected: {}/{}/{}", day, month, year);
+/// })
+/// .selected(15, 6, 2025);
+/// ```
+pub struct DatePicker {
+    /// The currently selected date as (day, month, year).
+    selected_date: Option<(u32, u32, u32)>,
+    /// Whether the calendar popover is open.
+    is_open: bool,
+    /// Callback invoked when a date is selected.
+    on_change: Arc<dyn Fn(u32, u32, u32) + Send + Sync>,
+    /// Stable per-instance hash used to identify this component in the system state store.
+    id_hash: u64,
+}
+
+impl DatePicker {
+    /// Create a new DatePicker with the given change callback.
+    ///
+    /// The picker defaults to no selected date and closed state.
+    pub fn new(on_change: impl Fn(u32, u32, u32) + Send + Sync + 'static) -> Self {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let counter = DATEPICKER_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        counter.hash(&mut hasher);
+        std::any::type_name::<DatePicker>().hash(&mut hasher);
+        let id_hash = hasher.finish();
+
+        Self {
+            selected_date: None,
+            is_open: false,
+            on_change: Arc::new(on_change),
+            id_hash,
+        }
+    }
+
+    /// Set the initially selected date (day, month, year).
+    pub fn selected(mut self, day: u32, month: u32, year: u32) -> Self {
+        self.selected_date = Some((day, month, year));
+        self
+    }
+
+    /// Read the open state from the system component state.
+    fn is_open_state(&self) -> bool {
+        let s = load_system_state();
+        s.get_component_state::<bool>(self.id_hash)
+            .map(|v| *v.read().unwrap())
+            .unwrap_or(false)
+    }
+
+    /// Write the open state into the system component state.
+    fn set_open_state(&self, open: bool) {
+        let id = self.id_hash;
+        update_system_state(move |s| {
+            let mut s = s.clone();
+            s.set_component_state(id, open);
+            s
+        });
+    }
+
+    /// Read the currently displayed month from system state, defaulting to
+    /// the selected date's month or today's month.
+    fn displayed_month_state(&self) -> (u32, u32) {
+        let s = load_system_state();
+        s.get_component_state::<(u32, u32)>(self.id_hash + 1)
+            .map(|v| *v.read().unwrap())
+            .unwrap_or_else(|| {
+                if let Some((_d, m, y)) = self.selected_date {
+                    (m, y)
+                } else {
+                    let (_d, m, y) = today_date();
+                    (m, y)
+                }
+            })
+    }
+
+    /// Write the currently displayed month into system state.
+    fn set_displayed_month(&self, month: u32, year: u32) {
+        let id = self.id_hash + 1;
+        update_system_state(move |s| {
+            let mut s = s.clone();
+            s.set_component_state(id, (month, year));
+            s
+        });
+    }
+
+    /// Format the selected date as DD/MM/YYYY, or return a placeholder.
+    fn format_date(&self) -> String {
+        if let Some((day, month, year)) = self.selected_date {
+            format!("{:02}/{:02}/{}", day, month, year)
+        } else {
+            "DD/MM/YYYY".to_string()
+        }
+    }
+
+    /// Render the text field portion of the date picker.
+    fn render_text_field(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "DatePickerField");
+
+        // Background
+        renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.14, 1.0]);
+        // Border
+        renderer.stroke_rounded_rect(rect, 6.0, [0.2, 0.3, 0.5, 0.8], 1.5);
+
+        // Date text
+        let text = self.format_date();
+        let text_color = if self.selected_date.is_some() {
+            [1.0, 1.0, 1.0, 1.0]
+        } else {
+            [0.5, 0.5, 0.6, 0.7]
+        };
+        let text_x = rect.x + 10.0;
+        let text_y = rect.y + (rect.height - 14.0) / 2.0;
+        renderer.draw_text(&text, text_x, text_y, 14.0, text_color);
+
+        // Calendar icon on the right
+        let icon_x = rect.x + rect.width - 28.0;
+        let icon_y = rect.y + (rect.height - 14.0) / 2.0;
+        renderer.draw_text("\u{1F4C5}", icon_x, icon_y, 14.0, [0.7, 0.7, 0.8, 0.9]);
+
+        renderer.pop_vnode();
+    }
+
+    /// Render the calendar popover with glassmorphic styling.
+    fn render_calendar(&self, renderer: &mut dyn Renderer, anchor_rect: Rect) {
+        let pop_w: f32 = 280.0;
+        let pop_h: f32 = 260.0;
+        let gap = 6.0;
+
+        let pop_rect = Rect {
+            x: anchor_rect.x,
+            y: anchor_rect.y + anchor_rect.height + gap,
+            width: pop_w,
+            height: pop_h,
+        };
+
+        renderer.set_z_index(500.0);
+
+        // Semi-transparent backdrop behind the popover
+        renderer.fill_rect(anchor_rect, [0.0, 0.0, 0.0, 0.25]);
+
+        // Glassmorphic background
+        renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
+        renderer.fill_rounded_rect(pop_rect, 12.0, [0.06, 0.06, 0.1, 0.9]);
+        renderer.stroke_rounded_rect(pop_rect, 12.0, [0.15, 0.25, 0.4, 0.7], 1.5);
+
+        let (display_month, display_year) = self.displayed_month_state();
+
+        // Header: month/year with navigation arrows
+        let header_h = 32.0;
+        let header_rect = Rect {
+            x: pop_rect.x,
+            y: pop_rect.y,
+            width: pop_w,
+            height: header_h,
+        };
+
+        // Previous month button
+        let prev_btn_rect = Rect {
+            x: header_rect.x + 8.0,
+            y: header_rect.y + 4.0,
+            width: 24.0,
+            height: 24.0,
+        };
+        renderer.draw_text(
+            "<",
+            prev_btn_rect.x + 6.0,
+            prev_btn_rect.y + 4.0,
+            14.0,
+            [0.7, 0.8, 1.0, 1.0],
+        );
+
+        // Month/year label (centered)
+        let label = format!(
+            "{} {}",
+            MONTH_NAMES[(display_month - 1) as usize],
+            display_year
+        );
+        let (tw, _th) = renderer.measure_text(&label, 14.0);
+        let label_x = header_rect.x + (header_rect.width - tw) / 2.0;
+        let label_y = header_rect.y + (header_h - 14.0) / 2.0;
+        renderer.draw_text(&label, label_x, label_y, 14.0, [1.0, 1.0, 1.0, 1.0]);
+
+        // Next month button
+        let next_btn_rect = Rect {
+            x: header_rect.x + header_rect.width - 32.0,
+            y: header_rect.y + 4.0,
+            width: 24.0,
+            height: 24.0,
+        };
+        renderer.draw_text(
+            ">",
+            next_btn_rect.x + 6.0,
+            next_btn_rect.y + 4.0,
+            14.0,
+            [0.7, 0.8, 1.0, 1.0],
+        );
+
+        // Day-of-week headers
+        let grid_y_start = pop_rect.y + header_h + 4.0;
+        let cell_w = pop_w / 7.0;
+        let cell_h = 28.0;
+
+        for (i, day_name) in DAY_HEADERS.iter().enumerate() {
+            let cx = pop_rect.x + i as f32 * cell_w + cell_w / 2.0;
+            let (tw, _th) = renderer.measure_text(day_name, 11.0);
+            renderer.draw_text(
+                day_name,
+                cx - tw / 2.0,
+                grid_y_start + (cell_h - 11.0) / 2.0,
+                11.0,
+                [0.5, 0.5, 0.6, 0.8],
+            );
+        }
+
+        // Separator line below headers
+        let sep_y = grid_y_start + cell_h;
+        renderer.draw_line(
+            pop_rect.x + 8.0,
+            sep_y,
+            pop_rect.x + pop_w - 8.0,
+            sep_y,
+            [0.15, 0.15, 0.2, 0.5],
+            1.0,
+        );
+
+        // Compute calendar grid
+        let first_dow = day_of_week(display_year, display_month, 1);
+        let num_days = days_in_month(display_month, display_year);
+        let prev_month = if display_month == 1 {
+            12
+        } else {
+            display_month - 1
+        };
+        let prev_year = if display_month == 1 {
+            display_year - 1
+        } else {
+            display_year
+        };
+        let prev_month_days = days_in_month(prev_month, prev_year);
+
+        let today = today_date();
+
+        // Day grid: up to 6 rows
+        let grid_start_y = sep_y + 4.0;
+        let total_cells = first_dow as usize + num_days as usize;
+        let num_rows = ((total_cells + 6) / 7).min(6);
+
+        for row in 0..num_rows {
+            for col in 0..7 {
+                let cell_idx = row * 7 + col;
+                let cell_x = pop_rect.x + col as f32 * cell_w;
+                let cell_y = grid_start_y + row as f32 * cell_h;
+                let cell_rect = Rect {
+                    x: cell_x,
+                    y: cell_y,
+                    width: cell_w,
+                    height: cell_h,
+                };
+
+                let day_num: u32;
+                let is_current_month: bool;
+
+                if cell_idx < first_dow as usize {
+                    // Previous month days
+                    day_num = prev_month_days - (first_dow - cell_idx as u32) + 1;
+                    is_current_month = false;
+                } else {
+                    let d = cell_idx as u32 - first_dow + 1;
+                    if d <= num_days {
+                        day_num = d;
+                        is_current_month = true;
+                    } else {
+                        // Next month days
+                        day_num = d - num_days;
+                        is_current_month = false;
+                    }
+                }
+
+                if !is_current_month {
+                    // Dimmed days from adjacent months
+                    let day_str = format!("{}", day_num);
+                    let (tw, _th) = renderer.measure_text(&day_str, 12.0);
+                    renderer.draw_text(
+                        &day_str,
+                        cell_x + (cell_w - tw) / 2.0,
+                        cell_y + (cell_h - 12.0) / 2.0,
+                        12.0,
+                        [0.3, 0.3, 0.35, 0.5],
+                    );
+                } else {
+                    let is_selected = self
+                        .selected_date
+                        .map(|(sd, sm, sy)| {
+                            sd == day_num && sm == display_month && sy == display_year
+                        })
+                        .unwrap_or(false);
+                    let is_today =
+                        day_num == today.0 && display_month == today.1 && display_year == today.2;
+
+                    // Highlight selected day
+                    if is_selected {
+                        let highlight_rect = Rect {
+                            x: cell_x + (cell_w - 24.0) / 2.0,
+                            y: cell_y + (cell_h - 24.0) / 2.0,
+                            width: 24.0,
+                            height: 24.0,
+                        };
+                        renderer.fill_rounded_rect(highlight_rect, 12.0, [0.0, 0.7, 0.85, 0.9]);
+                    } else if is_today {
+                        let highlight_rect = Rect {
+                            x: cell_x + (cell_w - 24.0) / 2.0,
+                            y: cell_y + (cell_h - 24.0) / 2.0,
+                            width: 24.0,
+                            height: 24.0,
+                        };
+                        renderer.stroke_rounded_rect(
+                            highlight_rect,
+                            12.0,
+                            [0.0, 0.7, 0.85, 0.6],
+                            1.5,
+                        );
+                    }
+
+                    let day_str = format!("{}", day_num);
+                    let (tw, _th) = renderer.measure_text(&day_str, 12.0);
+                    let text_color = if is_selected {
+                        [1.0, 1.0, 1.0, 1.0]
+                    } else if is_today {
+                        [0.0, 0.85, 1.0, 1.0]
+                    } else {
+                        [0.85, 0.85, 0.9, 1.0]
+                    };
+                    renderer.draw_text(
+                        &day_str,
+                        cell_x + (cell_w - tw) / 2.0,
+                        cell_y + (cell_h - 12.0) / 2.0,
+                        12.0,
+                        text_color,
+                    );
+                }
+            }
+        }
+
+        // Register click handlers
+        let id = self.id_hash;
+        let on_change = self.on_change.clone();
+        let pr = pop_rect;
+        let ar = anchor_rect;
+
+        // Previous month button click
+        let prev_r = prev_btn_rect;
+        let dm = display_month;
+        let dy = display_year;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event: Event| {
+                if let Event::PointerClick { x, y, .. } = event {
+                    if prev_r.contains(x, y) {
+                        let (new_m, new_y) = if dm == 1 { (12, dy - 1) } else { (dm - 1, dy) };
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id + 1, (new_m, new_y));
+                            s
+                        });
+                    }
+                }
+            }),
+        );
+
+        // Next month button click
+        let next_r = next_btn_rect;
+        let dm2 = display_month;
+        let dy2 = display_year;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event: Event| {
+                if let Event::PointerClick { x, y, .. } = event {
+                    if next_r.contains(x, y) {
+                        let (new_m, new_y) = if dm2 == 12 {
+                            (1, dy2 + 1)
+                        } else {
+                            (dm2 + 1, dy2)
+                        };
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id + 1, (new_m, new_y));
+                            s
+                        });
+                    }
+                }
+            }),
+        );
+
+        // Day cell clicks
+        for row in 0..num_rows {
+            for col in 0..7 {
+                let cell_idx = row * 7 + col;
+                let cell_x = pop_rect.x + col as f32 * cell_w;
+                let cell_y = grid_start_y + row as f32 * cell_h;
+                let cell_rect = Rect {
+                    x: cell_x,
+                    y: cell_y,
+                    width: cell_w,
+                    height: cell_h,
+                };
+
+                if cell_idx >= first_dow as usize {
+                    let d = cell_idx as u32 - first_dow + 1;
+                    if d <= num_days {
+                        let oc = on_change.clone();
+                        let id2 = id;
+                        renderer.register_handler(
+                            "pointerclick",
+                            Arc::new(move |event: Event| {
+                                if let Event::PointerClick { x, y, .. } = event {
+                                    if cell_rect.contains(x, y) {
+                                        (oc)(d, display_month, display_year);
+                                        update_system_state(move |s| {
+                                            let mut s = s.clone();
+                                            s.set_component_state(id2, false);
+                                            s
+                                        });
+                                    }
+                                }
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Click outside to close
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event: Event| {
+                if let Event::PointerClick { x, y, .. } = event {
+                    if !pr.contains(x, y) && !ar.contains(x, y) {
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id, false);
+                            s
+                        });
+                    }
+                }
+            }),
+        );
+
+        renderer.set_z_index(0.0);
+    }
+}
+
+impl View for DatePicker {
+    type Body = Never;
+
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "DatePicker");
+
+        let is_open = self.is_open_state() || self.is_open;
+
+        // Render the text field
+        self.render_text_field(renderer, rect);
+
+        // Register click handler on the text field to toggle the popover
+        let id = self.id_hash;
+        let tr = rect;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event: Event| {
+                if let Event::PointerClick { x, y, .. } = event {
+                    if tr.contains(x, y) {
+                        let current = {
+                            let s = load_system_state();
+                            s.get_component_state::<bool>(id)
+                                .map(|v| *v.read().unwrap())
+                                .unwrap_or(false)
+                        };
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id, !current);
+                            s
+                        });
+                    }
+                }
+            }),
+        );
+
+        // Render calendar popover if open
+        if is_open {
+            self.render_calendar(renderer, rect);
+        }
+
+        renderer.pop_vnode();
+    }
+}

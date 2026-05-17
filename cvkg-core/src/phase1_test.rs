@@ -93,7 +93,7 @@ mod tests {
 /// under both sequential and concurrent access patterns.
 #[cfg(test)]
 mod phase2_tests {
-    use crate::{load_system_state, update_system_state, KnowledgeFragment};
+    use crate::{KnowledgeFragment, load_system_state, update_system_state};
 
     /// Sequential read-after-write: update is immediately visible to load.
     #[test]
@@ -179,7 +179,9 @@ mod phase2_tests {
         // Final assertion: last write is visible
         let snap = load_system_state();
         assert_eq!(
-            snap.fragments.get("concurrent_counter").map(|f| f.created_at),
+            snap.fragments
+                .get("concurrent_counter")
+                .map(|f| f.created_at),
             Some(WRITES as u64 - 1),
             "Final write must be the last one published"
         );
@@ -277,7 +279,10 @@ mod phase3_tests {
             final_val
         );
         // version == THREADS is the maximum; it could be less if some stores raced
-        assert!(state.version() >= 1, "version must be at least 1 after any write");
+        assert!(
+            state.version() >= 1,
+            "version must be at least 1 after any write"
+        );
     }
 }
 
@@ -288,7 +293,7 @@ mod phase3_tests {
 #[cfg(test)]
 #[cfg(not(target_arch = "wasm32"))]
 mod phase6_tests {
-    use crate::{transact_pair, transact_system_state, KnowledgeFragment, State};
+    use crate::{KnowledgeFragment, State, transact_pair, transact_system_state};
 
     /// Sequential correctness: both `fragments` and `last_query_results` land in the same
     /// committed snapshot — transact_system_state is not split across two separate stores.
@@ -309,10 +314,14 @@ mod phase6_tests {
         });
 
         let snap = crate::load_system_state();
-        assert!(snap.fragments.contains_key("p6_frag"),
-            "fragment must be present after transact_system_state");
-        assert!(snap.last_query_results.contains(&"p6_frag".to_string()),
-            "last_query_results must reflect the same committed transaction");
+        assert!(
+            snap.fragments.contains_key("p6_frag"),
+            "fragment must be present after transact_system_state"
+        );
+        assert!(
+            snap.last_query_results.contains(&"p6_frag".to_string()),
+            "last_query_results must reflect the same committed transaction"
+        );
     }
 
     /// Concurrent lost-update prevention: 10 threads each insert a unique fragment via
@@ -358,13 +367,18 @@ mod phase6_tests {
                 });
             }));
         }
-        for h in handles { h.join().expect("thread panicked"); }
+        for h in handles {
+            h.join().expect("thread panicked");
+        }
 
         let snap = crate::load_system_state();
         for i in 0..N {
             let key = format!("{}{}", prefix, i);
-            assert!(snap.fragments.contains_key(&key),
-                "fragment {} was lost — STM retry must prevent overwrites", key);
+            assert!(
+                snap.fragments.contains_key(&key),
+                "fragment {} was lost — STM retry must prevent overwrites",
+                key
+            );
         }
     }
 
@@ -381,8 +395,14 @@ mod phase6_tests {
         let notified_b = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let na = std::sync::Arc::clone(&notified_a);
         let nb = std::sync::Arc::clone(&notified_b);
-        state_a.subscribe(move |v| { assert_eq!(*v, 20); na.store(true, std::sync::atomic::Ordering::Relaxed); });
-        state_b.subscribe(move |v| { assert_eq!(*v, 10); nb.store(true, std::sync::atomic::Ordering::Relaxed); });
+        state_a.subscribe(move |v| {
+            assert_eq!(*v, 20);
+            na.store(true, std::sync::atomic::Ordering::Relaxed);
+        });
+        state_b.subscribe(move |v| {
+            assert_eq!(*v, 10);
+            nb.store(true, std::sync::atomic::Ordering::Relaxed);
+        });
 
         let v_before_a = state_a.version();
         let v_before_b = state_b.version();
@@ -392,44 +412,65 @@ mod phase6_tests {
 
         assert_eq!(state_a.get(), 20, "state_a must hold state_b's old value");
         assert_eq!(state_b.get(), 10, "state_b must hold state_a's old value");
-        assert_eq!(state_a.version(), v_before_a + 1, "version_a must increment exactly once");
-        assert_eq!(state_b.version(), v_before_b + 1, "version_b must increment exactly once");
-        assert!(notified_a.load(std::sync::atomic::Ordering::Relaxed), "state_a subscriber must fire");
-        assert!(notified_b.load(std::sync::atomic::Ordering::Relaxed), "state_b subscriber must fire");
+        assert_eq!(
+            state_a.version(),
+            v_before_a + 1,
+            "version_a must increment exactly once"
+        );
+        assert_eq!(
+            state_b.version(),
+            v_before_b + 1,
+            "version_b must increment exactly once"
+        );
+        assert!(
+            notified_a.load(std::sync::atomic::Ordering::Relaxed),
+            "state_a subscriber must fire"
+        );
+        assert!(
+            notified_b.load(std::sync::atomic::Ordering::Relaxed),
+            "state_b subscriber must fire"
+        );
     }
 }
 
 /// Phase 7: Batching queue test
 #[cfg(test)]
 mod phase7_tests {
-    use crate::{batch, State};
-    use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
+    use crate::{State, batch};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
 
     #[test]
     fn test_batch_defers_notifications() {
         let state_a = State::new(10);
         let state_b = State::new(20);
-        
+
         let counter = Arc::new(AtomicUsize::new(0));
         let c1 = Arc::clone(&counter);
         let c2 = Arc::clone(&counter);
-        
-        state_a.subscribe(move |_| { c1.fetch_add(1, Ordering::SeqCst); });
-        state_b.subscribe(move |_| { c2.fetch_add(1, Ordering::SeqCst); });
-        
+
+        state_a.subscribe(move |_| {
+            c1.fetch_add(1, Ordering::SeqCst);
+        });
+        state_b.subscribe(move |_| {
+            c2.fetch_add(1, Ordering::SeqCst);
+        });
+
         batch(|| {
             state_a.set(11);
             state_b.set(21);
             // Notifications should not have fired yet
             assert_eq!(counter.load(Ordering::SeqCst), 0);
-            
+
             // Inner batch calls should be no-ops (just execute inline)
             batch(|| {
                 state_a.set(12);
             });
             assert_eq!(counter.load(Ordering::SeqCst), 0);
         });
-        
+
         // After batch, all queued notifications fire
         assert_eq!(counter.load(Ordering::SeqCst), 3);
         assert_eq!(state_a.get(), 12);

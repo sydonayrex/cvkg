@@ -1,4 +1,7 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Layer in a layer system
 pub struct Layer {
@@ -57,7 +60,9 @@ impl LayerSystem {
 
 impl View for LayerSystem {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let item_h = 32.0;
@@ -73,7 +78,11 @@ impl View for LayerSystem {
             };
 
             let is_active = self.active_layer.as_deref() == Some(&layer.id);
-            let bg = if is_active { [0.1, 0.2, 0.4, 1.0] } else { [0.06, 0.06, 0.1, 1.0] };
+            let bg = if is_active {
+                [0.1, 0.2, 0.4, 1.0]
+            } else {
+                [0.06, 0.06, 0.1, 1.0]
+            };
             renderer.fill_rounded_rect(layer_rect, 4.0, bg);
             if is_active {
                 renderer.stroke_rounded_rect(layer_rect, 4.0, [0.0, 0.8, 1.0, 1.0], 1.0);
@@ -81,22 +90,54 @@ impl View for LayerSystem {
 
             // Eye icon for visibility
             let icon = if layer.visible { "👁" } else { "🚫" };
-            renderer.draw_text(icon, layer_rect.x + 8.0, layer_rect.y + 10.0, 12.0, [0.6, 0.8, 1.0, 1.0]);
+            renderer.draw_text(
+                icon,
+                layer_rect.x + 8.0,
+                layer_rect.y + 10.0,
+                12.0,
+                [0.6, 0.8, 1.0, 1.0],
+            );
 
             // Layer name
-            renderer.draw_text(&layer.name, layer_rect.x + 32.0, layer_rect.y + 10.0, 12.0, [0.8, 0.8, 0.9, 1.0]);
+            renderer.draw_text(
+                &layer.name,
+                layer_rect.x + 32.0,
+                layer_rect.y + 10.0,
+                12.0,
+                [0.8, 0.8, 0.9, 1.0],
+            );
 
             // Lock icon
             let lock_icon = if layer.locked { "🔒" } else { "🔓" };
-            renderer.draw_text(lock_icon, layer_rect.x + layer_rect.width - 60.0, layer_rect.y + 10.0, 12.0, [0.7, 0.5, 0.4, 1.0]);
+            renderer.draw_text(
+                lock_icon,
+                layer_rect.x + layer_rect.width - 60.0,
+                layer_rect.y + 10.0,
+                12.0,
+                [0.7, 0.5, 0.4, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for LayerSystem {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
         let height = (self.layers.len() as f32 * 40.0) + 16.0;
-        Size { width: 200.0, height }
+        Size {
+            width: 200.0,
+            height,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

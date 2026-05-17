@@ -1,4 +1,7 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Never, Rect, Renderer, Size, View};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 use std::sync::Arc;
 
 /// Basic date structure for calendar components.
@@ -13,7 +16,11 @@ impl Date {
     /// Returns today's date (mocked for simplicity).
     pub fn today() -> Self {
         // Mocking today's date for simplicity
-        Self { year: 2026, month: 4, day: 30 }
+        Self {
+            year: 2026,
+            month: 4,
+            day: 30,
+        }
     }
 
     /// Formats the date as YYYY-MM-DD.
@@ -23,8 +30,6 @@ impl Date {
 }
 
 /// A calendar component for selecting dates or date ranges.
-/// 
-/// INSPIRED BY: Mantine (DatePicker) and MUI X (DateRangePicker).
 pub struct TyrCalendar {
     pub(crate) selected_date: Date,
     pub(crate) range_end: Option<Date>,
@@ -72,27 +77,50 @@ impl TyrCalendar {
 
 impl View for TyrCalendar {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "TyrCalendar");
-        
+
         // Background
         renderer.fill_rounded_rect(rect, 8.0, [0.08, 0.08, 0.12, 1.0]);
         renderer.stroke_rect(rect, [0.2, 0.2, 0.3, 1.0], 1.0);
 
         // Header (Month Year)
         let header_h = 40.0;
-        let _header_rect = Rect { x: rect.x, y: rect.y, width: rect.width, height: header_h };
-        let title = format!("{} {}", month_name(self.selected_date.month), self.selected_date.year);
+        let _header_rect = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: header_h,
+        };
+        let title = format!(
+            "{} {}",
+            month_name(self.selected_date.month),
+            self.selected_date.year
+        );
         let (tw, th) = renderer.measure_text(&title, 16.0);
-        renderer.draw_text(&title, rect.x + (rect.width - tw) / 2.0, rect.y + (header_h - th) / 2.0, 16.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(
+            &title,
+            rect.x + (rect.width - tw) / 2.0,
+            rect.y + (header_h - th) / 2.0,
+            16.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
 
         // Days of week
         let day_w = rect.width / 7.0;
         let days = ["S", "M", "T", "W", "T", "F", "S"];
         for (i, day) in days.iter().enumerate() {
-            renderer.draw_text(day, rect.x + i as f32 * day_w + (day_w - 10.0) / 2.0, rect.y + header_h + 5.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+            renderer.draw_text(
+                day,
+                rect.x + i as f32 * day_w + (day_w - 10.0) / 2.0,
+                rect.y + header_h + 5.0,
+                12.0,
+                [0.5, 0.5, 0.6, 1.0],
+            );
         }
 
         // Days grid
@@ -100,14 +128,22 @@ impl View for TyrCalendar {
         let today = self.selected_date;
         let days_in_month = match today.month {
             4 | 6 | 9 | 11 => 30,
-            2 => if (today.year % 4 == 0 && today.year % 100 != 0) || today.year % 400 == 0 { 29 } else { 28 },
+            2 => {
+                if (today.year % 4 == 0 && today.year % 100 != 0) || today.year % 400 == 0 {
+                    29
+                } else {
+                    28
+                }
+            }
             _ => 31,
         };
-        
+
         for row in 0..6 {
             for col in 0..7 {
                 let day_num = row * 7 + col + 1;
-                if day_num > days_in_month { break; }
+                if day_num > days_in_month {
+                    break;
+                }
                 let cell_rect = Rect {
                     x: rect.x + col as f32 * day_w,
                     y: grid_y + row as f32 * 30.0,
@@ -115,11 +151,18 @@ impl View for TyrCalendar {
                     height: 30.0,
                 };
 
-                let _date = Date { year: today.year, month: today.month, day: day_num as u32 };
+                let _date = Date {
+                    year: today.year,
+                    month: today.month,
+                    day: day_num as u32,
+                };
                 let is_selected = day_num == self.selected_date.day as usize;
-                
-                let is_disabled = self.min_date.is_some_and(|min| day_num < min.day as usize && today.month == min.month && today.year == min.year)
-                    || self.max_date.is_some_and(|max| day_num > max.day as usize && today.month == max.month && today.year == max.year);
+
+                let is_disabled = self.min_date.is_some_and(|min| {
+                    day_num < min.day as usize && today.month == min.month && today.year == min.year
+                }) || self.max_date.is_some_and(|max| {
+                    day_num > max.day as usize && today.month == max.month && today.year == max.year
+                });
 
                 if is_selected {
                     renderer.fill_rounded_rect(cell_rect, 4.0, [0.0, 0.8, 1.0, 0.4]);
@@ -129,8 +172,18 @@ impl View for TyrCalendar {
 
                 let day_str = day_num.to_string();
                 let (dtw, dth) = renderer.measure_text(&day_str, 14.0);
-                let text_color = if is_disabled { [0.3, 0.3, 0.35, 1.0] } else { [1.0, 1.0, 1.0, 1.0] };
-                renderer.draw_text(&day_str, cell_rect.x + (day_w - dtw) / 2.0, cell_rect.y + (30.0 - dth) / 2.0, 14.0, text_color);
+                let text_color = if is_disabled {
+                    [0.3, 0.3, 0.35, 1.0]
+                } else {
+                    [1.0, 1.0, 1.0, 1.0]
+                };
+                renderer.draw_text(
+                    &day_str,
+                    cell_rect.x + (day_w - dtw) / 2.0,
+                    cell_rect.y + (30.0 - dth) / 2.0,
+                    14.0,
+                    text_color,
+                );
             }
         }
 
@@ -139,25 +192,32 @@ impl View for TyrCalendar {
         let year = self.selected_date.year;
         let month = self.selected_date.month;
         let rect_clone = rect;
-        
-        renderer.register_handler("pointerclick", Arc::new(move |event| {
-            if let cvkg_core::Event::PointerClick { x, y, .. } = event {
-                // Simplified hit testing for the grid
-                let local_x = x - rect_clone.x;
-                let local_y = y - (rect_clone.y + header_h + 25.0);
-                
-                if (0.0..180.0).contains(&local_y) {
-                    let col = (local_x / day_w) as i32;
-                    let row = (local_y / 30.0) as i32;
-                    if (0..7).contains(&col) && (0..6).contains(&row) {
-                        let day = row * 7 + col + 1;
-                        if day >= 1 && day <= days_in_month as i32 {
-                            on_date_select(Date { year, month, day: day as u32 });
+
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = event {
+                    // Simplified hit testing for the grid
+                    let local_x = x - rect_clone.x;
+                    let local_y = y - (rect_clone.y + header_h + 25.0);
+
+                    if (0.0..180.0).contains(&local_y) {
+                        let col = (local_x / day_w) as i32;
+                        let row = (local_y / 30.0) as i32;
+                        if (0..7).contains(&col) && (0..6).contains(&row) {
+                            let day = row * 7 + col + 1;
+                            if day >= 1 && day <= days_in_month as i32 {
+                                on_date_select(Date {
+                                    year,
+                                    month,
+                                    day: day as u32,
+                                });
+                            }
                         }
                     }
                 }
-            }
-        }));
+            }),
+        );
 
         renderer.pop_vnode();
     }
@@ -170,18 +230,36 @@ impl LayoutView for TyrCalendar {
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {
-        Size { width: 250.0, height: 220.0 }
+        Size {
+            width: 250.0,
+            height: 220.0,
+        }
     }
 
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 fn month_name(m: u32) -> &'static str {
     match m {
-        1 => "January", 2 => "February", 3 => "March", 4 => "April",
-        5 => "May", 6 => "June", 7 => "July", 8 => "August",
-        9 => "September", 10 => "October", 11 => "November", 12 => "December",
-        _ => "Unknown"
+        1 => "January",
+        2 => "February",
+        3 => "March",
+        4 => "April",
+        5 => "May",
+        6 => "June",
+        7 => "July",
+        8 => "August",
+        9 => "September",
+        10 => "October",
+        11 => "November",
+        12 => "December",
+        _ => "Unknown",
     }
 }
 
@@ -196,7 +274,11 @@ impl DatePicker {
     /// Creates a new DatePicker with the given change handler.
     pub fn new(on_date_change: impl Fn(Date) + Send + Sync + 'static) -> Self {
         Self {
-            selected_date: Date { year: 0, month: 0, day: 0 },
+            selected_date: Date {
+                year: 0,
+                month: 0,
+                day: 0,
+            },
             placeholder: "Select date".into(),
             on_date_change: Arc::new(on_date_change),
         }
@@ -205,22 +287,40 @@ impl DatePicker {
 
 impl View for DatePicker {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePicker");
         renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
         renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-        
+
         let display = if self.selected_date.year == 0 {
             self.placeholder.clone()
         } else {
             self.selected_date.format()
         };
-        let text_color = if self.selected_date.year == 0 { [0.5, 0.5, 0.6, 1.0] } else { [1.0, 1.0, 1.0, 1.0] };
-        
-        renderer.draw_text(&display, rect.x + 8.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, text_color);
-        renderer.draw_text("📅", rect.x + rect.width - 24.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, [0.5, 0.5, 0.6, 1.0]);
+        let text_color = if self.selected_date.year == 0 {
+            [0.5, 0.5, 0.6, 1.0]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+
+        renderer.draw_text(
+            &display,
+            rect.x + 8.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            text_color,
+        );
+        renderer.draw_text(
+            "📅",
+            rect.x + rect.width - 24.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
 
         let id_hash = {
             use std::hash::{Hash, Hasher};
@@ -254,18 +354,22 @@ impl View for DatePicker {
                     s.set_component_state(id_hash, false);
                     s
                 });
-            }).selected_date(self.selected_date);
+            })
+            .selected_date(self.selected_date);
             cal.render(renderer, cal_rect);
             renderer.set_z_index(0.0);
         }
 
-        renderer.register_handler("pointerclick", Arc::new(move |_event| {
-            cvkg_core::update_system_state(|s| {
-                let mut s = s.clone();
-                s.set_component_state(id_hash, !is_expanded);
-                s
-            });
-        }));
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |_event| {
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(id_hash, !is_expanded);
+                    s
+                });
+            }),
+        );
         renderer.pop_vnode();
     }
 }
@@ -277,8 +381,17 @@ impl LayoutView for DatePicker {
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {
-        Size { width: proposal.width.unwrap_or(180.0), height: 32.0 }
+        Size {
+            width: proposal.width.unwrap_or(180.0),
+            height: 32.0,
+        }
     }
 
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

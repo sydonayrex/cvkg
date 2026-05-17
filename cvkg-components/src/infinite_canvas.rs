@@ -1,4 +1,7 @@
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never, AnyView};
+use cvkg_core::{
+    AnyView, Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// An infinite canvas with pan/zoom viewport controls.
 pub struct InfiniteCanvas {
@@ -38,11 +41,22 @@ impl InfiniteCanvas {
         self
     }
 
-    pub fn item(mut self, id: &str, content: impl View + Clone + 'static, x: f32, y: f32, width: f32, height: f32) -> Self {
+    pub fn item(
+        mut self,
+        id: &str,
+        content: impl View + Clone + 'static,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+    ) -> Self {
         self.children.push(CanvasItem {
             id: id.to_string(),
             content: content.erase(),
-            x, y, width, height,
+            x,
+            y,
+            width,
+            height,
         });
         self
     }
@@ -50,7 +64,9 @@ impl InfiniteCanvas {
 
 impl View for InfiniteCanvas {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Draw grid background
@@ -62,10 +78,17 @@ impl View for InfiniteCanvas {
         let mut x = start_x;
         while x < rect.width {
             let line_x = (x * self.zoom + self.pan_x).max(rect.x);
-            renderer.draw_line(line_x, rect.y, line_x, rect.y + rect.height, grid_color, 0.5);
+            renderer.draw_line(
+                line_x,
+                rect.y,
+                line_x,
+                rect.y + rect.height,
+                grid_color,
+                0.5,
+            );
             x += grid_size.max(1.0);
         }
-        
+
         let mut y = start_y;
         while y < rect.height {
             let line_y = (y * self.zoom + self.pan_y).max(rect.y);
@@ -77,10 +100,24 @@ impl View for InfiniteCanvas {
         let origin_x = self.pan_x;
         let origin_y = self.pan_y;
         if origin_x >= rect.x && origin_x <= rect.x + rect.width {
-            renderer.draw_line(origin_x, rect.y, origin_x, rect.y + rect.height, [0.2, 0.4, 0.6, 0.5], 1.0);
+            renderer.draw_line(
+                origin_x,
+                rect.y,
+                origin_x,
+                rect.y + rect.height,
+                [0.2, 0.4, 0.6, 0.5],
+                1.0,
+            );
         }
         if origin_y >= rect.y && origin_y <= rect.y + rect.height {
-            renderer.draw_line(rect.x, origin_y, rect.x + rect.width, origin_y, [0.2, 0.4, 0.6, 0.5], 1.0);
+            renderer.draw_line(
+                rect.x,
+                origin_y,
+                rect.x + rect.width,
+                origin_y,
+                [0.2, 0.4, 0.6, 0.5],
+                1.0,
+            );
         }
 
         // Render children
@@ -90,9 +127,17 @@ impl View for InfiniteCanvas {
             let item_w = (item.width * self.zoom).max(1.0);
             let item_h = (item.height * self.zoom).max(1.0);
 
-            if item_x + item_w > rect.x && item_x < rect.x + rect.width &&
-               item_y + item_h > rect.y && item_y < rect.y + rect.height {
-                let item_rect = Rect { x: item_x, y: item_y, width: item_w, height: item_h };
+            if item_x + item_w > rect.x
+                && item_x < rect.x + rect.width
+                && item_y + item_h > rect.y
+                && item_y < rect.y + rect.height
+            {
+                let item_rect = Rect {
+                    x: item_x,
+                    y: item_y,
+                    width: item_w,
+                    height: item_h,
+                };
                 item.content.render(renderer, item_rect);
             }
         }
@@ -100,10 +145,24 @@ impl View for InfiniteCanvas {
 }
 
 impl LayoutView for InfiniteCanvas {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 800.0, height: 600.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 800.0,
+            height: 600.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }
 
 /// Minimap provides a small overview of the canvas.
@@ -123,7 +182,9 @@ impl Minimap {
 
 impl View for Minimap {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Draw minimap background
@@ -142,8 +203,22 @@ impl View for Minimap {
 }
 
 impl LayoutView for Minimap {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: self.minimap_size, height: self.minimap_size }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: self.minimap_size,
+            height: self.minimap_size,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

@@ -1,6 +1,0 @@
----
-source: cvkg-components/tests/snapshot_tests.rs
-assertion_line: 16
-expression: "\"All primitive components constructed successfully.\""
----
-All primitive components constructed successfully.

@@ -1,5 +1,7 @@
 # berserker
 
+![Berserker Hero HUD](../docs/images/berserker_hero_hud.png)
+
 **berserker** is the gaming/UI application built with CVKG framework featuring the Cyber Viking aesthetic.
 
 ## 🚀 Quick Start

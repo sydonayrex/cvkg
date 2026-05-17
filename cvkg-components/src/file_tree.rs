@@ -1,4 +1,4 @@
-use cvkg_core::{Never, Rect, Renderer, Size, View, SizeProposal, Event};
+use cvkg_core::{Event, Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 /// Represents the type of a file in the tree.
@@ -26,8 +26,6 @@ pub struct FileItem {
 
 /// A high-fidelity YggdrasilTree component for hierarchical data management.
 /// Named after the World Tree, whose roots and branches connect all realms.
-///
-/// INSPIRED BY: RSuite (Tree) and Mantine (Tree).
 pub struct YggdrasilTree {
     pub items: Vec<FileItem>, // Keeping FileItem for now but can be generalized later
     pub on_toggle: Arc<dyn Fn(String) + Send + Sync>,
@@ -40,9 +38,9 @@ pub struct YggdrasilTree {
 impl YggdrasilTree {
     /// Creates a new YggdrasilTree.
     pub fn new(
-        items: Vec<FileItem>, 
+        items: Vec<FileItem>,
         on_toggle: impl Fn(String) + Send + Sync + 'static,
-        on_select: impl Fn(String) + Send + Sync + 'static
+        on_select: impl Fn(String) + Send + Sync + 'static,
     ) -> Self {
         Self {
             items,
@@ -62,7 +60,7 @@ impl YggdrasilTree {
     pub fn with_drag_drop(
         mut self,
         on_drag_start: impl Fn(String) + Send + Sync + 'static,
-        on_drop: impl Fn(String, String) + Send + Sync + 'static
+        on_drop: impl Fn(String, String) + Send + Sync + 'static,
     ) -> Self {
         self.on_drag_start = Some(Arc::new(on_drag_start));
         self.on_drop = Some(Arc::new(on_drop));
@@ -72,7 +70,9 @@ impl YggdrasilTree {
 
 impl View for YggdrasilTree {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "YggdrasilTree");
@@ -81,8 +81,12 @@ impl View for YggdrasilTree {
         let indent_w = 20.0;
 
         for item in &self.items {
-            current_y = self.render_item(renderer, item, rect.x, current_y, rect.width, row_h, indent_w, 0);
-            if current_y > rect.y + rect.height { break; }
+            current_y = self.render_item(
+                renderer, item, rect.x, current_y, rect.width, row_h, indent_w, 0,
+            );
+            if current_y > rect.y + rect.height {
+                break;
+            }
         }
         renderer.pop_vnode();
     }
@@ -97,18 +101,23 @@ impl View for YggdrasilTree {
 
 impl YggdrasilTree {
     fn render_item(
-        &self, 
-        renderer: &mut dyn Renderer, 
-        item: &FileItem, 
-        x: f32, 
-        y: f32, 
-        width: f32, 
-        row_h: f32, 
+        &self,
+        renderer: &mut dyn Renderer,
+        item: &FileItem,
+        x: f32,
+        y: f32,
+        width: f32,
+        row_h: f32,
         indent_w: f32,
-        depth: usize
+        depth: usize,
     ) -> f32 {
         let item_x = x + (depth as f32 * indent_w);
-        let row_rect = Rect { x, y, width, height: row_h };
+        let row_rect = Rect {
+            x,
+            y,
+            width,
+            height: row_h,
+        };
 
         renderer.push_vnode(row_rect, "YggdrasilTreeRow");
         renderer.set_key(&item.id);
@@ -116,29 +125,74 @@ impl YggdrasilTree {
         // 1. Selection Highlight
         if item.is_selected {
             renderer.fill_rect(row_rect, [0.0, 1.0, 1.0, 0.1]);
-            renderer.stroke_rect(Rect { x: row_rect.x, y: row_rect.y, width: 2.0, height: row_rect.height }, [0.0, 1.0, 1.0, 1.0], 1.0);
+            renderer.stroke_rect(
+                Rect {
+                    x: row_rect.x,
+                    y: row_rect.y,
+                    width: 2.0,
+                    height: row_rect.height,
+                },
+                [0.0, 1.0, 1.0, 1.0],
+                1.0,
+            );
         }
 
         // 2. Expansion Indicator (Arrow)
         if item.children.is_some() {
-            let arrow_rect = Rect { x: item_x + 4.0, y: y + 8.0, width: 12.0, height: 12.0 };
+            let arrow_rect = Rect {
+                x: item_x + 4.0,
+                y: y + 8.0,
+                width: 12.0,
+                height: 12.0,
+            };
             renderer.push_vnode(arrow_rect, "ExpansionArrow");
             let color = [0.6, 0.6, 0.6, 1.0];
             if item.is_expanded {
                 // Down arrow
-                renderer.draw_line(arrow_rect.x, arrow_rect.y + 2.0, arrow_rect.x + 6.0, arrow_rect.y + 8.0, color, 1.5);
-                renderer.draw_line(arrow_rect.x + 6.0, arrow_rect.y + 8.0, arrow_rect.x + 12.0, arrow_rect.y + 2.0, color, 1.5);
+                renderer.draw_line(
+                    arrow_rect.x,
+                    arrow_rect.y + 2.0,
+                    arrow_rect.x + 6.0,
+                    arrow_rect.y + 8.0,
+                    color,
+                    1.5,
+                );
+                renderer.draw_line(
+                    arrow_rect.x + 6.0,
+                    arrow_rect.y + 8.0,
+                    arrow_rect.x + 12.0,
+                    arrow_rect.y + 2.0,
+                    color,
+                    1.5,
+                );
             } else {
                 // Right arrow
-                renderer.draw_line(arrow_rect.x + 2.0, arrow_rect.y, arrow_rect.x + 8.0, arrow_rect.y + 6.0, color, 1.5);
-                renderer.draw_line(arrow_rect.x + 8.0, arrow_rect.y + 6.0, arrow_rect.x + 2.0, arrow_rect.y + 12.0, color, 1.5);
+                renderer.draw_line(
+                    arrow_rect.x + 2.0,
+                    arrow_rect.y,
+                    arrow_rect.x + 8.0,
+                    arrow_rect.y + 6.0,
+                    color,
+                    1.5,
+                );
+                renderer.draw_line(
+                    arrow_rect.x + 8.0,
+                    arrow_rect.y + 6.0,
+                    arrow_rect.x + 2.0,
+                    arrow_rect.y + 12.0,
+                    color,
+                    1.5,
+                );
             }
-            
+
             let id = item.id.clone();
             let on_toggle = self.on_toggle.clone();
-            renderer.register_handler("pointerclick", Arc::new(move |_| {
-                on_toggle(id.clone());
-            }));
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |_| {
+                    on_toggle(id.clone());
+                }),
+            );
             renderer.pop_vnode();
         }
 
@@ -150,42 +204,75 @@ impl YggdrasilTree {
             FileKind::Archive => [0.9, 0.8, 0.2, 0.9],
             _ => [0.7, 0.7, 0.8, 0.9],
         };
-        renderer.fill_rect(Rect { x: icon_x, y: y + 6.0, width: 16.0, height: 16.0 }, [icon_color[0], icon_color[1], icon_color[2], 0.2]);
-        renderer.stroke_rect(Rect { x: icon_x, y: y + 6.0, width: 16.0, height: 16.0 }, icon_color, 1.0);
+        renderer.fill_rect(
+            Rect {
+                x: icon_x,
+                y: y + 6.0,
+                width: 16.0,
+                height: 16.0,
+            },
+            [icon_color[0], icon_color[1], icon_color[2], 0.2],
+        );
+        renderer.stroke_rect(
+            Rect {
+                x: icon_x,
+                y: y + 6.0,
+                width: 16.0,
+                height: 16.0,
+            },
+            icon_color,
+            1.0,
+        );
 
         // 4. Label
-        let label_color = if item.is_selected { [1.0, 1.0, 1.0, 1.0] } else { [0.9, 0.9, 0.9, 0.8] };
+        let label_color = if item.is_selected {
+            [1.0, 1.0, 1.0, 1.0]
+        } else {
+            [0.9, 0.9, 0.9, 0.8]
+        };
         renderer.draw_text(&item.name, icon_x + 24.0, y + 19.0, 13.0, label_color);
 
         // 5. Interaction (Selection, Hover, Drag/Drop)
         {
             let id = item.id.clone();
             let on_select = self.on_select.clone();
-            renderer.register_handler("pointerclick", Arc::new(move |ev| {
-                if let Event::PointerClick { .. } = ev {
-                    on_select(id.clone());
-                }
-            }));
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |ev| {
+                    if let Event::PointerClick { .. } = ev {
+                        on_select(id.clone());
+                    }
+                }),
+            );
 
             if let Some(on_hover) = &self.on_hover {
                 let id_enter = item.id.clone();
                 let on_hover_enter = on_hover.clone();
-                renderer.register_handler("pointerenter", Arc::new(move |_| {
-                    on_hover_enter(Some(id_enter.clone()));
-                }));
+                renderer.register_handler(
+                    "pointerenter",
+                    Arc::new(move |_| {
+                        on_hover_enter(Some(id_enter.clone()));
+                    }),
+                );
 
                 let on_hover_exit = on_hover.clone();
-                renderer.register_handler("pointerexit", Arc::new(move |_| {
-                    on_hover_exit(None);
-                }));
+                renderer.register_handler(
+                    "pointerexit",
+                    Arc::new(move |_| {
+                        on_hover_exit(None);
+                    }),
+                );
             }
 
             if let Some(on_drag) = &self.on_drag_start {
                 let id_drag = item.id.clone();
                 let on_drag_c = on_drag.clone();
-                renderer.register_handler("pointerdown", Arc::new(move |_| {
-                    on_drag_c(id_drag.clone());
-                }));
+                renderer.register_handler(
+                    "pointerdown",
+                    Arc::new(move |_| {
+                        on_drag_c(id_drag.clone());
+                    }),
+                );
             }
         }
 
@@ -193,11 +280,21 @@ impl YggdrasilTree {
 
         let mut next_y = y + row_h;
         if item.is_expanded
-            && let Some(children) = &item.children {
-                for child in children {
-                    next_y = self.render_item(renderer, child, x, next_y, width, row_h, indent_w, depth + 1);
-                }
+            && let Some(children) = &item.children
+        {
+            for child in children {
+                next_y = self.render_item(
+                    renderer,
+                    child,
+                    x,
+                    next_y,
+                    width,
+                    row_h,
+                    indent_w,
+                    depth + 1,
+                );
             }
+        }
 
         next_y
     }

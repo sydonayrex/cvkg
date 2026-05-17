@@ -78,17 +78,17 @@ impl ApplicationHandler for MemoryApp {
             WindowEvent::KeyboardInput {
                 event: kb_event, ..
             } if kb_event.state.is_pressed() => {
-                    // Cyclic search demonstration
-                    let queries = ["", "bifrost", "niflheim", "thermal", "security"];
-                    static mut QUERY_INDEX: usize = 0;
-                    unsafe {
-                        QUERY_INDEX = (QUERY_INDEX + 1) % queries.len();
-                        let mut state = self.memory_state.get();
-                        state.process_query(queries[QUERY_INDEX]);
-                        self.memory_state.set(state);
-                        println!("Searching for: '{}'", queries[QUERY_INDEX]);
-                    }
-                    self.window.as_ref().unwrap().request_redraw();
+                // Cyclic search demonstration
+                let queries = ["", "bifrost", "niflheim", "thermal", "security"];
+                static mut QUERY_INDEX: usize = 0;
+                unsafe {
+                    QUERY_INDEX = (QUERY_INDEX + 1) % queries.len();
+                    let mut state = self.memory_state.get();
+                    state.process_query(queries[QUERY_INDEX]);
+                    self.memory_state.set(state);
+                    println!("Searching for: '{}'", queries[QUERY_INDEX]);
+                }
+                self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::RedrawRequested => {
                 let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());

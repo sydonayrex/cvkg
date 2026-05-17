@@ -1,4 +1,4 @@
-use crate::types::{PortId, NodeId, PortPosition, PortDirection, EdgeId};
+use crate::types::{EdgeId, NodeId, PortDirection, PortId, PortPosition};
 use serde::{Deserialize, Serialize};
 
 /// Connection port on a node
@@ -12,7 +12,12 @@ pub struct FlowPort {
 }
 
 impl FlowPort {
-    pub fn new(id: PortId, node_id: NodeId, position: PortPosition, direction: PortDirection) -> Self {
+    pub fn new(
+        id: PortId,
+        node_id: NodeId,
+        position: PortPosition,
+        direction: PortDirection,
+    ) -> Self {
         Self {
             id,
             node_id,

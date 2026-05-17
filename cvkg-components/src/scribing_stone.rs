@@ -1,7 +1,7 @@
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::{Arc, Mutex};
 
-/// An interactive drawing canvas (inspired by open-pencil).
+/// An interactive drawing canvas.
 /// Strokes are rendered as glowing runic fissures.
 /// Section 4.6: "Direct runic inscription via stylus or pointer."
 pub struct ScribingStone {
@@ -24,12 +24,14 @@ impl ScribingStone {
 
 impl View for ScribingStone {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // 1. Basalt Surface
         renderer.fill_rect(rect, [0.02, 0.02, 0.03, 1.0]);
-        
+
         // 2. Render existing strokes
         let strokes = self.strokes.lock().unwrap();
         for stroke in strokes.iter() {
@@ -42,22 +44,28 @@ impl View for ScribingStone {
 
         // 3. Interaction Handler
         let strokes_clone = self.strokes.clone();
-        renderer.register_handler("pointerdown", Arc::new(move |ev| {
-            if let Event::PointerDown { x, y, .. } = ev {
-                let mut s = strokes_clone.lock().unwrap();
-                s.push(vec![[x, y]]);
-            }
-        }));
+        renderer.register_handler(
+            "pointerdown",
+            Arc::new(move |ev| {
+                if let Event::PointerDown { x, y, .. } = ev {
+                    let mut s = strokes_clone.lock().unwrap();
+                    s.push(vec![[x, y]]);
+                }
+            }),
+        );
 
         let strokes_clone2 = self.strokes.clone();
-        renderer.register_handler("pointermove", Arc::new(move |ev| {
-            if let Event::PointerMove { x, y } = ev {
-                let mut s = strokes_clone2.lock().unwrap();
-                if let Some(last_stroke) = s.last_mut() {
-                    last_stroke.push([x, y]);
+        renderer.register_handler(
+            "pointermove",
+            Arc::new(move |ev| {
+                if let Event::PointerMove { x, y } = ev {
+                    let mut s = strokes_clone2.lock().unwrap();
+                    if let Some(last_stroke) = s.last_mut() {
+                        last_stroke.push([x, y]);
+                    }
                 }
-            }
-        }));
+            }),
+        );
 
         renderer.pop_vnode();
     }

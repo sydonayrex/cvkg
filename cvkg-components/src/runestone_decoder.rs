@@ -26,21 +26,26 @@ impl RunestoneDecoder {
 
 impl View for RunestoneDecoder {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
         let progress = ((t - self.start_time) / self.duration.as_secs_f32()).clamp(0.0, 1.0);
-        
-        let runes = ['ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚻ', 'ᚼ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ', 'ᛏ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛟ', 'ᛞ'];
-        
+
+        let runes = [
+            'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚻ', 'ᚼ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ',
+            'ᛏ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛟ', 'ᛞ',
+        ];
+
         let mut display_text = String::new();
         let chars: Vec<char> = self.text.chars().collect();
-        
+
         for (i, &c) in chars.iter().enumerate() {
             let char_progress = (progress * chars.len() as f32) - i as f32;
             let char_progress = char_progress.clamp(0.0, 1.0);
-            
+
             if char_progress >= 1.0 {
                 display_text.push(c);
             } else if char_progress > 0.0 {
@@ -54,6 +59,12 @@ impl View for RunestoneDecoder {
         }
 
         let color = [0.0, 1.0, 1.0, 1.0]; // Cyan deciphering glow
-        renderer.draw_text(&display_text, rect.x, rect.y + rect.height * 0.8, rect.height * 0.8, color);
+        renderer.draw_text(
+            &display_text,
+            rect.x,
+            rect.y + rect.height * 0.8,
+            rect.height * 0.8,
+            color,
+        );
     }
 }

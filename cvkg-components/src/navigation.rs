@@ -1,4 +1,4 @@
-use cvkg_core::{Never, Rect, Renderer, Size, View, SizeProposal};
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 /// Breadcrumb navigation component.
@@ -22,7 +22,11 @@ impl Breadcrumb {
         Self { items: Vec::new() }
     }
 
-    pub fn item(mut self, label: impl Into<String>, on_click: Option<impl Fn() + Send + Sync + 'static>) -> Self {
+    pub fn item(
+        mut self,
+        label: impl Into<String>,
+        on_click: Option<impl Fn() + Send + Sync + 'static>,
+    ) -> Self {
         self.items.push(BreadcrumbItem {
             label: label.into(),
             on_click: on_click.map(|f| Arc::new(f) as Arc<dyn Fn() + Send + Sync>),
@@ -33,21 +37,39 @@ impl Breadcrumb {
 
 impl View for Breadcrumb {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let mut current_x = rect.x;
         for (i, item) in self.items.iter().enumerate() {
             let (tw, th) = renderer.measure_text(&item.label, 14.0);
-            
-            let color = if item.on_click.is_some() { [0.0, 0.8, 1.0, 1.0] } else { [0.7, 0.7, 0.7, 1.0] };
-            renderer.draw_text(&item.label, current_x, rect.y + (rect.height - th) / 2.0, 14.0, color);
+
+            let color = if item.on_click.is_some() {
+                [0.0, 0.8, 1.0, 1.0]
+            } else {
+                [0.7, 0.7, 0.7, 1.0]
+            };
+            renderer.draw_text(
+                &item.label,
+                current_x,
+                rect.y + (rect.height - th) / 2.0,
+                14.0,
+                color,
+            );
             current_x += tw + 8.0;
 
             if i < self.items.len() - 1 {
                 let separator = "/";
                 let (sw, _) = renderer.measure_text(separator, 14.0);
-                renderer.draw_text(separator, current_x, rect.y + (rect.height - th) / 2.0, 14.0, [0.4, 0.4, 0.4, 1.0]);
+                renderer.draw_text(
+                    separator,
+                    current_x,
+                    rect.y + (rect.height - th) / 2.0,
+                    14.0,
+                    [0.4, 0.4, 0.4, 1.0],
+                );
                 current_x += sw + 8.0;
             }
         }
@@ -63,7 +85,10 @@ impl View for Breadcrumb {
                 width += sw + 8.0;
             }
         }
-        Size { width: proposal.width.unwrap_or(width), height: 24.0 }
+        Size {
+            width: proposal.width.unwrap_or(width),
+            height: 24.0,
+        }
     }
 }
 
@@ -75,7 +100,11 @@ pub struct Pagination {
 }
 
 impl Pagination {
-    pub fn new(current_page: usize, total_pages: usize, on_page_change: impl Fn(usize) + Send + Sync + 'static) -> Self {
+    pub fn new(
+        current_page: usize,
+        total_pages: usize,
+        on_page_change: impl Fn(usize) + Send + Sync + 'static,
+    ) -> Self {
         Self {
             current_page,
             total_pages,
@@ -86,7 +115,9 @@ impl Pagination {
 
 impl View for Pagination {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let btn_w = 32.0;
@@ -97,51 +128,97 @@ impl View for Pagination {
         let current_page = self.current_page;
 
         // Previous button
-        let prev_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+        let prev_rect = Rect {
+            x: current_x,
+            y: rect.y,
+            width: btn_w,
+            height: rect.height,
+        };
         renderer.push_vnode(prev_rect, "PaginationPrev");
         renderer.fill_rounded_rect(prev_rect, 4.0, [0.15, 0.15, 0.2, 1.0]);
-        renderer.draw_text("<", prev_rect.x + 10.0, prev_rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
-        
+        renderer.draw_text(
+            "<",
+            prev_rect.x + 10.0,
+            prev_rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
+
         let on_prev = on_page_change.clone();
-        renderer.register_handler("pointerclick", Arc::new(move |_| {
-            if current_page > 1 {
-                on_prev(current_page - 1);
-            }
-        }));
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |_| {
+                if current_page > 1 {
+                    on_prev(current_page - 1);
+                }
+            }),
+        );
         renderer.pop_vnode();
         current_x += btn_w + spacing;
 
         // Page numbers (simplified)
         for p in 1..=self.total_pages.min(5) {
-            let page_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+            let page_rect = Rect {
+                x: current_x,
+                y: rect.y,
+                width: btn_w,
+                height: rect.height,
+            };
             renderer.push_vnode(page_rect, "PaginationPage");
             let is_current = p == self.current_page;
-            let bg = if is_current { [0.0, 0.6, 0.8, 1.0] } else { [0.1, 0.1, 0.12, 1.0] };
+            let bg = if is_current {
+                [0.0, 0.6, 0.8, 1.0]
+            } else {
+                [0.1, 0.1, 0.12, 1.0]
+            };
             renderer.fill_rounded_rect(page_rect, 4.0, bg);
             let p_str = p.to_string();
-            renderer.draw_text(&p_str, page_rect.x + 10.0, page_rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
-            
+            renderer.draw_text(
+                &p_str,
+                page_rect.x + 10.0,
+                page_rect.y + (rect.height - 14.0) / 2.0,
+                14.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+
             let on_p = on_page_change.clone();
-            renderer.register_handler("pointerclick", Arc::new(move |_| {
-                on_p(p);
-            }));
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |_| {
+                    on_p(p);
+                }),
+            );
             renderer.pop_vnode();
             current_x += btn_w + spacing;
         }
 
         // Next button
-        let next_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+        let next_rect = Rect {
+            x: current_x,
+            y: rect.y,
+            width: btn_w,
+            height: rect.height,
+        };
         renderer.push_vnode(next_rect, "PaginationNext");
         renderer.fill_rounded_rect(next_rect, 4.0, [0.15, 0.15, 0.2, 1.0]);
-        renderer.draw_text(">", next_rect.x + 10.0, next_rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
-        
+        renderer.draw_text(
+            ">",
+            next_rect.x + 10.0,
+            next_rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
+
         let total = self.total_pages;
         let on_next = on_page_change.clone();
-        renderer.register_handler("pointerclick", Arc::new(move |_| {
-            if current_page < total {
-                on_next(current_page + 1);
-            }
-        }));
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |_| {
+                if current_page < total {
+                    on_next(current_page + 1);
+                }
+            }),
+        );
         renderer.pop_vnode();
     }
 
@@ -149,6 +226,9 @@ impl View for Pagination {
         let btn_w = 32.0;
         let spacing = 8.0;
         let count = 2 + self.total_pages.min(5);
-        Size { width: count as f32 * (btn_w + spacing), height: 32.0 }
+        Size {
+            width: count as f32 * (btn_w + spacing),
+            height: 32.0,
+        }
     }
 }

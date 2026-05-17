@@ -3,7 +3,10 @@
 //! The Vanir god Freyr governs prosperity and possessions - this inspector
 //! manages properties and attributes of UI components.
 
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Property value types
 #[derive(Debug, Clone)]
@@ -60,39 +63,95 @@ impl FreyrInspector {
 
 impl View for FreyrInspector {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y, width: rect.width, height: 28.0 },
-            [0.08, 0.06, 0.12, 1.0]
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: 28.0,
+            },
+            [0.08, 0.06, 0.12, 1.0],
         );
-        renderer.draw_text(&self.title, rect.x + 10.0, rect.y + 9.0, 13.0, [0.9, 0.7, 1.0, 1.0]);
+        renderer.draw_text(
+            &self.title,
+            rect.x + 10.0,
+            rect.y + 9.0,
+            13.0,
+            [0.9, 0.7, 1.0, 1.0],
+        );
 
         let row_h = 28.0;
         let mut current_y = rect.y + 32.0;
 
         for prop in &self.properties {
-            let prop_rect = Rect { x: rect.x, y: current_y, width: rect.width, height: row_h };
+            let prop_rect = Rect {
+                x: rect.x,
+                y: current_y,
+                width: rect.width,
+                height: row_h,
+            };
             renderer.fill_rect(prop_rect, [0.06, 0.06, 0.08, 1.0]);
-            renderer.draw_text(&prop.name, prop_rect.x + 8.0, prop_rect.y + 8.0, 11.0, [0.8, 0.9, 1.0, 1.0]);
+            renderer.draw_text(
+                &prop.name,
+                prop_rect.x + 8.0,
+                prop_rect.y + 8.0,
+                11.0,
+                [0.8, 0.9, 1.0, 1.0],
+            );
 
             let value_str = match &prop.value {
                 PropertyValue::Text(s) => s.clone(),
                 PropertyValue::Number(n) => format!("{:.2}", n),
-                PropertyValue::Boolean(b) => if *b { "true".to_string() } else { "false".to_string() },
-                PropertyValue::Color([r, g, b, a]) => format!("#{:02X}{:02X}{:02X}{:02X}", (*r * 255.0) as u8, (*g * 255.0) as u8, (*b * 255.0) as u8, (*a * 255.0) as u8),
+                PropertyValue::Boolean(b) => {
+                    if *b {
+                        "true".to_string()
+                    } else {
+                        "false".to_string()
+                    }
+                }
+                PropertyValue::Color([r, g, b, a]) => format!(
+                    "#{:02X}{:02X}{:02X}{:02X}",
+                    (*r * 255.0) as u8,
+                    (*g * 255.0) as u8,
+                    (*b * 255.0) as u8,
+                    (*a * 255.0) as u8
+                ),
                 PropertyValue::Enum(v, _) => v.clone(),
             };
-            renderer.draw_text(&value_str, prop_rect.x + 100.0, prop_rect.y + 8.0, 11.0, [0.6, 0.8, 1.0, 1.0]);
+            renderer.draw_text(
+                &value_str,
+                prop_rect.x + 100.0,
+                prop_rect.y + 8.0,
+                11.0,
+                [0.6, 0.8, 1.0, 1.0],
+            );
             current_y += row_h;
         }
     }
 }
 
 impl LayoutView for FreyrInspector {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 280.0, height: 36.0 + self.properties.len() as f32 * 28.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 280.0,
+            height: 36.0 + self.properties.len() as f32 * 28.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

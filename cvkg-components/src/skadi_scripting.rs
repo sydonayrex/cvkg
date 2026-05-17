@@ -3,7 +3,10 @@
 //! Skadi the Vanir huntress brings precision and sharp focus - her scripting
 //! system enables visual workflow construction with precise node connections.
 
-use cvkg_core::{layout::{LayoutCache, LayoutView, SizeProposal}, Rect, Renderer, Size, View, Never};
+use cvkg_core::{
+    Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
+};
 
 /// Script node types
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -55,7 +58,14 @@ impl SkadiScripting {
         }
     }
 
-    pub fn node(mut self, id: usize, name: &str, node_type: ScriptNodeType, x: f32, y: f32) -> Self {
+    pub fn node(
+        mut self,
+        id: usize,
+        name: &str,
+        node_type: ScriptNodeType,
+        x: f32,
+        y: f32,
+    ) -> Self {
         self.nodes.push(ScriptNode {
             id,
             name: name.to_string(),
@@ -90,7 +100,9 @@ impl SkadiScripting {
 
 impl View for SkadiScripting {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Background grid
@@ -99,8 +111,13 @@ impl View for SkadiScripting {
                 let gx = rect.x + 20.0 + x as f32 * 40.0;
                 let gy = rect.y + 20.0 + y as f32 * 40.0;
                 renderer.fill_rect(
-                    Rect { x: gx, y: gy, width: 2.0, height: 2.0 },
-                    [0.1, 0.1, 0.12, 0.5]
+                    Rect {
+                        x: gx,
+                        y: gy,
+                        width: 2.0,
+                        height: 2.0,
+                    },
+                    [0.1, 0.1, 0.12, 0.5],
                 );
             }
         }
@@ -109,14 +126,20 @@ impl View for SkadiScripting {
         for conn in &self.connections {
             if let (Some(from), Some(to)) = (
                 self.nodes.iter().find(|n| n.id == conn.from),
-                self.nodes.iter().find(|n| n.id == conn.to)
+                self.nodes.iter().find(|n| n.id == conn.to),
             ) {
                 let x1 = rect.x + from.position.0;
                 let y1 = rect.y + from.position.1;
                 let x2 = rect.x + to.position.0;
                 let y2 = rect.y + to.position.1;
                 renderer.draw_line(x1, y1, x2, y2, [0.4, 0.5, 0.7, 0.8], 2.0);
-                renderer.draw_text(&conn.label, (x1 + x2) / 2.0, (y1 + y2) / 2.0, 9.0, [0.5, 0.6, 0.8, 1.0]);
+                renderer.draw_text(
+                    &conn.label,
+                    (x1 + x2) / 2.0,
+                    (y1 + y2) / 2.0,
+                    9.0,
+                    [0.5, 0.6, 0.8, 1.0],
+                );
             }
         }
 
@@ -135,23 +158,54 @@ impl View for SkadiScripting {
             let is_selected = self.selected_node == Some(node.id);
 
             renderer.fill_rect(
-                Rect { x: cx - 50.0, y: cy - 20.0, width: 100.0, height: 40.0 },
-                color
+                Rect {
+                    x: cx - 50.0,
+                    y: cy - 20.0,
+                    width: 100.0,
+                    height: 40.0,
+                },
+                color,
             );
             if is_selected {
                 renderer.stroke_rect(
-                    Rect { x: cx - 52.0, y: cy - 22.0, width: 104.0, height: 44.0 },
-                    [1.0, 0.9, 0.4, 1.0], 2.0
+                    Rect {
+                        x: cx - 52.0,
+                        y: cy - 22.0,
+                        width: 104.0,
+                        height: 44.0,
+                    },
+                    [1.0, 0.9, 0.4, 1.0],
+                    2.0,
                 );
             }
-            renderer.draw_text(&node.name, cx - 45.0, cy - 5.0, 11.0, [0.95, 0.95, 1.0, 1.0]);
+            renderer.draw_text(
+                &node.name,
+                cx - 45.0,
+                cy - 5.0,
+                11.0,
+                [0.95, 0.95, 1.0, 1.0],
+            );
         }
     }
 }
 
 impl LayoutView for SkadiScripting {
-    fn size_that_fits(&self, _proposal: SizeProposal, _subviews: &[&dyn LayoutView], _cache: &mut LayoutCache) -> Size {
-        Size { width: 500.0, height: 400.0 }
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 500.0,
+            height: 400.0,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn LayoutView], _cache: &mut LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
+    }
 }

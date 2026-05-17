@@ -22,11 +22,17 @@
 //!
 //! Provides high-fidelity physics-based animation and transition systems for CVKG.
 
-use std::time::Duration;
 use std::sync::Arc;
-
+use std::time::Duration;
+pub mod behavior;
+pub mod geometry;
+pub mod growth;
 pub mod particles;
+pub mod shader_anim;
+pub mod skeletal;
 pub use particles::*;
+
+pub mod physics;
 
 /// Sleipnir spring parameters for the physics solver
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -37,14 +43,40 @@ pub struct SleipnirParams {
 }
 
 impl SleipnirParams {
-    pub fn snappy() -> Self { Self { stiffness: 230.0, damping: 22.0, mass: 1.0 } }
-    pub fn fluid() -> Self { Self { stiffness: 170.0, damping: 26.0, mass: 1.0 } }
-    pub fn heavy() -> Self { Self { stiffness: 90.0, damping: 20.0, mass: 1.0 } }
-    pub fn bouncy() -> Self { Self { stiffness: 190.0, damping: 14.0, mass: 1.0 } }
+    pub fn snappy() -> Self {
+        Self {
+            stiffness: 230.0,
+            damping: 22.0,
+            mass: 1.0,
+        }
+    }
+    pub fn fluid() -> Self {
+        Self {
+            stiffness: 170.0,
+            damping: 26.0,
+            mass: 1.0,
+        }
+    }
+    pub fn heavy() -> Self {
+        Self {
+            stiffness: 90.0,
+            damping: 20.0,
+            mass: 1.0,
+        }
+    }
+    pub fn bouncy() -> Self {
+        Self {
+            stiffness: 190.0,
+            damping: 14.0,
+            mass: 1.0,
+        }
+    }
 }
 
 impl Default for SleipnirParams {
-    fn default() -> Self { Self::fluid() }
+    fn default() -> Self {
+        Self::fluid()
+    }
 }
 
 /// A discrete keyframe in a hybrid animation path
@@ -113,7 +145,11 @@ pub struct RubberBand {
 impl RubberBand {
     /// Create a new RubberBand solver with default resistance.
     pub fn new(min: f32, max: f32) -> Self {
-        Self { min, max, constant: 0.55 }
+        Self {
+            min,
+            max,
+            constant: 0.55,
+        }
     }
 
     /// Calculate the resisted value for an input that may exceed bounds.
@@ -205,10 +241,14 @@ impl SleipnirSolver {
             x: initial.x + d.x * dt,
             v: initial.v + d.v * dt,
         };
-        let force = -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
+        let force =
+            -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
         // Protect against division by zero; mass must be positive.
         let mass = self.params.mass.max(0.001);
-        SolverState { x: state.v, v: force / mass }
+        SolverState {
+            x: state.v,
+            v: force / mass,
+        }
     }
 
     pub fn is_settled(&self) -> bool {
@@ -222,7 +262,7 @@ pub struct ActiveAnimation {
     pub elapsed: Duration,
     pub is_finished: bool,
     pub current_value: f32,
-    
+
     // Internal state for complex animations
     solver: Option<SleipnirSolver>,
     child_states: Vec<ActiveAnimation>,
@@ -243,11 +283,13 @@ impl ActiveAnimation {
     }
 
     pub fn update(&mut self, dt: Duration, start_val: f32, end_val: f32) -> f32 {
-        if self.is_finished { return end_val; }
-        
+        if self.is_finished {
+            return end_val;
+        }
+
         self.elapsed += dt;
         let t = self.elapsed.as_secs_f32();
-        
+
         match &self.animation {
             Animation::Ginnungagap => {
                 self.is_finished = true;
@@ -263,7 +305,9 @@ impl ActiveAnimation {
                 }
             }
             Animation::Sleipnir(params) => {
-                let solver = self.solver.get_or_insert_with(|| SleipnirSolver::new(*params, end_val, start_val));
+                let solver = self
+                    .solver
+                    .get_or_insert_with(|| SleipnirSolver::new(*params, end_val, start_val));
                 self.current_value = solver.tick(dt.as_secs_f32());
                 if solver.is_settled() {
                     self.is_finished = true;
@@ -275,12 +319,15 @@ impl ActiveAnimation {
                     self.current_value = end_val;
                 } else {
                     if self.child_states.is_empty() {
-                        self.child_states = anims.iter().map(|a| ActiveAnimation::new(a.clone())).collect();
+                        self.child_states = anims
+                            .iter()
+                            .map(|a| ActiveAnimation::new(a.clone()))
+                            .collect();
                     }
-                    
+
                     let child = &mut self.child_states[self.current_index];
                     self.current_value = child.update(dt, start_val, end_val);
-                    
+
                     if child.is_finished {
                         self.current_index += 1;
                         if self.current_index >= anims.len() {
@@ -291,9 +338,12 @@ impl ActiveAnimation {
             }
             Animation::Parallel(anims) => {
                 if self.child_states.is_empty() {
-                    self.child_states = anims.iter().map(|a| ActiveAnimation::new(a.clone())).collect();
+                    self.child_states = anims
+                        .iter()
+                        .map(|a| ActiveAnimation::new(a.clone()))
+                        .collect();
                 }
-                
+
                 let mut all_finished = true;
                 let mut sum_val = 0.0;
                 for child in &mut self.child_states {
@@ -302,8 +352,12 @@ impl ActiveAnimation {
                         all_finished = false;
                     }
                 }
-                
-                self.current_value = if !anims.is_empty() { sum_val / anims.len() as f32 } else { end_val };
+
+                self.current_value = if !anims.is_empty() {
+                    sum_val / anims.len() as f32
+                } else {
+                    end_val
+                };
                 if all_finished {
                     self.is_finished = true;
                 }
@@ -324,8 +378,12 @@ pub trait AnimationValue: Sized + Clone + PartialEq {
 }
 
 impl AnimationValue for f32 {
-    fn lerp(&self, other: &Self, t: f32) -> Self { self + (other - self) * t }
-    fn distance(&self, other: &Self) -> f32 { (self - other).abs() }
+    fn lerp(&self, other: &Self, t: f32) -> Self {
+        self + (other - self) * t
+    }
+    fn distance(&self, other: &Self) -> f32 {
+        (self - other).abs()
+    }
 }
 
 #[cfg(test)]
@@ -335,15 +393,15 @@ mod tests {
     #[test]
     fn test_rubber_band_solving() {
         let rb = RubberBand::new(0.0, 100.0);
-        
+
         // Inside bounds
         assert_eq!(rb.solve(50.0), 50.0);
-        
+
         // Above bounds
         let over = rb.solve(150.0);
         assert!(over > 100.0);
         assert!(over < 150.0); // Resistance applied
-        
+
         // Below bounds
         let under = rb.solve(-50.0);
         assert!(under < 0.0);
@@ -354,16 +412,15 @@ mod tests {
     fn test_sleipnir_solver_convergence() {
         let params = SleipnirParams::snappy();
         let mut solver = SleipnirSolver::new(params, 100.0, 0.0);
-        
+
         // Initial state
         assert!(!solver.is_settled());
-        
+
         // Simulate some ticks
         for _ in 0..100 {
             solver.tick(0.016);
         }
-        
-        // Should eventually settle near target
+
         assert!(solver.is_settled());
         assert!((solver.state.x - 100.0).abs() < 0.01);
     }
@@ -371,21 +428,25 @@ mod tests {
     #[test]
     fn test_animation_sequence_execution() {
         let anims = vec![
-            Animation::Linear { duration: Duration::from_millis(100) },
-            Animation::Linear { duration: Duration::from_millis(100) },
+            Animation::Linear {
+                duration: Duration::from_millis(100),
+            },
+            Animation::Linear {
+                duration: Duration::from_millis(100),
+            },
         ];
         let mut active = ActiveAnimation::new(Animation::Sequence(anims));
-        
+
         // Update first animation halfway
         active.update(Duration::from_millis(50), 0.0, 100.0);
         assert!(!active.is_finished);
         assert_eq!(active.current_index, 0);
-        
+
         // Complete first animation
         active.update(Duration::from_millis(60), 0.0, 100.0);
         assert!(!active.is_finished);
         assert_eq!(active.current_index, 1);
-        
+
         // Complete second animation
         active.update(Duration::from_millis(100), 0.0, 100.0);
         assert!(active.is_finished);

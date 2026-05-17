@@ -49,17 +49,27 @@ impl View for Progress {
             ProgressVariant::Linear => {
                 let track_h = rect.height.min(8.0);
                 let track_y = rect.y + (rect.height - track_h) / 2.0;
-                
+
                 // Track
                 renderer.fill_rounded_rect(
-                    Rect { x: rect.x, y: track_y, width: rect.width, height: track_h },
+                    Rect {
+                        x: rect.x,
+                        y: track_y,
+                        width: rect.width,
+                        height: track_h,
+                    },
                     track_h / 2.0,
                     [0.15, 0.15, 0.2, 1.0],
                 );
-                
+
                 // Fill
                 renderer.fill_rounded_rect(
-                    Rect { x: rect.x, y: track_y, width: rect.width * pct, height: track_h },
+                    Rect {
+                        x: rect.x,
+                        y: track_y,
+                        width: rect.width * pct,
+                        height: track_h,
+                    },
                     track_h / 2.0,
                     [0.0, 0.85, 1.0, 1.0],
                 );
@@ -75,7 +85,7 @@ impl View for Progress {
 
                 // Background ring
                 renderer.stroke_ellipse(circ_rect, [0.1, 0.1, 0.15, 1.0], 4.0);
-                
+
                 // Progress ring (simulated with smaller ellipse for now)
                 let inset = 4.0;
                 let progress_rect = Rect {
@@ -89,13 +99,20 @@ impl View for Progress {
         }
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn cvkg_core::Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         match self.variant {
             ProgressVariant::Linear => cvkg_core::Size {
                 width: proposal.width.unwrap_or(100.0),
                 height: 12.0,
             },
-            ProgressVariant::Circular => cvkg_core::Size { width: 40.0, height: 40.0 },
+            ProgressVariant::Circular => cvkg_core::Size {
+                width: 40.0,
+                height: 40.0,
+            },
         }
     }
 }
@@ -138,9 +155,19 @@ impl View for Gauge {
         renderer.fill_ellipse(inner, [0.0, 0.85, 1.0, 1.0]);
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        let size = proposal.width.unwrap_or(100.0).min(proposal.height.unwrap_or(100.0));
-        cvkg_core::Size { width: size, height: size }
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn cvkg_core::Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let size = proposal
+            .width
+            .unwrap_or(100.0)
+            .min(proposal.height.unwrap_or(100.0));
+        cvkg_core::Size {
+            width: size,
+            height: size,
+        }
     }
 }
 
@@ -152,22 +179,44 @@ pub struct StatusBar {
 
 impl StatusBar {
     pub fn new(text: impl Into<String>, color: [f32; 4]) -> Self {
-        Self { text: text.into(), color }
+        Self {
+            text: text.into(),
+            color,
+        }
     }
 }
 
 impl View for StatusBar {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
         renderer.fill_rect(rect, [0.05, 0.05, 0.08, 0.9]);
-        renderer.draw_line(rect.x, rect.y, rect.x + rect.width, rect.y, [0.2, 0.2, 0.3, 1.0], 1.0);
-        
-        renderer.draw_text(&self.text, rect.x + 10.0, rect.y + (rect.height - 12.0) / 2.0, 12.0, self.color);
+        renderer.draw_line(
+            rect.x,
+            rect.y,
+            rect.x + rect.width,
+            rect.y,
+            [0.2, 0.2, 0.3, 1.0],
+            1.0,
+        );
+
+        renderer.draw_text(
+            &self.text,
+            rect.x + 10.0,
+            rect.y + (rect.height - 12.0) / 2.0,
+            12.0,
+            self.color,
+        );
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn cvkg_core::Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn cvkg_core::Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let (tw, th) = renderer.measure_text(&self.text, 12.0);
         cvkg_core::Size {
             width: proposal.width.unwrap_or(tw + 40.0),
@@ -187,8 +236,6 @@ pub enum ChartType {
 
 /// ValkyrieAnalytics - A tactical chart for monitoring mission data.
 /// Named after the Valkyries, who monitor and choose the course of battle.
-/// 
-/// INSPIRED BY: MUI X (Charts) and iOS 26 (Tactical Visualization).
 pub struct ValkyrieAnalytics {
     pub chart_type: ChartType,
     pub data: Vec<f32>,
@@ -242,7 +289,12 @@ impl View for ValkyrieAnalytics {
                     let x = rect.x + i as f32 * dx;
                     let y = rect.y + rect.height * (1.0 - val);
                     renderer.fill_rounded_rect(
-                        Rect { x: x - 3.0, y: y - 3.0, width: 6.0, height: 6.0 },
+                        Rect {
+                            x: x - 3.0,
+                            y: y - 3.0,
+                            width: 6.0,
+                            height: 6.0,
+                        },
                         3.0,
                         self.color,
                     );
@@ -300,7 +352,12 @@ impl View for ValkyrieAnalytics {
 
                     renderer.draw_line(x1, y1, x2, y2, self.color, 2.0);
                     renderer.fill_rounded_rect(
-                        Rect { x: x1 - 2.0, y: y1 - 2.0, width: 4.0, height: 4.0 },
+                        Rect {
+                            x: x1 - 2.0,
+                            y: y1 - 2.0,
+                            width: 4.0,
+                            height: 4.0,
+                        },
                         2.0,
                         self.color,
                     );
@@ -316,7 +373,9 @@ pub struct TelemetryView;
 
 impl View for TelemetryView {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
@@ -326,31 +385,51 @@ impl View for TelemetryView {
         }
 
         let stats = renderer.get_telemetry();
-        
+
         // Bifrost Glassmorphism
         renderer.bifrost(rect, 20.0, 1.2, 0.85);
         renderer.fill_rounded_rect(rect, 6.0, [0.02, 0.03, 0.05, 0.6]);
-        
+
         let accent_cyan = [0.0, 1.0, 1.0, 0.9];
         let accent_gold = [1.0, 0.8, 0.0, 0.9];
         let alert_red = [1.0, 0.2, 0.2, 1.0];
-        
-        let border_color = if stats.hardware_stall_detected { alert_red } else { accent_cyan };
+
+        let border_color = if stats.hardware_stall_detected {
+            alert_red
+        } else {
+            accent_cyan
+        };
         renderer.stroke_rounded_rect(rect, 6.0, border_color, 1.5);
-        
+
         // Tactical Header
         renderer.fill_rect(
-            Rect { x: rect.x, y: rect.y, width: rect.width, height: 20.0 },
-            [border_color[0], border_color[1], border_color[2], 0.2]
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: 20.0,
+            },
+            [border_color[0], border_color[1], border_color[2], 0.2],
         );
-        renderer.draw_text("KVASIR TELEMETRY", rect.x + 8.0, rect.y + 4.0, 10.0, border_color);
+        renderer.draw_text(
+            "KVASIR TELEMETRY",
+            rect.x + 8.0,
+            rect.y + 4.0,
+            10.0,
+            border_color,
+        );
 
-let lines = [("FPS", format!("{:.1}", 1000.0 / stats.frame_time_ms.max(0.1))),
+        let lines = [
+            (
+                "FPS",
+                format!("{:.1}", 1000.0 / stats.frame_time_ms.max(0.1)),
+            ),
             ("FRAME", format!("{:.2} ms", stats.frame_time_ms)),
             ("P99", format!("{:.2} ms", stats.p99_frame_time_ms)),
             ("JITTER", format!("{:.2} ms", stats.frame_jitter_ms)),
             ("DRAW", format!("{}", stats.draw_calls)),
-            ("VERT", format!("{}", stats.vertices))];
+            ("VERT", format!("{}", stats.vertices)),
+        ];
 
         let start_y = rect.y + 28.0;
         for (i, (label, val)) in lines.iter().enumerate() {
@@ -361,24 +440,49 @@ let lines = [("FPS", format!("{:.1}", 1000.0 / stats.frame_time_ms.max(0.1))),
 
         if stats.hardware_stall_detected {
             renderer.fill_rounded_rect(
-                Rect { x: rect.x + 5.0, y: rect.y + rect.height - 25.0, width: rect.width - 10.0, height: 20.0 },
+                Rect {
+                    x: rect.x + 5.0,
+                    y: rect.y + rect.height - 25.0,
+                    width: rect.width - 10.0,
+                    height: 20.0,
+                },
                 4.0,
-                [alert_red[0], alert_red[1], alert_red[2], 0.2]
+                [alert_red[0], alert_red[1], alert_red[2], 0.2],
             );
-            renderer.draw_text("HARDWARE STALL DETECTED", rect.x + 12.0, rect.y + rect.height - 20.0, 10.0, alert_red);
+            renderer.draw_text(
+                "HARDWARE STALL DETECTED",
+                rect.x + 12.0,
+                rect.y + rect.height - 20.0,
+                10.0,
+                alert_red,
+            );
         }
-        
+
         // Dynamic Scanning Line (Simulated with elapsed time if available)
         // For now, just a static tactical divider
-        renderer.draw_line(rect.x + 5.0, rect.y + 24.0, rect.x + rect.width - 5.0, rect.y + 24.0, [1.0, 1.0, 1.0, 0.1], 1.0);
+        renderer.draw_line(
+            rect.x + 5.0,
+            rect.y + 24.0,
+            rect.x + rect.width - 5.0,
+            rect.y + 24.0,
+            [1.0, 1.0, 1.0, 0.1],
+            1.0,
+        );
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        cvkg_core::Size { width: 180.0, height: 160.0 }
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: 180.0,
+            height: 160.0,
+        }
     }
 }
 
-use cvkg_core::{TemporalNode, TemporalEdge, MemoryLayer};
+use cvkg_core::{MemoryLayer, TemporalEdge, TemporalNode};
 
 /// MimirsWell - A dynamic, force-directed graph visualization for the Temporal Graph.
 pub struct MimirsWell {
@@ -394,50 +498,65 @@ impl MimirsWell {
 
 impl View for MimirsWell {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
-        
+
         // 1. Draw Bifrost Paths (Edges)
         for edge in &self.edges {
             let (x1, y1) = self.get_node_pos(&edge.source, rect, t);
             let (x2, y2) = self.get_node_pos(&edge.target, rect, t);
-            
+
             // Animated Glow-Path (Bifrost)
             let alpha = 0.2 + (t * 3.0).sin().abs() * 0.2;
             renderer.draw_line(x1, y1, x2, y2, [1.0, 0.0, 1.0, alpha], 1.0); // Magenta Liquid
-            
+
             // Traveling Pulse
             let progress = (t * 0.5 + (edge.source.len() as f32)).fract();
             let px = x1 + (x2 - x1) * progress;
             let py = y1 + (y2 - y1) * progress;
-            renderer.fill_ellipse(Rect { x: px - 1.5, y: py - 1.5, width: 3.0, height: 3.0 }, [1.0, 1.0, 1.0, 0.6]);
+            renderer.fill_ellipse(
+                Rect {
+                    x: px - 1.5,
+                    y: py - 1.5,
+                    width: 3.0,
+                    height: 3.0,
+                },
+                [1.0, 1.0, 1.0, 0.6],
+            );
         }
-        
+
         // 2. Draw Nodes (Clipped-Corner / Tactical)
         for node in &self.nodes {
             let (nx, ny) = self.get_node_pos(&node.id, rect, t);
-            
-            // Neural Activity Pulsing (Inspired by VYOM)
+
             let activity_pulse = (t * 4.0 + (node.weight * 10.0)).sin() * 0.15 + 0.85;
             let size = (10.0 + node.weight * 15.0) * activity_pulse;
-            
+
             let mut color = match node.layer {
-                MemoryLayer::Episodic => [0.0, 0.8, 1.0, 0.9], // Cyan
+                MemoryLayer::Episodic => [0.0, 0.8, 1.0, 0.9],  // Cyan
                 MemoryLayer::Semantic => [1.0, 0.84, 0.0, 0.9], // Viking Gold
                 MemoryLayer::Procedural => [1.0, 0.0, 1.0, 0.9], // Magenta Liquid
             };
-            
+
             // Boost brightness based on pulse
             color[3] *= activity_pulse;
-            
+
             // Draw Clipped-Corner Node
             self.draw_clipped_node(renderer, nx, ny, size, color);
-            
+
             // Label for high-weight nodes
             if node.weight > 0.5 {
-                renderer.draw_text(&node.id, nx + size / 2.0 + 4.0, ny - 4.0, 9.0, [1.0, 1.0, 1.0, 0.5 * activity_pulse]);
+                renderer.draw_text(
+                    &node.id,
+                    nx + size / 2.0 + 4.0,
+                    ny - 4.0,
+                    9.0,
+                    [1.0, 1.0, 1.0, 0.5 * activity_pulse],
+                );
             }
         }
     }
@@ -446,35 +565,56 @@ impl View for MimirsWell {
 impl MimirsWell {
     fn get_node_pos(&self, id: &str, rect: Rect, t: f32) -> (f32, f32) {
         let mut h = 0u32;
-        for b in id.bytes() { h = h.wrapping_mul(31).wrapping_add(b as u32); }
-        
+        for b in id.bytes() {
+            h = h.wrapping_mul(31).wrapping_add(b as u32);
+        }
+
         let fx = (h % 1000) as f32 / 1000.0;
         let fy = ((h / 1000) % 1000) as f32 / 1000.0;
-        
+
         let dx = (t * 0.4 + fx * 20.0).sin() * 10.0;
         let dy = (t * 0.6 + fy * 20.0).cos() * 10.0;
-        
+
         (
             rect.x + rect.width * 0.15 + rect.width * 0.7 * fx + dx,
-            rect.y + rect.height * 0.15 + rect.height * 0.7 * fy + dy
+            rect.y + rect.height * 0.15 + rect.height * 0.7 * fy + dy,
         )
     }
 
-    fn draw_clipped_node(&self, renderer: &mut dyn Renderer, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    fn draw_clipped_node(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: [f32; 4],
+    ) {
         let s = size / 2.0;
         let c = s * 0.4;
-        
+
         let points = [
-            (x - s + c, y - s), (x + s - c, y - s),
-            (x + s, y - s + c), (x + s, y + s - c),
-            (x + s - c, y + s), (x - s + c, y + s),
-            (x - s, y + s - c), (x - s, y - s + c),
+            (x - s + c, y - s),
+            (x + s - c, y - s),
+            (x + s, y - s + c),
+            (x + s, y + s - c),
+            (x + s - c, y + s),
+            (x - s + c, y + s),
+            (x - s, y + s - c),
+            (x - s, y - s + c),
         ];
-        
+
         let mut fill_color = color;
         fill_color[3] *= 0.15;
-        renderer.fill_rect(Rect { x: x - s, y: y - s, width: size, height: size }, fill_color);
-        
+        renderer.fill_rect(
+            Rect {
+                x: x - s,
+                y: y - s,
+                width: size,
+                height: size,
+            },
+            fill_color,
+        );
+
         for i in 0..8 {
             let p1 = points[i];
             let p2 = points[(i + 1) % 8];
@@ -484,8 +624,8 @@ impl MimirsWell {
 }
 
 const RUNES: &[char] = &[
-    'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚾ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ',
-    'ᛏ', 'ᛒ', 'ᛖ', 'ᛗ', 'ᛚ', 'ᛜ', 'ᛞ', 'ᛟ',
+    'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚾ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ', 'ᛏ', 'ᛒ', 'ᛖ',
+    'ᛗ', 'ᛚ', 'ᛜ', 'ᛞ', 'ᛟ',
 ];
 
 /// RuneScript - A text component that reveals itself with a runic "deciphering" animation.
@@ -520,13 +660,15 @@ impl RuneScript {
 
 impl View for RuneScript {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
         let revealed_count = (t * self.speed) as usize;
         let mut display_text = String::new();
-        
+
         let chars: Vec<char> = self.text.chars().collect();
         for i in 0..chars.len() {
             if i < revealed_count {
@@ -538,15 +680,28 @@ impl View for RuneScript {
                 break;
             }
         }
-        
+
         if !display_text.is_empty() {
-            renderer.draw_text(&display_text, rect.x, rect.y + self.font_size, self.font_size, self.color);
+            renderer.draw_text(
+                &display_text,
+                rect.x,
+                rect.y + self.font_size,
+                self.font_size,
+                self.color,
+            );
         }
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let (w, h) = renderer.measure_text(&self.text, self.font_size);
-        cvkg_core::Size { width: w, height: h }
+        cvkg_core::Size {
+            width: w,
+            height: h,
+        }
     }
 }
 
@@ -573,22 +728,24 @@ impl SleipnirGait {
 
 impl View for SleipnirGait {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
         let child_height = rect.height / self.children.len().max(1) as f32;
-        
+
         for (i, child) in self.children.iter().enumerate() {
             let start_time = i as f32 * self.stagger_delay;
             if t < start_time {
                 continue;
             }
-            
+
             // Apply reveal opacity based on how long since its start time
             let opacity = ((t - start_time) * 4.0).min(1.0);
             renderer.push_opacity(opacity);
-            
+
             let child_rect = Rect {
                 x: rect.x,
                 y: rect.y + i as f32 * child_height,
@@ -596,7 +753,7 @@ impl View for SleipnirGait {
                 height: child_height,
             };
             child.render(renderer, child_rect);
-            
+
             renderer.pop_opacity();
         }
     }
@@ -620,11 +777,13 @@ impl<V: View> VölvaScan<V> {
 
 impl<V: View> View for VölvaScan<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
-        
+
         if t < self.duration {
             // Render Runic Noise
             let mut noise = String::new();
@@ -632,7 +791,9 @@ impl<V: View> View for VölvaScan<V> {
             for i in 0..char_count {
                 let rune_idx = ((t * 50.0 + i as f32) as usize) % RUNES.len();
                 noise.push(RUNES[rune_idx]);
-                if i % 10 == 0 { noise.push('\n'); }
+                if i % 10 == 0 {
+                    noise.push('\n');
+                }
             }
             renderer.draw_text(&noise, rect.x, rect.y + 10.0, 10.0, [0.0, 1.0, 1.0, 0.4]);
         } else {
@@ -646,8 +807,6 @@ impl<V: View> View for VölvaScan<V> {
 }
 /// RunicTooltip - A contextual tooltip for providing hidden wisdom (information).
 /// Named after the Runes, which encode secret knowledge.
-/// 
-/// INSPIRED BY: Radix UI (Tooltip) and Mantine (Tooltip).
 pub struct RunicTooltip<V: View> {
     pub content: V,
     pub text: String,
@@ -673,11 +832,13 @@ impl<V: View> RunicTooltip<V> {
 
 impl<V: View> View for RunicTooltip<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "RunicTooltip");
-        
+
         // 1. Render Base Content
         self.content.render(renderer, rect);
 
@@ -695,8 +856,14 @@ impl<V: View> View for RunicTooltip<V> {
             renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
             renderer.fill_rounded_rect(tip_rect, 4.0, [0.08, 0.08, 0.1, 0.9]);
             renderer.stroke_rect(tip_rect, [0.0, 1.0, 1.0, 0.6], 1.0);
-            
-            renderer.draw_text(&self.text, tip_rect.x + 8.0, tip_rect.y + 6.0, 12.0, [1.0, 1.0, 1.0, 1.0]);
+
+            renderer.draw_text(
+                &self.text,
+                tip_rect.x + 8.0,
+                tip_rect.y + 6.0,
+                12.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
             renderer.set_z_index(0.0);
         }
 
@@ -706,8 +873,6 @@ impl<V: View> View for RunicTooltip<V> {
 
 /// EikonaAvatar - A user representation component with status indicators.
 /// Named after the hybrid concept of "form/image" (Eikona).
-/// 
-/// INSPIRED BY: HeroUI (Avatar) and Chakra UI (Avatar).
 pub struct EikonaAvatar {
     pub src: Option<String>,
     pub fallback: String,
@@ -746,11 +911,13 @@ impl EikonaAvatar {
 
 impl View for EikonaAvatar {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "EikonaAvatar");
-        
+
         // 1. Base Circle
         renderer.fill_ellipse(rect, [0.1, 0.1, 0.15, 1.0]);
         renderer.stroke_ellipse(rect, [0.3, 0.4, 0.5, 0.6], 1.0);
@@ -765,7 +932,7 @@ impl View for EikonaAvatar {
                 rect.x + (rect.width - tw) / 2.0,
                 rect.y + (rect.height - 14.0) / 2.0,
                 14.0,
-                [1.0, 1.0, 1.0, 0.8]
+                [1.0, 1.0, 1.0, 0.8],
             );
         }
 
@@ -778,14 +945,14 @@ impl View for EikonaAvatar {
                 width: status_size,
                 height: status_size,
             };
-            
+
             let color = match status {
                 AvatarStatus::Online => [0.0, 1.0, 0.0, 1.0],
                 AvatarStatus::Offline => [0.5, 0.5, 0.5, 1.0],
                 AvatarStatus::Busy => [1.0, 0.0, 0.0, 1.0],
                 AvatarStatus::Away => [1.0, 0.8, 0.0, 1.0],
             };
-            
+
             renderer.fill_ellipse(status_rect, color);
             renderer.stroke_ellipse(status_rect, [0.0, 0.0, 0.0, 1.0], 1.5);
         }
@@ -796,8 +963,6 @@ impl View for EikonaAvatar {
 
 /// MerkiBadge - A status or count indicator component.
 /// Named after Merki, the Norse word for mark or sign.
-/// 
-/// INSPIRED BY: Chakra UI (Badge) and Mantine (Badge).
 pub struct MerkiBadge {
     pub text: String,
     pub color: [f32; 4],
@@ -821,24 +986,26 @@ impl MerkiBadge {
 
 impl View for MerkiBadge {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "MerkiBadge");
-        
+
         let mut bg = self.color;
         bg[3] *= 0.2;
-        
+
         renderer.fill_rounded_rect(rect, 4.0, bg);
         renderer.stroke_rounded_rect(rect, 4.0, self.color, 1.0);
-        
+
         let (tw, _) = renderer.measure_text(&self.text, 10.0);
         renderer.draw_text(
             &self.text,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - 10.0) / 2.0,
             10.0,
-            [1.0, 1.0, 1.0, 0.9]
+            [1.0, 1.0, 1.0, 0.9],
         );
 
         renderer.pop_vnode();
@@ -847,8 +1014,6 @@ impl View for MerkiBadge {
 
 /// UrdrTimeline - A chronological timeline of events (the past).
 /// Named after Urdr, the Norn of the Past.
-/// 
-/// INSPIRED BY: Mantine (Timeline) and Ant Design (Timeline).
 pub struct UrdrTimeline {
     pub items: Vec<UrdrEvent>,
 }
@@ -878,14 +1043,23 @@ impl UrdrTimeline {
 
 impl View for UrdrTimeline {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "UrdrTimeline");
-        
+
         let t = renderer.elapsed_time();
         let line_x = rect.x + 20.0;
-        renderer.draw_line(line_x, rect.y, line_x, rect.y + rect.height, [0.3, 0.3, 0.4, 0.5], 1.5);
+        renderer.draw_line(
+            line_x,
+            rect.y,
+            line_x,
+            rect.y + rect.height,
+            [0.3, 0.3, 0.4, 0.5],
+            1.5,
+        );
 
         let mut current_y = rect.y + 10.0;
         let item_spacing = 50.0;
@@ -894,17 +1068,39 @@ impl View for UrdrTimeline {
             // 1. Bifrost Resonance (Glowing Temporal Nodes)
             let pulse = (t * 2.0 + i as f32).sin() * 0.2 + 0.8;
             renderer.fill_ellipse(
-                Rect { x: line_x - 5.0, y: current_y - 1.0, width: 10.0, height: 10.0 },
-                [0.0, 1.0, 1.0, 0.3 * pulse]
+                Rect {
+                    x: line_x - 5.0,
+                    y: current_y - 1.0,
+                    width: 10.0,
+                    height: 10.0,
+                },
+                [0.0, 1.0, 1.0, 0.3 * pulse],
             );
             renderer.fill_ellipse(
-                Rect { x: line_x - 3.0, y: current_y + 1.0, width: 6.0, height: 6.0 },
-                [0.0, 1.0, 1.0, 1.0]
+                Rect {
+                    x: line_x - 3.0,
+                    y: current_y + 1.0,
+                    width: 6.0,
+                    height: 6.0,
+                },
+                [0.0, 1.0, 1.0, 1.0],
             );
 
             // 2. Content
-            renderer.draw_text(&event.timestamp, line_x + 20.0, current_y - 2.0, 10.0, [0.6, 0.6, 0.7, 0.8]);
-            renderer.draw_text(&event.title, line_x + 20.0, current_y + 12.0, 13.0, [1.0, 1.0, 1.0, 0.9]);
+            renderer.draw_text(
+                &event.timestamp,
+                line_x + 20.0,
+                current_y - 2.0,
+                10.0,
+                [0.6, 0.6, 0.7, 0.8],
+            );
+            renderer.draw_text(
+                &event.title,
+                line_x + 20.0,
+                current_y + 12.0,
+                13.0,
+                [1.0, 1.0, 1.0, 0.9],
+            );
 
             current_y += item_spacing;
         }
@@ -915,8 +1111,6 @@ impl View for UrdrTimeline {
 
 /// DraumaSkeleton - A shimmering skeleton loader for async content.
 /// Named after the dreams (Drauma) of content waiting to be born.
-/// 
-/// INSPIRED BY: Mantine (Skeleton) and MUI (Skeleton).
 pub struct DraumaSkeleton {
     pub border_radius: f32,
     pub shimmer: bool,
@@ -946,13 +1140,15 @@ impl DraumaSkeleton {
 
 impl View for DraumaSkeleton {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DraumaSkeleton");
-        
+
         let t = renderer.elapsed_time();
-        
+
         // 1. Mimir's Refraction (Skeletal Depth)
         // Drauma represents a "spectral" presence of content
         renderer.bifrost(rect, self.border_radius, 2.0, 0.8);
@@ -968,7 +1164,7 @@ impl View for DraumaSkeleton {
                 width: shimmer_w,
                 height: rect.height,
             };
-            
+
             let shimmer_alpha = 0.15 * (1.0 - (shimmer_pos - 0.5).abs() * 2.0);
             renderer.fill_rect(shimmer_rect, [0.0, 0.8, 1.0, shimmer_alpha]);
         }

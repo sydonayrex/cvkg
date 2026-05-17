@@ -1,5 +1,5 @@
-use crate::types::{NodeId, NodeType};
 use crate::port::FlowPort;
+use crate::types::{NodeId, NodeType};
 use serde::{Deserialize, Serialize};
 
 /// A node in the flow graph
@@ -35,7 +35,7 @@ impl FlowNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{PortId, PortPosition, PortDirection};
+    use crate::types::{PortDirection, PortId, PortPosition};
 
     #[test]
     fn test_node_creation() {
@@ -47,7 +47,12 @@ mod tests {
     #[test]
     fn test_add_port() {
         let mut node = FlowNode::new(NodeId(1), "Test Node", (0.0, 0.0));
-        node.add_port(FlowPort::new(PortId(10), NodeId(1), PortPosition::Right, PortDirection::Output));
+        node.add_port(FlowPort::new(
+            PortId(10),
+            NodeId(1),
+            PortPosition::Right,
+            PortDirection::Output,
+        ));
         assert_eq!(node.ports.len(), 1);
     }
 }

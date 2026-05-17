@@ -4,9 +4,9 @@
 //! Materials allow components to request specific visual properties (Bifrost, Gungnir, etc.)
 //! which the renderer can then batch and optimize based on the active RenderTier.
 
+use crate::RenderTier;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
-use crate::RenderTier;
 
 /// Description of a visual material and its hardware requirements.
 #[derive(Debug, Clone)]
@@ -44,7 +44,9 @@ impl MaterialRegistry {
 
     /// Retrieve the global material registry instance.
     pub fn global() -> Arc<Mutex<Self>> {
-        REGISTRY.get_or_init(|| Arc::new(Mutex::new(Self::new()))).clone()
+        REGISTRY
+            .get_or_init(|| Arc::new(Mutex::new(Self::new())))
+            .clone()
     }
 
     fn register_defaults(&mut self) {

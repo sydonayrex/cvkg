@@ -145,7 +145,11 @@ impl View for Avatar {
         }
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let dim = self.size.dimension();
         cvkg_core::Size {
             width: dim,

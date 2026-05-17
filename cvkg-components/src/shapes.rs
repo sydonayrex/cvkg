@@ -1,4 +1,4 @@
-use cvkg_core::{View, Rect, Renderer, Never, SizeProposal, Size};
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 /// Hvergelmir - A hexagonal shape primitive (Norse equivalent of Hexagon)
 #[derive(Clone)]
@@ -16,7 +16,7 @@ impl Hvergelmir {
             stroke_width: 2.0,
         }
     }
-    
+
     pub fn color(mut self, color: [f32; 4]) -> Self {
         self.color = color;
         self
@@ -25,13 +25,17 @@ impl Hvergelmir {
 
 impl View for Hvergelmir {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
-    
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let center_x = rect.x + rect.width / 2.0;
         let center_y = rect.y + rect.height / 2.0;
-        let radius = (self.size / 2.0).min(rect.width / 2.0).min(rect.height / 2.0);
-        
+        let radius = (self.size / 2.0)
+            .min(rect.width / 2.0)
+            .min(rect.height / 2.0);
+
         let vertices: Vec<[f32; 2]> = (0..6)
             .map(|i| {
                 let angle = std::f32::consts::PI / 3.0 * i as f32 - std::f32::consts::PI / 6.0;
@@ -40,14 +44,17 @@ impl View for Hvergelmir {
                     center_y + radius * angle.sin(),
                 ]
             })
-            .collect();       
+            .collect();
         renderer.fill_polygon(&vertices, self.color);
         renderer.stroke_polygon(&vertices, [1.0, 1.0, 1.0, 0.8], self.stroke_width);
     }
-    
+
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
         let size = proposal.width.unwrap_or(self.size);
-        Size { width: size, height: size }
+        Size {
+            width: size,
+            height: size,
+        }
     }
 
     fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
@@ -56,11 +63,25 @@ impl View for Hvergelmir {
 }
 
 impl cvkg_core::layout::LayoutView for Hvergelmir {
-    fn size_that_fits(&self, proposal: SizeProposal, _subviews: &[&dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) -> Size {
+    fn size_that_fits(
+        &self,
+        proposal: SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> Size {
         let s = proposal.width.unwrap_or(self.size);
-        Size { width: s, height: s }
+        Size {
+            width: s,
+            height: s,
+        }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) {
+    }
 }
 
 /// Skjaldborg - A trapezoidal panel (Norse equivalent of Trapezoid / Shield Wall)
@@ -77,16 +98,18 @@ impl Skjaldborg {
 
 impl View for Skjaldborg {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
-    
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let vertices = [
-            [rect.x, rect.y], // top left
-            [rect.x + rect.width, rect.y], // top right
+            [rect.x, rect.y],                                   // top left
+            [rect.x + rect.width, rect.y],                      // top right
             [rect.x + rect.width * 0.85, rect.y + rect.height], // bottom right
             [rect.x + rect.width * 0.15, rect.y + rect.height], // bottom left
         ];
-        
+
         renderer.fill_polygon(&vertices, self.color);
     }
 
@@ -96,13 +119,24 @@ impl View for Skjaldborg {
 }
 
 impl cvkg_core::layout::LayoutView for Skjaldborg {
-    fn size_that_fits(&self, proposal: SizeProposal, _subviews: &[&dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) -> Size {
-        Size { 
-            width: proposal.width.unwrap_or(100.0), 
-            height: proposal.height.unwrap_or(50.0) 
+    fn size_that_fits(
+        &self,
+        proposal: SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> Size {
+        Size {
+            width: proposal.width.unwrap_or(100.0),
+            height: proposal.height.unwrap_or(50.0),
         }
     }
-    fn place_subviews(&self, _bounds: Rect, _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView], _cache: &mut cvkg_core::layout::LayoutCache) {}
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) {
+    }
 }
 
 /// Idavoll - A tactical octagonal container (8-sided).
@@ -131,7 +165,9 @@ impl<V: View> Idavoll<V> {
 
 impl<V: View> View for Idavoll<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let center_x = rect.x + rect.width / 2.0;
@@ -148,14 +184,14 @@ impl<V: View> View for Idavoll<V> {
                 ]
             })
             .collect();
-        
+
         let mut bg_color = self.color;
         bg_color[3] = 0.1;
         renderer.fill_polygon(&vertices, bg_color);
         renderer.stroke_polygon(&vertices, self.color, self.stroke_width);
-        
+
         // Inscribed square content area
-        let content_size = radius * 1.414 / 1.5; 
+        let content_size = radius * 1.414 / 1.5;
         let content_rect = Rect {
             x: center_x - content_size / 2.0,
             y: center_y - content_size / 2.0,
@@ -201,7 +237,9 @@ impl<V: View> PolygonFrame<V> {
 
 impl<V: View> View for PolygonFrame<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
@@ -217,22 +255,23 @@ impl<V: View> View for PolygonFrame<V> {
 
         let vertices: Vec<[f32; 2]> = (0..self.sides)
             .map(|i| {
-                let angle = (2.0 * std::f32::consts::PI / self.sides as f32) * i as f32 + self.rotation;
+                let angle =
+                    (2.0 * std::f32::consts::PI / self.sides as f32) * i as f32 + self.rotation;
                 [
                     center_x + radius * angle.cos(),
                     center_y + radius * angle.sin(),
                 ]
             })
             .collect();
-        
+
         // 1. Background
         let mut bg_color = self.color;
         bg_color[3] = 0.1;
         renderer.fill_polygon(&vertices, bg_color);
-        
+
         // 2. Border
         renderer.stroke_polygon(&vertices, self.color, self.stroke_width);
-        
+
         // 3. Content
         // We calculate the largest inscribed square to ensure content fits
         let inner_radius = radius * (std::f32::consts::PI / self.sides as f32).cos();

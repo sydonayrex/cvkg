@@ -1,6 +1,6 @@
 use cvkg_core::{Never, Rect, Renderer, View};
 
-/// The AI's visual presence. A pulsating runic orb (inspired by Orb).
+/// The AI's visual presence. A pulsating runic orb.
 /// Section 4.2: "Animated artifacts for AI-assisted interfaces."
 pub struct OracleOrb {
     pub size: f32,
@@ -25,7 +25,9 @@ impl OracleOrb {
 
 impl View for OracleOrb {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
@@ -73,9 +75,14 @@ impl View for OracleOrb {
             let dist = radius * 1.5;
             let sx = center_x + angle.cos() * dist;
             let sy = center_y + angle.sin() * dist;
-            
+
             renderer.fill_rect(
-                Rect { x: sx - 2.0, y: sy - 2.0, width: 4.0, height: 4.0 },
+                Rect {
+                    x: sx - 2.0,
+                    y: sy - 2.0,
+                    width: 4.0,
+                    height: 4.0,
+                },
                 self.color,
             );
         }

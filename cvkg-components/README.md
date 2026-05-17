@@ -1,6 +1,6 @@
 # cvkg-components
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
 
 `cvkg-components` is the standard library for the CVKG framework, providing a vast collection of atomic primitives and complex "Berserker" widgets.
 

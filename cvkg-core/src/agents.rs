@@ -4,7 +4,7 @@
 //! It provides identity and priority tracking for UI state mutations,
 //! enabling predictable resolution when multiple AI agents contend for the same state.
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Unique identifier for an AI agent or system component issuing state mutations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -65,13 +65,13 @@ where
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64;
-    
+
     let meta = MutationMetadata {
         agent_id,
         priority,
         timestamp_ms: now,
     };
-    
+
     let prev = CURRENT_AGENT.with(|a| a.replace(Some(meta)));
     let result = f();
     CURRENT_AGENT.with(|a| a.replace(prev));
@@ -90,7 +90,11 @@ where
     F: FnOnce() -> R,
 {
     pub fn new(agent_id: AgentId, priority: AgentPriority, mutation: F) -> Self {
-        Self { agent_id, priority, mutation }
+        Self {
+            agent_id,
+            priority,
+            mutation,
+        }
     }
 
     pub fn execute(self) -> R {
@@ -108,7 +112,8 @@ pub struct ConflictEvent {
     pub timestamp_ms: u64,
 }
 
-type ConflictHandlerList = std::sync::Arc<std::sync::Mutex<Vec<Box<dyn Fn(ConflictEvent) + Send + Sync>>>>;
+type ConflictHandlerList =
+    std::sync::Arc<std::sync::Mutex<Vec<Box<dyn Fn(ConflictEvent) + Send + Sync>>>>;
 static CONFLICT_HANDLERS: once_cell::sync::Lazy<ConflictHandlerList> =
     once_cell::sync::Lazy::new(|| std::sync::Arc::new(std::sync::Mutex::new(Vec::new())));
 

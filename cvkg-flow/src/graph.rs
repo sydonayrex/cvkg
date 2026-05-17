@@ -1,8 +1,8 @@
-use crate::node::FlowNode;
 use crate::edge::FlowEdge;
-use crate::types::{NodeId, EdgeId, PortId};
-use std::collections::HashMap;
+use crate::node::FlowNode;
+use crate::types::{EdgeId, NodeId, PortId};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// FlowGraph - collection of nodes and edges
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -25,34 +25,46 @@ impl FlowGraph {
     }
 
     pub fn get_node_by_port(&self, port_id: PortId) -> Option<&FlowNode> {
-        self.nodes.values().find(|n| n.ports.iter().any(|p| p.id == port_id))
+        self.nodes
+            .values()
+            .find(|n| n.ports.iter().any(|p| p.id == port_id))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::*;
+    use crate::edge::FlowEdge;
     use crate::node::FlowNode;
     use crate::port::FlowPort;
-    use crate::edge::FlowEdge;
+    use crate::types::*;
 
     #[test]
     fn test_graph_add_node_edge() {
         let mut graph = FlowGraph::new();
         let mut n1 = FlowNode::new(NodeId(1), "N1", (0.0, 0.0));
-        n1.add_port(FlowPort::new(PortId(10), NodeId(1), PortPosition::Right, PortDirection::Output));
+        n1.add_port(FlowPort::new(
+            PortId(10),
+            NodeId(1),
+            PortPosition::Right,
+            PortDirection::Output,
+        ));
         graph.add_node(n1);
 
         let mut n2 = FlowNode::new(NodeId(2), "N2", (100.0, 0.0));
-        n2.add_port(FlowPort::new(PortId(20), NodeId(2), PortPosition::Left, PortDirection::Input));
+        n2.add_port(FlowPort::new(
+            PortId(20),
+            NodeId(2),
+            PortPosition::Left,
+            PortDirection::Input,
+        ));
         graph.add_node(n2);
 
         graph.add_edge(FlowEdge::new(EdgeId(100), PortId(10), PortId(20)));
 
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.edges.len(), 1);
-        
+
         let node = graph.get_node_by_port(PortId(10)).unwrap();
         assert_eq!(node.id, NodeId(1));
     }

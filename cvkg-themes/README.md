@@ -1,6 +1,6 @@
 # cvkg-themes
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
 
 `cvkg-themes` defines the authoritative "Berserker Design System" tokens, enabling consistent aesthetics, rhythmic typography, and accessible color palettes across the CVKG ecosystem.
 

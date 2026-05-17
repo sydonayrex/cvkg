@@ -1,6 +1,6 @@
 # cvkg-render-gpu
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![GPU Shader Pipeline](../docs/images/gpu_shader_pipeline.png)
 
 `cvkg-render-gpu` is the "Surtr" pipeline: a high-performance, `wgpu`-powered GPU renderer designed for "Berserker" aesthetics and complex visual effects.
 

@@ -35,28 +35,44 @@ pub enum CvkgError {
 impl fmt::Display for CvkgError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CvkgError::InvalidGeometry { rect, reason, suggestion } => {
+            CvkgError::InvalidGeometry {
+                rect,
+                reason,
+                suggestion,
+            } => {
                 write!(
                     f,
                     "Invalid geometry: {} - {}. Suggestion: {}",
                     rect, reason, suggestion
                 )
             }
-            CvkgError::MissingFeature { feature, crate_name, suggestion } => {
+            CvkgError::MissingFeature {
+                feature,
+                crate_name,
+                suggestion,
+            } => {
                 write!(
                     f,
                     "Missing feature '{}' in crate {}. {}. Run: cargo build -p {} --features {}",
                     feature, crate_name, suggestion, crate_name, feature
                 )
             }
-            CvkgError::InvalidViewComposition { view_type, parent_type, suggestion } => {
+            CvkgError::InvalidViewComposition {
+                view_type,
+                parent_type,
+                suggestion,
+            } => {
                 write!(
                     f,
                     "Cannot use {} inside {}. {}. Check the parent-child compatibility rules.",
                     view_type, parent_type, suggestion
                 )
             }
-            CvkgError::RendererInitFailed { backend, reason, suggestion } => {
+            CvkgError::RendererInitFailed {
+                backend,
+                reason,
+                suggestion,
+            } => {
                 write!(
                     f,
                     "Failed to initialize {} renderer: {}. {}",
@@ -73,7 +89,9 @@ impl std::error::Error for CvkgError {}
 pub fn invalid_geometry_error(rect: &str, reason: &str) -> CvkgError {
     let suggestion = match reason {
         r if r.contains("negative") => "Ensure width and height are positive values".to_string(),
-        r if r.contains("zero") => "Check that dimensions are non-zero before rendering".to_string(),
+        r if r.contains("zero") => {
+            "Check that dimensions are non-zero before rendering".to_string()
+        }
         _ => "Verify rectangle dimensions are valid".to_string(),
     };
     CvkgError::InvalidGeometry {

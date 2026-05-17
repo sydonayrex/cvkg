@@ -1,7 +1,7 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{FnArg, ItemFn, ItemStruct, Pat, parse_macro_input, DeriveInput};
+use syn::{DeriveInput, FnArg, ItemFn, ItemStruct, Pat, parse_macro_input};
 
 /// State attribute macro — derives common traits for state structs
 ///
@@ -20,21 +20,21 @@ pub fn state(_attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// View derive macro — automatically implements cvkg_core::View
-/// 
+///
 /// If the struct has a `body` method defined in an `impl` block, it will be used.
 /// Otherwise, it defaults to a primitive View (Body = Never).
 #[proc_macro_derive(View)]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = input.ident;
-    
+
     let expanded = quote! {
         impl cvkg_core::View for #name {
             type Body = cvkg_core::Never;
             fn body(self) -> Self::Body { unreachable!("Primitive view has no body") }
         }
     };
-    
+
     TokenStream::from(expanded)
 }
 
@@ -55,7 +55,9 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut field_names = Vec::new();
 
     for arg in inputs {
-        if let FnArg::Typed(pat_type) = arg && let Pat::Ident(pat_ident) = &*pat_type.pat {
+        if let FnArg::Typed(pat_type) = arg
+            && let Pat::Ident(pat_ident) = &*pat_type.pat
+        {
             let arg_name = &pat_ident.ident;
             let arg_type = &pat_type.ty;
             fields.push(quote! { pub #arg_name: #arg_type });
@@ -70,27 +72,27 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let struct_name = quote::format_ident!("{}View", name_str);
 
     let expanded = quote! {
-        #vis struct #struct_name {
-            #(#fields),*
-        }
-
-impl cvkg_core::View for #struct_name {
-            type Body = cvkg_core::AnyView;
-
-            fn body(self) -> Self::Body {
-                // Map fields back to local variables for the body
-                #(let #field_names = self.#field_names;)*
-                cvkg_core::AnyView::new(#body)
+            #vis struct #struct_name {
+                #(#fields),*
             }
-        }
 
-        #(#attrs)*
-        #vis fn #name(#inputs) -> #struct_name {
-            #struct_name {
-                #(#field_names),*
+    impl cvkg_core::View for #struct_name {
+                type Body = cvkg_core::AnyView;
+
+                fn body(self) -> Self::Body {
+                    // Map fields back to local variables for the body
+                    #(let #field_names = self.#field_names;)*
+                    cvkg_core::AnyView::new(#body)
+                }
             }
-        }
-    };
+
+            #(#attrs)*
+            #vis fn #name(#inputs) -> #struct_name {
+                #struct_name {
+                    #(#field_names),*
+                }
+            }
+        };
 
     TokenStream::from(expanded)
 }
@@ -119,15 +121,15 @@ pub fn binding(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemStruct);
-    
+
     let name = &input.ident;
     let vis = &input.vis;
-    
+
     // Extract fields from the struct
     let mut fields = Vec::new();
     let mut field_names = Vec::new();
     let mut field_types = Vec::new();
-    
+
     match &input.fields {
         syn::Fields::Named(fields_named) => {
             for field in &fields_named.named {
@@ -152,16 +154,16 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
             // unit struct
         }
     }
-    
+
     // Builder struct
     let builder_name = quote::format_ident!("{}Builder", name);
-    
+
     // Generate the expanded code
     let expanded = quote! {
         #vis struct #name {
             #(#fields),*
         }
-        
+
         impl #name {
             /// Create a new builder for this component
             pub fn builder() -> #builder_name {
@@ -170,11 +172,11 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
-        
+
         #vis struct #builder_name {
             #(#field_names: Option<#field_types>),*
         }
-        
+
         impl #builder_name {
             #(
                 pub fn #field_names(mut self, value: #field_types) -> Self {
@@ -182,16 +184,16 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     self
                 }
             )*
-            
+
             pub fn build(self) -> #name {
                 #name {
                     #(#field_names: self.#field_names.expect("missing required field "),)*
                 }
             }
         }
-        
+
     };
-    
+
     TokenStream::from(expanded)
 }
 
@@ -216,17 +218,17 @@ pub fn view(input: TokenStream) -> TokenStream {
 pub fn cvkg_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let name = &input.ident;
-    
+
     let expanded = quote! {
         #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
         #input
-        
+
         impl #name {
             pub fn vdom_id(&self) -> String {
                 format!("{}_{}", stringify!(#name), std::collections::hash_map::DefaultHasher::new().finish())
             }
         }
     };
-    
+
     TokenStream::from(expanded)
 }

@@ -7,7 +7,12 @@ pub fn create_styled_nodes() -> FlowGraph {
     // Input Node (Cyber Neon Green)
     let mut input = FlowNode::new(NodeId(1), "Data Input", (50.0, 50.0));
     input.node_type = NodeType::Input;
-    input.add_port(FlowPort::new(PortId(11), NodeId(1), PortPosition::Bottom, PortDirection::Output));
+    input.add_port(FlowPort::new(
+        PortId(11),
+        NodeId(1),
+        PortPosition::Bottom,
+        PortDirection::Output,
+    ));
     graph.add_node(input);
 
     // Group Node (Larger area)

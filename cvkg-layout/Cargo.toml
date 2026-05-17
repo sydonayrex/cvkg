@@ -7,5 +7,5 @@ description.workspace = true
 edition.workspace = true
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.17" }
+cvkg-core = { path = "../cvkg-core", version = "0.1.20" }
 taffy = "0.6"

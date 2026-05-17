@@ -19,3 +19,5 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 # Lock-free RCU for image/texture cache (replaces RwLock in Phase 4)
 arc-swap = { workspace = true }
 libc = { workspace = true }
+image = { workspace = true }
+pollster = "0.4.0"

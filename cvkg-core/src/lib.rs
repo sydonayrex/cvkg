@@ -100,9 +100,10 @@ impl KnowledgeState {
         // Fafnir's Decay: Components naturally revert to base state over time
         for state in self.component_states.values() {
             if let Ok(mut lock) = state.write()
-                && let Some(v) = lock.downcast_mut::<f32>() {
-                    *v = (*v * decay_factor).max(1.0);
-                }
+                && let Some(v) = lock.downcast_mut::<f32>()
+            {
+                *v = (*v * decay_factor).max(1.0);
+            }
         }
     }
 
@@ -172,14 +173,12 @@ pub enum MemoryLayer {
 /// The operational Realm of the UI.
 /// Midgard: Classic, functional, 2D tactical UI for mortals.
 /// Asgard: High-fidelity, cognitive, shader-heavy UI for the Singularity.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum Realm {
     Midgard,
     #[default]
     Asgard,
 }
-
 
 /// A node in the Temporal Graph representing a cognitive anchor
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -258,8 +257,6 @@ impl Default for YggdrasilTokens {
         Self::new()
     }
 }
-
-
 
 impl YggdrasilTokens {
     pub fn new() -> Self {
@@ -905,7 +902,6 @@ impl ViewModifier for GungnirPulseModifier {
 }
 
 /// MagneticModifier makes a view "magnetic", subtly leaning towards or pulling the cursor.
-/// Inspired by high-fidelity creative studio UIs.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MagneticModifier {
     pub radius: f32,
@@ -999,7 +995,11 @@ impl ViewModifier for BifrostLayerModifier {
             }
             MemoryLayer::Procedural => {
                 renderer.fill_rect(rect, [0.05, 0.05, 0.07, 0.95]);
-                let stroke_color = if realm == Realm::Asgard { [0.3, 0.3, 0.3, 1.0] } else { [0.2, 0.2, 0.2, 1.0] };
+                let stroke_color = if realm == Realm::Asgard {
+                    [0.3, 0.3, 0.3, 1.0]
+                } else {
+                    [0.2, 0.2, 0.2, 1.0]
+                };
                 renderer.stroke_rect(rect, stroke_color, 2.0);
             }
         }
@@ -1023,7 +1023,8 @@ impl ViewModifier for FafnirModifier {
 
     fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
         let state = crate::load_system_state();
-        let vitality = state.get_component_state::<f32>(self.id)
+        let vitality = state
+            .get_component_state::<f32>(self.id)
             .map(|v| *v.read().unwrap())
             .unwrap_or(1.0);
 
@@ -1032,19 +1033,23 @@ impl ViewModifier for FafnirModifier {
         let growth = (vitality - 1.0).clamp(0.0, 4.0);
         let scale = 1.0 + growth * 0.12;
         let glow_intensity = growth * 0.25;
-        
+
         // Feed Fafnir: Register interaction to boost vitality
         let id = self.id;
-        renderer.register_handler("pointermove", std::sync::Arc::new(move |_| {
-            crate::update_system_state(|s| {
-                let mut s = s.clone();
-                let v = s.get_component_state::<f32>(id)
-                    .map(|v| *v.read().unwrap())
-                    .unwrap_or(1.0);
-                s.set_component_state(id, (v + 0.05).min(5.0)); // Cap at 5.0
-                s
-            });
-        }));
+        renderer.register_handler(
+            "pointermove",
+            std::sync::Arc::new(move |_| {
+                crate::update_system_state(|s| {
+                    let mut s = s.clone();
+                    let v = s
+                        .get_component_state::<f32>(id)
+                        .map(|v| *v.read().unwrap())
+                        .unwrap_or(1.0);
+                    s.set_component_state(id, (v + 0.05).min(5.0)); // Cap at 5.0
+                    s
+                });
+            }),
+        );
 
         if scale > 1.01 {
             renderer.push_transform([0.0, 0.0], [scale, scale], 0.0);
@@ -1075,23 +1080,23 @@ impl ViewModifier for MimirIntentModifier {
         let state = crate::load_system_state();
         let pos = state.last_pointer_pos;
         let vel = state.pointer_velocity;
-        
+
         // Calculate if the cursor is moving towards this rect
         let center = [rect.x + rect.width / 2.0, rect.y + rect.height / 2.0];
         let dx = center[0] - pos[0];
         let dy = center[1] - pos[1];
-        
+
         // Dot product of velocity and direction to center
         let dot = vel[0] * dx + vel[1] * dy;
-        let speed_sq = vel[0]*vel[0] + vel[1]*vel[1];
-        let dist_sq = dx*dx + dy*dy;
-        
-        if dot > 0.0 && dist_sq < 250.0*250.0 && speed_sq > 0.5 && state.realm == Realm::Asgard {
+        let speed_sq = vel[0] * vel[0] + vel[1] * vel[1];
+        let dist_sq = dx * dx + dy * dy;
+
+        if dot > 0.0 && dist_sq < 250.0 * 250.0 && speed_sq > 0.5 && state.realm == Realm::Asgard {
             // Intent detected: render a subtle "ghost" reveal
             let intent_strength = (dot / (speed_sq.sqrt() * dist_sq.sqrt())).clamp(0.0, 1.0);
             renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 0.3 * intent_strength], 1.5);
         }
-        
+
         view.render(renderer, rect);
     }
 }
@@ -1111,21 +1116,26 @@ impl ViewModifier for KvasirVibeModifier {
         if crate::load_system_state().realm == Realm::Asgard {
             let t = renderer.elapsed_time();
             let c = self.complexity.clamp(0.0, 1.0);
-            
+
             // 1. Core Cognitive Cloud (Bifrost)
             // Turbulence increases with complexity
             let blur = 20.0 + c * 40.0;
             let turbulence_x = (t * (1.0 + c * 2.0)).sin() * 8.0 * c;
             let turbulence_y = (t * (0.8 + c * 1.5)).cos() * 5.0 * c;
-            renderer.bifrost(rect.offset(turbulence_x, turbulence_y), blur, 0.8 + c * 0.4, 0.25);
-            
+            renderer.bifrost(
+                rect.offset(turbulence_x, turbulence_y),
+                blur,
+                0.8 + c * 0.4,
+                0.25,
+            );
+
             // 2. Synaptic Discharge (Gungnir pulses)
             if c > 0.2 {
                 let pulse = (t * (3.0 + c * 5.0)).sin().abs() * c;
                 let color = [0.0, 0.9, 1.0, 0.4 * pulse]; // Cyan synaptic pulse
                 renderer.gungnir(rect, color, 12.0 + c * 24.0, 0.6 * pulse);
             }
-            
+
             // 3. Unstable Resonance (Magenta/Red shift for high complexity)
             if c > 0.7 {
                 let instability = (t * 15.0).cos().abs() * (c - 0.7) * 3.3;
@@ -1165,28 +1175,78 @@ impl ViewModifier for OdinsEyeModifier {
             );
 
             // 3. Hugin (Thought) Telemetry - Left Side
-            let hugin_rect = Rect { x: rect.x + 20.0, y: rect.y + 40.0, width: 200.0, height: rect.height - 80.0 };
-            renderer.draw_text("HUGIN: THOUGHT", hugin_rect.x, hugin_rect.y, 10.0, [0.0, 1.0, 1.0, 0.6]);
+            let hugin_rect = Rect {
+                x: rect.x + 20.0,
+                y: rect.y + 40.0,
+                width: 200.0,
+                height: rect.height - 80.0,
+            };
+            renderer.draw_text(
+                "HUGIN: THOUGHT",
+                hugin_rect.x,
+                hugin_rect.y,
+                10.0,
+                [0.0, 1.0, 1.0, 0.6],
+            );
             for (i, thought) in state.thoughts.iter().rev().take(10).enumerate() {
-                renderer.draw_text(thought, hugin_rect.x, hugin_rect.y + 20.0 + i as f32 * 14.0, 9.0, [1.0, 1.0, 1.0, 0.4]);
+                renderer.draw_text(
+                    thought,
+                    hugin_rect.x,
+                    hugin_rect.y + 20.0 + i as f32 * 14.0,
+                    9.0,
+                    [1.0, 1.0, 1.0, 0.4],
+                );
             }
 
             // 4. Munin (Memory) Telemetry - Right Side
-            let munin_rect = Rect { x: rect.x + rect.width - 220.0, y: rect.y + 40.0, width: 200.0, height: rect.height - 80.0 };
-            renderer.draw_text("MUNIN: MEMORY", munin_rect.x, munin_rect.y, 10.0, [1.0, 0.84, 0.0, 0.6]);
+            let munin_rect = Rect {
+                x: rect.x + rect.width - 220.0,
+                y: rect.y + 40.0,
+                width: 200.0,
+                height: rect.height - 80.0,
+            };
+            renderer.draw_text(
+                "MUNIN: MEMORY",
+                munin_rect.x,
+                munin_rect.y,
+                10.0,
+                [1.0, 0.84, 0.0, 0.6],
+            );
             for (i, node) in state.nodes.iter().take(10).enumerate() {
                 let opacity = (node.weight.min(1.0)) * 0.5;
-                renderer.draw_text(&node.id, munin_rect.x, munin_rect.y + 20.0 + i as f32 * 14.0, 9.0, [1.0, 1.0, 1.0, opacity]);
+                renderer.draw_text(
+                    &node.id,
+                    munin_rect.x,
+                    munin_rect.y + 20.0 + i as f32 * 14.0,
+                    9.0,
+                    [1.0, 1.0, 1.0, opacity],
+                );
             }
 
             // 5. Omniscient Focus Beams (Gungnir Beams)
             if let Some(focus_id) = &state.odin_focus {
                 // Visualize causal links to the focus node
-                renderer.draw_text(&format!("EYE FOCUS: {}", focus_id), rect.x + rect.width / 2.0 - 50.0, rect.y + 20.0, 12.0, [0.0, 1.0, 1.0, 0.8]);
-                
+                renderer.draw_text(
+                    &format!("EYE FOCUS: {}", focus_id),
+                    rect.x + rect.width / 2.0 - 50.0,
+                    rect.y + 20.0,
+                    12.0,
+                    [0.0, 1.0, 1.0, 0.8],
+                );
+
                 // In a real implementation, we would find the rect of the focus_id component.
                 // For the 'Eye', we manifest a central beam of wisdom.
-                renderer.gungnir(Rect { x: rect.x + rect.width / 2.0 - 1.0, y: rect.y, width: 2.0, height: rect.height }, [0.0, 1.0, 1.0, 1.0], 20.0, 0.4);
+                renderer.gungnir(
+                    Rect {
+                        x: rect.x + rect.width / 2.0 - 1.0,
+                        y: rect.y,
+                        width: 2.0,
+                        height: rect.height,
+                    },
+                    [0.0, 1.0, 1.0, 1.0],
+                    20.0,
+                    0.4,
+                );
             }
         }
     }
@@ -1201,14 +1261,40 @@ pub struct SleipnirParams {
 }
 
 impl SleipnirParams {
-    pub fn snappy() -> Self { Self { stiffness: 230.0, damping: 22.0, mass: 1.0 } }
-    pub fn fluid() -> Self { Self { stiffness: 170.0, damping: 26.0, mass: 1.0 } }
-    pub fn heavy() -> Self { Self { stiffness: 90.0, damping: 20.0, mass: 1.0 } }
-    pub fn bouncy() -> Self { Self { stiffness: 190.0, damping: 14.0, mass: 1.0 } }
+    pub fn snappy() -> Self {
+        Self {
+            stiffness: 230.0,
+            damping: 22.0,
+            mass: 1.0,
+        }
+    }
+    pub fn fluid() -> Self {
+        Self {
+            stiffness: 170.0,
+            damping: 26.0,
+            mass: 1.0,
+        }
+    }
+    pub fn heavy() -> Self {
+        Self {
+            stiffness: 90.0,
+            damping: 20.0,
+            mass: 1.0,
+        }
+    }
+    pub fn bouncy() -> Self {
+        Self {
+            stiffness: 190.0,
+            damping: 14.0,
+            mass: 1.0,
+        }
+    }
 }
 
 impl Default for SleipnirParams {
-    fn default() -> Self { Self::fluid() }
+    fn default() -> Self {
+        Self::fluid()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1238,18 +1324,20 @@ impl SleipnirSolver {
 
     /// Advance the simulation by dt seconds using RK4 integration.
     pub fn tick(&mut self, dt: f32) -> f32 {
-        if dt <= 0.0 { return self.state.x; }
-        
+        if dt <= 0.0 {
+            return self.state.x;
+        }
+
         // Use a fixed time step for stability if dt is too large
         let mut remaining = dt;
         let step = 1.0 / 120.0;
-        
+
         while remaining > 0.0 {
             let d = remaining.min(step);
             self.step(d);
             remaining -= d;
         }
-        
+
         self.state.x
     }
 
@@ -1271,9 +1359,13 @@ impl SleipnirSolver {
             x: initial.x + d.x * dt,
             v: initial.v + d.v * dt,
         };
-        let force = -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
+        let force =
+            -self.params.stiffness * (state.x - self.target) - self.params.damping * state.v;
         let mass = self.params.mass.max(0.001);
-        SolverState { x: state.v, v: force / mass }
+        SolverState {
+            x: state.v,
+            v: force / mass,
+        }
     }
 
     pub fn is_settled(&self) -> bool {
@@ -1304,18 +1396,18 @@ impl ViewModifier for SleipnirModifier {
 
     fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
         let state = load_system_state();
-        
+
         // Try to fetch the solver from persistent state.
         let solver_lock_opt = state.get_component_state::<SleipnirSolver>(self.id);
-        
+
         let current_val;
-        
+
         if let Some(lock) = solver_lock_opt {
             // Found a solver. Tick it.
             let mut solver = lock.write().unwrap();
             solver.set_target(self.target);
             current_val = solver.tick(renderer.delta_time());
-            
+
             // If the solver hasn't settled yet, request another frame.
             if !solver.is_settled() {
                 renderer.request_redraw();
@@ -1325,16 +1417,16 @@ impl ViewModifier for SleipnirModifier {
             let solver = SleipnirSolver::new(
                 self.params,
                 self.target,
-                self.target // Initialize at target to avoid jump on first frame
+                self.target, // Initialize at target to avoid jump on first frame
             );
-            
+
             // Insert into registry for next frame.
             get_system_state().rcu(|old| {
                 let mut new_state = (**old).clone();
                 new_state.set_component_state(self.id, solver);
                 new_state
             });
-            
+
             current_val = self.target;
         }
 
@@ -1642,15 +1734,19 @@ pub struct EmptyView;
 
 impl View for EmptyView {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
     fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
-        Size { width: 0.0, height: 0.0 }
+        Size {
+            width: 0.0,
+            height: 0.0,
+        }
     }
 }
 
 /// A view that has been transformed by a modifier.
-///
 /// Section 4.3: "Each modifier implements ViewModifier and produces a ModifiedView<Inner, Self>."
 #[derive(Clone)]
 pub struct ModifiedView<V, M> {
@@ -1725,7 +1821,12 @@ pub trait ViewModifier: Send + Clone {
     }
 
     /// Measure hook that coordinates size propagation.
-    fn measure_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+    fn measure_view<V: View>(
+        &self,
+        view: &V,
+        renderer: &mut dyn Renderer,
+        proposal: SizeProposal,
+    ) -> Size {
         let child_proposal = self.transform_proposal(proposal);
         let child_size = view.intrinsic_size(renderer, child_proposal);
         self.transform_size(child_size)
@@ -1751,20 +1852,20 @@ pub struct TelemetryData {
     pub frame_jitter_ms: f32,
     /// Indicates if a hardware stall (DRAM refresh, thermal spike) was detected.
     pub hardware_stall_detected: bool,
-    
+
     // Pass timing
     pub input_time_ms: f32,
     pub state_flush_time_ms: f32,
     pub layout_time_ms: f32,
     pub draw_time_ms: f32,
     pub gpu_submit_time_ms: f32,
-    
+
     pub draw_calls: u32,
     pub vertices: u32,
-    
+
     /// Global Berserker Pipeline Intensity (0.0 - 1.0+)
     pub berserker_rage: f32,
-    
+
     // Memory breakdown
     pub vram_usage_mb: f32,
     pub vram_textures_mb: f32,
@@ -1795,7 +1896,6 @@ impl Default for FrameBudget {
 
 /// The Renderer trait defines the atomic drawing operations for all CVKG backends.
 /// This trait is object-safe and used by the View::render system.
-///
 /// # Implementation Requirements
 /// 1. Coordinate system is origin-top-left (0,0) with Y increasing downwards.
 /// 2. Colors are [R, G, B, A] in the [0.0, 1.0] range.
@@ -1804,14 +1904,13 @@ impl Default for FrameBudget {
 pub trait ElapsedTime {
     /// Returns the cumulative time since the renderer started in seconds.
     fn elapsed_time(&self) -> f32;
-    
+
     /// Returns the time elapsed since the last frame in seconds.
     fn delta_time(&self) -> f32;
 }
 
 /// The Renderer trait defines the atomic drawing operations for all CVKG backends.
 /// This trait is object-safe and used by the View::render system.
-///
 /// # Implementation Requirements
 /// 1. Coordinate system is origin-top-left (0,0) with Y increasing downwards.
 /// 2. Colors are [R, G, B, A] in the [0.0, 1.0] range.
@@ -1960,7 +2059,9 @@ pub trait Renderer: ElapsedTime + Send {
 
     // ── Export & Print ───────────────────────────────────────────────────
     /// Capture the current frame as a PNG byte buffer.
-    fn capture_png(&mut self) -> Vec<u8> { Vec::new() }
+    fn capture_png(&mut self) -> Vec<u8> {
+        Vec::new()
+    }
     /// Trigger a native print dialog or spooling operation.
     fn print(&mut self) {}
 
@@ -2078,7 +2179,9 @@ pub mod accessibility {
     }
 }
 /// Defines the hardware acceleration tier and feature set available to the renderer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum RenderTier {
     /// High-performance GPU path (WebGPU / Vulkan / Metal / DX12) with full shader support.
     Tier1GPU = 0,
@@ -2106,7 +2209,7 @@ pub struct ColorTheme {
     pub glass_blur_strength: f32,
     pub shatter_edge_width: f32,
     pub neon_bloom_radius: f32,
-    pub rune_opacity: f32, 
+    pub rune_opacity: f32,
 }
 impl ColorTheme {
     /// Asgard Mode: The high-fidelity "Cyberpunk Viking" aesthetic.
@@ -2119,7 +2222,7 @@ impl ColorTheme {
             rune_glow: [0.75, 0.98, 1.0, 0.9],
             ember_core: [0.95, 0.12, 0.12, 1.0],
             background_deep: [0.01, 0.01, 0.03, 1.0],
-            mani_glow: [0.7, 0.9, 1.0, 0.05], 
+            mani_glow: [0.7, 0.9, 1.0, 0.05],
             glass_blur_strength: 0.6,
             shatter_edge_width: 1.8,
             neon_bloom_radius: 0.022,
@@ -2133,12 +2236,12 @@ impl ColorTheme {
             primary_neon: [0.2, 0.4, 0.6, 1.0], // Muted blue
             shatter_neon: [0.5, 0.5, 0.5, 1.0], // Neutral gray
             glass_base: [0.1, 0.12, 0.15, 1.0], // Solid slate
-            glass_edge: [0.3, 0.35, 0.4, 1.0], // Subtle border
+            glass_edge: [0.3, 0.35, 0.4, 1.0],  // Subtle border
             rune_glow: [0.8, 0.8, 0.8, 0.0],    // Runes disabled
             ember_core: [0.5, 0.5, 0.5, 1.0],
             background_deep: [0.05, 0.05, 0.07, 1.0],
-            mani_glow: [0.0, 0.0, 0.0, 0.0],    // No cursor glow
-            glass_blur_strength: 0.0,           // No blur
+            mani_glow: [0.0, 0.0, 0.0, 0.0], // No cursor glow
+            glass_blur_strength: 0.0,        // No blur
             shatter_edge_width: 1.0,
             neon_bloom_radius: 0.0,
             rune_opacity: 0.0,
@@ -2333,8 +2436,9 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             let mut skip = false;
             if self.resolution == agents::ConflictResolution::PriorityWins
                 && let (Some(new_m), Some(old_m)) = (new_meta, existing_meta)
-                && new_m.priority < old_m.priority {
-                    skip = true;
+                && new_m.priority < old_m.priority
+            {
+                skip = true;
             }
             if !skip {
                 self.tvar.write(tx, value.clone())?;
@@ -2345,9 +2449,12 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             }
         });
         #[cfg(target_arch = "wasm32")]
-        let (was_skipped, final_val, final_meta) = (false, value, agents::get_current_mutation_metadata());
+        let (was_skipped, final_val, final_meta) =
+            (false, value, agents::get_current_mutation_metadata());
         if was_skipped {
-            if let (Some(new_m), Some(old_m)) = (agents::get_current_mutation_metadata(), final_meta) {
+            if let (Some(new_m), Some(old_m)) =
+                (agents::get_current_mutation_metadata(), final_meta)
+            {
                 agents::notify_conflict(agents::ConflictEvent {
                     agent_id: new_m.agent_id,
                     priority: new_m.priority,
@@ -2360,7 +2467,8 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
         }
         self.swap.store(Arc::new(final_val.clone()));
         self.metadata_swap.store(Arc::new(final_meta));
-        self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+        self.version
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
         let subs = Arc::clone(&self.subscribers);
         if crate::is_batching() {
             crate::enqueue_batch_task(Box::new(move || {
@@ -2385,8 +2493,9 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
                 let mut skip = false;
                 if self.resolution == agents::ConflictResolution::PriorityWins
                     && let (Some(new_m), Some(old_m)) = (new_meta, existing_meta)
-                    && new_m.priority < old_m.priority {
-                        skip = true;
+                    && new_m.priority < old_m.priority
+                {
+                    skip = true;
                 }
                 if !skip {
                     let current = self.tvar.read(tx)?;
@@ -2399,7 +2508,9 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
                 }
             });
             if was_skipped {
-                if let (Some(new_m), Some(old_m)) = (agents::get_current_mutation_metadata(), final_meta) {
+                if let (Some(new_m), Some(old_m)) =
+                    (agents::get_current_mutation_metadata(), final_meta)
+                {
                     agents::notify_conflict(agents::ConflictEvent {
                         agent_id: new_m.agent_id,
                         priority: new_m.priority,
@@ -2412,7 +2523,8 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             }
             self.swap.store(Arc::new(final_val.clone()));
             self.metadata_swap.store(Arc::new(final_meta));
-            self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+            self.version
+                .fetch_add(1, std::sync::atomic::Ordering::Release);
             let subs = Arc::clone(&self.subscribers);
             if crate::is_batching() {
                 crate::enqueue_batch_task(Box::new(move || {
@@ -2443,8 +2555,8 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
     }
 }
 use crate::runtime::NodeStateSnapshot;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 /// Global application state registry.
 pub static SYSTEM_STATE: OnceLock<Arc<arc_swap::ArcSwap<KnowledgeState>>> = OnceLock::new();
 #[cfg(not(target_arch = "wasm32"))]
@@ -2513,7 +2625,9 @@ where
     F: Fn(&KnowledgeState) -> KnowledgeState,
 {
     if is_rendering() {
-        log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
+        log::warn!(
+            "LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance."
+        );
     }
     LAYOUT_DIRTY.store(true, Ordering::SeqCst);
     let swap = get_system_state();
@@ -2522,8 +2636,7 @@ where
     swap.store(Arc::clone(&new_state));
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let tvar = KNOWLEDGE_TVAR
-            .get_or_init(|| stm::TVar::new((*new_state).clone()));
+        let tvar = KNOWLEDGE_TVAR.get_or_init(|| stm::TVar::new((*new_state).clone()));
         stm::atomically(|tx| tvar.write(tx, (*new_state).clone()));
     }
 }
@@ -2534,12 +2647,12 @@ where
     #[cfg(not(target_arch = "wasm32"))]
     {
         if is_rendering() {
-            log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
+            log::warn!(
+                "LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance."
+            );
         }
         let tvar = KNOWLEDGE_TVAR
-            .get_or_init(|| {
-                stm::TVar::new((**get_system_state().load()).clone())
-            })
+            .get_or_init(|| stm::TVar::new((**get_system_state().load()).clone()))
             .clone();
         let new_state = stm::atomically(move |tx| {
             let current = tvar.read(tx)?;
@@ -2552,7 +2665,9 @@ where
     #[cfg(target_arch = "wasm32")]
     {
         if is_rendering() {
-            log::warn!("LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance.");
+            log::warn!(
+                "LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance."
+            );
         }
         update_system_state(f);
     }
@@ -2567,7 +2682,7 @@ impl KnowledgeState {
         self.component_states
             .insert(id, Arc::new(std::sync::RwLock::new(state)));
     }
-/// Get a reference to a component's internal state.
+    /// Get a reference to a component's internal state.
     pub fn get_component_state<T: 'static + Send + Sync>(
         &self,
         id: u64,
@@ -2660,7 +2775,8 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
             let v = value.clone();
             stm::atomically(move |tx| tvar.write(tx, v.clone()));
         }
-        self.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+        self.version
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
     }
     /// Get current version
     pub fn version(&self) -> u64 {
@@ -2686,29 +2802,41 @@ where
     });
     state_a.swap.store(Arc::new(new_a.clone()));
     state_b.swap.store(Arc::new(new_b.clone()));
-    state_a.version.fetch_add(1, std::sync::atomic::Ordering::Release);
-    state_b.version.fetch_add(1, std::sync::atomic::Ordering::Release);
+    state_a
+        .version
+        .fetch_add(1, std::sync::atomic::Ordering::Release);
+    state_b
+        .version
+        .fetch_add(1, std::sync::atomic::Ordering::Release);
     let subs_a = Arc::clone(&state_a.subscribers);
     let subs_b = Arc::clone(&state_b.subscribers);
     if crate::is_batching() {
         crate::enqueue_batch_task(Box::new(move || {
             {
                 let s = subs_a.lock().unwrap();
-                for cb in s.iter() { cb(&new_a); }
+                for cb in s.iter() {
+                    cb(&new_a);
+                }
             }
             {
                 let s = subs_b.lock().unwrap();
-                for cb in s.iter() { cb(&new_b); }
+                for cb in s.iter() {
+                    cb(&new_b);
+                }
             }
         }));
     } else {
         {
             let s = subs_a.lock().unwrap();
-            for cb in s.iter() { cb(&new_a); }
+            for cb in s.iter() {
+                cb(&new_a);
+            }
         }
         {
             let s = subs_b.lock().unwrap();
-            for cb in s.iter() { cb(&new_b); }
+            for cb in s.iter() {
+                cb(&new_b);
+            }
         }
     }
 }
@@ -2719,7 +2847,6 @@ pub(crate) static ENVIRONMENT: OnceLock<
     Mutex<HashMap<TypeId, Box<dyn std::any::Any + Send + Sync>>>,
 > = OnceLock::new();
 /// Environment key type for accessing ambient values
-///
 /// Implement this trait to define a new environment key.
 pub trait EnvKey: 'static + Send + Sync {
     /// The type of value stored in the environment
@@ -3057,13 +3184,22 @@ impl<K: EnvKey> Environment<K> {
                 if let Some(typed_val) = val.downcast_ref::<K::Value>() {
                     return typed_val.clone();
                 } else {
-                    log::warn!("Environment: Downcast failed for key type {:?}", std::any::type_name::<K>());
+                    log::warn!(
+                        "Environment: Downcast failed for key type {:?}",
+                        std::any::type_name::<K>()
+                    );
                 }
             } else {
-                log::debug!("Environment: Key not found: {:?}. Returning default.", std::any::type_name::<K>());
+                log::debug!(
+                    "Environment: Key not found: {:?}. Returning default.",
+                    std::any::type_name::<K>()
+                );
             }
         } else {
-            log::debug!("Environment: Store not initialized. Key: {:?}. Returning default.", std::any::type_name::<K>());
+            log::debug!(
+                "Environment: Store not initialized. Key: {:?}. Returning default.",
+                std::any::type_name::<K>()
+            );
         }
         K::default_value()
     }
@@ -3072,7 +3208,8 @@ impl<K: EnvKey> Environment<K> {
 pub mod env {
     /// Insert a value into the environment
     pub fn insert<K: super::EnvKey>(value: K::Value) {
-        let store = super::ENVIRONMENT.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+        let store = super::ENVIRONMENT
+            .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
         let mut env_map = store.lock().unwrap();
         env_map.insert(std::any::TypeId::of::<K>(), Box::new(value));
     }
@@ -3093,7 +3230,10 @@ pub struct Size {
 }
 
 impl Size {
-    pub const ZERO: Self = Self { width: 0.0, height: 0.0 };
+    pub const ZERO: Self = Self {
+        width: 0.0,
+        height: 0.0,
+    };
 
     pub fn new(width: f32, height: f32) -> Self {
         Self { width, height }
@@ -3424,7 +3564,12 @@ pub mod layout {
 
     impl EdgeInsets {
         pub fn new(top: f32, leading: f32, bottom: f32, trailing: f32) -> Self {
-            Self { top, leading, bottom, trailing }
+            Self {
+                top,
+                leading,
+                bottom,
+                trailing,
+            }
         }
 
         pub fn all(value: f32) -> Self {
@@ -3537,11 +3682,10 @@ pub mod layout {
 pub use layout::{LayoutCache, LayoutView, Rect, SizeProposal};
 // Size and FrameRenderer are pub items in this module; no re-export alias needed.
 
-pub mod runtime;
-pub mod scene_graph;
 pub mod agents;
 pub mod material;
-
+pub mod runtime;
+pub mod scene_graph;
 
 pub use scene_graph::{NodeId, bifrost_registry};
 
@@ -3559,14 +3703,73 @@ pub trait AssetManager: Send + Sync {
 /// User input event types
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Event {
-    PointerDown { x: f32, y: f32, button: u32 },
-    PointerUp { x: f32, y: f32, button: u32 },
-    PointerMove { x: f32, y: f32 },
-    PointerClick { x: f32, y: f32, button: u32 },
+    PointerDown {
+        x: f32,
+        y: f32,
+        button: u32,
+    },
+    PointerUp {
+        x: f32,
+        y: f32,
+        button: u32,
+    },
+    PointerMove {
+        x: f32,
+        y: f32,
+    },
+    PointerClick {
+        x: f32,
+        y: f32,
+        button: u32,
+    },
     PointerEnter,
     PointerLeave,
-    KeyDown { key: String },
-    KeyUp { key: String },
+    /// Mouse wheel / trackpad scroll event.
+    /// `delta_x` is the horizontal scroll amount, `delta_y` is the vertical scroll amount (positive = scroll down).
+    PointerWheel {
+        x: f32,
+        y: f32,
+        delta_x: f32,
+        delta_y: f32,
+    },
+    /// Double-click event (rapid successive clicks).
+    PointerDoubleClick {
+        x: f32,
+        y: f32,
+        button: u32,
+    },
+    /// Drag-and-drop: drag started (pointer moved while button held past threshold).
+    DragStart {
+        x: f32,
+        y: f32,
+        button: u32,
+    },
+    /// Drag-and-drop: drag in progress.
+    DragMove {
+        x: f32,
+        y: f32,
+    },
+    /// Drag-and-drop: drag ended (pointer released).
+    DragEnd {
+        x: f32,
+        y: f32,
+    },
+    KeyDown {
+        key: String,
+    },
+    KeyUp {
+        key: String,
+    },
+    /// Focus gained by a node.
+    FocusIn,
+    /// Focus lost by a node.
+    FocusOut,
+    /// Clipboard copy event.
+    Copy,
+    /// Clipboard cut event.
+    Cut,
+    /// Clipboard paste event with the pasted text content.
+    Paste(String),
     /// Input Method Editor event (e.g. CJK character composition)
     Ime(String),
 }
@@ -3581,8 +3784,18 @@ impl Event {
             Self::PointerClick { .. } => "pointerclick",
             Self::PointerEnter => "pointerenter",
             Self::PointerLeave => "pointerleave",
+            Self::PointerWheel { .. } => "pointerwheel",
+            Self::PointerDoubleClick { .. } => "pointerdoubleclick",
+            Self::DragStart { .. } => "dragstart",
+            Self::DragMove { .. } => "dragmove",
+            Self::DragEnd { .. } => "dragend",
             Self::KeyDown { .. } => "keydown",
             Self::KeyUp { .. } => "keyup",
+            Self::FocusIn => "focusin",
+            Self::FocusOut => "focusout",
+            Self::Copy => "copy",
+            Self::Cut => "cut",
+            Self::Paste(_) => "paste",
             Self::Ime(_) => "ime",
         }
     }
@@ -3659,7 +3872,7 @@ impl<T: Clone + Send + Sync + 'static> Suspense<T> {
     {
         let suspense = Self::new();
         let suspense_clone = suspense.clone();
-        
+
         #[cfg(not(target_arch = "wasm32"))]
         {
             // Try to use an existing tokio runtime, or fallback to a dedicated thread
@@ -3697,7 +3910,7 @@ impl<T: Clone + Send + Sync + 'static> Suspense<T> {
                 }
             });
         }
-        
+
         suspense
     }
 
@@ -3786,12 +3999,12 @@ mod phase1_test;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BerserkerMode {
     Normal,
-    Rage,     // Red tint, slight shake
-    Frenzy,   // Heavy red tint, motion blur, aggressive shake
-    GodMode,  // Golden aura, lightning arcs
+    Rage,    // Red tint, slight shake
+    Frenzy,  // Heavy red tint, motion blur, aggressive shake
+    GodMode, // Golden aura, lightning arcs
 }
 
-/// Seer trait for AI-assisted UI components (inspired by Argmax OSS).
+/// Seer trait for AI-assisted UI components.
 /// Allows components to receive "prophecies" (predictions) from an AI backend.
 pub trait Seer: Send + Sync {
     /// Provide a prediction for the next user action or content.

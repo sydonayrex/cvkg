@@ -1,6 +1,6 @@
 # cvkg-flow
 
-![CVKG Hero HUD](../docs/images/cvkg_hero.png)
+![VDOM Agent Graph](../docs/images/vdom_agent_graph.png)
 
 `cvkg-flow` is a high-fidelity visual node graph editing engine built on top of CVKG, designed for complex data-flow and logic orchestration.
 

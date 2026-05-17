@@ -52,7 +52,7 @@ impl View for Button {
         } else {
             [0.12, 0.12, 0.18, 1.0]
         };
-        
+
         // Elevation & Depth
         renderer.push_shadow(1.0, [0.0, 0.0, 0.0, 0.5], [0.0, 1.0]);
         renderer.fill_rounded_rect(rect, 6.0, bg);
@@ -105,7 +105,11 @@ impl View for Button {
         Some(self)
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::layout::SizeProposal,
+    ) -> cvkg_core::Size {
         let (tw, th) = renderer.measure_text(&self.label, 14.0);
         cvkg_core::Size {
             width: tw + 16.0,
@@ -229,7 +233,11 @@ impl View for Toggle {
         renderer.pop_vnode();
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let (tw, th) = renderer.measure_text(&self.label, 14.0);
         cvkg_core::Size {
             width: 40.0 + 8.0 + tw,
@@ -323,15 +331,13 @@ impl View for Slider {
         let end = *self.range.end();
         let on_change = self.on_change.clone();
         let slider_rect = rect;
-        let is_dragging = std::sync::Arc::new(std::sync::Mutex::new(false));
+        let is_dragging = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         let drag_start = is_dragging.clone();
         renderer.register_handler(
             "pointerdown",
             std::sync::Arc::new(move |_| {
-                if let Ok(mut dragging) = drag_start.lock() {
-                    *dragging = true;
-                }
+                drag_start.store(true, std::sync::atomic::Ordering::Relaxed);
             }),
         );
 
@@ -339,18 +345,15 @@ impl View for Slider {
         renderer.register_handler(
             "pointerup",
             std::sync::Arc::new(move |_| {
-                if let Ok(mut dragging) = drag_stop.lock() {
-                    *dragging = false;
-                }
+                drag_stop.store(false, std::sync::atomic::Ordering::Relaxed);
             }),
         );
 
         renderer.register_handler(
             "pointermove",
             std::sync::Arc::new(move |event| {
-                if let Ok(dragging) = is_dragging.lock()
-                    && !*dragging {
-                        return;
+                if !is_dragging.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
                 }
                 if let cvkg_core::Event::PointerMove { x, .. } = event {
                     let pct = ((x - slider_rect.x) / slider_rect.width).clamp(0.0, 1.0);
@@ -361,7 +364,11 @@ impl View for Slider {
         );
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(150.0),
             height: 24.0,
@@ -478,7 +485,11 @@ impl View for Stepper {
         );
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let (lw, lh) = renderer.measure_text(&self.label, 14.0);
         let (vw, _) = renderer.measure_text(&self.value.to_string(), 14.0);
         cvkg_core::Size {
@@ -627,8 +638,16 @@ impl View for Input {
         renderer.pop_vnode();
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        let text = if self.text.is_empty() { &self.placeholder } else { &self.text };
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let text = if self.text.is_empty() {
+            &self.placeholder
+        } else {
+            &self.text
+        };
         let (tw, th) = renderer.measure_text(text, 14.0);
         cvkg_core::Size {
             width: proposal.width.unwrap_or(tw + 24.0).max(100.0),
@@ -721,10 +740,22 @@ impl View for SecureField {
         );
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        let text = if self.text.is_empty() { &self.placeholder } else { "*" }; // Proxy for measurement
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let text = if self.text.is_empty() {
+            &self.placeholder
+        } else {
+            "*"
+        }; // Proxy for measurement
         let (tw, th) = renderer.measure_text(text, 14.0);
-        let width = if self.text.is_empty() { tw + 24.0 } else { (self.text.len() as f32 * 10.0) + 24.0 };
+        let width = if self.text.is_empty() {
+            tw + 24.0
+        } else {
+            (self.text.len() as f32 * 10.0) + 24.0
+        };
         cvkg_core::Size {
             width: proposal.width.unwrap_or(width).max(100.0),
             height: th + 16.0,
@@ -872,7 +903,11 @@ impl View for Textarea {
         renderer.pop_vnode();
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(300.0),
             height: proposal.height.unwrap_or(200.0),
@@ -909,7 +944,7 @@ impl View for Dropdown {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Dropdown");
-        
+
         let id_hash = {
             use std::hash::{Hash, Hasher};
             let mut s = std::collections::hash_map::DefaultHasher::new();
@@ -930,9 +965,25 @@ impl View for Dropdown {
         renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
         renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 1.0], 1.0);
 
-        let selected = self.options.get(self.selection).cloned().unwrap_or_default();
-        renderer.draw_text(&selected, rect.x + 8.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
-        renderer.draw_text(if is_expanded { "▲" } else { "▼" }, rect.x + rect.width - 20.0, rect.y + (rect.height - 14.0) / 2.0, 12.0, [0.5, 0.5, 0.6, 1.0]);
+        let selected = self
+            .options
+            .get(self.selection)
+            .cloned()
+            .unwrap_or_default();
+        renderer.draw_text(
+            &selected,
+            rect.x + 8.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
+        renderer.draw_text(
+            if is_expanded { "▲" } else { "▼" },
+            rect.x + rect.width - 20.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            12.0,
+            [0.5, 0.5, 0.6, 1.0],
+        );
 
         if is_expanded {
             let popover_h = (self.options.len() as f32 * 30.0).min(200.0);
@@ -956,52 +1007,68 @@ impl View for Dropdown {
                     width: popover_rect.width,
                     height: 30.0,
                 };
-                
+
                 if i == self.selection {
                     renderer.fill_rect(item_rect, [0.0, 0.5, 0.8, 0.3]);
                 }
-                
-                renderer.draw_text(opt, item_rect.x + 8.0, item_rect.y + (item_rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+
+                renderer.draw_text(
+                    opt,
+                    item_rect.x + 8.0,
+                    item_rect.y + (item_rect.height - 14.0) / 2.0,
+                    14.0,
+                    [1.0, 1.0, 1.0, 1.0],
+                );
             }
             renderer.set_z_index(0.0);
         }
 
         let options_count = self.options.len();
         let on_change = self.on_change.clone();
-        
-        renderer.register_handler("pointerclick", std::sync::Arc::new(move |event| {
-            if let cvkg_core::Event::PointerClick { x, y, .. } = event {
-                if is_expanded {
-                    let popover_h = (options_count as f32 * 30.0).min(200.0);
-                    let popover_rect = Rect {
-                        x: rect.x,
-                        y: rect.y + rect.height + 4.0,
-                        width: rect.width,
-                        height: popover_h,
-                    };
-                    
-                    if x >= popover_rect.x && x <= popover_rect.x + popover_rect.width &&
-                       y >= popover_rect.y && y <= popover_rect.y + popover_rect.height {
-                        let idx = ((y - popover_rect.y) / 30.0) as usize;
-                        if idx < options_count {
-                            on_change(idx);
+
+        renderer.register_handler(
+            "pointerclick",
+            std::sync::Arc::new(move |event| {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = event {
+                    if is_expanded {
+                        let popover_h = (options_count as f32 * 30.0).min(200.0);
+                        let popover_rect = Rect {
+                            x: rect.x,
+                            y: rect.y + rect.height + 4.0,
+                            width: rect.width,
+                            height: popover_h,
+                        };
+
+                        if x >= popover_rect.x
+                            && x <= popover_rect.x + popover_rect.width
+                            && y >= popover_rect.y
+                            && y <= popover_rect.y + popover_rect.height
+                        {
+                            let idx = ((y - popover_rect.y) / 30.0) as usize;
+                            if idx < options_count {
+                                on_change(idx);
+                            }
                         }
                     }
+
+                    // Toggle expanded state atomically
+                    cvkg_core::update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id_hash, !is_expanded);
+                        s
+                    });
                 }
-                
-                // Toggle expanded state atomically
-                cvkg_core::update_system_state(|s| {
-                    let mut s = s.clone();
-                    s.set_component_state(id_hash, !is_expanded);
-                    s
-                });
-            }
-        }));
+            }),
+        );
 
         renderer.pop_vnode();
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let mut max_w = 0.0f32;
         for opt in &self.options {
             let (w, _) = renderer.measure_text(opt, 14.0);
@@ -1086,7 +1153,11 @@ impl View for Picker {
         );
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         let mut max_w = 0.0f32;
         let mut max_h = 0.0f32;
         for opt in &self.options {
@@ -1100,7 +1171,6 @@ impl View for Picker {
         }
     }
 }
-
 
 /// ColorPicker for RGBA color selection
 pub struct ColorPicker {
@@ -1172,7 +1242,10 @@ impl View for ColorPicker {
             renderer.register_handler(
                 "pointerclick",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerClick { x, .. } = event && x >= cell_rect.x && x <= cell_rect.x + cell_rect.width {
+                    if let cvkg_core::Event::PointerClick { x, .. } = event
+                        && x >= cell_rect.x
+                        && x <= cell_rect.x + cell_rect.width
+                    {
                         (on_change)(col);
                     }
                 }),
@@ -1180,14 +1253,17 @@ impl View for ColorPicker {
         }
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(200.0),
             height: 32.0,
         }
     }
 }
-
 
 /// Checkbox component for boolean input.
 #[derive(Clone)]
@@ -1200,7 +1276,11 @@ pub struct Checkbox {
 impl Checkbox {
     /// Create a new Checkbox.
     pub fn new(is_checked: bool, on_change: impl Fn(bool) + Send + Sync + 'static) -> Self {
-        Self { is_checked, label: None, on_change: std::sync::Arc::new(on_change) }
+        Self {
+            is_checked,
+            label: None,
+            on_change: std::sync::Arc::new(on_change),
+        }
     }
 
     /// Set the label for the checkbox.
@@ -1212,25 +1292,73 @@ impl Checkbox {
 
 impl View for Checkbox {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Checkbox");
         let box_size = 18.0;
-        let box_rect = Rect { x: rect.x, y: rect.y + (rect.height - box_size) / 2.0, width: box_size, height: box_size };
-        let bg = if self.is_checked { [0.0, 0.7, 1.0, 1.0] } else { [0.12, 0.12, 0.15, 1.0] };
+        let box_rect = Rect {
+            x: rect.x,
+            y: rect.y + (rect.height - box_size) / 2.0,
+            width: box_size,
+            height: box_size,
+        };
+        let bg = if self.is_checked {
+            [0.0, 0.7, 1.0, 1.0]
+        } else {
+            [0.12, 0.12, 0.15, 1.0]
+        };
         renderer.fill_rounded_rect(box_rect, 3.0, bg);
         renderer.stroke_rect(box_rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-        if self.is_checked { renderer.draw_text("✓", box_rect.x + 3.0, box_rect.y - 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]); }
-        if let Some(label) = &self.label { renderer.draw_text(label, box_rect.x + box_size + 8.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, [1.0, 1.0, 1.0, 1.0]); }
-        let is_checked = self.is_checked; let on_change = self.on_change.clone();
-        renderer.register_handler("pointerclick", std::sync::Arc::new(move |_| { (on_change)(!is_checked); }));
+        if self.is_checked {
+            renderer.draw_text(
+                "✓",
+                box_rect.x + 3.0,
+                box_rect.y - 2.0,
+                14.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+        }
+        if let Some(label) = &self.label {
+            renderer.draw_text(
+                label,
+                box_rect.x + box_size + 8.0,
+                rect.y + (rect.height - 14.0) / 2.0,
+                14.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+        }
+        let is_checked = self.is_checked;
+        let on_change = self.on_change.clone();
+        renderer.register_handler(
+            "pointerclick",
+            std::sync::Arc::new(move |_| {
+                (on_change)(!is_checked);
+            }),
+        );
         renderer.pop_vnode();
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        let label_width = self.label.as_ref().map_or(0.0, |l| renderer.measure_text(l, 14.0).0);
-        cvkg_core::Size { width: 18.0 + if self.label.is_some() { 8.0 + label_width } else { 0.0 }, height: 22.0 }
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        _proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let label_width = self
+            .label
+            .as_ref()
+            .map_or(0.0, |l| renderer.measure_text(l, 14.0).0);
+        cvkg_core::Size {
+            width: 18.0
+                + if self.label.is_some() {
+                    8.0 + label_width
+                } else {
+                    0.0
+                },
+            height: 22.0,
+        }
     }
 }
 
@@ -1244,7 +1372,11 @@ pub struct RadioGroup<V> {
 
 impl<V: View + Clone> RadioGroup<V> {
     pub fn new(selected_index: usize, on_change: impl Fn(usize) + Send + Sync + 'static) -> Self {
-        Self { options: Vec::new(), selected_index, on_change: std::sync::Arc::new(on_change) }
+        Self {
+            options: Vec::new(),
+            selected_index,
+            on_change: std::sync::Arc::new(on_change),
+        }
     }
     pub fn option(mut self, label: impl Into<String>, view: V) -> Self {
         self.options.push((label.into(), view));
@@ -1253,29 +1385,81 @@ impl<V: View + Clone> RadioGroup<V> {
 }
 
 impl<V: View + Clone> View for RadioGroup<V> {
-    type Body = Never; fn body(self) -> Self::Body { unreachable!() }
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "RadioGroup");
         for (idx, (label, _)) in self.options.iter().enumerate() {
-            let item_rect = Rect { x: rect.x, y: rect.y + idx as f32 * 24.0, width: rect.width, height: 24.0 };
+            let item_rect = Rect {
+                x: rect.x,
+                y: rect.y + idx as f32 * 24.0,
+                width: rect.width,
+                height: 24.0,
+            };
             renderer.push_vnode(item_rect, "RadioItem");
-            
+
             let dot_radius = if idx == self.selected_index { 5.0 } else { 4.0 };
-            renderer.fill_rounded_rect(Rect { x: rect.x + 9.0 - dot_radius, y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius, width: dot_radius * 2.0, height: dot_radius * 2.0 }, dot_radius, if idx == self.selected_index { [0.0, 0.8, 1.0, 1.0] } else { [0.15, 0.15, 0.2, 1.0] });
-            if idx != self.selected_index { renderer.stroke_rect(Rect { x: rect.x + 9.0 - dot_radius, y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius, width: dot_radius * 2.0, height: dot_radius * 2.0 }, [0.4, 0.4, 0.5, 1.0], 1.0); }
-            renderer.draw_text(label, rect.x + 22.0, rect.y + idx as f32 * 24.0 + 11.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
-            
+            renderer.fill_rounded_rect(
+                Rect {
+                    x: rect.x + 9.0 - dot_radius,
+                    y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius,
+                    width: dot_radius * 2.0,
+                    height: dot_radius * 2.0,
+                },
+                dot_radius,
+                if idx == self.selected_index {
+                    [0.0, 0.8, 1.0, 1.0]
+                } else {
+                    [0.15, 0.15, 0.2, 1.0]
+                },
+            );
+            if idx != self.selected_index {
+                renderer.stroke_rect(
+                    Rect {
+                        x: rect.x + 9.0 - dot_radius,
+                        y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius,
+                        width: dot_radius * 2.0,
+                        height: dot_radius * 2.0,
+                    },
+                    [0.4, 0.4, 0.5, 1.0],
+                    1.0,
+                );
+            }
+            renderer.draw_text(
+                label,
+                rect.x + 22.0,
+                rect.y + idx as f32 * 24.0 + 11.0,
+                14.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+
             let on_change = self.on_change.clone();
-            renderer.register_handler("pointerclick", Arc::new(move |_| {
-                on_change(idx);
-            }));
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |_| {
+                    on_change(idx);
+                }),
+            );
             renderer.pop_vnode();
         }
         renderer.pop_vnode();
     }
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        let max_width = self.options.iter().map(|(l, _)| renderer.measure_text(l, 14.0).0).fold(0.0, f32::max);
-        cvkg_core::Size { width: (proposal.width.unwrap_or(max_width + 30.0)).max(max_width + 30.0), height: self.options.len() as f32 * 24.0 }
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let max_width = self
+            .options
+            .iter()
+            .map(|(l, _)| renderer.measure_text(l, 14.0).0)
+            .fold(0.0, f32::max);
+        cvkg_core::Size {
+            width: (proposal.width.unwrap_or(max_width + 30.0)).max(max_width + 30.0),
+            height: self.options.len() as f32 * 24.0,
+        }
     }
 }
 
@@ -1287,34 +1471,93 @@ pub struct Tabs<V> {
 }
 
 impl<V: View> Tabs<V> {
-    pub fn new() -> Self { Self { tabs: Vec::new(), selected_index: 0 } }
-    pub fn tab(mut self, label: impl Into<String>, content: V) -> Self { self.tabs.push((label.into(), content)); self }
-    pub fn selected(mut self, index: usize) -> Self { self.selected_index = index.min(self.tabs.len().saturating_sub(1)); self }
+    pub fn new() -> Self {
+        Self {
+            tabs: Vec::new(),
+            selected_index: 0,
+        }
+    }
+    pub fn tab(mut self, label: impl Into<String>, content: V) -> Self {
+        self.tabs.push((label.into(), content));
+        self
+    }
+    pub fn selected(mut self, index: usize) -> Self {
+        self.selected_index = index.min(self.tabs.len().saturating_sub(1));
+        self
+    }
 }
 
-impl<V: View> Default for Tabs<V> { fn default() -> Self { Self::new() } }
+impl<V: View> Default for Tabs<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<V: View> View for Tabs<V> {
-    type Body = Never; fn body(self) -> Self::Body { unreachable!() }
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Tabs");
         let tab_height = 36.0;
         for (idx, (label, _)) in self.tabs.iter().enumerate() {
-            let tab_rect = Rect { x: rect.x + idx as f32 * (rect.width / self.tabs.len() as f32), y: rect.y, width: rect.width / self.tabs.len() as f32, height: tab_height };
+            let tab_rect = Rect {
+                x: rect.x + idx as f32 * (rect.width / self.tabs.len() as f32),
+                y: rect.y,
+                width: rect.width / self.tabs.len() as f32,
+                height: tab_height,
+            };
             let is_selected = idx == self.selected_index;
-            renderer.fill_rounded_rect(tab_rect, 6.0, if is_selected { [0.15, 0.15, 0.2, 1.0] } else { [0.08, 0.08, 0.12, 1.0] });
-            if is_selected { renderer.stroke_rect(tab_rect, [0.0, 0.8, 1.0, 1.0], 2.0); }
-            renderer.draw_text(label, tab_rect.x + 12.0, tab_rect.y + (tab_rect.height - 14.0) / 2.0, 14.0, if is_selected { [1.0, 1.0, 1.0, 1.0] } else { [0.7, 0.7, 0.75, 1.0] });
+            renderer.fill_rounded_rect(
+                tab_rect,
+                6.0,
+                if is_selected {
+                    [0.15, 0.15, 0.2, 1.0]
+                } else {
+                    [0.08, 0.08, 0.12, 1.0]
+                },
+            );
+            if is_selected {
+                renderer.stroke_rect(tab_rect, [0.0, 0.8, 1.0, 1.0], 2.0);
+            }
+            renderer.draw_text(
+                label,
+                tab_rect.x + 12.0,
+                tab_rect.y + (tab_rect.height - 14.0) / 2.0,
+                14.0,
+                if is_selected {
+                    [1.0, 1.0, 1.0, 1.0]
+                } else {
+                    [0.7, 0.7, 0.75, 1.0]
+                },
+            );
         }
         if let Some((_, content)) = self.tabs.get(self.selected_index) {
-            let content_rect = Rect { x: rect.x, y: rect.y + tab_height + 8.0, width: rect.width, height: rect.height - tab_height - 8.0 };
+            let content_rect = Rect {
+                x: rect.x,
+                y: rect.y + tab_height + 8.0,
+                width: rect.width,
+                height: rect.height - tab_height - 8.0,
+            };
             content.render(renderer, content_rect);
         }
         renderer.pop_vnode();
     }
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        let max_h = self.tabs.iter().map(|(_, c)| c.intrinsic_size(renderer, proposal).height).fold(0.0, f32::max);
-        cvkg_core::Size { width: proposal.width.unwrap_or(300.0), height: 36.0 + 8.0 + max_h }
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let max_h = self
+            .tabs
+            .iter()
+            .map(|(_, c)| c.intrinsic_size(renderer, proposal).height)
+            .fold(0.0, f32::max);
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(300.0),
+            height: 36.0 + 8.0 + max_h,
+        }
     }
 }
 
@@ -1327,28 +1570,59 @@ pub struct Select<V> {
 }
 
 impl<V: Clone> Select<V> {
-    pub fn new(placeholder: impl Into<String>) -> Self { Self { placeholder: placeholder.into(), options: Vec::new(), selected_index: None } }
-    pub fn option(mut self, label: impl Into<String>, value: V) -> Self { self.options.push((label.into(), value)); self }
+    pub fn new(placeholder: impl Into<String>) -> Self {
+        Self {
+            placeholder: placeholder.into(),
+            options: Vec::new(),
+            selected_index: None,
+        }
+    }
+    pub fn option(mut self, label: impl Into<String>, value: V) -> Self {
+        self.options.push((label.into(), value));
+        self
+    }
 }
 
 impl<V: Clone + View> View for Select<V> {
-    type Body = Never; fn body(self) -> Self::Body { unreachable!() }
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Select");
         renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.15, 1.0]);
         renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-        let display_text = self.selected_index.and_then(|i| self.options.get(i)).map(|(l, _)| l.as_str()).unwrap_or(&self.placeholder);
-        renderer.draw_text(display_text, rect.x + 12.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, if self.selected_index.is_some() { [1.0, 1.0, 1.0, 1.0] } else { [0.5, 0.5, 0.55, 1.0] });
+        let display_text = self
+            .selected_index
+            .and_then(|i| self.options.get(i))
+            .map(|(l, _)| l.as_str())
+            .unwrap_or(&self.placeholder);
+        renderer.draw_text(
+            display_text,
+            rect.x + 12.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            if self.selected_index.is_some() {
+                [1.0, 1.0, 1.0, 1.0]
+            } else {
+                [0.5, 0.5, 0.55, 1.0]
+            },
+        );
         renderer.pop_vnode();
     }
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
-        cvkg_core::Size { width: proposal.width.unwrap_or(150.0), height: 36.0 }
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(150.0),
+            height: 36.0,
+        }
     }
 }
 /// ValkyrSelect - A tactical chooser/select component.
 /// Named after the Valkyries, the "Choosers of the Slain".
-/// 
-/// INSPIRED BY: Radix UI (Select) and Headless UI (Combobox).
 #[derive(Clone)]
 pub struct ValkyrSelect {
     pub(crate) options: Vec<String>,
@@ -1359,10 +1633,7 @@ pub struct ValkyrSelect {
 
 impl ValkyrSelect {
     /// Creates a new ValkyrSelect with the given options and change handler.
-    pub fn new(
-        options: Vec<String>,
-        on_change: impl Fn(String) + Send + Sync + 'static,
-    ) -> Self {
+    pub fn new(options: Vec<String>, on_change: impl Fn(String) + Send + Sync + 'static) -> Self {
         Self {
             options,
             selected: None,
@@ -1386,20 +1657,38 @@ impl ValkyrSelect {
 
 impl View for ValkyrSelect {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ValkyrSelect");
-        
+
         // 1. Selector Base
         renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
         renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-        
+
         let display = self.selected.as_ref().unwrap_or(&self.placeholder);
-        let text_color = if self.selected.is_none() { [0.5, 0.5, 0.6, 1.0] } else { [1.0, 1.0, 1.0, 1.0] };
-        
-        renderer.draw_text(display, rect.x + 8.0, rect.y + (rect.height - 14.0) / 2.0, 14.0, text_color);
-        renderer.draw_text("▼", rect.x + rect.width - 20.0, rect.y + (rect.height - 14.0) / 2.0, 10.0, [0.6, 0.6, 0.7, 1.0]);
+        let text_color = if self.selected.is_none() {
+            [0.5, 0.5, 0.6, 1.0]
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
+
+        renderer.draw_text(
+            display,
+            rect.x + 8.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            14.0,
+            text_color,
+        );
+        renderer.draw_text(
+            "▼",
+            rect.x + rect.width - 20.0,
+            rect.y + (rect.height - 14.0) / 2.0,
+            10.0,
+            [0.6, 0.6, 0.7, 1.0],
+        );
 
         // 2. Interaction State
         let id_hash = {
@@ -1439,13 +1728,19 @@ impl View for ValkyrSelect {
                     width: menu_rect.width,
                     height: 32.0,
                 };
-                
+
                 let is_hovered = false; // Mocked for simplicity
                 if is_hovered {
                     renderer.fill_rect(opt_rect, [0.0, 0.8, 1.0, 0.2]);
                 }
 
-                renderer.draw_text(opt, opt_rect.x + 12.0, opt_rect.y + 10.0, 13.0, [1.0, 1.0, 1.0, 0.9]);
+                renderer.draw_text(
+                    opt,
+                    opt_rect.x + 12.0,
+                    opt_rect.y + 10.0,
+                    13.0,
+                    [1.0, 1.0, 1.0, 0.9],
+                );
             }
             renderer.set_z_index(0.0);
         }
@@ -1453,34 +1748,36 @@ impl View for ValkyrSelect {
         // 4. Handlers
         let on_change = self.on_change.clone();
         let options = self.options.clone();
-        
-        renderer.register_handler("pointerclick", Arc::new(move |event| {
-            if let cvkg_core::Event::PointerClick { x: _, y, .. } = event {
 
-                if !is_open {
-                    cvkg_core::update_system_state(|s| {
-                        let mut s = s.clone();
-                        s.set_component_state(id_hash, true);
-                        s
-                    });
-                } else {
-                    // Check if clicked an option
-                    let local_y = y - (rect.y + rect.height + 4.0);
-                    if local_y >= 0.0 && local_y < (options.len() as f32 * 32.0) {
-                        let idx = (local_y / 32.0) as usize;
-                        if let Some(opt) = options.get(idx) {
-                            on_change(opt.clone());
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::PointerClick { x: _, y, .. } = event {
+                    if !is_open {
+                        cvkg_core::update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id_hash, true);
+                            s
+                        });
+                    } else {
+                        // Check if clicked an option
+                        let local_y = y - (rect.y + rect.height + 4.0);
+                        if local_y >= 0.0 && local_y < (options.len() as f32 * 32.0) {
+                            let idx = (local_y / 32.0) as usize;
+                            if let Some(opt) = options.get(idx) {
+                                on_change(opt.clone());
+                            }
                         }
+
+                        cvkg_core::update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id_hash, false);
+                            s
+                        });
                     }
-                    
-                    cvkg_core::update_system_state(|s| {
-                        let mut s = s.clone();
-                        s.set_component_state(id_hash, false);
-                        s
-                    });
                 }
-            }
-        }));
+            }),
+        );
 
         renderer.pop_vnode();
     }
@@ -1488,8 +1785,6 @@ impl View for ValkyrSelect {
 
 /// HringrPagination - A cyclic pagination component for navigating data loops.
 /// Named after the rings/circles (Hringr), representing the eternal cycle.
-/// 
-/// INSPIRED BY: Mantine (Pagination) and MUI (Pagination).
 #[derive(Clone)]
 pub struct HringrPagination {
     pub current_page: usize,
@@ -1516,40 +1811,79 @@ impl HringrPagination {
 
 impl View for HringrPagination {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HringrPagination");
-        
+
         let btn_w = 32.0;
         let spacing = 4.0;
         let mut current_x = rect.x;
 
         // 1. Previous Button
-        let prev_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+        let prev_rect = Rect {
+            x: current_x,
+            y: rect.y,
+            width: btn_w,
+            height: rect.height,
+        };
         renderer.fill_rounded_rect(prev_rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
-        renderer.draw_text("<", prev_rect.x + 10.0, prev_rect.y + 10.0, 14.0, [0.8, 0.8, 0.9, 1.0]);
+        renderer.draw_text(
+            "<",
+            prev_rect.x + 10.0,
+            prev_rect.y + 10.0,
+            14.0,
+            [0.8, 0.8, 0.9, 1.0],
+        );
         current_x += btn_w + spacing;
 
         // 2. Page Numbers (Simplified)
         for i in 1..=self.total_pages.min(5) {
-            let page_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+            let page_rect = Rect {
+                x: current_x,
+                y: rect.y,
+                width: btn_w,
+                height: rect.height,
+            };
             let is_selected = i == self.current_page;
-            let bg = if is_selected { [0.0, 0.8, 1.0, 0.4] } else { [0.05, 0.05, 0.08, 1.0] };
-            
+            let bg = if is_selected {
+                [0.0, 0.8, 1.0, 0.4]
+            } else {
+                [0.05, 0.05, 0.08, 1.0]
+            };
+
             renderer.fill_rounded_rect(page_rect, 4.0, bg);
             if is_selected {
                 renderer.stroke_rect(page_rect, [0.0, 1.0, 1.0, 0.8], 1.0);
             }
-            
-            renderer.draw_text(&i.to_string(), page_rect.x + 10.0, page_rect.y + 10.0, 13.0, [1.0, 1.0, 1.0, 0.9]);
+
+            renderer.draw_text(
+                &i.to_string(),
+                page_rect.x + 10.0,
+                page_rect.y + 10.0,
+                13.0,
+                [1.0, 1.0, 1.0, 0.9],
+            );
             current_x += btn_w + spacing;
         }
 
         // 3. Next Button
-        let next_rect = Rect { x: current_x, y: rect.y, width: btn_w, height: rect.height };
+        let next_rect = Rect {
+            x: current_x,
+            y: rect.y,
+            width: btn_w,
+            height: rect.height,
+        };
         renderer.fill_rounded_rect(next_rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
-        renderer.draw_text(">", next_rect.x + 10.0, next_rect.y + 10.0, 14.0, [0.8, 0.8, 0.9, 1.0]);
+        renderer.draw_text(
+            ">",
+            next_rect.x + 10.0,
+            next_rect.y + 10.0,
+            14.0,
+            [0.8, 0.8, 0.9, 1.0],
+        );
 
         renderer.pop_vnode();
     }
@@ -1557,8 +1891,6 @@ impl View for HringrPagination {
 
 /// ValhallaRating - A tactical rating component for assessing quality.
 /// Named after Valhalla, where the chosen are assessed for their worth.
-/// 
-/// INSPIRED BY: Mantine (Rating) and MUI (Rating).
 pub struct ValhallaRating {
     pub value: f32,
     pub max: usize,
@@ -1579,11 +1911,13 @@ impl ValhallaRating {
 
 impl View for ValhallaRating {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ValhallaRating");
-        
+
         let t = renderer.elapsed_time();
         let star_w = rect.width / self.max as f32;
         let star_h = rect.height;
@@ -1595,17 +1929,21 @@ impl View for ValhallaRating {
                 width: star_w * 0.8,
                 height: star_h,
             };
-            
+
             let is_filled = (i as f32) < self.value;
-            
+
             // 1. Bifrost Resonance (Glowing Star Spirits)
-            let resonance = if is_filled { (t * 2.0 + i as f32).sin() * 0.2 + 0.8 } else { 1.0 };
-            let color = if is_filled { 
+            let resonance = if is_filled {
+                (t * 2.0 + i as f32).sin() * 0.2 + 0.8
+            } else {
+                1.0
+            };
+            let color = if is_filled {
                 [1.0, 0.84, 0.0, 0.9 * resonance] // Viking Gold with resonance
-            } else { 
+            } else {
                 [0.2, 0.2, 0.25, 0.3] // Dimmed stone
             };
-            
+
             renderer.fill_ellipse(star_rect, color);
             if is_filled {
                 // Einherjar Spirit Glow
@@ -1619,8 +1957,6 @@ impl View for ValhallaRating {
 
 /// BifrostColorPicker - A color selection component.
 /// Named after the Bifrost, the rainbow bridge connecting the realms.
-/// 
-/// INSPIRED BY: Mantine (ColorPicker) and LiquidGlassKit (Refractive materials).
 pub struct BifrostColorPicker {
     pub color: [f32; 4],
 }
@@ -1634,27 +1970,43 @@ impl BifrostColorPicker {
 
 impl View for BifrostColorPicker {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "BifrostColorPicker");
-        
+
         // 1. Rainbow Track (Bifrost Bridge)
         let track_h = rect.height * 0.2;
-        let track_rect = Rect { x: rect.x, y: rect.y + (rect.height - track_h) / 2.0, width: rect.width, height: track_h };
-        
+        let track_rect = Rect {
+            x: rect.x,
+            y: rect.y + (rect.height - track_h) / 2.0,
+            width: rect.width,
+            height: track_h,
+        };
+
         // Mocking a rainbow gradient with segments
         let segments = 6;
         let seg_w = rect.width / segments as f32;
         let colors = [
-            [1.0, 0.0, 0.0, 1.0], [1.0, 0.5, 0.0, 1.0], [1.0, 1.0, 0.0, 1.0],
-            [0.0, 1.0, 0.0, 1.0], [0.0, 0.0, 1.0, 1.0], [0.5, 0.0, 1.0, 1.0]
+            [1.0, 0.0, 0.0, 1.0],
+            [1.0, 0.5, 0.0, 1.0],
+            [1.0, 1.0, 0.0, 1.0],
+            [0.0, 1.0, 0.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            [0.5, 0.0, 1.0, 1.0],
         ];
-        
+
         for i in 0..segments {
             renderer.fill_rect(
-                Rect { x: rect.x + i as f32 * seg_w, y: track_rect.y, width: seg_w, height: track_h },
-                colors[i]
+                Rect {
+                    x: rect.x + i as f32 * seg_w,
+                    y: track_rect.y,
+                    width: seg_w,
+                    height: track_h,
+                },
+                colors[i],
             );
         }
 
@@ -1667,11 +2019,11 @@ impl View for BifrostColorPicker {
             width: indicator_size,
             height: indicator_size,
         };
-        
+
         // Advanced refractive lensing
         renderer.bifrost(indicator_rect, indicator_size / 2.0, 2.0, 0.98);
         renderer.fill_ellipse(indicator_rect, self.color);
-        
+
         // Surtur's Reactive Materials (Glow Ring)
         let t = renderer.elapsed_time();
         let pulse = (t * 3.0).sin() * 0.1 + 0.9;
