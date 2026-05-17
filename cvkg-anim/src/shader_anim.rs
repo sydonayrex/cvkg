@@ -104,20 +104,17 @@ impl ReactionDiffusion {
                 let v = cell.y;
 
                 // 3x3 Laplacian convolution with wrapping boundaries (inlined to avoid double borrow)
-                let lap_u = ReactionDiffusion::laplacian_static(src, self.width, self.height, x, y, 0);
-                let lap_v = ReactionDiffusion::laplacian_static(src, self.width, self.height, x, y, 1);
+                let lap_u =
+                    ReactionDiffusion::laplacian_static(src, self.width, self.height, x, y, 0);
+                let lap_v =
+                    ReactionDiffusion::laplacian_static(src, self.width, self.height, x, y, 1);
 
                 let uvv = u * v * v;
 
                 let new_u = u + dt * (du * lap_u - uvv + f * (1.0 - u));
                 let new_v = v + dt * (dv * lap_v + uvv - (f + k) * v);
 
-                dst[idx] = Vec4::new(
-                    new_u.clamp(0.0, 1.0),
-                    new_v.clamp(0.0, 1.0),
-                    0.0,
-                    0.0,
-                );
+                dst[idx] = Vec4::new(new_u.clamp(0.0, 1.0), new_v.clamp(0.0, 1.0), 0.0, 0.0);
             }
         }
 
@@ -125,7 +122,14 @@ impl ReactionDiffusion {
     }
 
     /// Samples a grid cell with toroidal wrapping.
-    fn sample_static(grid: &[Vec4], width: u32, height: u32, x: i32, y: i32, component: usize) -> f32 {
+    fn sample_static(
+        grid: &[Vec4],
+        width: u32,
+        height: u32,
+        x: i32,
+        y: i32,
+        component: usize,
+    ) -> f32 {
         let w = width as i32;
         let h = height as i32;
         let wx = x.rem_euclid(w) as u32;
@@ -140,7 +144,14 @@ impl ReactionDiffusion {
 
     /// Computes the Laplacian for a single cell using a 3x3 stencil (static version).
     /// `component` 0 = U (x), 1 = V (y).
-    fn laplacian_static(grid: &[Vec4], width: u32, height: u32, x: i32, y: i32, component: usize) -> f32 {
+    fn laplacian_static(
+        grid: &[Vec4],
+        width: u32,
+        height: u32,
+        x: i32,
+        y: i32,
+        component: usize,
+    ) -> f32 {
         let center_val = Self::sample_static(grid, width, height, x, y, component);
         let adj_sum = Self::sample_static(grid, width, height, x - 1, y, component)
             + Self::sample_static(grid, width, height, x + 1, y, component)
@@ -364,9 +375,16 @@ impl VertexAnimationTexture {
 /// boolean operations with smooth blending.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SdfPrimitive {
-    Sphere { radius: f32 },
-    Box { half_extents: Vec3 },
-    Torus { major_radius: f32, minor_radius: f32 },
+    Sphere {
+        radius: f32,
+    },
+    Box {
+        half_extents: Vec3,
+    },
+    Torus {
+        major_radius: f32,
+        minor_radius: f32,
+    },
 }
 
 /// An SDF node that can be a primitive or a composite operation.
@@ -443,10 +461,7 @@ impl SdfAnimator {
                     major_radius,
                     minor_radius,
                 } => {
-                    let q = Vec2::new(
-                        Vec2::new(p.x, p.z).length() - *major_radius,
-                        p.y,
-                    );
+                    let q = Vec2::new(Vec2::new(p.x, p.z).length() - *major_radius, p.y);
                     q.length() - *minor_radius
                 }
             },
@@ -656,11 +671,8 @@ mod tests {
 
     #[test]
     fn test_sdf_smooth_union() {
-        let union = SdfAnimator::smooth_union(
-            SdfAnimator::sphere(1.0),
-            SdfAnimator::sphere(1.0),
-            0.5,
-        );
+        let union =
+            SdfAnimator::smooth_union(SdfAnimator::sphere(1.0), SdfAnimator::sphere(1.0), 0.5);
         let animator = SdfAnimator::with_root(union);
         // At origin, both spheres give -1.0, union should be around -1.0
         let d = animator.evaluate(Vec3::ZERO);

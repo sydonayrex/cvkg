@@ -14,10 +14,10 @@
 
 use std::collections::HashMap;
 
-use fontdb::{Database, Family, Query, Source, Weight, Stretch, Style};
+use fontdb::{Database, Family, Query, Source, Stretch, Style, Weight};
 use rustybuzz::{Direction, Feature, UnicodeBuffer};
-use swash::scale::{Render, ScaleContext, Source as SwashSource};
 use swash::FontRef;
+use swash::scale::{Render, ScaleContext, Source as SwashSource};
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -728,7 +728,7 @@ struct ResolvedFont {
 impl ResolvedFont {
     fn from_data(data: FontData) -> Option<Self> {
         let font_ref = data.font_ref()?;
-        let _face_ref = font_ref;  // FontRef derefs to provide table data
+        let _face_ref = font_ref; // FontRef derefs to provide table data
 
         // Get metrics from the font
         let _metrics = swash::scale::image::Image::new(); // placeholder
@@ -813,7 +813,8 @@ impl RunicTextEngine {
             let id = face.id;
             if !self.font_data.contains_key(&id) {
                 let face_index = face.index;
-                self.font_data.insert(id, FontData::new(data.clone(), face_index));
+                self.font_data
+                    .insert(id, FontData::new(data.clone(), face_index));
             }
         }
     }
@@ -831,9 +832,7 @@ impl RunicTextEngine {
                 let bytes: Vec<u8> = arc_data.as_ref().as_ref().to_vec();
                 bytes
             }
-            Source::File(path) => {
-                std::fs::read(&path).ok()?
-            }
+            Source::File(path) => std::fs::read(&path).ok()?,
             _ => return None,
         };
 
@@ -857,7 +856,9 @@ impl RunicTextEngine {
                 if let Some(data) = self.get_font_data(id) {
                     if let Some(mut resolved) = ResolvedFont::from_data(data.clone()) {
                         // Load fallbacks - collect IDs first to avoid borrow issues
-                        let fallback_ids: Vec<fontdb::ID> = self.db.faces()
+                        let fallback_ids: Vec<fontdb::ID> = self
+                            .db
+                            .faces()
                             .filter(|f| f.id != id)
                             .map(|f| f.id)
                             .collect();
@@ -942,7 +943,9 @@ impl RunicTextEngine {
         }
 
         // Create rustybuzz face
-        let face = resolved.primary.face()
+        let face = resolved
+            .primary
+            .face()
             .ok_or(ShapingError::InvalidFontData)?;
 
         // Build buffer
@@ -994,7 +997,9 @@ impl RunicTextEngine {
 
     /// Check if a cluster represents a space character.
     fn is_space_cluster(text: &str, cluster: u32) -> bool {
-        text.chars().nth(cluster as usize).map_or(false, |c| c.is_ascii_whitespace())
+        text.chars()
+            .nth(cluster as usize)
+            .map_or(false, |c| c.is_ascii_whitespace())
     }
 
     /// Apply font fallback for glyphs with ID 0 (missing).
@@ -1012,7 +1017,10 @@ impl RunicTextEngine {
                 let glyph_cluster = glyphs[i].cluster;
                 let glyph_is_rtl = glyphs[i].is_rtl;
                 let glyph_x = glyphs[i].x;
-                let c = text.chars().nth(glyph_cluster as usize).unwrap_or('\u{FFFD}');
+                let c = text
+                    .chars()
+                    .nth(glyph_cluster as usize)
+                    .unwrap_or('\u{FFFD}');
 
                 // Try each fallback font
                 for fallback in &resolved.fallbacks {
@@ -1113,7 +1121,10 @@ impl RunicTextEngine {
             let mut glyphs = self.shape_run(&span.text, &span.style, direction)?;
 
             // Offset glyph x positions by accumulated width
-            let span_offset_x = all_glyphs.last().map(|g| g.x + g.advance_width).unwrap_or(0.0);
+            let span_offset_x = all_glyphs
+                .last()
+                .map(|g| g.x + g.advance_width)
+                .unwrap_or(0.0);
             for glyph in &mut glyphs {
                 glyph.x += span_offset_x;
             }
@@ -1121,9 +1132,9 @@ impl RunicTextEngine {
             // Track primary font metrics from the first span
             if all_glyphs.is_empty() {
                 primary_metrics = (
-                    span.style.font_size * 0.8,   // ascent estimate
-                    span.style.font_size * 0.2,   // descent estimate
-                    span.style.font_size * 0.2,   // line gap estimate
+                    span.style.font_size * 0.8, // ascent estimate
+                    span.style.font_size * 0.2, // descent estimate
+                    span.style.font_size * 0.2, // line gap estimate
                 );
                 if let Ok(resolved) = self.resolve_font(&span.style) {
                     primary_metrics = resolved.metrics_pixels(span.style.font_size);
@@ -1238,7 +1249,9 @@ impl RunicTextEngine {
                         let mut bp = 0;
                         let mut ci2 = 0u32;
                         let tb = text.as_bytes();
-                        while bp < tb.len() && ci2 < glyphs[break_glyph.min(glyphs.len() - 1)].cluster {
+                        while bp < tb.len()
+                            && ci2 < glyphs[break_glyph.min(glyphs.len() - 1)].cluster
+                        {
                             bp += Self::utf8_len(tb[bp]);
                             ci2 += 1;
                         }
@@ -1251,7 +1264,14 @@ impl RunicTextEngine {
                         .map(|g| g.advance_width)
                         .sum();
 
-                    let x_offset = Self::compute_x_offset(align, max_w, line_width, glyphs, line_start_glyph, break_glyph);
+                    let x_offset = Self::compute_x_offset(
+                        align,
+                        max_w,
+                        line_width,
+                        glyphs,
+                        line_start_glyph,
+                        break_glyph,
+                    );
 
                     // Position glyphs
                     let mut x = x_offset;
@@ -1286,7 +1306,14 @@ impl RunicTextEngine {
                     .map(|g| g.advance_width)
                     .sum();
 
-                let x_offset = Self::compute_x_offset(align, max_w, line_width, glyphs, line_start_glyph, glyphs.len());
+                let x_offset = Self::compute_x_offset(
+                    align,
+                    max_w,
+                    line_width,
+                    glyphs,
+                    line_start_glyph,
+                    glyphs.len(),
+                );
 
                 let mut x = x_offset;
                 for g in &mut glyphs[line_start_glyph..] {
@@ -1381,10 +1408,15 @@ impl RunicTextEngine {
 
     /// UTF-8 char length helper.
     fn utf8_len(first_byte: u8) -> usize {
-        if first_byte < 0x80 { 1 }
-        else if first_byte < 0xE0 { 2 }
-        else if first_byte < 0xF0 { 3 }
-        else { 4 }
+        if first_byte < 0x80 {
+            1
+        } else if first_byte < 0xE0 {
+            2
+        } else if first_byte < 0xF0 {
+            3
+        } else {
+            4
+        }
     }
 
     /// Rasterize a glyph to a bitmap image.
@@ -1395,16 +1427,18 @@ impl RunicTextEngine {
     ) -> Result<GlyphImage, ShapingError> {
         let resolved = self.resolve_font(style)?;
 
-        let font_ref = resolved.primary.font_ref()
+        let font_ref = resolved
+            .primary
+            .font_ref()
             .ok_or(ShapingError::InvalidFontData)?;
 
-        let mut scaler = self.scale_context.builder(font_ref)
+        let mut scaler = self
+            .scale_context
+            .builder(font_ref)
             .size(style.font_size)
             .build();
 
-        let render = Render::new(&[
-            SwashSource::Outline,
-        ]);
+        let render = Render::new(&[SwashSource::Outline]);
 
         if let Some(image) = render.render(&mut scaler, glyph_id as u16) {
             return Ok(GlyphImage {
@@ -1421,7 +1455,9 @@ impl RunicTextEngine {
         // Try fallback fonts
         for fallback in &resolved.fallbacks {
             if let Some(font_ref) = fallback.font_ref() {
-                let mut scaler = self.scale_context.builder(font_ref)
+                let mut scaler = self
+                    .scale_context
+                    .builder(font_ref)
                     .size(style.font_size)
                     .build();
                 if let Some(image) = render.render(&mut scaler, glyph_id as u16) {
@@ -1454,7 +1490,7 @@ impl RunicTextEngine {
             descent,
             line_gap,
             units_per_em: resolved.units_per_em,
-            x_height: 0.0,  // Would need to read from OS/2 table
+            x_height: 0.0,   // Would need to read from OS/2 table
             cap_height: 0.0, // Would need to read from OS/2 table
         })
     }
@@ -1506,7 +1542,10 @@ impl RunicTextEngine {
     pub fn rasterize(&mut self, cache_key: u64) -> Option<GlyphImage> {
         // Find the glyph_id first, then release the borrow
         let glyph_id = self.cache.values().find_map(|glyphs| {
-            glyphs.iter().find(|g| g.cache_key == cache_key).map(|g| g.glyph_id)
+            glyphs
+                .iter()
+                .find(|g| g.cache_key == cache_key)
+                .map(|g| g.glyph_id)
         })?;
         let style = TextStyle::new("Jupiteroid", 16.0);
         self.rasterize_glyph(glyph_id, &style).ok()
@@ -1548,7 +1587,9 @@ mod tests {
     fn test_basic_shaping() {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
-        let glyphs = engine.shape_run("Hello", &style, Direction::LeftToRight).unwrap();
+        let glyphs = engine
+            .shape_run("Hello", &style, Direction::LeftToRight)
+            .unwrap();
         assert!(!glyphs.is_empty(), "Should produce glyphs for 'Hello'");
     }
 
@@ -1557,7 +1598,9 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello", style.clone())];
-        let shaped = engine.shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap).unwrap();
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
         let (glyph_idx, cluster) = shaped.hit_test(0);
         assert!(glyph_idx < shaped.glyphs.len());
         assert_eq!(cluster, 0);
@@ -1568,8 +1611,14 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello World This Is A Test", style.clone())];
-        let shaped = engine.shape_layout(&spans, Some(80.0), TextAlign::Start, TextOverflow::WordWrap).unwrap();
-        assert!(shaped.lines.len() > 1, "Should wrap into multiple lines, got {}", shaped.lines.len());
+        let shaped = engine
+            .shape_layout(&spans, Some(80.0), TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
+        assert!(
+            shaped.lines.len() > 1,
+            "Should wrap into multiple lines, got {}",
+            shaped.lines.len()
+        );
     }
 
     #[test]
@@ -1610,11 +1659,41 @@ mod tests {
 
     #[test]
     fn test_cache_key_deterministic() {
-        let key1 = CacheKey::new("Hello", 12345, 16.0, Weight::NORMAL, Stretch::Normal, Style::Normal, Direction::LeftToRight, 0.0, 0.0);
-        let key2 = CacheKey::new("Hello", 12345, 16.0, Weight::NORMAL, Stretch::Normal, Style::Normal, Direction::LeftToRight, 0.0, 0.0);
+        let key1 = CacheKey::new(
+            "Hello",
+            12345,
+            16.0,
+            Weight::NORMAL,
+            Stretch::Normal,
+            Style::Normal,
+            Direction::LeftToRight,
+            0.0,
+            0.0,
+        );
+        let key2 = CacheKey::new(
+            "Hello",
+            12345,
+            16.0,
+            Weight::NORMAL,
+            Stretch::Normal,
+            Style::Normal,
+            Direction::LeftToRight,
+            0.0,
+            0.0,
+        );
         assert_eq!(key1, key2);
 
-        let key3 = CacheKey::new("World", 12345, 16.0, Weight::NORMAL, Stretch::Normal, Style::Normal, Direction::LeftToRight, 0.0, 0.0);
+        let key3 = CacheKey::new(
+            "World",
+            12345,
+            16.0,
+            Weight::NORMAL,
+            Stretch::Normal,
+            Style::Normal,
+            Direction::LeftToRight,
+            0.0,
+            0.0,
+        );
         assert_ne!(key1, key3);
     }
 
@@ -1623,7 +1702,9 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello", style.clone())];
-        let shaped = engine.shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap).unwrap();
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
         let (x, line) = shaped.cursor_position(0);
         assert_eq!(line, 0);
         assert!(x >= 0.0);
@@ -1634,9 +1715,14 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello World", style.clone())];
-        let shaped = engine.shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap).unwrap();
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
         let rects = shaped.selection_rects(0, 5);
-        assert!(!rects.is_empty(), "Should produce selection rects for 'Hello'");
+        assert!(
+            !rects.is_empty(),
+            "Should produce selection rects for 'Hello'"
+        );
     }
 
     #[test]
@@ -1674,7 +1760,9 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("", style.clone())];
-        let shaped = engine.shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap).unwrap();
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
         assert!(shaped.glyphs.is_empty());
     }
 
@@ -1687,7 +1775,9 @@ mod tests {
             TextSpan::at("Hello ", style1, 0),
             TextSpan::at("World", style2, 6),
         ];
-        let shaped = engine.shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap).unwrap();
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
         assert!(!shaped.glyphs.is_empty());
         assert_eq!(shaped.text, "Hello World");
     }
@@ -1697,10 +1787,21 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hi", style.clone())];
-        let shaped = engine.shape_layout(&spans, Some(200.0), TextAlign::Center, TextOverflow::WordWrap).unwrap();
+        let shaped = engine
+            .shape_layout(
+                &spans,
+                Some(200.0),
+                TextAlign::Center,
+                TextOverflow::WordWrap,
+            )
+            .unwrap();
         assert!(!shaped.lines.is_empty());
         let line = &shaped.lines[0];
-        assert!(line.x_offset > 0.0, "Center-aligned line should have positive x_offset, got {}", line.x_offset);
+        assert!(
+            line.x_offset > 0.0,
+            "Center-aligned line should have positive x_offset, got {}",
+            line.x_offset
+        );
     }
 
     #[test]
@@ -1708,7 +1809,9 @@ mod tests {
         let mut engine = RunicTextEngine::new();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello World This Is Long", style.clone())];
-        let shaped = engine.shape_layout(&spans, Some(50.0), TextAlign::Start, TextOverflow::Ellipsis).unwrap();
+        let shaped = engine
+            .shape_layout(&spans, Some(50.0), TextAlign::Start, TextOverflow::Ellipsis)
+            .unwrap();
         assert!(!shaped.lines.is_empty());
     }
 
@@ -1750,9 +1853,6 @@ mod tests {
     #[test]
     fn test_jupiteroid_font_available() {
         let engine = RunicTextEngine::new();
-        assert!(
-            engine.font_count() > 0,
-            "Should have fonts loaded"
-        );
+        assert!(engine.font_count() > 0, "Should have fonts loaded");
     }
 }

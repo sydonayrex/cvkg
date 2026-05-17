@@ -303,11 +303,7 @@ fn cycle_focus(forward: bool) {
         .unwrap_or_default();
 
     let next_idx = if current.is_empty() {
-        if forward {
-            0
-        } else {
-            focus_order.len() - 1
-        }
+        if forward { 0 } else { focus_order.len() - 1 }
     } else if let Some(idx) = focus_order.iter().position(|id| id == &current) {
         if forward {
             (idx + 1) % focus_order.len()

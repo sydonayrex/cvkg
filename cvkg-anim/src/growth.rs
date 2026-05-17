@@ -366,7 +366,10 @@ impl Bounds {
 
     /// Check if a point is contained in the bounds (inclusive).
     pub fn contains(&self, point: Vec2) -> bool {
-        point.x >= self.min.x && point.x <= self.max.x && point.y >= self.min.y && point.y <= self.max.y
+        point.x >= self.min.x
+            && point.x <= self.max.x
+            && point.y >= self.min.y
+            && point.y <= self.max.y
     }
 }
 
@@ -563,11 +566,7 @@ impl VoronoiFracture {
 
     /// Compute a discrete closest-site grid.  Returns a 2D grid of indices
     /// (into `sites`) with the grid stored as a flat `Vec<usize>`.
-    fn compute_voronoi_grid(
-        &self,
-        sites: &[Vec2],
-        bounds: Bounds,
-    ) -> Vec<usize> {
+    fn compute_voronoi_grid(&self, sites: &[Vec2], bounds: Bounds) -> Vec<usize> {
         let res = self.resolution;
         let mut grid = vec![0usize; res * res];
 
@@ -601,12 +600,7 @@ impl VoronoiFracture {
     /// For each site, gather the grid region belonging to it and extract an
     /// outer polygon via a marching-squares-like boundary walk, scaled back to
     /// world-space.
-    fn extract_cells(
-        &self,
-        sites: &[Vec2],
-        grid: &[usize],
-        bounds: Bounds,
-    ) -> Vec<VoronoiCell> {
+    fn extract_cells(&self, sites: &[Vec2], grid: &[usize], bounds: Bounds) -> Vec<VoronoiCell> {
         let res = self.resolution;
         let cell_width = bounds.width() / res as f32;
         let cell_height = bounds.height() / res as f32;
@@ -641,8 +635,7 @@ impl VoronoiFracture {
                             boundary_points.push(Vec2::new(x0, y1));
                         } else {
                             // Interior cell — emit centre for robustness.
-                            boundary_points
-                                .push(Vec2::new((x0 + x1) * 0.5, (y0 + y1) * 0.5));
+                            boundary_points.push(Vec2::new((x0 + x1) * 0.5, (y0 + y1) * 0.5));
                         }
                     }
                 }
@@ -725,27 +718,20 @@ impl VoronoiFracture {
                 if current_inside {
                     output.push(current);
                     if !next_inside {
-                        if let Some(inter) =
-                            line_intersection(current, next, edge_start, edge_end)
+                        if let Some(inter) = line_intersection(current, next, edge_start, edge_end)
                         {
                             output.push(inter);
                         }
                     }
                 } else if next_inside {
-                    if let Some(inter) =
-                        line_intersection(current, next, edge_start, edge_end)
-                    {
+                    if let Some(inter) = line_intersection(current, next, edge_start, edge_end) {
                         output.push(inter);
                     }
                 }
             }
         }
 
-        if output.len() < 3 {
-            None
-        } else {
-            Some(output)
-        }
+        if output.len() < 3 { None } else { Some(output) }
     }
 }
 
@@ -867,13 +853,11 @@ fn convex_hull_graham(points: &[Vec2]) -> Vec<Vec2> {
         .collect();
 
     sorted.sort_by(|a, b| {
-        a.0.partial_cmp(&b.0)
-            .unwrap()
-            .then_with(|| {
-                let da = (a.1 - pivot).length_squared();
-                let db = (b.1 - pivot).length_squared();
-                da.partial_cmp(&db).unwrap()
-            })
+        a.0.partial_cmp(&b.0).unwrap().then_with(|| {
+            let da = (a.1 - pivot).length_squared();
+            let db = (b.1 - pivot).length_squared();
+            da.partial_cmp(&db).unwrap()
+        })
     });
 
     // Remove duplicate angles (keep farthest — last in sorted order).
@@ -1091,11 +1075,7 @@ mod tests {
     #[test]
     fn test_voronoi_no_cells_returns_input() {
         let vf = VoronoiFracture::new();
-        let polygon = vec![
-            Vec2::ZERO,
-            Vec2::new(10.0, 0.0),
-            Vec2::new(10.0, 10.0),
-        ];
+        let polygon = vec![Vec2::ZERO, Vec2::new(10.0, 0.0), Vec2::new(10.0, 10.0)];
         let result = vf.clip_polygon(&polygon);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].0, polygon);
@@ -1112,13 +1092,23 @@ mod tests {
 
     #[test]
     fn test_polygon_area_square() {
-        let sq = vec![Vec2::ZERO, Vec2::new(2.0, 0.0), Vec2::new(2.0, 2.0), Vec2::new(0.0, 2.0)];
+        let sq = vec![
+            Vec2::ZERO,
+            Vec2::new(2.0, 0.0),
+            Vec2::new(2.0, 2.0),
+            Vec2::new(0.0, 2.0),
+        ];
         assert!((polygon_area(&sq) - 4.0).abs() < 1e-6);
     }
 
     #[test]
     fn test_polygon_centroid_square() {
-        let sq = vec![Vec2::ZERO, Vec2::new(2.0, 0.0), Vec2::new(2.0, 2.0), Vec2::new(0.0, 2.0)];
+        let sq = vec![
+            Vec2::ZERO,
+            Vec2::new(2.0, 0.0),
+            Vec2::new(2.0, 2.0),
+            Vec2::new(0.0, 2.0),
+        ];
         let c = polygon_centroid(&sq);
         assert!((c - Vec2::new(1.0, 1.0)).length() < 1e-6);
     }
@@ -1230,7 +1220,11 @@ mod tests {
             if frag.velocity.length_squared() > 0.0 && outward.length_squared() > 0.0 {
                 let alignment = frag.velocity.normalize().dot(outward);
                 // Velocity should generally point outward (positive dot).
-                assert!(alignment > -0.5, "Fragment velocity not outward: {}", alignment);
+                assert!(
+                    alignment > -0.5,
+                    "Fragment velocity not outward: {}",
+                    alignment
+                );
             }
         }
     }

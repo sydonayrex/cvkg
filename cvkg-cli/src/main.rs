@@ -213,7 +213,7 @@ fn main() {
                     if target_str == "wasm" || target_str == "webkit" {
                         println!("{} WebKit preview mode detected. Starting background preview server...", style("🌐").blue());
                     }
-                    
+
                     if let Err(e) = ws_server::start_server(addr).await {
                         eprintln!("{} Failed to start dev server: {}", style("❌").red(), e);
                     }

@@ -48,7 +48,14 @@ pub struct Toast {
 
 impl Toast {
     /// Creates a new Toast with the given parameters.
-    pub fn new(id: u64, title: impl Into<String>, message: impl Into<String>, kind: ToastKind, duration: f32, created_at: f32) -> Self {
+    pub fn new(
+        id: u64,
+        title: impl Into<String>,
+        message: impl Into<String>,
+        kind: ToastKind,
+        duration: f32,
+        created_at: f32,
+    ) -> Self {
         Self {
             id,
             title: title.into(),
@@ -154,12 +161,23 @@ impl ToastManager {
 
     /// Adds a persistent (non-auto-dismissing) toast with the given title,
     /// message, and kind. Must be manually dismissed via `dismiss()`.
-    pub fn persistent(&mut self, title: impl Into<String>, message: impl Into<String>, kind: ToastKind) {
+    pub fn persistent(
+        &mut self,
+        title: impl Into<String>,
+        message: impl Into<String>,
+        kind: ToastKind,
+    ) {
         self.add_toast(title, message, kind, 0.0);
     }
 
     /// Internal helper to create and push a toast.
-    fn add_toast(&mut self, title: impl Into<String>, message: impl Into<String>, kind: ToastKind, duration: f32) {
+    fn add_toast(
+        &mut self,
+        title: impl Into<String>,
+        message: impl Into<String>,
+        kind: ToastKind,
+        duration: f32,
+    ) {
         let id = self.alloc_id();
         // created_at is 0.0; the View::render impl uses renderer.elapsed_time()
         // to compute the real creation timestamp on first render.
@@ -271,7 +289,13 @@ impl View for ToastManager {
 impl ToastManager {
     /// Renders a single toast with glassmorphic styling, title, message,
     /// close button, and countdown progress bar.
-    fn render_toast(&self, renderer: &mut dyn Renderer, toast: &Toast, rect: Rect, current_time: f32) {
+    fn render_toast(
+        &self,
+        renderer: &mut dyn Renderer,
+        toast: &Toast,
+        rect: Rect,
+        current_time: f32,
+    ) {
         let accent = toast.kind.color();
         let t = current_time;
 
@@ -366,15 +390,19 @@ impl ToastManager {
         // Register click handler for close button
         let close_id = toast.id;
         let on_dismiss = self.dismiss_callback(close_id);
-        renderer.register_handler("pointerclick", Arc::new(move |event| {
-            if let cvkg_core::Event::PointerClick { x, y, .. } = event {
-                let dx = x - close_center_x;
-                let dy = y - close_center_y;
-                if dx * dx + dy * dy <= (CLOSE_BUTTON_SIZE * 0.75) * (CLOSE_BUTTON_SIZE * 0.75) {
-                    on_dismiss();
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = event {
+                    let dx = x - close_center_x;
+                    let dy = y - close_center_y;
+                    if dx * dx + dy * dy <= (CLOSE_BUTTON_SIZE * 0.75) * (CLOSE_BUTTON_SIZE * 0.75)
+                    {
+                        on_dismiss();
+                    }
                 }
-            }
-        }));
+            }),
+        );
 
         // 9. Countdown progress bar at the bottom
         let fraction = toast.countdown_fraction(current_time);

@@ -159,6 +159,7 @@ pub use window::{GinnungagapWindow, HiminnModal, YggdrasilWindow};
 pub use wyrd_hud::WyrdHUD;
 pub mod autocomplete;
 pub mod bragi_creative;
+pub mod datepicker;
 pub mod eir_motion;
 pub mod form_validation;
 pub mod hlin_accessibility;
@@ -168,7 +169,6 @@ pub mod toast;
 pub mod tooltip;
 pub mod transitions;
 pub mod tyr_security;
-pub mod datepicker;
 
 pub use bragi_creative::*;
 pub use eir_motion::*;

@@ -204,9 +204,30 @@ impl<V: View> Tooltip<V> {
         // Draw the triangle as two filled half-rects (approximated with lines for a simple arrow).
         // We draw three lines forming the triangle outline.
         let line_width = 1.0;
-        renderer.draw_line(base_a[0], base_a[1], tip[0], tip[1], arrow_color, line_width);
-        renderer.draw_line(base_b[0], base_b[1], tip[0], tip[1], arrow_color, line_width);
-        renderer.draw_line(base_a[0], base_a[1], base_b[0], base_b[1], arrow_color, line_width);
+        renderer.draw_line(
+            base_a[0],
+            base_a[1],
+            tip[0],
+            tip[1],
+            arrow_color,
+            line_width,
+        );
+        renderer.draw_line(
+            base_b[0],
+            base_b[1],
+            tip[0],
+            tip[1],
+            arrow_color,
+            line_width,
+        );
+        renderer.draw_line(
+            base_a[0],
+            base_a[1],
+            base_b[0],
+            base_b[1],
+            arrow_color,
+            line_width,
+        );
     }
 }
 
@@ -239,8 +260,8 @@ impl<V: View> View for Tooltip<V> {
         // pointer must be hovering AND the delay (0.3s) must have elapsed.
         let now = renderer.elapsed_time();
         let show_delay = 0.3;
-        let is_visible = hover_state.is_hovered
-            && (now - hover_state.hover_start_time) >= show_delay;
+        let is_visible =
+            hover_state.is_hovered && (now - hover_state.hover_start_time) >= show_delay;
 
         if is_visible {
             let tip_rect = self.tooltip_rect(rect, renderer);
@@ -260,13 +281,7 @@ impl<V: View> View for Tooltip<V> {
             // Render the tooltip text.
             let text_x = tip_rect.x + 8.0;
             let text_y = tip_rect.y + 6.0;
-            renderer.draw_text(
-                &self.text,
-                text_x,
-                text_y,
-                12.0,
-                [1.0, 1.0, 1.0, 1.0],
-            );
+            renderer.draw_text(&self.text, text_x, text_y, 12.0, [1.0, 1.0, 1.0, 1.0]);
 
             renderer.set_z_index(0.0);
         }

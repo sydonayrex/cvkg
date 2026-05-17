@@ -1,4 +1,4 @@
-use cvkg_core::{load_system_state, update_system_state, Event, Never, Rect, Renderer, View};
+use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 

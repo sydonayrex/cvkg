@@ -596,10 +596,7 @@ mod tests {
 
     #[test]
     fn test_text_align_justify() {
-        assert_eq!(
-            TextAlign::Justify,
-            TextAlign::Justify
-        );
+        assert_eq!(TextAlign::Justify, TextAlign::Justify);
     }
 
     #[test]

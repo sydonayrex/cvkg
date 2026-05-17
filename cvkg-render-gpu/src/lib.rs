@@ -2999,8 +2999,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         );
     }
 
-    fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {
-    }
+    fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {}
 
     fn draw_linear_gradient(
         &mut self,

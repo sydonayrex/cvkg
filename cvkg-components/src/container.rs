@@ -611,7 +611,14 @@ impl<V: View> ScrollView<V> {
 
     /// Apply momentum decay and clamp position to valid range.
     /// Returns updated state with velocity applied.
-    fn apply_momentum(state: ScrollState, viewport_w: f32, viewport_h: f32, content_w: f32, content_h: f32, decay: f32) -> ScrollState {
+    fn apply_momentum(
+        state: ScrollState,
+        viewport_w: f32,
+        viewport_h: f32,
+        content_w: f32,
+        content_h: f32,
+        decay: f32,
+    ) -> ScrollState {
         let max_x = (content_w - viewport_w).max(0.0);
         let max_y = (content_h - viewport_h).max(0.0);
 
@@ -733,7 +740,14 @@ impl<V: View> View for ScrollView<V> {
         let mut state = self.read_state();
 
         // ── Apply momentum (velocity decay) ──
-        state = Self::apply_momentum(state, rect.width, rect.height, content_w, content_h, self.momentum_decay);
+        state = Self::apply_momentum(
+            state,
+            rect.width,
+            rect.height,
+            content_w,
+            content_h,
+            self.momentum_decay,
+        );
 
         // ── Auto-hide scrollbar opacity ──
         let is_scrolling = state.vel_x.abs() > 0.1 || state.vel_y.abs() > 0.1 || state.is_dragging;
@@ -763,7 +777,10 @@ impl<V: View> View for ScrollView<V> {
             renderer.register_handler(
                 "pointerwheel",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerWheel { delta_x, delta_y, .. } = event {
+                    if let cvkg_core::Event::PointerWheel {
+                        delta_x, delta_y, ..
+                    } = event
+                    {
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
                             let mut st: ScrollState = s
@@ -916,17 +933,21 @@ impl<V: View> View for ScrollView<V> {
         renderer.push_clip_rect(rect);
 
         // Apply scroll offset via transform
-        renderer.push_transform(
-            [-state.pos_x, -state.pos_y],
-            [1.0, 1.0],
-            0.0,
-        );
+        renderer.push_transform([-state.pos_x, -state.pos_y], [1.0, 1.0], 0.0);
 
         let content_rect = Rect {
             x: rect.x,
             y: rect.y,
-            width: if content_w > 0.0 { content_w } else { rect.width },
-            height: if content_h > 0.0 { content_h } else { rect.height },
+            width: if content_w > 0.0 {
+                content_w
+            } else {
+                rect.width
+            },
+            height: if content_h > 0.0 {
+                content_h
+            } else {
+                rect.height
+            },
         };
         self.content.render(renderer, content_rect);
 

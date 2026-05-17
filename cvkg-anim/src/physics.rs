@@ -50,11 +50,7 @@ impl Vec3 {
 
     pub fn normalized(self) -> Self {
         let l = self.length();
-        if l > 1e-8 {
-            self / l
-        } else {
-            Self::ZERO
-        }
+        if l > 1e-8 { self / l } else { Self::ZERO }
     }
 
     pub fn lerp(self, o: Self, t: f32) -> Self {
@@ -925,11 +921,10 @@ impl FluidSimulation {
                 pressure_force += dir * pressure_term;
 
                 // Viscosity force
-                let visc_scalar = self.viscosity
-                    * self.particle_mass
-                    / densities[j]
-                    * self.viscosity_lap(r);
-                viscosity_force += (self.particles[j].velocity - self.particles[i].velocity) * visc_scalar;
+                let visc_scalar =
+                    self.viscosity * self.particle_mass / densities[j] * self.viscosity_lap(r);
+                viscosity_force +=
+                    (self.particles[j].velocity - self.particles[i].velocity) * visc_scalar;
             }
 
             let total_force = pressure_force + viscosity_force + self.gravity * densities[i];

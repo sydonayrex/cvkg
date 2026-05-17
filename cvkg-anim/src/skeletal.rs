@@ -15,7 +15,12 @@ pub struct IkJoint {
 
 impl IkJoint {
     pub fn new(position: Vec3, length: f32) -> Self {
-        Self { position, length, min_angle: None, max_angle: None }
+        Self {
+            position,
+            length,
+            min_angle: None,
+            max_angle: None,
+        }
     }
 
     pub fn with_angle_limits(mut self, min: f32, max: f32) -> Self {
@@ -38,16 +43,29 @@ pub struct FabrikSolver {
 
 impl FabrikSolver {
     pub fn new(joints: Vec<IkJoint>, base: Vec3) -> Self {
-        Self { joints, tolerance: 0.01, max_iterations: 20, base }
+        Self {
+            joints,
+            tolerance: 0.01,
+            max_iterations: 20,
+            base,
+        }
     }
 
-    pub fn with_tolerance(mut self, t: f32) -> Self { self.tolerance = t; self }
-    pub fn with_max_iterations(mut self, n: usize) -> Self { self.max_iterations = n; self }
+    pub fn with_tolerance(mut self, t: f32) -> Self {
+        self.tolerance = t;
+        self
+    }
+    pub fn with_max_iterations(mut self, n: usize) -> Self {
+        self.max_iterations = n;
+        self
+    }
 
     /// Solve IK for `target`. Returns the updated joint positions.
     pub fn solve(&self, target: Vec3) -> Vec<Vec3> {
         let n = self.joints.len();
-        if n == 0 { return vec![]; }
+        if n == 0 {
+            return vec![];
+        }
 
         // Build positions array: base + each joint tip
         let mut positions: Vec<Vec3> = Vec::with_capacity(n + 1);
@@ -75,7 +93,9 @@ impl FabrikSolver {
         for _ in 0..self.max_iterations {
             // Check convergence
             let dist = (positions[n] - target).length();
-            if dist < self.tolerance { break; }
+            if dist < self.tolerance {
+                break;
+            }
 
             // Forward reaching: set end effector to target
             positions[n] = target;
@@ -111,15 +131,28 @@ pub struct CcdSolver {
 
 impl CcdSolver {
     pub fn new(joints: Vec<IkJoint>, base: Vec3) -> Self {
-        Self { joints, tolerance: 0.01, max_iterations: 20, base }
+        Self {
+            joints,
+            tolerance: 0.01,
+            max_iterations: 20,
+            base,
+        }
     }
 
-    pub fn with_tolerance(mut self, t: f32) -> Self { self.tolerance = t; self }
-    pub fn with_max_iterations(mut self, n: usize) -> Self { self.max_iterations = n; self }
+    pub fn with_tolerance(mut self, t: f32) -> Self {
+        self.tolerance = t;
+        self
+    }
+    pub fn with_max_iterations(mut self, n: usize) -> Self {
+        self.max_iterations = n;
+        self
+    }
 
     pub fn solve(&self, target: Vec3) -> Vec<Vec3> {
         let n = self.joints.len();
-        if n == 0 { return vec![]; }
+        if n == 0 {
+            return vec![];
+        }
 
         let mut positions: Vec<Vec3> = Vec::with_capacity(n + 1);
         positions.push(self.base);
@@ -139,7 +172,9 @@ impl CcdSolver {
         }
 
         for _ in 0..self.max_iterations {
-            if (positions[n] - target).length() < self.tolerance { break; }
+            if (positions[n] - target).length() < self.tolerance {
+                break;
+            }
 
             for i in (1..=n).rev() {
                 let joint_pos = positions[i - 1];
@@ -154,7 +189,9 @@ impl CcdSolver {
                 let dot = to_end.dot(to_target);
                 let angle = cross.length().atan2(dot);
 
-                if angle.abs() < 1e-6 { continue; }
+                if angle.abs() < 1e-6 {
+                    continue;
+                }
 
                 let axis = if cross.length_squared() > 1e-10 {
                     cross.normalize()
@@ -251,8 +288,16 @@ impl ProceduralLocomotion {
             sway_speed: 3.0,
             left_foot_offset: Vec3::new(0.0, 0.0, -0.15),
             right_foot_offset: Vec3::new(0.0, 0.0, 0.15),
-            left_foot: FootTarget { position: Vec3::ZERO, grounded: true, ground_normal: Vec3::Y },
-            right_foot: FootTarget { position: Vec3::ZERO, grounded: true, ground_normal: Vec3::Y },
+            left_foot: FootTarget {
+                position: Vec3::ZERO,
+                grounded: true,
+                ground_normal: Vec3::Y,
+            },
+            right_foot: FootTarget {
+                position: Vec3::ZERO,
+                grounded: true,
+                ground_normal: Vec3::Y,
+            },
             time: 0.0,
             prev_hip_y: hip_position.y,
             ground_y: 0.0,
@@ -387,7 +432,12 @@ impl RagdollBlender {
             blend_weight: 0.0,
             target_weight: 0.0,
             blend_speed: 2.0,
-            bone_weights: (0..bone_count).map(|i| BoneWeight { bone_index: i, weight: 0.0 }).collect(),
+            bone_weights: (0..bone_count)
+                .map(|i| BoneWeight {
+                    bone_index: i,
+                    weight: 0.0,
+                })
+                .collect(),
             animated_positions: vec![Vec3::ZERO; bone_count],
             physics_positions: vec![Vec3::ZERO; bone_count],
             output_positions: vec![Vec3::ZERO; bone_count],
@@ -434,7 +484,8 @@ impl RagdollBlender {
         // Blend per-bone
         for (i, bw) in self.bone_weights.iter().enumerate() {
             let w = self.blend_weight * bw.weight;
-            self.output_positions[i] = self.animated_positions[i].lerp(self.physics_positions[i], w);
+            self.output_positions[i] =
+                self.animated_positions[i].lerp(self.physics_positions[i], w);
         }
 
         &self.output_positions
@@ -466,9 +517,7 @@ mod tests {
 
     #[test]
     fn test_fabrik_unreachable() {
-        let joints = vec![
-            IkJoint::new(Vec3::ZERO, 0.5),
-        ];
+        let joints = vec![IkJoint::new(Vec3::ZERO, 0.5)];
         let solver = FabrikSolver::new(joints, Vec3::ZERO);
         let positions = solver.solve(Vec3::new(5.0, 0.0, 0.0));
         // Should stretch toward target
@@ -516,7 +565,12 @@ mod tests {
         // Should be close to physics positions
         for i in 0..3 {
             let dist = (out[i] - blender.physics_positions[i]).length();
-            assert!(dist < 0.05, "Bone {} not blended to physics: dist={}", i, dist);
+            assert!(
+                dist < 0.05,
+                "Bone {} not blended to physics: dist={}",
+                i,
+                dist
+            );
         }
     }
 

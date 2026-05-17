@@ -410,7 +410,11 @@ impl CrowdSimulation {
 
         for i in 0..n {
             let agent = &self.agents[i];
-            let pref_speed = self.preferred_speeds.get(i).copied().unwrap_or(agent.max_speed);
+            let pref_speed = self
+                .preferred_speeds
+                .get(i)
+                .copied()
+                .unwrap_or(agent.max_speed);
             let pref_vel = if agent.velocity.length_squared() > 0.0 {
                 agent.velocity.normalize() * pref_speed
             } else {
@@ -438,8 +442,7 @@ impl CrowdSimulation {
                     // Push apart: use normal pointing away from other agent
                     let dist = dist_sq.sqrt().max(0.001);
                     let normal = rel_pos / dist;
-                    let u = (normal * (combined_radius - dist) / dt.max(0.001)
-                        - rel_vel)
+                    let u = (normal * (combined_radius - dist) / dt.max(0.001) - rel_vel)
                         .max(Vec2::ZERO);
                     orca_planes.push((agent.velocity + u * 0.5, normal));
                     continue;
@@ -451,15 +454,22 @@ impl CrowdSimulation {
 
                 // Check if relative velocity is inside the velocity obstacle
                 let dot = w.dot(rel_pos);
-                if dot < 0.0 && dot * dot > combined_radius_sq * w_len_sq / (self.time_horizon * self.time_horizon) {
+                if dot < 0.0
+                    && dot * dot
+                        > combined_radius_sq * w_len_sq / (self.time_horizon * self.time_horizon)
+                {
                     // Project onto truncated cone boundary
                     let leg = (dist_sq - combined_radius_sq).sqrt();
                     let normal = if rel_pos.x * rel_pos.y >= 0.0 {
-                        Vec2::new(rel_pos.x * leg - rel_pos.y * combined_radius,
-                                  rel_pos.x * combined_radius + rel_pos.y * leg) / dist_sq
+                        Vec2::new(
+                            rel_pos.x * leg - rel_pos.y * combined_radius,
+                            rel_pos.x * combined_radius + rel_pos.y * leg,
+                        ) / dist_sq
                     } else {
-                        Vec2::new(rel_pos.x * leg + rel_pos.y * combined_radius,
-                                  -rel_pos.x * combined_radius + rel_pos.y * leg) / dist_sq
+                        Vec2::new(
+                            rel_pos.x * leg + rel_pos.y * combined_radius,
+                            -rel_pos.x * combined_radius + rel_pos.y * leg,
+                        ) / dist_sq
                     };
                     let u = (normal * w.dot(normal) - w) * 0.5;
                     orca_planes.push((agent.velocity + u, normal.normalize_or_zero()));
@@ -476,9 +486,12 @@ impl CrowdSimulation {
                         rel_pos.x * leg - rel_pos.y * combined_radius,
                         rel_pos.x * combined_radius + rel_pos.y * leg,
                     ) / dist_sq;
-                    let left_vel = rel_vel - left_leg * (rel_vel.dot(left_leg) / left_leg.length_squared().max(0.001));
+                    let left_vel = rel_vel
+                        - left_leg * (rel_vel.dot(left_leg) / left_leg.length_squared().max(0.001));
                     if left_vel.dot(left_normal) < 0.0 {
-                        let u = (left_normal * (-rel_vel.dot(left_normal)) - (rel_vel - left_normal * rel_vel.dot(left_normal))) * 0.5;
+                        let u = (left_normal * (-rel_vel.dot(left_normal))
+                            - (rel_vel - left_normal * rel_vel.dot(left_normal)))
+                            * 0.5;
                         orca_planes.push((agent.velocity + u, left_normal.normalize_or_zero()));
                     }
 
@@ -491,9 +504,13 @@ impl CrowdSimulation {
                         rel_pos.x * leg + rel_pos.y * combined_radius,
                         -rel_pos.x * combined_radius + rel_pos.y * leg,
                     ) / dist_sq;
-                    let right_vel = rel_vel - right_leg * (rel_vel.dot(right_leg) / right_leg.length_squared().max(0.001));
+                    let right_vel = rel_vel
+                        - right_leg
+                            * (rel_vel.dot(right_leg) / right_leg.length_squared().max(0.001));
                     if right_vel.dot(right_normal) < 0.0 {
-                        let u = (right_normal * (-rel_vel.dot(right_normal)) - (rel_vel - right_normal * rel_vel.dot(right_normal))) * 0.5;
+                        let u = (right_normal * (-rel_vel.dot(right_normal))
+                            - (rel_vel - right_normal * rel_vel.dot(right_normal)))
+                            * 0.5;
                         orca_planes.push((agent.velocity + u, right_normal.normalize_or_zero()));
                     }
                 }
@@ -507,15 +524,20 @@ impl CrowdSimulation {
 
                 if dist < combined_radius {
                     // Already colliding: push away
-                    let normal = if dist > 0.001 { rel_pos / dist } else { Vec2::X };
-                    let u = normal * (combined_radius - dist) / dt.max(0.001)
-                        - agent.velocity;
+                    let normal = if dist > 0.001 {
+                        rel_pos / dist
+                    } else {
+                        Vec2::X
+                    };
+                    let u = normal * (combined_radius - dist) / dt.max(0.001) - agent.velocity;
                     orca_planes.push((agent.velocity + u, normal));
                     continue;
                 }
 
                 // Treat obstacle as a single point; compute tangent lines
-                let leg = (dist * dist - combined_radius * combined_radius).sqrt().max(0.001);
+                let leg = (dist * dist - combined_radius * combined_radius)
+                    .sqrt()
+                    .max(0.001);
                 let normal = Vec2::new(
                     rel_pos.x * leg - rel_pos.y * combined_radius,
                     rel_pos.x * combined_radius + rel_pos.y * leg,
@@ -793,9 +815,12 @@ mod tests {
 
     #[test]
     fn test_crowd_with_obstacles() {
-        let agents = vec![
-            Agent::new(Vec2::new(0.0, 0.0), Vec2::new(30.0, 0.0), 5.0, 50.0),
-        ];
+        let agents = vec![Agent::new(
+            Vec2::new(0.0, 0.0),
+            Vec2::new(30.0, 0.0),
+            5.0,
+            50.0,
+        )];
         let obstacles = vec![Obstacle::new(Vec2::new(50.0, 0.0), 10.0)];
         let mut sim = CrowdSimulation::new(agents).with_obstacles(obstacles);
         sim.update(0.016);

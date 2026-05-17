@@ -154,10 +154,8 @@ impl TerrainErosion {
                 }
 
                 // Check sediment capacity for additional erosion
-                let velocity =
-                    ((total_height - lowest_total) / self.cell_size).max(0.0);
-                let capacity =
-                    self.sediment_capacity * velocity * current_water;
+                let velocity = ((total_height - lowest_total) / self.cell_size).max(0.0);
+                let capacity = self.sediment_capacity * velocity * current_water;
                 if new_sediment[idx] > capacity {
                     // Deposit excess
                     let excess = new_sediment[idx] - capacity;
@@ -356,8 +354,8 @@ impl Default for WindParams {
 pub struct WindInstance {
     pub position: Vec2,
     pub phase_offset: f32,
-    pub stiffness: f32,   // How resistant to wind (0 = floppy, 1 = rigid)
-    pub height: f32,      // Affects lever arm for displacement
+    pub stiffness: f32, // How resistant to wind (0 = floppy, 1 = rigid)
+    pub height: f32,    // Affects lever arm for displacement
 }
 
 pub struct VegetationWind {
@@ -442,9 +440,11 @@ impl VegetationWind {
 
         // Add spatial variation via noise
         let noise_val = smooth_noise(
-            position.x * self.params.turbulence_scale + t * self.params.turbulence_speed
+            position.x * self.params.turbulence_scale
+                + t * self.params.turbulence_speed
                 + noise_offset.x,
-            position.y * self.params.turbulence_scale + t * self.params.turbulence_speed * 0.7
+            position.y * self.params.turbulence_scale
+                + t * self.params.turbulence_speed * 0.7
                 + noise_offset.y,
         );
 
@@ -454,12 +454,7 @@ impl VegetationWind {
     }
 
     /// Compute Gerstner-like wave displacement for a single instance
-    fn wave_displacement(
-        &self,
-        t: f32,
-        instance: &WindInstance,
-        noise_offset: Vec2,
-    ) -> Vec3 {
+    fn wave_displacement(&self, t: f32, instance: &WindInstance, noise_offset: Vec2) -> Vec3 {
         let dir = self.params.direction.normalize_or_zero();
         let gust = self.gust_factor(t, instance.position, noise_offset);
 
@@ -539,9 +534,8 @@ mod tests {
         let h = 4;
         let hm = vec![1.0; w * h];
         let hardness = vec![0.5; w * h];
-        let mut erosion = TerrainErosion::new(
-            w, h, hm, hardness, 0.01, 0.1, 1.0, 0.1, 0.05, 0.01, 1.0,
-        );
+        let mut erosion =
+            TerrainErosion::new(w, h, hm, hardness, 0.01, 0.1, 1.0, 0.1, 0.05, 0.01, 1.0);
         assert_eq!(erosion.height_at(0, 0), 1.0);
         erosion.step();
         // After one step, rain has been added and some dissolution occurred
@@ -550,7 +544,11 @@ mod tests {
 
     #[test]
     fn test_mesh_deformer_basic() {
-        let base = vec![Vec3::ZERO, Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 1.0, 0.0)];
+        let base = vec![
+            Vec3::ZERO,
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        ];
         let mut deformer = MeshDeformer::new(base.clone());
 
         let deltas = vec![Vec3::Y, Vec3::Y, Vec3::Y];

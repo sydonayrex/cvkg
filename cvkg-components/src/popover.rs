@@ -1,7 +1,7 @@
-use cvkg_core::{load_system_state, update_system_state, Event, Never, Rect, Renderer, View};
+use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Global counter for generating unique popover instance IDs.
 static POPOVER_COUNTER: AtomicU64 = AtomicU64::new(0);

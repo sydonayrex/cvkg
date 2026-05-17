@@ -56,7 +56,11 @@ impl<V: View> FormField<V> {
     pub fn required(mut self) -> Self {
         self.is_required = true;
         // Avoid duplicate Required rules
-        if !self.rules.iter().any(|r| matches!(r, ValidationRule::Required)) {
+        if !self
+            .rules
+            .iter()
+            .any(|r| matches!(r, ValidationRule::Required))
+        {
             self.rules.push(ValidationRule::Required);
         }
         self
@@ -90,10 +94,7 @@ impl<V: View> FormField<V> {
                 }
                 ValidationRule::MaxLength(max) => {
                     if value.len() > *max {
-                        return Err(format!(
-                            "{} must be at most {} characters",
-                            self.label, max
-                        ));
+                        return Err(format!("{} must be at most {} characters", self.label, max));
                     }
                 }
                 ValidationRule::Pattern(pattern) => {
@@ -120,7 +121,11 @@ impl<V: View> View for FormField<V> {
         renderer.push_vnode(rect, "FormField");
 
         let label_height = 20.0;
-        let error_height = if self.error_message.is_some() { 18.0 } else { 0.0 };
+        let error_height = if self.error_message.is_some() {
+            18.0
+        } else {
+            0.0
+        };
         let content_top = rect.y + label_height;
         let content_height = rect.height - label_height - error_height;
 
@@ -150,12 +155,7 @@ impl<V: View> View for FormField<V> {
 
         // If invalid and dirty, draw a red border behind the content
         if !self.is_valid && self.is_dirty {
-            renderer.stroke_rounded_rect(
-                content_rect,
-                4.0,
-                [1.0, 0.2, 0.2, 1.0],
-                1.5,
-            );
+            renderer.stroke_rounded_rect(content_rect, 4.0, [1.0, 0.2, 0.2, 1.0], 1.5);
         }
 
         self.content.render(renderer, content_rect);
@@ -178,7 +178,11 @@ impl<V: View> View for FormField<V> {
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
         let content_size = self.content.intrinsic_size(renderer, proposal);
-        let error_h = if self.error_message.is_some() { 18.0 } else { 0.0 };
+        let error_h = if self.error_message.is_some() {
+            18.0
+        } else {
+            0.0
+        };
         Size {
             width: content_size.width,
             height: 20.0 + content_size.height + error_h,
@@ -204,7 +208,11 @@ impl<V: View> LayoutView for FormField<V> {
             &mut DummyRenderer,
             proposal,
         );
-        let error_h = if self.error_message.is_some() { 18.0 } else { 0.0 };
+        let error_h = if self.error_message.is_some() {
+            18.0
+        } else {
+            0.0
+        };
         Size {
             width: content_size.width,
             height: 20.0 + content_size.height + error_h,
@@ -237,9 +245,25 @@ impl Renderer for DummyRenderer {
     fn fill_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4]) {}
     fn fill_ellipse(&mut self, _rect: Rect, _color: [f32; 4]) {}
     fn stroke_rect(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {}
-    fn stroke_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4], _stroke_width: f32) {}
+    fn stroke_rounded_rect(
+        &mut self,
+        _rect: Rect,
+        _radius: f32,
+        _color: [f32; 4],
+        _stroke_width: f32,
+    ) {
+    }
     fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {}
-    fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _color: [f32; 4], _stroke_width: f32) {}
+    fn draw_line(
+        &mut self,
+        _x1: f32,
+        _y1: f32,
+        _x2: f32,
+        _y2: f32,
+        _color: [f32; 4],
+        _stroke_width: f32,
+    ) {
+    }
     fn draw_text(&mut self, _text: &str, _x: f32, _y: f32, _size: f32, _color: [f32; 4]) {}
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         (text.len() as f32 * size * 0.6, size * 1.2)
