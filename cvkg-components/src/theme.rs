@@ -384,3 +384,50 @@ pub fn toast_warning() -> [f32; 4] {
 pub fn toast_info() -> [f32; 4] {
     info()
 }
+
+// =============================================================================
+// TYPOGRAPHY SCALE
+// =============================================================================
+
+/// Hero font size (48.0)
+#[inline]
+pub fn font_hero() -> f32 {
+    48.0
+}
+
+/// Heading 1 font size (32.0)
+#[inline]
+pub fn font_h1() -> f32 {
+    32.0
+}
+
+/// Heading 2 font size (24.0)
+#[inline]
+pub fn font_h2() -> f32 {
+    24.0
+}
+
+/// Heading 3 font size (20.0)
+#[inline]
+pub fn font_h3() -> f32 {
+    20.0
+}
+
+/// Standard body font size (16.0)
+#[inline]
+pub fn font_body() -> f32 {
+    crate::FONT_BASE
+}
+
+/// Caption/small font size (12.0)
+#[inline]
+pub fn font_caption() -> f32 {
+    12.0
+}
+
+/// Monospaced/code font size (14.0)
+#[inline]
+pub fn font_code() -> f32 {
+    14.0
+}
+
