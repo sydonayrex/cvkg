@@ -1683,18 +1683,15 @@ impl RunicTextEngine {
         let mut family = "sans-serif".to_string();
         let face_ids: Vec<fontdb::ID> = self.db.faces().map(|f| f.id).collect();
         for id in face_ids {
-            if let Some(font_data) = self.get_font_data(id) {
-                if let Some(font_ref) = font_data.font_ref() {
-                    if font_ref.key.value() == ck.font_cache_key {
-                        if let Some(face) = self.db.face(id) {
-                            if let Some((name, _)) = face.families.first() {
+            if let Some(font_data) = self.get_font_data(id)
+                && let Some(font_ref) = font_data.font_ref()
+                    && font_ref.key.value() == ck.font_cache_key {
+                        if let Some(face) = self.db.face(id)
+                            && let Some((name, _)) = face.families.first() {
                                 family = name.clone();
                             }
-                        }
                         break;
                     }
-                }
-            }
         }
 
         let mut style = TextStyle::new(&family, ck.font_size as f32 / 2.0);

@@ -27,12 +27,12 @@ fn journey_node_connection_flow() {
     ));
     graph.add_node(n2);
 
-    graph.add_edge(FlowEdge::new(EdgeId(100), PortId(10), PortId(20)));
+    graph.add_edge(FlowEdge::new(100, NodeId(1), 0, NodeId(2), 0));
 
     assert_eq!(graph.nodes.len(), 2);
     assert_eq!(graph.edges.len(), 1);
 
     let edge = graph.edges.get(&EdgeId(100)).unwrap();
-    assert_eq!(edge.source, PortId(10));
-    assert_eq!(edge.target, PortId(20));
+    assert_eq!(edge.source_node, NodeId(1));
+    assert_eq!(edge.target_node, NodeId(2));
 }

@@ -15,8 +15,10 @@ pub struct LayerId(pub u64);
 /// Material type that determines which GPU pass a layer's draw calls are routed to
 /// in the Backdrop Capture Architecture.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default)]
 pub enum Material {
     /// Opaque or standard UI. Rendered in the initial Scene Capture pass.
+    #[default]
     Opaque,
     /// Glassmorphism elements. Rendered in the Material Composite pass,
     /// sampling from the Kawase Blur pyramid.
@@ -26,11 +28,6 @@ pub enum Material {
     Overlay,
 }
 
-impl Default for Material {
-    fn default() -> Self {
-        Material::Opaque
-    }
-}
 
 /// A draw command within a layer.
 /// This is a simplified representation that the compositor produces
@@ -171,7 +168,7 @@ impl LayerTree {
     pub fn is_dirty(&self, id: LayerId, since_generation: u64) -> bool {
         self.layer_generations
             .get(&id)
-            .map_or(false, |&g| g > since_generation)
+            .is_some_and(|&g| g > since_generation)
     }
 
     /// Advances the global generation counter.

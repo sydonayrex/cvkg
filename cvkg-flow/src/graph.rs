@@ -128,7 +128,7 @@ mod tests {
         ));
         graph.add_node(n2);
 
-        graph.add_edge(FlowEdge::new(EdgeId(100), PortId(10), PortId(20)));
+        graph.add_edge(FlowEdge::new(100, NodeId(1), 0, NodeId(2), 0));
 
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.edges.len(), 1);

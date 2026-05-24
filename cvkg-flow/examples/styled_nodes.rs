@@ -1,4 +1,6 @@
 use cvkg_flow::*;
+use cvkg_flow::types::*;
+use cvkg_flow::port::*;
 
 /// This example shows different node types and styling options.
 pub fn create_styled_nodes() -> FlowGraph {

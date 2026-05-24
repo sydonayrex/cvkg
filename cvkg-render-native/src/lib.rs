@@ -453,6 +453,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     vdom.dispatch_event(cvkg_core::Event::PointerMove {
                         x: state.cursor_pos[0],
                         y: state.cursor_pos[1],
+                        proximity_field: 0.0,
                     });
                 }
                 // FIX #12: Always request redraw on movement to ensure hover effects respond immediately.
@@ -486,6 +487,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 x: state.cursor_pos[0],
                                 y: state.cursor_pos[1],
                                 button: btn_id,
+                                proximity_field: 0.0,
                             });
                         }
                         winit::event::ElementState::Released => {
@@ -986,6 +988,7 @@ fn convert_mouse_event(
             x: position[0],
             y: position[1],
             button,
+            proximity_field: 0.0,
         },
         winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
             x: position[0],
@@ -1240,7 +1243,7 @@ mod tests {
     fn test_event_conversion() {
         // Mouse press event
         let event = convert_mouse_event(winit::event::ElementState::Pressed, [10.0, 20.0], 0);
-        if let cvkg_core::Event::PointerDown { x, y, button } = event {
+        if let cvkg_core::Event::PointerDown { x, y, button, .. } = event {
             assert_eq!(x, 10.0);
             assert_eq!(y, 20.0);
             assert_eq!(button, 0);

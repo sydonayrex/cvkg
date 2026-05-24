@@ -390,16 +390,14 @@ impl SceneGraph {
                 for candidate in candidates {
                     // Skip self comparison or identical rects (since they will merge trivially but we need to remove one)
                     // If they are exactly identical, we handle it too.
-                    if let Some(j) = self.dirty_regions.iter().position(|r| *r == candidate) {
-                        if i != j {
-                            if let Some(union) = rect_union(self.dirty_regions[i], self.dirty_regions[j]) {
+                    if let Some(j) = self.dirty_regions.iter().position(|r| *r == candidate)
+                        && i != j
+                            && let Some(union) = rect_union(self.dirty_regions[i], self.dirty_regions[j]) {
                                 self.dirty_regions[i] = union;
                                 self.dirty_regions.remove(j);
                                 changed = true;
                                 break 'outer;
                             }
-                        }
-                    }
                 }
             }
         }

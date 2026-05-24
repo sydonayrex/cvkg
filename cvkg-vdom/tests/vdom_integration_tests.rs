@@ -13,6 +13,7 @@ fn create_node(id: u64, key: Option<&str>, c_type: &str, children: Vec<NodeId>) 
         aria_role: "presentation".to_string(),
         aria_props: AriaProps::default(),
         portal_target: None,
+        sdf_shape: None,
     }
 }
 

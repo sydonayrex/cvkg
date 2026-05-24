@@ -90,6 +90,8 @@ pub struct VNode {
     pub aria_props: AriaProps,
     /// Optional portal target. If set, this node's children render into the target ID.
     pub portal_target: Option<NodeId>,
+    /// Vili SDF Shape for precise hit testing
+    pub sdf_shape: Option<cvkg_core::layout::SdfShape>,
 }
 
 impl PartialEq for VNode {
@@ -103,6 +105,7 @@ impl PartialEq for VNode {
             && self.children == other.children
             && self.aria_role == other.aria_role
             && self.aria_props == other.aria_props
+            && self.sdf_shape == other.sdf_shape
     }
 }
 
@@ -118,6 +121,7 @@ impl std::fmt::Debug for VNode {
             .field("children", &self.children)
             .field("aria_role", &self.aria_role)
             .field("aria_props", &self.aria_props)
+            .field("sdf_shape", &self.sdf_shape)
             .finish_non_exhaustive()
     }
 }
@@ -206,6 +210,8 @@ pub enum VDomPatch {
         children: Option<Vec<NodeId>>,
         /// Updated event handlers
         handlers: Option<EventHandlerMap>,
+        /// Updated SDF shape
+        sdf_shape: Option<cvkg_core::layout::SdfShape>,
     },
     /// Remove an existing node
     Remove(NodeId),
@@ -239,6 +245,7 @@ impl std::fmt::Debug for VDomPatch {
                 aria_role,
                 children,
                 handlers,
+                sdf_shape,
             } => f
                 .debug_struct("Update")
                 .field("id", id)
@@ -248,6 +255,7 @@ impl std::fmt::Debug for VDomPatch {
                 .field("aria_role", aria_role)
                 .field("children", children)
                 .field("handlers_count", &handlers.as_ref().map(|h| h.len()))
+                .field("sdf_shape", sdf_shape)
                 .finish(),
             Self::Remove(id) => f.debug_tuple("Remove").field(id).finish(),
             Self::Replace { id, node } => f
@@ -283,8 +291,9 @@ impl serde::Serialize for VDomPatch {
                 aria_role,
                 children,
                 handlers,
+                sdf_shape,
             } => {
-                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 7)?;
+                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 8)?;
                 state.serialize_field("id", id)?;
                 state.serialize_field("props", props)?;
                 state.serialize_field("layout", layout)?;
@@ -297,6 +306,7 @@ impl serde::Serialize for VDomPatch {
                         .as_ref()
                         .map(|h| h.keys().cloned().collect::<Vec<String>>()),
                 )?;
+                state.serialize_field("sdf_shape", sdf_shape)?;
                 state.end()
             }
             Self::Remove(id) => serializer.serialize_newtype_variant("VDomPatch", 2, "Remove", id),
@@ -336,6 +346,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 aria_role: Option<String>,
                 children: Option<Vec<NodeId>>,
                 handlers: Option<Vec<String>>,
+                sdf_shape: Option<cvkg_core::layout::SdfShape>,
             },
             Remove(NodeId),
             Replace {
@@ -360,6 +371,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 aria_role,
                 children,
                 handlers,
+                sdf_shape,
             } => VDomPatch::Update {
                 id,
                 props,
@@ -375,12 +387,12 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                         // The actual handler closures cannot be serialized.
                         map.insert(
                             key,
-                            Arc::new(|_event: cvkg_core::Event| {})
-                                as Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
+                            std::sync::Arc::new(|_| log::warn!("Cannot invoke serialized handler")),
                         );
                     }
                     map
                 }),
+                sdf_shape,
             },
             VDomPatchInternal::Remove(id) => VDomPatch::Remove(id),
             VDomPatchInternal::Replace { id, node } => VDomPatch::Replace { id, node },
@@ -621,6 +633,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -651,6 +664,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
                 ..Default::default()
             },
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -683,6 +697,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: role.to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
         self.stack.push(id);
     }
@@ -712,6 +727,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -733,6 +749,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -754,6 +771,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -777,6 +795,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -807,6 +826,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
 
@@ -830,8 +850,17 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         });
     }
+
+    fn set_sdf_shape(&mut self, shape: cvkg_core::layout::SdfShape) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id) {
+                node.sdf_shape = Some(shape);
+            }
+    }
+
     fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4], width: f32) {
         let mut props = HashMap::new();
         props.insert("x1".to_string(), serde_json::to_value(x1).unwrap());
@@ -1042,6 +1071,7 @@ impl VDom {
                     aria_role,
                     children,
                     handlers,
+                    sdf_shape,
                 } => {
                     if let Some(node) = self.nodes.get_mut(&id) {
                         if let Some(p) = props {
@@ -1068,6 +1098,9 @@ impl VDom {
                         }
                         if let Some(h) = handlers {
                             self.event_handlers.insert(id, h);
+                        }
+                        if let Some(s) = sdf_shape {
+                            node.sdf_shape = Some(s);
                         }
                     }
                 }
@@ -1201,6 +1234,7 @@ impl VDom {
         let aria_props_changed = old_node.aria_props != new_node.aria_props;
         let aria_role_changed = old_node.aria_role != new_node.aria_role;
         let children_changed = old_node.children != new_node.children;
+        let sdf_shape_changed = old_node.sdf_shape != new_node.sdf_shape;
 
         let handlers_changed = other.event_handlers.contains_key(&new_id);
 
@@ -1209,6 +1243,7 @@ impl VDom {
             || aria_props_changed
             || aria_role_changed
             || children_changed
+            || sdf_shape_changed
             || handlers_changed
         {
             patches.push(VDomPatch::Update {
@@ -1239,6 +1274,11 @@ impl VDom {
                     None
                 },
                 handlers: other.event_handlers.get(&new_id).cloned(),
+                sdf_shape: if sdf_shape_changed {
+                    new_node.sdf_shape
+                } else {
+                    None
+                },
             });
         }
 
@@ -1365,45 +1405,69 @@ impl VDom {
         res
     }
 
+    fn sdf_distance(shape: Option<&cvkg_core::layout::SdfShape>, layout: &LayoutRect, x: f32, y: f32) -> f32 {
+        let shape = shape.copied().unwrap_or(cvkg_core::layout::SdfShape::Rect(cvkg_core::layout::Rect {
+            x: layout.x, y: layout.y, width: layout.width, height: layout.height
+        }));
+        match shape {
+            cvkg_core::layout::SdfShape::Rect(r) => {
+                let dx = (r.x - x).max(x - (r.x + r.width)).max(0.0);
+                let dy = (r.y - y).max(y - (r.y + r.height)).max(0.0);
+                if dx == 0.0 && dy == 0.0 {
+                    let in_x = (x - r.x).min(r.x + r.width - x);
+                    let in_y = (y - r.y).min(r.y + r.height - y);
+                    -in_x.min(in_y)
+                } else {
+                    (dx*dx + dy*dy).sqrt()
+                }
+            }
+            cvkg_core::layout::SdfShape::RoundedRect { rect: r, radius } => {
+                let hw = r.width / 2.0; let hh = r.height / 2.0;
+                let cx = r.x + hw; let cy = r.y + hh;
+                let dx = (x - cx).abs() - hw + radius;
+                let dy = (y - cy).abs() - hh + radius;
+                dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0) - radius
+            }
+            cvkg_core::layout::SdfShape::Circle { center, radius } => {
+                ((x - center[0]).powi(2) + (y - center[1]).powi(2)).sqrt() - radius
+            }
+        }
+    }
+
     /// Perform hit testing to find the front-most node at the given coordinates.
-    pub fn hit_test(&self, x: f32, y: f32) -> Option<NodeId> {
+    pub fn hit_test(&self, x: f32, y: f32) -> Option<(NodeId, f32)> {
         self.root
             .and_then(|root_id| self.hit_test_recursive(root_id, x, y))
     }
 
-    fn hit_test_recursive(&self, node_id: NodeId, x: f32, y: f32) -> Option<NodeId> {
+    fn hit_test_recursive(&self, node_id: NodeId, x: f32, y: f32) -> Option<(NodeId, f32)> {
         let node = self.nodes.get(&node_id)?;
 
-        // Check if coordinate is within bounds
-        let hit_self = x >= node.layout.x
-            && x <= node.layout.x + node.layout.width
-            && y >= node.layout.y
-            && y <= node.layout.y + node.layout.height;
+        let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, x, y);
+        let proximity = (1.0 - (dist / 150.0)).clamp(0.0, 1.0);
 
-        if !hit_self {
-            return None;
-        }
-
-        // Search children in reverse (front-to-back)
-        for child_id in node.children.iter().rev() {
-            if let Some(hit) = self.hit_test_recursive(*child_id, x, y) {
-                // If the child hit was a primitive/presentation node, and this node
-                // has handlers, this node is the real interactive target.
-                if let Some(child_node) = self.nodes.get(&hit)
-                    && child_node.aria_role == "presentation"
-                    && self.event_handlers.contains_key(&node_id)
-                {
-                    return Some(node_id);
+        if proximity > 0.0 {
+            // Search children in reverse (front-to-back)
+            for child_id in node.children.iter().rev() {
+                if let Some((hit, hit_prox)) = self.hit_test_recursive(*child_id, x, y) {
+                    if let Some(child_node) = self.nodes.get(&hit)
+                        && child_node.aria_role == "presentation" && self.event_handlers.contains_key(&node_id) {
+                            return Some((node_id, proximity.max(hit_prox)));
+                        }
+                    return Some((hit, hit_prox));
                 }
-                return Some(hit);
+            }
+
+            if dist <= 0.0 || self.event_handlers.contains_key(&node_id) {
+                return Some((node_id, proximity));
             }
         }
 
-        Some(node_id)
+        None
     }
 
     /// Dispatch an event to the VDOM by performing a hit test and calling the handler.
-    pub fn dispatch_event(&self, event: cvkg_core::Event) -> cvkg_core::EventResponse {
+    pub fn dispatch_event(&self, mut event: cvkg_core::Event) -> cvkg_core::EventResponse {
         let _span = tracing::info_span!("vdom_dispatch_event").entered();
         let event_name = event.name();
 
@@ -1420,8 +1484,18 @@ impl VDom {
             | cvkg_core::Event::DragMove { x, y, .. }
             | cvkg_core::Event::DragEnd { x, y } => {
                 log::info!("[VDOM] Hit testing at ({}, {})", x, y);
-                let id = self.hit_test(x, y);
-                log::info!("[VDOM] Hit test result: {:?}", id);
+                let (id, proximity) = match self.hit_test(x, y) {
+                    Some((i, p)) => (Some(i), p),
+                    None => (None, 0.0),
+                };
+                log::info!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
+
+                if let cvkg_core::Event::PointerMove { ref mut proximity_field, .. } = event {
+                    *proximity_field = proximity;
+                }
+                if let cvkg_core::Event::PointerDown { ref mut proximity_field, .. } = event {
+                    *proximity_field = proximity;
+                }
 
                 // Update focus/capture/hover state
                 if let cvkg_core::Event::PointerDown { .. } = event {
@@ -1746,6 +1820,7 @@ mod tests {
             aria_role: "presentation".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            sdf_shape: None,
         }
     }
 
@@ -1838,6 +1913,7 @@ mod tests {
                 ..Default::default()
             },
             portal_target: None,
+            sdf_shape: None,
         };
 
         let accesskit_node = node.to_accesskit_node();
@@ -1855,9 +1931,10 @@ mod tests {
 
         // PointerDown on node 1 should set focus
         vdom.dispatch_event(cvkg_core::Event::PointerDown {
-            x: 50.0,
-            y: 50.0,
+            x: 15.0,
+            y: 25.0,
             button: 0,
+            proximity_field: 0.0,
         });
         assert_eq!(vdom.focused_node.lock().unwrap().unwrap(), NodeId(1));
 
@@ -1866,7 +1943,58 @@ mod tests {
             x: 500.0,
             y: 500.0,
             button: 0,
+            proximity_field: 0.0,
         });
         assert!(vdom.focused_node.lock().unwrap().is_none());
+    }
+
+    #[test]
+    fn test_vili_interaction_paradigm() {
+        let mut vdom = VDom::new();
+        vdom.root = Some(NodeId(1));
+
+        let mut node = dummy_node(1, "Button");
+        node.layout = LayoutRect { x: 100.0, y: 100.0, width: 50.0, height: 50.0 };
+        // Set an SDF shape
+        node.sdf_shape = Some(cvkg_core::layout::SdfShape::Circle { center: [125.0, 125.0], radius: 25.0 });
+        // Add an event handler so it is hit testable via proximity
+        vdom.event_handlers.insert(NodeId(1), HashMap::new());
+        vdom.nodes.insert(NodeId(1), node);
+
+        // Direct hit inside the circle
+        let (id1, prox1) = vdom.hit_test(125.0, 125.0).unwrap();
+        assert_eq!(id1, NodeId(1));
+        assert_eq!(prox1, 1.0); // Exact hit
+
+        // Proximity hit outside the circle (radius is 25, so at (125, 175) distance is 25 from edge)
+        let (id2, prox2) = vdom.hit_test(125.0, 175.0).unwrap();
+        assert_eq!(id2, NodeId(1));
+        // distance to circle = 50 - 25 = 25. 
+        // proximity = 1.0 - 25.0/150.0 = 1.0 - 0.1666... = 0.8333...
+        assert!(prox2 > 0.8 && prox2 < 0.9);
+
+        // Outside proximity radius (distance > 150)
+        let hit = vdom.hit_test(125.0, 400.0);
+        assert!(hit.is_none());
+    }
+
+    #[test]
+    fn test_sdf_computation() {
+        use cvkg_core::layout::SdfShape;
+        let rect = LayoutRect { x: 10.0, y: 10.0, width: 50.0, height: 50.0 };
+        
+        // Test basic Rect
+        let dist1 = VDom::sdf_distance(None, &rect, 10.0, 10.0);
+        assert!(dist1 <= 0.0);
+
+        let dist2 = VDom::sdf_distance(None, &rect, 0.0, 10.0);
+        assert_eq!(dist2, 10.0); // 10 units away horizontally
+
+        // Test Circle
+        let circle = SdfShape::Circle { center: [35.0, 35.0], radius: 25.0 };
+        let dist_center = VDom::sdf_distance(Some(&circle), &rect, 35.0, 35.0);
+        assert_eq!(dist_center, -25.0); // exactly at center
+        let dist_edge = VDom::sdf_distance(Some(&circle), &rect, 60.0, 35.0);
+        assert_eq!(dist_edge, 0.0); // directly on edge
     }
 }

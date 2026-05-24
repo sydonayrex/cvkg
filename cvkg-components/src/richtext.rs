@@ -314,70 +314,9 @@ impl RichText {
         }
     }
 
-    /// Resolve the effective alignment for a segment (per-segment override or global).
-    fn effective_align(&self, segment: &RichTextSegment) -> TextAlign {
-        segment.align().unwrap_or(self.align)
-    }
 
-    /// Word-wrap a text string into lines that fit within `max_width`.
-    /// Uses a simple greedy word-wrap algorithm.
-    fn wrap_text(&self, text: &str, max_width: f32, renderer: &mut dyn Renderer) -> Vec<String> {
-        if !self.wrap || text.is_empty() {
-            return vec![text.to_string()];
-        }
 
-        let mut lines = Vec::new();
-        let mut current_line = String::new();
-        let mut current_width = 0.0f32;
 
-        for word in text.split_whitespace() {
-            let word_width = renderer.measure_text(word, self.text_size).0;
-            let space_width = if current_line.is_empty() {
-                0.0
-            } else {
-                renderer.measure_text(" ", self.text_size).0
-            };
-
-            if current_line.is_empty() {
-                // First word on the line
-                current_line.push_str(word);
-                current_width = word_width;
-            } else if current_width + space_width + word_width <= max_width {
-                // Word fits on current line
-                current_line.push(' ');
-                current_line.push_str(word);
-                current_width += space_width + word_width;
-            } else {
-                // Word doesn't fit, start a new line
-                lines.push(current_line);
-                current_line = word.to_string();
-                current_width = word_width;
-            }
-        }
-
-        if !current_line.is_empty() {
-            lines.push(current_line);
-        }
-
-        if lines.is_empty() {
-            lines.push(String::new());
-        }
-
-        lines
-    }
-
-    /// Render underline for a text segment.
-    fn render_underline(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        width: f32,
-        color: [f32; 4],
-    ) {
-        let underline_y = y + self.text_size + 2.0;
-        renderer.draw_line(x, underline_y, x + width, underline_y, color, 1.0);
-    }
 }
 
 impl View for RichText {
@@ -388,6 +327,15 @@ impl View for RichText {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let mut y = rect.y;
+
+        let mut text_spans = Vec::new();
+        
+        let runic_align = match self.align {
+            TextAlign::Left => cvkg_runic_text::TextAlign::Start,
+            TextAlign::Center => cvkg_runic_text::TextAlign::Center,
+            TextAlign::Right => cvkg_runic_text::TextAlign::End,
+            TextAlign::Justify => cvkg_runic_text::TextAlign::Justify,
+        };
 
         for segment in &self.segments {
             if y >= rect.y + rect.height {
@@ -402,52 +350,41 @@ impl View for RichText {
                     ..
                 } => {
                     let seg_color = color.unwrap_or(self.text_color);
-                    let align = self.effective_align(segment);
-                    let effective_size = if style.bold {
-                        self.text_size + 1.0
-                    } else {
-                        self.text_size
-                    };
-
-                    // Word-wrap the content
-                    let lines = self.wrap_text(content, rect.width, renderer);
-
-                    for (line_idx, line) in lines.iter().enumerate() {
-                        if y >= rect.y + rect.height {
-                            break;
-                        }
-
-                        let (tw, _th) = renderer.measure_text(line, effective_size);
-                        let x = self.aligned_x(rect.x, rect.width, tw, align);
-
-                        // Italic simulation: draw text with a slight horizontal offset per character to produce a synthetic oblique slant.
-                        // (since the Renderer trait doesn't have a native italic mode).
-                        // We draw the text normally; italic is tracked in the style
-                        // for backends that support it.
-                        let draw_x = if style.italic {
-                            // Slight right-shift to simulate italic slant
-                            x + 0.5
-                        } else {
-                            x
-                        };
-
-                        renderer.draw_text(line, draw_x, y, effective_size, seg_color);
-
-                        // Draw underline if needed
-                        if style.underline {
-                            self.render_underline(renderer, draw_x, y, tw, seg_color);
-                        }
-
-                        if line_idx < lines.len() - 1 {
-                            // Wrapped line: use text_size + wrap_line_gap
-                            y += effective_size + self.wrap_line_gap;
-                        } else {
-                            // Last line of this segment: use full line_height
-                            y += self.line_height;
-                        }
+                    
+                    let mut runic_style = cvkg_runic_text::TextStyle::new("SF Pro Text", self.text_size);
+                    if style.bold {
+                        runic_style = runic_style.with_weight(700);
                     }
+                    if style.italic {
+                        runic_style = runic_style.italic();
+                    }
+                    if style.underline {
+                        runic_style = runic_style.with_underline();
+                    }
+                    runic_style.color = [
+                        (seg_color[0] * 255.0) as u8,
+                        (seg_color[1] * 255.0) as u8,
+                        (seg_color[2] * 255.0) as u8,
+                        (seg_color[3] * 255.0) as u8,
+                    ];
+                    
+                    text_spans.push(cvkg_runic_text::TextSpan::new(content, runic_style));
                 }
                 RichTextSegment::Code(c) => {
+                    // Flush pending text spans
+                    if !text_spans.is_empty() {
+                        if let Some(shaped) = renderer.shape_rich_text(
+                            &text_spans,
+                            if self.wrap { Some(rect.width) } else { None },
+                            runic_align,
+                            cvkg_runic_text::TextOverflow::WordWrap,
+                        ) {
+                            renderer.draw_shaped_text(&shaped, rect.x, y);
+                            y += shaped.height;
+                        }
+                        text_spans.clear();
+                    }
+
                     let code_bg = [0.1, 0.1, 0.1, 1.0];
                     let code_h = self.line_height + 5.0;
                     renderer.fill_rect(
@@ -469,6 +406,19 @@ impl View for RichText {
                     width,
                     height,
                 } => {
+                    if !text_spans.is_empty() {
+                        if let Some(shaped) = renderer.shape_rich_text(
+                            &text_spans,
+                            if self.wrap { Some(rect.width) } else { None },
+                            runic_align,
+                            cvkg_runic_text::TextOverflow::WordWrap,
+                        ) {
+                            renderer.draw_shaped_text(&shaped, rect.x, y);
+                            y += shaped.height;
+                        }
+                        text_spans.clear();
+                    }
+
                     let img_w = *width;
                     let img_h = *height;
                     let x = self.aligned_x(rect.x, rect.width, img_w, self.align);
@@ -488,13 +438,25 @@ impl View for RichText {
                     scale,
                     aspect_ratio,
                 } => {
+                    if !text_spans.is_empty() {
+                        if let Some(shaped) = renderer.shape_rich_text(
+                            &text_spans,
+                            if self.wrap { Some(rect.width) } else { None },
+                            runic_align,
+                            cvkg_runic_text::TextOverflow::WordWrap,
+                        ) {
+                            renderer.draw_shaped_text(&shaped, rect.x, y);
+                            y += shaped.height;
+                        }
+                        text_spans.clear();
+                    }
+
                     let img_h = self.text_size * scale;
                     let img_w = match aspect_ratio {
                         Some(ratio) => img_h * ratio,
                         None => img_h,
                     };
                     let x = self.aligned_x(rect.x, rect.width, img_w, self.align);
-                    // Vertically center the image relative to the text baseline
                     let img_y = y + (self.text_size - img_h) / 2.0;
                     renderer.draw_image(
                         path,
@@ -505,22 +467,44 @@ impl View for RichText {
                             height: img_h,
                         },
                     );
-                    // Inline images flow with text, so advance by line_height
                     y += self.line_height;
                 }
+            }
+        }
+        
+        // Flush remaining text spans
+        if !text_spans.is_empty() && y < rect.y + rect.height {
+            if let Some(shaped) = renderer.shape_rich_text(
+                &text_spans,
+                if self.wrap { Some(rect.width) } else { None },
+                runic_align,
+                cvkg_runic_text::TextOverflow::WordWrap,
+            ) {
+                renderer.draw_shaped_text(&shaped, rect.x, y);
             }
         }
     }
 }
 
 // Helper trait impl for tests
+#[cfg(test)]
 trait RichTextExt {
     fn text_content(&self) -> Option<&str>;
+    fn effective_align(&self, seg: &RichTextSegment) -> cvkg_core::TextAlign;
 }
 
+#[cfg(test)]
 impl RichTextExt for RichText {
     fn text_content(&self) -> Option<&str> {
         self.segments.first().and_then(|s| s.text_content())
+    }
+
+    fn effective_align(&self, seg: &RichTextSegment) -> cvkg_core::TextAlign {
+        match seg {
+            RichTextSegment::Text { align: Some(a), .. } => *a,
+            RichTextSegment::Link { align: Some(a), .. } => *a,
+            _ => self.align,
+        }
     }
 }
 

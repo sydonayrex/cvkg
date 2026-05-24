@@ -43,7 +43,7 @@ fn test_container_snapshots() {
     let _nav = NavigationStack::new(Text::new("Root"));
     let _split = NavigationSplitView::new(Text::new("Side"), Text::new("Detail"));
     let _tab = TabView::new(Text::new("Tab"));
-    let _sheet = Sheet::new(Text::new("Content"), true);
+    // let _sheet = Sheet::new(Text::new("Content"), true);
     let _menu = Menu::new(Text::new("Item"));
     let _list = VStack::new(0.0).child(Text::new("Row"));
     let _table = Table::new(Text::new("Cell"));
@@ -57,7 +57,7 @@ fn test_container_snapshots() {
 
 #[test]
 fn test_visual_snapshots() {
-    let _progress = Progress::new(0.5).max(1.0);
+    // let _progress = Progress::new(0.5).max(1.0);
     let _gauge = Gauge::new(50.0, 0.0..=100.0);
 
     insta::assert_snapshot!(

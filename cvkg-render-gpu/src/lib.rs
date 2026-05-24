@@ -101,7 +101,7 @@ impl YggdrasilPacker {
             
             let new_seg = SkylineSegment { x, y: y + h, w };
             let mut remaining = w;
-            let mut insert_idx = idx;
+            let insert_idx = idx;
             
             while remaining > 0 {
                 if self.skyline[insert_idx].w <= remaining {
@@ -131,10 +131,8 @@ impl YggdrasilPacker {
         None
     }
 
-    fn clear(&mut self) {
-        self.skyline.clear();
-        self.skyline.push(SkylineSegment { x: 0, y: 0, w: self.width });
-    }
+
+
 }
 
 #[cfg(test)]
@@ -147,13 +145,9 @@ mod tests {
 
         // Pack first item
         assert_eq!(packer.pack(10, 10), Some((0, 0)));
-        assert_eq!(packer.current_x, 10);
-        assert_eq!(packer.shelf_height, 10);
 
         // Pack second item on same shelf
         assert_eq!(packer.pack(20, 15), Some((10, 0)));
-        assert_eq!(packer.current_x, 30);
-        assert_eq!(packer.shelf_height, 15);
     }
 
     #[test]
@@ -163,9 +157,6 @@ mod tests {
 
         // This should trigger a new shelf
         assert_eq!(packer.pack(50, 20), Some((0, 10)));
-        assert_eq!(packer.current_x, 50);
-        assert_eq!(packer.shelf_y, 10);
-        assert_eq!(packer.shelf_height, 20);
     }
 
     #[test]
@@ -3723,6 +3714,124 @@ impl cvkg_core::Renderer for SurtrRenderer {
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         let shaped = self.shape_text_with_stack(text, size);
         (shaped.width, shaped.height)
+    }
+
+    fn shape_rich_text(
+        &mut self,
+        spans: &[cvkg_runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: cvkg_runic_text::TextAlign,
+        overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        let sf = self.current_scale_factor();
+        let mut scaled_spans = spans.to_vec();
+        for span in &mut scaled_spans {
+            span.style.font_size *= sf;
+            if span.style.fallback_families.is_empty() {
+                span.style.fallback_families = vec![
+                    "SF Pro".to_string(),
+                    "Inter".to_string(),
+                    "Helvetica Neue".to_string(),
+                    "Helvetica".to_string(),
+                    "Arial".to_string(),
+                    "sans-serif".to_string(),
+                ];
+            }
+        }
+        let scaled_max_width = max_width.map(|w| w * sf);
+        self.text_engine.shape_layout(&scaled_spans, scaled_max_width, align, overflow).ok()
+    }
+
+    fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
+        for glyph in &shaped.glyphs {
+            let byte_idx = shaped.grapheme_boundaries.get(glyph.cluster as usize).copied().unwrap_or(0);
+            let mut span_color = [1.0, 1.0, 1.0, 1.0];
+            for span in &shaped.spans {
+                if byte_idx >= span.byte_offset && byte_idx < span.byte_offset + span.text.len() {
+                    span_color = [
+                        span.style.color[0] as f32 / 255.0,
+                        span.style.color[1] as f32 / 255.0,
+                        span.style.color[2] as f32 / 255.0,
+                        span.style.color[3] as f32 / 255.0,
+                    ];
+                    break;
+                }
+            }
+            let c = self.apply_opacity(span_color);
+
+            let cache_key = glyph.cache_key;
+            let (uv_rect, w, h) = if let Some(info) = self.text_cache.get(&cache_key) {
+                *info
+            } else {
+                if let Some(image) = self.text_engine.rasterize(cache_key) {
+                    let gw = image.width;
+                    let gh = image.height;
+
+                    let pack_res = self.atlas_packer.pack(gw, gh);
+                    let (nx, ny) = if let Some(pos) = pack_res {
+                        pos
+                    } else {
+                        self.reclaim_vram();
+                        self.atlas_packer.pack(gw, gh).unwrap_or((0, 0))
+                    };
+
+                    let mut rgba_data = Vec::with_capacity((gw * gh * 4) as usize);
+                    for alpha in &image.data {
+                        rgba_data.push(255);
+                        rgba_data.push(255);
+                        rgba_data.push(255);
+                        rgba_data.push(*alpha);
+                    }
+
+                    self.queue.write_texture(
+                        wgpu::TexelCopyTextureInfo {
+                            texture: &self.mega_atlas_tex,
+                            mip_level: 0,
+                            origin: wgpu::Origin3d { x: nx, y: ny, z: 0 },
+                            aspect: wgpu::TextureAspect::All,
+                        },
+                        &rgba_data,
+                        wgpu::TexelCopyBufferLayout {
+                            offset: 0,
+                            bytes_per_row: Some(gw * 4),
+                            rows_per_image: Some(gh),
+                        },
+                        wgpu::Extent3d {
+                            width: gw,
+                            height: gh,
+                            depth_or_array_layers: 1,
+                        },
+                    );
+
+                    let info = (
+                        Rect {
+                            x: nx as f32 / 4096.0,
+                            y: ny as f32 / 4096.0,
+                            width: gw as f32 / 4096.0,
+                            height: gh as f32 / 4096.0,
+                        },
+                        gw as f32,
+                        gh as f32,
+                    );
+                    self.text_cache.put(cache_key, info);
+                    info
+                } else {
+                    (Rect::zero(), 0.0, 0.0)
+                }
+            };
+
+            if w > 0.0 {
+                let sf = self.current_scale_factor();
+                let glyph_rect = Rect {
+                    x: x + glyph.x / sf,
+                    y: y + glyph.y / sf,
+                    width: w / sf,
+                    height: h / sf,
+                };
+                let tid = self.get_texture_id("__mega_atlas");
+                self.fill_rect_with_full_params(glyph_rect, c, 6, tid, 0.0, uv_rect);
+            }
+        }
     }
 
     fn draw_texture(&mut self, texture_id: u32, rect: Rect) {

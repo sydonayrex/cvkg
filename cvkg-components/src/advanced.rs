@@ -105,9 +105,16 @@ impl<V: View> View for SvadilVeil<V> {
         
         if let Some(content) = &self.content {
             let size = content.intrinsic_size(renderer, SizeProposal::tight(rect.width, rect.height));
-            // Center the content in the veil
-            let cx = rect.x + (rect.width - size.width) / 2.0;
-            let cy = rect.y + (rect.height - size.height) / 2.0;
+            // Delegate centering to the layout engine via HStack+VStack
+            let inner = Rect::new(rect.x, rect.y, rect.width, rect.height);
+            let mut cache = LayoutCache::new();
+            let layouts: Vec<&dyn LayoutView> = vec![];
+            let row = cvkg_layout::HStack::compute_layout(
+                0.0, cvkg_core::Alignment::Center, cvkg_core::Distribution::Center,
+                inner, &layouts, &mut cache,
+            );
+            let cx = if !row.is_empty() { row[0].x } else { rect.x };
+            let cy = if !row.is_empty() { row[0].y } else { rect.y };
             content.render(renderer, Rect::new(cx, cy, size.width, size.height));
         }
         renderer.pop_vnode();
@@ -312,6 +319,83 @@ impl<V: View> View for NidhugMasonry<V> {
         let max_height = column_heights.into_iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0.0);
         
         Size { width, height: (max_height - spacing).max(0.0) }
+    }
+    
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+}
+
+impl<V: View> cvkg_core::layout::LayoutView for NidhugMasonry<V> {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::layout::SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> cvkg_core::Size {
+        let spacing = 16.0;
+        let width = proposal.width.unwrap_or(400.0);
+        let col_width = ((width - (self.columns - 1) as f32 * spacing) / self.columns as f32).max(0.0);
+        
+        let mut column_heights = vec![0.0_f32; self.columns];
+        
+        for item in &self.items {
+            let (col_idx, _) = column_heights.iter().enumerate()
+                .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .unwrap_or((0, &0.0));
+            
+            let item_size = if let Some(l) = item.layout() {
+                l.size_that_fits(cvkg_core::layout::SizeProposal::width(col_width), &[], cache)
+            } else {
+                cvkg_core::Size::ZERO
+            };
+            
+            column_heights[col_idx] += item_size.height + spacing;
+        }
+        
+        let max_height = column_heights.into_iter().max_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)).unwrap_or(0.0);
+        
+        cvkg_core::Size { width, height: (max_height - spacing).max(0.0) }
+    }
+
+    fn place_subviews(
+        &self,
+        bounds: cvkg_core::Rect,
+        subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        cache: &mut cvkg_core::layout::LayoutCache,
+    ) {
+        let n = subviews.len();
+        if n == 0 {
+            return;
+        }
+        let spacing = 16.0;
+        let columns = self.columns;
+        let col_width = ((bounds.width - (columns - 1) as f32 * spacing) / columns as f32).max(0.0);
+
+        // Measure all subviews first
+        let mut child_sizes: Vec<cvkg_core::Size> = Vec::with_capacity(n);
+        for sv in subviews.iter() {
+            let sz = sv.size_that_fits(
+                cvkg_core::layout::SizeProposal::width(col_width),
+                &[],
+                cache,
+            );
+            child_sizes.push(sz);
+        }
+
+        // Bin-packing: assign to shortest column
+        let mut column_heights = vec![0.0_f32; columns];
+        for (i, sv) in subviews.iter_mut().enumerate() {
+            let (col_idx, &min_h) = column_heights.iter().enumerate()
+                .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                .unwrap_or((0, &0.0));
+            let item_x = bounds.x + col_idx as f32 * (col_width + spacing);
+            let item_y = bounds.y + min_h;
+            let child_h = child_sizes[i].height;
+            let child_rect = cvkg_core::Rect::new(item_x, item_y, col_width, child_h);
+            sv.place_subviews(child_rect, &mut [], cache);
+            column_heights[col_idx] += child_h + spacing;
+        }
     }
 }
 
@@ -554,8 +638,90 @@ impl<V: View> View for HuginContextMenu<V> {
 pub struct MuninMenubar<V> { items: Vec<V> }
 impl<V: View> View for MuninMenubar<V> {
     type Body = Never; fn body(self) -> Self::Body { unreachable!() }
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {}
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size { Size { width: 0.0, height: 0.0 } }
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "MuninMenubar");
+        renderer.fill_rect(rect, [0.1, 0.1, 0.12, 1.0]);
+        
+        let layouts: Vec<&dyn cvkg_core::layout::LayoutView> = self.items.iter().filter_map(|c| c.layout()).collect();
+        let mut cache = cvkg_core::layout::LayoutCache::new();
+        let inner_rect = Rect::new(rect.x + 8.0, rect.y, rect.width - 16.0, rect.height);
+        
+        // Delegate structural geometry to the layout engine
+        let rects = cvkg_layout::HStack::compute_layout(
+            12.0,
+            cvkg_core::Alignment::Center,
+            cvkg_core::Distribution::Leading,
+            inner_rect,
+            &layouts,
+            &mut cache,
+        );
+        
+        let mut idx = 0;
+        for item in &self.items {
+            if item.layout().is_some() && idx < rects.len() {
+                item.render(renderer, rects[idx]);
+                idx += 1;
+            }
+        }
+        renderer.pop_vnode();
+    }
+    
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let layouts: Vec<&dyn cvkg_core::layout::LayoutView> = self.items.iter().filter_map(|c| c.layout()).collect();
+        let mut cache = cvkg_core::layout::LayoutCache::new();
+        let mut w = 16.0;
+        for l in layouts {
+            w += l.size_that_fits(SizeProposal::unspecified(), &[], &mut cache).width + 12.0;
+        }
+        Size { width: proposal.width.unwrap_or(w), height: proposal.height.unwrap_or(32.0) }
+    }
+    
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+}
+
+impl<V: View> cvkg_core::layout::LayoutView for MuninMenubar<V> {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::layout::SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> cvkg_core::Size {
+        let layouts: Vec<&dyn cvkg_core::layout::LayoutView> = self.items.iter().filter_map(|c| c.layout()).collect();
+        let mut w = 16.0;
+        for l in layouts {
+            w += l.size_that_fits(cvkg_core::layout::SizeProposal::unspecified(), &[], cache).width + 12.0;
+        }
+        cvkg_core::Size { width: proposal.width.unwrap_or(w), height: proposal.height.unwrap_or(32.0) }
+    }
+
+    fn place_subviews(
+        &self,
+        bounds: cvkg_core::Rect,
+        subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        cache: &mut cvkg_core::layout::LayoutCache,
+    ) {
+        let layouts: Vec<&dyn cvkg_core::layout::LayoutView> = self.items.iter().filter_map(|c| c.layout()).collect();
+        if layouts.is_empty() {
+            return;
+        }
+        let inner_rect = cvkg_core::Rect::new(bounds.x + 8.0, bounds.y, bounds.width - 16.0, bounds.height);
+        let rects = cvkg_layout::HStack::compute_layout(
+            12.0,
+            cvkg_core::Alignment::Center,
+            cvkg_core::Distribution::Leading,
+            inner_rect,
+            &layouts,
+            cache,
+        );
+        // Delegate each subview into its computed rect
+        for (i, sv) in subviews.iter_mut().enumerate() {
+            if i < rects.len() {
+                sv.place_subviews(rects[i], &mut [], cache);
+            }
+        }
+    }
 }
 
 #[derive(Clone)]

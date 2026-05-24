@@ -72,10 +72,21 @@ pub trait Renderer3D {
 // Text — text layout and measurement
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Text rendering and measurement.
 pub trait RendererText {
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32);
+
+    fn shape_rich_text(
+        &mut self,
+        _spans: &[cvkg_runic_text::TextSpan],
+        _max_width: Option<f32>,
+        _align: cvkg_runic_text::TextAlign,
+        _overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        None
+    }
+
+    fn draw_shaped_text(&mut self, _text: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {}
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

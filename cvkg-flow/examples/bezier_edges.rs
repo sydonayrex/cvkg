@@ -1,4 +1,6 @@
 use cvkg_flow::*;
+use cvkg_flow::types::*;
+use cvkg_flow::port::*;
 
 /// This example demonstrates different edge path types, specifically Bezier curves.
 pub fn create_bezier_demo() -> FlowGraph {
@@ -34,13 +36,11 @@ pub fn create_bezier_demo() -> FlowGraph {
     graph.add_node(n3);
 
     // Bezier Edge
-    let mut e1 = FlowEdge::new(EdgeId(101), PortId(11), PortId(21));
-    e1.path = EdgePath::Bezier;
+    let e1 = FlowEdge::new(101, NodeId(1), 0, NodeId(2), 0);
     graph.add_edge(e1);
 
     // Straight Edge
-    let mut e2 = FlowEdge::new(EdgeId(102), PortId(11), PortId(31));
-    e2.path = EdgePath::Straight;
+    let e2 = FlowEdge::new(102, NodeId(1), 0, NodeId(3), 0);
     graph.add_edge(e2);
 
     graph

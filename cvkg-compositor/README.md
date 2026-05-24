@@ -1,65 +1,34 @@
-# CVKG Compositor
+# cvkg-compositor
 
-![CVKG Compositor Engine Architecture](compositor_diagram.png)
+`cvkg-compositor` is a high-performance, node-based visual compositor crate for the Computer Vision Knowledge Graph (CVKG) ecosystem. It provides the core engine for composing complex scenes, layouts, and node graphs efficiently.
 
-`cvkg-compositor` is the retained-mode layer orchestration engine for the Cyber Viking Kvasir Graph (CVKG) UI framework.
+![Compositor Engine Capabilities](/home/nelson/.gemini/antigravity/brain/bf1b2c15-7683-4950-8fe1-c14440a259c8/compositor_engine_diagram_1779592343685.png)
 
-The compositor acts as the critical bridge between `cvkg-vdom` (the virtual UI state) and `cvkg-render-gpu` (the actual drawing backend). It is responsible for intelligently routing UI elements into GPU passes and minimizing unnecessary redraws.
+## Features
 
-## Key Capabilities
+- **Advanced Node Compositing**: Combine, transform, and layer diverse visual elements.
+- **Continuous Proximity & Kinematic Fields (Vili Paradigm)**: The UI is driven by continuous proximity fields and dynamic attention scaling rather than static rectangular hitboxes.
+- **Hardware Acceleration Ready**: Architected to plug seamlessly into GPU-accelerated rendering pipelines (`cvkg-render-gpu`).
+- **Reactive State Management**: Uses a robust virtual DOM (`cvkg-vdom`) under the hood to efficiently track diffs and apply layout patches.
 
-1. **Material Routing**: 
-   The engine reads the `Material` property of each `Layer` (e.g., `Opaque`, `Glass`, `Overlay`) and routes the draw commands into specific GPU pass buckets. This enables advanced, multi-pass rendering pipelines like Kawase Blur pyramids for frosted glass effects without burdening the application layer.
+## Integration
 
-2. **Damage Tracking**: 
-   A robust generation-based system tracks which UI layers have been modified since the last frame. Static UI elements are not re-recorded, significantly reducing CPU overhead and preserving battery life on native desktop environments.
+`cvkg-compositor` integrates seamlessly with:
+- `cvkg-flow` for graph-based node visualization and wiring.
+- `cvkg-components` for the UI shell, docking panels, and interactive property inspectors.
+- `cvkg-scene` to inject composite results into the final 2D/3D render context.
 
-3. **Layer Orchestration**: 
-   Maintains a retained `LayerTree` with proper Z-sorting (painter's algorithm) and hierarchical relationships, separating the UI definition from the GPU command submission.
+## Usage
 
-## Architecture
+Add `cvkg-compositor` to your `Cargo.toml`:
 
-```text
-VDom → LayerTreeBuilder → CompositorEngine → SurtrRenderer
-                                   │
-                         ┌─────────┼─────────┐
-                         ▼         ▼         ▼
-                    scene_cmds  glass_cmds  overlay_cmds
-                         │         │         │
-                         ▼         ▼         ▼
-                    ┌─────────────────────────────┐
-                    │  Backdrop Capture Pipeline  │
-                    │  (Scene→Blur→Composite→UI)  │
-                    └─────────────────────────────┘
+```toml
+[dependencies]
+cvkg-compositor = { path = "../cvkg-compositor", version = "0.1.21" }
 ```
 
-## Quick Start
-
-The compositor is typically driven internally by `cvkg-core` and the platform-specific runners. However, you can inspect the orchestration logic by interacting with `LayerTree` and `CompositorEngine` directly if you are writing a custom rendering backend.
-
-```rust
-use cvkg_compositor::{CompositorEngine, LayerTree, Layer, Material};
-
-let mut tree = LayerTree::new();
-let mut engine = CompositorEngine::new();
-
-// Define a glassmorphic layer
-let mut glass_layer = Layer::default();
-glass_layer.material = Material::Glass { blur_radius: 12.0 };
-let id = tree.allocate_id();
-glass_layer.id = id;
-
-tree.insert_layer(glass_layer);
-tree.set_roots(vec![id]);
-
-// Route commands based on material
-let buckets = engine.route_layers(&tree);
-
-// Dispatch to GPU passes...
-// renderer.render_scene(&buckets.scene_cmds);
-// renderer.render_glass(&buckets.glass_cmds);
-```
+Initialize the compositor within your primary app configuration, leveraging the Vili Interaction Paradigm for fluid, dynamic pointer interaction and kinematics.
 
 ## License
 
-This project is licensed under the MPL-2.0 License.
+MIT / Apache-2.0

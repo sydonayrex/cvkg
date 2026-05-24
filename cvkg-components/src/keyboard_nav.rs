@@ -324,7 +324,7 @@ fn cycle_focus(forward: bool) {
 }
 
 /// Hash for the focus order list in system state.
-fn focus_order_hash() -> u64 {
+pub fn focus_order_hash() -> u64 {
     use std::hash::{Hash, Hasher};
     let mut s = std::collections::hash_map::DefaultHasher::new();
     "focus_order".hash(&mut s);
@@ -332,7 +332,7 @@ fn focus_order_hash() -> u64 {
 }
 
 /// Hash for the current focus ID in system state.
-fn current_focus_hash() -> u64 {
+pub fn current_focus_hash() -> u64 {
     use std::hash::{Hash, Hasher};
     let mut s = std::collections::hash_map::DefaultHasher::new();
     "current_focus".hash(&mut s);

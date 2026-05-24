@@ -19,8 +19,7 @@ struct AutoCompleteState {
     selection: Option<usize>,
     /// Indices into the options list that match the current filter text.
     filtered_indices: Vec<usize>,
-    /// The current text in the input field.
-    text: String,
+
 }
 
 impl AutoCompleteState {
@@ -30,7 +29,7 @@ impl AutoCompleteState {
             is_open: false,
             selection: None,
             filtered_indices,
-            text: String::new(),
+
         }
     }
 }
@@ -265,7 +264,7 @@ impl View for AutoComplete {
                             is_open: open,
                             selection: sel,
                             filtered_indices: filtered,
-                            text: new_text,
+        
                         };
                         let saved = new_state.clone();
                         cvkg_core::update_system_state(move |sys| {

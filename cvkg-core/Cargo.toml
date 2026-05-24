@@ -59,6 +59,9 @@ features = ["derive"]
 [dependencies.serde_json]
 version = "1.0"
 
+[dependencies.cvkg-runic-text]
+path = "../cvkg-runic-text"
+
 [dependencies.stl_io]
 version = "0.7"
 

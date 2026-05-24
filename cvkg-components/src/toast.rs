@@ -45,6 +45,8 @@ pub struct Toast {
     pub duration: f32,
     /// Timestamp (seconds since renderer start) when this toast was created.
     pub created_at: f32,
+    /// Whether the toast was explicitly dismissed.
+    pub dismissed: bool,
 }
 
 impl Toast {
@@ -64,6 +66,7 @@ impl Toast {
             kind,
             duration,
             created_at,
+            dismissed: false,
         }
     }
 
@@ -85,7 +88,7 @@ impl Toast {
     }
 
     /// Returns true if this toast should be auto-dismissed at the given time.
-    fn is_expired(&self, current_time: f32) -> bool {
+    pub fn is_expired(&self, current_time: f32) -> bool {
         self.duration > 0.0 && self.elapsed(current_time) >= self.duration
     }
 }
@@ -238,7 +241,9 @@ impl ToastManager {
 
     /// Dismisses the toast with the given ID, if it exists.
     pub fn dismiss(&mut self, id: u64) {
-        self.toasts.retain(|t| t.id != id);
+        if let Some(toast) = self.toasts.iter_mut().find(|t| t.id == id) {
+            toast.dismissed = true;
+        }
     }
 
     /// Removes all active toasts immediately.
@@ -246,14 +251,39 @@ impl ToastManager {
         self.toasts.clear();
     }
 
+    /// Updates the toast manager lifecycle, initializing timestamps and purging expired toasts.
+    pub fn update(&mut self, current_time: f32) {
+        self.init_timestamps(current_time);
+        self.purge_expired(current_time);
+    }
+
     /// Purges any toasts that have exceeded their duration at the given time.
-    fn purge_expired(&mut self, current_time: f32) {
-        self.toasts.retain(|t| !t.is_expired(current_time));
+    pub fn purge_expired(&mut self, current_time: f32) {
+        let s = cvkg_core::load_system_state();
+        self.toasts.retain(|t| {
+            let expired_or_dismissed = t.is_expired(current_time) || t.dismissed;
+            if !expired_or_dismissed {
+                return true;
+            }
+            
+            // Check if animation has settled
+            let anim_hash = t.id.wrapping_add(88888);
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash) {
+                let solver = solver_arc.read().unwrap();
+                if solver.is_settled() {
+                    return false; // Settled at 0.0, purge it
+                } else {
+                    return true; // Still animating out
+                }
+            }
+            
+            false // No solver created, just purge
+        });
     }
 
     /// Initializes created_at for toasts that haven't been timestamped yet
     /// (created_at == 0.0 and duration > 0).
-    fn init_timestamps(&mut self, current_time: f32) {
+    pub fn init_timestamps(&mut self, current_time: f32) {
         for toast in &mut self.toasts {
             if toast.created_at == 0.0 {
                 toast.created_at = current_time;
@@ -345,6 +375,32 @@ impl ToastManager {
     ) {
         let accent = toast.kind.color();
         let t = current_time;
+
+        let anim_hash = toast.id.wrapping_add(88888);
+        let target = if toast.is_expired(current_time) || toast.dismissed { 0.0 } else { 1.0 };
+        let mut t_val = 0.0;
+        {
+            let s = cvkg_core::load_system_state();
+            if s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash).is_none() {
+                cvkg_core::update_system_state(|st| {
+                    let mut new_st = st.clone();
+                    new_st.set_component_state(anim_hash, cvkg_anim::SleipnirSolver::new(cvkg_anim::SleipnirParams::snappy(), target, 0.0));
+                    new_st
+                });
+            }
+        }
+        {
+            let s = cvkg_core::load_system_state();
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash) {
+                let mut solver = solver_arc.write().unwrap();
+                solver.set_target(target);
+                t_val = solver.tick(renderer.delta_time());
+            }
+        }
+
+        renderer.push_opacity(t_val);
+        let slide_offset = (1.0 - t_val) * 50.0;
+        renderer.push_transform([slide_offset, 0.0], [1.0, 1.0], 0.0);
 
         renderer.push_vnode(rect, "Toast");
 
@@ -466,6 +522,8 @@ impl ToastManager {
         }
 
         renderer.pop_vnode();
+        renderer.pop_transform();
+        renderer.pop_opacity();
     }
 
     /// Returns a callback that dismisses a toast by ID.

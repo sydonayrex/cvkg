@@ -49,6 +49,7 @@ fn journey_button_click_flow() {
     vdom.dispatch_event(Event::PointerMove {
         x: button_node.layout.x + button_node.layout.width / 2.0,
         y: button_node.layout.y + button_node.layout.height / 2.0,
+        proximity_field: 0.0,
     });
 
     vdom.dispatch_event(Event::PointerClick {

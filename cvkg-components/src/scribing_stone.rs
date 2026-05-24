@@ -59,7 +59,7 @@ impl View for ScribingStone {
         renderer.register_handler(
             "pointermove",
             Arc::new(move |ev| {
-                if let Event::PointerMove { x, y } = ev {
+                if let Event::PointerMove { x, y, .. } = ev {
                     let mut s = strokes_clone2.lock().unwrap();
                     if let Some(last_stroke) = s.last_mut() {
                         last_stroke.push([x, y]);

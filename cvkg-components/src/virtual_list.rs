@@ -85,7 +85,7 @@ where
             .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(0.0);
 
-        let content_h = data_len as f32 * self.item_height;
+        let _content_h = data_len as f32 * self.item_height;
         let start_idx = (scroll_offset / self.item_height).floor().max(0.0) as usize;
         let visible_count = (rect.height / self.item_height).ceil() as usize + 1;
         let end_idx = (start_idx + visible_count).min(data_len);

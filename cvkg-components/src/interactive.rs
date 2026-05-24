@@ -254,9 +254,74 @@ impl View for Button {
             }
         }
 
-        let bg = self.bg_color(is_pressed, is_hovered);
-        let (border_color, border_width) = self.border_color(is_pressed, is_hovered);
-        let text_color = self.text_color(is_hovered);
+        let hover_anim_hash = hover_hash.wrapping_add(12345);
+        let press_anim_hash = focus_hash.wrapping_add(12345);
+        
+        let hover_target = if is_hovered { 1.0 } else { 0.0 };
+        let mut hover_t = 0.0;
+        {
+            let s = cvkg_core::load_system_state();
+            if s.get_component_state::<cvkg_anim::SleipnirSolver>(hover_anim_hash).is_none() {
+                cvkg_core::update_system_state(|st| {
+                    let mut new_st = st.clone();
+                    new_st.set_component_state(hover_anim_hash, cvkg_anim::SleipnirSolver::new(cvkg_anim::SleipnirParams::snappy(), hover_target, hover_target));
+                    new_st
+                });
+            }
+        }
+        {
+            let s = cvkg_core::load_system_state();
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(hover_anim_hash) {
+                let mut solver = solver_arc.write().unwrap();
+                solver.set_target(hover_target);
+                hover_t = solver.tick(renderer.delta_time());
+            }
+        }
+
+        let press_target = if is_pressed { 1.0 } else { 0.0 };
+        let mut press_t = 0.0;
+        {
+            let s = cvkg_core::load_system_state();
+            if s.get_component_state::<cvkg_anim::SleipnirSolver>(press_anim_hash).is_none() {
+                cvkg_core::update_system_state(|st| {
+                    let mut new_st = st.clone();
+                    new_st.set_component_state(press_anim_hash, cvkg_anim::SleipnirSolver::new(cvkg_anim::SleipnirParams::snappy(), press_target, press_target));
+                    new_st
+                });
+            }
+        }
+        {
+            let s = cvkg_core::load_system_state();
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(press_anim_hash) {
+                let mut solver = solver_arc.write().unwrap();
+                solver.set_target(press_target);
+                press_t = solver.tick(renderer.delta_time());
+            }
+        }
+
+        let lerp_color = |a: [f32; 4], b: [f32; 4], t: f32| -> [f32; 4] {
+            [
+                a[0] + (b[0] - a[0]) * t,
+                a[1] + (b[1] - a[1]) * t,
+                a[2] + (b[2] - a[2]) * t,
+                a[3] + (b[3] - a[3]) * t,
+            ]
+        };
+
+        let bg_normal = self.bg_color(false, false);
+        let bg_hover = self.bg_color(false, true);
+        let bg_press = self.bg_color(true, true);
+        let bg = lerp_color(lerp_color(bg_normal, bg_hover, hover_t), bg_press, press_t);
+
+        let (bc_normal, bw_normal) = self.border_color(false, false);
+        let (bc_hover, bw_hover) = self.border_color(false, true);
+        let (bc_press, bw_press) = self.border_color(true, true);
+        let border_color = lerp_color(lerp_color(bc_normal, bc_hover, hover_t), bc_press, press_t);
+        let border_width = bw_normal + (bw_hover - bw_normal) * hover_t + (bw_press - bw_hover) * press_t;
+
+        let tc_normal = self.text_color(false);
+        let tc_hover = self.text_color(true);
+        let text_color = lerp_color(tc_normal, tc_hover, hover_t);
         let font_size = self.font_size();
 
         // Elevation & Depth
@@ -1432,7 +1497,8 @@ impl<V: Clone + View> View for Select<V> {
             // Read hover index from system state
             let hover_idx = cvkg_core::load_system_state()
                 .get_component_state::<usize>(self.id_hash.wrapping_add(1))
-                .map(|v| *v.read().unwrap());
+                .map(|v| *v.read().unwrap())
+                .or(self.hover_index);
 
             for (i, (label, _)) in self.options.iter().enumerate() {
                 let item_rect = Rect {
@@ -1539,6 +1605,38 @@ impl<V: Clone + View> View for Select<V> {
                 }
             }),
         );
+
+        if is_open {
+            let item_height = 32.0;
+            let popover_h = (self.options.len() as f32 * item_height).min(200.0);
+            let popover_rect = Rect {
+                x: rect.x,
+                y: rect.y + rect.height + 4.0,
+                width: rect.width,
+                height: popover_h,
+            };
+            
+            // Pointer hover tracking
+            let id_hash_hover = self.id_hash.wrapping_add(1);
+            let pr = popover_rect;
+            renderer.register_handler(
+                "pointermove",
+                Arc::new(move |event| {
+                    if let cvkg_core::Event::PointerMove { x, y, .. } = event {
+                        if x >= pr.x && x <= pr.x + pr.width
+                            && y >= pr.y && y <= pr.y + pr.height
+                        {
+                            let hover_idx = ((y - pr.y) / item_height) as usize;
+                            cvkg_core::update_system_state(|s| {
+                                let mut s = s.clone();
+                                s.set_component_state(id_hash_hover, hover_idx);
+                                s
+                            });
+                        }
+                    }
+                }),
+            );
+        }
 
         renderer.pop_vnode();
     }
@@ -2487,6 +2585,29 @@ impl<T: Clone + View> View for GeriTransfer<T> {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "GeriTransfer");
         renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        
+        let half_w = rect.width / 2.0;
+        let left_rect = Rect { x: rect.x, y: rect.y, width: half_w, height: rect.height };
+        let right_rect = Rect { x: rect.x + half_w, y: rect.y, width: half_w, height: rect.height };
+        
+        // Draw separator
+        renderer.draw_line(rect.x + half_w, rect.y, rect.x + half_w, rect.y + rect.height, [0.3, 0.3, 0.3, 1.0], 1.0);
+        
+        let item_h = 30.0;
+        let mut y_offset = 10.0;
+        for item in &self.left_items {
+            let item_rect = Rect { x: left_rect.x + 10.0, y: left_rect.y + y_offset, width: left_rect.width - 20.0, height: item_h };
+            item.render(renderer, item_rect);
+            y_offset += item_h + 5.0;
+        }
+        
+        let mut y_offset = 10.0;
+        for item in &self.right_items {
+            let item_rect = Rect { x: right_rect.x + 10.0, y: right_rect.y + y_offset, width: right_rect.width - 20.0, height: item_h };
+            item.render(renderer, item_rect);
+            y_offset += item_h + 5.0;
+        }
+
         renderer.pop_vnode();
     }
     

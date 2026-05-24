@@ -113,7 +113,10 @@ path = "tests/tactical_tests.rs"
 version = "0.1.21"
 
 [dependencies.cvkg-core]
-version = "0.1.21"
+path = "../cvkg-core"
+
+[dependencies.cvkg-runic-text]
+path = "../cvkg-runic-text"
 
 [dependencies.cvkg-layout]
 version = "0.1.21"

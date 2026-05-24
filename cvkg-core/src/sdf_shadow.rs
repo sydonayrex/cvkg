@@ -320,8 +320,8 @@ mod tests {
     #[test]
     fn sdf_shadow_params_with_angle() {
         let p = SdfShadowParams::with_angle(std::f32::consts::PI / 4.0);
-        assert!((p.light_dir[0] - std::f32::consts::PI / 4.0.sin()).abs() < 0.001);
-        assert!((p.light_dir[1] - std::f32::consts::PI / 4.0.cos()).abs() < 0.001);
+        assert!((p.light_dir[0] - (std::f32::consts::PI / 4.0_f32).sin()).abs() < 0.001);
+        assert!((p.light_dir[1] - (std::f32::consts::PI / 4.0_f32).cos()).abs() < 0.001);
     }
 
     #[test]

@@ -63,6 +63,7 @@ impl CommandBuckets {
 
 /// Damage tracking information for a single frame.
 #[derive(Debug)]
+#[derive(Default)]
 pub struct DamageInfo {
     /// IDs of layers that were modified this frame.
     pub dirty_layers: Vec<LayerId>,
@@ -72,15 +73,6 @@ pub struct DamageInfo {
     pub full_rebuild_needed: bool,
 }
 
-impl Default for DamageInfo {
-    fn default() -> Self {
-        Self {
-            dirty_layers: Vec::new(),
-            frame_generation: 0,
-            full_rebuild_needed: false,
-        }
-    }
-}
 
 /// The compositor engine that orchestrates the retained-mode layer tree.
 pub struct CompositorEngine {
@@ -237,7 +229,7 @@ impl CompositorEngine {
         }
 
         let material = layer.material;
-        let draw_list: Vec<_> = layer.draw_list.iter().cloned().collect();
+        let draw_list: Vec<_> = layer.draw_list.to_vec();
         let children: Vec<_> = layer.children.iter().rev().cloned().collect();
 
         for cmd in &draw_list {

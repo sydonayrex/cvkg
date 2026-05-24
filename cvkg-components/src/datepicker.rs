@@ -133,7 +133,7 @@ impl DatePicker {
     }
 
     /// Write the open state into the system component state.
-    fn set_open_state(&self, open: bool) {
+    pub fn set_open_state(&self, open: bool) {
         let id = self.id_hash;
         update_system_state(move |s| {
             let mut s = s.clone();
@@ -159,7 +159,7 @@ impl DatePicker {
     }
 
     /// Write the currently displayed month into system state.
-    fn set_displayed_month(&self, month: u32, year: u32) {
+    pub fn set_displayed_month(&self, month: u32, year: u32) {
         let id = self.id_hash + 1;
         update_system_state(move |s| {
             let mut s = s.clone();

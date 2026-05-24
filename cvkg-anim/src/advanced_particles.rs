@@ -270,7 +270,7 @@ impl ReactionDiffusionField {
         let right = if x < w - 1 {
             self.b_current[idx + 1]
         } else {
-            self.b_current[idx - w + 1]
+            self.b_current[idx + 1 - w]
         };
         let up = if y > 0 {
             self.b_current[idx - w]
@@ -303,7 +303,7 @@ impl ReactionDiffusionField {
         let right = if x < w - 1 {
             grid[idx + 1]
         } else {
-            grid[idx - w + 1]
+            grid[idx + 1 - w]
         };
         let up = if y > 0 {
             grid[idx - w]
@@ -501,7 +501,10 @@ impl SdfShape {
         if dist < 0.0 {
             // Inside the SDF -- push out
             let grad = self.gradient(pos.x, pos.y);
-            let normal = grad.normalize_or_zero();
+            let mut normal = grad.normalize_or_zero();
+            if normal == Vec2::ZERO {
+                normal = Vec2::new(1.0, 0.0);
+            }
             *pos += normal * (-dist + 0.1);
 
             // Reflect velocity
@@ -997,6 +1000,7 @@ mod tests {
     #[test]
     fn soa_particle_death() {
         let mut system = SoaParticleSystem::new(100);
+        system.active = false;
         system.spawn(0.0, 0.0, 0.0, 0.0, 0.01, [1.0, 1.0, 1.0, 1.0], 1.0);
         assert_eq!(system.count, 1);
 

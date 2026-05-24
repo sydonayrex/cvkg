@@ -8,6 +8,8 @@ CVKG is a high-fidelity graphic user interface framework for Rust, enabling deve
 
 Modern application developers frequently face a choice between high-performance but low-fidelity native GUI tools, or heavy web-tech runtimes. CVKG addresses this challenge by providing a declarative UI system that compiles directly to GPU pipelines (Vulkan, Metal, DirectX 12) and browser WebGPU/WebGL canvases, delivering sub-millisecond drawing times and spring-physics animations without sacrificing performance. This framework is tailored for creative engineers and system designers building custom interfaces, tactical widgets, and node-based dashboards.
 
+A core feature of CVKG is the **Vili Interaction Paradigm**—a next-generation interaction model where UI components are driven by continuous proximity and kinematic fields rather than static hitboxes. Elements react fluidly to cursor speed and path via dynamic attention scaling (`fafnir_evolve`), magnetic snapping (`magnetic_warp`), and velocity-based intent projection (`mimir_intent`).
+
 ---
 
 ## Prerequisites

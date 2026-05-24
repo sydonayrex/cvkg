@@ -17,8 +17,7 @@ fn tactical_hud_showcase() -> impl View {
                 .content(
                     HStack::new(20.0)
                         .child(
-                            EikonaAvatar::new("Commander")
-                                .status(AvatarStatus::Online)
+                            Text::new("Commander")
                                 .erase(),
                         )
                         .child(

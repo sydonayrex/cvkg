@@ -254,19 +254,64 @@ impl<V: View> View for Tooltip<V> {
                 })
         };
 
-        // Determine if the tooltip should be visible:
-        // pointer must be hovering AND the delay (0.3s) must have elapsed.
         let now = renderer.elapsed_time();
-        let show_delay = 0.3;
-        let is_visible =
-            hover_state.is_hovered && (now - hover_state.hover_start_time) >= show_delay;
+        let mut hover_start = hover_state.hover_start_time;
+        if hover_state.is_hovered && hover_start == -1.0 {
+            hover_start = now;
+            cvkg_core::update_system_state(|s| {
+                let mut next = s.clone();
+                next.set_component_state(self.id_hash, HoverState {
+                    is_hovered: true,
+                    hover_start_time: now,
+                });
+                next
+            });
+        }
 
-        if is_visible {
+        let show_delay = 0.3;
+        let should_show = hover_state.is_hovered && (now - hover_start) >= show_delay && hover_start > 0.0;
+        let target = if should_show { 1.0 } else { 0.0 };
+
+        let anim_hash = self.id_hash.wrapping_add(12345);
+        let mut t_val = 0.0;
+        {
+            let s = cvkg_core::load_system_state();
+            if s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash).is_none() {
+                cvkg_core::update_system_state(|st| {
+                    let mut new_st = st.clone();
+                    new_st.set_component_state(anim_hash, cvkg_anim::SleipnirSolver::new(cvkg_anim::SleipnirParams::snappy(), target, 0.0));
+                    new_st
+                });
+            }
+        }
+        {
+            let s = cvkg_core::load_system_state();
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash) {
+                let mut solver = solver_arc.write().unwrap();
+                solver.set_target(target);
+                t_val = solver.tick(renderer.delta_time());
+            }
+        }
+
+        if t_val > 0.01 {
             let tip_rect = self.tooltip_rect(rect, renderer);
             let pos = self.resolved_position(rect);
 
             // Raise the tooltip above other content.
             renderer.set_z_index(1000.0);
+            
+            renderer.push_opacity(t_val);
+            let scale = 0.9 + 0.1 * t_val;
+            
+            // Calculate center for scaling
+            let cx = tip_rect.x + tip_rect.width / 2.0;
+            let cy = tip_rect.y + tip_rect.height / 2.0;
+            
+            renderer.push_transform(
+                [cx - cx * scale, cy - cy * scale],
+                [scale, scale],
+                0.0,
+            );
 
             // Dark glassmorphic background.
             renderer.fill_rounded_rect(tip_rect, 6.0, [0.05, 0.05, 0.1, 0.9]);
@@ -281,6 +326,8 @@ impl<V: View> View for Tooltip<V> {
             let text_y = tip_rect.y + 6.0;
             renderer.draw_text(&self.text, text_x, text_y, 12.0, theme::text());
 
+            renderer.pop_transform();
+            renderer.pop_opacity();
             renderer.set_z_index(0.0);
         }
 

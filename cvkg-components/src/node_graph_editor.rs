@@ -533,7 +533,7 @@ impl View for NodeGraphEditor {
             renderer.register_handler(
                 "pointermove",
                 Arc::new(move |event| {
-                    if let Event::PointerMove { x, y } = event {
+                    if let Event::PointerMove { x, y, .. } = event {
                         cvkg_core::update_system_state(|s| {
                             let mut s2 = s.clone();
 

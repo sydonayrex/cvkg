@@ -563,9 +563,16 @@ mod tests {
 
     #[test]
     fn test_canvas_ribbons_rebuild() {
+        use crate::port::FlowPort;
+        use crate::types::{PortPosition, PortDirection};
         let mut canvas = FlowCanvas::new();
-        canvas.add_node(FlowNode::new(NodeId(1), "A", (0.0, 0.0)));
-        canvas.add_node(FlowNode::new(NodeId(2), "B", (200.0, 0.0)));
+        let mut n1 = FlowNode::new(NodeId(1), "A", (0.0, 0.0));
+        n1.add_port(FlowPort::new(crate::types::PortId(1), NodeId(1), PortPosition::Right, PortDirection::Output));
+        canvas.add_node(n1);
+
+        let mut n2 = FlowNode::new(NodeId(2), "B", (200.0, 0.0));
+        n2.add_port(FlowPort::new(crate::types::PortId(2), NodeId(2), PortPosition::Left, PortDirection::Input));
+        canvas.add_node(n2);
 
         let edge = FlowEdge::new(1, NodeId(1), 0, NodeId(2), 0);
         canvas.add_edge(edge);

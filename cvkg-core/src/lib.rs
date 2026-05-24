@@ -1612,7 +1612,7 @@ impl ViewModifier for OnPointerMoveModifier {
         renderer.register_handler(
             "pointermove",
             std::sync::Arc::new(move |event| {
-                if let Event::PointerMove { x, y } = event {
+                if let Event::PointerMove { x, y, .. } = event {
                     (action)(x, y);
                 }
             }),
@@ -1953,6 +1953,18 @@ pub trait Renderer: ElapsedTime + Send {
     /// Measure the width and height of the specified text.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32);
 
+    fn shape_rich_text(
+        &mut self,
+        _spans: &[cvkg_runic_text::TextSpan],
+        _max_width: Option<f32>,
+        _align: cvkg_runic_text::TextAlign,
+        _overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        None
+    }
+
+    fn draw_shaped_text(&mut self, _text: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {}
+
     // ── Images & textures ────────────────────────────────────────────────
     /// Draw a texture (GPU-side) at the specified rect.
     fn draw_texture(&mut self, _texture_id: u32, _rect: Rect) {}
@@ -2163,6 +2175,42 @@ pub trait Renderer: ElapsedTime + Send {
     fn current_material(&self) -> crate::material::DrawMaterial {
         crate::material::DrawMaterial::Opaque
     }
+
+    // ── Vili Interaction Paradigm ──────────────────────────────────────────
+    /// Compute the user's velocity/intent vector.
+    fn mimir_intent(&self) -> [f32; 2] {
+        [0.0, 0.0]
+    }
+    /// Calculate magnetic coordinate warp towards an anchor.
+    fn magnetic_warp(&self, pointer: [f32; 2], anchor_rect: Rect, strength: f32) -> [f32; 2] {
+        if strength <= 0.0 { return pointer; }
+        let cx = anchor_rect.x + anchor_rect.width / 2.0;
+        let cy = anchor_rect.y + anchor_rect.height / 2.0;
+        let dx = pointer[0] - cx;
+        let dy = pointer[1] - cy;
+        let dist = (dx * dx + dy * dy).sqrt();
+        let radius = 120.0;
+        if dist < radius && dist > 0.0 {
+            let force = (1.0 - dist / radius) * strength;
+            [pointer[0] - dx * force, pointer[1] - dy * force]
+        } else {
+            pointer
+        }
+    }
+    /// Calculate kinematic glow intensity based on proximity.
+    fn mani_glow_intensity(&self, pointer: [f32; 2], bounds: Rect, radius: f32) -> f32 {
+        let cx = bounds.x + bounds.width / 2.0;
+        let cy = bounds.y + bounds.height / 2.0;
+        let dist = ((pointer[0] - cx).powi(2) + (pointer[1] - cy).powi(2)).sqrt();
+        if dist < radius { (1.0 - dist / radius).clamp(0.0, 1.0) } else { 0.0 }
+    }
+    /// Calculate dynamic element attention (scaling/morphing) statelessly per frame.
+    fn fafnir_evolve(&self, pointer: [f32; 2], bounds: Rect, max_scale: f32) -> f32 {
+        let prox = self.mani_glow_intensity(pointer, bounds, 120.0);
+        1.0 + (max_scale - 1.0) * prox
+    }
+    /// Sets the precise Vili SDF Shape boundary for hit-testing.
+    fn set_sdf_shape(&mut self, _shape: crate::layout::SdfShape) {}
 }
 
 /// Utility for accessibility compliance (WCAG 2.1).
@@ -3793,6 +3841,14 @@ pub mod layout {
         pub insets: EdgeInsets,
     }
 
+    /// SDF Shape definitions for Vili Interaction Paradigm hit-testing.
+    #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+    pub enum SdfShape {
+        Rect(Rect),
+        RoundedRect { rect: Rect, radius: f32 },
+        Circle { center: [f32; 2], radius: f32 },
+    }
+
     /// Rectangle in logical pixels
     #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
     pub struct Rect {
@@ -3916,6 +3972,7 @@ pub enum Event {
         x: f32,
         y: f32,
         button: u32,
+        proximity_field: f32,
     },
     PointerUp {
         x: f32,
@@ -3925,6 +3982,7 @@ pub enum Event {
     PointerMove {
         x: f32,
         y: f32,
+        proximity_field: f32,
     },
     PointerClick {
         x: f32,
@@ -4260,4 +4318,67 @@ pub trait Seer: Send + Sync {
     fn predict(&self, context: &str) -> String;
     /// Stream real-time "whispers" (transcriptions/intent).
     fn whispers(&self) -> Vec<String>;
+}
+
+#[cfg(test)]
+mod vili_tests {
+    use super::*;
+
+    struct DummyRenderer;
+    impl ElapsedTime for DummyRenderer {
+        fn elapsed_time(&self) -> f32 { 0.0 }
+        fn delta_time(&self) -> f32 { 0.0 }
+    }
+    impl Renderer for DummyRenderer {
+        fn fill_rect(&mut self, _r: Rect, _c: [f32; 4]) {}
+        fn fill_rounded_rect(&mut self, _r: Rect, _rad: f32, _c: [f32; 4]) {}
+        fn fill_ellipse(&mut self, _r: Rect, _c: [f32; 4]) {}
+        fn stroke_rect(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
+        fn stroke_rounded_rect(&mut self, _r: Rect, _rad: f32, _c: [f32; 4], _w: f32) {}
+        fn stroke_ellipse(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
+        fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
+        fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
+        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) { (0.0, 0.0) }
+        fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
+    }
+
+    #[test]
+    fn test_magnetic_warp() {
+        let renderer = DummyRenderer;
+        let anchor = Rect { x: 100.0, y: 100.0, width: 50.0, height: 50.0 };
+        // Pointer is near the anchor (distance < 120)
+        let pointer = [125.0, 50.0]; 
+        // distance from center (125, 125) is 75.
+        // force = (1.0 - 75/120) * strength
+        let warp = renderer.magnetic_warp(pointer, anchor, 1.0);
+        // It should pull closer to (125, 125), so Y should be > 50
+        assert!(warp[1] > 50.0);
+        
+        // Out of range pointer should remain unchanged
+        let far_pointer = [500.0, 500.0];
+        let far_warp = renderer.magnetic_warp(far_pointer, anchor, 1.0);
+        assert_eq!(far_pointer, far_warp);
+    }
+
+    #[test]
+    fn test_mani_glow() {
+        let renderer = DummyRenderer;
+        let bounds = Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let pointer_inside = [50.0, 50.0];
+        let glow_max = renderer.mani_glow_intensity(pointer_inside, bounds, 120.0);
+        assert_eq!(glow_max, 1.0);
+
+        let pointer_edge = [50.0, -10.0];
+        let glow_partial = renderer.mani_glow_intensity(pointer_edge, bounds, 120.0);
+        assert!(glow_partial > 0.0 && glow_partial < 1.0);
+    }
+
+    #[test]
+    fn test_fafnir_evolve() {
+        let renderer = DummyRenderer;
+        let bounds = Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let pointer_inside = [50.0, 50.0];
+        let scale = renderer.fafnir_evolve(pointer_inside, bounds, 1.2);
+        assert_eq!(scale, 1.2); // Full scale when hovering center
+    }
 }

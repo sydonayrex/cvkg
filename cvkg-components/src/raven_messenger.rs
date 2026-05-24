@@ -1,6 +1,5 @@
 use cvkg_core::{
 Never, Rect, Renderer, View};
-use std::sync::Arc;
 
 /// A single chat message with role, content, timestamp, and optional code blocks.
 #[derive(Clone)]
@@ -115,7 +114,7 @@ impl View for RavenMessenger {
         let padding = 12.0;
         let msg_spacing = 8.0;
         let header_h = 20.0;
-        let footer_h = 16.0;
+        let _footer_h = 16.0;
         let code_block_padding = 8.0;
         let bubble_radius = 8.0;
 

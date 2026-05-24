@@ -1302,6 +1302,53 @@ impl View for MultiAgentOrchestrator {
             self.render_run_comparison(renderer, rect);
         }
 
+        // ── Render restored overlay panels ───────────────────────────────
+        let panel_width = 300.0;
+        let mut floating_y = rect.y + 10.0;
+        let floating_x = rect.x + 10.0;
+
+        if self.state.show_output_panel {
+            self.render_output_panel(renderer, floating_x, floating_y, panel_width, 150.0);
+            floating_y += 160.0;
+        }
+        if self.state.show_message_panel {
+            self.render_message_panel(renderer, floating_x, floating_y, panel_width, 200.0);
+            floating_y += 210.0;
+        }
+        if self.state.show_validation_panel {
+            self.render_validation_panel(renderer, floating_x, floating_y, panel_width, 150.0);
+            floating_y += 160.0;
+        }
+        if self.state.show_skills_panel {
+            self.render_skills_panel(renderer, floating_x, floating_y, panel_width, 200.0);
+            floating_y += 210.0;
+        }
+        if self.state.show_webhook_panel {
+            self.render_webhook_panel(renderer, floating_x, floating_y, panel_width, 100.0);
+            floating_y += 110.0;
+        }
+        if self.state.show_schedule_panel {
+            self.render_schedule_panel(renderer, floating_x, floating_y, panel_width, 100.0);
+            floating_y += 110.0;
+        }
+        if self.state.show_recurring_panel {
+            self.render_recurring_panel(renderer, floating_x, floating_y, panel_width, 150.0);
+            floating_y += 160.0;
+        }
+        if self.state.show_minimap {
+            let minimap_w = 200.0;
+            let minimap_h = 150.0;
+            self.render_minimap(
+                renderer,
+                rect.x + rect.width - minimap_w - 20.0,
+                rect.y + rect.height - minimap_h - 20.0,
+                minimap_w,
+                minimap_h,
+            );
+        }
+
+        let _ = floating_y;
+
         // ── Event handlers ──────────────────────────────────────────────
         self.register_event_handlers(renderer, rect);
     }
@@ -2792,7 +2839,7 @@ pub struct NodeMetrics {
     pub total_cost: f64,
     pub avg_duration_ms: f64,
     pub last_duration_ms: f64,
-    pub min_duration_ms: f64,
+    pub node_id: String,
     pub max_duration_ms: f64,
 }
 
@@ -2809,359 +2856,316 @@ fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
 }
 
 // ============================================================
-// Render helper: output panel
+// Restored Rendering Methods
 // ============================================================
-
-fn render_output_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_output_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
-    if let Some(sel) = &state.selected_node {
-        if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
-            let output_text = if node.outputs.is_empty() {
-                "No output yet."
-            } else {
-                &node.outputs[0]
-            };
-            renderer.draw_text(output_text, x + 12.0, y + 30.0, 12.0, theme::text_muted());
-        }
-    } else {
-        renderer.draw_text(
-            "Select a node to inspect output.",
-            x + 12.0,
-            y + 30.0,
-            12.0,
-            theme::text_muted(),
-        );
-    }
-}
-
-// ============================================================
-// Render helper: agent message panel
-// ============================================================
-
-fn render_message_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_message_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text(
-        "Agent Messages",
-        x + 12.0,
-        y + 8.0,
-        14.0,
-        theme::text(),
-    );
-    let mut cy = y + 30.0;
-    for msg in state.message_log.iter().rev().take(20) {
-        let color = match msg.message_type {
-            MessageType::Request => [0.3, 0.7, 1.0, 1.0],
-            MessageType::Response => [0.3, 1.0, 0.5, 1.0],
-            MessageType::Error => theme::error_color(),
-            MessageType::Info => theme::text_muted(),
-        };
-        let label = format!(
-            "[{}] {} -> {}",
-            msg.message_type, msg.from_node, msg.to_node
-        );
-        renderer.draw_text(&label, x + 12.0, cy, 11.0, color);
-        cy += 16.0;
-        renderer.draw_text(&msg.content, x + 20.0, cy, 10.0, theme::text_muted());
-        cy += 20.0;
-        if cy > y + h - 20.0 {
-            break;
-        }
-    }
-}
-
-// ============================================================
-// Render helper: validation panel
-// ============================================================
-
-fn render_validation_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_validation_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
-    if state.validation_errors.is_empty() {
-        renderer.draw_text(
-            "No issues found.",
-            x + 12.0,
-            y + 30.0,
-            12.0,
-            [0.3, 1.0, 0.5, 1.0],
-        );
-    } else {
-        let mut cy = y + 30.0;
-        for err in &state.validation_errors {
-            let color = if err.is_error {
-                theme::error_color()
-            } else {
-                [1.0, 0.8, 0.2, 1.0]
-            };
-            renderer.draw_text(&err.message, x + 12.0, cy, 11.0, color);
-            cy += 18.0;
-        }
-    }
-}
-
-// ============================================================
-// Render helper: skills config panel
-// ============================================================
-
-fn render_skills_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_skills_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text(
-        "Skills Configuration",
-        x + 12.0,
-        y + 8.0,
-        14.0,
-        theme::text(),
-    );
-    renderer.draw_text(
-        "Available skills:",
-        x + 12.0,
-        y + 30.0,
-        12.0,
-        theme::text_muted(),
-    );
-    let mut cy = y + 50.0;
-    for skill in state.skill_registry.list_skills() {
-        renderer.draw_text(
-            &format!("• {}", skill.name),
-            x + 20.0,
-            cy,
-            11.0,
-            theme::info(),
-        );
-        cy += 16.0;
-        if cy > y + h - 20.0 {
-            break;
-        }
-    }
-}
-
-// ============================================================
-// Render helper: webhook config panel
-// ============================================================
-
-fn render_webhook_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_webhook_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text(
-        "Webhook Configuration",
-        x + 12.0,
-        y + 8.0,
-        14.0,
-        theme::text(),
-    );
-    if let Some(sel) = &state.selected_node {
-        if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
+impl MultiAgentOrchestrator {
+    fn render_output_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
+        if let Some(sel) = &state.selected_node {
+            if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
+                let output_text = if node.outputs.is_empty() {
+                    "No output yet."
+                } else {
+                    &node.outputs[0]
+                };
+                renderer.draw_text(output_text, x + 12.0, y + 30.0, 12.0, theme::text_muted());
+            }
+        } else {
             renderer.draw_text(
-                &format!("URL: {}", node.webhook_config.url),
+                "Select a node to inspect output.",
                 x + 12.0,
                 y + 30.0,
-                11.0,
-                theme::text_muted(),
-            );
-            renderer.draw_text(
-                &format!("Method: {}", node.webhook_config.method),
-                x + 12.0,
-                y + 48.0,
-                11.0,
+                12.0,
                 theme::text_muted(),
             );
         }
-    } else {
+    }
+
+    fn render_message_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
         renderer.draw_text(
-            "Select a webhook node.",
+            "Agent Messages",
             x + 12.0,
-            y + 30.0,
-            12.0,
-            theme::text_muted(),
+            y + 8.0,
+            14.0,
+            theme::text(),
         );
+        let mut cy = y + 30.0;
+        for msg in state.message_log.iter().rev().take(20) {
+            let color = match msg.message_type {
+                MessageType::Request => [0.3, 0.7, 1.0, 1.0],
+                MessageType::Response => [0.3, 1.0, 0.5, 1.0],
+                MessageType::Error => theme::error_color(),
+                MessageType::Info => theme::text_muted(),
+            };
+            let label = format!(
+                "[{}] {} -> {}",
+                msg.message_type, msg.from_node, msg.to_node
+            );
+            renderer.draw_text(&label, x + 12.0, cy, 11.0, color);
+            cy += 16.0;
+            renderer.draw_text(&msg.content, x + 20.0, cy, 10.0, theme::text_muted());
+            cy += 20.0;
+            if cy > y + h - 20.0 {
+                break;
+            }
+        }
     }
-}
 
-// ============================================================
-// Render helper: schedule config panel
-// ============================================================
-
-fn render_schedule_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_schedule_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text(
-        "Schedule Configuration",
-        x + 12.0,
-        y + 8.0,
-        14.0,
-        theme::text(),
-    );
-    if let Some(sel) = &state.selected_node {
-        if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
+    fn render_validation_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
+        if state.validation_errors.is_empty() {
             renderer.draw_text(
-                &format!("Cron: {}", node.schedule_config.cron_expression),
+                "No issues found.",
                 x + 12.0,
                 y + 30.0,
-                11.0,
-                theme::text_muted(),
+                12.0,
+                [0.3, 1.0, 0.5, 1.0],
             );
-            renderer.draw_text(
-                &format!("Interval: {}s", node.schedule_config.interval_seconds),
-                x + 12.0,
-                y + 48.0,
-                11.0,
-                theme::text_muted(),
-            );
+        } else {
+            let mut cy = y + 30.0;
+            for err in &state.validation_errors {
+                let color = if err.is_error {
+                    theme::error_color()
+                } else {
+                    [1.0, 0.8, 0.2, 1.0]
+                };
+                renderer.draw_text(&err.message, x + 12.0, cy, 11.0, color);
+                cy += 18.0;
+            }
         }
-    } else {
+    }
+
+    fn render_skills_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
         renderer.draw_text(
-            "Select a schedule node.",
+            "Skills Configuration",
+            x + 12.0,
+            y + 8.0,
+            14.0,
+            theme::text(),
+        );
+        renderer.draw_text(
+            "Available skills:",
             x + 12.0,
             y + 30.0,
             12.0,
             theme::text_muted(),
         );
-    }
-}
-
-// ============================================================
-// Render helper: recurring runs panel
-// ============================================================
-
-fn render_recurring_panel(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_recurring_panel {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text(
-        "Recurring Runs",
-        x + 12.0,
-        y + 8.0,
-        14.0,
-        theme::text(),
-    );
-    if state.recurring_runs.is_empty() {
-        renderer.draw_text(
-            "No recurring runs configured.",
-            x + 12.0,
-            y + 30.0,
-            12.0,
-            theme::text_muted(),
-        );
-    } else {
-        let mut cy = y + 30.0;
-        for run in &state.recurring_runs {
+        let mut cy = y + 50.0;
+        for skill in state.skill_registry.list_skills() {
             renderer.draw_text(
-                &format!("Every {}s ({} runs)", run.interval_seconds, run.run_count),
-                x + 12.0,
+                &format!("• {}", skill.name),
+                x + 20.0,
                 cy,
                 11.0,
-                theme::text_muted(),
+                theme::info(),
             );
-            cy += 18.0;
+            cy += 16.0;
+            if cy > y + h - 20.0 {
+                break;
+            }
         }
     }
-}
 
-// ============================================================
-// Render helper: minimap
-// ============================================================
-
-fn render_minimap(
-    state: &OrchestratorState,
-    renderer: &mut dyn Renderer,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-) {
-    if !state.show_minimap {
-        return;
-    }
-    renderer.fill_rounded_rect(r(x, y, w, h), 4.0, [0.06, 0.06, 0.1, 0.9]);
-    renderer.stroke_rounded_rect(r(x, y, w, h), 4.0, [0.25, 0.25, 0.4, 1.0], 1.0);
-    let scale = 0.1;
-    for node in &state.nodes {
-        let nx = x + node.position.0 * scale;
-        let ny = y + node.position.1 * scale;
-        let nw = node.size.0 * scale;
-        let nh = node.size.1 * scale;
-        renderer.fill_rounded_rect(
-            r(nx, ny, nw.max(2.0), nh.max(2.0)),
-            1.0,
-            [0.4, 0.4, 0.6, 0.8],
+    fn render_webhook_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.draw_text(
+            "Webhook Configuration",
+            x + 12.0,
+            y + 8.0,
+            14.0,
+            theme::text(),
         );
+        if let Some(sel) = &state.selected_node {
+            if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
+                renderer.draw_text(
+                    &format!("URL: {}", node.webhook_config.url),
+                    x + 12.0,
+                    y + 30.0,
+                    11.0,
+                    theme::text_muted(),
+                );
+                renderer.draw_text(
+                    &format!("Method: {}", node.webhook_config.method),
+                    x + 12.0,
+                    y + 48.0,
+                    11.0,
+                    theme::text_muted(),
+                );
+            }
+        } else {
+            renderer.draw_text(
+                "Select a webhook node.",
+                x + 12.0,
+                y + 30.0,
+                12.0,
+                theme::text_muted(),
+            );
+        }
     }
-    let vp_x = x + state.viewport_offset.0 * scale;
-    let vp_y = y + state.viewport_offset.1 * scale;
-    let vp_w = 200.0 * state.viewport_zoom * scale;
-    let vp_h = 150.0 * state.viewport_zoom * scale;
-    renderer.stroke_rounded_rect(r(vp_x, vp_y, vp_w, vp_h), 1.0, [0.0, 1.0, 0.5, 0.5], 1.0);
+
+    fn render_schedule_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.draw_text(
+            "Schedule Configuration",
+            x + 12.0,
+            y + 8.0,
+            14.0,
+            theme::text(),
+        );
+        if let Some(sel) = &state.selected_node {
+            if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
+                renderer.draw_text(
+                    &format!("Cron: {}", node.schedule_config.cron_expression),
+                    x + 12.0,
+                    y + 30.0,
+                    11.0,
+                    theme::text_muted(),
+                );
+                renderer.draw_text(
+                    &format!("Interval: {}s", node.schedule_config.interval_seconds),
+                    x + 12.0,
+                    y + 48.0,
+                    11.0,
+                    theme::text_muted(),
+                );
+            }
+        } else {
+            renderer.draw_text(
+                "Select a schedule node.",
+                x + 12.0,
+                y + 30.0,
+                12.0,
+                theme::text_muted(),
+            );
+        }
+    }
+
+    fn render_recurring_panel(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.draw_text(
+            "Recurring Runs",
+            x + 12.0,
+            y + 8.0,
+            14.0,
+            theme::text(),
+        );
+        if state.recurring_runs.is_empty() {
+            renderer.draw_text(
+                "No recurring runs configured.",
+                x + 12.0,
+                y + 30.0,
+                12.0,
+                theme::text_muted(),
+            );
+        } else {
+            let mut cy = y + 30.0;
+            for run in &state.recurring_runs {
+                renderer.draw_text(
+                    &format!("Every {}s ({} runs)", run.interval_seconds, run.run_count),
+                    x + 12.0,
+                    cy,
+                    11.0,
+                    theme::text_muted(),
+                );
+                cy += 18.0;
+            }
+        }
+    }
+
+    fn render_minimap(
+        &self,
+        renderer: &mut dyn Renderer,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+    ) {
+        let state = &self.state;
+        renderer.fill_rounded_rect(r(x, y, w, h), 4.0, [0.06, 0.06, 0.1, 0.9]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 4.0, [0.25, 0.25, 0.4, 1.0], 1.0);
+        let scale = 0.1;
+        for node in &state.nodes {
+            let nx = x + node.position.0 * scale;
+            let ny = y + node.position.1 * scale;
+            let nw = node.size.0 * scale;
+            let nh = node.size.1 * scale;
+            renderer.fill_rounded_rect(
+                r(nx, ny, nw.max(2.0), nh.max(2.0)),
+                1.0,
+                [0.4, 0.4, 0.6, 0.8],
+            );
+        }
+        let vp_x = x + state.viewport_offset.0 * scale;
+        let vp_y = y + state.viewport_offset.1 * scale;
+        let vp_w = 200.0 * state.viewport_zoom * scale;
+        let vp_h = 150.0 * state.viewport_zoom * scale;
+        renderer.stroke_rounded_rect(r(vp_x, vp_y, vp_w, vp_h), 1.0, [0.0, 1.0, 0.5, 0.5], 1.0);
+    }
 }

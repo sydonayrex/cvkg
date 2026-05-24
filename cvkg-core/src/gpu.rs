@@ -235,9 +235,6 @@ pub fn unit_circle(segments: usize) -> (Vec<[f32; 2]>, Vec<u32>) {
         indices.push(i as u32);
         indices.push((i + 1) as u32);
     }
-    indices.push(0);
-    indices.push((n - 1) as u32);
-    indices.push(1);
 
     (vertices, indices)
 }
@@ -279,7 +276,10 @@ mod tests {
 
         let (verts, inds) = unit_quad();
         batch.set_vertices(&verts, &inds);
-        batch.push_instance(InstanceTransform::translation(100.0, 200.0), None);
+        batch.push_instance(
+            InstanceTransform::translation(100.0, 200.0),
+            Some(InstanceColor::new(1.0, 1.0, 1.0, 1.0)),
+        );
         batch.push_instance(
             InstanceTransform::translation(300.0, 400.0),
             Some(InstanceColor::new(1.0, 0.0, 0.0, 1.0)),
@@ -316,6 +316,6 @@ mod tests {
     fn unit_circle_geometry() {
         let (verts, inds) = unit_circle(16);
         assert_eq!(verts.len(), 16);
-        assert_eq!(inds.len(), 16 * 3);
+        assert_eq!(inds.len(), (16 - 2) * 3);
     }
 }

@@ -10,12 +10,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dest_path = PathBuf::from(&out_dir).join("shader_spirv.rs");
 
     // Check if we should skip recompilation (caching optimization)
-    let wgsl_src = vec![
-        read_to_string("src/shaders/common.wgsl")?,
+    let wgsl_src = [read_to_string("src/shaders/common.wgsl")?,
         read_to_string("src/shaders/shapes.wgsl")?,
         read_to_string("src/shaders/bifrost.wgsl")?,
-        read_to_string("src/shaders/bloom.wgsl")?,
-    ].join("\n");
+        read_to_string("src/shaders/bloom.wgsl")?].join("\n");
 
     // Calculate hash to detect changes
     let mut hasher = DefaultHasher::new();

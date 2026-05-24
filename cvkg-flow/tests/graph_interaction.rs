@@ -1,4 +1,7 @@
 use cvkg_flow::*;
+use cvkg_flow::types::*;
+use cvkg_flow::port::*;
+use cvkg_flow::interaction::*;
 
 #[test]
 fn test_complex_workflow_interaction() {
@@ -34,7 +37,7 @@ fn test_complex_workflow_interaction() {
     container.push_history(); // history = [graph_with_n1, graph_with_n1_n2]
 
     let e_id = EdgeId(301);
-    container.graph.add_edge(FlowEdge::new(e_id, p1_id, p2_id));
+    container.graph.add_edge(FlowEdge::new(301, n1_id, 0, n2_id, 0));
 
     assert_eq!(container.graph.edges.len(), 1);
 

@@ -1,9 +1,8 @@
 use cvkg_anim::{RunicEmitter, SleipnirParams, SleipnirSolver};
 use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
-use cvkg_flow::{
-    EdgeId, FlowEdge, FlowGraph, FlowNode, FlowPort, NodeId as FlowNodeId, PortDirection, PortId,
-    PortPosition,
-};
+use cvkg_flow::{FlowEdge, FlowGraph, FlowNode};
+use cvkg_flow::types::{EdgeId, NodeId as FlowNodeId, PortDirection, PortId, PortPosition};
+use cvkg_flow::port::FlowPort;
 use cvkg_layout::HStack;
 use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
 use std::collections::HashMap;
@@ -111,6 +110,7 @@ fn test_journey_vdom_patch_lifecycle() {
         id: NodeId(1),
         key: None,
         component_type: "div".to_string(),
+        sdf_shape: None,
         props: HashMap::new(),
         state: None,
         layout: LayoutRect::default(),
@@ -127,6 +127,7 @@ fn test_journey_vdom_patch_lifecycle() {
     // 2. Update State
     vdom.apply_patches(vec![VDomPatch::Update {
         id: NodeId(1),
+        sdf_shape: None,
         props: None,
         layout: Some(LayoutRect {
             x: 10.0,
@@ -168,7 +169,7 @@ fn test_journey_flow_graph_interaction() {
 
     graph.add_node(n1);
     graph.add_node(n2);
-    graph.add_edge(FlowEdge::new(EdgeId(1), PortId(1), PortId(2)));
+    graph.add_edge(FlowEdge::new(1, FlowNodeId(1), 0, FlowNodeId(2), 0));
 
     // 2. Verify graph topology
     assert_eq!(graph.nodes.len(), 2);

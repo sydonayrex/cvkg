@@ -1,4 +1,6 @@
 use cvkg_flow::*;
+use cvkg_flow::types::*;
+use cvkg_flow::port::*;
 
 /// This example demonstrates how to create a basic graph with two nodes and a connection.
 pub fn create_basic_flow() -> FlowGraph {
@@ -25,7 +27,7 @@ pub fn create_basic_flow() -> FlowGraph {
     graph.add_node(node2);
 
     // Create Edge connecting the ports
-    graph.add_edge(FlowEdge::new(EdgeId(301), PortId(101), PortId(201)));
+    graph.add_edge(FlowEdge::new(301, NodeId(1), 0, NodeId(2), 0));
 
     graph
 }

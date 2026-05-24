@@ -174,6 +174,8 @@ Several architectural choices separate CVKG from conventional UI systems.
    Animation in CVKG is computed iteratively at runtime using `SleipnirSolver`'s RK4 integration. Pre-baked cubic Bezier curves cannot handle mid-motion interruptions gracefully. Spring solvers allow animations to change targets instantly while retaining velocity, eliminating visual hitching.
 3. **Stand-alone Text shaping (`cvkg-runic-text`)**:
    Text shaping is computationally heavy and interacts with volatile operating system font databases. Isolate this complexity to prevent OS font-linking quirks and external library compilation cycles from impacting core framework compilation speed.
+4. **Vili Interaction Paradigm**:
+   Standard UI frameworks rely on discrete rectangular hitboxes (AABB) for mouse interactions. CVKG instead relies on continuous mathematical fields—evaluating exact distance metrics using Signed Distance Fields (SDFs). This approach unlocks rich, dynamic feedback where pointer velocity (`mimir_intent`), proximity (`mani_glow`), and layout adaptation (`fafnir_evolve`) seamlessly influence visual elements before a click ever occurs.
 
 ---
 

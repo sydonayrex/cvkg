@@ -45,3 +45,5 @@ version = "2.0"
 features = ["full"]
 
 [dev-dependencies]
+cvkg-core = { path = "../cvkg-core" }
+cvkg-components = { path = "../cvkg-components" }

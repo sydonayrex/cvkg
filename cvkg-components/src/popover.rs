@@ -103,7 +103,7 @@ impl<V: View, C: View> Popover<V, C> {
     }
 
     /// Write the open state into the system component state.
-    fn set_open_state(&self, open: bool) {
+    pub fn set_open_state(&self, open: bool) {
         let id = self.id_hash;
         update_system_state(move |s| {
             let mut s = s.clone();
