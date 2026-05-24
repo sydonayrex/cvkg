@@ -10,6 +10,8 @@ Modern application developers frequently face a choice between high-performance 
 
 A core feature of CVKG is the **Vili Interaction Paradigm**—a next-generation interaction model where UI components are driven by continuous proximity and kinematic fields rather than static hitboxes. Elements react fluidly to cursor speed and path via dynamic attention scaling (`fafnir_evolve`), magnetic snapping (`magnetic_warp`), and velocity-based intent projection (`mimir_intent`).
 
+Furthermore, CVKG includes a high-performance **GPU Vector Graphics Engine** capable of handling full SVG stroke tessellation (`lyon`), full 3x3 affine transformation stacks (scale, shear, rotation), and real-time CPU evaluation of embedded Animated SVGs (`<animate>`, `<animateTransform>`).
+
 ---
 
 ## Prerequisites

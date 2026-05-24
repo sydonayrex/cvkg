@@ -42,6 +42,9 @@ name = "large_tree"
 path = "benches/large_tree.rs"
 harness = false
 
+[dependencies]
+roxmltree = "0.20"
+
 [dependencies.accesskit]
 version = "0.24"
 

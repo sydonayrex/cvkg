@@ -2154,6 +2154,9 @@ pub trait Renderer: ElapsedTime + Send {
     /// This transform should be applied to all subsequent draw calls until popped.
     /// Transform-only animations use this to avoid re-triggering the layout engine.
     fn push_transform(&mut self, _translation: [f32; 2], _scale: [f32; 2], _rotation: f32) {}
+    /// Push a raw 2D affine transform matrix [a, b, c, d, e, f] corresponding to 
+    /// [m11, m12, m21, m22, tx, ty].
+    fn push_affine(&mut self, _transform: [f32; 6]) {}
     /// Pop the last 2D transform from the stack.
     fn pop_transform(&mut self) {}
     /// Return the resolved layout bounds for a specific node ID if it exists.

@@ -8,8 +8,10 @@
 
 This crate is the authoritative drawing backend for CVKG. It does NOT handle windowing or higher-level layout. Its responsibilities include:
 - Managing the Muspelheim multi-pass pipeline (Bloom, Blur, Composite).
-- Tessellating 2D primitives into GPU-ready meshes using `lyon`.
+- Tessellating 2D primitives and SVG strokes into GPU-ready meshes using `lyon`.
 - Managing a Mega-Atlas for high-efficiency text and image batching.
+- Executing real-time parsing and evaluation of Animated SVGs via `roxmltree` and `usvg`.
+- Propagating full 3x3 affine transformation matrices for complex nested scaling, skew, and rotation.
 - Implementing advanced shader effects: Bifrost (frost), Gungnir (glow), and Mjolnir (geometric clipping/shattering).
 - Optimizing VRAM usage via LRU-based cache eviction and atlas recycling.
 

@@ -16,7 +16,7 @@ This crate provides the abstract definitions for the UI system but does NOT impl
 
 ### Core Traits
 - `View`: The primary building block. Every UI element implements `View`. It uses a declarative `body()` method for composition.
-- `Renderer`: A trait defining the drawing operations available to primitive views.
+- `Renderer`: A trait defining the drawing operations available to primitive views, now supporting full 3x3 affine transformations (`push_affine`).
 - `ViewModifier`: Enables the extension of view behavior and appearance via composition.
 
 ### Key Structs

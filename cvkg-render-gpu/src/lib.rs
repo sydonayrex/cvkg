@@ -160,6 +160,44 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_svg_animations() {
+        let svg = r##"
+            <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+                <g id="spinner">
+                    <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="2s" />
+                </g>
+                <circle id="pulse">
+                    <animate attributeName="opacity" from="0.5" to="1.0" dur="0.5s" />
+                </circle>
+                <!-- Edge cases: xlink:href, ms suffix, values list -->
+                <rect>
+                    <animate xlink:href="#myRect" attributeName="x" values="10; 20; 30" dur="500ms" />
+                </rect>
+            </svg>
+        "##;
+        let anims = parse_svg_animations(svg.as_bytes());
+        assert_eq!(anims.len(), 3);
+        
+        assert_eq!(anims[0].target_id, "spinner");
+        assert_eq!(anims[0].attribute_name, "transform");
+        assert_eq!(anims[0].duration, 2.0);
+        assert_eq!(anims[0].from_val, 0.0);
+        assert_eq!(anims[0].to_val, 360.0);
+
+        assert_eq!(anims[1].target_id, "pulse");
+        assert_eq!(anims[1].attribute_name, "opacity");
+        assert_eq!(anims[1].duration, 0.5);
+        assert_eq!(anims[1].from_val, 0.5);
+        assert_eq!(anims[1].to_val, 1.0);
+
+        assert_eq!(anims[2].target_id, "myRect");
+        assert_eq!(anims[2].attribute_name, "x");
+        assert_eq!(anims[2].duration, 0.5); // 500ms parsed as 0.5
+        assert_eq!(anims[2].from_val, 10.0);
+        assert_eq!(anims[2].to_val, 30.0);
+    }
+
+    #[test]
     fn test_shelf_packer_full() {
         let mut packer = YggdrasilPacker::new(10, 10);
         assert_eq!(packer.pack(11, 5), None);
@@ -182,6 +220,17 @@ pub struct SvgModel {
     pub vertices: Vec<Vertex>,
     pub indices: Vec<u32>,
     pub view_box: Rect,
+    pub animations: Vec<SvgAnimation>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SvgAnimation {
+    pub target_id: String,
+    pub attribute_name: String,
+    pub from_val: f32,
+    pub to_val: f32,
+    pub duration: f32,
+    pub vertex_range: std::ops::Range<usize>,
 }
 
 // ShieldWall — re-export AccessKit types so callers can build tree updates
@@ -196,7 +245,8 @@ pub use accesskit_winit::Adapter as ShieldWallAdapter;
 pub use cvkg_core::{ColorTheme, SceneUniforms};
 
 use lyon::tessellation::{
-    BuffersBuilder, FillOptions, FillTessellator, FillVertex, FillVertexConstructor, VertexBuffers,
+    BuffersBuilder, FillOptions, FillTessellator, FillVertex, FillVertexConstructor, StrokeOptions,
+    StrokeTessellator, StrokeVertex, StrokeVertexConstructor, VertexBuffers,
 };
 
 #[repr(C)]
@@ -1546,6 +1596,7 @@ impl SurtrRenderer {
         self.opacity_stack = vec![1.0];
         self.clip_stack.clear();
         self.slice_stack.clear();
+        self.transform_stack.clear();
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
@@ -1619,6 +1670,7 @@ impl SurtrRenderer {
         self.opacity_stack = vec![1.0];
         self.clip_stack.clear();
         self.slice_stack.clear();
+        self.transform_stack.clear();
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
@@ -3452,7 +3504,33 @@ impl cvkg_core::Renderer for SurtrRenderer {
         );
     }
 
-    fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {}
+    fn stroke_ellipse(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32) {
+        // Tessellate an ellipse stroke using Lyon's StrokeTessellator.
+        let cx = rect.x + rect.width / 2.0;
+        let cy = rect.y + rect.height / 2.0;
+        let rx = rect.width / 2.0;
+        let ry = rect.height / 2.0;
+
+        // Build an ellipse path using Lyon
+        let mut builder = lyon::path::Path::builder();
+        if rx > 0.0 && ry > 0.0 {
+            // Approximate ellipse with 64 segments
+            let segments = 64;
+            for i in 0..segments {
+                let angle = 2.0 * std::f32::consts::PI * (i as f32) / (segments as f32);
+                let x = cx + rx * angle.cos();
+                let y = cy + ry * angle.sin();
+                if i == 0 {
+                    builder.begin(lyon::math::point(x, y));
+                } else {
+                    builder.line_to(lyon::math::point(x, y));
+                }
+            }
+            builder.close();
+        }
+        let path = builder.build();
+        self.stroke_path(&path, color, stroke_width);
+    }
 
     fn draw_linear_gradient(
         &mut self,
@@ -3970,10 +4048,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
-        // Build a 2D affine matrix: T * R * S
-        // col0 = (cos*sx, sin*sx, 0)
-        // col1 = (-sin*sy, cos*sy, 0)
-        // col2 = (tx, ty, 1)
         let c = rotation.cos();
         let sn = rotation.sin();
         let affine = glam::Mat3::from_cols(
@@ -3986,29 +4060,21 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.transform_stack.push(parent * affine);
     }
 
+    fn push_affine(&mut self, transform: [f32; 6]) {
+        let affine = glam::Mat3::from_cols(
+            glam::Vec3::new(transform[0], transform[1], 0.0),
+            glam::Vec3::new(transform[2], transform[3], 0.0),
+            glam::Vec3::new(transform[4], transform[5], 1.0),
+        );
+        let parent = self.transform_stack.last().copied().unwrap_or(glam::Mat3::IDENTITY);
+        self.transform_stack.push(parent * affine);
+    }
+
     fn pop_transform(&mut self) {
         self.transform_stack.pop();
     }
 
-    /// Compute per-vertex transform values from the current matrix.
-    /// Extracts translation, scale, rotation, and skew from the affine matrix
-    /// so the existing vertex shader fields still work correctly.
-    fn current_transform(&self) -> ([f32; 2], [f32; 2], f32, f32, f32) {
-        // Returns (translation, scale, rotation, skew_x, skew_y)
-        let m = self.transform_stack.last().copied().unwrap_or(glam::Mat3::IDENTITY);
-        let t = [m.z.x, m.z.y];
-        // Extract scale and rotation from the 2x2 submatrix
-        let a = m.x.x;
-        let b = m.x.y;
-        let c = m.y.x;
-        let d = m.y.y;
-        let sx = (a * a + b * b).sqrt();
-        let sy = (c * c + d * d).sqrt();
-        let rotation = b.atan2(a);
-        // Skew: the angle between the basis vectors minus 90 degrees
-        let skew_x = (a * c + b * d) / (sx * sy); // sin(skew)
-        (t, [sx, sy], rotation, skew_x, 0.0)
-    }
+
 
     fn set_theme(&mut self, theme: ColorTheme) {
         self.current_theme = theme;
@@ -4222,6 +4288,142 @@ impl SurtrRenderer {
     ) -> Option<&Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>> {
         self.event_handlers.get(event_type)
     }
+
+    /// Compute per-vertex transform values from the current matrix.
+    /// Extracts translation, scale, rotation, and skew from the affine matrix
+    /// so the existing vertex shader fields still work correctly.
+    pub(crate) fn current_transform(&self) -> ([f32; 2], [f32; 2], f32, f32, f32) {
+        // Returns (translation, scale, rotation, skew_x, skew_y)
+        let m = self.transform_stack.last().copied().unwrap_or(glam::Mat3::IDENTITY);
+        let t = [m.z_axis.x, m.z_axis.y];
+        // Extract scale and rotation from the 2x2 submatrix
+        let a = m.x_axis.x;
+        let b = m.x_axis.y;
+        let c = m.y_axis.x;
+        let d = m.y_axis.y;
+        let sx = (a * a + b * b).sqrt();
+        let sy = (c * c + d * d).sqrt();
+        let rotation = b.atan2(a);
+        // Skew: the angle between the basis vectors minus 90 degrees
+        let skew_x = (a * c + b * d) / (sx * sy); // sin(skew)
+        (t, [sx, sy], rotation, skew_x, 0.0)
+    }
+
+    pub fn stroke_path(&mut self, path: &lyon::path::Path, color: [f32; 4], stroke_width: f32) {
+        let c = self.apply_opacity(color);
+        let mut tessellator = StrokeTessellator::new();
+        let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+        let base_vertex_idx = self.vertices.len() as u32;
+
+        let (translation, scale, rotation, _, _) = self.current_transform();
+        let screen = [self.current_width() as f32, self.current_height() as f32];
+        let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
+            x: -10000.0,
+            y: -10000.0,
+            width: 20000.0,
+            height: 20000.0,
+        });
+        let clip = [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height];
+
+        tessellator
+            .tessellate_path(
+                path,
+                &StrokeOptions::default().with_line_width(stroke_width),
+                &mut BuffersBuilder::new(
+                    &mut buffers,
+                    CustomStrokeVertexConstructor {
+                        color: c,
+                        translation,
+                        scale,
+                        rotation,
+                        screen,
+                        clip,
+                    },
+                ),
+            )
+            .unwrap();
+
+        self.vertices.extend(buffers.vertices);
+        for idx in &buffers.indices {
+            self.indices.push(base_vertex_idx + *idx);
+        }
+
+        let material = self.current_material();
+        let tid = self.get_texture_id("__mega_atlas");
+
+        let last_call = self.draw_calls.last();
+        let needs_new_call = self.draw_calls.is_empty()
+            || self.current_texture_id != tid
+            || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
+            || last_call.unwrap().material != material;
+
+        if needs_new_call {
+            self.current_texture_id = tid;
+            self.draw_calls.push(DrawCall {
+                texture_id: tid,
+                scissor_rect: self.clip_stack.last().copied(),
+                index_start: base_vertex_idx,
+                index_count: buffers.indices.len() as u32,
+                material,
+            });
+        } else if let Some(call) = self.draw_calls.last_mut() {
+            call.index_count += buffers.indices.len() as u32;
+        }
+    }
+}
+
+pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
+    let mut parsed_animations = Vec::new();
+    if let Ok(xml_doc) = roxmltree::Document::parse(std::str::from_utf8(data).unwrap_or("")) {
+        for node in xml_doc.descendants() {
+            if node.tag_name().name() == "animateTransform" || node.tag_name().name() == "animate" {
+                let target_id = node
+                    .attribute("href")
+                    .or_else(|| node.attribute(("http://www.w3.org/1999/xlink", "href")))
+                    .or_else(|| node.attribute("xlink:href"))
+                    .or_else(|| node.parent_element().and_then(|p| p.attribute("id")))
+                    .unwrap_or("")
+                    .trim_start_matches('#')
+                    .to_string();
+
+                if !target_id.is_empty() {
+                    let dur_str = node.attribute("dur").unwrap_or("1s");
+                    let duration = if dur_str.ends_with("ms") {
+                        dur_str.trim_end_matches("ms").parse::<f32>().unwrap_or(1000.0) / 1000.0
+                    } else {
+                        dur_str.trim_end_matches('s').parse::<f32>().unwrap_or(1.0)
+                    };
+
+                    let (from_val, to_val) = if let Some(values) = node.attribute("values") {
+                        let parts: Vec<&str> = values.split(';').collect();
+                        if parts.len() >= 2 {
+                            let f = parts[0].trim().parse::<f32>().unwrap_or(0.0);
+                            let t = parts[parts.len() - 1].trim().parse::<f32>().unwrap_or(0.0);
+                            (f, t)
+                        } else {
+                            (0.0, 360.0) // Fallback defaults
+                        }
+                    } else {
+                        let f = node.attribute("from").unwrap_or("0").parse::<f32>().unwrap_or(0.0);
+                        let t = node.attribute("to").unwrap_or("360").parse::<f32>().unwrap_or(360.0);
+                        (f, t)
+                    };
+
+                    let attr = node.attribute("attributeName").unwrap_or("transform").to_string();
+
+                    parsed_animations.push(SvgAnimation {
+                        target_id,
+                        attribute_name: attr,
+                        from_val,
+                        to_val,
+                        duration,
+                        vertex_range: 0..0, // Will be filled during tessellation
+                    });
+                }
+            }
+        }
+    }
+    parsed_animations
 }
 
 // --- SVG Helpers ---
@@ -4262,6 +4464,39 @@ struct SceneVertexConstructor {
     translation: [f32; 2],
     scale: [f32; 2],
     rotation: f32,
+}
+
+/// Vertex constructor for stroke tessellation -- includes screen and clip for transform.
+struct CustomStrokeVertexConstructor {
+    color: [f32; 4],
+    translation: [f32; 2],
+    scale: [f32; 2],
+    rotation: f32,
+    screen: [f32; 2],
+    clip: [f32; 4],
+}
+
+impl StrokeVertexConstructor<Vertex> for CustomStrokeVertexConstructor {
+    fn new_vertex(&mut self, vertex: StrokeVertex) -> Vertex {
+        let pos = vertex.position();
+        Vertex {
+            position: [pos.x, pos.y, 0.0],
+            normal: [0.0, 0.0, 1.0],
+            uv: [0.0, 0.0],
+            color: self.color,
+            mode: 0,
+            radius: 0.0,
+            slice: [0.0, 0.0, 0.0, 1.0],
+            logical: [pos.x, pos.y],
+            size: [1.0, 1.0],
+            screen: self.screen,
+            clip: self.clip,
+            translation: self.translation,
+            scale: self.scale,
+            rotation: self.rotation,
+            tex_index: 0,
+        }
+    }
 }
 
 impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
@@ -4500,12 +4735,15 @@ impl SurtrRenderer {
             height: tree.size().height(),
         };
 
+        let parsed_animations = parse_svg_animations(data);
+
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
         let mut tessellator = FillTessellator::new();
+        let mut finalized_animations = Vec::new();
 
         for child in tree.root().children() {
-            self.tessellate_node(child, &mut tessellator, &mut vertices, &mut indices);
+            self.tessellate_node(child, &mut tessellator, &mut vertices, &mut indices, &parsed_animations, &mut finalized_animations);
         }
 
         self.svg_cache.put(
@@ -4514,6 +4752,7 @@ impl SurtrRenderer {
                 vertices,
                 indices,
                 view_box,
+                animations: finalized_animations,
             },
         );
     }
@@ -4524,10 +4763,19 @@ impl SurtrRenderer {
         tessellator: &mut FillTessellator,
         vertices: &mut Vec<Vertex>,
         indices: &mut Vec<u32>,
+        parsed_animations: &[SvgAnimation],
+        finalized_animations: &mut Vec<SvgAnimation>,
     ) {
+        let start_idx = vertices.len();
+        let node_id = match node {
+            usvg::Node::Group(g) => g.id().to_string(),
+            usvg::Node::Path(p) => p.id().to_string(),
+            _ => String::new(),
+        };
+
         if let usvg::Node::Group(ref group) = *node {
             for child in group.children() {
-                self.tessellate_node(child, tessellator, vertices, indices);
+                self.tessellate_node(child, tessellator, vertices, indices, parsed_animations, finalized_animations);
             }
         } else if let usvg::Node::Path(ref path) = *node
             && let Some(fill) = path.fill()
@@ -4567,6 +4815,17 @@ impl SurtrRenderer {
                 indices.push(base_vertex_idx + idx);
             }
         }
+
+        let end_idx = vertices.len();
+        if !node_id.is_empty() && start_idx < end_idx {
+            for anim in parsed_animations {
+                if anim.target_id == node_id {
+                    let mut final_anim = anim.clone();
+                    final_anim.vertex_range = start_idx..end_idx;
+                    finalized_animations.push(final_anim);
+                }
+            }
+        }
     }
 
     /// draw_svg — Renders a pre-loaded SVG icon at the specified logical rect.
@@ -4591,8 +4850,45 @@ impl SurtrRenderer {
         let scale = self.current_scale_factor();
         let snap = |v: f32| (v * scale).round() / scale;
 
-        for v in &model.vertices {
-            let mut v = *v;
+        let mut local_vertices = model.vertices.clone();
+        for anim in &model.animations {
+            let t = (self.current_scene.time % anim.duration) / anim.duration;
+            let val = anim.from_val + (anim.to_val - anim.from_val) * t;
+
+            if anim.attribute_name == "transform" {
+                // assume rotation
+                let mut min_x = f32::MAX;
+                let mut min_y = f32::MAX;
+                let mut max_x = f32::MIN;
+                let mut max_y = f32::MIN;
+                for i in anim.vertex_range.clone() {
+                    let p = local_vertices[i].position;
+                    if p[0] < min_x { min_x = p[0]; }
+                    if p[1] < min_y { min_y = p[1]; }
+                    if p[0] > max_x { max_x = p[0]; }
+                    if p[1] > max_y { max_y = p[1]; }
+                }
+                let cx = (min_x + max_x) * 0.5;
+                let cy = (min_y + max_y) * 0.5;
+                
+                let c = val.to_radians().cos();
+                let s = val.to_radians().sin();
+                
+                for i in anim.vertex_range.clone() {
+                    let p = local_vertices[i].position;
+                    let dx = p[0] - cx;
+                    let dy = p[1] - cy;
+                    local_vertices[i].position[0] = cx + dx * c - dy * s;
+                    local_vertices[i].position[1] = cy + dx * s + dy * c;
+                }
+            } else if anim.attribute_name == "opacity" {
+                for i in anim.vertex_range.clone() {
+                    local_vertices[i].color[3] = val;
+                }
+            }
+        }
+
+        for mut v in local_vertices {
             let rel_x = (v.position[0] - model.view_box.x) / model.view_box.width;
             let rel_y = (v.position[1] - model.view_box.y) / model.view_box.height;
 
@@ -4605,7 +4901,9 @@ impl SurtrRenderer {
             v.mode = mode;
 
             if let Some(override_color) = color {
-                v.color = self.apply_opacity(override_color);
+                let mut c = override_color;
+                c[3] *= v.color[3]; // preserve animated opacity
+                v.color = self.apply_opacity(c);
             } else {
                 v.color = self.apply_opacity(v.color);
             }
