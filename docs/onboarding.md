@@ -49,6 +49,7 @@ The workspace is organized into modular tiers to separate core application logic
 - `cvkg/` — Main public facade and backend selector.
 - `cvkg-core/` — Fundamental geometry types, environment maps, and rendering traits.
 - `cvkg-vdom/` — Stateless Virtual DOM manager, tree diffing, and accessibility bridges.
+- `cvkg-compositor/` — Retained-mode layer orchestration engine mapping UI to GPU passes.
 - `cvkg-scene/` — Retained scene graph with spatial subdivision and drawing buffers.
 - `cvkg-layout/` — Flexbox positioning engines and stack containers.
 - `cvkg-anim/` — Sleipnir spring-physics and RK4 animation solvers.

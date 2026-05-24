@@ -16,6 +16,7 @@ graph TD
     cvkg_core["cvkg-core (Traits & Types)"]
     cvkg_macros["cvkg-macros (DSL & State)"]
     cvkg_vdom["cvkg-vdom (Stateless VDOM)"]
+    cvkg_compositor["cvkg-compositor (Layer Orchestration)"]
     cvkg_scene["cvkg-scene (Retained Scene)"]
     cvkg_layout["cvkg-layout (Flexbox Space)"]
     cvkg_anim["cvkg-anim (RK4 Springs)"]
@@ -43,7 +44,9 @@ graph TD
     cvkg_anim --> cvkg_core
     cvkg_scene --> cvkg_core
     cvkg_vdom --> cvkg_core
-    cvkg_vdom --> cvkg_scene
+    cvkg_vdom --> cvkg_compositor
+    cvkg_compositor --> cvkg_scene
+    cvkg_compositor --> cvkg_core
 
     cvkg_themes --> cvkg_core
     cvkg_themes --> cvkg_anim
@@ -111,6 +114,14 @@ Manages UI tree transformations, tracking nodes and calculating visual updates.
   - `VDom` — The hierarchical Virtual DOM tree.
   - `VDomPatch` — Mutations (Create, Update, Delete, Move) computed by tree diffing.
   - `VNodeRenderer` — Driver that evaluates a composed `View` tree to populate a logical `VDom`.
+
+### 2.5. Layer Compositor
+Retained-mode layer orchestration engine that routes draw calls into multi-pass GPU buckets.
+- **Primary Crate**: `cvkg-compositor`
+- **Key Structs**:
+  - `CompositorEngine` — Evaluates damage tracking and routes layer rendering by material type.
+  - `LayerTree` — Z-sorted hierarchy of visual layers.
+  - `Material` — Determines GPU passes (e.g., Scene, Glass, Overlay).
 
 ### 3. Layout Engine
 Calculates spatial positions and dimensions.
