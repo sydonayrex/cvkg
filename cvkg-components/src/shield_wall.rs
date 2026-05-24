@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// A futuristic Scifi-Viking frame.
 /// Features animated glowing borders and 'shield' corner brackets.
@@ -12,7 +13,7 @@ impl<V: View> ShieldWall<V> {
     pub fn new(content: V) -> Self {
         Self {
             content,
-            border_color: [0.0, 0.8, 1.0, 1.0], // Cyan
+            border_color: theme::accent(), // Cyan
             glow_intensity: 0.8,
         }
     }

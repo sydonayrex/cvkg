@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 use cvkg_vdom::VDom;
 // No imports needed from crate for now
 
@@ -33,7 +34,7 @@ impl View for VdomInspector {
         // Bifrost background
         renderer.bifrost(panel_rect, 20.0, 0.5, 0.8);
         renderer.fill_rect(panel_rect, [0.05, 0.05, 0.05, 0.8]);
-        renderer.stroke_rect(panel_rect, [0.0, 1.0, 1.0, 1.0], 1.0);
+        renderer.stroke_rect(panel_rect, theme::accent(), 1.0);
 
         // Title
         let title_rect = Rect {
@@ -47,7 +48,7 @@ impl View for VdomInspector {
             title_rect.x,
             title_rect.y,
             16.0,
-            [0.0, 1.0, 1.0, 1.0],
+            theme::accent(),
         );
 
         // Hierarchy
@@ -82,7 +83,7 @@ impl VdomInspector {
                 x + indent,
                 current_y,
                 12.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
             current_y += 20.0;
 
@@ -134,7 +135,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             12.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
         y += line_h;
 
@@ -144,7 +145,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.7, 0.7, 0.8, 1.0],
+            theme::text_muted(),
         );
         y += line_h;
         renderer.draw_text(
@@ -152,7 +153,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.7, 0.7, 0.8, 1.0],
+            theme::text_muted(),
         );
         y += line_h;
         renderer.draw_text(
@@ -160,7 +161,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.7, 0.7, 0.8, 1.0],
+            theme::text_muted(),
         );
         y += line_h;
         renderer.draw_text(
@@ -168,7 +169,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.7, 0.7, 0.8, 1.0],
+            theme::text_muted(),
         );
         y += line_h;
         renderer.draw_text(
@@ -176,19 +177,19 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.7, 0.7, 0.8, 1.0],
+            theme::text_muted(),
         );
         y += 25.0;
 
         // GPU Stats
-        renderer.draw_text("GPU_RESOURCES", x, y, 12.0, [1.0, 0.6, 0.0, 1.0]);
+        renderer.draw_text("GPU_RESOURCES", x, y, 12.0, theme::warning());
         y += 20.0;
         renderer.draw_text(
             &format!("VRAM_TOTAL: {:.2} MB", telemetry.vram_usage_mb),
             x,
             y,
             11.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
         y += line_h;
         renderer.draw_text(
@@ -196,7 +197,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.6, 0.6, 0.7, 1.0],
+            theme::text_muted(),
         );
         y += line_h;
         renderer.draw_text(
@@ -204,7 +205,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             10.0,
-            [0.6, 0.6, 0.7, 1.0],
+            theme::text_muted(),
         );
         y += 25.0;
 
@@ -214,7 +215,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             11.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
         y += line_h;
         renderer.draw_text(
@@ -222,7 +223,7 @@ impl View for TelemetryOverlay {
             x,
             y,
             11.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
     }
 }
@@ -245,7 +246,7 @@ impl Default for ConstraintOverlay {
     fn default() -> Self {
         Self {
             enabled: true,
-            constraint_color: [0.0, 1.0, 1.0, 0.8], // Cyan
+            constraint_color: theme::accent(), // Cyan
             padding_color: [1.0, 0.0, 1.0, 0.3],    // Magenta (semi-transparent)
             show_margins: true,
             show_padding: true,

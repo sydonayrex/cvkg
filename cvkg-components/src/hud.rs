@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 use std::sync::Arc;
 
 /// Vegvísir - A radial tactical menu (Norse compass)
@@ -73,7 +74,7 @@ impl View for Vegvísir {
                 [0.0, 0.5, 0.8, 0.8],
             );
 
-            renderer.draw_text(&item.label, x - 20.0, y + 5.0, 10.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(&item.label, x - 20.0, y + 5.0, 10.0, theme::text());
         }
 
         let on_select = self.on_select.clone();
@@ -242,9 +243,9 @@ impl View for GjallarAlert {
 
         let t = renderer.elapsed_time();
         let accent_color = match self.kind {
-            AlertKind::Information => [0.0, 0.8, 1.0, 1.0], // Cyan
-            AlertKind::Warning => [1.0, 0.6, 0.0, 1.0],     // Orange
-            AlertKind::Critical => [1.0, 0.2, 0.2, 1.0],    // Red
+            AlertKind::Information => theme::accent(), // Cyan
+            AlertKind::Warning => theme::warning(),     // Orange
+            AlertKind::Critical => theme::error_color(),    // Red
         };
 
         // 1. Mimir's Refraction (Glass Depth)

@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -188,7 +189,7 @@ impl DatePicker {
         // Date text
         let text = self.format_date();
         let text_color = if self.selected_date.is_some() {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         } else {
             [0.5, 0.5, 0.6, 0.7]
         };
@@ -262,7 +263,7 @@ impl DatePicker {
         let (tw, _th) = renderer.measure_text(&label, 14.0);
         let label_x = header_rect.x + (header_rect.width - tw) / 2.0;
         let label_y = header_rect.y + (header_h - 14.0) / 2.0;
-        renderer.draw_text(&label, label_x, label_y, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text(&label, label_x, label_y, 14.0, theme::text());
 
         // Next month button
         let next_btn_rect = Rect {
@@ -408,11 +409,11 @@ impl DatePicker {
                     let day_str = format!("{}", day_num);
                     let (tw, _th) = renderer.measure_text(&day_str, 12.0);
                     let text_color = if is_selected {
-                        [1.0, 1.0, 1.0, 1.0]
+                        theme::text()
                     } else if is_today {
-                        [0.0, 0.85, 1.0, 1.0]
+                        theme::accent()
                     } else {
-                        [0.85, 0.85, 0.9, 1.0]
+                        theme::text()
                     };
                     renderer.draw_text(
                         &day_str,

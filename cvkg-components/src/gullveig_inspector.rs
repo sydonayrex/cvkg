@@ -3,6 +3,7 @@
 //! Gullveig the Vanir witch was known for her prophetic powers and ability
 //! to see into the nature of things - this inspector reveals component internals.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -96,7 +97,7 @@ impl View for GullveigInspector {
             rect.x + 10.0,
             stats_y,
             10.0,
-            [0.6, 0.8, 1.0, 1.0],
+            theme::info(),
         );
 
         // Attributes

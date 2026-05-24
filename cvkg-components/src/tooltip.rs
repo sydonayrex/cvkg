@@ -1,4 +1,6 @@
-use cvkg_core::{Event, Never, Rect, Renderer, View};
+use cvkg_core::{
+Event, Never, Rect, Renderer, View};
+use crate::theme;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -277,7 +279,7 @@ impl<V: View> View for Tooltip<V> {
             // Render the tooltip text.
             let text_x = tip_rect.x + 8.0;
             let text_y = tip_rect.y + 6.0;
-            renderer.draw_text(&self.text, text_x, text_y, 12.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(&self.text, text_x, text_y, 12.0, theme::text());
 
             renderer.set_z_index(0.0);
         }

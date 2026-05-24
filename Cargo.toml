@@ -22,27 +22,29 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.20"
+version = "0.1.21"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 [workspace.dependencies]
-cvkg-core = { path = "cvkg-core", version = "0.1.20" }
-cvkg-vdom = { path = "cvkg-vdom", version = "0.1.20" }
-cvkg-scene = { path = "cvkg-scene", version = "0.1.20" }
-cvkg-layout = { path = "cvkg-layout", version = "0.1.20" }
-cvkg-anim = { path = "cvkg-anim", version = "0.1.20" }
-cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.1.20" }
-runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.1.20" }
-cvkg-themes = { path = "cvkg-themes", version = "0.1.20" }
-cvkg-macros = { path = "cvkg-macros", version = "0.1.20" }
-cvkg-components = { path = "cvkg-components", version = "0.1.20" }
-cvkg-test = { path = "cvkg-test", version = "0.1.20" }
-cvkg-flow = { path = "cvkg-flow", version = "0.1.20" }
-cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.1.20" }
-cvkg-cli = { path = "cvkg-cli", version = "0.1.20" }
-cvkg = { path = "cvkg", version = "0.1.20" }
+cvkg-core = { path = "cvkg-core", version = "0.1.21" }
+cvkg-vdom = { path = "cvkg-vdom", version = "0.1.21" }
+cvkg-scene = { path = "cvkg-scene", version = "0.1.21" }
+cvkg-layout = { path = "cvkg-layout", version = "0.1.21" }
+cvkg-anim = { path = "cvkg-anim", version = "0.1.21" }
+cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.1.21" }
+runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.1.21" }
+cvkg-runic-text = { path = "cvkg-runic-text", version = "0.1.21" }
+cvkg-themes = { path = "cvkg-themes", version = "0.1.21" }
+cvkg-macros = { path = "cvkg-macros", version = "0.1.21" }
+cvkg-components = { path = "cvkg-components", version = "0.1.21" }
+cvkg-test = { path = "cvkg-test", version = "0.1.21" }
+cvkg-flow = { path = "cvkg-flow", version = "0.1.21" }
+cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.1.21" }
+cvkg-compositor = { path = "cvkg-compositor", version = "0.1.21" }
+cvkg-cli = { path = "cvkg-cli", version = "0.1.21" }
+cvkg = { path = "cvkg", version = "0.1.21" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", default-features = false, features = ["sync", "rt", "macros"] }

@@ -7,6 +7,7 @@ use std::process::Command;
 pub enum Template {
     Minimal,
     Dashboard,
+    AiCopilot,
 }
 
 impl std::str::FromStr for Template {
@@ -15,6 +16,7 @@ impl std::str::FromStr for Template {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "dashboard" => Ok(Template::Dashboard),
+            "ai" | "ai-copilot" => Ok(Template::AiCopilot),
             _ => Ok(Template::Minimal),
         }
     }
@@ -78,8 +80,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cvkg = {{ version = "0.1.15", features = ["native"] }}
-cvkg-core = {{ version = "0.1.15" }}
+cvkg = {{ version = "0.1.21", features = ["native"] }}
+cvkg-core = {{ version = "0.1.21" }}
 tokio = {{ version = "1.0", features = ["full"] }}
 log = "0.4"
 "#,
@@ -139,6 +141,38 @@ fn MainContent() {
 
 fn main() {
     cvkg::native::NativeRenderer::run(Dashboard());
+}
+"#
+            }
+            Template::AiCopilot => {
+                r#"use cvkg::prelude::*;
+use cvkg_components::*;
+
+#[allow(non_snake_case)]
+#[view_component]
+fn CopilotApp() {
+    HStack::new(16.0)
+        .child(
+            VStack::new(16.0)
+                .child(Text::new("AI Copilot").font_size(24.0))
+                .child(
+                    SleipnFlow::new()
+                        .node(FenrirNode::new().info("Context Gather", 2))
+                        .node(FenrirNode::new().info("Analysis", 1))
+                        .node(FenrirNode::new().info("Generation", 0))
+                )
+        )
+        .child(
+            VStack::new(16.0)
+                .child(HuginChat::new().message("user", "Analyze my system performance"))
+                .child(HuginChat::new().message("assistant", "The system is currently running nominally with 98% shields."))
+                .child(Spacer::new())
+                .child(GeriPrompt::new().text("What about engine 2?"))
+        )
+}
+
+fn main() {
+    cvkg::native::NativeRenderer::run(CopilotApp());
 }
 "#
             }

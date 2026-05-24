@@ -10,8 +10,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let dest_path = PathBuf::from(&out_dir).join("shader_spirv.rs");
 
     // Check if we should skip recompilation (caching optimization)
-    let shader_path = "src/shaders.wgsl";
-    let wgsl_src = read_to_string(shader_path)?;
+    let wgsl_src = vec![
+        read_to_string("src/shaders/common.wgsl")?,
+        read_to_string("src/shaders/shapes.wgsl")?,
+        read_to_string("src/shaders/bifrost.wgsl")?,
+        read_to_string("src/shaders/bloom.wgsl")?,
+    ].join("\n");
 
     // Calculate hash to detect changes
     let mut hasher = DefaultHasher::new();
@@ -36,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if !should_rebuild && dest_path.exists() {
         println!("cargo:warning=Shader cache hit - skipping SPIR-V compilation");
-        println!("cargo:rerun-if-changed={}", shader_path);
+        println!("cargo:rerun-if-changed=src/shaders");
         return Ok(());
     }
 
@@ -70,6 +74,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cache_file = File::create(&cache_path)?;
     writeln!(cache_file, "{}", current_hash)?;
 
-    println!("cargo:rerun-if-changed={}", shader_path);
+    println!("cargo:rerun-if-changed=src/shaders");
     Ok(())
 }

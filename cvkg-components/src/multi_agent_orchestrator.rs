@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
+use crate::theme;
 use cvkg_core::{
     Renderer, Size, View,
     layout::{LayoutCache, LayoutView, Rect, SizeProposal},
@@ -1642,7 +1643,7 @@ impl MultiAgentOrchestrator {
 
         // Selection highlight
         if is_selected {
-            renderer.stroke_rounded_rect(node_rect, 6.0, [0.0, 0.8, 1.0, 0.8], 2.0);
+            renderer.stroke_rounded_rect(node_rect, 6.0, theme::accent(), 2.0);
         }
 
         // Title bar
@@ -1675,7 +1676,7 @@ impl MultiAgentOrchestrator {
         );
 
         // Name
-        renderer.draw_text(&node.name, nx + 28.0, ny + 7.0, 12.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.draw_text(&node.name, nx + 28.0, ny + 7.0, 12.0, theme::surface());
 
         // Status indicator (if running)
         if let Some(ref run) = self.state.current_run
@@ -1820,7 +1821,7 @@ impl MultiAgentOrchestrator {
                 width: 12.0,
                 height: 12.0,
             },
-            [0.0, 0.8, 1.0, 0.8],
+            theme::accent(),
         );
     }
 
@@ -1875,7 +1876,7 @@ impl MultiAgentOrchestrator {
                 btn_x + 12.0,
                 btn_y + 6.0,
                 11.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
         } else {
             renderer.fill_rounded_rect(
@@ -1893,7 +1894,7 @@ impl MultiAgentOrchestrator {
                 btn_x + 16.0,
                 btn_y + 6.0,
                 11.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
         }
 
@@ -2158,7 +2159,7 @@ impl MultiAgentOrchestrator {
         let panel_y = rect.y + 40.0;
 
         // Background overlay
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
+        renderer.fill_rect(rect, theme::shadow());
 
         // Panel
         let panel_rect = Rect {
@@ -2264,7 +2265,7 @@ impl MultiAgentOrchestrator {
         let panel_y = rect.y + 40.0;
 
         // Background overlay
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
+        renderer.fill_rect(rect, theme::shadow());
 
         // Panel
         let panel_rect = Rect {
@@ -2824,7 +2825,7 @@ fn render_output_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
+    renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
     if let Some(sel) = &state.selected_node {
         if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
             let output_text = if node.outputs.is_empty() {
@@ -2832,7 +2833,7 @@ fn render_output_panel(
             } else {
                 &node.outputs[0]
             };
-            renderer.draw_text(output_text, x + 12.0, y + 30.0, 12.0, [0.7, 0.7, 0.8, 1.0]);
+            renderer.draw_text(output_text, x + 12.0, y + 30.0, 12.0, theme::text_muted());
         }
     } else {
         renderer.draw_text(
@@ -2840,7 +2841,7 @@ fn render_output_panel(
             x + 12.0,
             y + 30.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
     }
 }
@@ -2867,15 +2868,15 @@ fn render_message_panel(
         x + 12.0,
         y + 8.0,
         14.0,
-        [0.9, 0.9, 1.0, 1.0],
+        theme::text(),
     );
     let mut cy = y + 30.0;
     for msg in state.message_log.iter().rev().take(20) {
         let color = match msg.message_type {
             MessageType::Request => [0.3, 0.7, 1.0, 1.0],
             MessageType::Response => [0.3, 1.0, 0.5, 1.0],
-            MessageType::Error => [1.0, 0.3, 0.3, 1.0],
-            MessageType::Info => [0.7, 0.7, 0.8, 1.0],
+            MessageType::Error => theme::error_color(),
+            MessageType::Info => theme::text_muted(),
         };
         let label = format!(
             "[{}] {} -> {}",
@@ -2883,7 +2884,7 @@ fn render_message_panel(
         );
         renderer.draw_text(&label, x + 12.0, cy, 11.0, color);
         cy += 16.0;
-        renderer.draw_text(&msg.content, x + 20.0, cy, 10.0, [0.6, 0.6, 0.7, 1.0]);
+        renderer.draw_text(&msg.content, x + 20.0, cy, 10.0, theme::text_muted());
         cy += 20.0;
         if cy > y + h - 20.0 {
             break;
@@ -2908,7 +2909,7 @@ fn render_validation_panel(
     }
     renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
     renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-    renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, [0.9, 0.9, 1.0, 1.0]);
+    renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
     if state.validation_errors.is_empty() {
         renderer.draw_text(
             "No issues found.",
@@ -2921,7 +2922,7 @@ fn render_validation_panel(
         let mut cy = y + 30.0;
         for err in &state.validation_errors {
             let color = if err.is_error {
-                [1.0, 0.3, 0.3, 1.0]
+                theme::error_color()
             } else {
                 [1.0, 0.8, 0.2, 1.0]
             };
@@ -2953,14 +2954,14 @@ fn render_skills_panel(
         x + 12.0,
         y + 8.0,
         14.0,
-        [0.9, 0.9, 1.0, 1.0],
+        theme::text(),
     );
     renderer.draw_text(
         "Available skills:",
         x + 12.0,
         y + 30.0,
         12.0,
-        [0.7, 0.7, 0.8, 1.0],
+        theme::text_muted(),
     );
     let mut cy = y + 50.0;
     for skill in state.skill_registry.list_skills() {
@@ -2969,7 +2970,7 @@ fn render_skills_panel(
             x + 20.0,
             cy,
             11.0,
-            [0.6, 0.8, 1.0, 1.0],
+            theme::info(),
         );
         cy += 16.0;
         if cy > y + h - 20.0 {
@@ -3000,7 +3001,7 @@ fn render_webhook_panel(
         x + 12.0,
         y + 8.0,
         14.0,
-        [0.9, 0.9, 1.0, 1.0],
+        theme::text(),
     );
     if let Some(sel) = &state.selected_node {
         if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
@@ -3009,14 +3010,14 @@ fn render_webhook_panel(
                 x + 12.0,
                 y + 30.0,
                 11.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
             renderer.draw_text(
                 &format!("Method: {}", node.webhook_config.method),
                 x + 12.0,
                 y + 48.0,
                 11.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
         }
     } else {
@@ -3025,7 +3026,7 @@ fn render_webhook_panel(
             x + 12.0,
             y + 30.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
     }
 }
@@ -3052,7 +3053,7 @@ fn render_schedule_panel(
         x + 12.0,
         y + 8.0,
         14.0,
-        [0.9, 0.9, 1.0, 1.0],
+        theme::text(),
     );
     if let Some(sel) = &state.selected_node {
         if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
@@ -3061,14 +3062,14 @@ fn render_schedule_panel(
                 x + 12.0,
                 y + 30.0,
                 11.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
             renderer.draw_text(
                 &format!("Interval: {}s", node.schedule_config.interval_seconds),
                 x + 12.0,
                 y + 48.0,
                 11.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
         }
     } else {
@@ -3077,7 +3078,7 @@ fn render_schedule_panel(
             x + 12.0,
             y + 30.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
     }
 }
@@ -3104,7 +3105,7 @@ fn render_recurring_panel(
         x + 12.0,
         y + 8.0,
         14.0,
-        [0.9, 0.9, 1.0, 1.0],
+        theme::text(),
     );
     if state.recurring_runs.is_empty() {
         renderer.draw_text(
@@ -3112,7 +3113,7 @@ fn render_recurring_panel(
             x + 12.0,
             y + 30.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
     } else {
         let mut cy = y + 30.0;
@@ -3122,7 +3123,7 @@ fn render_recurring_panel(
                 x + 12.0,
                 cy,
                 11.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
             cy += 18.0;
         }

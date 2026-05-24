@@ -1,0 +1,23 @@
+[package]
+name = "cvkg-components"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+cvkg-core = { path = "../cvkg-core", version = "0.1.20" }
+cvkg-layout = { path = "../cvkg-layout", version = "0.1.20" }
+cvkg-anim = { path = "../cvkg-anim", version = "0.1.20" }
+cvkg-themes = { path = "../cvkg-themes", version = "0.1.20" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.20" }
+log = "0.4"
+
+[dev-dependencies]
+insta = "1.47.2"
+winit = "0.30"
+cvkg-render-gpu = { path = "../cvkg-render-gpu" }
+cvkg-render-native = { path = "../cvkg-render-native" }
+cvkg-macros = { path = "../cvkg-macros" }
+pollster = "0.3"

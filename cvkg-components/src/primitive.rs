@@ -1,6 +1,8 @@
-use crate::{Color, FontWeight, Orientation};
+use crate::{Color, FontWeight, Orientation, FONT_SM, FONT_XS, SPACE_XS, SPACE_SM};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
+use crate::theme;
+use std::sync::Arc;
 
 /// Text view for displaying strings
 #[allow(dead_code)]
@@ -304,28 +306,119 @@ impl View for Shape {
 pub struct Badge {
     pub(crate) text: String,
     pub(crate) variant: BadgeVariant,
+    pub(crate) size: BadgeSize,
+    pub(crate) on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub(crate) dot_indicator: bool,
+    pub(crate) count_only: bool,
 }
 
 impl Badge {
+    /// Create a new Badge component with the given text.
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
             variant: BadgeVariant::Default,
+            size: BadgeSize::Md,
+            on_click: None,
+            dot_indicator: false,
+            count_only: false,
         }
     }
 
+    /// Set the visual variant of the badge.
     pub fn variant(mut self, variant: BadgeVariant) -> Self {
         self.variant = variant;
         self
     }
+
+    /// Set the size of the badge.
+    pub fn size(mut self, size: BadgeSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Set an optional click callback.
+    pub fn on_click(mut self, callback: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_click = Some(Arc::new(callback));
+        self
+    }
+
+    /// Enable the dot-indicator style (small dot + text) for status indicators.
+    pub fn dot_indicator(mut self, enabled: bool) -> Self {
+        self.dot_indicator = enabled;
+        self
+    }
+
+    /// Enable count-badge mode (number in a circle) for notification counts.
+    pub fn count_only(mut self, enabled: bool) -> Self {
+        self.count_only = enabled;
+        self
+    }
 }
 
+/// Visual variants for Badge, each mapping to distinct colors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BadgeVariant {
     Default,
     Secondary,
     Destructive,
     Outline,
+    Success,
+    Warning,
+}
+
+/// Size variants controlling badge height and padding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BadgeSize {
+    /// Small: 16px height
+    Sm,
+    /// Medium: 24px height
+    Md,
+    /// Large: 32px height
+    Lg,
+}
+
+impl BadgeSize {
+    /// Returns the badge height in logical pixels.
+    pub fn height(self) -> f32 {
+        match self {
+            BadgeSize::Sm => 16.0,
+            BadgeSize::Md => 24.0,
+            BadgeSize::Lg => 32.0,
+        }
+    }
+
+    /// Returns the horizontal padding.
+    pub fn h_padding(self) -> f32 {
+        match self {
+            BadgeSize::Sm => SPACE_XS,
+            BadgeSize::Md => SPACE_SM,
+            BadgeSize::Lg => SPACE_SM * 1.5,
+        }
+    }
+
+    /// Returns the font size for the badge text.
+    pub fn font_size(self) -> f32 {
+        match self {
+            BadgeSize::Sm => FONT_XS,
+            BadgeSize::Md => FONT_SM,
+            BadgeSize::Lg => FONT_SM,
+        }
+    }
+}
+
+impl BadgeVariant {
+    /// Returns the (background_color, text_color) as RGBA arrays for this variant.
+    pub fn colors(self) -> ([f32; 4], [f32; 4]) {
+        match self {
+            BadgeVariant::Default => (theme::accent(), theme::text()),
+            BadgeVariant::Secondary => (theme::border_strong(), theme::text()),
+            BadgeVariant::Destructive => (theme::error_color(), theme::text()),
+            BadgeVariant::Outline => (theme::button_ghost_bg(), theme::accent()),
+            BadgeVariant::Success => (theme::success(), theme::text()),
+            BadgeVariant::Warning => (theme::warning(), theme::text()),
+        }
+    }
 }
 
 impl View for Badge {
@@ -335,34 +428,96 @@ impl View for Badge {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let (bg, text_color) = match self.variant {
-            BadgeVariant::Default => ([0.0, 0.8, 1.0, 1.0], [0.0, 0.0, 0.0, 1.0]),
-            BadgeVariant::Secondary => ([0.2, 0.2, 0.25, 1.0], [1.0, 1.0, 1.0, 1.0]),
-            BadgeVariant::Destructive => ([0.8, 0.1, 0.1, 1.0], [1.0, 1.0, 1.0, 1.0]),
-            BadgeVariant::Outline => ([0.0, 0.0, 0.0, 0.0], [0.0, 0.8, 1.0, 1.0]),
-        };
+        let (bg, text_color) = self.variant.colors();
+        let height = self.size.height();
+        let radius = height / 2.0;
 
-        renderer.fill_rounded_rect(rect, rect.height / 2.0, bg);
-        if let BadgeVariant::Outline = self.variant {
-            renderer.stroke_rounded_rect(rect, rect.height / 2.0, text_color, 1.0);
+        if self.count_only {
+            // Count badge: number in a circle
+            let diameter = height;
+            let circle_rect = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: diameter,
+                height: diameter,
+            };
+            renderer.fill_ellipse(circle_rect, bg);
+            let font_size = self.size.font_size();
+            let (tw, th) = renderer.measure_text(&self.text, font_size);
+            renderer.draw_text(
+                &self.text,
+                rect.x + (diameter - tw) / 2.0,
+                rect.y + (diameter - th) / 2.0,
+                font_size,
+                text_color,
+            );
+            return;
         }
 
-        let (tw, th) = renderer.measure_text(&self.text, 12.0);
-        renderer.draw_text(
-            &self.text,
-            rect.x + (rect.width - tw) / 2.0,
-            rect.y + (rect.height - th) / 2.0,
-            12.0,
-            text_color,
-        );
+        // Draw background rounded rect
+        if self.variant == BadgeVariant::Outline {
+            renderer.stroke_rounded_rect(rect, radius, text_color, 1.0);
+        } else {
+            renderer.fill_rounded_rect(rect, radius, bg);
+        }
+
+        let font_size = self.size.font_size();
+        let (tw, th) = renderer.measure_text(&self.text, font_size);
+
+        if self.dot_indicator {
+            // Dot indicator: small 8px dot + text
+            let dot_size = 8.0;
+            let dot_rect = Rect {
+                x: rect.x + self.size.h_padding(),
+                y: rect.y + (height - dot_size) / 2.0,
+                width: dot_size,
+                height: dot_size,
+            };
+            // Use the background color for the dot (or white for outline)
+            let dot_color = if self.variant == BadgeVariant::Outline {
+                text_color
+            } else {
+                bg
+            };
+            renderer.fill_ellipse(dot_rect, dot_color);
+
+            let text_x = rect.x + self.size.h_padding() + dot_size + SPACE_XS;
+            let text_y = rect.y + (height - th) / 2.0;
+            renderer.draw_text(&self.text, text_x, text_y, font_size, text_color);
+        } else {
+            // Standard badge: centered text
+            renderer.draw_text(
+                &self.text,
+                rect.x + (rect.width - tw) / 2.0,
+                rect.y + (rect.height - th) / 2.0,
+                font_size,
+                text_color,
+            );
+        }
     }
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
-        let (tw, th) = renderer.measure_text(&self.text, 12.0);
-        Size {
-            width: tw + 16.0,
-            height: th + 8.0,
+        let height = self.size.height();
+        let font_size = self.size.font_size();
+        let h_pad = self.size.h_padding();
+
+        if self.count_only {
+            let (tw, _th) = renderer.measure_text(&self.text, font_size);
+            let diameter = height.max(tw + SPACE_SM);
+            return Size {
+                width: diameter,
+                height: diameter,
+            };
         }
+
+        let (tw, _th) = renderer.measure_text(&self.text, font_size);
+        let mut width = tw + h_pad * 2.0;
+
+        if self.dot_indicator {
+            width += 8.0 + SPACE_XS; // dot + gap
+        }
+
+        Size { width, height }
     }
 }
 

@@ -1,7 +1,9 @@
 use cvkg_core::{
-    AnyView, Never, Rect, Renderer, Size, View,
+    AnyView, Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
+use crate::theme;
+use std::sync::Arc;
 
 /// Column definition for a DataGrid.
 pub struct DataGridColumn<D> {
@@ -23,8 +25,12 @@ where
     pub(crate) sort_order: SortOrder,
     pub(crate) frozen_columns: usize,
     pub(crate) show_sparklines: bool,
+    pub(crate) selected_index: Option<usize>,
+    pub(crate) on_select: Option<Arc<dyn Fn(usize) + Send + Sync>>,
+    pub(crate) on_sort: Option<Arc<dyn Fn(String, SortOrder) + Send + Sync>>,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum SortOrder {
     Asc,
     Desc,
@@ -42,6 +48,9 @@ where
             columns: Vec::new(),
             sort_column: None,
             sort_order: SortOrder::Asc,
+            selected_index: None,
+            on_select: None,
+            on_sort: None,
             frozen_columns: 0,
             show_sparklines: false,
         }
@@ -86,6 +95,24 @@ where
         self.sort_order = order;
         self
     }
+
+    /// Sets the row selection callback.
+    pub fn on_select(mut self, callback: impl Fn(usize) + Send + Sync + 'static) -> Self {
+        self.on_select = Some(Arc::new(callback));
+        self
+    }
+
+    /// Sets the column sort callback.
+    pub fn on_sort(mut self, callback: impl Fn(String, SortOrder) + Send + Sync + 'static) -> Self {
+        self.on_sort = Some(Arc::new(callback));
+        self
+    }
+
+    /// Sets the selected row index.
+    pub fn selected(mut self, index: Option<usize>) -> Self {
+        self.selected_index = index;
+        self
+    }
 }
 
 impl<D> View for RunesTable<D>
@@ -102,23 +129,32 @@ where
             return;
         }
 
-        // Render frozen header columns
+        renderer.push_vnode(rect, "RunesTable");
+
         let header_h = 36.0;
         let mut current_x = rect.x;
+
+        // ── Column headers (clickable for sortable columns) ──
         for (i, col) in self.columns.iter().enumerate() {
-            if i >= self.frozen_columns {
+            if i >= self.frozen_columns && current_x >= rect.x + rect.width {
                 break;
             }
             let col_rect = Rect {
                 x: current_x,
                 y: rect.y,
-                width: col.width,
+                width: col.width.clamp(40.0, 500.0),
                 height: header_h,
             };
-            renderer.fill_rect(col_rect, [0.08, 0.08, 0.12, 1.0]);
-            renderer.stroke_rect(col_rect, [0.3, 0.5, 0.8, 1.0], 1.0);
+            let is_sorted = self.sort_column.as_deref() == Some(&col.header);
+            let header_bg = if is_sorted {
+                theme::table_header_bg()
+            } else {
+                theme::surface_elevated()
+            };
+            renderer.fill_rect(col_rect, header_bg);
+            renderer.stroke_rect(col_rect, [0.3, 0.5, 0.8, if is_sorted { 0.8 } else { 0.4 }], 1.0);
 
-            let sort_indicator = if self.sort_column.as_deref() == Some(&col.header) {
+            let sort_indicator = if is_sorted {
                 match self.sort_order {
                     SortOrder::Asc => " ▲",
                     SortOrder::Desc => " ▼",
@@ -129,14 +165,40 @@ where
             renderer.draw_text(
                 &format!("{}{}", col.header, sort_indicator),
                 col_rect.x + 8.0,
-                col_rect.y + 8.0,
+                col_rect.y + 10.0,
                 13.0,
-                [0.8, 0.9, 1.0, 1.0],
+                if is_sorted { theme::accent() } else { theme::text() },
             );
+
+            // ── Sort click handler ──
+            if col.sortable {
+                let col_name = col.header.clone();
+                let on_sort = self.on_sort.clone();
+                let current_order = self.sort_order.clone();
+                let cr = col_rect;
+                renderer.register_handler(
+                    "pointerclick",
+                    Arc::new(move |event| {
+                        if let Event::PointerClick { x, y, .. } = event {
+                            if cr.contains(x, y) {
+                                if let Some(ref cb) = on_sort {
+                                    let new_order = if current_order == SortOrder::Asc {
+                                        SortOrder::Desc
+                                    } else {
+                                        SortOrder::Asc
+                                    };
+                                    (cb)(col_name.clone(), new_order);
+                                }
+                            }
+                        }
+                    }),
+                );
+            }
+
             current_x += col.width;
         }
 
-        // Render body (virtualized)
+        // ── Body (virtualized row rendering) ──
         let body_rect = Rect {
             x: rect.x,
             y: rect.y + header_h,
@@ -155,30 +217,61 @@ where
 
         for idx in start_idx..end_idx {
             if let Some(item) = self.data.get(idx) {
-                let row_y = idx as f32 * self.row_height + header_h;
-                let mut current_x = rect.x;
+                let row_y = rect.y + header_h + idx as f32 * self.row_height - start_idx as f32 * self.row_height;
+                let row_rect = Rect {
+                    x: rect.x,
+                    y: row_y,
+                    width: rect.width,
+                    height: self.row_height,
+                };
+                let is_selected = self.selected_index == Some(idx);
+
+                // Row background: alternating + selection highlight
+                let bg = if is_selected {
+                    [0.0, 0.4, 0.8, 0.4]
+                } else if idx % 2 == 0 {
+                    theme::input_bg()
+                } else {
+                    theme::surface_elevated()
+                };
+                renderer.fill_rect(row_rect, bg);
+                if is_selected {
+                    renderer.stroke_rect(row_rect, [0.0, 0.8, 1.0, 0.6], 1.5);
+                }
+
+                let mut cx = rect.x;
                 for col in &self.columns {
                     let cell_rect = Rect {
-                        x: current_x,
+                        x: cx,
                         y: row_y,
                         width: col.width,
                         height: self.row_height,
                     };
-
-                    // Alternating row colors
-                    let bg = if idx % 2 == 0 {
-                        [0.06, 0.06, 0.1, 1.0]
-                    } else {
-                        [0.08, 0.08, 0.12, 1.0]
-                    };
-                    renderer.fill_rect(cell_rect, bg);
-
                     let view = (col.cell_builder)(item);
                     view.render(renderer, cell_rect);
-                    current_x += col.width;
+                    cx += col.width;
                 }
+
+                // ── Row selection click handler ──
+                let row_idx = idx;
+                let on_select = self.on_select.clone();
+                let rr = row_rect;
+                renderer.register_handler(
+                    "pointerclick",
+                    Arc::new(move |event| {
+                        if let Event::PointerClick { x, y, .. } = event {
+                            if rr.contains(x, y) {
+                                if let Some(ref cb) = on_select {
+                                    (cb)(row_idx);
+                                }
+                            }
+                        }
+                    }),
+                );
             }
         }
+
+        renderer.pop_vnode();
     }
 }
 
@@ -261,13 +354,13 @@ where
             width: rect.width,
             height: filter_h,
         };
-        renderer.fill_rounded_rect(filter_rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.fill_rounded_rect(filter_rect, 4.0, theme::surface());
         renderer.draw_text(
             &format!("Filter: {}", self.filter_text),
             filter_rect.x + 8.0,
             filter_rect.y + 10.0,
             13.0,
-            [0.6, 0.6, 0.7, 1.0],
+            theme::text_muted(),
         );
 
         // Render table below filter

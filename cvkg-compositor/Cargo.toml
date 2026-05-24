@@ -1,0 +1,18 @@
+[package]
+name = "cvkg-compositor"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+cvkg-core = { workspace = true }
+glam = { workspace = true }
+log = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]

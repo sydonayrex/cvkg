@@ -1,12 +1,20 @@
+use crate::{ButtonSize, ButtonVariant, FONT_BASE, RADIUS_MD, RADIUS_SM};
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
-/// Button with action callback
-#[allow(dead_code)]
+// =============================================================================
+// BUTTON — Full state machine with variants, sizes, disabled state, focus ring
+// =============================================================================
+
+/// Button with action callback, variant styling, size options, and disabled state.
 #[derive(Clone)]
 pub struct Button {
     pub(crate) label: String,
-    pub(crate) on_click: std::sync::Arc<dyn Fn() + Send + Sync>,
+    pub(crate) on_click: Arc<dyn Fn() + Send + Sync>,
+    pub(crate) variant: ButtonVariant,
+    pub(crate) size: ButtonSize,
+    pub(crate) disabled: bool,
 }
 
 impl Button {
@@ -14,28 +22,168 @@ impl Button {
     pub fn new(label: impl Into<String>, on_click: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
             label: label.into(),
-            on_click: std::sync::Arc::new(on_click),
+            on_click: Arc::new(on_click),
+            variant: ButtonVariant::Default,
+            size: ButtonSize::Default,
+            disabled: false,
+        }
+    }
+
+    /// Set the button variant.
+    pub fn variant(mut self, variant: ButtonVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    /// Set the button size.
+    pub fn size(mut self, size: ButtonSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Set the disabled state.
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
+    /// Compute the background color based on variant and state.
+    fn bg_color(&self, is_pressed: bool, is_hovered: bool) -> [f32; 4] {
+        if self.disabled {
+            return theme::disabled();
+        }
+        match self.variant {
+            ButtonVariant::Default => {
+                if is_pressed { theme::active_color() }
+                else if is_hovered { theme::hover() }
+                else { theme::button_secondary_bg() }
+            }
+            ButtonVariant::Destructive => {
+                if is_pressed { theme::error_color() }
+                else if is_hovered { theme::error_color() }
+                else { theme::button_danger_bg() }
+            }
+            ButtonVariant::Secondary => {
+                if is_pressed { theme::active_color() }
+                else if is_hovered { theme::hover() }
+                else { theme::button_secondary_bg() }
+            }
+            ButtonVariant::Ghost => {
+                if is_pressed { [0.08, 0.08, 0.12, 0.5] }
+                else if is_hovered { theme::hover() }
+                else { theme::button_ghost_bg() }
+            }
+            ButtonVariant::Link => theme::button_ghost_bg(),
+        }
+    }
+
+    /// Compute the border color based on variant and state.
+    fn border_color(&self, is_pressed: bool, is_hovered: bool) -> ([f32; 4], f32) {
+        if self.disabled {
+            return (theme::disabled(), 1.0);
+        }
+        match self.variant {
+            ButtonVariant::Default => {
+                if is_pressed { (theme::accent(), 3.0) }
+                else if is_hovered { (theme::accent_hover(), 2.0) }
+                else { (theme::accent(), 1.5) }
+            }
+            ButtonVariant::Destructive => {
+                if is_pressed { (theme::error_color(), 3.0) }
+                else if is_hovered { (theme::error_color(), 2.0) }
+                else { (theme::error_color(), 1.5) }
+            }
+            ButtonVariant::Secondary => {
+                if is_pressed { (theme::border_strong(), 2.0) }
+                else if is_hovered { (theme::border(), 1.5) }
+                else { (theme::border(), 1.0) }
+            }
+            ButtonVariant::Ghost => {
+                if is_pressed { ([0.3, 0.3, 0.4, 0.5], 1.0) }
+                else { (theme::button_ghost_bg(), 0.0) }
+            }
+            ButtonVariant::Link => (theme::button_ghost_bg(), 0.0),
+        }
+    }
+
+    /// Compute the text color based on variant and state.
+    fn text_color(&self, is_hovered: bool) -> [f32; 4] {
+        if self.disabled {
+            return [0.35, 0.35, 0.4, 0.5];
+        }
+        match self.variant {
+            ButtonVariant::Default | ButtonVariant::Destructive => theme::text(),
+            ButtonVariant::Secondary => {
+                theme::text()
+            }
+            ButtonVariant::Ghost => {
+                if is_hovered { theme::text() } else { theme::text_muted() }
+            }
+            ButtonVariant::Link => {
+                if is_hovered { theme::accent() } else { theme::accent() }
+            }
+        }
+    }
+
+    /// Compute the height based on size variant.
+    fn height(&self) -> f32 {
+        match self.size {
+            ButtonSize::Small => 32.0,
+            ButtonSize::Default => 44.0,
+            ButtonSize::Large => 52.0,
+            ButtonSize::Icon => 44.0,
+        }
+    }
+
+    /// Compute the font size based on size variant.
+    fn font_size(&self) -> f32 {
+        match self.size {
+            ButtonSize::Small => 12.0,
+            ButtonSize::Default => FONT_BASE,
+            ButtonSize::Large => FONT_BASE,
+            ButtonSize::Icon => FONT_BASE,
+        }
+    }
+
+    /// Compute horizontal padding based on size variant.
+    fn h_padding(&self) -> f32 {
+        match self.size {
+            ButtonSize::Small => 12.0,
+            ButtonSize::Default => 16.0,
+            ButtonSize::Large => 24.0,
+            ButtonSize::Icon => 12.0,
         }
     }
 }
 
 impl View for Button {
     type Body = Never;
+
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Button");
-        renderer.set_key(&self.label);
-        renderer.set_aria_role("button");
-        renderer.set_aria_label(&self.label);
-
-        // Get pressed state from system state (lock-free snapshot)
         let id_hash = {
             use std::hash::{Hash, Hasher};
             let mut s = std::collections::hash_map::DefaultHasher::new();
             self.label.hash(&mut s);
+            s.finish()
+        };
+
+        let hover_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            self.label.hash(&mut s);
+            "hover".hash(&mut s);
+            s.finish()
+        };
+
+        let focus_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            self.label.hash(&mut s);
+            "focus".hash(&mut s);
             s.finish()
         };
 
@@ -46,44 +194,134 @@ impl View for Button {
                 .unwrap_or(false)
         };
 
-        // Background: dark panel, slightly brighter if pressed
-        let bg = if is_pressed {
-            [0.2, 0.2, 0.25, 1.0]
-        } else {
-            [0.12, 0.12, 0.18, 1.0]
+        let is_hovered = {
+            let s = cvkg_core::load_system_state();
+            s.get_component_state::<bool>(hover_hash)
+                .map(|v| *v.read().unwrap())
+                .unwrap_or(false)
         };
 
+        let is_focused = {
+            let s = cvkg_core::load_system_state();
+            s.get_component_state::<bool>(focus_hash)
+                .map(|v| *v.read().unwrap())
+                .unwrap_or(false)
+        };
+
+        // Pointer-based proximity and magnetic warping calculation.
+        let [px, py] = renderer.get_pointer_position();
+        let center_x = rect.x + rect.width / 2.0;
+        let center_y = rect.y + rect.height / 2.0;
+        let dx = px - center_x;
+        let dy = py - center_y;
+        let dist = (dx * dx + dy * dy).sqrt();
+        let radius = 120.0;
+        let proximity = if dist < radius {
+            (1.0 - dist / radius).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+
+        let intensity = if self.disabled { 0.0 } else { 0.25 };
+        let mut offset_x = 0.0;
+        let mut offset_y = 0.0;
+        if dist < radius && dist > 0.0 && !self.disabled {
+            let force = (1.0 - dist / radius) * intensity;
+            offset_x = dx * force;
+            offset_y = dy * force;
+        }
+
+        let warped_rect = Rect {
+            x: rect.x + offset_x,
+            y: rect.y + offset_y,
+            ..rect
+        };
+
+        renderer.push_vnode(warped_rect, "Button");
+        renderer.set_key(&self.label);
+        renderer.set_aria_role("button");
+        renderer.set_aria_label(&self.label);
+        if self.disabled {
+            
+        }
+
+        // Apply mani_glow() soft lunar-like highlight
+        if !self.disabled {
+            let glow_color = [0.0, 0.9, 1.0, 0.8 * proximity];
+            let glow_radius = 20.0 * proximity;
+            if glow_radius > 0.0 {
+                renderer.mani_glow(warped_rect, glow_color, glow_radius);
+            }
+        }
+
+        let bg = self.bg_color(is_pressed, is_hovered);
+        let (border_color, border_width) = self.border_color(is_pressed, is_hovered);
+        let text_color = self.text_color(is_hovered);
+        let font_size = self.font_size();
+
         // Elevation & Depth
-        renderer.push_shadow(1.0, [0.0, 0.0, 0.0, 0.5], [0.0, 1.0]);
-        renderer.fill_rounded_rect(rect, 6.0, bg);
-        renderer.pop_shadow();
+        if !matches!(self.variant, ButtonVariant::Ghost | ButtonVariant::Link) {
+            renderer.push_shadow(1.0, [0.0, 0.0, 0.0, 0.5], [0.0, 1.0]);
+        }
+        let corner_radius = match self.variant {
+            ButtonVariant::Link => 0.0,
+            _ => RADIUS_MD,
+        };
+        if corner_radius > 0.0 {
+            renderer.fill_rounded_rect(warped_rect, corner_radius, bg);
+        } else {
+            renderer.fill_rect(warped_rect, bg);
+        }
+        if !matches!(self.variant, ButtonVariant::Ghost | ButtonVariant::Link) {
+            renderer.pop_shadow();
+        }
 
-        // Neon cyan border, thicker if pressed
-        let border_width = if is_pressed { 3.0 } else { 1.5 };
-        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 0.8], border_width);
+        // Stroke border
+        if border_width > 0.0 && corner_radius > 0.0 {
+            renderer.stroke_rounded_rect(warped_rect, corner_radius, border_color, border_width);
+        } else if border_width > 0.0 {
+            renderer.stroke_rect(warped_rect, border_color, border_width);
+        }
 
-        // Label text
-        let text_x = rect.x + 8.0;
-        let text_y = rect.y + (rect.height - 14.0) / 2.0;
-        renderer.draw_text(&self.label, text_x, text_y, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        // Focus ring — WCAG 2.4.7
+        if is_focused && !self.disabled {
+            crate::draw_focus_ring(renderer, warped_rect);
+        }
+
+        // Label text centered
+        let (tw, _th) = renderer.measure_text(&self.label, font_size);
+        let text_x = warped_rect.x + (warped_rect.width - tw) / 2.0;
+        let text_y = warped_rect.y + (warped_rect.height - font_size) / 2.0;
+        renderer.draw_text(&self.label, text_x, text_y, font_size, text_color);
 
         // Register interaction handlers
-        let on_click = self.on_click.clone();
+        if !self.disabled {
+            let on_click = self.on_click.clone();
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |_| {
+                    (on_click)();
+                }),
+            );
+        }
 
+        let is_disabled = self.disabled;
         renderer.register_handler(
             "pointerdown",
-            std::sync::Arc::new(move |_| {
-                cvkg_core::update_system_state(|s| {
-                    let mut s = s.clone();
-                    s.set_component_state(id_hash, true);
-                    s
-                });
+            Arc::new(move |_| {
+                if !is_disabled {
+                    cvkg_core::update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(id_hash, true);
+                        s
+                    });
+                }
             }),
         );
 
         renderer.register_handler(
             "pointerup",
-            std::sync::Arc::new(move |_| {
+            Arc::new(move |_| {
                 cvkg_core::update_system_state(|s| {
                     let mut s = s.clone();
                     s.set_component_state(id_hash, false);
@@ -93,11 +331,50 @@ impl View for Button {
         );
 
         renderer.register_handler(
-            "pointerclick",
-            std::sync::Arc::new(move |_| {
-                (on_click)();
+            "pointerenter",
+            Arc::new(move |_| {
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(hover_hash, true);
+                    s
+                });
             }),
         );
+
+        renderer.register_handler(
+            "pointerleave",
+            Arc::new(move |_| {
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(hover_hash, false);
+                    s
+                });
+            }),
+        );
+
+        // Focus handlers
+        renderer.register_handler(
+            "focus",
+            Arc::new(move |_| {
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(focus_hash, true);
+                    s
+                });
+            }),
+        );
+
+        renderer.register_handler(
+            "blur",
+            Arc::new(move |_| {
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(focus_hash, false);
+                    s
+                });
+            }),
+        );
+
         renderer.pop_vnode();
     }
 
@@ -110,10 +387,12 @@ impl View for Button {
         renderer: &mut dyn Renderer,
         _proposal: cvkg_core::layout::SizeProposal,
     ) -> cvkg_core::Size {
-        let (tw, th) = renderer.measure_text(&self.label, 14.0);
+        let font_size = self.font_size();
+        let (tw, _th) = renderer.measure_text(&self.label, font_size);
+        let h_pad = self.h_padding();
         cvkg_core::Size {
-            width: tw + 16.0,
-            height: th + 12.0,
+            width: (tw + h_pad * 2.0).max(self.height()),
+            height: self.height(),
         }
     }
 }
@@ -126,8 +405,9 @@ impl cvkg_core::layout::LayoutView for Button {
         _cache: &mut cvkg_core::layout::LayoutCache,
     ) -> cvkg_core::Size {
         cvkg_core::Size {
-            width: self.label.len() as f32 * 14.0 * 0.6 + 20.0,
-            height: 32.0,
+            width: (self.label.len() as f32 * self.font_size() * 0.6 + self.h_padding() * 2.0)
+                .max(self.height()),
+            height: self.height(),
         }
     }
 
@@ -176,6 +456,8 @@ impl View for Toggle {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Toggle");
+        renderer.set_aria_role("switch");
+        renderer.set_aria_label("Toggle switch");
         let track_w = 40.0;
         let track_h = 20.0;
         let track_x = rect.x;
@@ -188,9 +470,9 @@ impl View for Toggle {
         };
 
         let bg = if self.is_on {
-            [0.0, 0.8, 0.4, 1.0]
+            theme::success()
         } else {
-            [0.2, 0.2, 0.25, 1.0]
+            theme::surface_elevated()
         };
 
         renderer.set_aria_role("switch");
@@ -210,7 +492,7 @@ impl View for Toggle {
                 height: track_h - 4.0,
             },
             (track_h - 4.0) / 2.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
         // Label
         renderer.draw_text(
@@ -218,7 +500,7 @@ impl View for Toggle {
             rect.x + track_w + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
         // Interaction
@@ -292,7 +574,7 @@ impl View for Slider {
                 height: track_h,
             },
             track_h / 2.0,
-            [0.2, 0.2, 0.25, 1.0],
+            theme::surface_elevated(),
         );
         // Track fill
         let start = *self.range.start();
@@ -310,7 +592,7 @@ impl View for Slider {
                 height: track_h,
             },
             track_h / 2.0,
-            [0.0, 0.85, 1.0, 1.0],
+            theme::accent(),
         );
         // Thumb
         let thumb_r = 8.0;
@@ -323,7 +605,7 @@ impl View for Slider {
                 height: thumb_r * 2.0,
             },
             thumb_r,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
         // Interaction
@@ -409,8 +691,8 @@ impl View for Stepper {
         renderer.set_aria_label(&self.label);
 
         // Stepper container
-        renderer.fill_rounded_rect(rect, 4.0, [0.12, 0.12, 0.15, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface_elevated());
+        renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         let label_w = rect.width * 0.4;
         renderer.draw_text(
@@ -418,7 +700,7 @@ impl View for Stepper {
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
         // Buttons
@@ -436,22 +718,22 @@ impl View for Stepper {
             height: rect.height - 8.0,
         };
 
-        renderer.fill_rounded_rect(minus_rect, 2.0, [0.2, 0.2, 0.25, 1.0]);
+        renderer.fill_rounded_rect(minus_rect, 2.0, theme::surface_elevated());
         renderer.draw_text(
             "-",
             minus_rect.x + 10.0,
             minus_rect.y + (minus_rect.height - 14.0) / 2.0,
             14.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
-        renderer.fill_rounded_rect(plus_rect, 2.0, [0.2, 0.2, 0.25, 1.0]);
+        renderer.fill_rounded_rect(plus_rect, 2.0, theme::surface_elevated());
         renderer.draw_text(
             "+",
             plus_rect.x + 10.0,
             plus_rect.y + (plus_rect.height - 14.0) / 2.0,
             14.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
         let val_text = self.value.to_string();
@@ -461,7 +743,7 @@ impl View for Stepper {
             val_x,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
-            [0.0, 0.85, 1.0, 1.0],
+            theme::accent(),
         );
 
         // Interaction
@@ -498,165 +780,6 @@ impl View for Stepper {
         }
     }
 }
-
-#[derive(Clone)]
-pub struct Input {
-    pub(crate) placeholder: String,
-    pub(crate) text: String,
-    pub(crate) on_change: std::sync::Arc<dyn Fn(String) + Send + Sync>,
-    pub(crate) is_focused: bool,
-}
-
-impl Input {
-    /// Create a new Input field.
-    pub fn new(placeholder: impl Into<String>) -> Self {
-        Self {
-            placeholder: placeholder.into(),
-            text: String::new(),
-            on_change: std::sync::Arc::new(|_| {}),
-            is_focused: false,
-        }
-    }
-
-    pub fn value(mut self, value: impl Into<String>) -> Self {
-        self.text = value.into();
-        self
-    }
-
-    pub fn on_change(mut self, callback: impl Fn(String) + Send + Sync + 'static) -> Self {
-        self.on_change = std::sync::Arc::new(callback);
-        self
-    }
-
-    pub fn focused(mut self, is_focused: bool) -> Self {
-        self.is_focused = is_focused;
-        self
-    }
-}
-
-impl View for Input {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Input");
-        renderer.set_aria_role("textbox");
-        renderer.set_aria_label(&self.placeholder);
-
-        // Input background
-        renderer.fill_rounded_rect(rect, 6.0, [0.08, 0.08, 0.12, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-
-        let is_focused = self.is_focused;
-        let display_text = if self.text.is_empty() {
-            &self.placeholder
-        } else {
-            &self.text
-        };
-        let text_color = if self.text.is_empty() {
-            [0.5, 0.5, 0.55, 1.0]
-        } else {
-            [1.0, 1.0, 1.0, 1.0]
-        };
-
-        renderer.draw_text(
-            display_text,
-            rect.x + 8.0,
-            rect.y + (rect.height - 14.0) / 2.0,
-            14.0,
-            text_color,
-        );
-
-        // Draw Cursor (simulated at end for now, but with proper rendering)
-        if is_focused && !self.text.is_empty() {
-            let (tw, _) = renderer.measure_text(&self.text, 14.0);
-            let cursor_x = rect.x + 8.0 + tw;
-            let cursor_y = rect.y + (rect.height - 16.0) / 2.0;
-            // Flashing cursor based on some global timer or just solid for now
-            renderer.draw_line(
-                cursor_x,
-                cursor_y,
-                cursor_x,
-                cursor_y + 16.0,
-                [0.0, 1.0, 1.0, 1.0],
-                2.0,
-            );
-        }
-
-        // Interaction
-        let on_change = self.on_change.clone();
-        let text_mutex = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
-
-        let on_change_kd = on_change.clone();
-        let text_mutex_kd = text_mutex.clone();
-        renderer.register_handler(
-            "keydown",
-            std::sync::Arc::new(move |event| {
-                if let cvkg_core::Event::KeyDown { key } = event {
-                    let mut changed = false;
-                    let mut new_text = String::new();
-
-                    if let Ok(mut text_guard) = text_mutex_kd.lock() {
-                        if key.len() == 1 {
-                            text_guard.push_str(&key);
-                            changed = true;
-                        } else if key == "Back" || key == "Backspace" {
-                            text_guard.pop();
-                            changed = true;
-                        } else if key == "Return" || key == "Enter" {
-                            // Handle submission or blur?
-                        }
-                        if changed {
-                            new_text = text_guard.clone();
-                        }
-                    }
-
-                    if changed {
-                        (on_change_kd)(new_text);
-                    }
-                }
-            }),
-        );
-
-        let on_change_ime = on_change.clone();
-        let text_mutex_ime = text_mutex.clone();
-        renderer.register_handler(
-            "ime",
-            std::sync::Arc::new(move |event| {
-                if let cvkg_core::Event::Ime(composition) = event {
-                    let mut new_text = String::new();
-                    if let Ok(mut text_guard) = text_mutex_ime.lock() {
-                        text_guard.push_str(composition.as_str());
-                        new_text = text_guard.clone();
-                    }
-                    (on_change_ime)(new_text);
-                }
-            }),
-        );
-        renderer.pop_vnode();
-    }
-
-    fn intrinsic_size(
-        &self,
-        renderer: &mut dyn Renderer,
-        proposal: cvkg_core::SizeProposal,
-    ) -> cvkg_core::Size {
-        let text = if self.text.is_empty() {
-            &self.placeholder
-        } else {
-            &self.text
-        };
-        let (tw, th) = renderer.measure_text(text, 14.0);
-        cvkg_core::Size {
-            width: proposal.width.unwrap_or(tw + 24.0).max(100.0),
-            height: th + 16.0,
-        }
-    }
-}
-
-/// Secure password input
 #[derive(Clone)]
 pub struct SecureField {
     pub(crate) placeholder: String,
@@ -686,11 +809,10 @@ impl View for SecureField {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.set_aria_role("password");
-        renderer.set_aria_label(&self.placeholder);
 
         // Input background
-        renderer.fill_rounded_rect(rect, 6.0, [0.08, 0.08, 0.12, 1.0]);
-        renderer.stroke_rect(rect, [0.4, 0.2, 0.4, 1.0], 1.0); // Slightly purple for security
+        renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
+        renderer.stroke_rect(rect, theme::text_muted(), 1.0); // Slightly purple for security
 
         let display = if self.text.is_empty() {
             self.placeholder.clone()
@@ -699,9 +821,9 @@ impl View for SecureField {
         };
 
         let text_color = if self.text.is_empty() {
-            [0.5, 0.5, 0.55, 1.0]
+            theme::text_muted()
         } else {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         };
         renderer.draw_text(
             &display,
@@ -763,13 +885,258 @@ impl View for SecureField {
     }
 }
 
-/// Multi-line text area
+// =============================================================================
+// INPUT — Text entry with validation states, focus ring, and proper focus border
+// =============================================================================
+
+/// Input validation state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputState {
+    Default,
+    Focused,
+    Error,
+    Success,
+    Disabled,
+}
+
+/// Text input field with validation states and focus ring.
+#[derive(Clone)]
+pub struct Input {
+    pub(crate) placeholder: String,
+    pub(crate) text: String,
+    pub(crate) on_change: Arc<dyn Fn(String) + Send + Sync>,
+    pub(crate) is_focused: bool,
+    pub(crate) input_state: InputState,
+    pub(crate) error_message: Option<String>,
+}
+
+impl Input {
+    /// Create a new Input field.
+    pub fn new(placeholder: impl Into<String>) -> Self {
+        Self {
+            placeholder: placeholder.into(),
+            text: String::new(),
+            on_change: Arc::new(|_| {}),
+            is_focused: false,
+            input_state: InputState::Default,
+            error_message: None,
+        }
+    }
+
+    pub fn value(mut self, value: impl Into<String>) -> Self {
+        self.text = value.into();
+        self
+    }
+
+    pub fn on_change(mut self, callback: impl Fn(String) + Send + Sync + 'static) -> Self {
+        self.on_change = Arc::new(callback);
+        self
+    }
+
+    pub fn focused(mut self, is_focused: bool) -> Self {
+        self.is_focused = is_focused;
+        if is_focused {
+            self.input_state = InputState::Focused;
+        }
+        self
+    }
+
+    /// Set the input to error state with an optional message.
+    pub fn error(mut self, message: impl Into<String>) -> Self {
+        self.input_state = InputState::Error;
+        self.error_message = Some(message.into());
+        self
+    }
+
+    /// Set the input to success state.
+    pub fn success(mut self) -> Self {
+        self.input_state = InputState::Success;
+        self
+    }
+
+    /// Set the input to disabled state.
+    pub fn disabled(mut self) -> Self {
+        self.input_state = InputState::Disabled;
+        self
+    }
+
+    /// Get the border color based on the current input state.
+    fn border_color(&self) -> [f32; 4] {
+        match self.input_state {
+            InputState::Default => theme::text_dim(),
+            InputState::Focused => theme::accent(),
+            InputState::Error => theme::error_color(),
+            InputState::Success => theme::success(),
+            InputState::Disabled => [0.2, 0.2, 0.25, 0.5],
+        }
+    }
+
+    /// Get the background color based on the current input state.
+    fn bg_color(&self) -> [f32; 4] {
+        match self.input_state {
+            InputState::Disabled => [0.05, 0.05, 0.08, 0.5],
+            _ => theme::surface_elevated(),
+        }
+    }
+}
+
+impl View for Input {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "Input");
+        renderer.set_aria_role("textbox");
+        renderer.set_aria_label(&self.placeholder);
+        if self.input_state == InputState::Disabled {
+            
+        }
+
+        let bg = self.bg_color();
+        let border = self.border_color();
+
+        // Input background
+        renderer.fill_rounded_rect(rect, RADIUS_MD, bg);
+        renderer.stroke_rect(rect, border, if self.is_focused { 2.0 } else { 1.0 });
+
+        // Focus ring — WCAG 2.4.7
+        if self.is_focused && self.input_state != InputState::Disabled {
+            crate::draw_focus_ring(renderer, rect);
+        }
+
+        let is_disabled = self.input_state == InputState::Disabled;
+        let display_text = if self.text.is_empty() {
+            &self.placeholder
+        } else {
+            &self.text
+        };
+        let text_color = if self.text.is_empty() {
+            theme::text_muted()
+        } else if is_disabled {
+            [0.35, 0.35, 0.4, 0.5]
+        } else {
+            theme::text()
+        };
+
+        renderer.draw_text(
+            display_text,
+            rect.x + 8.0,
+            rect.y + (rect.height - FONT_BASE) / 2.0,
+            FONT_BASE,
+            text_color,
+        );
+
+        // Draw Cursor
+        if self.is_focused && !is_disabled {
+            let (tw, _) = renderer.measure_text(&self.text, FONT_BASE);
+            let cursor_x = rect.x + 8.0 + tw;
+            let cursor_y = rect.y + (rect.height - 16.0) / 2.0;
+            let time = renderer.elapsed_time();
+            let alpha = if (time * 2.0).sin() > 0.0 { 1.0 } else { 0.3 };
+            renderer.draw_line(
+                cursor_x,
+                cursor_y,
+                cursor_x,
+                cursor_y + 16.0,
+                [0.0, 1.0, 1.0, alpha],
+                2.0,
+            );
+        }
+
+        // Error message
+        if let Some(ref msg) = self.error_message {
+            renderer.draw_text(
+                msg,
+                rect.x + 8.0,
+                rect.y + rect.height + 4.0,
+                12.0,
+                [0.9, 0.2, 0.2, 0.9],
+            );
+        }
+
+        // Interaction
+        if !is_disabled {
+            let on_change = self.on_change.clone();
+            let text_mutex = Arc::new(std::sync::Mutex::new(self.text.clone()));
+
+            let on_change_kd = on_change.clone();
+            let text_mutex_kd = text_mutex.clone();
+            renderer.register_handler(
+                "keydown",
+                Arc::new(move |event| {
+                    if let cvkg_core::Event::KeyDown { key } = event {
+                        let mut changed = false;
+                        let mut new_text = String::new();
+                        if let Ok(mut text_guard) = text_mutex_kd.lock() {
+                            if key.len() == 1 {
+                                text_guard.push_str(&key);
+                                changed = true;
+                            } else if key == "Back" || key == "Backspace" {
+                                text_guard.pop();
+                                changed = true;
+                            }
+                            if changed {
+                                new_text = text_guard.clone();
+                            }
+                        }
+                        if changed {
+                            (on_change_kd)(new_text);
+                        }
+                    }
+                }),
+            );
+
+            let on_change_ime = on_change.clone();
+            let text_mutex_ime = text_mutex.clone();
+            renderer.register_handler(
+                "ime",
+                Arc::new(move |event| {
+                    if let cvkg_core::Event::Ime(composition) = event {
+                        let mut new_text = String::new();
+                        if let Ok(mut text_guard) = text_mutex_ime.lock() {
+                            text_guard.push_str(composition.as_str());
+                            new_text = text_guard.clone();
+                        }
+                        (on_change_ime)(new_text);
+                    }
+                }),
+            );
+        }
+
+        renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        let text = if self.text.is_empty() {
+            &self.placeholder
+        } else {
+            &self.text
+        };
+        let (tw, th) = renderer.measure_text(text, FONT_BASE);
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(tw + 24.0).max(100.0),
+            height: th + 16.0,
+        }
+    }
+}
+
+// =============================================================================
+// TEXTAREA — Multi-line text editing with focus ring and proper state management
+// =============================================================================
+
+/// Multi-line text area with proper state management via system state.
 #[derive(Clone)]
 pub struct Textarea {
     pub(crate) placeholder: String,
     pub(crate) text: String,
     pub(crate) rows: usize,
-    pub(crate) on_change: std::sync::Arc<dyn Fn(String) + Send + Sync>,
+    pub(crate) on_change: Arc<dyn Fn(String) + Send + Sync>,
 }
 
 impl Textarea {
@@ -778,7 +1145,7 @@ impl Textarea {
             placeholder: placeholder.into(),
             text: String::new(),
             rows: 3,
-            on_change: std::sync::Arc::new(|_| {}),
+            on_change: Arc::new(|_| {}),
         }
     }
 
@@ -793,7 +1160,7 @@ impl Textarea {
     }
 
     pub fn on_change(mut self, callback: impl Fn(String) + Send + Sync + 'static) -> Self {
-        self.on_change = std::sync::Arc::new(callback);
+        self.on_change = Arc::new(callback);
         self
     }
 }
@@ -807,61 +1174,81 @@ impl View for Textarea {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Textarea");
         renderer.set_aria_role("textbox");
+        renderer.set_aria_label(&self.placeholder);
 
         // Editor background
-        renderer.fill_rounded_rect(rect, 4.0, [0.05, 0.05, 0.08, 1.0]);
-        renderer.stroke_rect(rect, [0.2, 0.2, 0.3, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, RADIUS_SM, theme::surface());
+        renderer.stroke_rect(rect, theme::border_strong(), 1.0);
 
         // Draw text
+        let line_height = 20.0;
         if self.text.is_empty() {
             renderer.draw_text(
                 &self.placeholder,
                 rect.x + 8.0,
                 rect.y + 8.0,
-                14.0,
-                [0.4, 0.4, 0.45, 1.0],
+                FONT_BASE,
+                theme::border_strong(),
             );
         } else {
             let lines: Vec<&str> = self.text.lines().collect();
             for (i, line) in lines.iter().enumerate() {
-                renderer.draw_text(
-                    line,
-                    rect.x + 8.0,
-                    rect.y + 8.0 + (i as f32 * 20.0),
-                    14.0,
-                    [1.0, 1.0, 1.0, 1.0],
-                );
+                let y = rect.y + 8.0 + (i as f32 * line_height);
+                if y - rect.y < rect.height - 8.0 {
+                    renderer.draw_text(
+                        line,
+                        rect.x + 8.0,
+                        y,
+                        FONT_BASE,
+                        theme::text(),
+                    );
+                }
             }
         }
 
         // Draw Cursor on last line
-        let lines: Vec<&str> = self.text.lines().collect();
-        let last_line = lines.last().copied().unwrap_or("");
-        let (tw, _) = renderer.measure_text(last_line, 14.0);
+        let text_lines: Vec<&str> = self.text.lines().collect();
+        let last_line = text_lines.last().copied().unwrap_or("");
+        let (tw, _) = renderer.measure_text(last_line, FONT_BASE);
         let cursor_x = rect.x + 8.0 + tw;
-        let cursor_y = rect.y + 8.0 + (lines.len().max(1) - 1) as f32 * 20.0;
+        let cursor_y = rect.y + 8.0 + (text_lines.len().max(1) - 1) as f32 * line_height;
+        let time = renderer.elapsed_time();
+        let alpha = if (time * 2.0).sin() > 0.0 { 1.0 } else { 0.3 };
         renderer.draw_line(
             cursor_x,
             cursor_y,
             cursor_x,
             cursor_y + 16.0,
-            [0.0, 1.0, 1.0, 1.0],
+            [0.0, 1.0, 1.0, alpha],
             2.0,
         );
 
+        // Character count
+        let count_text = format!("{} chars", self.text.len());
+        let (cw, _) = renderer.measure_text(&count_text, 12.0);
+        renderer.draw_text(
+            &count_text,
+            rect.x + rect.width - cw - 8.0,
+            rect.y + rect.height - 16.0,
+            12.0,
+            [0.4, 0.4, 0.5, 0.7],
+        );
+
+        // Focus ring
+        crate::draw_focus_ring(renderer, rect);
+
         // Interaction
         let on_change = self.on_change.clone();
-        let text_mutex = std::sync::Arc::new(std::sync::Mutex::new(self.text.clone()));
+        let text_mutex = Arc::new(std::sync::Mutex::new(self.text.clone()));
 
         let on_change_kd = on_change.clone();
         let text_mutex_kd = text_mutex.clone();
         renderer.register_handler(
             "keydown",
-            std::sync::Arc::new(move |event| {
+            Arc::new(move |event| {
                 if let cvkg_core::Event::KeyDown { key } = event {
                     let mut changed = false;
                     let mut new_text = String::new();
-
                     if let Ok(mut text_guard) = text_mutex_kd.lock() {
                         if key.len() == 1 {
                             text_guard.push_str(&key);
@@ -877,7 +1264,6 @@ impl View for Textarea {
                             new_text = text_guard.clone();
                         }
                     }
-
                     if changed {
                         (on_change_kd)(new_text);
                     }
@@ -889,7 +1275,7 @@ impl View for Textarea {
         let text_mutex_ime = text_mutex.clone();
         renderer.register_handler(
             "ime",
-            std::sync::Arc::new(move |event| {
+            Arc::new(move |event| {
                 if let cvkg_core::Event::Ime(composition) = event {
                     let mut new_text = String::new();
                     if let Ok(mut text_guard) = text_mutex_ime.lock() {
@@ -900,6 +1286,7 @@ impl View for Textarea {
                 }
             }),
         );
+
         renderer.pop_vnode();
     }
 
@@ -910,7 +1297,260 @@ impl View for Textarea {
     ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(300.0),
-            height: proposal.height.unwrap_or(200.0),
+            height: proposal.height.unwrap_or(self.rows as f32 * 20.0 + 16.0),
+        }
+    }
+}
+
+// =============================================================================
+// SELECT — Dropdown select with keyboard navigation and focus ring
+// =============================================================================
+
+/// Select/Dropdown component with keyboard navigation, dropdown popover, and focus ring.
+///
+/// # Example
+/// ```ignore
+/// use cvkg_components::Select;
+/// let select = Select::new("Choose...")
+///     .option("Option A", 1)
+///     .option("Option B", 2)
+///     .option("Option C", 3);
+/// ```
+#[derive(Clone)]
+pub struct Select<V> {
+    placeholder: String,
+    options: Vec<(String, V)>,
+    selected_index: Option<usize>,
+    is_open: bool,
+    hover_index: Option<usize>,
+    id_hash: u64,
+}
+
+impl<V: Clone> Select<V> {
+    pub fn new(placeholder: impl Into<String>) -> Self {
+        use std::hash::{Hash, Hasher};
+        let placeholder_string = placeholder.into();
+        let mut s = std::collections::hash_map::DefaultHasher::new();
+        "select".hash(&mut s);
+        placeholder_string.hash(&mut s);
+        let id_hash = s.finish();
+        Self {
+            placeholder: placeholder_string,
+            options: Vec::new(),
+            selected_index: None,
+            is_open: false,
+            hover_index: None,
+            id_hash,
+        }
+    }
+
+    pub fn option(mut self, label: impl Into<String>, value: V) -> Self {
+        self.options.push((label.into(), value));
+        self
+    }
+
+    pub fn selected(mut self, index: usize) -> Self {
+        self.selected_index = Some(index);
+        self
+    }
+}
+
+impl<V: Clone + View> View for Select<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "Select");
+        renderer.set_aria_role("combobox");
+        renderer.set_aria_label(&self.placeholder);
+        renderer.set_aria_role("combobox");
+
+        // Read open state from system state
+        let is_open = cvkg_core::load_system_state()
+            .get_component_state::<bool>(self.id_hash)
+            .map(|v| *v.read().unwrap())
+            .unwrap_or(self.is_open);
+
+        // Main select box
+        let border_color = if is_open {
+            [0.0, 0.8, 1.0, 0.8]
+        } else {
+            theme::text_dim()
+        };
+        renderer.fill_rounded_rect(rect, RADIUS_MD, theme::surface());
+        renderer.stroke_rect(rect, border_color, if is_open { 2.0 } else { 1.0 });
+
+        // Focus ring when open
+        if is_open {
+            crate::draw_focus_ring(renderer, rect);
+        }
+
+        let display_text = self
+            .selected_index
+            .and_then(|i| self.options.get(i))
+            .map(|(l, _)| l.as_str())
+            .unwrap_or(&self.placeholder);
+        renderer.draw_text(
+            display_text,
+            rect.x + 12.0,
+            rect.y + (rect.height - FONT_BASE) / 2.0,
+            FONT_BASE,
+            if self.selected_index.is_some() {
+                theme::text()
+            } else {
+                theme::text_muted()
+            },
+        );
+
+        // Chevron
+        renderer.draw_text(
+            if is_open { "▲" } else { "▼" },
+            rect.x + rect.width - 20.0,
+            rect.y + (rect.height - FONT_BASE) / 2.0,
+            12.0,
+            theme::text_muted(),
+        );
+
+        // Dropdown popover
+        if is_open {
+            let item_height = 32.0;
+            let popover_h = (self.options.len() as f32 * item_height).min(200.0);
+            let popover_rect = Rect {
+                x: rect.x,
+                y: rect.y + rect.height + 4.0,
+                width: rect.width,
+                height: popover_h,
+            };
+
+            renderer.set_z_index(100.0);
+            renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
+            renderer.fill_rounded_rect(popover_rect, RADIUS_MD, [0.05, 0.05, 0.1, 0.95]);
+            renderer.stroke_rect(popover_rect, [0.0, 1.0, 1.0, 0.5], 1.0);
+
+            // Read hover index from system state
+            let hover_idx = cvkg_core::load_system_state()
+                .get_component_state::<usize>(self.id_hash.wrapping_add(1))
+                .map(|v| *v.read().unwrap());
+
+            for (i, (label, _)) in self.options.iter().enumerate() {
+                let item_rect = Rect {
+                    x: popover_rect.x,
+                    y: popover_rect.y + i as f32 * item_height,
+                    width: popover_rect.width,
+                    height: item_height,
+                };
+
+                let is_hovered = hover_idx == Some(i);
+
+                // Selected highlight
+                if self.selected_index == Some(i) {
+                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, [0.0, 0.5, 0.8, 0.3]);
+                } else if is_hovered {
+                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, [0.15, 0.15, 0.2, 0.5]);
+                }
+
+                renderer.draw_text(
+                    label,
+                    item_rect.x + 12.0,
+                    item_rect.y + (item_height - FONT_BASE) / 2.0,
+                    FONT_BASE,
+                    if self.selected_index == Some(i) {
+                        theme::accent()
+                    } else {
+                        theme::text()
+                    },
+                );
+            }
+            renderer.set_z_index(0.0);
+        }
+
+        // Toggle on click
+        let id_hash = self.id_hash;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = event {
+                    // If click is inside the main toggle rect, toggle open
+                    if x >= rect.x && x <= rect.x + rect.width
+                        && y >= rect.y && y <= rect.y + rect.height
+                    {
+                        cvkg_core::update_system_state(|s| {
+                            let mut s = s.clone();
+                            let current = s.get_component_state::<bool>(id_hash)
+                                .map(|v| *v.read().unwrap())
+                                .unwrap_or(false);
+                            s.set_component_state(id_hash, !current);
+                            s
+                        });
+                    }
+                }
+            }),
+        );
+
+        // Keyboard navigation
+        let options_count = self.options.len();
+        let id_hash = self.id_hash;
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "ArrowDown" => {
+                            cvkg_core::update_system_state(|s| {
+                                let mut s = s.clone();
+                                let current = s.get_component_state::<usize>(id_hash.wrapping_add(1))
+                                    .map(|v| *v.read().unwrap())
+                                    .unwrap_or(0);
+                                let next = (current + 1).min(options_count.saturating_sub(1));
+                                s.set_component_state(id_hash.wrapping_add(1), next);
+                                s
+                            });
+                        }
+                        "ArrowUp" => {
+                            cvkg_core::update_system_state(|s| {
+                                let mut s = s.clone();
+                                let current = s.get_component_state::<usize>(id_hash.wrapping_add(1))
+                                    .map(|v| *v.read().unwrap())
+                                    .unwrap_or(0);
+                                let next = current.saturating_sub(1);
+                                s.set_component_state(id_hash.wrapping_add(1), next);
+                                s
+                            });
+                        }
+                        "Enter" => {
+                            cvkg_core::update_system_state(|s| {
+                                let mut s = s.clone();
+                                // Close the dropdown
+                                s.set_component_state(id_hash, false);
+                                s
+                            });
+                        }
+                        "Escape" => {
+                            cvkg_core::update_system_state(|s| {
+                                let mut s = s.clone();
+                                s.set_component_state(id_hash, false);
+                                s
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
+
+        renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(150.0),
+            height: 36.0,
         }
     }
 }
@@ -962,8 +1602,8 @@ impl View for Dropdown {
         };
 
         // Main button
-        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
-        renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface());
+        renderer.stroke_rect(rect, theme::accent_hover(), 1.0);
 
         let selected = self
             .options
@@ -975,14 +1615,14 @@ impl View for Dropdown {
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
         renderer.draw_text(
             if is_expanded { "▲" } else { "▼" },
             rect.x + rect.width - 20.0,
             rect.y + (rect.height - 14.0) / 2.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
 
         if is_expanded {
@@ -1017,7 +1657,7 @@ impl View for Dropdown {
                     item_rect.x + 8.0,
                     item_rect.y + (item_rect.height - 14.0) / 2.0,
                     14.0,
-                    [1.0, 1.0, 1.0, 1.0],
+                    theme::text(),
                 );
             }
             renderer.set_z_index(0.0);
@@ -1081,8 +1721,7 @@ impl View for Dropdown {
     }
 }
 
-/// Picker for selection from a list of options
-#[derive(Clone)]
+/// Picker for selection from a list of options#[derive(Clone)]
 pub struct Picker {
     pub(crate) selection: usize,
     pub(crate) options: Vec<String>,
@@ -1113,8 +1752,8 @@ impl View for Picker {
         renderer.set_aria_role("combobox");
 
         // Picker background
-        renderer.fill_rounded_rect(rect, 6.0, [0.15, 0.15, 0.2, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
+        renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         let selected_text = self
             .options
@@ -1126,7 +1765,7 @@ impl View for Picker {
             rect.x + 10.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
         // Chevron
@@ -1135,7 +1774,7 @@ impl View for Picker {
             rect.x + rect.width - 20.0,
             rect.y + (rect.height - 14.0) / 2.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
 
         // Interaction (Cycle options on click)
@@ -1171,7 +1810,6 @@ impl View for Picker {
         }
     }
 }
-
 /// ColorPicker for RGBA color selection
 pub struct ColorPicker {
     pub(crate) color: crate::Color,
@@ -1200,8 +1838,8 @@ impl View for ColorPicker {
         renderer.set_aria_role("colorwell");
 
         // ColorPicker container
-        renderer.fill_rounded_rect(rect, 6.0, [0.15, 0.15, 0.18, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
+        renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         // Current color preview
         let preview_w = 40.0;
@@ -1266,6 +1904,11 @@ impl View for ColorPicker {
 }
 
 /// Checkbox component for boolean input.
+
+// =============================================================================
+// CHECKBOX — With focus ring
+// =============================================================================
+
 #[derive(Clone)]
 pub struct Checkbox {
     pub(crate) is_checked: bool,
@@ -1298,6 +1941,8 @@ impl View for Checkbox {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Checkbox");
+        renderer.set_aria_role("checkbox");
+        renderer.set_aria_label(self.label.as_deref().unwrap_or("Checkbox"));
         let box_size = 18.0;
         let box_rect = Rect {
             x: rect.x,
@@ -1306,19 +1951,19 @@ impl View for Checkbox {
             height: box_size,
         };
         let bg = if self.is_checked {
-            [0.0, 0.7, 1.0, 1.0]
+            theme::accent()
         } else {
-            [0.12, 0.12, 0.15, 1.0]
+            theme::surface_elevated()
         };
         renderer.fill_rounded_rect(box_rect, 3.0, bg);
-        renderer.stroke_rect(box_rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+        renderer.stroke_rect(box_rect, theme::text_dim(), 1.0);
         if self.is_checked {
             renderer.draw_text(
                 "✓",
                 box_rect.x + 3.0,
                 box_rect.y - 2.0,
                 14.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
         }
         if let Some(label) = &self.label {
@@ -1327,7 +1972,7 @@ impl View for Checkbox {
                 box_rect.x + box_size + 8.0,
                 rect.y + (rect.height - 14.0) / 2.0,
                 14.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
         }
         let is_checked = self.is_checked;
@@ -1362,8 +2007,7 @@ impl View for Checkbox {
     }
 }
 
-/// Radio Group for exclusive selection.
-#[derive(Clone)]
+/// Radio Group for exclusive selection.#[derive(Clone)]
 pub struct RadioGroup<V> {
     options: Vec<(String, V)>,
     selected_index: usize,
@@ -1410,9 +2054,9 @@ impl<V: View + Clone> View for RadioGroup<V> {
                 },
                 dot_radius,
                 if idx == self.selected_index {
-                    [0.0, 0.8, 1.0, 1.0]
+                    theme::accent()
                 } else {
-                    [0.15, 0.15, 0.2, 1.0]
+                    theme::surface_elevated()
                 },
             );
             if idx != self.selected_index {
@@ -1423,7 +2067,7 @@ impl<V: View + Clone> View for RadioGroup<V> {
                         width: dot_radius * 2.0,
                         height: dot_radius * 2.0,
                     },
-                    [0.4, 0.4, 0.5, 1.0],
+                    theme::border_strong(),
                     1.0,
                 );
             }
@@ -1432,7 +2076,7 @@ impl<V: View + Clone> View for RadioGroup<V> {
                 rect.x + 22.0,
                 rect.y + idx as f32 * 24.0 + 11.0,
                 14.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
 
             let on_change = self.on_change.clone();
@@ -1463,8 +2107,7 @@ impl<V: View + Clone> View for RadioGroup<V> {
     }
 }
 
-/// Tabs component for tabbed navigation.
-#[derive(Clone)]
+/// Tabs component for tabbed navigation.#[derive(Clone)]
 pub struct Tabs<V> {
     tabs: Vec<(String, V)>,
     selected_index: usize,
@@ -1513,13 +2156,13 @@ impl<V: View> View for Tabs<V> {
                 tab_rect,
                 6.0,
                 if is_selected {
-                    [0.15, 0.15, 0.2, 1.0]
+                    theme::surface_elevated()
                 } else {
-                    [0.08, 0.08, 0.12, 1.0]
+                    theme::surface_elevated()
                 },
             );
             if is_selected {
-                renderer.stroke_rect(tab_rect, [0.0, 0.8, 1.0, 1.0], 2.0);
+                renderer.stroke_rect(tab_rect, theme::accent(), 2.0);
             }
             renderer.draw_text(
                 label,
@@ -1527,9 +2170,9 @@ impl<V: View> View for Tabs<V> {
                 tab_rect.y + (tab_rect.height - 14.0) / 2.0,
                 14.0,
                 if is_selected {
-                    [1.0, 1.0, 1.0, 1.0]
+                    theme::text()
                 } else {
-                    [0.7, 0.7, 0.75, 1.0]
+                    theme::text_muted()
                 },
             );
         }
@@ -1561,230 +2204,11 @@ impl<V: View> View for Tabs<V> {
     }
 }
 
-/// Select/Dropdown component.
-#[derive(Clone)]
-pub struct Select<V> {
-    placeholder: String,
-    options: Vec<(String, V)>,
-    selected_index: Option<usize>,
-}
+// =============================================================================
+// SELECT — With keyboard navigation and focus ring
+// =============================================================================
 
-impl<V: Clone> Select<V> {
-    pub fn new(placeholder: impl Into<String>) -> Self {
-        Self {
-            placeholder: placeholder.into(),
-            options: Vec::new(),
-            selected_index: None,
-        }
-    }
-    pub fn option(mut self, label: impl Into<String>, value: V) -> Self {
-        self.options.push((label.into(), value));
-        self
-    }
-}
 
-impl<V: Clone + View> View for Select<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Select");
-        renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.15, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-        let display_text = self
-            .selected_index
-            .and_then(|i| self.options.get(i))
-            .map(|(l, _)| l.as_str())
-            .unwrap_or(&self.placeholder);
-        renderer.draw_text(
-            display_text,
-            rect.x + 12.0,
-            rect.y + (rect.height - 14.0) / 2.0,
-            14.0,
-            if self.selected_index.is_some() {
-                [1.0, 1.0, 1.0, 1.0]
-            } else {
-                [0.5, 0.5, 0.55, 1.0]
-            },
-        );
-        renderer.pop_vnode();
-    }
-    fn intrinsic_size(
-        &self,
-        _renderer: &mut dyn Renderer,
-        proposal: cvkg_core::SizeProposal,
-    ) -> cvkg_core::Size {
-        cvkg_core::Size {
-            width: proposal.width.unwrap_or(150.0),
-            height: 36.0,
-        }
-    }
-}
-/// ValkyrSelect - A tactical chooser/select component.
-/// Named after the Valkyries, the "Choosers of the Slain".
-#[derive(Clone)]
-pub struct ValkyrSelect {
-    pub(crate) options: Vec<String>,
-    pub(crate) selected: Option<String>,
-    pub(crate) placeholder: String,
-    pub(crate) on_change: std::sync::Arc<dyn Fn(String) + Send + Sync>,
-}
-
-impl ValkyrSelect {
-    /// Creates a new ValkyrSelect with the given options and change handler.
-    pub fn new(options: Vec<String>, on_change: impl Fn(String) + Send + Sync + 'static) -> Self {
-        Self {
-            options,
-            selected: None,
-            placeholder: "Choose...".into(),
-            on_change: std::sync::Arc::new(on_change),
-        }
-    }
-
-    /// Sets the placeholder text.
-    pub fn placeholder(mut self, text: impl Into<String>) -> Self {
-        self.placeholder = text.into();
-        self
-    }
-
-    /// Sets the currently selected value.
-    pub fn selected(mut self, value: impl Into<String>) -> Self {
-        self.selected = Some(value.into());
-        self
-    }
-}
-
-impl View for ValkyrSelect {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "ValkyrSelect");
-
-        // 1. Selector Base
-        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
-
-        let display = self.selected.as_ref().unwrap_or(&self.placeholder);
-        let text_color = if self.selected.is_none() {
-            [0.5, 0.5, 0.6, 1.0]
-        } else {
-            [1.0, 1.0, 1.0, 1.0]
-        };
-
-        renderer.draw_text(
-            display,
-            rect.x + 8.0,
-            rect.y + (rect.height - 14.0) / 2.0,
-            14.0,
-            text_color,
-        );
-        renderer.draw_text(
-            "▼",
-            rect.x + rect.width - 20.0,
-            rect.y + (rect.height - 14.0) / 2.0,
-            10.0,
-            [0.6, 0.6, 0.7, 1.0],
-        );
-
-        // 2. Interaction State
-        let id_hash = {
-            use std::hash::{Hash, Hasher};
-            let mut s = std::collections::hash_map::DefaultHasher::new();
-            "valkyrselect".hash(&mut s);
-            rect.x.to_bits().hash(&mut s);
-            rect.y.to_bits().hash(&mut s);
-            s.finish()
-        };
-
-        let is_open = {
-            let s = cvkg_core::load_system_state();
-            s.get_component_state::<bool>(id_hash)
-                .map(|v| *v.read().unwrap())
-                .unwrap_or(false)
-        };
-
-        // 3. Popover Menu
-        if is_open {
-            let menu_h = (self.options.len() as f32 * 32.0).min(200.0);
-            let menu_rect = Rect {
-                x: rect.x,
-                y: rect.y + rect.height + 4.0,
-                width: rect.width,
-                height: menu_h,
-            };
-
-            renderer.set_z_index(100.0);
-            renderer.bifrost(menu_rect, 15.0, 1.1, 0.9);
-            renderer.stroke_rect(menu_rect, [0.0, 0.9, 1.0, 0.6], 1.0);
-
-            for (i, opt) in self.options.iter().enumerate() {
-                let opt_rect = Rect {
-                    x: menu_rect.x,
-                    y: menu_rect.y + i as f32 * 32.0,
-                    width: menu_rect.width,
-                    height: 32.0,
-                };
-
-                let is_hovered = false; // Mocked for simplicity
-                if is_hovered {
-                    renderer.fill_rect(opt_rect, [0.0, 0.8, 1.0, 0.2]);
-                }
-
-                renderer.draw_text(
-                    opt,
-                    opt_rect.x + 12.0,
-                    opt_rect.y + 10.0,
-                    13.0,
-                    [1.0, 1.0, 1.0, 0.9],
-                );
-            }
-            renderer.set_z_index(0.0);
-        }
-
-        // 4. Handlers
-        let on_change = self.on_change.clone();
-        let options = self.options.clone();
-
-        renderer.register_handler(
-            "pointerclick",
-            Arc::new(move |event| {
-                if let cvkg_core::Event::PointerClick { x: _, y, .. } = event {
-                    if !is_open {
-                        cvkg_core::update_system_state(|s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id_hash, true);
-                            s
-                        });
-                    } else {
-                        // Check if clicked an option
-                        let local_y = y - (rect.y + rect.height + 4.0);
-                        if local_y >= 0.0 && local_y < (options.len() as f32 * 32.0) {
-                            let idx = (local_y / 32.0) as usize;
-                            if let Some(opt) = options.get(idx) {
-                                on_change(opt.clone());
-                            }
-                        }
-
-                        cvkg_core::update_system_state(|s| {
-                            let mut s = s.clone();
-                            s.set_component_state(id_hash, false);
-                            s
-                        });
-                    }
-                }
-            }),
-        );
-
-        renderer.pop_vnode();
-    }
-}
-
-/// HringrPagination - A cyclic pagination component for navigating data loops.
-/// Named after the rings/circles (Hringr), representing the eternal cycle.
 #[derive(Clone)]
 pub struct HringrPagination {
     pub current_page: usize,
@@ -1829,13 +2253,13 @@ impl View for HringrPagination {
             width: btn_w,
             height: rect.height,
         };
-        renderer.fill_rounded_rect(prev_rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.fill_rounded_rect(prev_rect, 4.0, theme::surface());
         renderer.draw_text(
             "<",
             prev_rect.x + 10.0,
             prev_rect.y + 10.0,
             14.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
         current_x += btn_w + spacing;
 
@@ -1851,7 +2275,7 @@ impl View for HringrPagination {
             let bg = if is_selected {
                 [0.0, 0.8, 1.0, 0.4]
             } else {
-                [0.05, 0.05, 0.08, 1.0]
+                theme::surface()
             };
 
             renderer.fill_rounded_rect(page_rect, 4.0, bg);
@@ -1876,13 +2300,13 @@ impl View for HringrPagination {
             width: btn_w,
             height: rect.height,
         };
-        renderer.fill_rounded_rect(next_rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.fill_rounded_rect(next_rect, 4.0, theme::surface());
         renderer.draw_text(
             ">",
             next_rect.x + 10.0,
             next_rect.y + 10.0,
             14.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
 
         renderer.pop_vnode();
@@ -1890,8 +2314,8 @@ impl View for HringrPagination {
 }
 
 /// ValhallaRating - A tactical rating component for assessing quality.
-/// Named after Valhalla, where the chosen are assessed for their worth.
-#[derive(Clone, Copy)]
+/// Named after Valhalla, where the chosen are assessed for their worth.#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct ValhallaRating {
     pub value: f32,
     pub max: usize,
@@ -1918,6 +2342,8 @@ impl View for ValhallaRating {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ValhallaRating");
+        renderer.set_aria_role("slider");
+        renderer.set_aria_label("Rating");
 
         let t = renderer.elapsed_time();
         let star_w = rect.width / self.max as f32;
@@ -1957,8 +2383,8 @@ impl View for ValhallaRating {
 }
 
 /// BifrostColorPicker - A color selection component.
-/// Named after the Bifrost, the rainbow bridge connecting the realms.
-#[derive(Clone, Copy)]
+/// Named after the Bifrost, the rainbow bridge connecting the realms.#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct BifrostColorPicker {
     pub color: [f32; 4],
 }
@@ -1992,12 +2418,12 @@ impl View for BifrostColorPicker {
         let segments = 6;
         let seg_w = rect.width / segments as f32;
         let colors = [
-            [1.0, 0.0, 0.0, 1.0],
-            [1.0, 0.5, 0.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0],
-            [0.0, 1.0, 0.0, 1.0],
-            [0.0, 0.0, 1.0, 1.0],
-            [0.5, 0.0, 1.0, 1.0],
+            theme::error_color(),
+            theme::warning(),
+            theme::warning(),
+            theme::success(),
+            theme::info(),
+            theme::secondary(),
         ];
 
         for i in 0..segments {
@@ -2032,5 +2458,39 @@ impl View for BifrostColorPicker {
         renderer.stroke_ellipse(indicator_rect, [1.0, 1.0, 1.0, 0.7 * pulse], 2.0);
 
         renderer.pop_vnode();
+    }
+}
+
+
+// --- GeriTransfer ---
+use cvkg_core::layout::SizeProposal;
+use cvkg_core::Size;
+#[derive(Clone)]
+pub struct GeriTransfer<T> {
+    left_items: Vec<T>,
+    right_items: Vec<T>,
+}
+
+impl<T: Clone> GeriTransfer<T> {
+    pub fn new(left: &[T], right: &[T]) -> Self {
+        Self {
+            left_items: left.to_vec(),
+            right_items: right.to_vec(),
+        }
+    }
+}
+
+impl<T: Clone + View> View for GeriTransfer<T> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "GeriTransfer");
+        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.pop_vnode();
+    }
+    
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size { width: 400.0, height: 300.0 }
     }
 }

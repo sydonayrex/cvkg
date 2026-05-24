@@ -28,7 +28,6 @@
     clippy::doc_lazy_continuation,
     clippy::needless_borrow,
     ambiguous_glob_reexports,
-    dead_code,
     clippy::type_complexity,
     clippy::unusual_byte_groupings
 )]
@@ -39,6 +38,7 @@
 
 // --- Shared Types ---
 
+/// Font weight for text rendering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FontWeight {
     Regular,
@@ -47,6 +47,128 @@ pub enum FontWeight {
 }
 
 pub use cvkg_core::Color;
+
+// =============================================================================
+// TYPOGRAPHY SYSTEM — Centralized design tokens for text sizing
+// =============================================================================
+
+/// Typography scale providing consistent font sizes across all components.
+/// Replace all magic font numbers with these tokens.
+pub const FONT_XS: f32 = 10.0;
+pub const FONT_SM: f32 = 12.0;
+pub const FONT_BASE: f32 = 14.0;
+pub const FONT_MD: f32 = 16.0;
+pub const FONT_LG: f32 = 20.0;
+pub const FONT_XL: f32 = 24.0;
+pub const FONT_2XL: f32 = 32.0;
+pub const FONT_3XL: f32 = 48.0;
+
+/// Line height multipliers for each font size.
+pub const LINE_HEIGHT_XS: f32 = 1.4;
+pub const LINE_HEIGHT_SM: f32 = 1.4;
+pub const LINE_HEIGHT_BASE: f32 = 1.5;
+pub const LINE_HEIGHT_MD: f32 = 1.5;
+pub const LINE_HEIGHT_LG: f32 = 1.5;
+pub const LINE_HEIGHT_XL: f32 = 1.4;
+pub const LINE_HEIGHT_2XL: f32 = 1.3;
+pub const LINE_HEIGHT_3XL: f32 = 1.2;
+
+// =============================================================================
+// SPACING SCALE — Consistent spacing tokens
+// =============================================================================
+
+/// Spacing scale for layout consistency.
+pub const SPACE_XS: f32 = 4.0;
+pub const SPACE_SM: f32 = 8.0;
+pub const SPACE_MD: f32 = 16.0;
+pub const SPACE_LG: f32 = 24.0;
+pub const SPACE_XL: f32 = 32.0;
+
+// =============================================================================
+// BORDER RADIUS SCALE — Consistent corner radii
+// =============================================================================
+
+/// Border radius scale for consistent corner rounding.
+pub const RADIUS_XS: f32 = 2.0;
+pub const RADIUS_SM: f32 = 4.0;
+pub const RADIUS_MD: f32 = 6.0;
+pub const RADIUS_LG: f32 = 8.0;
+pub const RADIUS_XL: f32 = 12.0;
+pub const RADIUS_2XL: f32 = 16.0;
+pub const RADIUS_FULL: f32 = 9999.0;
+
+// =============================================================================
+// FOCUS RING SYSTEM — WCAG 2.4.7 compliant focus indicators
+// =============================================================================
+
+/// Focus ring width in logical pixels.
+pub const FOCUS_RING_WIDTH: f32 = 2.0;
+
+/// Focus ring offset from the element bounds.
+pub const FOCUS_RING_OFFSET: f32 = 2.0;
+
+/// Default focus ring color (cyan accent).
+pub const FOCUS_RING_COLOR: [f32; 4] = [0.0, 0.8, 1.0, 0.8];
+
+/// Draws a focus ring around the given rectangle.
+/// This function should be called by every interactive component when it has focus.
+///
+/// # Contract
+/// - Uses `FOCUS_RING_WIDTH` for stroke width
+/// - Uses `FOCUS_RING_OFFSET` to expand outward from the element bounds
+/// - Uses `FOCUS_RING_COLOR` or the theme's focus ring color
+pub fn draw_focus_ring(renderer: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
+    let outline_rect = cvkg_core::Rect {
+        x: rect.x - FOCUS_RING_OFFSET,
+        y: rect.y - FOCUS_RING_OFFSET,
+        width: rect.width + FOCUS_RING_OFFSET * 2.0,
+        height: rect.height + FOCUS_RING_OFFSET * 2.0,
+    };
+    renderer.stroke_rounded_rect(outline_rect, RADIUS_SM, FOCUS_RING_COLOR, FOCUS_RING_WIDTH);
+}
+
+/// Draws a focus ring with a custom color.
+pub fn draw_focus_ring_color(
+    renderer: &mut dyn cvkg_core::Renderer,
+    rect: cvkg_core::Rect,
+    color: [f32; 4],
+) {
+    let outline_rect = cvkg_core::Rect {
+        x: rect.x - FOCUS_RING_OFFSET,
+        y: rect.y - FOCUS_RING_OFFSET,
+        width: rect.width + FOCUS_RING_OFFSET * 2.0,
+        height: rect.height + FOCUS_RING_OFFSET * 2.0,
+    };
+    renderer.stroke_rounded_rect(outline_rect, RADIUS_SM, color, FOCUS_RING_WIDTH);
+}
+
+// =============================================================================
+// BUTTON VARIANTS — Standard button styles
+// =============================================================================
+
+/// Button visual variants matching the shadcn/ui pattern.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonVariant {
+    /// Primary action button.
+    Default,
+    /// Destructive/danger action button.
+    Destructive,
+    /// Outlined/ghost button.
+    Secondary,
+    /// Subtle background button.
+    Ghost,
+    /// Link-styled button.
+    Link,
+}
+
+/// Button size variants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ButtonSize {
+    Small,
+    Default,
+    Large,
+    Icon,
+}
 
 // Re-export submodules
 pub mod advanced_forms;
@@ -62,6 +184,7 @@ pub mod container;
 pub mod data_grid;
 pub mod devtools;
 pub mod docking_workspace;
+pub mod dropdown_menu;
 pub mod effects;
 pub mod error;
 pub mod file_tree;
@@ -103,6 +226,7 @@ pub mod gullveig_inspector;
 pub mod idunn_persistence;
 pub mod layer_system;
 pub mod njord_theme;
+pub mod theme;
 pub mod skadi_scripting;
 pub mod timeline_editor;
 
@@ -117,10 +241,11 @@ pub use collaboration::*;
 pub use command::*;
 pub use command_palette::{BifrostLauncher, MimirSpotlight};
 pub use container::{
-    AlertDialog, Dialog, DialogAction, Form, GjallarSplitter, HStack, LazyVStack, Menu,
-    NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, Sheet, SheetModifier, TabView,
-    Table, VStack,
+    GarmAlert, GeriDialog, DialogAction, Form, GjallarSplitter, HStack, LazyVStack, Menu,
+    NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, GraniSheet, SheetPosition,
+    SheetModifier, TabView, Table, VStack,
 };
+pub use dropdown_menu::{DropdownItem, DropdownMenu};
 pub use data_grid::RunesTable;
 pub use devtools::*;
 pub use docking_workspace::*;
@@ -137,8 +262,8 @@ pub use hud::{AlertKind, GjallarAlert, TacticalGauge, Vegvísir};
 pub use idunn_persistence::*;
 pub use image::*;
 pub use interactive::{
-    BifrostColorPicker, Button, Checkbox, HringrPagination, Input, Picker, SecureField, Slider,
-    Stepper, Textarea, Toggle, ValhallaRating, ValkyrSelect,
+    BifrostColorPicker, Button, Checkbox, Dropdown, HringrPagination, Input, Picker,
+    SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating, GeriTransfer,
 };
 pub use layer_system::*;
 pub use memory::*;
@@ -164,14 +289,19 @@ pub use valkyrie_indicator::ValkyrieIndicator;
 pub use virtual_list::*;
 pub use virtual_table::*;
 pub use visual::{
-    AvatarStatus, ChartType, DraumaSkeleton, EikonaAvatar, Gauge, MerkiBadge, MimirsWell, Progress,
-    RuneScript, RunicTooltip, SleipnirGait, StatusBar, TelemetryView, UrdrTimeline,
-    ValkyrieAnalytics, VölvaScan,
+    AvatarStatus, ChartType, DraumaSkeleton, MuninAvatar, EmptyState, Gauge, MerkiBadge,
+    MimirsWell, SkollProgress, RuneScript, RunicTooltip, SleipnirGait, HatiSpinner, SpinnerVariant,
+    StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan, HatiCarousel,
 };
 pub use window::{GinnungagapWindow, HiminnModal, YggdrasilWindow};
 pub use wyrd_hud::WyrdHUD;
 pub mod autocomplete;
 pub mod bragi_creative;
+pub mod combobox;
+pub mod new_components;
+pub use new_components::*;
+pub mod ai_components;
+pub use ai_components::*;
 pub mod datepicker;
 pub mod eir_motion;
 pub mod form_validation;
@@ -185,9 +315,12 @@ pub mod tyr_security;
 
 pub use autocomplete::*;
 pub use bragi_creative::*;
+pub use combobox::*;
 pub use eir_motion::*;
 pub use hlin_accessibility::*;
+pub use popover::*;
 pub use toast::*;
+pub use tooltip::*;
 pub use transitions::*;
 pub use tyr_security::*;
 // Re-export layout components

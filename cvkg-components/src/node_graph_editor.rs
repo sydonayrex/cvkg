@@ -8,6 +8,7 @@
 //! - Background grid for spatial reference
 //! - Two-layer state: persistent (nodes/edges) + interaction (drag/hover/pending)
 
+use crate::theme;
 use cvkg_core::{
     Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -88,7 +89,7 @@ impl GraphNode {
             height: 120.0,
             input_ports: Vec::new(),
             output_ports: Vec::new(),
-            color: [0.08, 0.08, 0.15, 1.0],
+            color: theme::surface_elevated(),
         }
     }
 
@@ -655,7 +656,7 @@ impl View for NodeGraphEditor {
         // ── Drawing ─────────────────────────────────────────────────────
 
         // Background
-        renderer.fill_rect(rect, [0.04, 0.04, 0.08, 1.0]);
+        renderer.fill_rect(rect, theme::surface());
 
         // Grid
         self.draw_grid(renderer, rect);
@@ -704,7 +705,7 @@ impl View for NodeGraphEditor {
                     width: 12.0,
                     height: 12.0,
                 },
-                [0.0, 0.8, 1.0, 0.8],
+                theme::accent(),
             );
         }
 
@@ -753,7 +754,7 @@ impl View for NodeGraphEditor {
                         height: node.height,
                     },
                     6.0,
-                    [0.0, 0.8, 1.0, 1.0],
+                    theme::accent(),
                     2.0,
                 );
             }
@@ -798,7 +799,7 @@ impl View for NodeGraphEditor {
                     .is_some_and(|(nid, pid)| nid == &node.id && pid == &port.id);
 
                 let port_color = if is_hovered {
-                    [0.0, 0.9, 1.0, 1.0]
+                    theme::accent_hover()
                 } else {
                     [0.4, 0.6, 0.9, 0.9]
                 };
@@ -836,7 +837,7 @@ impl View for NodeGraphEditor {
                     .is_some_and(|(nid, pid)| nid == &node.id && pid == &port.id);
 
                 let port_color = if is_hovered {
-                    [0.0, 0.9, 1.0, 1.0]
+                    theme::accent_hover()
                 } else {
                     [0.4, 0.9, 0.6, 0.9]
                 };

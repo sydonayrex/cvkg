@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     AnyView, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -98,7 +99,7 @@ impl View for DockingWorkspace {
             width: rect.width,
             height: self.header_height,
         };
-        renderer.fill_rect(header_rect, [0.08, 0.08, 0.12, 1.0]);
+        renderer.fill_rect(header_rect, theme::surface_elevated());
         renderer.stroke_rect(header_rect, [0.3, 0.5, 0.8, 1.0], 1.0);
         renderer.draw_text(
             "Docking Workspace",
@@ -115,7 +116,7 @@ impl View for DockingWorkspace {
             width: self.sidebar_width,
             height: rect.height - self.header_height,
         };
-        renderer.fill_rect(sidebar_rect, [0.06, 0.06, 0.1, 1.0]);
+        renderer.fill_rect(sidebar_rect, theme::input_bg());
         renderer.stroke_rect(sidebar_rect, [0.2, 0.3, 0.5, 1.0], 1.0);
 
         let mut current_y = sidebar_rect.y + 8.0;
@@ -128,7 +129,7 @@ impl View for DockingWorkspace {
                 let text_color = if is_active {
                     [0.9, 0.95, 1.0, 1.0]
                 } else {
-                    [0.5, 0.5, 0.6, 1.0]
+                    theme::text_muted()
                 };
                 renderer.draw_text(
                     &panel.title,
@@ -145,7 +146,7 @@ impl View for DockingWorkspace {
                         width: 3.0,
                         height: 14.0,
                     };
-                    renderer.fill_rounded_rect(indicator_rect, 1.5, [0.0, 0.8, 1.0, 1.0]);
+                    renderer.fill_rounded_rect(indicator_rect, 1.5, theme::accent());
                 }
 
                 current_y += 28.0;
@@ -376,19 +377,19 @@ impl View for WorkspaceTabs {
             let bg = if is_active {
                 [0.1, 0.2, 0.3, 1.0]
             } else {
-                [0.06, 0.06, 0.1, 1.0]
+                theme::input_bg()
             };
             renderer.fill_rounded_rect(tab_rect, 4.0, bg);
 
             let color = if is_active {
-                [1.0, 1.0, 1.0, 1.0]
+                theme::text()
             } else {
-                [0.5, 0.5, 0.6, 1.0]
+                theme::text_muted()
             };
             renderer.draw_text(&tab.label, tab_rect.x + 8.0, tab_rect.y + 10.0, 13.0, color);
 
             if is_active {
-                renderer.stroke_rect(tab_rect, [0.0, 0.8, 1.0, 1.0], 1.0);
+                renderer.stroke_rect(tab_rect, theme::accent(), 1.0);
             }
         }
 

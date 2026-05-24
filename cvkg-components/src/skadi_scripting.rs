@@ -3,6 +3,7 @@
 //! Skadi the Vanir huntress brings precision and sharp focus - her scripting
 //! system enables visual workflow construction with precise node connections.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -149,7 +150,7 @@ impl View for SkadiScripting {
                 ScriptNodeType::Input => [0.0, 0.7, 0.9, 1.0],
                 ScriptNodeType::Process => [0.4, 0.6, 0.9, 1.0],
                 ScriptNodeType::Condition => [0.9, 0.7, 0.2, 1.0],
-                ScriptNodeType::Output => [0.0, 0.8, 0.4, 1.0],
+                ScriptNodeType::Output => theme::success(),
                 ScriptNodeType::Variable => [0.7, 0.4, 0.9, 1.0],
             };
 

@@ -3,6 +3,7 @@
 //! The Vanir god Njord governs prosperity and well-being - this theme engine
 //! provides dynamic theming capabilities for the CVKG framework.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -85,7 +86,7 @@ impl View for NjordTheme {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.fill_rect(rect, [0.05, 0.05, 0.08, 1.0]);
+        renderer.fill_rect(rect, theme::surface());
         renderer.draw_text(
             "Njord Theme Engine",
             rect.x + 10.0,

@@ -1,0 +1,386 @@
+//! Theme helpers for CVKG components.
+//!
+//! Provides convenient access to themed colors via `StyleResolver::color_array()`.
+//! Every color used by a component should be resolved through this module,
+//! never hardcoded as raw `[f32; 4]` arrays.
+//!
+//! Token keys match the semantic color tokens defined in cvkg-core's `default_tokens()`:
+//!   - "background", "surface", "surface_elevated", "surface_overlay"
+//!   - "primary", "secondary", "accent", "accent_hover"
+//!   - "text", "text_muted", "text_dim"
+//!   - "border", "border_strong"
+//!   - "hover", "active", "disabled", "disabled_text"
+//!   - "success", "warning", "error", "info"
+//!   - "focus_ring", "shadow", "code_bg"
+
+use cvkg_core::StyleResolver;
+
+/// Resolve a themed color by token key. Returns `[f32; 4]` RGBA.
+#[inline]
+pub fn color(key: &str) -> [f32; 4] {
+    StyleResolver::color_array(key)
+}
+
+// === Convenience wrappers for hot-path code ===
+
+/// Background color (root canvas). Adaptive: black in dark, white in light.
+#[inline]
+pub fn bg() -> [f32; 4] {
+    color("background")
+}
+
+/// Surface color (cards, panels). Adaptive.
+#[inline]
+pub fn surface() -> [f32; 4] {
+    color("surface")
+}
+
+/// Elevated surface (dialogs, popovers). Adaptive.
+#[inline]
+pub fn surface_elevated() -> [f32; 4] {
+    color("surface_elevated")
+}
+
+/// Overlay surface (modals, sheets). Adaptive.
+#[inline]
+pub fn surface_overlay() -> [f32; 4] {
+    color("surface_overlay")
+}
+
+/// Primary text color. Adaptive.
+#[inline]
+pub fn text() -> [f32; 4] {
+    color("text")
+}
+
+/// Muted text color (secondary text, placeholders). Adaptive.
+#[inline]
+pub fn text_muted() -> [f32; 4] {
+    color("text_muted")
+}
+
+/// Dim text color (tertiary text, disabled hints). Adaptive.
+#[inline]
+pub fn text_dim() -> [f32; 4] {
+    color("text_dim")
+}
+
+/// Border color. Adaptive.
+#[inline]
+pub fn border() -> [f32; 4] {
+    color("border")
+}
+
+/// Strong border color (dividers, separators). Adaptive.
+#[inline]
+pub fn border_strong() -> [f32; 4] {
+    color("border_strong")
+}
+
+/// Primary accent color (NiflCyan #00FFFF).
+#[inline]
+pub fn accent() -> [f32; 4] {
+    color("accent")
+}
+
+/// Accent hover color (#33FFFF).
+#[inline]
+pub fn accent_hover() -> [f32; 4] {
+    color("accent_hover")
+}
+
+/// Hover state background. Adaptive.
+#[inline]
+pub fn hover() -> [f32; 4] {
+    color("hover")
+}
+
+/// Active/pressed state background. Adaptive.
+#[inline]
+pub fn active_color() -> [f32; 4] {
+    color("active")
+}
+
+/// Disabled state background. Adaptive.
+#[inline]
+pub fn disabled() -> [f32; 4] {
+    color("disabled")
+}
+
+/// Disabled text color. Adaptive.
+#[inline]
+pub fn disabled_text() -> [f32; 4] {
+    color("disabled_text")
+}
+
+/// Success color (#00E676).
+#[inline]
+pub fn success() -> [f32; 4] {
+    color("success")
+}
+
+/// Warning color (#FFB300).
+#[inline]
+pub fn warning() -> [f32; 4] {
+    color("warning")
+}
+
+/// Error color (#FF5252).
+#[inline]
+pub fn error_color() -> [f32; 4] {
+    color("error")
+}
+
+/// Info color (#448AFF).
+#[inline]
+pub fn info() -> [f32; 4] {
+    color("info")
+}
+
+/// Focus ring color (NiflCyan #00FFFF).
+#[inline]
+pub fn focus_ring() -> [f32; 4] {
+    color("focus_ring")
+}
+
+/// Shadow color. Adaptive.
+#[inline]
+pub fn shadow() -> [f32; 4] {
+    color("shadow")
+}
+
+/// Code block background. Adaptive.
+#[inline]
+pub fn code_bg() -> [f32; 4] {
+    color("code_bg")
+}
+
+// === Derived helpers ===
+
+/// Primary brand color (NiflCyan #00FFFF).
+#[inline]
+pub fn primary() -> [f32; 4] {
+    color("primary")
+}
+
+/// Secondary brand color (MuspelMagenta #FF00FF).
+#[inline]
+pub fn secondary() -> [f32; 4] {
+    color("secondary")
+}
+
+/// Button background for the "primary" variant (uses accent color).
+#[inline]
+pub fn button_primary_bg() -> [f32; 4] {
+    accent()
+}
+
+/// Button background for the "secondary" variant.
+#[inline]
+pub fn button_secondary_bg() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// Button background for the "danger" variant.
+#[inline]
+pub fn button_danger_bg() -> [f32; 4] {
+    error_color()
+}
+
+/// Button background for the "ghost" variant (transparent).
+#[inline]
+pub fn button_ghost_bg() -> [f32; 4] {
+    [0.0, 0.0, 0.0, 0.0]
+}
+
+/// Input field background.
+#[inline]
+pub fn input_bg() -> [f32; 4] {
+    surface()
+}
+
+/// Input field border (focused state).
+#[inline]
+pub fn input_border_focus() -> [f32; 4] {
+    accent()
+}
+
+/// Input field border (error state).
+#[inline]
+pub fn input_border_error() -> [f32; 4] {
+    error_color()
+}
+
+/// Input field border (success state).
+#[inline]
+pub fn input_border_success() -> [f32; 4] {
+    success()
+}
+
+/// Toggle/switch active (on) background.
+#[inline]
+pub fn toggle_active() -> [f32; 4] {
+    accent()
+}
+
+/// Toggle/switch inactive (off) background. Adaptive.
+#[inline]
+pub fn toggle_inactive() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// Slider track filled portion.
+#[inline]
+pub fn slider_track_filled() -> [f32; 4] {
+    accent()
+}
+
+/// Slider track unfilled portion. Adaptive.
+#[inline]
+pub fn slider_track_unfilled() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// Checkbox/radio checked background.
+#[inline]
+pub fn checkbox_checked() -> [f32; 4] {
+    accent()
+}
+
+/// Checkbox/radio unchecked background.
+#[inline]
+pub fn checkbox_unchecked() -> [f32; 4] {
+    surface()
+}
+
+/// SkollProgress bar fill color.
+#[inline]
+pub fn progress_fill() -> [f32; 4] {
+    accent()
+}
+
+/// SkollProgress bar track color.
+#[inline]
+pub fn progress_track() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// HatiSpinner color.
+#[inline]
+pub fn spinner_color() -> [f32; 4] {
+    accent()
+}
+
+/// Skeleton shimmer base color. Adaptive.
+#[inline]
+pub fn skeleton_base() -> [f32; 4] {
+    color("hover")
+}
+
+/// Skeleton shimmer highlight color. Adaptive.
+#[inline]
+pub fn skeleton_highlight() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// Tab active background. Adaptive.
+#[inline]
+pub fn tab_active_bg() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// Tab inactive background.
+#[inline]
+pub fn tab_inactive_bg() -> [f32; 4] {
+    [0.0, 0.0, 0.0, 0.0]
+}
+
+/// Tab hover background.
+#[inline]
+pub fn tab_hover_bg() -> [f32; 4] {
+    hover()
+}
+
+/// Table row selected background.
+#[inline]
+pub fn table_row_selected() -> [f32; 4] {
+    hover()
+}
+
+/// Table row hover background.
+#[inline]
+pub fn table_row_hover() -> [f32; 4] {
+    hover()
+}
+
+/// Table header background.
+#[inline]
+pub fn table_header_bg() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// List item hover background.
+#[inline]
+pub fn list_item_hover() -> [f32; 4] {
+    hover()
+}
+
+/// List item selected background.
+#[inline]
+pub fn list_item_selected() -> [f32; 4] {
+    hover()
+}
+
+/// Chat bubble background (user).
+#[inline]
+pub fn chat_bubble_user() -> [f32; 4] {
+    accent()
+}
+
+/// Chat bubble background (assistant).
+#[inline]
+pub fn chat_bubble_assistant() -> [f32; 4] {
+    surface_elevated()
+}
+
+/// Chat bubble text color (user).
+#[inline]
+pub fn chat_text_user() -> [f32; 4] {
+    [0.0, 0.0, 0.0, 1.0]
+}
+
+/// Chat bubble text color (assistant).
+#[inline]
+pub fn chat_text_assistant() -> [f32; 4] {
+    text()
+}
+
+/// Tooltip background.
+#[inline]
+pub fn tooltip_bg() -> [f32; 4] {
+    surface_overlay()
+}
+
+/// Toast success accent.
+#[inline]
+pub fn toast_success() -> [f32; 4] {
+    success()
+}
+
+/// Toast error accent.
+#[inline]
+pub fn toast_error() -> [f32; 4] {
+    error_color()
+}
+
+/// Toast warning accent.
+#[inline]
+pub fn toast_warning() -> [f32; 4] {
+    warning()
+}
+
+/// Toast info accent.
+#[inline]
+pub fn toast_info() -> [f32; 4] {
+    info()
+}

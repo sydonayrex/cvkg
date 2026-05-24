@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -77,7 +78,7 @@ impl View for TimelineEditor {
                 width: rect.width,
                 height: 24.0,
             },
-            [0.08, 0.08, 0.12, 1.0],
+            theme::surface_elevated(),
         );
 
         // Time markers
@@ -91,7 +92,7 @@ impl View for TimelineEditor {
                 x - 10.0,
                 ruler_y + 4.0,
                 10.0,
-                [0.5, 0.5, 0.6, 1.0],
+                theme::text_muted(),
             );
         }
 
@@ -102,7 +103,7 @@ impl View for TimelineEditor {
             ruler_y,
             current_x,
             ruler_y + 24.0,
-            [0.0, 0.8, 1.0, 1.0],
+            theme::accent(),
             2.0,
         );
 
@@ -115,7 +116,7 @@ impl View for TimelineEditor {
                 width: rect.width,
                 height: track_h,
             };
-            renderer.fill_rounded_rect(track_rect, 4.0, [0.06, 0.06, 0.1, 1.0]);
+            renderer.fill_rounded_rect(track_rect, 4.0, theme::input_bg());
             renderer.stroke_rounded_rect(track_rect, 4.0, [0.2, 0.3, 0.5, 1.0], 1.0);
 
             renderer.draw_text(
@@ -123,7 +124,7 @@ impl View for TimelineEditor {
                 track_rect.x + 8.0,
                 track_rect.y + 14.0,
                 12.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
 
             // Draw keyframes
@@ -136,7 +137,7 @@ impl View for TimelineEditor {
                     width: 10.0,
                     height: 10.0,
                 };
-                renderer.fill_ellipse(kf_rect, [0.0, 0.8, 1.0, 1.0]);
+                renderer.fill_ellipse(kf_rect, theme::accent());
                 renderer.stroke_ellipse(kf_rect, [0.6, 0.9, 1.0, 1.0], 1.0);
             }
 

@@ -353,4 +353,18 @@ pub trait RendererPointer {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Material — draw call routing for multi-pass pipeline
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Material routing — controls which pass a draw call is routed to.
+pub trait RendererMaterial {
+    /// Set the active material for subsequent draw calls.
+    fn set_material(&mut self, _material: crate::material::DrawMaterial) {}
+    /// Return the currently active material.
+    fn current_material(&self) -> crate::material::DrawMaterial {
+        crate::material::DrawMaterial::Opaque
+    }
+}
+
 

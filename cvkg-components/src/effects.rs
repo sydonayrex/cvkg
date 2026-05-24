@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// Seiðr - Holographic projection effect with scanline animation
 #[derive(Clone)]
@@ -63,7 +64,7 @@ impl LokiGlitch {
         Self {
             content: content.into(),
             font_size: 16.0,
-            base_color: [1.0, 1.0, 1.0, 1.0],
+            base_color: theme::text(),
             glitch_intensity: 5.0,
         }
     }
@@ -180,7 +181,7 @@ impl<V: View> NiflheimFrost<V> {
             morph_progress: 0.0,
             corner_radius_rest: 8.0,
             corner_radius_hover: 16.0,
-            edge_color: [0.0, 1.0, 1.0, 0.8],
+            edge_color: theme::accent(),
             clean_glass: false,
         }
     }
@@ -301,7 +302,7 @@ impl Default for FutharkFlow {
     fn default() -> Self {
         Self {
             speed: 3.0,
-            color: [0.0, 1.0, 1.0, 0.6],
+            color: theme::focus_ring(),
         }
     }
 }

@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -20,7 +21,7 @@ impl LineChart {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
-            color: [0.0, 0.8, 1.0, 1.0],
+            color: theme::accent(),
             show_grid: true,
         }
     }
@@ -71,7 +72,7 @@ impl View for LineChart {
                     y,
                     rect.x + rect.width - padding,
                     y,
-                    [0.1, 0.1, 0.15, 1.0],
+                    theme::surface(),
                     0.5,
                 );
             }
@@ -143,7 +144,7 @@ impl BarChart {
     pub fn new() -> Self {
         Self {
             data: Vec::new(),
-            color: [0.0, 0.8, 0.4, 1.0],
+            color: theme::success(),
         }
     }
 
@@ -197,7 +198,7 @@ impl View for BarChart {
                 x,
                 rect.y + rect.height - padding + 8.0,
                 10.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
         }
     }
@@ -475,7 +476,7 @@ impl View for RadarChart {
                     width: r * 2.0,
                     height: r * 2.0,
                 },
-                [0.1, 0.1, 0.15, 1.0],
+                theme::surface(),
                 0.5,
             );
         }
@@ -485,7 +486,7 @@ impl View for RadarChart {
             let angle = -std::f32::consts::FRAC_PI_2 + (i as f32 / n) * std::f32::consts::TAU;
             let x = center_x + (radius * (angle).cos());
             let y = center_y + (radius * (angle).sin());
-            renderer.draw_line(center_x, center_y, x, y, [0.2, 0.2, 0.3, 1.0], 0.5);
+            renderer.draw_line(center_x, center_y, x, y, theme::border_strong(), 0.5);
 
             // Label
             let label_x = center_x + (radius + 20.0) * (angle).cos();
@@ -496,7 +497,7 @@ impl View for RadarChart {
                     label_x - 10.0,
                     label_y - 6.0,
                     10.0,
-                    [0.6, 0.6, 0.7, 1.0],
+                    theme::text_muted(),
                 );
             }
         }

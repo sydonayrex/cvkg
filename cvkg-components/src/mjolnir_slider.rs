@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -40,7 +41,7 @@ impl View for MjolnirSlider {
         renderer.push_vnode(rect, "MjolnirSlider");
 
         // 1. Heavy Metallic Base
-        renderer.fill_rounded_rect(rect, 4.0, [0.05, 0.05, 0.08, 1.0]);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface());
         renderer.stroke_rounded_rect(rect, 4.0, [0.3, 0.3, 0.4, 0.5], 1.5);
 
         // 2. Energy Fill (Cyan Pulse)
@@ -63,7 +64,7 @@ impl View for MjolnirSlider {
             rect.x + 8.0,
             rect.y + rect.height / 2.0 + 5.0,
             12.0,
-            [1.0, 1.0, 1.0, 0.9],
+            theme::text(),
         );
 
         // 4. Interaction Handler

@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{KnowledgeState, Never, Rect, Renderer, State, View};
 
 /// MemoryView provides a tactical interface for inspecting an agent's KnowledgeState.
@@ -42,7 +43,7 @@ impl View for MemoryView {
                 rect.x + 10.0,
                 y_offset,
                 12.0,
-                [0.4, 0.4, 0.5, 1.0],
+                theme::text_muted(),
             );
         } else {
             for id in &state.last_query_results {
@@ -64,7 +65,7 @@ impl View for MemoryView {
                         rect.x + 8.0,
                         y_offset + 18.0,
                         13.0,
-                        [1.0, 1.0, 1.0, 1.0],
+                        theme::text(),
                     );
 
                     // Metadata
@@ -74,7 +75,7 @@ impl View for MemoryView {
                         rect.x + 8.0,
                         y_offset + 35.0,
                         10.0,
-                        [0.5, 0.5, 0.6, 1.0],
+                        theme::text_muted(),
                     );
 
                     y_offset += 55.0;

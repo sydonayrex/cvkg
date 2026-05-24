@@ -3,6 +3,7 @@
 //! This module provides tools for building, monitoring, and debugging AI workflows
 //! including multi-agent orchestration, prompt chains, and execution tracing.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -102,7 +103,7 @@ impl View for MultiAgentPanel {
 
             // Background
             let bg = match agent.status {
-                AgentStatus::Idle => [0.04, 0.04, 0.08, 1.0],
+                AgentStatus::Idle => theme::surface(),
                 AgentStatus::Running => [0.06, 0.08, 0.12, 1.0],
                 AgentStatus::Completed => [0.04, 0.10, 0.08, 1.0],
                 AgentStatus::Failed => [0.12, 0.04, 0.06, 1.0],
@@ -116,10 +117,10 @@ impl View for MultiAgentPanel {
                 agent_rect.x + 12.0,
                 agent_rect.y + 8.0,
                 12.0,
-                [0.8, 0.8, 0.9, 1.0],
+                theme::text(),
             );
 
-            // Progress bar
+            // SkollProgress bar
             let progress_w = (agent_rect.width - 140.0) * agent.progress;
             renderer.fill_rect(
                 Rect {
@@ -128,7 +129,7 @@ impl View for MultiAgentPanel {
                     width: progress_w.max(0.0),
                     height: 4.0,
                 },
-                [0.0, 0.8, 1.0, 1.0],
+                theme::accent(),
             );
             renderer.stroke_rect(
                 Rect {
@@ -154,7 +155,7 @@ impl View for MultiAgentPanel {
                 agent_rect.x + agent_rect.width - 20.0,
                 agent_rect.y + 24.0,
                 14.0,
-                [0.6, 0.8, 1.0, 1.0],
+                theme::info(),
             );
 
             current_y += row_h;
@@ -263,8 +264,8 @@ impl View for PromptChainVisualizer {
             let y = rect.y + 30.0 + i as f32 * 36.0;
 
             let color = match step.status {
-                PromptStatus::Pending => [0.4, 0.4, 0.5, 1.0],
-                PromptStatus::Running => [0.0, 0.8, 1.0, 1.0],
+                PromptStatus::Pending => theme::text_muted(),
+                PromptStatus::Running => theme::accent(),
                 PromptStatus::Completed => [0.0, 0.9, 0.4, 1.0],
                 PromptStatus::Failed => [0.9, 0.3, 0.3, 1.0],
             };
@@ -435,7 +436,7 @@ impl View for MemoryGraphViewer {
                 cx - 20.0,
                 cy + radius + 4.0,
                 10.0,
-                [0.8, 0.8, 0.9, 1.0],
+                theme::text(),
             );
         }
     }
@@ -522,7 +523,7 @@ impl View for TokenStreamViewer {
 
         for token in &self.tokens {
             let color = match token.token_type {
-                TokenType::Word => [0.9, 0.9, 1.0, 1.0],
+                TokenType::Word => theme::text(),
                 TokenType::Punctuation => [0.8, 0.6, 0.2, 1.0],
                 TokenType::Space => [0.3, 0.3, 0.3, 1.0],
                 TokenType::NewLine => [0.4, 0.4, 0.4, 1.0],
@@ -532,7 +533,7 @@ impl View for TokenStreamViewer {
         }
 
         if self.is_streaming {
-            renderer.draw_text("▋", current_x, y, 12.0, [0.0, 0.8, 1.0, 1.0]);
+            renderer.draw_text("▋", current_x, y, 12.0, theme::accent());
         }
     }
 }
@@ -611,7 +612,7 @@ impl View for ReasoningTraceInspector {
                     width: rect.width,
                     height: 20.0,
                 },
-                [0.08, 0.08, 0.12, 1.0],
+                theme::surface_elevated(),
             );
             renderer.draw_text(
                 &step.description,
@@ -630,7 +631,7 @@ impl View for ReasoningTraceInspector {
                     width: conf_w,
                     height: 4.0,
                 },
-                [0.0, 0.8, 0.4, 1.0],
+                theme::success(),
             );
 
             // Conclusion
@@ -872,7 +873,7 @@ impl View for AIWorkflowBuilder {
                 WorkflowNodeType::Input => [0.0, 0.7, 0.9, 1.0],
                 WorkflowNodeType::Process => [0.4, 0.6, 0.9, 1.0],
                 WorkflowNodeType::Decision => [0.9, 0.7, 0.2, 1.0],
-                WorkflowNodeType::Output => [0.0, 0.8, 0.4, 1.0],
+                WorkflowNodeType::Output => theme::success(),
                 WorkflowNodeType::Agent => [0.8, 0.4, 0.9, 1.0],
             };
 
@@ -963,7 +964,7 @@ impl View for AIExecutionDebugger {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.fill_rect(rect, [0.05, 0.05, 0.08, 1.0]);
+        renderer.fill_rect(rect, theme::surface());
         renderer.draw_text(
             "AI Execution Debugger",
             rect.x + 10.0,
@@ -981,7 +982,7 @@ impl View for AIExecutionDebugger {
                     width: rect.width - 20.0,
                     height: 22.0,
                 },
-                [0.1, 0.1, 0.15, 1.0],
+                theme::surface(),
             );
             renderer.draw_text(
                 &format!("● {}", bp),

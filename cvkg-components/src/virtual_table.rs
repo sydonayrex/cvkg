@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     AnyView, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -180,14 +181,14 @@ where
                 width: col.width,
                 height: header_h,
             };
-            renderer.fill_rect(col_rect, [0.1, 0.1, 0.15, 1.0]);
-            renderer.stroke_rect(col_rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+            renderer.fill_rect(col_rect, theme::surface());
+            renderer.stroke_rect(col_rect, theme::text_dim(), 1.0);
             renderer.draw_text(
                 &col.header,
                 col_rect.x + 8.0,
                 col_rect.y + 8.0,
                 14.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
             current_x += col.width;
         }

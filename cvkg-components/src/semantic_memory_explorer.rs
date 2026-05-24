@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -102,7 +103,7 @@ impl View for SemanticMemoryExplorer {
             let radius = 20.0 + cluster.strength * 15.0;
 
             let color = if self.highlighted.as_deref() == Some(&cluster.id) {
-                [0.0, 0.8, 1.0, 1.0]
+                theme::accent()
             } else {
                 [0.2, 0.4, 0.8, 1.0]
             };
@@ -120,7 +121,7 @@ impl View for SemanticMemoryExplorer {
                 cx - 20.0,
                 cy + radius + 4.0,
                 11.0,
-                [0.8, 0.8, 0.9, 1.0],
+                theme::text(),
             );
         }
     }

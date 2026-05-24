@@ -184,6 +184,7 @@ body { font-family: 'JetBrains Mono', 'Fira Code', monospace; background: #0b0b1
 .graph-view { flex: 1; position: relative; overflow: hidden; }
 .graph-view svg { width: 100%; height: 100%; }
 .graph-view .node-rect { fill: #1a1a3a; stroke: #3a3a6a; stroke-width: 1; rx: 4; }
+.graph-view .node-rect.ai-node { fill: #1a254a; stroke: #4a7aff; stroke-width: 2; }
 .graph-view .node-label { fill: #c0c0c8; font-size: 10px; text-anchor: middle; }
 .graph-view .edge-line { stroke: #3a3a6a; stroke-width: 1.5; fill: none; }
 .graph-view .edge-label { fill: #6a6a8a; font-size: 9px; text-anchor: middle; }
@@ -265,7 +266,9 @@ function renderGraph() {
 
     // Draw nodes
     state.nodes.forEach(node => {
-        svgContent += `<rect class="node-rect" x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" />`;
+        let isAiNode = node.node_type === "FenrirNode" || node.node_type === "SleipnFlow";
+        let rectClass = isAiNode ? "node-rect ai-node" : "node-rect";
+        svgContent += `<rect class="${rectClass}" x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" />`;
         svgContent += `<text class="node-label" x="${node.x + node.width / 2}" y="${node.y + node.height / 2 + 4}">${node.label}</text>`;
     });
 

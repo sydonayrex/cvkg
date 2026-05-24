@@ -38,58 +38,102 @@ use lru::LruCache;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-/// ShelfPacker — A simple shelf-based atlas packer for the Mega-Atlas.
-#[derive(Debug, Clone)]
-struct ShelfPacker {
-    width: u32,
-    height: u32,
-    shelf_y: u32,
-    shelf_height: u32,
-    current_x: u32,
+#[derive(Clone, Copy)]
+struct SkylineSegment {
+    x: u32,
+    y: u32,
+    w: u32,
 }
 
-impl ShelfPacker {
+struct YggdrasilPacker {
+    width: u32,
+    height: u32,
+    skyline: Vec<SkylineSegment>,
+}
+
+impl YggdrasilPacker {
     fn new(width: u32, height: u32) -> Self {
         Self {
             width,
             height,
-            shelf_y: 0,
-            shelf_height: 0,
-            current_x: 0,
+            skyline: vec![SkylineSegment { x: 0, y: 0, w: width }],
         }
     }
 
     fn pack(&mut self, w: u32, h: u32) -> Option<(u32, u32)> {
-        // Bounds check for the item itself
-        if w > self.width || h > self.height {
-            return None;
+        if w > self.width || h > self.height { return None; }
+        
+        let mut best_idx = None;
+        let mut best_y = u32::MAX;
+        let mut best_w = u32::MAX;
+        
+        for i in 0..self.skyline.len() {
+            let seg = &self.skyline[i];
+            if seg.x + w > self.width { continue; }
+            
+            let mut y = seg.y;
+            let mut remaining = w;
+            let mut j = i;
+            let mut fits = true;
+            
+            while remaining > 0 {
+                if j >= self.skyline.len() { fits = false; break; }
+                let s = &self.skyline[j];
+                y = y.max(s.y);
+                if y + h > self.height { fits = false; break; }
+                if s.w >= remaining { break; }
+                remaining -= s.w;
+                j += 1;
+            }
+            
+            if fits {
+                if y < best_y || (y == best_y && seg.w < best_w) {
+                    best_y = y;
+                    best_idx = Some(i);
+                    best_w = seg.w;
+                }
+            }
         }
-
-        // Shelf packing algorithm: simple and fast for real-time UI.
-        if self.current_x + w > self.width {
-            // New shelf
-            self.shelf_y += self.shelf_height;
-            self.current_x = 0;
-            self.shelf_height = 0;
+        
+        if let Some(idx) = best_idx {
+            let x = self.skyline[idx].x;
+            let y = best_y;
+            
+            let new_seg = SkylineSegment { x, y: y + h, w };
+            let mut remaining = w;
+            let mut insert_idx = idx;
+            
+            while remaining > 0 {
+                if self.skyline[insert_idx].w <= remaining {
+                    remaining -= self.skyline[insert_idx].w;
+                    self.skyline.remove(insert_idx);
+                } else {
+                    self.skyline[insert_idx].x += remaining;
+                    self.skyline[insert_idx].w -= remaining;
+                    remaining = 0;
+                }
+            }
+            self.skyline.insert(insert_idx, new_seg);
+            
+            let mut i = 0;
+            while i < self.skyline.len() - 1 {
+                if self.skyline[i].y == self.skyline[i+1].y {
+                    let w = self.skyline[i+1].w;
+                    self.skyline[i].w += w;
+                    self.skyline.remove(i+1);
+                } else {
+                    i += 1;
+                }
+            }
+            
+            return Some((x, y));
         }
-
-        if self.shelf_y + h > self.height {
-            return None; // Out of space
-        }
-
-        let pos = (self.current_x, self.shelf_y);
-        self.current_x += w;
-        if h > self.shelf_height {
-            self.shelf_height = h;
-        }
-        Some(pos)
+        None
     }
 
-    /// Resets the packer to the start of the atlas.
     fn clear(&mut self) {
-        self.shelf_y = 0;
-        self.shelf_height = 0;
-        self.current_x = 0;
+        self.skyline.clear();
+        self.skyline.push(SkylineSegment { x: 0, y: 0, w: self.width });
     }
 }
 
@@ -99,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_shelf_packer_basic() {
-        let mut packer = ShelfPacker::new(100, 100);
+        let mut packer = YggdrasilPacker::new(100, 100);
 
         // Pack first item
         assert_eq!(packer.pack(10, 10), Some((0, 0)));
@@ -114,7 +158,7 @@ mod tests {
 
     #[test]
     fn test_shelf_packer_wrap() {
-        let mut packer = ShelfPacker::new(100, 100);
+        let mut packer = YggdrasilPacker::new(100, 100);
         packer.pack(60, 10);
 
         // This should trigger a new shelf
@@ -126,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_shelf_packer_full() {
-        let mut packer = ShelfPacker::new(10, 10);
+        let mut packer = YggdrasilPacker::new(10, 10);
         assert_eq!(packer.pack(11, 5), None);
         assert_eq!(packer.pack(5, 11), None);
     }
@@ -134,7 +178,12 @@ mod tests {
 
 use cvkg_core::{LAYOUT_DIRTY, Mesh, Renderer};
 use std::sync::atomic::Ordering;
-const WGSL_SRC: &str = include_str!("shaders.wgsl");
+const WGSL_SRC: &str = concat!(
+    include_str!("shaders/common.wgsl"),
+    include_str!("shaders/shapes.wgsl"),
+    include_str!("shaders/bifrost.wgsl"),
+    include_str!("shaders/bloom.wgsl")
+);
 
 /// SvgModel — A collection of tessellated triangles representing a vector icon.
 #[derive(Clone, Debug)]
@@ -187,8 +236,9 @@ struct DrawCall {
     pub scissor_rect: Option<Rect>,
     pub index_start: u32,
     pub index_count: u32,
-    pub is_glass: bool,
-    pub is_ui: bool,
+    /// Material routing tag — determines which pass this draw call is routed to
+    /// in the multi-pass Backdrop Capture pipeline.
+    pub material: cvkg_core::DrawMaterial,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -227,6 +277,7 @@ impl Vertex {
 }
 
 /// SurtrRenderer implements the high-performance GPU backend.
+#[allow(dead_code)]
 pub struct SurtrRenderer {
     instance: Arc<wgpu::Instance>,
     adapter: Arc<wgpu::Adapter>,
@@ -239,16 +290,16 @@ pub struct SurtrRenderer {
     pub headless_context: Option<HeadlessContext>,
 
     // Mega-Atlas (Shared across all windows)
-    text_engine: runic_text::RunicTextEngine,
+    text_engine: cvkg_runic_text::RunicTextEngine,
     mega_atlas_tex: wgpu::Texture,
     #[allow(dead_code)]
     mega_atlas_view: wgpu::TextureView,
     _mega_atlas_sampler: wgpu::Sampler,
     mega_atlas_bind_group: wgpu::BindGroup,
     text_cache: LruCache<u64, (Rect, f32, f32)>,
-    atlas_packer: ShelfPacker,
+    atlas_packer: YggdrasilPacker,
     image_uv_registry: LruCache<String, Rect>,
-    texture_registry: std::collections::HashMap<String, u32>,
+    texture_registry: LruCache<String, u32>,
     texture_views: Vec<wgpu::TextureView>,
     dummy_sampler: wgpu::Sampler,
     svg_cache: LruCache<String, SvgModel>,
@@ -318,6 +369,13 @@ pub struct SurtrRenderer {
     /// Whether a redraw has been requested for the next frame.
     pub redraw_requested: bool,
 
+    // Timestamp Queries (Norse: Skuld = future/time/debt)
+    skuld_queries: Option<wgpu::QuerySet>,
+    skuld_buffer: Option<wgpu::Buffer>,
+    skuld_read_buffer: Option<wgpu::Buffer>,
+    skuld_period: f32,
+    pub last_gpu_time_ns: u64,
+
     // VDOM node stack for hierarchy tracking
     vnode_stack: Vec<(Rect, &'static str)>,
 
@@ -327,6 +385,32 @@ pub struct SurtrRenderer {
         String,
         Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>,
     >,
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Backdrop Capture Architecture — Kawase Blur Pyramid
+    // ══════════════════════════════════════════════════════════════════════════
+    /// Off-screen texture holding the mip-chain blur pyramid for glass sampling.
+    glass_blur_texture: wgpu::Texture,
+    /// Per-mip-level views into glass_blur_texture.
+    glass_blur_views: Vec<wgpu::TextureView>,
+    /// Bind groups for the downsample pass (one per mip level).
+    glass_blur_down_bind_groups: Vec<wgpu::BindGroup>,
+    /// Bind groups for the upsample pass (one per mip level).
+    glass_blur_up_bind_groups: Vec<wgpu::BindGroup>,
+    /// Uniform buffer for blur parameters (src_size, mip_level, kernel_width, mode).
+    glass_blur_uniform_buffer: wgpu::Buffer,
+    /// Render pipeline for Kawase downsample passes.
+    glass_blur_pipeline: wgpu::RenderPipeline,
+    /// Render pipeline for Kawase upsample passes.
+    glass_blur_upsample_pipeline: wgpu::RenderPipeline,
+    /// Bind group layout for blur passes (uniform + texture + sampler).
+    glass_blur_bind_group_layout: wgpu::BindGroupLayout,
+    /// Bind group layout for reading blur output in glass composite pass.
+    glass_output_bind_group_layout: wgpu::BindGroupLayout,
+    /// Current material state — draw calls are tagged with this material.
+    current_draw_material: cvkg_core::DrawMaterial,
+    /// Number of mip levels in the glass blur pyramid.
+    blur_pyramid_mip_count: u32,
 }
 
 struct SurfaceContext {
@@ -474,13 +558,17 @@ impl SurtrRenderer {
             info.name, info.device_type, info.backend
         );
         println!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
+        let mut required_features = wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::TEXTURE_BINDING_ARRAY;
+        if supports_timestamps {
+            required_features |= wgpu::Features::TIMESTAMP_QUERY;
+        }
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Surtr Forge"),
-                required_features:
-                    wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                        | wgpu::Features::TEXTURE_BINDING_ARRAY,
+                required_features,
                 required_limits: wgpu::Limits {
                     max_bindings_per_bind_group: 256,
                     max_binding_array_elements_per_shader_stage: 256,
@@ -495,6 +583,12 @@ impl SurtrRenderer {
 
         let instance = Arc::new(instance);
         let adapter = Arc::new(adapter);
+        
+        device.on_uncaptured_error(Arc::new(|error| {
+            log::error!("[GPU] Uncaptured device error (Device Lost or Panic): {:?}", error);
+            // In a full recovery scenario, we would signal the event loop to rebuild the GPU context
+        }));
+
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
@@ -598,6 +692,31 @@ impl SurtrRenderer {
             f
         } else {
             wgpu::TextureFormat::Rgba8UnormSrgb
+        };
+
+        let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
+        let skuld_period = queue.get_timestamp_period();
+        let (skuld_queries, skuld_buffer, skuld_read_buffer) = if supports_timestamps {
+            let q = device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Skuld Timestamp Queries"),
+                count: 2,
+                ty: wgpu::QueryType::Timestamp,
+            });
+            let b = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Skuld Query Buffer"),
+                size: 16,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            let rb = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Skuld Read Buffer"),
+                size: 16,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            (Some(q), Some(b), Some(rb))
+        } else {
+            (None, None, None)
         };
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1109,6 +1228,34 @@ impl SurtrRenderer {
 
         let staging_belt = wgpu::util::StagingBelt::new((*device).clone(), 1024 * 1024);
 
+        // Clone bind group layouts before they are moved into the Self struct
+        let glass_blur_bind_group_layout = env_bind_group_layout.clone();
+        let glass_output_bind_group_layout = env_bind_group_layout.clone();
+        let glass_blur_pipeline = pipeline.clone();
+        let glass_blur_upsample_pipeline = pipeline.clone();
+
+        // Create glass blur pyramid resources (must be before Self struct, which moves device)
+        let glass_blur_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Glass Blur Pyramid"),
+            size: wgpu::Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let glass_blur_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Glass Blur Uniform"),
+            size: 64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             instance,
             adapter,
@@ -1123,15 +1270,15 @@ impl SurtrRenderer {
             blur_v_pipeline,
             composite_pipeline,
             env_bind_group_layout,
-            text_engine: runic_text::RunicTextEngine::default(),
+            text_engine: cvkg_runic_text::RunicTextEngine::default(),
             mega_atlas_tex,
             mega_atlas_view: mega_atlas_view_obj,
             _mega_atlas_sampler: text_sampler,
             mega_atlas_bind_group,
             text_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
-            atlas_packer: ShelfPacker::new(4096, 4096),
+            atlas_packer: YggdrasilPacker::new(4096, 4096),
             image_uv_registry: LruCache::new(NonZeroUsize::new(256).unwrap()),
-            texture_registry,
+            texture_registry: LruCache::new(NonZeroUsize::new(255).unwrap()),
             texture_views: texture_views_list,
             dummy_sampler,
             svg_cache: LruCache::new(NonZeroUsize::new(128).unwrap()),
@@ -1168,10 +1315,27 @@ impl SurtrRenderer {
             _debug_layout: false,
             transform_stack: Vec::new(),
             redraw_requested: false,
+            skuld_queries,
+            skuld_buffer,
+            skuld_read_buffer,
+            skuld_period,
+            last_gpu_time_ns: 0,
             vnode_stack: Vec::new(),
             event_handlers: std::collections::HashMap::new(),
             staging_belt,
             staging_command_buffers: Vec::new(),
+            // Backdrop Capture Architecture — Kawase Blur Pyramid
+            glass_blur_texture,
+            glass_blur_views: Vec::new(),
+            glass_blur_down_bind_groups: Vec::new(),
+            glass_blur_up_bind_groups: Vec::new(),
+            glass_blur_uniform_buffer,
+            glass_blur_pipeline,
+            glass_blur_upsample_pipeline,
+            glass_blur_bind_group_layout,
+            glass_output_bind_group_layout,
+            current_draw_material: cvkg_core::DrawMaterial::Opaque,
+            blur_pyramid_mip_count: 1,
         }
     }
 
@@ -1428,6 +1592,32 @@ impl SurtrRenderer {
 
     /// begin_frame — Strike the flaming sword to begin a new GPU frame for a specific window.
     pub fn begin_frame(&mut self, window_id: winit::window::WindowId) -> wgpu::CommandEncoder {
+        // Skuld: Read the timestamps from the previous frame
+        if let Some(rb) = &self.skuld_read_buffer {
+            let slice = rb.slice(..);
+            let (tx, rx) = std::sync::mpsc::channel();
+            slice.map_async(wgpu::MapMode::Read, move |r| tx.send(r).unwrap());
+            
+            // Poll to ensure mapping is complete
+            self.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            }).unwrap();
+            
+            if rx.recv().is_ok() {
+                let data = slice.get_mapped_range();
+                let timestamps: [u64; 2] = bytemuck::cast_slice(&data).try_into().unwrap_or([0, 0]);
+                drop(data);
+                rb.unmap();
+                
+                if timestamps[1] > timestamps[0] {
+                    let diff_ticks = timestamps[1] - timestamps[0];
+                    self.last_gpu_time_ns = (diff_ticks as f64 * self.skuld_period as f64) as u64;
+                    // println!("[Skuld] GPU Time: {} ms", self.last_gpu_time_ns as f64 / 1_000_000.0);
+                }
+            }
+        }
+
         self.staging_belt.recall();
         self.current_window = Some(window_id);
         self.vertices.clear();
@@ -1534,10 +1724,29 @@ impl SurtrRenderer {
         let scene_tex = device.create_texture(&texture_desc);
         let scene_texture = scene_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let blur_tex_a = device.create_texture(&texture_desc);
+        let blur_width = (width / 2).max(1);
+        let blur_height = (height / 2).max(1);
+        let blur_texture_desc = wgpu::TextureDescriptor {
+            label: Some("Surtr Blur Texture"),
+            size: wgpu::Extent3d {
+                width: blur_width,
+                height: blur_height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        };
+
+        let blur_tex_a = device.create_texture(&blur_texture_desc);
         let blur_texture_a = blur_tex_a.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let blur_tex_b = device.create_texture(&texture_desc);
+        let blur_tex_b = device.create_texture(&blur_texture_desc);
         let blur_texture_b = blur_tex_b.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -1708,10 +1917,29 @@ impl SurtrRenderer {
         let scene_tex = device.create_texture(&texture_desc);
         let scene_texture = scene_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let blur_tex_a = device.create_texture(&texture_desc);
+        let blur_width = (width / 2).max(1);
+        let blur_height = (height / 2).max(1);
+        let blur_texture_desc = wgpu::TextureDescriptor {
+            label: Some("Surtr Blur Texture"),
+            size: wgpu::Extent3d {
+                width: blur_width,
+                height: blur_height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: config.format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        };
+
+        let blur_tex_a = device.create_texture(&blur_texture_desc);
         let blur_texture_a = blur_tex_a.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let blur_tex_b = device.create_texture(&texture_desc);
+        let blur_tex_b = device.create_texture(&blur_texture_desc);
         let blur_texture_b = blur_tex_b.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -1840,11 +2068,109 @@ impl SurtrRenderer {
     /// reclaim_vram — Atomic recycling of the Mega-Atlas and all associated caches.
     /// This prevents OOM and silent failures by quenching the atlas when full.
     pub fn reclaim_vram(&mut self) {
-        log::warn!("[GPU] Quenching the Forge: Reclaiming VRAM and recycling Mega-Atlas...");
-        self.atlas_packer.clear();
-        self.text_cache.clear();
-        self.image_uv_registry.clear();
-        self.svg_cache.clear();
+        log::warn!("[GPU] Yggdrasil Compaction: Compacting Mega-Atlas...");
+        
+        let new_mega_atlas_tex = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Yggdrasil Mega-Atlas (Compacted)"),
+            size: wgpu::Extent3d { width: 4096, height: 4096, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        
+        let mut new_packer = YggdrasilPacker::new(4096, 4096);
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Atlas Compaction Encoder"),
+        });
+        
+        let image_entries: Vec<(String, Rect)> = self.image_uv_registry.iter().map(|(k, v)| (k.clone(), *v)).collect();
+        for (name, old_uv) in image_entries {
+            if let Some(&tex_idx) = self.texture_registry.get(&name) {
+                if tex_idx == 0 {
+                    let w_px = (old_uv.width * 4096.0).round() as u32;
+                    let h_px = (old_uv.height * 4096.0).round() as u32;
+                    let old_x_px = (old_uv.x * 4096.0).round() as u32;
+                    let old_y_px = (old_uv.y * 4096.0).round() as u32;
+                    
+                    if let Some((new_x, new_y)) = new_packer.pack(w_px, h_px) {
+                        encoder.copy_texture_to_texture(
+                            wgpu::TexelCopyTextureInfo {
+                                texture: &self.mega_atlas_tex,
+                                mip_level: 0,
+                                origin: wgpu::Origin3d { x: old_x_px, y: old_y_px, z: 0 },
+                                aspect: wgpu::TextureAspect::All,
+                            },
+                            wgpu::TexelCopyTextureInfo {
+                                texture: &new_mega_atlas_tex,
+                                mip_level: 0,
+                                origin: wgpu::Origin3d { x: new_x, y: new_y, z: 0 },
+                                aspect: wgpu::TextureAspect::All,
+                            },
+                            wgpu::Extent3d { width: w_px, height: h_px, depth_or_array_layers: 1 },
+                        );
+                        
+                        let new_uv = Rect {
+                            x: new_x as f32 / 4096.0,
+                            y: new_y as f32 / 4096.0,
+                            width: old_uv.width,
+                            height: old_uv.height,
+                        };
+                        self.image_uv_registry.put(name.clone(), new_uv);
+                    }
+                }
+            }
+        }
+        
+        let text_entries: Vec<(u64, (Rect, f32, f32))> = self.text_cache.iter().map(|(k, v)| (*k, *v)).collect();
+        for (hash, (old_uv, w_f, h_f)) in text_entries {
+            let w_px = (old_uv.width * 4096.0).round() as u32;
+            let h_px = (old_uv.height * 4096.0).round() as u32;
+            let old_x_px = (old_uv.x * 4096.0).round() as u32;
+            let old_y_px = (old_uv.y * 4096.0).round() as u32;
+            
+            if let Some((new_x, new_y)) = new_packer.pack(w_px, h_px) {
+                encoder.copy_texture_to_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &self.mega_atlas_tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d { x: old_x_px, y: old_y_px, z: 0 },
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &new_mega_atlas_tex,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d { x: new_x, y: new_y, z: 0 },
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    wgpu::Extent3d { width: w_px, height: h_px, depth_or_array_layers: 1 },
+                );
+                
+                let new_uv = Rect {
+                    x: new_x as f32 / 4096.0,
+                    y: new_y as f32 / 4096.0,
+                    width: old_uv.width,
+                    height: old_uv.height,
+                };
+                self.text_cache.put(hash, (new_uv, w_f, h_f));
+            }
+        }
+        
+        self.queue.submit(std::iter::once(encoder.finish()));
+        
+        self.mega_atlas_tex = new_mega_atlas_tex;
+        let mega_atlas_view_obj = self.mega_atlas_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        self.texture_views[0] = mega_atlas_view_obj.clone();
+        
+        self.rebuild_texture_array_bind_group();
+        
+        if !self.texture_bind_groups.is_empty() {
+            self.texture_bind_groups[0] = self.mega_atlas_bind_group.clone();
+        }
+        
+        self.atlas_packer = new_packer;
         self.telemetry.vram_exhausted = false;
     }
 
@@ -1991,8 +2317,13 @@ impl SurtrRenderer {
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
                 index_count: 0,
-                is_glass: mode == 7,
-                is_ui: mode == 6,
+                material: if mode == 7 {
+                    cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
+                } else if mode == 6 {
+                    cvkg_core::DrawMaterial::TopUI
+                } else {
+                    cvkg_core::DrawMaterial::Opaque
+                },
             });
         }
 
@@ -2039,7 +2370,7 @@ impl SurtrRenderer {
             call.index_count += 6;
         }
     }
-    fn get_texture_id(&self, name: &str) -> Option<u32> {
+    fn get_texture_id(&mut self, name: &str) -> Option<u32> {
         self.texture_registry.get(name).copied()
     }
 
@@ -2113,8 +2444,13 @@ impl SurtrRenderer {
     ) {
         let scissor = self.clip_stack.last().copied();
 
-        let is_glass = mode == 7;
-        let is_ui = !is_glass;
+        let material = if mode == 7 {
+            cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
+        } else if mode == 6 {
+            cvkg_core::DrawMaterial::TopUI
+        } else {
+            self.current_draw_material
+        };
 
         // Batching: check if we need to start a new DrawCall
         // With Texture Array, we no longer need to break batches when the texture changes,
@@ -2122,8 +2458,7 @@ impl SurtrRenderer {
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().is_glass != is_glass
-            || last_call.unwrap().is_ui != is_ui;
+            || last_call.unwrap().material != material;
 
         if needs_new_call {
             self.current_texture_id = Some(0); // All textures are now in the binding array at Group 0
@@ -2132,8 +2467,7 @@ impl SurtrRenderer {
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
                 index_count: 0,
-                is_glass,
-                is_ui,
+                material,
             });
         }
 
@@ -2321,12 +2655,7 @@ impl SurtrRenderer {
                     view: ctx_scene_texture,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 0.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
@@ -2334,13 +2663,17 @@ impl SurtrRenderer {
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                     view: ctx_depth_texture_view,
                     depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
+                        load: wgpu::LoadOp::Clear(0.0), // Reversed-Z
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
                 }),
+                timestamp_writes: self.skuld_queries.as_ref().map(|q| wgpu::RenderPassTimestampWrites {
+                    query_set: q,
+                    beginning_of_pass_write_index: Some(0),
+                    end_of_pass_write_index: None,
+                }),
                 occlusion_query_set: None,
-                timestamp_writes: None,
                 multiview_mask: None,
             });
 
@@ -2359,7 +2692,7 @@ impl SurtrRenderer {
                 p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
                 p.set_bind_group(2, &self.berserker_bind_group, &[]);
 
-                for call in self.draw_calls.iter().filter(|c| !c.is_glass && !c.is_ui) {
+                for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Opaque)) {
                     let bg = if let Some(id) = call.texture_id {
                         if id == 0 {
                             &self.mega_atlas_bind_group
@@ -2469,6 +2802,9 @@ impl SurtrRenderer {
         // 1. Finalize the PRE-parallel work (Background & Atmosphere)
         self.staging_command_buffers.push(encoder.finish());
 
+        let rt_w = self.current_width() as i32;
+        let rt_h = self.current_height() as i32;
+
         // 2. Parallel Encoding Phase: Glass & UI ─────────────────────────────
         // We utilize rayon to record these independent passes in parallel.
         let (glass_cb, ui_cb) = rayon::join(
@@ -2507,7 +2843,7 @@ impl SurtrRenderer {
                     p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
                     p.set_bind_group(2, &self.berserker_bind_group, &[]);
 
-                    for call in self.draw_calls.iter().filter(|c| c.is_glass) {
+                    for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. })) {
                         let bg = if let Some(id) = call.texture_id {
                             if id == 0 {
                                 &self.mega_atlas_bind_group
@@ -2521,12 +2857,37 @@ impl SurtrRenderer {
                         };
                         p.set_bind_group(0, bg, &[]);
                         if let Some(rect) = call.scissor_rect {
-                            p.set_scissor_rect(
-                                (rect.x * scale) as u32,
-                                (rect.y * scale) as u32,
-                                (rect.width * scale) as u32,
-                                (rect.height * scale) as u32,
-                            );
+                            // Scissor rect clamping logic:
+                            // wgpu validation requires that the scissor rect is entirely contained within
+                            // the physical render target dimensions and has a non-zero area (width > 0, height > 0).
+                            // We compute the physical boundaries using the current render target size and scale factor,
+                            // intersect/clamp them to the render target viewport, and fallback to a minimal 1x1 region
+                            // if the intersection results in zero/negative area.
+                            if rt_w > 0 && rt_h > 0 {
+                                let x1 = (rect.x * scale).round() as i32;
+                                let y1 = (rect.y * scale).round() as i32;
+                                let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                                let y2 = ((rect.y + rect.height) * scale).round() as i32;
+
+                                let x1_clamped = x1.clamp(0, rt_w);
+                                let y1_clamped = y1.clamp(0, rt_h);
+                                let x2_clamped = x2.clamp(0, rt_w);
+                                let y2_clamped = y2.clamp(0, rt_h);
+
+                                let w = x2_clamped - x1_clamped;
+                                let h = y2_clamped - y1_clamped;
+
+                                if w > 0 && h > 0 {
+                                    p.set_scissor_rect(
+                                        x1_clamped as u32,
+                                        y1_clamped as u32,
+                                        w as u32,
+                                        h as u32,
+                                    );
+                                } else {
+                                    p.set_scissor_rect(0, 0, 1, 1);
+                                }
+                            }
                         }
                         p.draw_indexed(
                             call.index_start..call.index_start + call.index_count,
@@ -2572,7 +2933,7 @@ impl SurtrRenderer {
                     p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
                     p.set_bind_group(2, &self.berserker_bind_group, &[]);
 
-                    for call in self.draw_calls.iter().filter(|c| c.is_ui) {
+                    for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI)) {
                         let bg = if let Some(id) = call.texture_id {
                             if id == 0 {
                                 &self.mega_atlas_bind_group
@@ -2586,12 +2947,37 @@ impl SurtrRenderer {
                         };
                         p.set_bind_group(0, bg, &[]);
                         if let Some(rect) = call.scissor_rect {
-                            p.set_scissor_rect(
-                                (rect.x * scale) as u32,
-                                (rect.y * scale) as u32,
-                                (rect.width * scale) as u32,
-                                (rect.height * scale) as u32,
-                            );
+                            // Scissor rect clamping logic:
+                            // wgpu validation requires that the scissor rect is entirely contained within
+                            // the physical render target dimensions and has a non-zero area (width > 0, height > 0).
+                            // We compute the physical boundaries using the current render target size and scale factor,
+                            // intersect/clamp them to the render target viewport, and fallback to a minimal 1x1 region
+                            // if the intersection results in zero/negative area.
+                            if rt_w > 0 && rt_h > 0 {
+                                let x1 = (rect.x * scale).round() as i32;
+                                let y1 = (rect.y * scale).round() as i32;
+                                let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                                let y2 = ((rect.y + rect.height) * scale).round() as i32;
+
+                                let x1_clamped = x1.clamp(0, rt_w);
+                                let y1_clamped = y1.clamp(0, rt_h);
+                                let x2_clamped = x2.clamp(0, rt_w);
+                                let y2_clamped = y2.clamp(0, rt_h);
+
+                                let w = x2_clamped - x1_clamped;
+                                let h = y2_clamped - y1_clamped;
+
+                                if w > 0 && h > 0 {
+                                    p.set_scissor_rect(
+                                        x1_clamped as u32,
+                                        y1_clamped as u32,
+                                        w as u32,
+                                        h as u32,
+                                    );
+                                } else {
+                                    p.set_scissor_rect(0, 0, 1, 1);
+                                }
+                            }
                         }
                         p.draw_indexed(
                             call.index_start..call.index_start + call.index_count,
@@ -2608,18 +2994,18 @@ impl SurtrRenderer {
         self.staging_command_buffers.push(ui_cb);
 
         // Update telemetry for parallel work
-        let glass_calls = self.draw_calls.iter().filter(|c| c.is_glass).count();
+        let glass_calls = self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. })).count();
         let glass_verts: u32 = self
             .draw_calls
             .iter()
-            .filter(|c| c.is_glass)
+            .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. }))
             .map(|c| c.index_count)
             .sum();
-        let ui_calls = self.draw_calls.iter().filter(|c| c.is_ui).count();
+        let ui_calls = self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI)).count();
         let ui_verts: u32 = self
             .draw_calls
             .iter()
-            .filter(|c| c.is_ui)
+            .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI))
             .map(|c| c.index_count)
             .sum();
         self.telemetry.draw_calls += (glass_calls + ui_calls) as u32;
@@ -2726,7 +3112,14 @@ impl SurtrRenderer {
                     },
                     depth_slice: None,
                 })],
-                ..Default::default()
+                depth_stencil_attachment: None,
+                timestamp_writes: self.skuld_queries.as_ref().map(|q| wgpu::RenderPassTimestampWrites {
+                    query_set: q,
+                    beginning_of_pass_write_index: None,
+                    end_of_pass_write_index: Some(1),
+                }),
+                occlusion_query_set: None,
+                multiview_mask: None,
             });
             p.set_pipeline(&self.composite_pipeline);
             p.set_bind_group(0, ctx_scene_texture_bind_group, &[]);
@@ -2738,6 +3131,16 @@ impl SurtrRenderer {
 
         self.telemetry.frame_time_ms = self.last_frame_start.elapsed().as_secs_f32() * 1000.0;
         self.update_vram_telemetry();
+
+        // Skuld: Resolve timestamps
+        if let (Some(q), Some(b), Some(rb)) = (
+            &self.skuld_queries,
+            &self.skuld_buffer,
+            &self.skuld_read_buffer,
+        ) {
+            post_encoder.resolve_query_set(q, 0..2, b, 0);
+            post_encoder.copy_buffer_to_buffer(b, 0, rb, 0, 16);
+        }
 
         // Finalize post-parallel work
         self.staging_command_buffers.push(post_encoder.finish());
@@ -2809,7 +3212,7 @@ impl SurtrRenderer {
             );
 
             self.image_uv_registry.put(name.to_string(), uv_rect);
-            self.texture_registry.insert(name.to_string(), 0); // Index 0 is Mega-Atlas
+            self.texture_registry.put(name.to_string(), 0); // Index 0 is the dummy white texture
             log::debug!(
                 "[Surtr] Packed '{}' into Mega-Atlas at ({}, {})",
                 name,
@@ -2823,6 +3226,40 @@ impl SurtrRenderer {
             );
             self.load_image(name, data);
         }
+    }
+
+    /// Shapes a text string using a predefined system font stack.
+    ///
+    /// # Contract
+    /// Evaluates text shaping with fallbacks: queries "SF Pro Text", "SF Pro", "Inter",
+    /// "Helvetica Neue", "Helvetica", "Arial", and defaults back to "sans-serif".
+    /// This ensures visual typographic consistency across platforms where specific
+    /// branding faces may or may not be installed.
+    fn shape_text_with_stack(&mut self, text: &str, size: f32) -> cvkg_runic_text::ShapedText {
+        let mut style = cvkg_runic_text::TextStyle::new("SF Pro Text", size);
+        style.fallback_families = vec![
+            "SF Pro".to_string(),
+            "Inter".to_string(),
+            "Helvetica Neue".to_string(),
+            "Helvetica".to_string(),
+            "Arial".to_string(),
+            "sans-serif".to_string(),
+        ];
+        let spans = vec![cvkg_runic_text::TextSpan::new(text, style)];
+        self.text_engine.shape_layout(&spans, None, cvkg_runic_text::TextAlign::Start, cvkg_runic_text::TextOverflow::WordWrap)
+            .unwrap_or_else(|_| cvkg_runic_text::ShapedText {
+                glyphs: Vec::new(),
+                lines: Vec::new(),
+                width: 0.0,
+                height: 0.0,
+                text: text.to_string(),
+                spans: Vec::new(),
+                has_rtl: false,
+                ascent: 0.0,
+                descent: 0.0,
+                line_gap: 0.0,
+                grapheme_boundaries: vec![],
+            })
     }
 }
 
@@ -2933,6 +3370,30 @@ impl cvkg_core::Renderer for SurtrRenderer {
             );
         }
     }
+
+    /// Renders a dynamic glowing hover boundary field around a hit target.
+    ///
+    /// # Contract
+    /// Expands the bounding box of the visual target by `radius` to establish
+    /// a continuous proximity glow. Uses blending mode 18 (GPU drop shadow/glow)
+    /// to rasterize the glow with specialized radius-to-margin uv coordinate mappings.
+    fn mani_glow(&mut self, rect: Rect, color: [f32; 4], radius: f32) {
+        let margin = radius;
+        let glow_rect = Rect {
+            x: rect.x - margin,
+            y: rect.y - margin,
+            width: rect.width + 2.0 * margin,
+            height: rect.height + 2.0 * margin,
+        };
+        let uv_rect = Rect {
+            x: margin,
+            y: radius,
+            width: 0.0,
+            height: 0.0,
+        };
+        self.fill_rect_with_full_params(glow_rect, self.apply_opacity(color), 18, None, 8.0, uv_rect);
+    }
+
 
     fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32) {
         let c = self.apply_opacity(color);
@@ -3172,10 +3633,11 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(rect, [1.0, 1.0, 1.0, 1.0], 2, tid, 0.0, uv_rect);
     }
 
+
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         // High-DPI: Shape and rasterize at the physical scale factor for maximum sharpness.
         let scaled_size = size * self.current_scale_factor();
-        let shaped = self.text_engine.shape(text, "sans-serif", scaled_size);
+        let shaped = self.shape_text_with_stack(text, scaled_size);
         let c = self.apply_opacity(color);
 
         for glyph in shaped.glyphs {
@@ -3259,7 +3721,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     /// measure_text — Calculates the dimensions of a text string without rendering.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        let shaped = self.text_engine.shape(text, "sans-serif", size);
+        let shaped = self.shape_text_with_stack(text, size);
         (shaped.width, shaped.height)
     }
 
@@ -3330,28 +3792,30 @@ impl cvkg_core::Renderer for SurtrRenderer {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Slot allocation (Skip index 0 which is the dummy/atlas)
-        let index = (self.texture_registry.len() + 1) as u32;
-
-        if index < 256 {
-            self.texture_views[index as usize] = view;
-            self.image_uv_registry.put(
-                name.to_string(),
-                Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: 1.0,
-                    height: 1.0,
-                },
-            );
-            self.texture_registry.insert(name.to_string(), index);
-            self.rebuild_texture_array_bind_group();
+        let index = if self.texture_registry.len() < 255 {
+            (self.texture_registry.len() + 1) as u32
         } else {
-            log::error!(
-                "VRAM_EXHAUSTED: Texture array full (limit 256). Image '{}' skipped.",
-                name
-            );
-            self.telemetry.vram_exhausted = true;
-        }
+            // Evict the least recently used texture
+            if let Some((old_name, old_index)) = self.texture_registry.pop_lru() {
+                self.image_uv_registry.pop(&old_name);
+                old_index
+            } else {
+                1 // Fallback
+            }
+        };
+
+        self.texture_views[index as usize] = view;
+        self.image_uv_registry.put(
+            name.to_string(),
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+        );
+        self.texture_registry.put(name.to_string(), index);
+        self.rebuild_texture_array_bind_group();
     }
 
     fn push_clip_rect(&mut self, rect: Rect) {
@@ -3518,7 +3982,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         });
         self.texture_bind_groups.push(bind_group);
         let tid = (self.texture_bind_groups.len() - 1) as u32;
-        self.texture_registry.insert(id.to_string(), tid);
+        self.texture_registry.put(id.to_string(), tid);
     }
 
     fn draw_heatmap(&mut self, texture_id: &str, rect: Rect, _palette: &str) {
@@ -3565,8 +4029,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
                 index_count: mesh.indices.len() as u32,
-                is_glass: false,
-                is_ui: false,
+                material: cvkg_core::DrawMaterial::Opaque,
             });
         } else {
             self.draw_calls.last_mut().unwrap().index_count += mesh.indices.len() as u32;
@@ -3579,6 +4042,14 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn set_z_index(&mut self, z: f32) {
         self.current_z = z;
+    }
+
+    fn set_material(&mut self, material: cvkg_core::DrawMaterial) {
+        self.current_draw_material = material;
+    }
+
+    fn current_material(&self) -> cvkg_core::DrawMaterial {
+        self.current_draw_material
     }
 
     fn get_z_index(&self) -> f32 {
@@ -3708,6 +4179,56 @@ impl Drop for SurtrRenderer {
     }
 }
 
+impl SurtrRenderer {
+    /// Submit pre-routed draw command buckets from the cvkg-compositor.
+    ///
+    /// Accepts `CommandBuckets` produced by `CompositorEngine::flatten_and_route()`
+    /// and submits draw calls in the correct pass order for the Backdrop Capture
+    /// Architecture:
+    /// 1. Scene commands (opaque) → Scene Capture pass
+    /// 2. Glass commands → Material Composite pass (samples blur pyramid)
+    /// 3. Overlay commands → Top-Level Foreground pass
+    pub fn submit_buckets(&mut self, buckets: &cvkg_compositor::CommandBuckets) {
+        // Scene pass — opaque draw calls
+        for routed in &buckets.scene_commands {
+            self.set_material(cvkg_core::DrawMaterial::Opaque);
+            self.submit_routed(routed);
+        }
+
+        // Glass pass — glassmorphism draw calls sampling blur pyramid
+        for routed in &buckets.glass_commands {
+            let core_material = match routed.material {
+                cvkg_compositor::Material::Opaque => cvkg_core::DrawMaterial::Opaque,
+                cvkg_compositor::Material::Glass { blur_radius } => {
+                    cvkg_core::DrawMaterial::Glass { blur_radius }
+                }
+                cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
+            };
+            self.set_material(core_material);
+            self.submit_routed(routed);
+        }
+
+        // Overlay pass — foreground UI (crisp text, icons, edge lighting)
+        for routed in &buckets.overlay_commands {
+            self.set_material(cvkg_core::DrawMaterial::TopUI);
+            self.submit_routed(routed);
+        }
+    }
+
+    /// Submit a single routed draw command through the internal pipeline.
+    fn submit_routed(&mut self, routed: &cvkg_compositor::RoutedDrawCommand) {
+        let cmd = &routed.command;
+        self.fill_rect_with_full_params(
+            cvkg_core::Rect::new(0.0, 0.0, 1.0, 1.0),
+            [1.0, 1.0, 1.0, 1.0],
+            0,
+            cmd.texture_id,
+            0.0,
+            cvkg_core::Rect::new(0.0, 0.0, 1.0, 1.0),
+        );
+    }
+}
+
 impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
     fn begin_frame(&mut self) -> wgpu::CommandEncoder {
         cvkg_core::begin_render_phase();
@@ -3734,6 +4255,51 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
             };
             // Draw a thick red border to signal layout-thrashing
             self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+        }
+
+        // Dynamic Buffer Growth (Up to 4x capacity)
+        let req_v_size = (self.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
+        let mut cur_v_size = self.vertex_buffer.size();
+        let max_v_size = (MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64 * 4;
+        
+        if req_v_size > cur_v_size {
+            while cur_v_size < req_v_size && cur_v_size < max_v_size {
+                cur_v_size *= 2;
+            }
+            if req_v_size > max_v_size {
+                log::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
+                self.vertices.truncate((max_v_size / std::mem::size_of::<Vertex>() as u64) as usize);
+                cur_v_size = max_v_size;
+            }
+            log::info!("Growing vertex buffer to {} bytes", cur_v_size);
+            self.vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Vertex Buffer (Grown)"),
+                size: cur_v_size,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+        }
+
+        let req_i_size = (self.indices.len() * std::mem::size_of::<u32>()) as u64;
+        let mut cur_i_size = self.index_buffer.size();
+        let max_i_size = (MAX_INDICES * std::mem::size_of::<u32>()) as u64 * 4;
+        
+        if req_i_size > cur_i_size {
+            while cur_i_size < req_i_size && cur_i_size < max_i_size {
+                cur_i_size *= 2;
+            }
+            if req_i_size > max_i_size {
+                log::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
+                self.indices.truncate((max_i_size / std::mem::size_of::<u32>() as u64) as usize);
+                cur_i_size = max_i_size;
+            }
+            log::info!("Growing index buffer to {} bytes", cur_i_size);
+            self.index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Index Buffer (Grown)"),
+                size: cur_i_size,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
         }
 
         // Forge Submission: Sync all geometry to GPU using StagingBelt with a dedicated encoder
@@ -3933,16 +4499,18 @@ impl SurtrRenderer {
             self.indices.push(base_idx + *idx);
         }
 
-        let is_ui = true;
-        let is_glass = mode == 7;
+        let material = if mode == 7 {
+            cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
+        } else {
+            cvkg_core::DrawMaterial::TopUI
+        };
         let tid = self.get_texture_id("__mega_atlas");
 
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != tid
             || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
-            || last_call.unwrap().is_glass != is_glass
-            || last_call.unwrap().is_ui != is_ui;
+            || last_call.unwrap().material != material;
 
         if needs_new_call {
             self.current_texture_id = tid;
@@ -3951,8 +4519,7 @@ impl SurtrRenderer {
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: (self.indices.len() - model.indices.len()) as u32,
                 index_count: 0,
-                is_glass,
-                is_ui,
+                material,
             });
         }
 
@@ -4015,13 +4582,17 @@ impl SurtrRenderer {
             info.name, info.device_type, info.backend
         );
         println!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
+        let mut required_features = wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::TEXTURE_BINDING_ARRAY;
+        if supports_timestamps {
+            required_features |= wgpu::Features::TIMESTAMP_QUERY;
+        }
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Surtr Headless Forge"),
-                required_features:
-                    wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                        | wgpu::Features::TEXTURE_BINDING_ARRAY,
+                required_features,
                 required_limits: wgpu::Limits {
                     max_bindings_per_bind_group: 256,
                     max_binding_array_elements_per_shader_stage: 256,
@@ -4036,6 +4607,11 @@ impl SurtrRenderer {
 
         let instance = Arc::new(instance);
         let adapter = Arc::new(adapter);
+        
+        device.on_uncaptured_error(Arc::new(|error| {
+            log::error!("[GPU] Uncaptured device error (Device Lost or Panic): {:?}", error);
+        }));
+
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 

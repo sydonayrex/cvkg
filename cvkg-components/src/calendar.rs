@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -85,8 +86,8 @@ impl View for TyrCalendar {
         renderer.push_vnode(rect, "TyrCalendar");
 
         // Background
-        renderer.fill_rounded_rect(rect, 8.0, [0.08, 0.08, 0.12, 1.0]);
-        renderer.stroke_rect(rect, [0.2, 0.2, 0.3, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 8.0, theme::surface_elevated());
+        renderer.stroke_rect(rect, theme::border_strong(), 1.0);
 
         // Header (Month Year)
         let header_h = 40.0;
@@ -107,7 +108,7 @@ impl View for TyrCalendar {
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (header_h - th) / 2.0,
             16.0,
-            [1.0, 1.0, 1.0, 1.0],
+            theme::text(),
         );
 
         // Days of week
@@ -119,7 +120,7 @@ impl View for TyrCalendar {
                 rect.x + i as f32 * day_w + (day_w - 10.0) / 2.0,
                 rect.y + header_h + 5.0,
                 12.0,
-                [0.5, 0.5, 0.6, 1.0],
+                theme::text_muted(),
             );
         }
 
@@ -175,7 +176,7 @@ impl View for TyrCalendar {
                 let text_color = if is_disabled {
                     [0.3, 0.3, 0.35, 1.0]
                 } else {
-                    [1.0, 1.0, 1.0, 1.0]
+                    theme::text()
                 };
                 renderer.draw_text(
                     &day_str,
@@ -293,8 +294,8 @@ impl View for DatePicker {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePicker");
-        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface());
+        renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         let display = if self.selected_date.year == 0 {
             self.placeholder.clone()
@@ -302,9 +303,9 @@ impl View for DatePicker {
             self.selected_date.format()
         };
         let text_color = if self.selected_date.year == 0 {
-            [0.5, 0.5, 0.6, 1.0]
+            theme::text_muted()
         } else {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         };
 
         renderer.draw_text(
@@ -319,7 +320,7 @@ impl View for DatePicker {
             rect.x + rect.width - 24.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
 
         let id_hash = {

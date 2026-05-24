@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     AnyView, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -80,7 +81,7 @@ impl View for InfiniteCanvas {
         let start_x = (rect.x - self.pan_x) / self.zoom;
         let start_y = (rect.y - self.pan_y) / self.zoom;
 
-        let grid_color = [0.05, 0.05, 0.08, 1.0];
+        let grid_color = theme::surface();
         let mut x = start_x;
         while x < rect.width {
             let line_x = (x * self.zoom + self.pan_x).max(rect.x);
@@ -194,7 +195,7 @@ impl View for Minimap {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Draw minimap background
-        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface());
         renderer.stroke_rounded_rect(rect, 4.0, [0.3, 0.5, 0.8, 1.0], 1.0);
 
         // Render canvas preview (simplified)

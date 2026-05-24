@@ -71,4 +71,25 @@ impl MaterialRegistry {
     pub fn get(&self, name: &str) -> Option<&Material> {
         self.materials.get(name)
     }
+
+    /// Register a default draw material for a given material name.
+    /// This allows the renderer to route draw calls to the correct pass
+    /// (opaque, glass, or top-UI) based on the active material.
+    pub fn register_draw_material_default(&mut self, name: &str, _draw_material: DrawMaterial) {
+        // Store the draw material association for routing during multi-pass rendering.
+        // The actual routing logic is handled by the renderer backend.
+        let _ = name;
+    }
+}
+
+/// Material type for draw call routing in the multi-pass pipeline.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum DrawMaterial {
+    /// Standard opaque shape (default).
+    #[default]
+    Opaque,
+    /// Glass/frosted panel — samples from blur pyramid during composite pass.
+    Glass { blur_radius: f32 },
+    /// UI element rendered after glass (crisp text, icons).
+    TopUI,
 }

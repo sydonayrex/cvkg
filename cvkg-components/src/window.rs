@@ -1,5 +1,6 @@
 use crate::clipped_corner::ClippedCornerNode;
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// YggdrasilWindow - A tactical, draggable, resizable window container.
 /// Named after the World Tree, the central pillar of the Norse cosmos.
@@ -65,7 +66,7 @@ impl<V: View> View for YggdrasilWindow<V> {
             rect.x + 12.0,
             rect.y + 18.0,
             12.0,
-            [1.0, 1.0, 1.0, 0.9],
+            theme::text(),
         );
 
         // Header Underline
@@ -155,7 +156,7 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
             rect.x + 12.0,
             rect.y + 18.0,
             12.0,
-            [1.0, 1.0, 1.0, 0.9],
+            theme::text(),
         );
         renderer.draw_line(
             rect.x,
@@ -219,7 +220,7 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
                     width: 4.0,
                     height: content_rect.height,
                 },
-                [0.0, 1.0, 1.0, 1.0],
+                theme::accent(),
                 15.0,
                 0.6 * rift_opacity,
             );
@@ -243,7 +244,7 @@ impl<V: View> HiminnModal<V> {
             content,
             is_open: false,
             blur_radius: 20.0,
-            border_color: [0.0, 0.8, 1.0, 0.8], // Bifrost Cyan
+            border_color: theme::accent(), // Bifrost Cyan
         }
     }
 

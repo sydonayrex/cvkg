@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::{Arc, Mutex};
 
@@ -38,7 +39,7 @@ impl View for ScribingStone {
             for window in stroke.windows(2) {
                 let p1 = window[0];
                 let p2 = window[1];
-                renderer.draw_line(p1[0], p1[1], p2[0], p2[1], [0.0, 1.0, 1.0, 0.8], 2.0);
+                renderer.draw_line(p1[0], p1[1], p2[0], p2[1], theme::accent(), 2.0);
             }
         }
 

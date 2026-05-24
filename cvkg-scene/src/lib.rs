@@ -23,6 +23,9 @@
 //! and dirty-rect tracking for the Surtr GPU pipeline.
 
 pub mod test_renderer;
+pub mod quadtree;
+
+use quadtree::Quadtree;
 
 use cvkg_core::Rect;
 use serde::{Deserialize, Serialize};
@@ -56,6 +59,10 @@ pub struct VNode {
 
     /// Z-index for depth sorting
     pub z_index: f32,
+
+    /// Cached grid cells this node currently occupies
+    #[serde(skip, default)]
+    pub spatial_cells: Vec<(u32, u32)>,
 }
 
 impl VNode {
@@ -69,6 +76,7 @@ impl VNode {
             is_dirty: true,
             layer_id: 0,
             z_index: 0.0,
+            spatial_cells: Vec::new(),
         }
     }
 }
@@ -342,19 +350,55 @@ impl SceneGraph {
     }
 
     /// Merge overlapping dirty rects to reduce the number of regions.
-    /// Uses iterative O(n^2) merge: while any pair overlaps, replace with union.
+    /// Uses quadtree-based spatial intersection index.
     fn merge_dirty_regions(&mut self) {
         let mut changed = true;
         while changed {
             changed = false;
             let len = self.dirty_regions.len();
+            if len <= 1 {
+                break;
+            }
+
+            let mut min_x = f32::MAX;
+            let mut min_y = f32::MAX;
+            let mut max_x = f32::MIN;
+            let mut max_y = f32::MIN;
+            for r in &self.dirty_regions {
+                min_x = min_x.min(r.x);
+                min_y = min_y.min(r.y);
+                max_x = max_x.max(r.x + r.width);
+                max_y = max_y.max(r.y + r.height);
+            }
+
+            let bounds = Rect {
+                x: min_x,
+                y: min_y,
+                width: max_x - min_x,
+                height: max_y - min_y,
+            };
+            let mut qt = Quadtree::new(bounds);
+
+            for r in &self.dirty_regions {
+                qt.insert(*r);
+            }
+
             'outer: for i in 0..len {
-                for j in (i + 1)..len {
-                    if let Some(union) = rect_union(self.dirty_regions[i], self.dirty_regions[j]) {
-                        self.dirty_regions[i] = union;
-                        self.dirty_regions.remove(j);
-                        changed = true;
-                        break 'outer;
+                let mut candidates = Vec::new();
+                qt.retrieve(self.dirty_regions[i], &mut candidates);
+
+                for candidate in candidates {
+                    // Skip self comparison or identical rects (since they will merge trivially but we need to remove one)
+                    // If they are exactly identical, we handle it too.
+                    if let Some(j) = self.dirty_regions.iter().position(|r| *r == candidate) {
+                        if i != j {
+                            if let Some(union) = rect_union(self.dirty_regions[i], self.dirty_regions[j]) {
+                                self.dirty_regions[i] = union;
+                                self.dirty_regions.remove(j);
+                                changed = true;
+                                break 'outer;
+                            }
+                        }
                     }
                 }
             }

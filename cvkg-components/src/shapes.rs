@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 /// Hvergelmir - A hexagonal shape primitive (Norse equivalent of Hexagon)
@@ -12,7 +13,7 @@ impl Hvergelmir {
     pub fn new(size: f32) -> Self {
         Self {
             size,
-            color: [0.0, 0.8, 1.0, 1.0], // Cyan
+            color: theme::accent(), // Cyan
             stroke_width: 2.0,
         }
     }

@@ -5,6 +5,7 @@
 //! keyboard navigation (ArrowDown / ArrowUp / Enter / Escape) and pointer
 //! selection.
 
+use crate::theme;
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -122,8 +123,8 @@ impl View for AutoComplete {
         let options_ptr = self.options.as_ptr();
 
         // ── Text field background ──────────────────────────────────────────
-        renderer.fill_rounded_rect(rect, 6.0, [0.08, 0.08, 0.12, 1.0]);
-        renderer.stroke_rect(rect, [0.3, 0.3, 0.4, 1.0], 1.0);
+        renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
+        renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         // ── Display text or placeholder ────────────────────────────────────
         let display_text = if self.text.is_empty() {
@@ -132,9 +133,9 @@ impl View for AutoComplete {
             &self.text
         };
         let text_color = if self.text.is_empty() {
-            [0.5, 0.5, 0.55, 1.0]
+            theme::text_muted()
         } else {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         };
         renderer.draw_text(
             display_text,
@@ -154,7 +155,7 @@ impl View for AutoComplete {
                 cursor_y,
                 cursor_x,
                 cursor_y + 16.0,
-                [0.0, 1.0, 1.0, 1.0],
+                theme::accent(),
                 2.0,
             );
         }
@@ -196,9 +197,9 @@ impl View for AutoComplete {
 
                 let opt_text = &self.options[opt_idx];
                 let tc = if state.selection == Some(vis_idx) {
-                    [0.0, 0.9, 1.0, 1.0]
+                    theme::accent_hover()
                 } else {
-                    [0.85, 0.85, 0.9, 1.0]
+                    theme::text()
                 };
                 renderer.draw_text(
                     opt_text,

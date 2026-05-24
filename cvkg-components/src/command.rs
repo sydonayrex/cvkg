@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 use std::sync::Arc;
 
 /// Command palette component for quick actions and navigation.
@@ -73,9 +74,9 @@ impl View for Command {
             self.search_text.as_str()
         };
         let search_color = if self.search_text.is_empty() {
-            [0.5, 0.5, 0.6, 1.0]
+            theme::text_muted()
         } else {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         };
 
         renderer.draw_text(
@@ -90,7 +91,7 @@ impl View for Command {
             search_rect.y + search_h,
             search_rect.x + search_rect.width,
             search_rect.y + search_h,
-            [0.2, 0.2, 0.3, 1.0],
+            theme::border_strong(),
             1.0,
         );
 
@@ -114,7 +115,7 @@ impl View for Command {
                 item_rect.x + 12.0,
                 item_rect.y + 10.0,
                 14.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
             if let Some(shortcut) = &item.shortcut {
                 let (sw, _) = renderer.measure_text(shortcut, 12.0);
@@ -123,7 +124,7 @@ impl View for Command {
                     item_rect.x + item_rect.width - sw - 12.0,
                     item_rect.y + 11.0,
                     12.0,
-                    [0.4, 0.4, 0.5, 1.0],
+                    theme::text_muted(),
                 );
             }
 

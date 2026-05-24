@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// A spinning runic activity indicator.
 /// Section 4.5: "Kinetic runic pulses for background processing."
@@ -12,7 +13,7 @@ impl ValkyrieIndicator {
     pub fn new(size: f32) -> Self {
         Self {
             size,
-            color: [0.0, 1.0, 1.0, 1.0],
+            color: theme::accent(),
         }
     }
 }

@@ -3,6 +3,7 @@
 //! Tyr the Aesir god of law and justice protects order - this security system
 //! provides permission management, role-based rendering, and audit capabilities.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -131,7 +132,7 @@ impl View for TyrSecurity {
             rect.x + 10.0,
             rect.y + 20.0,
             14.0,
-            [0.9, 0.6, 0.6, 1.0],
+            theme::error_color(),
         );
 
         // Session info

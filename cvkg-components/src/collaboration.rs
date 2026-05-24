@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -66,7 +67,7 @@ impl View for CollaborationEngine {
                 width: rect.width,
                 height: 32.0,
             },
-            [0.08, 0.08, 0.12, 1.0],
+            theme::surface_elevated(),
         );
         renderer.draw_text(
             &self.session_name,
@@ -88,7 +89,7 @@ impl View for CollaborationEngine {
             };
 
             let status_color = match p.status {
-                ParticipantStatus::Online => [0.0, 0.8, 0.2, 1.0],
+                ParticipantStatus::Online => theme::success(),
                 ParticipantStatus::Away => [0.8, 0.6, 0.0, 1.0],
                 ParticipantStatus::Offline => [0.4, 0.4, 0.4, 1.0],
             };
@@ -100,13 +101,13 @@ impl View for CollaborationEngine {
                 height: 12.0,
             };
             renderer.fill_ellipse(status_rect, status_color);
-            renderer.stroke_ellipse(status_rect, [0.0, 0.0, 0.0, 0.5], 1.0);
+            renderer.stroke_ellipse(status_rect, theme::shadow(), 1.0);
             renderer.draw_text(
                 &p.name,
                 part_rect.x + 28.0,
                 part_rect.y + 14.0,
                 12.0,
-                [0.8, 0.8, 0.9, 1.0],
+                theme::text(),
             );
 
             // Draw cursor position if present

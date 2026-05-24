@@ -1,14 +1,15 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
-/// Progress indicator component.
+/// SkollProgress indicator component.
 #[derive(Clone)]
-pub struct Progress {
+pub struct SkollProgress {
     pub(crate) value: f32,
     pub(crate) max: f32,
     pub(crate) variant: ProgressVariant,
 }
 
-impl Progress {
+impl SkollProgress {
     pub fn new(value: f32) -> Self {
         Self {
             value,
@@ -34,7 +35,7 @@ pub enum ProgressVariant {
     Circular,
 }
 
-impl View for Progress {
+impl View for SkollProgress {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
@@ -61,7 +62,7 @@ impl View for Progress {
                         height: track_h,
                     },
                     track_h / 2.0,
-                    [0.15, 0.15, 0.2, 1.0],
+                    theme::surface_elevated(),
                 );
 
                 // Fill
@@ -73,7 +74,7 @@ impl View for Progress {
                         height: track_h,
                     },
                     track_h / 2.0,
-                    [0.0, 0.85, 1.0, 1.0],
+                    theme::accent(),
                 );
             }
             ProgressVariant::Circular => {
@@ -86,9 +87,9 @@ impl View for Progress {
                 };
 
                 // Background ring
-                renderer.stroke_ellipse(circ_rect, [0.1, 0.1, 0.15, 1.0], 4.0);
+                renderer.stroke_ellipse(circ_rect, theme::surface(), 4.0);
 
-                // Progress ring (simulated with smaller ellipse for now)
+                // SkollProgress ring (simulated with smaller ellipse for now)
                 let inset = 4.0;
                 let progress_rect = Rect {
                     x: circ_rect.x + inset,
@@ -96,7 +97,7 @@ impl View for Progress {
                     width: (circ_rect.width - 2.0 * inset) * pct,
                     height: circ_rect.height - 2.0 * inset,
                 };
-                renderer.stroke_ellipse(progress_rect, [0.0, 1.0, 1.0, 1.0], 4.0);
+                renderer.stroke_ellipse(progress_rect, theme::progress_fill(), 4.0);
             }
         }
     }
@@ -140,7 +141,7 @@ impl View for Gauge {
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        renderer.stroke_ellipse(rect, [0.15, 0.15, 0.2, 1.0], 6.0);
+        renderer.stroke_ellipse(rect, theme::surface_elevated(), 6.0);
         let start = *self.range.start();
         let end = *self.range.end();
         let pct = if (end - start).abs() > f32::EPSILON {
@@ -155,7 +156,7 @@ impl View for Gauge {
             width: (rect.width - 2.0 * inset) * pct,
             height: rect.height - 2.0 * inset,
         };
-        renderer.fill_ellipse(inner, [0.0, 0.85, 1.0, 1.0]);
+        renderer.fill_ellipse(inner, theme::accent());
     }
 
     fn intrinsic_size(
@@ -203,7 +204,7 @@ impl View for StatusBar {
             rect.y,
             rect.x + rect.width,
             rect.y,
-            [0.2, 0.2, 0.3, 1.0],
+            theme::border_strong(),
             1.0,
         );
 
@@ -253,7 +254,7 @@ impl ValkyrieAnalytics {
         Self {
             chart_type,
             data,
-            color: [0.0, 1.0, 1.0, 1.0],
+            color: theme::progress_fill(),
         }
     }
 
@@ -386,7 +387,7 @@ impl View for TelemetryView {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
             renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.12, 0.15, 0.1]);
-            renderer.stroke_rect(rect, [0.2, 0.2, 0.2, 1.0], 1.0);
+            renderer.stroke_rect(rect, theme::surface(), 1.0);
             return;
         }
 
@@ -398,7 +399,7 @@ impl View for TelemetryView {
 
         let accent_cyan = [0.0, 1.0, 1.0, 0.9];
         let accent_gold = [1.0, 0.8, 0.0, 0.9];
-        let alert_red = [1.0, 0.2, 0.2, 1.0];
+        let alert_red = theme::error_color();
 
         let border_color = if stats.hardware_stall_detected {
             alert_red
@@ -650,7 +651,7 @@ impl RuneScript {
         Self {
             text: text.into(),
             font_size: 14.0,
-            color: [0.0, 1.0, 1.0, 1.0], // Cyan
+            color: theme::progress_fill(), // Cyan
             speed: 20.0,
         }
     }
@@ -873,7 +874,7 @@ impl<V: View> View for RunicTooltip<V> {
                 tip_rect.x + 8.0,
                 tip_rect.y + 6.0,
                 12.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
             renderer.set_z_index(0.0);
         }
@@ -882,10 +883,10 @@ impl<V: View> View for RunicTooltip<V> {
     }
 }
 
-/// EikonaAvatar - A user representation component with status indicators.
+/// MuninAvatar - A user representation component with status indicators.
 /// Named after the hybrid concept of "form/image" (Eikona).
 #[derive(Clone)]
-pub struct EikonaAvatar {
+pub struct MuninAvatar {
     pub src: Option<String>,
     pub fallback: String,
     pub status: Option<AvatarStatus>,
@@ -899,8 +900,8 @@ pub enum AvatarStatus {
     Away,
 }
 
-impl EikonaAvatar {
-    /// Creates a new EikonaAvatar.
+impl MuninAvatar {
+    /// Creates a new MuninAvatar.
     pub fn new(fallback: impl Into<String>) -> Self {
         Self {
             src: None,
@@ -922,17 +923,17 @@ impl EikonaAvatar {
     }
 }
 
-impl View for EikonaAvatar {
+impl View for MuninAvatar {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "EikonaAvatar");
+        renderer.push_vnode(rect, "MuninAvatar");
 
         // 1. Base Circle
-        renderer.fill_ellipse(rect, [0.1, 0.1, 0.15, 1.0]);
+        renderer.fill_ellipse(rect, theme::surface());
         renderer.stroke_ellipse(rect, [0.3, 0.4, 0.5, 0.6], 1.0);
 
         // 2. Content
@@ -960,10 +961,10 @@ impl View for EikonaAvatar {
             };
 
             let color = match status {
-                AvatarStatus::Online => [0.0, 1.0, 0.0, 1.0],
-                AvatarStatus::Offline => [0.5, 0.5, 0.5, 1.0],
-                AvatarStatus::Busy => [1.0, 0.0, 0.0, 1.0],
-                AvatarStatus::Away => [1.0, 0.8, 0.0, 1.0],
+                AvatarStatus::Online => theme::success(),
+                AvatarStatus::Offline => theme::text_muted(),
+                AvatarStatus::Busy => theme::error_color(),
+                AvatarStatus::Away => theme::warning(),
             };
 
             renderer.fill_ellipse(status_rect, color);
@@ -987,7 +988,7 @@ impl MerkiBadge {
     pub fn new(text: impl Into<String>) -> Self {
         Self {
             text: text.into(),
-            color: [0.0, 0.8, 1.0, 1.0],
+            color: theme::accent(),
         }
     }
 
@@ -1099,7 +1100,7 @@ impl View for UrdrTimeline {
                     width: 6.0,
                     height: 6.0,
                 },
-                [0.0, 1.0, 1.0, 1.0],
+                theme::progress_fill(),
             );
 
             // 2. Content
@@ -1187,5 +1188,429 @@ impl View for DraumaSkeleton {
         }
 
         renderer.pop_vnode();
+    }
+}
+
+// =============================================================================
+// SPINNER — Animated loading indicator with multiple variants
+// =============================================================================
+
+/// HatiSpinner variant determining the visual style of the loading animation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpinnerVariant {
+    /// A rotating ring with a gap (classic spinner).
+    Circle,
+    /// Three dots bouncing in sequence.
+    Dots,
+    /// A horizontal bar that pulses in width.
+    PulseBar,
+    /// Small 12px spinner for inline use (e.g., inside buttons).
+    Inline,
+}
+
+/// An animated loading indicator component.
+#[derive(Clone)]
+pub struct HatiSpinner {
+    pub(crate) variant: SpinnerVariant,
+    pub(crate) size: f32,
+    pub(crate) color: [f32; 4],
+}
+
+impl HatiSpinner {
+    /// Creates a new HatiSpinner with the default Circle variant.
+    pub fn new() -> Self {
+        Self {
+            variant: SpinnerVariant::Circle,
+            size: 24.0,
+            color: theme::accent(),
+        }
+    }
+
+    /// Sets the spinner variant.
+    pub fn variant(mut self, variant: SpinnerVariant) -> Self {
+        self.variant = variant;
+        self
+    }
+
+    /// Sets the spinner size.
+    pub fn size(mut self, size: f32) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Sets the spinner color.
+    pub fn color(mut self, color: [f32; 4]) -> Self {
+        self.color = color;
+        self
+    }
+}
+
+impl View for HatiSpinner {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let t = renderer.elapsed_time();
+
+        match self.variant {
+            SpinnerVariant::Circle => {
+                let dim = self.size;
+                let circ_rect = Rect {
+                    x: rect.x + (rect.width - dim) / 2.0,
+                    y: rect.y + (rect.height - dim) / 2.0,
+                    width: dim,
+                    height: dim,
+                };
+
+                // Background ring (dim)
+                let bg_color = [
+                    self.color[0],
+                    self.color[1],
+                    self.color[2],
+                    self.color[3] * 0.2,
+                ];
+                renderer.stroke_ellipse(circ_rect, bg_color, 2.5);
+
+                // Rotating arc — simulated by drawing short line segments
+                // along an arc with a trailing fade, creating the appearance
+                // of a rotating spinner with a gap.
+                let rotation = t * 2.5;
+                let arc_frac = 0.65; // fraction of the circle that is visible
+                let num_segments = 48;
+
+                for i in 0..num_segments {
+                    let frac = i as f32 / num_segments as f32;
+                    if frac > arc_frac {
+                        continue;
+                    }
+                    let angle = rotation + frac * 2.0 * std::f32::consts::PI;
+                    let next_frac = (i + 1) as f32 / num_segments as f32;
+                    let next_angle = rotation + next_frac * 2.0 * std::f32::consts::PI;
+
+                    let cx = circ_rect.x + circ_rect.width / 2.0;
+                    let cy = circ_rect.y + circ_rect.height / 2.0;
+                    let r = circ_rect.width / 2.0;
+
+                    let x1 = cx + angle.cos() * r;
+                    let y1 = cy + angle.sin() * r;
+                    let x2 = cx + next_angle.cos() * r;
+                    let y2 = cy + next_angle.sin() * r;
+
+                    // Fade the trailing edge
+                    let alpha = self.color[3] * (1.0 - frac / arc_frac * 0.8).max(0.0);
+                    let seg_color = [self.color[0], self.color[1], self.color[2], alpha];
+                    renderer.draw_line(x1, y1, x2, y2, seg_color, 2.5);
+                }
+            }
+            SpinnerVariant::Dots => {
+                let dot_size = self.size * 0.25;
+                let spacing = dot_size * 2.2;
+                let total_width = spacing * 2.0;
+                let start_x = rect.x + (rect.width - total_width) / 2.0;
+                let base_y = rect.y + rect.height / 2.0;
+
+                for i in 0..3 {
+                    let offset = i as f32 * 0.6;
+                    let bounce = (t * 4.0 + offset).sin();
+                    let y = base_y + bounce * dot_size * 1.2;
+                    let alpha = 0.4 + (bounce + 1.0) * 0.3; // 0.4–1.0
+
+                    let dot_rect = Rect {
+                        x: start_x + i as f32 * spacing - dot_size / 2.0,
+                        y: y - dot_size / 2.0,
+                        width: dot_size,
+                        height: dot_size,
+                    };
+
+                    let dot_color = [self.color[0], self.color[1], self.color[2], self.color[3] * alpha];
+                    renderer.fill_ellipse(dot_rect, dot_color);
+                }
+            }
+            SpinnerVariant::PulseBar => {
+                let bar_h = self.size * 0.2;
+                let max_w = self.size;
+                let pulse = (t * 3.0).sin() * 0.5 + 0.5; // 0.0–1.0
+                let bar_w = max_w * (0.3 + pulse * 0.7);
+                let x = rect.x + (rect.width - bar_w) / 2.0;
+                let y = rect.y + (rect.height - bar_h) / 2.0;
+
+                let bar_rect = Rect {
+                    x,
+                    y,
+                    width: bar_w,
+                    height: bar_h,
+                };
+
+                renderer.fill_rounded_rect(bar_rect, bar_h / 2.0, self.color);
+            }
+            SpinnerVariant::Inline => {
+                // Small 12px circle spinner
+                let inline_size = 12.0;
+                let dim = inline_size;
+                let circ_rect = Rect {
+                    x: rect.x + (rect.width - dim) / 2.0,
+                    y: rect.y + (rect.height - dim) / 2.0,
+                    width: dim,
+                    height: dim,
+                };
+
+                let bg_color = [
+                    self.color[0],
+                    self.color[1],
+                    self.color[2],
+                    self.color[3] * 0.15,
+                ];
+                renderer.stroke_ellipse(circ_rect, bg_color, 1.5);
+
+                let rotation = t * 3.0;
+                let arc_frac = 0.5;
+                let num_segments = 24;
+
+                for i in 0..num_segments {
+                    let frac = i as f32 / num_segments as f32;
+                    if frac > arc_frac {
+                        continue;
+                    }
+                    let angle = rotation + frac * 2.0 * std::f32::consts::PI;
+                    let next_frac = (i + 1) as f32 / num_segments as f32;
+                    let next_angle = rotation + next_frac * 2.0 * std::f32::consts::PI;
+
+                    let cx = circ_rect.x + circ_rect.width / 2.0;
+                    let cy = circ_rect.y + circ_rect.height / 2.0;
+                    let r = circ_rect.width / 2.0;
+
+                    let x1 = cx + angle.cos() * r;
+                    let y1 = cy + angle.sin() * r;
+                    let x2 = cx + next_angle.cos() * r;
+                    let y2 = cy + next_angle.sin() * r;
+
+                    let alpha = self.color[3] * (1.0 - frac / arc_frac * 0.8).max(0.0);
+                    let seg_color = [self.color[0], self.color[1], self.color[2], alpha];
+                    renderer.draw_line(x1, y1, x2, y2, seg_color, 1.5);
+                }
+            }
+        }
+    }
+
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        match self.variant {
+            SpinnerVariant::Inline => cvkg_core::Size {
+                width: proposal.width.unwrap_or(12.0),
+                height: 12.0,
+            },
+            _ => cvkg_core::Size {
+                width: proposal.width.unwrap_or(self.size),
+                height: self.size,
+            },
+        }
+    }
+}
+
+// =============================================================================
+// EMPTY STATE — Centered placeholder for empty content
+// =============================================================================
+
+/// A centered empty state component with icon, title, description, and optional CTA.
+#[derive(Clone)]
+pub struct EmptyState {
+    pub(crate) title: String,
+    pub(crate) description: String,
+    pub(crate) icon: Option<String>,
+    pub(crate) action_label: Option<String>,
+    pub(crate) on_action: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl EmptyState {
+    /// Creates a new EmptyState with the given title and description.
+    pub fn new(title: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            title: title.into(),
+            description: description.into(),
+            icon: None,
+            action_label: None,
+            on_action: None,
+        }
+    }
+
+    /// Sets the icon (emoji or text) for the empty state.
+    pub fn icon(mut self, icon: impl Into<String>) -> Self {
+        self.icon = Some(icon.into());
+        self
+    }
+
+    /// Sets the CTA button label and action callback.
+    pub fn action(
+        mut self,
+        label: impl Into<String>,
+        on_action: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        self.action_label = Some(label.into());
+        self.on_action = Some(std::sync::Arc::new(on_action));
+        self
+    }
+}
+
+impl View for EmptyState {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        use crate::{Button, ButtonVariant, FONT_BASE, FONT_LG, SPACE_LG, SPACE_SM};
+
+        let mut y = rect.y;
+        let center_x = rect.x + rect.width / 2.0;
+
+        // 1. Icon (48px text)
+        if let Some(icon) = &self.icon {
+            let (tw, th) = renderer.measure_text(icon, crate::FONT_3XL);
+            renderer.draw_text(
+                icon,
+                center_x - tw / 2.0,
+                y + (crate::FONT_3XL - th).max(0.0),
+                crate::FONT_3XL,
+                [1.0, 1.0, 1.0, 0.7],
+            );
+            y += crate::FONT_3XL + SPACE_SM;
+        }
+
+        // 2. Title (FONT_LG)
+        let (tw, th) = renderer.measure_text(&self.title, FONT_LG);
+        renderer.draw_text(
+            &self.title,
+            center_x - tw / 2.0,
+            y + (FONT_LG - th).max(0.0),
+            FONT_LG,
+            [1.0, 1.0, 1.0, 0.9],
+        );
+        y += FONT_LG + SPACE_SM;
+
+        // 3. Description (FONT_BASE, dimmed)
+        let (tw, th) = renderer.measure_text(&self.description, FONT_BASE);
+        renderer.draw_text(
+            &self.description,
+            center_x - tw / 2.0,
+            y + (FONT_BASE - th).max(0.0),
+            FONT_BASE,
+            [0.6, 0.6, 0.7, 0.8],
+        );
+        y += FONT_BASE + SPACE_LG;
+
+        // 4. Optional CTA Button
+        if let (Some(label), Some(on_action)) = (&self.action_label, &self.on_action) {
+            let btn = Button::new(label.clone(), {
+                let cb = on_action.clone();
+                move || cb()
+            })
+            .variant(ButtonVariant::Default);
+
+            let btn_rect = Rect {
+                x: center_x - 80.0,
+                y,
+                width: 160.0,
+                height: 36.0,
+            };
+            btn.render(renderer, btn_rect);
+        }
+    }
+
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
+        use crate::{FONT_BASE, FONT_LG, FONT_3XL, SPACE_LG, SPACE_SM};
+
+        let mut height = 0.0;
+
+        if self.icon.is_some() {
+            height += FONT_3XL + SPACE_SM;
+        }
+
+        let (_, title_h) = renderer.measure_text(&self.title, FONT_LG);
+        height += title_h + SPACE_SM;
+
+        let (_, desc_h) = renderer.measure_text(&self.description, FONT_BASE);
+        height += desc_h + SPACE_LG;
+
+        if self.action_label.is_some() {
+            height += 36.0;
+        }
+
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(300.0),
+            height,
+        }
+    }
+}
+
+
+// --- HatiCarousel ---
+use cvkg_core::layout::SizeProposal;
+use cvkg_core::Size;
+#[derive(Clone)]
+pub struct HatiCarousel<V> {
+    children: Vec<V>,
+    current_index: usize,
+}
+
+impl<V: View> HatiCarousel<V> {
+    pub fn new() -> Self {
+        Self {
+            children: Vec::new(),
+            current_index: 0,
+        }
+    }
+
+    pub fn child(mut self, child: V) -> Self {
+        self.children.push(child);
+        self
+    }
+    
+    pub fn current_index(mut self, idx: usize) -> Self {
+        self.current_index = idx;
+        self
+    }
+}
+
+impl<V: View> Default for HatiCarousel<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<V: View> View for HatiCarousel<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body { unreachable!() }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "HatiCarousel");
+        // Clip children to bounds
+        renderer.push_clip_rect(rect);
+        
+        if let Some(active_child) = self.children.get(self.current_index) {
+            active_child.render(renderer, rect);
+        }
+        
+        renderer.pop_clip_rect();
+        renderer.pop_vnode();
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let mut max_w = 0.0_f32;
+        let mut max_h = 0.0_f32;
+        for c in &self.children {
+            let size = c.intrinsic_size(renderer, proposal);
+            max_w = max_w.max(size.width);
+            max_h = max_h.max(size.height);
+        }
+        Size { width: max_w, height: max_h }
     }
 }

@@ -3,6 +3,7 @@
 //! Idunn the Vanir goddess preserves eternal youth and golden apples of renewal -
 //! this persistence system preserves workspace state and enables session restoration.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -115,7 +116,7 @@ impl View for IdunnPersistence {
             rect.x + 10.0,
             rect.y + 9.0,
             13.0,
-            [0.6, 0.9, 0.6, 1.0],
+            theme::success(),
         );
 
         // Auto-restore indicator
@@ -139,7 +140,7 @@ impl View for IdunnPersistence {
                 rect.x + 10.0,
                 rect.y + 45.0,
                 11.0,
-                [0.7, 0.9, 0.7, 1.0],
+                theme::success(),
             );
             renderer.draw_text(
                 &format!("Workspace: {}", session.workspace_id),
@@ -183,7 +184,7 @@ impl View for IdunnPersistence {
                 rect.x + 20.0,
                 y + 6.0,
                 10.0,
-                [0.7, 0.9, 0.7, 1.0],
+                theme::success(),
             );
             renderer.draw_text(
                 &age_str,

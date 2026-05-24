@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// The AI's visual presence. A pulsating runic orb.
 /// Section 4.2: "Animated artifacts for AI-assisted interfaces."
@@ -12,7 +13,7 @@ impl OracleOrb {
     pub fn new(size: f32) -> Self {
         Self {
             size,
-            color: [0.0, 1.0, 1.0, 1.0], // Cyan
+            color: theme::accent(), // Cyan
             activity: 0.5,
         }
     }

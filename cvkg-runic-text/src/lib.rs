@@ -479,7 +479,7 @@ pub struct GlyphInstance {
     pub cluster: u32,
     /// Whether this glyph is from a RTL run.
     pub is_rtl: bool,
-    /// Cache key for rasterization lookup (font data identity).
+    /// Unique composite cache key for rasterization lookup, incorporating font identity, size, styling, and glyph ID.
     pub cache_key: u64,
 }
 
@@ -929,6 +929,35 @@ impl RunicTextEngine {
         features
     }
 
+    /// Computes a unique cache key for a glyph instance under a specific text style.
+    ///
+    /// # Contract
+    /// Hashes the font identifier, quantized font size, glyph ID, and stylistic attributes
+    /// (weight, stretch, style) into a single deterministic 64-bit unsigned integer to
+    /// prevent texture atlas key collisions while keeping cache size bounded.
+    fn calculate_glyph_cache_key(
+        font_cache_key: u64,
+        font_size: f32,
+        glyph_id: u16,
+        style: &TextStyle,
+    ) -> u64 {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        font_cache_key.hash(&mut hasher);
+        ((font_size * 2.0).round() as u32).hash(&mut hasher);
+        glyph_id.hash(&mut hasher);
+        style.weight.0.hash(&mut hasher);
+        style.stretch.to_number().hash(&mut hasher);
+        let style_discriminant = match style.style {
+            Style::Normal => 0u8,
+            Style::Italic => 1u8,
+            Style::Oblique => 2u8,
+        };
+        style_discriminant.hash(&mut hasher);
+        hasher.finish()
+    }
+
     /// Shape a single run of text.
     fn shape_run(
         &mut self,
@@ -988,6 +1017,13 @@ impl RunicTextEngine {
                 0.0
             };
 
+            let glyph_cache_key = Self::calculate_glyph_cache_key(
+                resolved.cache_key,
+                style.font_size,
+                info.glyph_id as u16,
+                style,
+            );
+
             glyphs.push(GlyphInstance {
                 glyph_id: info.glyph_id as u16,
                 x: x_offset + (pos.x_offset as f32) * scale,
@@ -996,7 +1032,7 @@ impl RunicTextEngine {
                 advance_height: (pos.y_advance as f32) * scale,
                 cluster: info.cluster,
                 is_rtl: direction == Direction::RightToLeft,
-                cache_key: resolved.cache_key,
+                cache_key: glyph_cache_key,
             });
 
             x_offset += advance + style.letter_spacing + letter_space;
@@ -1018,7 +1054,12 @@ impl RunicTextEngine {
             .is_some_and(|c| c.is_ascii_whitespace())
     }
 
-    /// Apply font fallback for glyphs with ID 0 (missing).
+    /// Resolves missing glyphs in primary font by looking up fallback fonts.
+    ///
+    /// # Contract
+    /// Evaluates glyph instances in place. For any glyph with ID 0, queries loaded
+    /// fallback fonts sequentially and overrides the ID, position metrics, and calculates
+    /// a new unique cache key using the fallback font identity if a match is found.
     fn apply_fallbacks(
         &mut self,
         glyphs: &mut [GlyphInstance],
@@ -1060,6 +1101,14 @@ impl RunicTextEngine {
                             glyphs[i].glyph_id = info.glyph_id as u16;
                             glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
                             glyphs[i].y = (pos.y_offset as f32) * scale;
+
+                            let fallback_key = fallback.font_ref().map(|r| r.key.value()).unwrap_or(resolved.cache_key);
+                            glyphs[i].cache_key = Self::calculate_glyph_cache_key(
+                                fallback_key,
+                                style.font_size,
+                                info.glyph_id as u16,
+                                style,
+                            );
                             break;
                         }
                     }
@@ -1612,20 +1661,66 @@ impl RunicTextEngine {
             })
     }
 
-    /// Rasterize a glyph by its cache key (backward-compatible).
+    /// Rasterizes a glyph by lookup using its unique composite cache key.
     ///
-    /// This looks up the glyph from the shape cache and rasterizes it.
-    /// Returns None if the cache key is not found.
+    /// # Contract
+    /// The `cache_key` must match a key generated during text shaping that hashes the
+    /// font data identity, size, styling, and glyph ID. This function resolves the matching
+    /// glyph parameters from the shape cache and rasterizes it at the correct size and weight
+    /// to prevent cache collisions and visual distortion. Returns `None` if no matching shaped
+    /// glyph is present in the cache.
     pub fn rasterize(&mut self, cache_key: u64) -> Option<GlyphImage> {
-        // Find the glyph_id first, then release the borrow
-        let glyph_id = self.cache.values().find_map(|glyphs| {
-            glyphs
-                .iter()
-                .find(|g| g.cache_key == cache_key)
-                .map(|g| g.glyph_id)
-        })?;
-        let style = TextStyle::new("Jupiteroid", 16.0);
-        self.rasterize_glyph(glyph_id, &style).ok()
+        let mut found: Option<(CacheKey, GlyphInstance)> = None;
+        for (ck, glyphs) in &self.cache {
+            if let Some(g) = glyphs.iter().find(|g| g.cache_key == cache_key) {
+                found = Some((*ck, *g));
+                break;
+            }
+        }
+        let (ck, glyph) = found?;
+
+        // Reconstruct font family from the database matching the font_cache_key
+        let mut family = "sans-serif".to_string();
+        let face_ids: Vec<fontdb::ID> = self.db.faces().map(|f| f.id).collect();
+        for id in face_ids {
+            if let Some(font_data) = self.get_font_data(id) {
+                if let Some(font_ref) = font_data.font_ref() {
+                    if font_ref.key.value() == ck.font_cache_key {
+                        if let Some(face) = self.db.face(id) {
+                            if let Some((name, _)) = face.families.first() {
+                                family = name.clone();
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        let mut style = TextStyle::new(&family, ck.font_size as f32 / 2.0);
+        style.weight = Weight(ck.weight);
+        style.stretch = match ck.stretch {
+            1 => Stretch::UltraCondensed,
+            2 => Stretch::ExtraCondensed,
+            3 => Stretch::Condensed,
+            4 => Stretch::SemiCondensed,
+            5 => Stretch::Normal,
+            6 => Stretch::SemiExpanded,
+            7 => Stretch::Expanded,
+            8 => Stretch::ExtraExpanded,
+            9 => Stretch::UltraExpanded,
+            _ => Stretch::Normal,
+        };
+        style.style = match ck.style {
+            0 => Style::Normal,
+            1 => Style::Italic,
+            2 => Style::Oblique,
+            _ => Style::Normal,
+        };
+
+        let mut image = self.rasterize_glyph(glyph.glyph_id, &style).ok()?;
+        image.cache_key = cache_key;
+        Some(image)
     }
 }
 

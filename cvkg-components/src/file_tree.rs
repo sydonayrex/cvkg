@@ -1,4 +1,6 @@
-use cvkg_core::{Event, Never, Rect, Renderer, Size, SizeProposal, View};
+use cvkg_core::{
+Event, Never, Rect, Renderer, Size, SizeProposal, View};
+use crate::theme;
 use std::sync::Arc;
 
 /// Represents the type of a file in the tree.
@@ -132,7 +134,7 @@ impl YggdrasilTree {
                     width: 2.0,
                     height: row_rect.height,
                 },
-                [0.0, 1.0, 1.0, 1.0],
+                theme::accent(),
                 1.0,
             );
         }
@@ -146,7 +148,7 @@ impl YggdrasilTree {
                 height: 12.0,
             };
             renderer.push_vnode(arrow_rect, "ExpansionArrow");
-            let color = [0.6, 0.6, 0.6, 1.0];
+            let color = theme::text_muted();
             if item.is_expanded {
                 // Down arrow
                 renderer.draw_line(
@@ -226,7 +228,7 @@ impl YggdrasilTree {
 
         // 4. Label
         let label_color = if item.is_selected {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         } else {
             [0.9, 0.9, 0.9, 0.8]
         };

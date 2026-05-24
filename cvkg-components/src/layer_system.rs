@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -81,11 +82,11 @@ impl View for LayerSystem {
             let bg = if is_active {
                 [0.1, 0.2, 0.4, 1.0]
             } else {
-                [0.06, 0.06, 0.1, 1.0]
+                theme::input_bg()
             };
             renderer.fill_rounded_rect(layer_rect, 4.0, bg);
             if is_active {
-                renderer.stroke_rounded_rect(layer_rect, 4.0, [0.0, 0.8, 1.0, 1.0], 1.0);
+                renderer.stroke_rounded_rect(layer_rect, 4.0, theme::accent(), 1.0);
             }
 
             // Eye icon for visibility
@@ -95,7 +96,7 @@ impl View for LayerSystem {
                 layer_rect.x + 8.0,
                 layer_rect.y + 10.0,
                 12.0,
-                [0.6, 0.8, 1.0, 1.0],
+                theme::info(),
             );
 
             // Layer name
@@ -104,7 +105,7 @@ impl View for LayerSystem {
                 layer_rect.x + 32.0,
                 layer_rect.y + 10.0,
                 12.0,
-                [0.8, 0.8, 0.9, 1.0],
+                theme::text(),
             );
 
             // Lock icon

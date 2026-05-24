@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 use std::sync::Arc;
 
 /// ToastKind - The severity / category of a toast notification.
@@ -17,10 +18,10 @@ impl ToastKind {
     /// Returns the RGBA accent color associated with this toast kind.
     fn color(self) -> [f32; 4] {
         match self {
-            ToastKind::Info => [0.0, 0.8, 1.0, 1.0],
-            ToastKind::Warning => [1.0, 0.6, 0.0, 1.0],
-            ToastKind::Error => [1.0, 0.2, 0.2, 1.0],
-            ToastKind::Success => [0.0, 0.8, 0.4, 1.0],
+            ToastKind::Info => theme::accent(),
+            ToastKind::Warning => theme::warning(),
+            ToastKind::Error => theme::error_color(),
+            ToastKind::Success => theme::toast_success(),
         }
     }
 }
@@ -95,12 +96,26 @@ impl Toast {
 /// The manager handles creation, dismissal, auto-expiry, and rendering
 /// of all active toasts.
 ///
+/// The manager is `Clone` and can be stored directly as application state.
+/// The dismiss callback is shared via `Arc`, so cloning the manager
+/// preserves the callback wiring.
+///
 /// # Example
 /// ```
 /// use cvkg_components::toast::{ToastManager, ToastKind};
 /// let mut manager = ToastManager::new();
 /// manager.success("Saved", "Your changes have been saved.");
 /// manager.error("Failed", "Could not connect to server.");
+/// ```
+///
+/// # Example with dismiss callback
+/// ```
+/// use cvkg_components::toast::{ToastManager, ToastKind};
+/// use std::sync::{Arc, Mutex};
+/// let manager = ToastManager::new()
+///     .with_dismiss_callback(|id| {
+///         println!("Toast {} dismissed", id);
+///     });
 /// ```
 #[derive(Clone)]
 pub struct ToastManager {
@@ -110,6 +125,11 @@ pub struct ToastManager {
     pub next_id: u64,
     /// Maximum number of toasts visible at once. Older toasts are removed first.
     pub max_visible: usize,
+    /// Optional callback invoked when a toast is dismissed (via close button
+    /// or any other UI interaction). The toast's unique ID is passed as the
+    /// argument. Applications should use this or `with_dismiss_callback` to
+    /// wire dismissal into their state management system.
+    pub on_dismiss: Option<Arc<dyn Fn(u64) + Send + Sync>>,
 }
 
 impl ToastManager {
@@ -119,12 +139,39 @@ impl ToastManager {
             toasts: Vec::new(),
             next_id: 0,
             max_visible: 5,
+            on_dismiss: None,
         }
     }
 
     /// Sets the maximum number of simultaneously visible toasts.
     pub fn max_visible(mut self, max: usize) -> Self {
         self.max_visible = max;
+        self
+    }
+
+    /// Sets a callback to be invoked when a toast is dismissed via the close
+    /// button. The callback receives the dismissed toast's unique ID.
+    ///
+    /// The callback is stored inside an `Arc`, so it is shared across clones
+    /// of the manager. This makes it easy to use `ToastManager` as application
+    /// state: clone it, pass a clone into your render tree, and the callback
+    /// will still fire correctly when a user clicks a close button.
+    ///
+    /// # Example
+    /// ```
+    /// use cvkg_components::toast::ToastManager;
+    /// use std::sync::Mutex;
+    /// let mut dismissed = Vec::new();
+    /// let manager = ToastManager::new()
+    ///     .with_dismiss_callback(move |id| {
+    ///         dismissed.push(id);
+    ///     });
+    /// ```
+    pub fn with_dismiss_callback<F>(mut self, callback: F) -> Self
+    where
+        F: Fn(u64) + Send + Sync + 'static,
+    {
+        self.on_dismiss = Some(Arc::new(callback));
         self
     }
 
@@ -369,7 +416,7 @@ impl ToastManager {
 
         // Draw X as two crossed lines
         let half = CLOSE_BUTTON_SIZE / 2.0 - 2.0;
-        let close_color = [1.0, 1.0, 1.0, 0.5];
+        let close_color = theme::text_dim();
         renderer.draw_line(
             close_center_x - half,
             close_center_y - half,
@@ -422,38 +469,63 @@ impl ToastManager {
     }
 
     /// Returns a callback that dismisses a toast by ID.
-    /// Note: Since ToastManager::render takes &self, the actual dismissal
-    /// must be handled by the application's state management. This callback
-    /// is a placeholder that applications should wire into their state system.
-    fn dismiss_callback(&self, _id: u64) -> Arc<dyn Fn() + Send + Sync> {
-        Arc::new(|| {
-            // The actual dismissal is handled externally via ToastManager::dismiss(id).
-            // Applications should connect this to their state management system.
-            // The close button handler triggers a pointerclick event that the
-            // application can intercept to call dismiss.
-        })
+    ///
+    /// If a dismiss callback was registered via `with_dismiss_callback`, the
+    /// returned closure will invoke it with the toast's unique ID. If no
+    /// callback was registered, the returned closure is a no-op.
+    fn dismiss_callback(&self, id: u64) -> Arc<dyn Fn() + Send + Sync> {
+        match &self.on_dismiss {
+            Some(cb) => {
+                let cb = Arc::clone(cb);
+                Arc::new(move || cb(id))
+            }
+            None => Arc::new(|| {}),
+        }
     }
 }
 
-/// Convenience functions for creating toast managers with callbacks.
+/// Convenience function to push a toast notification onto a manager.
 ///
-/// These free functions allow applications to wire toast dismissal
-/// into their state management system.
-pub mod helpers {
-    use super::*;
+/// This is a free function alternative to the `info`, `success`, `warning`,
+/// `error`, and `persistent` methods on `ToastManager`, allowing applications
+/// to add toasts with a specific `ToastKind` without needing a method
+/// for that exact kind.
+///
+/// # Example
+/// ```
+/// use cvkg_components::toast::{ToastManager, ToastKind, push_toast};
+/// let mut manager = ToastManager::new();
+/// push_toast(&mut manager, "Hello", "World", ToastKind::Info);
+/// assert_eq!(manager.len(), 1);
+/// ```
+pub fn push_toast(manager: &mut ToastManager, title: &str, message: &str, kind: ToastKind) {
+    let duration = match kind {
+        ToastKind::Info => 4.0,
+        ToastKind::Success => 3.0,
+        ToastKind::Warning => 5.0,
+        ToastKind::Error => 6.0,
+    };
+    manager.add_toast(title, message, kind, duration);
+}
 
-    /// Creates a ToastManager with a dismissal callback that is invoked
-    /// whenever a toast's close button is clicked.
-    pub fn toast_manager_with_dismiss<F>(manager: ToastManager, on_dismiss: F) -> ToastManager
-    where
-        F: Fn(u64) + Send + Sync + 'static,
-    {
-        // Store the callback for later use during rendering.
-        // The manager itself doesn't hold callbacks; instead, the application
-        // should handle Event::PointerClick events and call manager.dismiss(id).
-        let _ = on_dismiss;
-        manager
-    }
+/// Convenience function to push a persistent toast notification onto a
+/// manager. Persistent toasts do not auto-dismiss and must be removed
+/// via `ToastManager::dismiss()`.
+///
+/// # Example
+/// ```
+/// use cvkg_components::toast::{ToastManager, ToastKind, push_persistent_toast};
+/// let mut manager = ToastManager::new();
+/// push_persistent_toast(&mut manager, "Action Required", "Please save your work.", ToastKind::Warning);
+/// assert_eq!(manager.len(), 1);
+/// ```
+pub fn push_persistent_toast(
+    manager: &mut ToastManager,
+    title: &str,
+    message: &str,
+    kind: ToastKind,
+) {
+    manager.persistent(title, message, kind);
 }
 
 #[cfg(test)]
@@ -462,10 +534,10 @@ mod tests {
 
     #[test]
     fn test_toast_kind_colors() {
-        assert_eq!(ToastKind::Info.color(), [0.0, 0.8, 1.0, 1.0]);
-        assert_eq!(ToastKind::Warning.color(), [1.0, 0.6, 0.0, 1.0]);
-        assert_eq!(ToastKind::Error.color(), [1.0, 0.2, 0.2, 1.0]);
-        assert_eq!(ToastKind::Success.color(), [0.0, 0.8, 0.4, 1.0]);
+        assert_eq!(ToastKind::Info.color(), theme::accent());
+        assert_eq!(ToastKind::Warning.color(), theme::warning());
+        assert_eq!(ToastKind::Error.color(), theme::error_color());
+        assert_eq!(ToastKind::Success.color(), theme::toast_success());
     }
 
     #[test]
@@ -560,5 +632,72 @@ mod tests {
         manager.success("E", "F");
         let ids: Vec<u64> = manager.toasts.iter().map(|t| t.id).collect();
         assert_eq!(ids, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn test_with_dismiss_callback_is_stored() {
+        let manager = ToastManager::new().with_dismiss_callback(move |_| {});
+        assert!(manager.on_dismiss.is_some());
+    }
+
+    #[test]
+    fn test_dismiss_callback_invokes_stored_callback() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let received = Arc::new(AtomicU64::new(u64::MAX));
+        let received_clone = Arc::clone(&received);
+        let manager = ToastManager::new().with_dismiss_callback(move |id| {
+            received_clone.store(id, Ordering::SeqCst);
+        });
+        let cb = manager.dismiss_callback(42);
+        cb();
+        assert_eq!(received.load(Ordering::SeqCst), 42);
+    }
+
+    #[test]
+    fn test_dismiss_callback_no_callback_is_noop() {
+        let manager = ToastManager::new();
+        let cb = manager.dismiss_callback(99);
+        // Should not panic, just a no-op
+        cb();
+        assert!(manager.on_dismiss.is_none());
+    }
+
+    #[test]
+    fn test_manager_clone_preserves_callback() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        let received = Arc::new(AtomicU64::new(u64::MAX));
+        let received_clone = Arc::clone(&received);
+        let manager = ToastManager::new().with_dismiss_callback(move |id| {
+            received_clone.store(id, Ordering::SeqCst);
+        });
+        let cloned = manager.clone();
+        let cb = cloned.dismiss_callback(7);
+        cb();
+        assert_eq!(received.load(Ordering::SeqCst), 7);
+    }
+
+    #[test]
+    fn test_push_toast_convenience() {
+        let mut manager = ToastManager::new();
+        push_toast(&mut manager, "Hello", "World", ToastKind::Info);
+        assert_eq!(manager.len(), 1);
+        assert_eq!(manager.toasts[0].title, "Hello");
+        assert_eq!(manager.toasts[0].message, "World");
+        assert_eq!(manager.toasts[0].kind, ToastKind::Info);
+        assert_eq!(manager.toasts[0].duration, 4.0);
+    }
+
+    #[test]
+    fn test_push_persistent_toast_convenience() {
+        let mut manager = ToastManager::new();
+        push_persistent_toast(
+            &mut manager,
+            "Save",
+            "Please save your work.",
+            ToastKind::Warning,
+        );
+        assert_eq!(manager.len(), 1);
+        assert_eq!(manager.toasts[0].title, "Save");
+        assert_eq!(manager.toasts[0].duration, 0.0);
     }
 }

@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// Text alignment options for RichText.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,7 +128,7 @@ impl RichText {
             align: TextAlign::Left,
             line_height: 20.0,
             text_size: 14.0,
-            text_color: [1.0, 1.0, 1.0, 1.0],
+            text_color: theme::text(),
             wrap: true,
             wrap_line_gap: 2.0,
         }
@@ -151,7 +152,7 @@ impl RichText {
         self
     }
 
-    /// Set the default text color. Default is white `[1.0, 1.0, 1.0, 1.0]`.
+    /// Set the default text color. Default is white `theme::text()`.
     pub fn text_color(mut self, color: [f32; 4]) -> Self {
         self.text_color = color;
         self
@@ -460,7 +461,7 @@ impl View for RichText {
                     );
                     let (cw, _ch) = renderer.measure_text(c, self.text_size - 2.0);
                     let x = self.aligned_x(rect.x + 5.0, rect.width - 10.0, cw, self.align);
-                    renderer.draw_text(c, x, y + 4.0, self.text_size - 2.0, [0.0, 1.0, 0.0, 1.0]);
+                    renderer.draw_text(c, x, y + 4.0, self.text_size - 2.0, theme::success());
                     y += code_h + 5.0;
                 }
                 RichTextSegment::Image {
@@ -571,10 +572,10 @@ mod tests {
         let seg = RichTextSegment::Text {
             content: "red".to_string(),
             style: TextStyle::default(),
-            color: Some([1.0, 0.0, 0.0, 1.0]),
+            color: Some(theme::error_color()),
             align: None,
         };
-        assert_eq!(seg.color(), Some([1.0, 0.0, 0.0, 1.0]));
+        assert_eq!(seg.color(), Some(theme::error_color()));
     }
 
     #[test]
@@ -617,7 +618,7 @@ mod tests {
             .bold("bold text")
             .italic("italic text")
             .underline("underlined")
-            .color("red text", [1.0, 0.0, 0.0, 1.0])
+            .color("red text", theme::error_color())
             .aligned("right", TextAlign::Right)
             .styled("styled", true, true, true, [0.5, 0.5, 0.5, 1.0])
             .code("code")

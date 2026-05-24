@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// A code editor with runic syntax highlighting.
 /// Section 4.3: "Scriptorium components for runic logic definition."
@@ -25,7 +26,7 @@ impl View for RunestoneEditor {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // 1. Etched Stone Background
         renderer.fill_rect(rect, [0.03, 0.03, 0.05, 1.0]);
-        renderer.stroke_rect(rect, [0.2, 0.2, 0.3, 1.0], 1.0);
+        renderer.stroke_rect(rect, theme::border_strong(), 1.0);
 
         // 2. Line Numbers (Gutter)
         let gutter_width = 40.0;
@@ -35,7 +36,7 @@ impl View for RunestoneEditor {
             width: gutter_width,
             height: rect.height,
         };
-        renderer.fill_rect(gutter_rect, [0.05, 0.05, 0.08, 1.0]);
+        renderer.fill_rect(gutter_rect, theme::surface());
 
         let lines: Vec<&str> = self.text.lines().collect();
         for (i, _) in lines.iter().enumerate() {
@@ -44,7 +45,7 @@ impl View for RunestoneEditor {
                 rect.x + 10.0,
                 rect.y + 20.0 + (i as f32 * 20.0),
                 12.0,
-                [0.4, 0.4, 0.5, 1.0],
+                theme::text_muted(),
             );
         }
 
@@ -56,9 +57,9 @@ impl View for RunestoneEditor {
             // Simple word-based highlighting
             for word in line.split_whitespace() {
                 let color = match word {
-                    "fn" | "let" | "pub" | "use" => [1.0, 0.6, 0.0, 1.0], // Gold keywords
-                    "rune" | "spell" | "incantation" => [0.0, 1.0, 1.0, 1.0], // Cyan "magic" types
-                    _ => [0.8, 0.8, 0.9, 1.0],                            // White text
+                    "fn" | "let" | "pub" | "use" => theme::warning(), // Gold keywords
+                    "rune" | "spell" | "incantation" => theme::accent(), // Cyan "magic" types
+                    _ => theme::text(),                            // White text
                 };
 
                 renderer.draw_text(word, current_x, y, 14.0, color);
@@ -77,7 +78,7 @@ impl View for RunestoneEditor {
                 cursor_y,
                 cursor_x,
                 cursor_y + 16.0,
-                [1.0, 0.5, 0.0, 1.0],
+                theme::warning(),
                 2.0,
             );
         }

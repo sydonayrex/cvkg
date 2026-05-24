@@ -1,5 +1,6 @@
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
+use crate::theme;
 
 /// Validation rules that can be applied to form fields.
 #[derive(Clone, Debug)]
@@ -130,7 +131,7 @@ impl<V: View> View for FormField<V> {
         let content_height = rect.height - label_height - error_height;
 
         // --- Label ---
-        let label_color = [0.85, 0.85, 0.9, 1.0];
+        let label_color = theme::text();
         renderer.draw_text(&self.label, rect.x, rect.y + 2.0, 13.0, label_color);
 
         // Red asterisk for required fields
@@ -141,7 +142,7 @@ impl<V: View> View for FormField<V> {
                 rect.x + label_w + 4.0,
                 rect.y + 2.0,
                 13.0,
-                [1.0, 0.2, 0.2, 1.0],
+                theme::error_color(),
             );
         }
 
@@ -155,7 +156,7 @@ impl<V: View> View for FormField<V> {
 
         // If invalid and dirty, draw a red border behind the content
         if !self.is_valid && self.is_dirty {
-            renderer.stroke_rounded_rect(content_rect, 4.0, [1.0, 0.2, 0.2, 1.0], 1.5);
+            renderer.stroke_rounded_rect(content_rect, 4.0, theme::error_color(), 1.5);
         }
 
         self.content.render(renderer, content_rect);
@@ -169,7 +170,7 @@ impl<V: View> View for FormField<V> {
                 rect.x,
                 content_top + content_height + 2.0,
                 11.0,
-                [1.0, 0.2, 0.2, 1.0],
+                theme::error_color(),
             );
         }
 

@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 use std::time::Duration;
 
 /// RunestoneDecoder - A text component that "deciphers" ancient runes into digital text.
@@ -58,7 +59,7 @@ impl View for RunestoneDecoder {
             }
         }
 
-        let color = [0.0, 1.0, 1.0, 1.0]; // Cyan deciphering glow
+        let color = theme::accent(); // Cyan deciphering glow
         renderer.draw_text(
             &display_text,
             rect.x,

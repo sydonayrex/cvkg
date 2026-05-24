@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -45,7 +46,7 @@ impl View for DatePicker {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let bg = [0.08, 0.08, 0.12, 1.0];
+        let bg = theme::surface_elevated();
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let text = match self.selected_date {
@@ -59,7 +60,7 @@ impl View for DatePicker {
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - 14.0) / 2.0,
             13.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
 
         // Calendar icon
@@ -68,7 +69,7 @@ impl View for DatePicker {
             rect.x + 8.0,
             rect.y + 10.0,
             14.0,
-            [0.6, 0.8, 1.0, 1.0],
+            theme::info(),
         );
     }
 }
@@ -132,7 +133,7 @@ impl View for TimePicker {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let bg = [0.08, 0.08, 0.12, 1.0];
+        let bg = theme::surface_elevated();
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let text = match self.selected_time {
@@ -146,7 +147,7 @@ impl View for TimePicker {
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - 14.0) / 2.0,
             13.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
 
         renderer.draw_text(
@@ -154,7 +155,7 @@ impl View for TimePicker {
             rect.x + 8.0,
             rect.y + 10.0,
             14.0,
-            [0.6, 0.8, 1.0, 1.0],
+            theme::info(),
         );
     }
 }
@@ -253,7 +254,7 @@ impl View for Calendar {
                 day_rect.x + 4.0,
                 day_rect.y + 6.0,
                 11.0,
-                [0.5, 0.5, 0.6, 1.0],
+                theme::text_muted(),
             );
         }
 
@@ -266,13 +267,13 @@ impl View for Calendar {
                 width: grid_w,
                 height: 32.0,
             };
-            renderer.fill_rounded_rect(day_rect, 4.0, [0.06, 0.06, 0.1, 1.0]);
+            renderer.fill_rounded_rect(day_rect, 4.0, theme::input_bg());
             renderer.draw_text(
                 &i.to_string(),
                 day_rect.x + 4.0,
                 day_rect.y + 10.0,
                 12.0,
-                [0.7, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
         }
     }
@@ -344,7 +345,7 @@ impl View for Autocomplete {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let bg = [0.08, 0.08, 0.12, 1.0];
+        let bg = theme::surface_elevated();
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let (_tw, _) = renderer.measure_text(&self.text, 13.0);
@@ -353,7 +354,7 @@ impl View for Autocomplete {
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             13.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
 
         // Show matching suggestions
@@ -452,7 +453,7 @@ impl View for Combobox {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let bg = [0.08, 0.08, 0.12, 1.0];
+        let bg = theme::surface_elevated();
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let display = match &self.selected {
@@ -465,14 +466,14 @@ impl View for Combobox {
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             13.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
         renderer.draw_text(
             "▼",
             rect.x + rect.width - 20.0,
             rect.y + 10.0,
             12.0,
-            [0.5, 0.5, 0.6, 1.0],
+            theme::text_muted(),
         );
     }
 }
@@ -536,7 +537,7 @@ impl View for MultiSelect {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let bg = [0.08, 0.08, 0.12, 1.0];
+        let bg = theme::surface_elevated();
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let selected_display: Vec<_> = self
@@ -557,7 +558,7 @@ impl View for MultiSelect {
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             12.0,
-            [0.8, 0.8, 0.9, 1.0],
+            theme::text(),
         );
     }
 }
@@ -616,7 +617,7 @@ impl View for TagInput {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let bg = [0.08, 0.08, 0.12, 1.0];
+        let bg = theme::surface_elevated();
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let mut current_x = rect.x + 8.0;

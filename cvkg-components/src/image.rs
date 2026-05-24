@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// Static image view
 pub struct Image {
@@ -58,7 +59,7 @@ impl<P: View> View for AsyncImage<P> {
             }
             cvkg_core::AssetState::Error(msg) => {
                 // For now, draw a red border to indicate error
-                renderer.stroke_rect(rect, [1.0, 0.0, 0.0, 1.0], 2.0);
+                renderer.stroke_rect(rect, theme::error_color(), 2.0);
                 log::error!("AsyncImage error loading {}: {}", self.url, msg);
             }
         }
@@ -127,7 +128,7 @@ impl View for Avatar {
         };
 
         // Draw circular background/border
-        renderer.fill_ellipse(avatar_rect, [0.15, 0.15, 0.2, 1.0]);
+        renderer.fill_ellipse(avatar_rect, theme::surface_elevated());
         renderer.stroke_ellipse(avatar_rect, [0.0, 0.8, 1.0, 0.5], 1.5);
 
         if let Some(src) = &self.src {
@@ -140,7 +141,7 @@ impl View for Avatar {
                 avatar_rect.x + (dim - tw) / 2.0,
                 avatar_rect.y + (dim - th) / 2.0,
                 dim * 0.4,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
         }
     }

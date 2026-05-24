@@ -1,4 +1,5 @@
 use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
 
 /// A high-fidelity tactical data display.
 /// Section 4.9: "The Threads of Fate (Wyrd) — Precision telemetry readouts."
@@ -50,7 +51,7 @@ impl View for WyrdHUD {
 
         // 2. Corner 'Tracking' Brackets
         let b = 15.0;
-        let c = [0.0, 1.0, 1.0, 0.6];
+        let c = theme::focus_ring();
         renderer.draw_line(rect.x, rect.y, rect.x + b, rect.y, c, 1.0);
         renderer.draw_line(rect.x, rect.y, rect.x, rect.y + b, c, 1.0);
         renderer.draw_line(
@@ -76,7 +77,7 @@ impl View for WyrdHUD {
             rect.x + 10.0,
             rect.y + 25.0,
             18.0,
-            [1.0, 0.8, 0.0, 1.0],
+            theme::warning(),
         );
         renderer.draw_line(
             rect.x + 10.0,
@@ -92,7 +93,7 @@ impl View for WyrdHUD {
             let y = rect.y + 60.0 + (i as f32 * 25.0);
 
             // Key (Runic style label)
-            renderer.draw_text(k, rect.x + 10.0, y, 12.0, [0.6, 0.6, 0.7, 1.0]);
+            renderer.draw_text(k, rect.x + 10.0, y, 12.0, theme::text_muted());
 
             // Value (Glow)
             let val_color = [0.0, 1.0, 1.0, 0.9];

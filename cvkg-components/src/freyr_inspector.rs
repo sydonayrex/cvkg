@@ -3,6 +3,7 @@
 //! The Vanir god Freyr governs prosperity and possessions - this inspector
 //! manages properties and attributes of UI components.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -128,7 +129,7 @@ impl View for FreyrInspector {
                 prop_rect.x + 100.0,
                 prop_rect.y + 8.0,
                 11.0,
-                [0.6, 0.8, 1.0, 1.0],
+                theme::info(),
             );
             current_y += row_h;
         }

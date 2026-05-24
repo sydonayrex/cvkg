@@ -2154,6 +2154,15 @@ pub trait Renderer: ElapsedTime + Send {
     fn get_debug_layout(&self) -> bool {
         false
     }
+
+    // ── Material Routing ─────────────────────────────────────────────────
+    /// Set the active material for subsequent draw calls.
+    /// Controls which pass a draw call is routed to in the multi-pass pipeline.
+    fn set_material(&mut self, _material: crate::material::DrawMaterial) {}
+    /// Return the currently active material (defaults to Opaque).
+    fn current_material(&self) -> crate::material::DrawMaterial {
+        crate::material::DrawMaterial::Opaque
+    }
 }
 
 /// Utility for accessibility compliance (WCAG 2.1).
@@ -3055,7 +3064,33 @@ impl StyleResolver {
         let is_dark = appearance == Appearance::Dark;
         tokens.get(category, key, is_dark)
     }
+    /// Resolve a color from the current environment as a [f32; 4] RGBA array.
+    /// Returns the color value for the current appearance (light/dark).
+    /// Falls back to magenta (#FF00FF) if the key is not found.
+    pub fn color_array(key: &str) -> [f32; 4] {
+        let hex = Self::color(key);
+        parse_hex_color(&hex)
+    }
 }
+
+/// Parse a hex color string (#RRGGBB or #RRGGBBAA) into [f32; 4] RGBA.
+fn parse_hex_color(hex: &str) -> [f32; 4] {
+    let hex = hex.trim_start_matches('#');
+    if hex.len() >= 6 {
+        let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(255) as f32 / 255.0;
+        let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(0) as f32 / 255.0;
+        let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(255) as f32 / 255.0;
+        let a = if hex.len() >= 8 {
+            u8::from_str_radix(&hex[6..8], 16).unwrap_or(255) as f32 / 255.0
+        } else {
+            1.0
+        };
+        [r, g, b, a]
+    } else {
+        [1.0, 0.0, 1.0, 1.0] // Magenta fallback
+    }
+}
+
 /// The authoritative Cyberpunk Viking default tokens
 pub fn default_tokens() -> YggdrasilTokens {
     let mut tokens = YggdrasilTokens::new();
@@ -3090,6 +3125,133 @@ pub fn default_tokens() -> YggdrasilTokens {
         TokenValue::Adaptive {
             light: "#000000".to_string(),
             dark: "#FFFFFF".to_string(),
+        },
+    );
+    // Semantic component tokens
+    tokens.color.insert(
+        "surface_elevated".to_string(),
+        TokenValue::Adaptive {
+            light: "#FFFFFF".to_string(),
+            dark: "#1A1A24".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "surface_overlay".to_string(),
+        TokenValue::Adaptive {
+            light: "#FFFFFF".to_string(),
+            dark: "#1E1E2E".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "border".to_string(),
+        TokenValue::Adaptive {
+            light: "#D0D0D8".to_string(),
+            dark: "#2A2A3A".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "border_strong".to_string(),
+        TokenValue::Adaptive {
+            light: "#A0A0B0".to_string(),
+            dark: "#3A3A50".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "text_muted".to_string(),
+        TokenValue::Adaptive {
+            light: "#606070".to_string(),
+            dark: "#8080A0".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "text_dim".to_string(),
+        TokenValue::Adaptive {
+            light: "#9090A0".to_string(),
+            dark: "#505070".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "accent".to_string(),
+        TokenValue::Single {
+            value: "#00FFFF".to_string(), // NiflCyan
+        },
+    );
+    tokens.color.insert(
+        "accent_hover".to_string(),
+        TokenValue::Single {
+            value: "#33FFFF".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "success".to_string(),
+        TokenValue::Single {
+            value: "#00E676".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "warning".to_string(),
+        TokenValue::Single {
+            value: "#FFB300".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "error".to_string(),
+        TokenValue::Single {
+            value: "#FF5252".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "info".to_string(),
+        TokenValue::Single {
+            value: "#448AFF".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "hover".to_string(),
+        TokenValue::Adaptive {
+            light: "#F0F0F5".to_string(),
+            dark: "#252535".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "active".to_string(),
+        TokenValue::Adaptive {
+            light: "#E0E0EB".to_string(),
+            dark: "#303045".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "disabled".to_string(),
+        TokenValue::Adaptive {
+            light: "#E8E8F0".to_string(),
+            dark: "#1A1A28".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "disabled_text".to_string(),
+        TokenValue::Adaptive {
+            light: "#B0B0C0".to_string(),
+            dark: "#404060".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "focus_ring".to_string(),
+        TokenValue::Single {
+            value: "#00FFFF".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "shadow".to_string(),
+        TokenValue::Adaptive {
+            light: "#00000020".to_string(),
+            dark: "#00000060".to_string(),
+        },
+    );
+    tokens.color.insert(
+        "code_bg".to_string(),
+        TokenValue::Adaptive {
+            light: "#F5F5FA".to_string(),
+            dark: "#0D0D18".to_string(),
         },
     );
     // Bifrost (Glassmorphism) - Frosted Style
@@ -3734,6 +3896,7 @@ pub mod scene_graph;
 pub mod sdf_shadow;
 
 pub use scene_graph::{NodeId, bifrost_registry};
+pub use material::DrawMaterial;
 
 // Duplicate AssetState removed - original definition at line 67
 
@@ -3836,6 +3999,22 @@ pub enum Event {
         y: f32,
         touch_id: u64,
     },
+    /// Touch cancelled.
+    TouchCancel {
+        touch_id: u64,
+    },
+    /// Multi-touch pinch gesture.
+    GesturePinch {
+        scale: f32,
+        velocity: f32,
+    },
+    /// Multi-touch swipe/pan gesture.
+    GestureSwipe {
+        dx: f32,
+        dy: f32,
+        velocity_x: f32,
+        velocity_y: f32,
+    },
 }
 
 impl Event {
@@ -3864,6 +4043,9 @@ impl Event {
             Self::TouchStart { .. } => "touchstart",
             Self::TouchMove { .. } => "touchmove",
             Self::TouchEnd { .. } => "touchend",
+            Self::TouchCancel { .. } => "touchcancel",
+            Self::GesturePinch { .. } => "gesturepinch",
+            Self::GestureSwipe { .. } => "gestureswipe",
         }
     }
 }
