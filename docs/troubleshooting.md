@@ -40,7 +40,7 @@ This guide provides diagnostics, symptoms, and resolution procedures for common 
   ```
   Ensure only **one** backend feature is selected in your final manifest:
   ```toml
-  cvkg = { version = "0.1.20", features = ["native"] }
+  cvkg = { version = "0.1.21", features = ["native"] }
   ```
 
 ---

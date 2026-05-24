@@ -355,8 +355,8 @@ pub struct SurtrRenderer {
     // Debugging
     _debug_layout: bool,
 
-    // Transform Stack
-    transform_stack: Vec<([f32; 2], [f32; 2], f32)>,
+    // Transform Stack — stores full affine matrices for correct SVG transform composition.
+    transform_stack: Vec<glam::Mat3>,
     /// Whether a redraw has been requested for the next frame.
     pub redraw_requested: bool,
 
@@ -2337,7 +2337,7 @@ impl SurtrRenderer {
             let px = points[i][0];
             let py = points[i][1];
 
-            let (translation, scale_transform, rotation) = self.get_current_transform();
+            let (translation, scale_transform, rotation, _, _) = self.current_transform();
             self.vertices.push(Vertex {
                 position: [px, py, 0.0],
                 normal: [0.0, 0.0, 1.0],
@@ -2481,7 +2481,7 @@ impl SurtrRenderer {
         });
         let clip = [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height];
 
-        let (translation, scale_transform, rotation) = self.get_current_transform();
+        let (translation, scale_transform, rotation, _, _) = self.current_transform();
 
         let tex_index = texture_id.unwrap_or(0);
 
@@ -3970,27 +3970,44 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
-        let (current_t, current_s, current_r) =
-            self.transform_stack
-                .last()
-                .copied()
-                .unwrap_or(([0.0, 0.0], [1.0, 1.0], 0.0));
+        // Build a 2D affine matrix: T * R * S
+        // col0 = (cos*sx, sin*sx, 0)
+        // col1 = (-sin*sy, cos*sy, 0)
+        // col2 = (tx, ty, 1)
+        let c = rotation.cos();
+        let sn = rotation.sin();
+        let affine = glam::Mat3::from_cols(
+            glam::Vec3::new(c * scale[0], sn * scale[0], 0.0),
+            glam::Vec3::new(-sn * scale[1], c * scale[1], 0.0),
+            glam::Vec3::new(translation[0], translation[1], 1.0),
+        );
 
-        // Combine transforms (simplified: this doesn't handle full matrix multiplication yet,
-        // but for basic UI nesting it's often sufficient to just add translation and multiply scale).
-        // A full implementation would use mat3x3.
-        let new_t = [
-            current_t[0] + translation[0] * current_s[0],
-            current_t[1] + translation[1] * current_s[1],
-        ];
-        let new_s = [current_s[0] * scale[0], current_s[1] * scale[1]];
-        let new_r = current_r + rotation;
-
-        self.transform_stack.push((new_t, new_s, new_r));
+        let parent = self.transform_stack.last().copied().unwrap_or(glam::Mat3::IDENTITY);
+        self.transform_stack.push(parent * affine);
     }
 
     fn pop_transform(&mut self) {
         self.transform_stack.pop();
+    }
+
+    /// Compute per-vertex transform values from the current matrix.
+    /// Extracts translation, scale, rotation, and skew from the affine matrix
+    /// so the existing vertex shader fields still work correctly.
+    fn current_transform(&self) -> ([f32; 2], [f32; 2], f32, f32, f32) {
+        // Returns (translation, scale, rotation, skew_x, skew_y)
+        let m = self.transform_stack.last().copied().unwrap_or(glam::Mat3::IDENTITY);
+        let t = [m.z.x, m.z.y];
+        // Extract scale and rotation from the 2x2 submatrix
+        let a = m.x.x;
+        let b = m.x.y;
+        let c = m.y.x;
+        let d = m.y.y;
+        let sx = (a * a + b * b).sqrt();
+        let sy = (c * c + d * d).sqrt();
+        let rotation = b.atan2(a);
+        // Skew: the angle between the basis vectors minus 90 degrees
+        let skew_x = (a * c + b * d) / (sx * sy); // sin(skew)
+        (t, [sx, sy], rotation, skew_x, 0.0)
     }
 
     fn set_theme(&mut self, theme: ColorTheme) {
@@ -4107,7 +4124,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let pos = transform.transform_point3(glam::Vec3::from(mesh.vertices[i]));
             let norm = transform.transform_vector3(glam::Vec3::from(mesh.normals[i]));
 
-            let (translation, scale_transform, rotation) = self.get_current_transform();
+            let (translation, scale_transform, rotation, _, _) = self.current_transform();
             self.vertices.push(Vertex {
                 position: pos.to_array(),
                 normal: norm.to_array(),
@@ -4238,15 +4255,6 @@ fn usvg_to_lyon(path: &usvg::Path) -> lyon::path::Path {
         }
     }
     builder.build()
-}
-
-impl SurtrRenderer {
-    fn get_current_transform(&self) -> ([f32; 2], [f32; 2], f32) {
-        self.transform_stack
-            .last()
-            .cloned()
-            .unwrap_or(([0.0, 0.0], [1.0, 1.0], 0.0))
-    }
 }
 
 struct SceneVertexConstructor {

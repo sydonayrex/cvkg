@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "berserker"
-version = "0.1.21"
+version = "0.1.22"
 build = false
 autolib = false
 autobins = false
@@ -34,11 +34,11 @@ name = "berserker"
 path = "src/main.rs"
 
 [dependencies.cvkg]
-version = "0.1.21"
+version = "0.1.22"
 features = ["native"]
 
 [dependencies.cvkg-core]
-version = "0.1.21"
+version = "0.1.22"
 
 [dependencies.env_logger]
 version = "0.10"
