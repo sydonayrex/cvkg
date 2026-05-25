@@ -1,0 +1,16 @@
+[package]
+name = "cvkg-svg-filters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "WGPU-based SVG filter primitives for CVKG"
+
+[dependencies]
+wgpu.workspace = true
+bytemuck.workspace = true
+thiserror.workspace = true
+log.workspace = true
+usvg.workspace = true
+
+[dev-dependencies]
+strict-num = "0.1"

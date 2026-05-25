@@ -2148,6 +2148,23 @@ pub trait Renderer: ElapsedTime + Send {
     fn load_svg(&mut self, _name: &str, _svg_data: &[u8]) {}
     /// Draw a pre-loaded SVG model.
     fn draw_svg(&mut self, _name: &str, _rect: Rect) {}
+    /// Serialize a pre-loaded SVG model back to SVG XML markup.
+    /// Returns the serialized SVG string, or an error if the model is not loaded
+    /// or serialization is not supported by this renderer.
+    fn serialize_svg(&mut self, _name: &str) -> Result<String, String> {
+        Err("SVG serialization not supported by this renderer".into())
+    }
+    /// Apply an SVG filter to a pre-loaded SVG model by filter element ID.
+    /// The filter is evaluated and the result composited back into the SVG.
+    /// Returns the filtered SVG as XML, or an error if not supported.
+    fn apply_svg_filter(
+        &mut self,
+        _name: &str,
+        _filter_id: &str,
+        _region: Rect,
+    ) -> Result<String, String> {
+        Err("SVG filter not supported by this renderer".into())
+    }
 
     // ── GPU Transformations ──────────────────────────────────────────────
     /// Push a 2D transform (translation, scale, rotation) onto the stack.

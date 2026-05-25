@@ -9,8 +9,10 @@ members = [
     "cvkg-render-native",
     "cvkg-render-gpu",
     "cvkg-render-web",
-    "cvkg-vdom",
+    "cvkg-compositor",
     "cvkg-cli",
+    "cvkg-svg-serialize",
+    "cvkg-svg-filters",
     "cvkg-webkit-server",
     "cvkg-components",
     "cvkg-themes",
@@ -43,6 +45,8 @@ cvkg-test = { path = "cvkg-test", version = "0.1.22" }
 cvkg-flow = { path = "cvkg-flow", version = "0.1.22" }
 cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.1.22" }
 cvkg-compositor = { path = "cvkg-compositor", version = "0.1.22" }
+cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.1.22" }
+cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.1.22" }
 cvkg-cli = { path = "cvkg-cli", version = "0.1.22" }
 cvkg = { path = "cvkg", version = "0.1.22" }
 serde = { version = "1.0", features = ["derive"] }
@@ -85,6 +89,12 @@ kurbo = "0.11"
 rfd = "0.15"
 # System clipboard read/write
 arboard = "3.4"
+# SVG serializer (write path) -- usvg is read-only
+quick-xml = "0.37"
+# SVG parsing and serialization (usvg provides both read and write)
+usvg = "0.44"
+# Boolean path operations (union, intersect, subtract, xor)
+i_overlay = "0.26"
 
 [patch.crates-io]
 cvkg-core = { path = "cvkg-core" }
@@ -100,6 +110,8 @@ cvkg-themes = { path = "cvkg-themes" }
 cvkg-macros = { path = "cvkg-macros" }
 cvkg-runic-text = { path = "cvkg-runic-text" }
 cvkg-cli = { path = "cvkg-cli" }
+cvkg-svg-serialize = { path = "cvkg-svg-serialize" }
+cvkg-svg-filters = { path = "cvkg-svg-filters" }
 cvkg-webkit-server = { path = "cvkg-webkit-server" }
 cvkg-test = { path = "cvkg-test" }
 cvkg-flow = { path = "cvkg-flow" }

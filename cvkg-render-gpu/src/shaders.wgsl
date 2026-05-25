@@ -405,9 +405,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let d = length((in.uv - 0.5) * vec2<f32>(1.0, 4.0));
         color = theme.primary_neon * neon_glow(d, 0.01, 0.2);
     } else if in.mode == 10u {
-        let p = (in.uv - 0.5) * 2.0;
-        let d = min(sd_segment(p, vec2(-0.5, -0.8), vec2(0.5, 0.8)), sd_segment(p, vec2(0.5, -0.8), vec2(-0.5, 0.8)));
-        color = theme.rune_glow * neon_glow(d, 0.02, 0.15) * theme.rune_opacity;
+        // Gradient-filled tessellated geometry (Mode 10u)
+        // UV contains user-space coordinates from gradient_transform.
+        // Compute a linear gradient based on the user-space position.
+        let t = clamp(in.uv.x, 0.0, 1.0);
+        let end_color = vec4<f32>(in.slice.rgb, in.slice.a);
+        color = mix(in.color, end_color, t);
     } else if in.mode == 16u {
         // Radial Gradient Logic
         let dist = length(in.uv - 0.5) * 2.0; // 0 at center, 1 at edge

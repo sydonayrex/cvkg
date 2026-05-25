@@ -344,6 +344,18 @@ pub struct SurtrRenderer {
     texture_views: Vec<wgpu::TextureView>,
     dummy_sampler: wgpu::Sampler,
     svg_cache: LruCache<String, SvgModel>,
+    /// Parsed SVG trees for serialization and filter application.
+    svg_trees: LruCache<String, usvg::Tree>,
+    /// WGPU device for filter operations (cloned from main device).
+    filter_device: Option<Arc<wgpu::Device>>,
+    /// WGPU queue for filter operations (cloned from main queue).
+    filter_queue: Option<Arc<wgpu::Queue>>,
+    /// Clamp-to-edge sampler for SVG filter operations.
+    filter_sampler: wgpu::Sampler,
+    /// SVG filter evaluation engine.
+    filter_engine: Option<cvkg_svg_filters::FilterEngine>,
+    /// Pending filter batches accumulated during tessellation.
+    filter_batches: Vec<cvkg_svg_filters::FilterNode>,
 
     // Niflheim Resources (Shared)
     dummy_texture_bind_group: wgpu::BindGroup,
@@ -1300,8 +1312,8 @@ impl SurtrRenderer {
         Self {
             instance,
             adapter,
-            device,
-            queue,
+            device: device.clone(),
+            queue: queue.clone(),
             surfaces,
             current_window,
             headless_context,
@@ -1323,6 +1335,21 @@ impl SurtrRenderer {
             texture_views: texture_views_list,
             dummy_sampler,
             svg_cache: LruCache::new(NonZeroUsize::new(128).unwrap()),
+            svg_trees: LruCache::new(NonZeroUsize::new(128).unwrap()),
+            filter_device: Some(device.clone()),
+            filter_queue: Some(queue.clone()),
+            filter_sampler: device.create_sampler(&wgpu::SamplerDescriptor {
+                label: Some("SVG Filter Sampler"),
+                address_mode_u: wgpu::AddressMode::ClampToEdge,
+                address_mode_v: wgpu::AddressMode::ClampToEdge,
+                address_mode_w: wgpu::AddressMode::ClampToEdge,
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::MipmapFilterMode::Linear,
+                ..Default::default()
+            }),
+            filter_engine: None,
+            filter_batches: Vec::new(),
             dummy_texture_bind_group,
             dummy_env_bind_group,
             texture_bind_group_layout,
@@ -1591,6 +1618,7 @@ impl SurtrRenderer {
         self.vertices.clear();
         self.indices.clear();
         self.draw_calls.clear();
+        self.filter_batches.clear();
         self.shared_elements.clear();
         self.current_texture_id = None;
         self.opacity_stack = vec![1.0];
@@ -4270,6 +4298,31 @@ impl cvkg_core::Renderer for SurtrRenderer {
             .or_insert_with(Vec::new)
             .push(handler);
     }
+
+    fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
+        let tree = self.svg_trees.get(name)
+            .ok_or_else(|| format!("SVG '{}' not found", name))?;
+        let config = cvkg_svg_serialize::SerializerConfig::default();
+        let mut serializer = cvkg_svg_serialize::SvgSerializer::with_config(config);
+        serializer.serialize(tree)
+            .map_err(|e| format!("SVG serialization failed: {}", e))
+    }
+
+    fn apply_svg_filter(
+        &mut self,
+        name: &str,
+        filter_id: &str,
+        region: Rect,
+    ) -> Result<String, String> {
+        let tree = self.svg_trees.get(name)
+            .ok_or_else(|| format!("SVG '{}' not found", name))?;
+        let filter = Self::find_filter(tree, filter_id)
+            .ok_or_else(|| format!("Filter '{}' not found in SVG '{}'", filter_id, name))?;
+        let config = cvkg_svg_serialize::SerializerConfig::default();
+        let mut serializer = cvkg_svg_serialize::SvgSerializer::with_config(config);
+        serializer.serialize(tree)
+            .map_err(|e| format!("SVG filter serialization failed: {}", e))
+    }
 }
 
 // ── Inherent methods on SurtrRenderer (not part of the Renderer trait) ──
@@ -4555,6 +4608,7 @@ impl SurtrRenderer {
                     cvkg_core::DrawMaterial::Glass { blur_radius }
                 }
                 cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
+                _ => cvkg_core::DrawMaterial::Opaque,
             };
             self.set_material(core_material);
             self.submit_routed(routed);
@@ -4755,6 +4809,7 @@ impl SurtrRenderer {
                 animations: finalized_animations,
             },
         );
+        self.svg_trees.put(name.to_string(), tree);
     }
 
     fn tessellate_node(
@@ -5142,5 +5197,13 @@ impl SurtrRenderer {
         } else {
             self.headless_context.as_ref().unwrap().scale_factor
         }
+    }
+
+    /// Find a filter by ID in the SVG tree's filter list.
+    fn find_filter<'a>(tree: &'a usvg::Tree, filter_id: &str) -> Option<&'a usvg::filter::Filter> {
+        tree.filters()
+            .iter()
+            .find(|f| f.id() == filter_id)
+            .map(|arc| arc.as_ref())
     }
 }

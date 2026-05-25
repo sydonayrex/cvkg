@@ -1,0 +1,12 @@
+[package]
+name = "cvkg-svg-serialize"
+version.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+edition.workspace = true
+
+[dependencies]
+usvg = { workspace = true }
+quick-xml = { workspace = true }
+thiserror = { workspace = true }

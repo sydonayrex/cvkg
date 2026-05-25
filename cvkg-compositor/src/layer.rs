@@ -14,10 +14,20 @@ pub struct LayerId(pub u64);
 
 /// Material type that determines which GPU pass a layer's draw calls are routed to
 /// in the Backdrop Capture Architecture.
+///
+/// The blend mode variants correspond to the 16 SVG 1.1 blend modes from
+/// the CSS Compositing and Blending Level 1 specification. When a blend mode
+/// is set, the draw call's fragment shader uses the corresponding blend function
+/// instead of standard alpha compositing.
+///
+/// `Isolated` triggers off-screen buffer rendering: the layer and all its
+/// children are rendered to a separate texture, then composited back into the
+/// main scene. This matches the SVG `isolation` property.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[derive(Default)]
 pub enum Material {
-    /// Opaque or standard UI. Rendered in the initial Scene Capture pass.
+    /// Opaque or standard UI. Rendered in the initial Scene Capture pass
+    /// with standard alpha compositing (src-over).
     #[default]
     Opaque,
     /// Glassmorphism elements. Rendered in the Material Composite pass,
@@ -26,6 +36,56 @@ pub enum Material {
     /// Overlay UI (crisp text, focus rings, edge lighting).
     /// Rendered in the final Foreground pass, on top of glass.
     Overlay,
+
+    // ── SVG Blend Modes (CSS Compositing Level 1) ──────────────────────────
+
+    /// Multiplied blend: multiplies source and destination colors.
+    /// Formula: result = src * dst
+    Multiply,
+    /// Screen blend: inverse of multiply.
+    /// Formula: result = 1 - (1 - src) * (1 - dst)
+    Screen,
+    /// Overlay blend: combines multiply and screen based on destination.
+    /// Formula: if dst < 0.5 then 2*src*dst else 1-2*(1-src)*(1-dst)
+    BlendOverlay,
+    /// Darken blend: keeps the darker of source and destination per channel.
+    /// Formula: result = min(src, dst)
+    Darken,
+    /// Lighten blend: keeps the lighter of source and destination per channel.
+    /// Formula: result = max(src, dst)
+    Lighten,
+    /// Color-dodge blend: brightens destination to reflect source.
+    /// Formula: result = dst / (1 - src)
+    ColorDodge,
+    /// Color-burn blend: darkens destination to reflect source.
+    /// Formula: result = 1 - (1 - dst) / src
+    ColorBurn,
+    /// Hard-light blend: like overlay, but based on source instead of dest.
+    /// Formula: if src < 0.5 then 2*src*dst else 1-2*(1-src)*(1-dst)
+    HardLight,
+    /// Soft-light blend: subtle highlights/shadows.
+    /// Formula: result = (1-2*src)*dst^2 + 2*src*dst (simplified Pegtop)
+    SoftLight,
+    /// Difference blend: subtracts colors and takes absolute value.
+    /// Formula: result = |src - dst|
+    Difference,
+    /// Exclusion blend: similar to difference but lower contrast.
+    /// Formula: result = src + dst - 2*src*dst
+    Exclusion,
+    /// Hue blend: applies source hue to destination saturation/luminosity.
+    Hue,
+    /// Saturation blend: applies source saturation to destination hue/luminosity.
+    Saturation,
+    /// Color blend: applies source hue/saturation to destination luminosity.
+    Color,
+    /// Luminosity blend: applies source luminosity to destination hue/saturation.
+    Luminosity,
+
+    /// Isolated rendering: layer and children are rendered to an off-screen
+    /// buffer, then composited back into the main scene. This matches the
+    /// SVG `isolation` property and is required for correct blend mode
+    /// behavior when child elements should not blend with the background.
+    Isolated,
 }
 
 

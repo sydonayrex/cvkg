@@ -174,7 +174,19 @@ impl CompositorEngine {
         // Route into buckets by material.
         for cmd in &self.flatten_buffer {
             match cmd.material {
-                Material::Opaque => {
+                Material::Opaque | Material::Multiply | Material::Screen
+                | Material::BlendOverlay | Material::Darken | Material::Lighten
+                | Material::ColorDodge | Material::ColorBurn | Material::HardLight
+                | Material::SoftLight | Material::Difference | Material::Exclusion
+                | Material::Hue | Material::Saturation | Material::Color
+                | Material::Luminosity => {
+                    buckets.scene_commands.push(cmd.clone());
+                }
+                Material::Isolated => {
+                    // Isolated layers are rendered to an off-screen buffer first,
+                    // then composited back. For now, route to scene pass with
+                    // the Isolated material tag so the renderer knows to use
+                    // an off-screen target.
                     buckets.scene_commands.push(cmd.clone());
                 }
                 Material::Glass { .. } => {

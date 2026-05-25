@@ -60,6 +60,12 @@ workspace = true
 [dependencies.cvkg-compositor]
 workspace = true
 
+[dependencies.cvkg-svg-filters]
+workspace = true
+
+[dependencies.cvkg-svg-serialize]
+workspace = true
+
 
 [dependencies.futures]
 version = "0.3"
