@@ -1,16 +1,17 @@
 [package]
 name = "cvkg-svg-filters"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+version = "0.1.22"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
 description = "WGPU-based SVG filter primitives for CVKG"
 
 [dependencies]
-wgpu.workspace = true
-bytemuck.workspace = true
-thiserror.workspace = true
-log.workspace = true
-usvg.workspace = true
+wgpu = "29"
+bytemuck = { version = "1.14", features = ["derive"] }
+thiserror = "1.0"
+log = "0.4"
+usvg = "0.44"
 
 [dev-dependencies]
 strict-num = "0.1"

@@ -34,8 +34,8 @@ name = "berserker"
 path = "src/main.rs"
 
 [dependencies.cvkg]
-version = "0.1.22"
 features = ["native"]
+version = "0.1.22"
 
 [dependencies.cvkg-core]
 version = "0.1.22"

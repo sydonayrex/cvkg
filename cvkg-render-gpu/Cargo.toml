@@ -56,16 +56,16 @@ version = "1.14"
 features = ["derive"]
 
 [dependencies.cvkg-core]
-workspace = true
+version = "0.1.22"
+
 [dependencies.cvkg-compositor]
-workspace = true
+version = "0.1.22"
 
 [dependencies.cvkg-svg-filters]
-workspace = true
+version = "0.1.22"
 
 [dependencies.cvkg-svg-serialize]
-workspace = true
-
+version = "0.1.22"
 
 [dependencies.futures]
 version = "0.3"
@@ -100,7 +100,7 @@ features = [
 version = "1.12"
 
 [dependencies.cvkg-runic-text]
-workspace = true
+version = "0.1.22"
 
 [dependencies.swash]
 version = "0.2.7"
@@ -122,11 +122,10 @@ version = "0.5"
 version = "0.4.0"
 
 [build-dependencies.naga]
-version = "0.14"
+version = "29"
 features = [
     "wgsl-in",
     "spv-out",
-    "validate",
 ]
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "openbsd", target_os = "netbsd"))'.dependencies.accesskit_unix]

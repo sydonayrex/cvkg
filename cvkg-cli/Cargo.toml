@@ -82,7 +82,6 @@ features = [
     "sync",
     "rt",
     "macros",
-    "macros",
     "rt-multi-thread",
 ]
 default-features = false

@@ -60,7 +60,7 @@ features = ["derive"]
 version = "1.0"
 
 [dependencies.cvkg-runic-text]
-path = "../cvkg-runic-text"
+version = "0.1.22"
 
 [dependencies.stl_io]
 version = "0.7"

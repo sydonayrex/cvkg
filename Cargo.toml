@@ -106,6 +106,7 @@ cvkg-render-gpu = { path = "cvkg-render-gpu" }
 cvkg-render-web = { path = "cvkg-render-web" }
 cvkg-vdom = { path = "cvkg-vdom" }
 cvkg-components = { path = "cvkg-components" }
+cvkg-compositor = { path = "cvkg-compositor" }
 cvkg-themes = { path = "cvkg-themes" }
 cvkg-macros = { path = "cvkg-macros" }
 cvkg-runic-text = { path = "cvkg-runic-text" }
