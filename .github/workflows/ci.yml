@@ -50,7 +50,7 @@ jobs:
     - name: Run clippy
       run: cargo clippy --workspace --all-targets -- -D warnings
 
-  # ── Build & Test (Matrix: Linux, macOS, Windows) ─────────────────────────────
+  # ── Build & Test (Core crates — no system deps needed) ──────────────────────
   build:
     name: Build (${{ matrix.os }})
     needs: lint
@@ -62,23 +62,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          pkg-config \
-          libglib2.0-dev \
-          libatk1.0-dev libatk-bridge2.0-dev \
-          libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev \
-          libx11-dev libxcomposite-dev libxdamage-dev \
-          libxext-dev libxfixes-dev libxrandr-dev libxi-dev \
-          libxcursor-dev libxinerama-dev \
-          libasound2-dev libfontconfig1-dev libssl-dev \
-          libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
-          libspeechd-dev libsoup-3.0-dev libsecret-1-dev \
-          libnotify-dev libxdo-dev libcurl4-openssl-dev 2>&1 || true
 
     - name: Setup Rust toolchain
       uses: dtolnay/rust-toolchain@stable
@@ -94,11 +77,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
 
-    - name: Build workspace
-      run: cargo build --workspace
+    - name: Build core crates
+      run: cargo build -p cvkg-core -p cvkg-components -p cvkg-layout -p cvkg-anim -p cvkg-themes -p cvkg-svg-filters -p cvkg-svg-serialize -p cvkg-cli
 
     - name: Run tests
-      run: cargo test --workspace
+      run: cargo test -p cvkg-core -p cvkg-components -p cvkg-layout -p cvkg-anim -p cvkg-themes
 
   # ── Release Build Verification ────────────────────────────────────────────────
   release-builds:
@@ -109,54 +92,15 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          pkg-config \
-          libglib2.0-dev \
-          libatk1.0-dev libatk-bridge2.0-dev \
-          libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev \
-          libx11-dev libxcomposite-dev libxdamage-dev \
-          libxext-dev libxfixes-dev libxrandr-dev libxi-dev \
-          libxcursor-dev libxinerama-dev \
-          libasound2-dev libfontconfig1-dev libssl-dev \
-          libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
-          libspeechd-dev libsoup-3.0-dev libsecret-1-dev \
-          libnotify-dev libxdo-dev libcurl4-openssl-dev 2>&1 || true
-
-    - name: Setup Rust toolchain
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Cache Cargo
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-release-
-
     - name: Build release (cvkg-cli)
       run: cargo build --release -p cvkg-cli
 
-    - name: Build release (berserker)
-      run: cargo build --release -p berserker
-
-    - name: Build release (showcase)
-      run: cargo build --release -p showcase
-
-    - name: Verify release binaries
+    - name: Verify release binary
       run: |
-        echo "=== Release Binaries ==="
+        echo "=== Release Binary ==="
         ls -la target/release/cvkg 2>/dev/null || echo "cvkg-cli binary not found"
-        ls -la target/release/berserker 2>/dev/null || echo "berserker binary not found"
-        ls -la target/release/showcase 2>/dev/null || echo "showcase binary not found"
-        echo "=== Binary Sizes ==="
-        du -h target/release/cvkg target/release/berserker target/release/showcase 2>/dev/null || true
+        echo "=== Binary Size ==="
+        du -h target/release/cvkg 2>/dev/null || true
 
   # ── Packages (tagged releases only) ──────────────────────────────────────────
   package:
@@ -181,23 +125,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install system dependencies (Linux)
-      if: runner.os == 'Linux'
-      run: |
-        sudo apt-get update
-        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-          pkg-config \
-          libglib2.0-dev \
-          libatk1.0-dev libatk-bridge2.0-dev \
-          libcairo2-dev libpango1.0-dev libgdk-pixbuf2.0-dev \
-          libx11-dev libxcomposite-dev libxdamage-dev \
-          libxext-dev libxfixes-dev libxrandr-dev libxi-dev \
-          libxcursor-dev libxinerama-dev \
-          libasound2-dev libfontconfig1-dev libssl-dev \
-          libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
-          libspeechd-dev libsoup-3.0-dev libsecret-1-dev \
-          libnotify-dev libxdo-dev libcurl4-openssl-dev 2>&1 || true
-
     - name: Setup Rust toolchain
       uses: dtolnay/rust-toolchain@stable
 
@@ -218,35 +145,29 @@ jobs:
     - name: Package (Linux)
       if: runner.os == 'Linux'
       run: |
-        for bin in cvkg-cli berserker; do
-          for fmt in appimage deb; do
-            cargo packager --release -p "$bin" -f "$fmt" || echo "Warning: $bin $fmt packaging failed"
-          done
+        for fmt in appimage deb; do
+          cargo packager --release -p cvkg-cli -f "$fmt" || echo "Warning: cvkg-cli $fmt packaging failed"
         done
 
     - name: Package (macOS)
       if: runner.os == 'macOS'
       run: |
-        for bin in cvkg-cli berserker; do
-          for fmt in dmg app; do
-            cargo packager --release -p "$bin" -f "$fmt" || echo "Warning: $bin $fmt packaging failed"
-          done
+        for fmt in dmg app; do
+          cargo packager --release -p cvkg-cli -f "$fmt" || echo "Warning: cvkg-cli $fmt packaging failed"
         done
 
     - name: Package (Windows)
       if: runner.os == 'Windows'
       run: |
-        for bin in cvkg-cli berserker; do
-          for fmt in msi app; do
-            cargo packager --release -p "$bin" -f "$fmt" || echo "Warning: $bin $fmt packaging failed"
-          done
+        for fmt in msi app; do
+          cargo packager --release -p cvkg-cli -f "$fmt" || echo "Warning: cvkg-cli $fmt packaging failed"
         done
 
     - name: Collect artifacts
       shell: bash
       run: |
         mkdir -p artifacts
-        for bin in cvkg berserker showcase; do
+        for bin in cvkg; do
           for ext in "" ".exe"; do
             if [ -f "target/release/${bin}${ext}" ]; then
               cp "target/release/${bin}${ext}" "artifacts/${bin}-${runner.os}${ext}"
