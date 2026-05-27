@@ -28,6 +28,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
+          libjavascriptcoregtk-4.1-dev libspeechd-dev \
+          libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+          libasound2-dev libfontconfig1-dev libssl-dev
+
     - name: Setup Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -63,6 +74,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev \
+          libjavascriptcoregtk-4.1-dev libspeechd-dev \
+          libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+          libasound2-dev libfontconfig1-dev libssl-dev
+
     - name: Setup Rust toolchain
       uses: dtolnay/rust-toolchain@stable
 
@@ -77,11 +99,11 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
 
-    - name: Build core crates
-      run: cargo build -p cvkg-core -p cvkg-components -p cvkg-layout -p cvkg-anim -p cvkg-themes -p cvkg-svg-filters -p cvkg-svg-serialize -p cvkg-cli
+    - name: Build workspace
+      run: cargo build --workspace
 
     - name: Run tests
-      run: cargo test -p cvkg-core -p cvkg-components -p cvkg-layout -p cvkg-anim -p cvkg-themes
+      run: cargo test --workspace
 
   # ── Release Build Verification ────────────────────────────────────────────────
   release-builds:
