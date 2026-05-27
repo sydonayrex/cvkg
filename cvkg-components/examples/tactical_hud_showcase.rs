@@ -16,10 +16,7 @@ fn tactical_hud_showcase() -> impl View {
                 )
                 .content(
                     HStack::new(20.0)
-                        .child(
-                            Text::new("Commander")
-                                .erase(),
-                        )
+                        .child(Text::new("Commander").erase())
                         .child(
                             MerkiBadge::new("Sector 7G")
                                 .color([1.0, 0.84, 0.0, 1.0])

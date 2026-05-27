@@ -91,7 +91,7 @@ impl View for CollaborationEngine {
             let status_color = match p.status {
                 ParticipantStatus::Online => theme::success(),
                 ParticipantStatus::Away => [0.8, 0.6, 0.0, 1.0],
-                ParticipantStatus::Offline => [0.4, 0.4, 0.4, 1.0],
+                ParticipantStatus::Offline => theme::text_dim(),
             };
 
             let status_rect = Rect {

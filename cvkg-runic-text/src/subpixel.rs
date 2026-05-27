@@ -4,8 +4,7 @@
 /// pixel into R, G, B subpixels and computes independent coverage values
 /// for sharper text rendering on standard-RGB LCD panels.
 /// Subpixel layout order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SubpixelOrder {
     /// RGB horizontal stripe (most common).
     #[default]
@@ -17,7 +16,6 @@ pub enum SubpixelOrder {
     /// No subpixel rendering (grayscale).
     None,
 }
-
 
 /// A glyph positioned at subpixel resolution.
 #[derive(Debug, Clone, PartialEq)]

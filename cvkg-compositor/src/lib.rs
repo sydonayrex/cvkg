@@ -27,12 +27,8 @@ pub mod engine;
 pub mod layer;
 
 // Re-export primary types for convenience.
-pub use engine::{
-    CommandBuckets, CompositorEngine, DamageInfo, RoutedDrawCommand,
-};
-pub use layer::{
-    DrawCommand, Layer, LayerId, LayerTree, Material,
-};
+pub use engine::{CommandBuckets, CompositorEngine, DamageInfo, RoutedDrawCommand};
+pub use layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 
 /// Current version of the cvkg-compositor crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

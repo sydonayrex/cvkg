@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// The AI's visual presence. A pulsating runic orb.
 /// Section 4.2: "Animated artifacts for AI-assisted interfaces."

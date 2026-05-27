@@ -42,7 +42,6 @@
 use cvkg_core::{FrameRenderer, Renderer};
 use image;
 // FIX #10: Wayland import gated to Linux only — was unconditional, broke macOS/Windows builds.
-#[cfg(target_os = "linux")]
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -50,6 +49,281 @@ use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowId},
 };
+
+/// Represents the current state of a window.
+///
+/// Used by [`WindowStateDetector`] to track lifecycle transitions and drive
+/// rendering decisions (e.g., skip frames when occluded or minimized).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowState {
+    /// Window is visible and active.
+    Normal,
+    /// Window is minimized to the Dock or taskbar.
+    Minimized,
+    /// Window is in fullscreen mode.
+    Fullscreen,
+    /// Window is in Split View (side-by-side with another window).
+    SplitView,
+    /// Window is occluded by another window.
+    Occluded,
+    /// Window is hidden (ordered out).
+    Hidden,
+}
+
+/// Tracks the current [`WindowState`] based on incoming winit [`WindowEvent`]s.
+///
+/// The detector maps raw winit events to high-level window states and exposes
+/// helpers for render-loop decisions ([`should_render`], [`control_flow`]).
+///
+/// # Usage
+///
+/// ```no_run
+/// use cvkg_render_native::{WindowStateDetector, WindowState};
+/// let mut detector = WindowStateDetector::new();
+/// // In your event loop:
+/// // if let Some(new_state) = detector.update_from_event(&event) { ... }
+/// ```
+pub struct WindowStateDetector {
+    state: WindowState,
+    is_key: bool,
+    is_main: bool,
+}
+
+impl WindowStateDetector {
+    /// Creates a new detector initialized to [`WindowState::Normal`].
+    pub fn new() -> Self {
+        Self {
+            state: WindowState::Normal,
+            is_key: false,
+            is_main: false,
+        }
+    }
+
+    /// Returns the current window state.
+    pub fn state(&self) -> WindowState {
+        self.state
+    }
+
+    /// Returns whether the window is the key (first responder) window.
+    pub fn is_key(&self) -> bool {
+        self.is_key
+    }
+
+    /// Returns whether the window is the main window.
+    pub fn is_main(&self) -> bool {
+        self.is_main
+    }
+
+    /// Updates the internal state based on a winit [`WindowEvent`].
+    ///
+    /// Returns `Some(WindowState)` if the state changed, `None` otherwise.
+    ///
+    /// # State mapping
+    ///
+    /// | winit event | resulting state |
+    /// |---|---|
+    /// | `Occluded(true)` | `Occluded` |
+    /// | `Focused(true)` | updates `is_key`; checks fullscreen |
+    /// | `Focused(false)` | updates `is_key` |
+    /// | Default | `Normal` |
+    ///
+    /// Note: `Minimized` and `Fullscreen` detection requires querying the
+    /// winit `Window` directly (see [`update_from_window`]).
+    pub fn update_from_event(&mut self, event: &WindowEvent) -> Option<WindowState> {
+        let old_state = self.state;
+        match event {
+            WindowEvent::Occluded(true) => {
+                self.state = WindowState::Occluded;
+            }
+            WindowEvent::Focused(focused) => {
+                self.is_key = *focused;
+                if !focused && self.state != WindowState::Minimized {
+                    self.state = WindowState::Normal;
+                }
+            }
+            _ => {}
+        };
+        if self.state != old_state {
+            Some(self.state)
+        } else {
+            None
+        }
+    }
+
+    /// Updates the state by querying the winit `Window` directly.
+    ///
+    /// This should be called once per frame to detect states that winit
+    /// does not emit as events (minimized, fullscreen).
+    ///
+    /// Returns `Some(WindowState)` if the state changed, `None` otherwise.
+    pub fn update_from_window(&mut self, window: &winit::window::Window) -> Option<WindowState> {
+        let old_state = self.state;
+        if window.is_minimized().unwrap_or(false) {
+            self.state = WindowState::Minimized;
+        } else if window.fullscreen().is_some() {
+            self.state = WindowState::Fullscreen;
+        } else if self.state == WindowState::Minimized || self.state == WindowState::Fullscreen {
+            // Transition back to Normal when no longer minimized/fullscreen
+            self.state = WindowState::Normal;
+        }
+        if self.state != old_state {
+            Some(self.state)
+        } else {
+            None
+        }
+    }
+
+    /// Returns `true` if the window should render a frame in the current state.
+    ///
+    /// Returns `false` for [`WindowState::Occluded`], [`WindowState::Minimized`],
+    /// and [`WindowState::Hidden`].
+    pub fn should_render(&self) -> bool {
+        !matches!(
+            self.state,
+            WindowState::Occluded | WindowState::Minimized | WindowState::Hidden
+        )
+    }
+
+    /// Returns the appropriate [`ControlFlow`] for the current state.
+    ///
+    /// Non-rendering states get `ControlFlow::Wait` (save CPU cycles);
+    /// rendering states get `ControlFlow::Poll` for maximum responsiveness.
+    pub fn control_flow(&self) -> ControlFlow {
+        if self.should_render() {
+            ControlFlow::Poll
+        } else {
+            ControlFlow::Wait
+        }
+    }
+}
+
+impl Default for WindowStateDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Hit-test helper for resize handles on windows with rounded corners.
+///
+/// macOS Tahoe uses a 26pt corner radius, which means the visual corner arc
+/// does not cover the full 19×19 resize hotspot. This struct expands the
+/// clickable area 8px beyond the visual corner edge so users can still grab
+/// the resize handle reliably.
+pub struct ResizeHitTest {
+    /// The size of the window in physical pixels.
+    window_size: winit::dpi::PhysicalSize<u32>,
+    /// The corner radius in points (logical pixels).
+    corner_radius: f32,
+    /// Extra expansion in pixels beyond the visual corner edge.
+    expansion: f32,
+}
+
+impl ResizeHitTest {
+    /// Creates a new hit-test helper.
+    ///
+    /// # Arguments
+    ///
+    /// * `window_size` — the current window size in physical pixels.
+    /// * `corner_radius` — the corner radius in points (e.g., 26.0 for Tahoe).
+    /// * `expansion` — extra pixels to expand beyond the visual edge (e.g., 8.0).
+    pub fn new(
+        window_size: winit::dpi::PhysicalSize<u32>,
+        corner_radius: f32,
+        expansion: f32,
+    ) -> Self {
+        Self {
+            window_size,
+            corner_radius,
+            expansion,
+        }
+    }
+
+    /// Tests whether `pos` (a point relative to the window's top-left corner)
+    /// falls within the expanded resize-hit region for any corner.
+    ///
+    /// The hit region for each corner is a square of side `corner_radius + expansion`,
+    /// anchored at the corner. A point is considered a hit if it falls within
+    /// any of the four corner squares.
+    pub fn hit_test(&self, pos: winit::dpi::PhysicalSize<u32>, corner_radius: f32) -> bool {
+        let r = corner_radius + self.expansion;
+        let w = self.window_size.width as f32;
+        let h = self.window_size.height as f32;
+        let px = pos.width as f32;
+        let py = pos.height as f32;
+
+        // Top-left corner: square [0, r) x [0, r)
+        if px <= r && py <= r {
+            return true;
+        }
+
+        // Top-right corner: square [w-r, w) x [0, r)
+        if px >= w - r && py <= r {
+            return true;
+        }
+
+        // Bottom-left corner: square [0, r) x [h-r, h)
+        if px <= r && py >= h - r {
+            return true;
+        }
+
+        // Bottom-right corner: square [w-r, w) x [h-r, h)
+        if px >= w - r && py >= h - r {
+            return true;
+        }
+
+        false
+    }
+}
+
+/// Platform safe area insets (menu bar, notch, etc.).
+///
+/// Values are in logical points.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SafeAreaInsets {
+    /// Top inset (e.g., menu bar on macOS).
+    pub top: f32,
+    /// Bottom inset (e.g., Dock when at bottom).
+    pub bottom: f32,
+    /// Left inset.
+    pub left: f32,
+    /// Right inset.
+    pub right: f32,
+}
+
+impl SafeAreaInsets {
+    /// Returns zero insets on all sides.
+    pub fn zero() -> Self {
+        Self {
+            top: 0.0,
+            bottom: 0.0,
+            left: 0.0,
+            right: 0.0,
+        }
+    }
+
+    /// Returns appropriate safe-area insets for a given [`WindowState`].
+    ///
+    /// # Platform behavior
+    ///
+    /// * **Fullscreen** — zero insets (window owns the entire screen).
+    /// * **Normal** — 24pt top on macOS for the menu bar, 0 on other platforms.
+    /// * **All other states** — same as Normal.
+    pub fn for_window_state(state: WindowState) -> Self {
+        if state == WindowState::Fullscreen {
+            return Self::zero();
+        }
+        #[cfg(target_os = "macos")]
+        let top = 24.0;
+        #[cfg(not(target_os = "macos"))]
+        let top = 0.0;
+        Self {
+            top,
+            bottom: 0.0,
+            left: 0.0,
+            right: 0.0,
+        }
+    }
+}
 
 /// Native renderer backend implementing the Renderer trait.
 /// It wraps a shared SurtrRenderer for high-performance GPU drawing.
@@ -62,10 +336,24 @@ pub struct NativeRenderer {
     window: Arc<Window>,
 }
 
-/// Custom events for the native application event loop
+/// Custom events for the native application event loop, handling accessibility
+/// callbacks and routing window lifecycle control events from background threads.
 #[derive(Debug)]
-enum AppEvent {
+pub enum AppEvent {
+    /// Action request from the accessibility subsystem.
     AccessibilityAction(accesskit::ActionRequest),
+    /// Request to close a specific window.
+    CloseWindow(winit::window::WindowId),
+    /// Request to set the title bar string of a window.
+    SetTitle(winit::window::WindowId, String),
+    /// Request to resize a window.
+    SetSize(winit::window::WindowId, f32, f32),
+    /// Request to change visibility of a window.
+    SetVisible(winit::window::WindowId, bool),
+    /// Request to bring a window to the front and focus it.
+    BringToFront(winit::window::WindowId),
+    /// A native menu bar item was activated.
+    MenuAction(muda::MenuId),
 }
 
 impl NativeRenderer {
@@ -98,7 +386,7 @@ impl NativeRenderer {
 
         let mut app = App {
             view,
-            windows: std::collections::HashMap::new(),
+            window_manager: WindowManager::new(),
             gpu: None,
             asset_manager: std::sync::Arc::new(NativeAssetManager::new()),
             proxy: event_loop.create_proxy(),
@@ -106,13 +394,232 @@ impl NativeRenderer {
             last_frame_time: std::time::Instant::now(),
             berserker_mode: cvkg_core::BerserkerMode::Normal,
             rage: 0.0,
+            state_detector: WindowStateDetector::new(),
+            modifiers: winit::keyboard::ModifiersState::default(),
+            audio_engine: None,
+            haptic_engine: Arc::new(VisualHapticEngine::new()),
         };
 
         event_loop.run_app(&mut app).expect("Event loop error");
     }
 }
 
-struct WindowState {
+/// Native implementation of the cvkg_core::Window trait.
+/// Communicates state updates back to the winit event loop thread using an EventLoopProxy.
+struct NativeWindowWrapper {
+    winit_id: winit::window::WindowId,
+    window: Arc<winit::window::Window>,
+    proxy: winit::event_loop::EventLoopProxy<AppEvent>,
+    is_key: Arc<std::sync::atomic::AtomicBool>,
+    is_main: bool,
+}
+
+impl cvkg_core::Window for NativeWindowWrapper {
+    /// Request that this window be closed.
+    fn close(&self) {
+        let _ = self.proxy.send_event(AppEvent::CloseWindow(self.winit_id));
+    }
+
+    /// Change the title bar text of this window.
+    fn set_title(&self, title: &str) {
+        let _ = self
+            .proxy
+            .send_event(AppEvent::SetTitle(self.winit_id, title.to_string()));
+    }
+
+    /// Request updating this window's dimensions.
+    fn set_size(&self, width: f32, height: f32) {
+        let _ = self
+            .proxy
+            .send_event(AppEvent::SetSize(self.winit_id, width, height));
+    }
+
+    /// Return true if this window has key focus.
+    fn is_key(&self) -> bool {
+        self.is_key.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Return true if this is the primary application window.
+    fn is_main(&self) -> bool {
+        self.is_main
+    }
+
+    /// Return true if this window is visible.
+    fn is_visible(&self) -> bool {
+        self.window.is_visible().unwrap_or(false)
+    }
+
+    /// Show or hide this window.
+    fn set_visible(&self, visible: bool) {
+        let _ = self
+            .proxy
+            .send_event(AppEvent::SetVisible(self.winit_id, visible));
+    }
+
+    /// Focus and bring this window to the foreground.
+    fn bring_to_front(&self) {
+        let _ = self.proxy.send_event(AppEvent::BringToFront(self.winit_id));
+    }
+}
+
+/// Dynamic manager for all active native windows and their rendering contexts.
+pub struct WindowManager {
+    /// Mapping from native winit WindowId to internal WindowData.
+    pub windows: std::collections::HashMap<winit::window::WindowId, WindowData>,
+    /// Stack of windows ordered from back to front (end of vector is top-most).
+    pub window_stack: Vec<winit::window::WindowId>,
+    /// Mapping of winit window IDs to core IDs.
+    pub winit_to_core: std::collections::HashMap<winit::window::WindowId, cvkg_core::WindowId>,
+    /// Mapping of core window IDs to winit IDs.
+    pub core_to_winit: std::collections::HashMap<cvkg_core::WindowId, winit::window::WindowId>,
+    /// Monotonic counter to allocate unique core window IDs.
+    pub next_core_id: u64,
+}
+
+impl Default for WindowManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WindowManager {
+    /// Create an empty WindowManager.
+    pub fn new() -> Self {
+        Self {
+            windows: std::collections::HashMap::new(),
+            window_stack: Vec::new(),
+            winit_to_core: std::collections::HashMap::new(),
+            core_to_winit: std::collections::HashMap::new(),
+            next_core_id: 1,
+        }
+    }
+
+    /// Create and register a new native window.
+    pub fn create_window(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        gpu: &Option<Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>>,
+        proxy: winit::event_loop::EventLoopProxy<AppEvent>,
+        config: cvkg_core::WindowConfig,
+        is_main: bool,
+        view: &impl cvkg_core::View,
+    ) -> cvkg_core::WindowHandle {
+        let mut window_attrs = Window::default_attributes()
+            .with_title(&config.title)
+            .with_visible(true)
+            .with_transparent(config.transparent)
+            .with_decorations(config.decorations)
+            .with_inner_size(winit::dpi::LogicalSize::new(config.size.0, config.size.1));
+
+        if let Some(min) = config.min_size {
+            window_attrs =
+                window_attrs.with_min_inner_size(winit::dpi::LogicalSize::new(min.0, min.1));
+        }
+        if let Some(max) = config.max_size {
+            window_attrs =
+                window_attrs.with_max_inner_size(winit::dpi::LogicalSize::new(max.0, max.1));
+        }
+
+        let winit_level = match config.level {
+            cvkg_core::WindowLevel::Normal => winit::window::WindowLevel::Normal,
+            cvkg_core::WindowLevel::AlwaysOnTop => winit::window::WindowLevel::AlwaysOnTop,
+            cvkg_core::WindowLevel::PopUpMenu => winit::window::WindowLevel::AlwaysOnTop,
+        };
+        window_attrs = window_attrs.with_window_level(winit_level);
+
+        let window = Arc::new(
+            event_loop
+                .create_window(window_attrs)
+                .expect("Failed to create window"),
+        );
+
+        let winit_id = window.id();
+        let core_id = cvkg_core::WindowId(self.next_core_id);
+        self.next_core_id += 1;
+
+        let is_key_focused = Arc::new(std::sync::atomic::AtomicBool::new(true));
+
+        let wrapper = Arc::new(NativeWindowWrapper {
+            winit_id,
+            window: window.clone(),
+            proxy: proxy.clone(),
+            is_key: is_key_focused.clone(),
+            is_main,
+        });
+
+        let handle = cvkg_core::WindowHandle::new(core_id, wrapper);
+
+        let vdom = cvkg_vdom::VDom::build(
+            view,
+            cvkg_core::Rect::new(0.0, 0.0, config.size.0, config.size.1),
+        );
+
+        let data = WindowData {
+            window: window.clone(),
+            accesskit_adapter: None,
+            vdom: Some(vdom),
+            cursor_pos: [0.0, 0.0],
+            last_redraw_start: std::time::Instant::now(),
+            frame_history: std::collections::VecDeque::with_capacity(60),
+            frame_count: 0,
+            last_pos: None,
+            is_dragging: false,
+            drag_start_pos: [0.0, 0.0],
+            drag_button: 0,
+            drag_threshold: 5.0,
+            is_key_focused,
+            is_main,
+            core_id,
+            window_handle: handle.clone(),
+        };
+
+        self.windows.insert(winit_id, data);
+        self.window_stack.push(winit_id);
+        self.winit_to_core.insert(winit_id, core_id);
+        self.core_to_winit.insert(core_id, winit_id);
+
+        if let Some(gpu_mutex) = gpu {
+            gpu_mutex.lock().unwrap().register_window(window.clone());
+        }
+
+        handle
+    }
+
+    /// Close and unregister a native window.
+    pub fn close_window(&mut self, winit_id: winit::window::WindowId) {
+        self.windows.remove(&winit_id);
+        self.window_stack.retain(|id| *id != winit_id);
+        if let Some(core_id) = self.winit_to_core.remove(&winit_id) {
+            self.core_to_winit.remove(&core_id);
+        }
+    }
+
+    /// Bring a native window to the foreground and focus it.
+    pub fn bring_to_front(&mut self, winit_id: winit::window::WindowId) {
+        self.window_stack.retain(|id| *id != winit_id);
+        self.window_stack.push(winit_id);
+        if let Some(data) = self.windows.get(&winit_id) {
+            data.window.focus_window();
+        }
+    }
+
+    /// Get a reference to a window's data.
+    pub fn window(&self, winit_id: winit::window::WindowId) -> Option<&WindowData> {
+        self.windows.get(&winit_id)
+    }
+
+    /// Get a mutable reference to a window's data.
+    pub fn window_mut(&mut self, winit_id: winit::window::WindowId) -> Option<&mut WindowData> {
+        self.windows.get_mut(&winit_id)
+    }
+
+    /// Return the list of window IDs in current Z-order stack.
+    pub fn window_order(&self) -> &[winit::window::WindowId] {
+        &self.window_stack
+    }
+}
+
+pub struct WindowData {
     window: Arc<Window>,
     accesskit_adapter: Option<accesskit_winit::Adapter>,
     vdom: Option<cvkg_vdom::VDom>,
@@ -125,11 +632,26 @@ struct WindowState {
     frame_count: u64,
     /// Last window position for shake detection.
     last_pos: Option<[i32; 2]>,
+    // ── Drag tracking ──────────────────────────────────────────────────────
+    /// Whether a drag is currently in progress.
+    is_dragging: bool,
+    /// The position where the drag started.
+    drag_start_pos: [f32; 2],
+    /// The button that initiated the drag.
+    drag_button: u32,
+    /// Drag threshold in logical pixels (pointer must move this far to start drag).
+    drag_threshold: f32,
+
+    // ── Multi-window tracking ──────────────────────────────────────────────
+    is_key_focused: Arc<std::sync::atomic::AtomicBool>,
+    is_main: bool,
+    core_id: cvkg_core::WindowId,
+    window_handle: cvkg_core::WindowHandle,
 }
 
 struct App<V: cvkg_core::View> {
     view: V,
-    windows: std::collections::HashMap<WindowId, WindowState>,
+    window_manager: WindowManager,
     gpu: Option<Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>>,
     #[allow(dead_code)]
     asset_manager: std::sync::Arc<NativeAssetManager>,
@@ -138,49 +660,131 @@ struct App<V: cvkg_core::View> {
     last_frame_time: std::time::Instant,
     berserker_mode: cvkg_core::BerserkerMode,
     rage: f32,
+    /// Tracks the current window state for render-loop decisions.
+    state_detector: WindowStateDetector,
+    /// Tracks active modifier key states (Ctrl, Shift, Command, etc.).
+    modifiers: winit::keyboard::ModifiersState,
+    /// Cross-platform audio engine for spatialized sound cues.
+    audio_engine: Option<Arc<dyn cvkg_core::AudioEngine>>,
+    /// Visual haptic engine for micro-feedback animations.
+    haptic_engine: Arc<dyn cvkg_core::HapticEngine>,
 }
 
 impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.gpu.is_none() {
+            // Detect and apply system accessibility preferences at startup
+            let a11y_prefs = cvkg_core::AccessibilityPreferences::detect_from_system();
+            cvkg_core::set_accessibility_preferences(a11y_prefs);
+            if a11y_prefs.reduce_motion
+                || a11y_prefs.reduce_transparency
+                || a11y_prefs.increase_contrast
+            {
+                log::info!(
+                    "[Native] Accessibility prefs: motion={} transparency={} contrast={}",
+                    a11y_prefs.reduce_motion,
+                    a11y_prefs.reduce_transparency,
+                    a11y_prefs.increase_contrast
+                );
+            }
+
+            // Detect and apply system theme (dark/light)
+            let system_theme = cvkg_core::detect_system_theme();
+            log::info!("[Native] System theme detected: {:?}", system_theme);
+
+            // Initialize cross-platform audio engine
+            self.audio_engine =
+                RodioAudioEngine::new().map(|e| Arc::new(e) as Arc<dyn cvkg_core::AudioEngine>);
+
+            // Initialize visual haptic engine for micro-feedback
+            self.haptic_engine = Arc::new(VisualHapticEngine::new());
+
             log::info!("[Native] App instance (resumed): {:p}", self);
 
-            let window_attrs = Window::default_attributes()
-                .with_title("CVKG Berserker")
-                .with_visible(true)
-                .with_transparent(false)
-                .with_decorations(true)
-                .with_inner_size(winit::dpi::LogicalSize::new(1280.0, 720.0));
+            let config = cvkg_core::WindowConfig {
+                title: "CVKG Berserker".to_string(),
+                size: (1280.0, 720.0),
+                min_size: None,
+                max_size: None,
+                resizable: true,
+                transparent: false,
+                decorations: true,
+                level: cvkg_core::WindowLevel::Normal,
+            };
 
-            let window = Arc::new(
-                event_loop
-                    .create_window(window_attrs)
-                    .expect("Failed to create window"),
+            let handle = self.window_manager.create_window(
+                event_loop,
+                &self.gpu,
+                self.proxy.clone(),
+                config,
+                true, // is_main
+                &self.view,
             );
 
-            let window_id = window.id();
-            let vdom =
-                cvkg_vdom::VDom::build(&self.view, cvkg_core::Rect::new(0.0, 0.0, 1280.0, 720.0));
-
-            log::info!("[Native] INSERTING window ID: {:?}", window_id);
-
-            self.windows.insert(
-                window_id,
-                WindowState {
-                    window: window.clone(),
-                    accesskit_adapter: None,
-                    vdom: Some(vdom),
-                    cursor_pos: [0.0, 0.0],
-                    last_redraw_start: std::time::Instant::now(),
-                    frame_history: std::collections::VecDeque::with_capacity(60),
-                    frame_count: 0,
-                    last_pos: None,
-                },
-            );
+            let winit_id = self
+                .window_manager
+                .core_to_winit
+                .get(&handle.id)
+                .copied()
+                .expect("Failed to get winit_id");
+            let window = self
+                .window_manager
+                .windows
+                .get(&winit_id)
+                .unwrap()
+                .window
+                .clone();
 
             // Immediately set self.gpu to prevent re-entry
             let gpu = pollster::block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
             self.gpu = Some(Arc::new(std::sync::Mutex::new(gpu)));
+
+            // Register the window surface with the newly forged GPU renderer
+            if let Some(gpu_mutex) = &self.gpu {
+                gpu_mutex
+                    .lock()
+                    .expect("Failed to lock GPU mutex")
+                    .register_window(window.clone());
+            }
+
+            // ── Native menu bar ────────────────────────────────────────────────
+            // Build the standard CVKG OS-native menu bar and install it for this
+            // platform. Menu events are forwarded back to the winit event loop via
+            // the EventLoopProxy so they are processed on the main thread.
+            //
+            // Platform notes:
+            //   macOS  — init_for_nsapp() sets the NSApp main menu.
+            //   Windows — init_for_hwnd() attaches a HMENU to the window.
+            //   Linux  — init_for_gtk_window() requires the gtk feature.
+            let proxy_for_menu = self.proxy.clone();
+            muda::MenuEvent::set_event_handler(Some(move |event: muda::MenuEvent| {
+                let _ = proxy_for_menu.send_event(AppEvent::MenuAction(event.id));
+            }));
+
+            let menu = build_native_menu(&window);
+
+            #[cfg(target_os = "macos")]
+            unsafe {
+                menu.init_for_nsapp();
+            }
+
+            #[cfg(target_os = "windows")]
+            unsafe {
+                use winit::platform::windows::WindowExtWindows;
+                menu.init_for_hwnd(window.hwnd() as isize).ok();
+            }
+
+            #[cfg(target_os = "linux")]
+            {
+                // On Linux, muda needs the underlying GtkApplicationWindow.
+                // We cannot easily obtain a GtkWindow from a winit window here,
+                // so we fall back to keyboard-shortcut-only on Linux.
+                // Full GTK menu bar integration requires a GTK-native event loop.
+                let _ = menu;
+                log::info!(
+                    "[Native] Linux: OS menu bar not attached (GTK event loop not available). Keyboard shortcuts are active."
+                );
+            }
 
             log::info!("[Native] Initialization complete.");
             window.request_redraw();
@@ -226,346 +830,630 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
             return;
         };
 
-        let state = if let Some(s) = self.windows.get_mut(&id) {
-            s
-        } else {
-            return;
-        };
+        let mut close_window = false;
+        let mut bring_to_front = false;
+        let mut create_new_window = false;
+        // Cmd+Q was pressed — close all windows after the state block ends.
+        let mut quit_all = false;
 
-        match event {
-            WindowEvent::Moved(pos) => {
-                let dx = state.last_pos.map_or(0, |last| pos.x - last[0]);
-                let dy = state.last_pos.map_or(0, |last| pos.y - last[1]);
-                let speed = ((dx.pow(2) + dy.pow(2)) as f32).sqrt();
+        {
+            let state = if let Some(s) = self.window_manager.windows.get_mut(&id) {
+                s
+            } else {
+                return;
+            };
 
-                if speed > 0.1 {
-                    // Significant kinetic injection
-                    self.rage = (self.rage + 0.2).min(1.0);
-                    log::info!("[Native] Kinetic Injection! Rage: {}", self.rage);
+            match event {
+                WindowEvent::Moved(pos) => {
+                    let dx = state.last_pos.map_or(0, |last| pos.x - last[0]);
+                    let dy = state.last_pos.map_or(0, |last| pos.y - last[1]);
+                    let speed = ((dx.pow(2) + dy.pow(2)) as f32).sqrt();
+
+                    if speed > 0.1 {
+                        // Significant kinetic injection
+                        self.rage = (self.rage + 0.2).min(1.0);
+                        log::info!("[Native] Kinetic Injection! Rage: {}", self.rage);
+                    }
+
+                    state.last_pos = Some([pos.x, pos.y]);
+                    state.window.request_redraw();
                 }
-
-                state.last_pos = Some([pos.x, pos.y]);
-                state.window.request_redraw();
-            }
-            WindowEvent::CloseRequested => {
-                self.windows.remove(&id);
-                if self.windows.is_empty() {
-                    event_loop.exit();
+                WindowEvent::DroppedFile(path) => {
+                    if let Some(vdom) = &state.vdom {
+                        vdom.dispatch_event(cvkg_core::Event::FileDrop {
+                            path: path.to_string_lossy().into_owned(),
+                        });
+                    }
                 }
-            }
-            WindowEvent::Resized(physical_size) => {
-                // FIX #3: All lock().unwrap() calls in the render path replaced with
-                // lock().expect("...") providing actionable context on panic. The GPU
-                // mutex should never be poisoned under correct usage; expect() surfaces
-                // the failure clearly rather than producing an opaque unwrap panic.
-                gpu_arc
-                    .lock()
-                    .expect("GPU mutex poisoned during resize")
-                    .resize(
-                        id,
-                        physical_size.width,
-                        physical_size.height,
-                        state.window.scale_factor() as f32,
+                WindowEvent::CloseRequested => {
+                    let close_action = cvkg_core::WindowCloseAction::Allow;
+                    match close_action {
+                        cvkg_core::WindowCloseAction::Allow
+                        | cvkg_core::WindowCloseAction::Confirm => {
+                            close_window = true;
+                        }
+                        cvkg_core::WindowCloseAction::Deny => {
+                            log::info!("[Native] Close request denied for window {:?}", id);
+                        }
+                    }
+                }
+                WindowEvent::Resized(physical_size) => {
+                    gpu_arc
+                        .lock()
+                        .expect("GPU mutex poisoned during resize")
+                        .resize(
+                            id,
+                            physical_size.width,
+                            physical_size.height,
+                            state.window.scale_factor() as f32,
+                        );
+                    state.window.request_redraw();
+                }
+                WindowEvent::Focused(focused) => {
+                    log::info!("[Native] Window focus changed: {}", focused);
+                    state
+                        .is_key_focused
+                        .store(focused, std::sync::atomic::Ordering::SeqCst);
+                    if focused {
+                        bring_to_front = true;
+                    }
+                }
+                WindowEvent::RedrawRequested => {
+                    if state.frame_count % 60 == 0 {
+                        log::info!("[Native] RedrawRequested (frame {})", state.frame_count);
+                    }
+                    let size = state.window.inner_size();
+                    let scale = state.window.scale_factor();
+                    let logical_size = size.to_logical::<f32>(scale);
+
+                    let rect = cvkg_core::Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: logical_size.width,
+                        height: logical_size.height,
+                    };
+
+                    // Record the start of this redraw and snapshot the previous frame's
+                    // start time before overwriting it, so inter-frame gap is measurable.
+                    let redraw_start = std::time::Instant::now();
+                    let last_redraw_start = state.last_redraw_start;
+                    // Update last_redraw_start immediately so the next frame measures correctly
+                    // even if this frame returns early.
+                    state.last_redraw_start = redraw_start;
+
+                    // Build new vdom and diff (layout pass)
+                    let layout_start = std::time::Instant::now();
+                    let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                    let layout_end = std::time::Instant::now();
+
+                    // Apply patches to the accessibility tree and the previous VDOM
+                    let state_flush_start = std::time::Instant::now();
+                    if let Some(prev_vdom) = &mut state.vdom {
+                        let patches = prev_vdom.diff(&new_vdom);
+                        let mut nodes = Vec::new();
+                        for patch in &patches {
+                            if let cvkg_vdom::VDomPatch::Create(node)
+                            | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
+                            {
+                                nodes
+                                    .push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                            } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
+                                && let Some(node) = new_vdom.nodes.get(id)
+                            {
+                                nodes
+                                    .push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                            }
+                        }
+                        if !nodes.is_empty() {
+                            if let Some(adapter) = &mut state.accesskit_adapter {
+                                adapter.update_if_active(|| accesskit::TreeUpdate {
+                                    nodes,
+                                    tree: None,
+                                    focus: accesskit::NodeId(1),
+                                });
+                            }
+                        }
+                        prev_vdom.apply_patches(patches);
+                    } else {
+                        state.vdom = Some(new_vdom);
+                    }
+                    let state_flush_end = std::time::Instant::now();
+
+                    // GPU rendering
+                    let draw_start = std::time::Instant::now();
+                    let delta_time = redraw_start.duration_since(last_redraw_start).as_secs_f32();
+                    let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
+                    let mut gpu = gpu_arc
+                        .lock()
+                        .expect("GPU mutex poisoned during frame begin");
+                    let encoder = gpu.begin_frame(id);
+                    let mut renderer = NativeRenderer::new(
+                        state.window.clone(),
+                        gpu_arc.clone(),
+                        delta_time,
+                        elapsed_time,
+                        self.berserker_mode,
+                        self.rage,
                     );
-                state.window.request_redraw();
-            }
-            WindowEvent::Focused(focused) => {
-                log::info!("[Native] Window focus changed: {}", focused);
-            }
-            WindowEvent::RedrawRequested => {
-                if state.frame_count % 60 == 0 {
-                    log::info!("[Native] RedrawRequested (frame {})", state.frame_count);
-                }
-                let size = state.window.inner_size();
-                let scale = state.window.scale_factor();
-                let logical_size = size.to_logical::<f32>(scale);
+                    // Release the gpu lock before calling render — the render methods each
+                    // re-acquire it per-call, allowing the view tree to interleave with other
+                    // work without holding one giant critical section across the whole draw.
+                    drop(gpu);
+                    self.view.render(&mut renderer, rect);
+                    let draw_end = std::time::Instant::now();
 
-                let rect = cvkg_core::Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: logical_size.width,
-                    height: logical_size.height,
-                };
+                    // Re-acquire to submit the frame
+                    let gpu_submit_start = std::time::Instant::now();
+                    let mut gpu = gpu_arc
+                        .lock()
+                        .expect("GPU mutex poisoned during frame submit");
+                    gpu.render_frame();
+                    gpu.end_frame(encoder);
+                    let gpu_submit_end = std::time::Instant::now();
 
-                // Record the start of this redraw and snapshot the previous frame's
-                // start time before overwriting it, so inter-frame gap is measurable.
-                let redraw_start = std::time::Instant::now();
-                let last_redraw_start = state.last_redraw_start;
-                // Update last_redraw_start immediately so the next frame measures correctly
-                // even if this frame returns early.
-                state.last_redraw_start = redraw_start;
+                    // Build telemetry from this frame's timing measurements.
+                    // NOTE: input_time_ms measures the inter-frame gap (time from end of last frame
+                    // to start of this one), not input dispatch latency. The field name is defined
+                    // in cvkg_core::TelemetryData and kept as-is to match that struct.
+                    let mut telemetry = cvkg_core::TelemetryData::default();
+                    telemetry.input_time_ms =
+                        redraw_start.duration_since(last_redraw_start).as_secs_f32() * 1000.0;
+                    telemetry.layout_time_ms =
+                        layout_end.duration_since(layout_start).as_secs_f32() * 1000.0;
+                    telemetry.state_flush_time_ms = state_flush_end
+                        .duration_since(state_flush_start)
+                        .as_secs_f32()
+                        * 1000.0;
+                    telemetry.draw_time_ms =
+                        draw_end.duration_since(draw_start).as_secs_f32() * 1000.0;
+                    telemetry.gpu_submit_time_ms = gpu_submit_end
+                        .duration_since(gpu_submit_start)
+                        .as_secs_f32()
+                        * 1000.0;
 
-                // Build new vdom and diff (layout pass)
-                let layout_start = std::time::Instant::now();
-                let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
-                let layout_end = std::time::Instant::now();
+                    // Total frame time from redraw request to GPU submission complete
+                    let frame_time_ms =
+                        gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
+                    telemetry.frame_time_ms = frame_time_ms;
 
-                // Apply patches to the accessibility tree and the previous VDOM
-                let state_flush_start = std::time::Instant::now();
-                if let Some(prev_vdom) = &mut state.vdom {
-                    let patches = prev_vdom.diff(&new_vdom);
-                    let mut nodes = Vec::new();
-                    for patch in &patches {
-                        if let cvkg_vdom::VDomPatch::Create(node)
-                        | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
-                        {
-                            nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
-                        } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
-                            && let Some(node) = new_vdom.nodes.get(id)
-                        {
-                            nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
-                        }
+                    // Tail Latency Tracking (P99 and Jitter) over a 100-frame sliding window.
+                    state.frame_history.push_back(frame_time_ms);
+                    if state.frame_history.len() > 100 {
+                        state.frame_history.pop_front();
                     }
-                    if !nodes.is_empty() {
-                        if let Some(adapter) = &mut state.accesskit_adapter {
-                            adapter.update_if_active(|| accesskit::TreeUpdate {
-                                nodes,
-                                tree: None,
-                                focus: accesskit::NodeId(1),
-                            });
-                        }
+
+                    let mut sorted_frames: Vec<f32> = state.frame_history.iter().copied().collect();
+                    sorted_frames
+                        .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+
+                    if !sorted_frames.is_empty() {
+                        let p99_idx = (sorted_frames.len() as f32 * 0.99).floor() as usize;
+                        telemetry.p99_frame_time_ms =
+                            sorted_frames[p99_idx.min(sorted_frames.len() - 1)];
+
+                        // Jitter: standard deviation of frame times over the sliding window.
+                        let avg = sorted_frames.iter().sum::<f32>() / sorted_frames.len() as f32;
+                        let variance = sorted_frames.iter().map(|f| (f - avg).powi(2)).sum::<f32>()
+                            / sorted_frames.len() as f32;
+                        telemetry.frame_jitter_ms = variance.sqrt();
                     }
-                    prev_vdom.apply_patches(patches);
-                } else {
-                    state.vdom = Some(new_vdom);
+
+                    // FIX #8: hardware_stall_detected is now reset each frame based on current
+                    // jitter rather than being set once and never cleared. A single jittery frame
+                    // no longer permanently flags the session. Jitter > 20ms is a heuristic for
+                    // scheduling disruption (GC, OS preemption, slow layout) — not a confirmed
+                    // hardware stall, but the field name is defined in cvkg_core::TelemetryData.
+                    telemetry.hardware_stall_detected = telemetry.frame_jitter_ms > 20.0;
+
+                    state.frame_count += 1;
+
+                    telemetry.berserker_rage = self.rage;
+                    gpu.telemetry = telemetry;
                 }
-                let state_flush_end = std::time::Instant::now();
-
-                // GPU rendering
-                let draw_start = std::time::Instant::now();
-                let delta_time = redraw_start.duration_since(last_redraw_start).as_secs_f32();
-                let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
-                let mut gpu = gpu_arc
-                    .lock()
-                    .expect("GPU mutex poisoned during frame begin");
-                let encoder = gpu.begin_frame(id);
-                let mut renderer = NativeRenderer::new(
-                    state.window.clone(),
-                    gpu_arc.clone(),
-                    delta_time,
-                    elapsed_time,
-                    self.berserker_mode,
-                    self.rage,
-                );
-                // Release the gpu lock before calling render — the render methods each
-                // re-acquire it per-call, allowing the view tree to interleave with other
-                // work without holding one giant critical section across the whole draw.
-                drop(gpu);
-                self.view.render(&mut renderer, rect);
-                let draw_end = std::time::Instant::now();
-
-                // Re-acquire to submit the frame
-                let gpu_submit_start = std::time::Instant::now();
-                let mut gpu = gpu_arc
-                    .lock()
-                    .expect("GPU mutex poisoned during frame submit");
-                gpu.render_frame();
-                gpu.end_frame(encoder);
-                let gpu_submit_end = std::time::Instant::now();
-
-                // Build telemetry from this frame's timing measurements.
-                // NOTE: input_time_ms measures the inter-frame gap (time from end of last frame
-                // to start of this one), not input dispatch latency. The field name is defined
-                // in cvkg_core::TelemetryData and kept as-is to match that struct.
-                let mut telemetry = cvkg_core::TelemetryData::default();
-                telemetry.input_time_ms =
-                    redraw_start.duration_since(last_redraw_start).as_secs_f32() * 1000.0;
-                telemetry.layout_time_ms =
-                    layout_end.duration_since(layout_start).as_secs_f32() * 1000.0;
-                telemetry.state_flush_time_ms = state_flush_end
-                    .duration_since(state_flush_start)
-                    .as_secs_f32()
-                    * 1000.0;
-                telemetry.draw_time_ms = draw_end.duration_since(draw_start).as_secs_f32() * 1000.0;
-                telemetry.gpu_submit_time_ms = gpu_submit_end
-                    .duration_since(gpu_submit_start)
-                    .as_secs_f32()
-                    * 1000.0;
-
-                // Total frame time from redraw request to GPU submission complete
-                let frame_time_ms =
-                    gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
-                telemetry.frame_time_ms = frame_time_ms;
-
-                // Tail Latency Tracking (P99 and Jitter) over a 100-frame sliding window.
-                state.frame_history.push_back(frame_time_ms);
-                if state.frame_history.len() > 100 {
-                    state.frame_history.pop_front();
+                WindowEvent::CursorEntered { .. } => {
+                    log::info!("[Native] Cursor ENTERED window");
+                    if let Some(vdom) = &state.vdom {
+                        vdom.dispatch_event(cvkg_core::Event::PointerEnter);
+                    }
+                    state.window.request_redraw();
                 }
-
-                let mut sorted_frames: Vec<f32> = state.frame_history.iter().copied().collect();
-                sorted_frames.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-
-                if !sorted_frames.is_empty() {
-                    let p99_idx = (sorted_frames.len() as f32 * 0.99).floor() as usize;
-                    telemetry.p99_frame_time_ms =
-                        sorted_frames[p99_idx.min(sorted_frames.len() - 1)];
-
-                    // Jitter: standard deviation of frame times over the sliding window.
-                    let avg = sorted_frames.iter().sum::<f32>() / sorted_frames.len() as f32;
-                    let variance = sorted_frames.iter().map(|f| (f - avg).powi(2)).sum::<f32>()
-                        / sorted_frames.len() as f32;
-                    telemetry.frame_jitter_ms = variance.sqrt();
+                WindowEvent::CursorLeft { .. } => {
+                    log::info!("[Native] Cursor LEFT window");
+                    if let Some(vdom) = &state.vdom {
+                        vdom.dispatch_event(cvkg_core::Event::PointerLeave);
+                    }
+                    state.window.request_redraw();
                 }
-
-                // FIX #8: hardware_stall_detected is now reset each frame based on current
-                // jitter rather than being set once and never cleared. A single jittery frame
-                // no longer permanently flags the session. Jitter > 20ms is a heuristic for
-                // scheduling disruption (GC, OS preemption, slow layout) — not a confirmed
-                // hardware stall, but the field name is defined in cvkg_core::TelemetryData.
-                telemetry.hardware_stall_detected = telemetry.frame_jitter_ms > 20.0;
-
-                // FIX #7: Removed anti-analysis EnvironmentShield probe and enforce_mitigation
-                // calls. This code ran every 60 frames and actively interfered with legitimate
-                // profiling, debugging, and CI environments. Anti-debugging measures have no
-                // place in a developer tool's render loop and will break expected tooling behavior.
-
-                state.frame_count += 1;
-
-                telemetry.berserker_rage = self.rage;
-                gpu.telemetry = telemetry;
-            }
-            WindowEvent::CursorEntered { .. } => {
-                log::info!("[Native] Cursor ENTERED window");
-                if let Some(vdom) = &state.vdom {
-                    vdom.dispatch_event(cvkg_core::Event::PointerEnter);
+                WindowEvent::CursorMoved { position, .. } => {
+                    let scale = state.window.scale_factor();
+                    let logical = position.to_logical::<f32>(scale);
+                    log::info!(
+                        "[Native] Cursor Moved: Physical={:?} Logical={:?} Scale={}",
+                        position,
+                        logical,
+                        scale
+                    );
+                    state.cursor_pos = [logical.x, logical.y];
+                    if let Some(vdom) = &state.vdom {
+                        vdom.dispatch_event(cvkg_core::Event::PointerMove {
+                            x: state.cursor_pos[0],
+                            y: state.cursor_pos[1],
+                            proximity_field: 0.0,
+                        });
+                    }
+                    state.window.request_redraw();
                 }
-                state.window.request_redraw();
-            }
-            WindowEvent::CursorLeft { .. } => {
-                log::info!("[Native] Cursor LEFT window");
-                if let Some(vdom) = &state.vdom {
-                    vdom.dispatch_event(cvkg_core::Event::PointerLeave);
-                }
-                state.window.request_redraw();
-            }
-            WindowEvent::CursorMoved { position, .. } => {
-                let scale = state.window.scale_factor();
-                let logical = position.to_logical::<f32>(scale);
-                log::info!(
-                    "[Native] Cursor Moved: Physical={:?} Logical={:?} Scale={}",
-                    position,
-                    logical,
-                    scale
-                );
-                state.cursor_pos = [logical.x, logical.y];
-                if let Some(vdom) = &state.vdom {
-                    vdom.dispatch_event(cvkg_core::Event::PointerMove {
-                        x: state.cursor_pos[0],
-                        y: state.cursor_pos[1],
-                        proximity_field: 0.0,
-                    });
-                }
-                // FIX #12: Always request redraw on movement to ensure hover effects respond immediately.
-                state.window.request_redraw();
-            }
-            WindowEvent::MouseInput {
-                state: mouse_state,
-                button,
-                ..
-            } => {
-                log::info!(
-                    "[Native] MOUSE INPUT: {:?} button={:?} pos={:?}",
-                    mouse_state,
+                WindowEvent::MouseInput {
+                    state: mouse_state,
                     button,
-                    state.cursor_pos
-                );
-                if let Some(vdom) = &state.vdom {
-                    let btn_id = match button {
-                        winit::event::MouseButton::Left => 0,
-                        winit::event::MouseButton::Right => 2,
-                        winit::event::MouseButton::Middle => 1,
-                        winit::event::MouseButton::Back => 3,
-                        winit::event::MouseButton::Forward => 4,
-                        winit::event::MouseButton::Other(id) => id as u32,
-                    };
+                    ..
+                } => {
+                    log::info!(
+                        "[Native] MOUSE INPUT: {:?} button={:?} pos={:?}",
+                        mouse_state,
+                        button,
+                        state.cursor_pos
+                    );
+                    if let Some(vdom) = &state.vdom {
+                        let btn_id = match button {
+                            winit::event::MouseButton::Left => 0,
+                            winit::event::MouseButton::Right => 2,
+                            winit::event::MouseButton::Middle => 1,
+                            winit::event::MouseButton::Back => 3,
+                            winit::event::MouseButton::Forward => 4,
+                            winit::event::MouseButton::Other(id) => id as u32,
+                        };
 
-                    match mouse_state {
-                        winit::event::ElementState::Pressed => {
-                            log::info!("[Native] Dispatching PointerDown to VDOM");
-                            vdom.dispatch_event(cvkg_core::Event::PointerDown {
-                                x: state.cursor_pos[0],
-                                y: state.cursor_pos[1],
-                                button: btn_id,
-                                proximity_field: 0.0,
-                            });
+                        match mouse_state {
+                            winit::event::ElementState::Pressed => {
+                                log::info!("[Native] Dispatching PointerDown to VDOM");
+                                vdom.dispatch_event(cvkg_core::Event::PointerDown {
+                                    x: state.cursor_pos[0],
+                                    y: state.cursor_pos[1],
+                                    button: btn_id,
+                                    proximity_field: 0.0,
+                                });
+                            }
+                            winit::event::ElementState::Released => {
+                                log::info!("[Native] Dispatching PointerUp to VDOM");
+                                vdom.dispatch_event(cvkg_core::Event::PointerUp {
+                                    x: state.cursor_pos[0],
+                                    y: state.cursor_pos[1],
+                                    button: btn_id,
+                                });
+                            }
                         }
-                        winit::event::ElementState::Released => {
-                            log::info!("[Native] Dispatching PointerUp to VDOM");
-                            vdom.dispatch_event(cvkg_core::Event::PointerUp {
-                                x: state.cursor_pos[0],
-                                y: state.cursor_pos[1],
-                                button: btn_id,
-                            });
-                        }
+                        state.window.request_redraw();
+                    } else {
+                        log::warn!("[Native] Mouse input received but state.vdom is None!");
+                    }
+                }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    if let Some(vdom) = &state.vdom {
+                        let (dx, dy) = match delta {
+                            winit::event::MouseScrollDelta::LineDelta(x, y) => (x * 10.0, y * 10.0),
+                            winit::event::MouseScrollDelta::PixelDelta(pos) => {
+                                (pos.x as f32, pos.y as f32)
+                            }
+                        };
+                        vdom.dispatch_event(cvkg_core::Event::PointerWheel {
+                            x: state.cursor_pos[0],
+                            y: state.cursor_pos[1],
+                            delta_x: dx,
+                            delta_y: dy,
+                        });
+                        state.window.request_redraw();
+                    }
+                }
+                // ── Trackpad gestures (pinch-to-zoom, swipe) ──────────────────────
+                // OS-agnostic: winit provides these on macOS trackpad, Windows precision
+                // touchpads, and Linux (where supported). Falls back gracefully.
+                WindowEvent::PinchGesture { delta, .. } => {
+                    if let Some(vdom) = &state.vdom {
+                        let scale = 1.0 + delta as f32;
+                        let velocity = delta as f32;
+                        vdom.dispatch_event(cvkg_core::Event::GesturePinch {
+                            center: state.cursor_pos,
+                            scale,
+                            velocity,
+                            phase: cvkg_core::TouchPhase::Moved,
+                        });
+                    }
+                    // Provide micro-feedback on pinch
+                    if let Some(audio) = &self.audio_engine {
+                        audio.play_sound("nav_tick", 0.3);
+                    }
+                    self.haptic_engine
+                        .visual_tick((delta.abs() as f32 * 5.0).min(1.0));
+                    state.window.request_redraw();
+                }
+                WindowEvent::RotationGesture { delta, .. } => {
+                    if let Some(vdom) = &state.vdom {
+                        let angle = delta;
+                        vdom.dispatch_event(cvkg_core::Event::GestureSwipe {
+                            direction: [angle.cos(), angle.sin()],
+                            velocity: delta.abs(),
+                            phase: cvkg_core::TouchPhase::Moved,
+                        });
                     }
                     state.window.request_redraw();
-                } else {
-                    log::warn!("[Native] Mouse input received but state.vdom is None!");
                 }
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                if let Some(vdom) = &state.vdom {
-                    let (dx, dy) = match delta {
-                        winit::event::MouseScrollDelta::LineDelta(x, y) => (x * 10.0, y * 10.0),
-                        winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                            (pos.x as f32, pos.y as f32)
+                WindowEvent::KeyboardInput { event, .. } => {
+                    if event.state == winit::event::ElementState::Pressed {
+                        if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+                            // Cross-platform "command" key: ⌘ on macOS, Ctrl on all other OSes.
+                            // This ensures keyboard shortcuts work identically on every platform
+                            // without separate branches in every handler.
+                            let is_cmd = if cfg!(target_os = "macos") {
+                                self.modifiers.super_key()
+                            } else {
+                                self.modifiers.control_key()
+                            };
+                            let is_shift = self.modifiers.shift_key();
+
+                            if is_cmd {
+                                match code {
+                                    // ── Undo / Redo ───────────────────────────────
+                                    winit::keyboard::KeyCode::KeyZ => {
+                                        if is_shift {
+                                            log::info!("[Native] Shortcut: Redo (Cmd+Shift+Z)");
+                                            let mut redo_action = None;
+                                            cvkg_core::update_system_state(|s| {
+                                                let mut s = s.clone();
+                                                redo_action = s.undo_manager.redo();
+                                                s
+                                            });
+                                            if let Some(action) = redo_action {
+                                                action();
+                                            }
+                                            state.window.request_redraw();
+                                        } else {
+                                            log::info!("[Native] Shortcut: Undo (Cmd+Z)");
+                                            let mut undo_action = None;
+                                            cvkg_core::update_system_state(|s| {
+                                                let mut s = s.clone();
+                                                undo_action = s.undo_manager.undo();
+                                                s
+                                            });
+                                            if let Some(action) = undo_action {
+                                                action();
+                                            }
+                                            state.window.request_redraw();
+                                        }
+                                    }
+                                    // Ctrl+Y as alternative Redo on non-macOS
+                                    winit::keyboard::KeyCode::KeyY
+                                        if !cfg!(target_os = "macos") =>
+                                    {
+                                        log::info!("[Native] Shortcut: Redo (Ctrl+Y)");
+                                        let mut redo_action = None;
+                                        cvkg_core::update_system_state(|s| {
+                                            let mut s = s.clone();
+                                            redo_action = s.undo_manager.redo();
+                                            s
+                                        });
+                                        if let Some(action) = redo_action {
+                                            action();
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    // ── File operations ───────────────────────────
+                                    winit::keyboard::KeyCode::KeyN => {
+                                        log::info!("[Native] Shortcut: New Window (Cmd+N)");
+                                        create_new_window = true;
+                                    }
+                                    winit::keyboard::KeyCode::KeyO => {
+                                        log::info!("[Native] Shortcut: Open File (Cmd+O)");
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                                key: "cmd+o".to_string(),
+                                            });
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    winit::keyboard::KeyCode::KeyS => {
+                                        log::info!("[Native] Shortcut: Save (Cmd+S)");
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                                key: "cmd+s".to_string(),
+                                            });
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    winit::keyboard::KeyCode::KeyW => {
+                                        log::info!("[Native] Shortcut: Close Window (Cmd+W)");
+                                        close_window = true;
+                                    }
+                                    winit::keyboard::KeyCode::KeyQ => {
+                                        log::info!("[Native] Shortcut: Quit (Cmd+Q)");
+                                        // Defer closing all windows until after the state borrow ends.
+                                        quit_all = true;
+                                    }
+                                    // ── Clipboard ────────────────────────────────
+                                    winit::keyboard::KeyCode::KeyC => {
+                                        log::info!("[Native] Shortcut: Copy (Cmd+C)");
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::Copy);
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    winit::keyboard::KeyCode::KeyV => {
+                                        log::info!("[Native] Shortcut: Paste (Cmd+V)");
+                                        // Read the system clipboard. Fall back to empty string on
+                                        // error so the Paste event is always delivered to the VDOM.
+                                        let text = arboard::Clipboard::new()
+                                            .ok()
+                                            .and_then(|mut cb| cb.get_text().ok())
+                                            .unwrap_or_default();
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::Paste(text));
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    winit::keyboard::KeyCode::KeyX => {
+                                        log::info!("[Native] Shortcut: Cut (Cmd+X)");
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::Cut);
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    // ── Selection / search ────────────────────────
+                                    winit::keyboard::KeyCode::KeyA => {
+                                        log::info!("[Native] Shortcut: Select All (Cmd+A)");
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                                key: "cmd+a".to_string(),
+                                            });
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    winit::keyboard::KeyCode::KeyF => {
+                                        log::info!("[Native] Shortcut: Find (Cmd+F)");
+                                        if let Some(vdom) = &state.vdom {
+                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                                key: "cmd+f".to_string(),
+                                            });
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    _ => {}
+                                }
+                            }
                         }
-                    };
-                    vdom.dispatch_event(cvkg_core::Event::PointerWheel {
-                        x: state.cursor_pos[0],
-                        y: state.cursor_pos[1],
-                        delta_x: dx,
-                        delta_y: dy,
+                    }
+
+                    if let Some(vdom) = &state.vdom
+                        && let Some(cvkg_event) = convert_keyboard_event(event)
+                    {
+                        vdom.dispatch_event(cvkg_event);
+                        state.window.request_redraw();
+                    }
+                }
+
+                WindowEvent::Ime(ime_event) => {
+                    if let Some(vdom) = &state.vdom
+                        && let Some(cvkg_event) = convert_ime_event(ime_event)
+                    {
+                        vdom.dispatch_event(cvkg_event);
+                        state.window.request_redraw();
+                    }
+                }
+                WindowEvent::ModifiersChanged(new_modifiers) => {
+                    self.modifiers = new_modifiers.state();
+                    let shift = self.modifiers.shift_key();
+                    let ctrl = self.modifiers.control_key();
+                    let alt = self.modifiers.alt_key();
+                    let logo = self.modifiers.super_key();
+                    cvkg_core::update_system_state(|st| {
+                        let mut new_st = st.clone();
+                        new_st.modifiers_shift = shift;
+                        new_st.modifiers_ctrl = ctrl;
+                        new_st.modifiers_alt = alt;
+                        new_st.modifiers_logo = logo;
+                        new_st
                     });
-                    state.window.request_redraw();
                 }
+                _ => {}
             }
-            WindowEvent::KeyboardInput { event, .. } => {
-                if let Some(vdom) = &state.vdom
-                    && let Some(cvkg_event) = convert_keyboard_event(event)
-                {
-                    vdom.dispatch_event(cvkg_event);
-                    state.window.request_redraw();
-                }
+        } // end of state block
+
+        if close_window {
+            self.window_manager.close_window(id);
+        }
+        if quit_all {
+            // Drain all windows; the is_empty check below will exit the event loop.
+            for wid in self.window_manager.window_order().to_vec() {
+                self.window_manager.close_window(wid);
             }
-            WindowEvent::Ime(ime_event) => {
-                if let Some(vdom) = &state.vdom
-                    && let Some(cvkg_event) = convert_ime_event(ime_event)
-                {
-                    vdom.dispatch_event(cvkg_event);
-                    state.window.request_redraw();
-                }
-            }
-            _ => {}
+        }
+        // Exit the event loop when all windows are closed (Cmd+W on last window, or Cmd+Q).
+        if self.window_manager.windows.is_empty() {
+            event_loop.exit();
+        }
+        if bring_to_front {
+            self.window_manager.bring_to_front(id);
+        }
+        if create_new_window {
+            self.window_manager.create_window(
+                event_loop,
+                &self.gpu,
+                self.proxy.clone(),
+                cvkg_core::WindowConfig {
+                    title: "New CVKG Window".to_string(),
+                    size: (800.0, 600.0),
+                    ..Default::default()
+                },
+                false, // is_main
+                &self.view,
+            );
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AppEvent) {
-        let AppEvent::AccessibilityAction(request) = event;
-        let node_id = cvkg_vdom::NodeId(request.target.0);
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
+        match event {
+            AppEvent::AccessibilityAction(request) => {
+                let node_id = cvkg_vdom::NodeId(request.target.0);
+                let target_state = self.window_manager.windows.values_mut().find(|s| {
+                    s.vdom
+                        .as_ref()
+                        .map_or(false, |v| v.nodes.contains_key(&node_id))
+                });
 
-        // FIX #11: Accessibility actions carry a target NodeId that identifies which
-        // window owns the node. We search all windows for the one containing that node
-        // rather than routing to the arbitrary first window (HashMap iteration order is
-        // non-deterministic and would silently misroute actions in multi-window layouts).
-        let target_state = self.windows.values_mut().find(|s| {
-            s.vdom
-                .as_ref()
-                .map_or(false, |v| v.nodes.contains_key(&node_id))
-        });
-
-        if let Some(state) = target_state
-            && let Some(vdom) = &state.vdom
-            && let Some(node) = vdom.nodes.get(&node_id)
-            && request.action == accesskit::Action::Click
-        {
-            let event = cvkg_core::Event::PointerClick {
-                x: node.layout.x + node.layout.width / 2.0,
-                y: node.layout.y + node.layout.height / 2.0,
-                button: 0, // Assume left click for accessibility actions
-            };
-            vdom.dispatch_event(event);
+                if let Some(state) = target_state
+                    && let Some(vdom) = &state.vdom
+                    && let Some(node) = vdom.nodes.get(&node_id)
+                    && request.action == accesskit::Action::Click
+                {
+                    let event = cvkg_core::Event::PointerClick {
+                        x: node.layout.x + node.layout.width / 2.0,
+                        y: node.layout.y + node.layout.height / 2.0,
+                        button: 0, // Assume left click for accessibility actions
+                    };
+                    vdom.dispatch_event(event);
+                }
+            }
+            AppEvent::CloseWindow(winit_id) => {
+                self.window_manager.close_window(winit_id);
+                if self.window_manager.windows.is_empty() {
+                    event_loop.exit();
+                }
+            }
+            AppEvent::SetTitle(winit_id, title) => {
+                if let Some(data) = self.window_manager.windows.get(&winit_id) {
+                    data.window.set_title(&title);
+                }
+            }
+            AppEvent::SetSize(winit_id, width, height) => {
+                if let Some(data) = self.window_manager.windows.get(&winit_id) {
+                    let _ = data
+                        .window
+                        .request_inner_size(winit::dpi::LogicalSize::new(width, height));
+                }
+            }
+            AppEvent::SetVisible(winit_id, visible) => {
+                if let Some(data) = self.window_manager.windows.get(&winit_id) {
+                    data.window.set_visible(visible);
+                }
+            }
+            AppEvent::BringToFront(winit_id) => {
+                self.window_manager.bring_to_front(winit_id);
+            }
+            AppEvent::MenuAction(menu_id) => {
+                // Dispatch the menu action to the focused window's VDOM as a
+                // KeyDown event so existing shortcut listeners can respond.
+                // The menu_id string matches the IDs assigned in build_native_menu().
+                log::info!("[Native] Menu action: {:?}", menu_id);
+                let focused = self.window_manager.window_order().last().copied();
+                if let Some(winit_id) = focused
+                    && let Some(data) = self.window_manager.windows.get(&winit_id)
+                    && let Some(vdom) = &data.vdom
+                {
+                    vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                        key: menu_id.0.clone(),
+                    });
+                    data.window.request_redraw();
+                }
+            }
         }
     }
 
@@ -583,7 +1471,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 log::debug!("[Native] Heartbeat ticking (rage: {})", self.rage);
             }
             self.last_frame_time = now;
-            for window_state in self.windows.values() {
+            for window_state in self.window_manager.windows.values() {
                 window_state.window.request_redraw();
             }
             event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
@@ -953,6 +1841,211 @@ impl cvkg_core::Renderer for NativeRenderer {
         // For the Ulfhednar prototype, we simulate the handshake.
         println!("[BRIDGE] PRINTER_READY // SPOOLING_DATA...");
     }
+}
+
+// ── Native Menu Bar Builder ───────────────────────────────────────────
+
+/// Build a `muda::Menu` reflecting the standard CVKG menu structure.
+///
+/// Each menu item is assigned a `MenuId` whose string value matches the
+/// logical action name (e.g. `"cmd+n"`, `"cmd+s"`). The native renderer's
+/// `AppEvent::MenuAction` handler dispatches these as `Event::KeyDown` into
+/// the active VDOM so components can react identically to both keyboard
+/// shortcuts and menu selections.
+///
+/// The `_window` parameter is unused on macOS/Linux but required on Windows
+/// where the HMENU must be associated with a specific HWND.
+fn build_native_menu(_window: &winit::window::Window) -> muda::Menu {
+    let menu = muda::Menu::new();
+
+    // ── File ──────────────────────────────────────────────────────────────
+    let file_menu = muda::Submenu::new("File", true);
+    let _ = file_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+n".into()),
+        "New",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyN,
+        )),
+    ));
+    let _ = file_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+o".into()),
+        "Open…",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyO,
+        )),
+    ));
+    let _ = file_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = file_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+s".into()),
+        "Save",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyS,
+        )),
+    ));
+    let _ = file_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = file_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+w".into()),
+        "Close",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyW,
+        )),
+    ));
+    let _ = file_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = file_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+q".into()),
+        "Quit",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyQ,
+        )),
+    ));
+    let _ = menu.append(&file_menu);
+
+    // ── Edit ──────────────────────────────────────────────────────────────
+    let edit_menu = muda::Submenu::new("Edit", true);
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+z".into()),
+        "Undo",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyZ,
+        )),
+    ));
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+shift+z".into()),
+        "Redo",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER | muda::accelerator::Modifiers::SHIFT),
+            muda::accelerator::Code::KeyZ,
+        )),
+    ));
+    let _ = edit_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+x".into()),
+        "Cut",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyX,
+        )),
+    ));
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+c".into()),
+        "Copy",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyC,
+        )),
+    ));
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+v".into()),
+        "Paste",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyV,
+        )),
+    ));
+    let _ = edit_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+a".into()),
+        "Select All",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyA,
+        )),
+    ));
+    let _ = edit_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = edit_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+f".into()),
+        "Find…",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyF,
+        )),
+    ));
+    let _ = menu.append(&edit_menu);
+
+    // ── View ──────────────────────────────────────────────────────────────
+    let view_menu = muda::Submenu::new("View", true);
+    let _ = view_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+=".into()),
+        "Zoom In",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::Equal,
+        )),
+    ));
+    let _ = view_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+-".into()),
+        "Zoom Out",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::Minus,
+        )),
+    ));
+    let _ = view_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = view_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("fullscreen".into()),
+        "Toggle Fullscreen",
+        true,
+        None,
+    ));
+    let _ = menu.append(&view_menu);
+
+    // ── Window ────────────────────────────────────────────────────────────
+    let window_menu = muda::Submenu::new("Window", true);
+    let _ = window_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("cmd+m".into()),
+        "Minimize",
+        true,
+        Some(muda::accelerator::Accelerator::new(
+            Some(muda::accelerator::Modifiers::SUPER),
+            muda::accelerator::Code::KeyM,
+        )),
+    ));
+    let _ = window_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("window_zoom".into()),
+        "Zoom",
+        true,
+        None,
+    ));
+    let _ = window_menu.append(&muda::PredefinedMenuItem::separator());
+    let _ = window_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("bring_all_to_front".into()),
+        "Bring All to Front",
+        true,
+        None,
+    ));
+    let _ = menu.append(&window_menu);
+
+    // ── Help ──────────────────────────────────────────────────────────────
+    let help_menu = muda::Submenu::new("Help", true);
+    let _ = help_menu.append(&muda::MenuItem::with_id(
+        muda::MenuId("help_search".into()),
+        "Search Help",
+        true,
+        None,
+    ));
+    let _ = menu.append(&help_menu);
+
+    menu
 }
 
 // ── Event Conversion Helpers ───────────────────────────────────────────
@@ -1330,4 +2423,103 @@ fn load_icon() -> Option<winit::window::Icon> {
         base
     );
     None
+}
+
+// =============================================================================
+// AUDIO / HAPTIC ENGINES — Cross-platform micro-feedback
+// =============================================================================
+
+/// Cross-platform audio engine using rodio for spatialized sound cues.
+/// Uses rodio 0.21 API: OutputStreamBuilder::open_default_stream() returns
+/// OutputStream directly. Playback via Sink::try_new(&stream.mixer()) + append.
+pub struct RodioAudioEngine {
+    _stream: rodio::OutputStream,
+}
+
+impl RodioAudioEngine {
+    /// Create a new audio engine. Falls back to None if audio init fails.
+    pub fn new() -> Option<Self> {
+        match rodio::OutputStreamBuilder::open_default_stream() {
+            Ok(stream) => {
+                log::info!("[Native] Audio engine initialized (rodio)");
+                Some(Self { _stream: stream })
+            }
+            Err(e) => {
+                log::warn!("[Native] Audio init failed (no sound): {}", e);
+                None
+            }
+        }
+    }
+}
+
+impl cvkg_core::AudioEngine for RodioAudioEngine {
+    fn play_sound(&self, name: &str, volume: f32) {
+        let data: &[u8] = match name {
+            "nav_tick" => cvkg_core::sounds::NAVIGATION_TICK,
+            "success_chime" => cvkg_core::sounds::SUCCESS_CHIME,
+            "warning_tone" => cvkg_core::sounds::WARNING_TONE,
+            _ => {
+                log::warn!("[Native] Unknown sound: {}", name);
+                return;
+            }
+        };
+        self.play_buffer(data, volume);
+    }
+
+    fn play_buffer(&self, data: &[u8], _volume: f32) {
+        use std::io::Cursor;
+        let cursor = Cursor::new(data.to_vec());
+        let mixer = self._stream.mixer();
+        match rodio::play(mixer, cursor) {
+            Ok(_sink) => {}
+            Err(e) => log::warn!("[Native] Audio play failed: {}", e),
+        }
+    }
+
+    fn play_spatial(&self, name: &str, _position: [f32; 3], volume: f32) {
+        // Spatial audio: play sound without positional attenuation (OS-agnostic fallback)
+        self.play_sound(name, volume);
+    }
+}
+
+/// Visual haptic engine that translates haptic requests into visual micro-animations.
+/// Used as a cross-platform fallback where native haptics are unavailable.
+pub struct VisualHapticEngine {
+    last_impact: std::sync::Mutex<std::time::Instant>,
+}
+
+impl Default for VisualHapticEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl VisualHapticEngine {
+    pub fn new() -> Self {
+        Self {
+            last_impact: std::sync::Mutex::new(std::time::Instant::now()),
+        }
+    }
+}
+
+impl cvkg_core::HapticEngine for VisualHapticEngine {
+    fn impact(&self, intensity: cvkg_core::HapticIntensity) {
+        let _ = intensity;
+        *self.last_impact.lock().unwrap() = std::time::Instant::now();
+    }
+    fn selection(&self) {
+        self.impact(cvkg_core::HapticIntensity::Light);
+    }
+    fn success(&self) {
+        self.impact(cvkg_core::HapticIntensity::Medium);
+    }
+    fn warning(&self) {
+        self.impact(cvkg_core::HapticIntensity::Medium);
+    }
+    fn error(&self) {
+        self.impact(cvkg_core::HapticIntensity::Heavy);
+    }
+    fn visual_tick(&self, _intensity: f32) {
+        *self.last_impact.lock().unwrap() = std::time::Instant::now();
+    }
 }

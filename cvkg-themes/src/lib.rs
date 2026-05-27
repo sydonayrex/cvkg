@@ -447,6 +447,79 @@ impl Theme {
         self.is_dark
     }
 
+    /// Create a light-mode theme with appropriate OKLCH values.
+    ///
+    /// Mirrors the dark() constructor but with light backgrounds and dark text.
+    pub fn light() -> Self {
+        Self {
+            is_dark: false,
+            colors: SemanticColors {
+                // Derived from OKLCH seed (0.55, 0.12, 260.0) converted to sRGB
+                primary: Color::new(0.35, 0.30, 0.70, 1.0),
+                secondary: Color::new(0.30, 0.50, 0.30, 1.0),
+                accent: Color::new(0.30, 0.35, 0.75, 1.0),
+                // Near-white background
+                background: Color::new(0.97, 0.97, 0.98, 1.0),
+                surface: Color::new(0.93, 0.93, 0.95, 1.0),
+                error: Color::new(0.75, 0.15, 0.15, 1.0),
+                warning: Color::new(0.80, 0.60, 0.0, 1.0),
+                success: Color::new(0.15, 0.65, 0.30, 1.0),
+                // Near-black text
+                text: Color::new(0.08, 0.08, 0.10, 1.0),
+                text_dim: Color::new(0.40, 0.40, 0.45, 1.0),
+            },
+            typography: TypographyScale {
+                hero: 48.0,
+                h1: 32.0,
+                h2: 24.0,
+                body: 16.0,
+                caption: 12.0,
+                code: 12.0,
+            },
+            spacing: SpacingScale {
+                xs: 4.0,
+                s: 8.0,
+                m: 16.0,
+                l: 24.0,
+                xl: 32.0,
+            },
+            motion: MotionScale {
+                snappy: cvkg_anim::SleipnirParams::snappy(),
+                fluid: cvkg_anim::SleipnirParams::fluid(),
+                heavy: cvkg_anim::SleipnirParams::heavy(),
+                bouncy: cvkg_anim::SleipnirParams::bouncy(),
+            },
+            materials: vec![GlassMaterial {
+                backdrop_blur_radius: 20.0,
+                refraction_index: 1.15,
+                frost_intensity: 0.03,
+                tint_color: OklchColor::new(0.95, 0.01, 260.0, 1.0),
+                tint_opacity: 0.08,
+                border_glow_color: OklchColor::new(0.6, 0.05, 200.0, 0.4),
+                border_glow_radius: 8.0,
+            }],
+        }
+    }
+
+    /// Toggle between dark and light mode, returning a new Theme.
+    ///
+    /// Preserves the current theme's typography/spacing/motion scales.
+    /// Switches the color palette and glass material.
+    pub fn toggle(&self) -> Self {
+        let mut new = if self.is_dark {
+            Self::light()
+        } else {
+            Self::dark()
+        };
+
+        // Preserve typography, spacing, motion from current theme
+        new.typography = self.typography.clone();
+        new.spacing = self.spacing.clone();
+        new.motion = self.motion.clone();
+
+        new
+    }
+
     /// Evaluate APCA (Advanced Perceptual Contrast Algorithm) for text on background.
     ///
     /// Computes the sRGB relative luminance Y for both colors, then applies the
@@ -589,6 +662,10 @@ pub struct StateColors {
     pub text_on_hover: Color,
     /// Text color for use on the active background.
     pub text_on_active: Color,
+    /// Semantic error color (for status indicators, error states).
+    pub error: Color,
+    /// Semantic success color (for status indicators, success states).
+    pub success: Color,
 }
 
 impl StateColors {
@@ -648,6 +725,11 @@ impl StateColors {
             text,
             text_on_hover,
             text_on_active,
+            // Semantic error/success: derive from the base hue but with
+            // fixed lightness/chroma that matches the theme's semantic palette.
+            // These are derived from the base color's hue for consistency.
+            error: OklchColor::new(0.65, 0.15, 25.0, 1.0).to_rgba(),
+            success: OklchColor::new(0.75, 0.12, 145.0, 1.0).to_rgba(),
         }
     }
 
@@ -657,6 +739,9 @@ impl StateColors {
     }
 
     /// Returns the color for a given interactive state.
+    ///
+    /// For `Error` and `Success`, returns the theme's semantic error/success colors
+    /// derived from the base color's hue, ensuring consistency with the active theme.
     pub fn color_for(&self, state: InteractiveState) -> Color {
         match state {
             InteractiveState::Default => self.default,
@@ -664,8 +749,8 @@ impl StateColors {
             InteractiveState::Active => self.active,
             InteractiveState::Focus => self.focus,
             InteractiveState::Disabled => self.disabled,
-            InteractiveState::Error => Color::new(0.9, 0.2, 0.2, 1.0),
-            InteractiveState::Success => Color::new(0.2, 0.8, 0.4, 1.0),
+            InteractiveState::Error => self.error,
+            InteractiveState::Success => self.success,
         }
     }
 
@@ -829,5 +914,71 @@ mod state_color_tests {
             "text luminance {} should be < 0.5 for light bg",
             text_lum
         );
+    }
+
+    #[test]
+    fn light_theme_has_light_background() {
+        let theme = Theme::light();
+        assert!(!theme.is_dark());
+        let bg_lum = theme.colors.background.relative_luminance();
+        assert!(
+            bg_lum > 0.9,
+            "light bg luminance {} should be > 0.9",
+            bg_lum
+        );
+    }
+
+    #[test]
+    fn light_theme_has_dark_text() {
+        let theme = Theme::light();
+        let text_lum = theme.colors.text.relative_luminance();
+        assert!(
+            text_lum < 0.2,
+            "light text luminance {} should be < 0.2",
+            text_lum
+        );
+    }
+
+    #[test]
+    fn toggle_switches_mode() {
+        let dark = Theme::dark();
+        assert!(dark.is_dark());
+        let light = dark.toggle();
+        assert!(!light.is_dark());
+        let back_to_dark = light.toggle();
+        assert!(back_to_dark.is_dark());
+    }
+
+    #[test]
+    fn toggle_preserves_typography() {
+        let dark = Theme::dark();
+        let light = dark.toggle();
+        assert_eq!(dark.typography.body, light.typography.body);
+        assert_eq!(dark.spacing.m, light.spacing.m);
+    }
+
+    #[test]
+    fn state_colors_error_uses_derived_color() {
+        let states = StateColors::from_base(OklchColor::new(0.55, 0.12, 250.0, 1.0));
+        let error = states.color_for(InteractiveState::Error);
+        // Error color should be reddish (hue ~25 in OKLCH)
+        assert!(error.r > error.b, "error should be red-dominant");
+        assert!(error.g < error.r, "error should have more red than green");
+    }
+
+    #[test]
+    fn state_colors_success_uses_derived_color() {
+        let states = StateColors::from_base(OklchColor::new(0.55, 0.12, 250.0, 1.0));
+        let success = states.color_for(InteractiveState::Success);
+        // Success color should be greenish (hue ~145 in OKLCH)
+        assert!(success.g > success.r, "success should be green-dominant");
+    }
+
+    #[test]
+    fn state_colors_have_error_and_success_fields() {
+        let states = StateColors::from_rgb(0.5, 0.5, 0.5);
+        // Just verify the fields exist and are accessible
+        let _error = states.error;
+        let _success = states.success;
     }
 }

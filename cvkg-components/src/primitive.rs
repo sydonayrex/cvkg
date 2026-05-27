@@ -1,8 +1,8 @@
-use crate::{Color, FontWeight, Orientation, FONT_SM, FONT_XS, SPACE_XS, SPACE_SM};
+use crate::theme;
+use crate::{Color, FONT_SM, FONT_XS, FontWeight, Orientation, SPACE_SM, SPACE_XS};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
 use cvkg_runic_text as runic;
-use crate::theme;
 use std::sync::Arc;
 
 /// Text view for displaying strings
@@ -95,10 +95,16 @@ impl View for Text {
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         ) {
-            Size { width: shaped.width, height: shaped.height }
+            Size {
+                width: shaped.width,
+                height: shaped.height,
+            }
         } else {
             let (w, h) = renderer.measure_text(&self.content, self.font_size);
-            Size { width: w, height: h }
+            Size {
+                width: w,
+                height: h,
+            }
         }
     }
 
@@ -477,19 +483,44 @@ impl View for Badge {
         let span = runic::TextSpan::new(&self.text, style);
 
         if self.count_only {
-            let (tw, th) = if let Some(shaped) = renderer.shape_rich_text(&[span.clone()], None, runic::TextAlign::Start, runic::TextOverflow::Clip) {
+            let (tw, th) = if let Some(shaped) = renderer.shape_rich_text(
+                std::slice::from_ref(&span),
+                None,
+                runic::TextAlign::Start,
+                runic::TextOverflow::Clip,
+            ) {
                 (shaped.width, shaped.height)
             } else {
                 renderer.measure_text(&self.text, font_size)
             };
             let diameter = height.max(tw + SPACE_SM);
-            let cr = Rect { x: rect.x, y: rect.y, width: diameter, height: diameter };
+            let cr = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: diameter,
+                height: diameter,
+            };
             renderer.fill_ellipse(cr, bg);
 
-            if let Some(shaped) = renderer.shape_rich_text(&[span], None, runic::TextAlign::Start, runic::TextOverflow::Clip) {
-                renderer.draw_shaped_text(&shaped, rect.x + (diameter - tw) / 2.0, rect.y + (diameter - th) / 2.0);
+            if let Some(shaped) = renderer.shape_rich_text(
+                &[span],
+                None,
+                runic::TextAlign::Start,
+                runic::TextOverflow::Clip,
+            ) {
+                renderer.draw_shaped_text(
+                    &shaped,
+                    rect.x + (diameter - tw) / 2.0,
+                    rect.y + (diameter - th) / 2.0,
+                );
             } else {
-                renderer.draw_text(&self.text, rect.x + (diameter - tw) / 2.0, rect.y + (diameter - th) / 2.0, font_size, text_color);
+                renderer.draw_text(
+                    &self.text,
+                    rect.x + (diameter - tw) / 2.0,
+                    rect.y + (diameter - th) / 2.0,
+                    font_size,
+                    text_color,
+                );
             }
             return;
         }
@@ -500,8 +531,17 @@ impl View for Badge {
             renderer.fill_rounded_rect(rect, radius, bg);
         }
 
-        let shaped_opt = renderer.shape_rich_text(&[span.clone()], None, runic::TextAlign::Start, runic::TextOverflow::Clip);
-        let (tw, th) = if let Some(ref shaped) = shaped_opt { (shaped.width, shaped.height) } else { renderer.measure_text(&self.text, font_size) };
+        let shaped_opt = renderer.shape_rich_text(
+            std::slice::from_ref(&span),
+            None,
+            runic::TextAlign::Start,
+            runic::TextOverflow::Clip,
+        );
+        let (tw, th) = if let Some(ref shaped) = shaped_opt {
+            (shaped.width, shaped.height)
+        } else {
+            renderer.measure_text(&self.text, font_size)
+        };
 
         if self.dot_indicator {
             let dot_size = 8.0;
@@ -511,7 +551,11 @@ impl View for Badge {
                 width: dot_size,
                 height: dot_size,
             };
-            let dot_color = if self.variant == BadgeVariant::Outline { text_color } else { bg };
+            let dot_color = if self.variant == BadgeVariant::Outline {
+                text_color
+            } else {
+                bg
+            };
             renderer.fill_ellipse(dot_rect, dot_color);
 
             let text_x = rect.x + self.size.h_padding() + dot_size + SPACE_XS;
@@ -523,9 +567,19 @@ impl View for Badge {
             }
         } else {
             if let Some(shaped) = shaped_opt {
-                renderer.draw_shaped_text(&shaped, rect.x + (rect.width - tw) / 2.0, rect.y + (rect.height - th) / 2.0);
+                renderer.draw_shaped_text(
+                    &shaped,
+                    rect.x + (rect.width - tw) / 2.0,
+                    rect.y + (rect.height - th) / 2.0,
+                );
             } else {
-                renderer.draw_text(&self.text, rect.x + (rect.width - tw) / 2.0, rect.y + (rect.height - th) / 2.0, font_size, text_color);
+                renderer.draw_text(
+                    &self.text,
+                    rect.x + (rect.width - tw) / 2.0,
+                    rect.y + (rect.height - th) / 2.0,
+                    font_size,
+                    text_color,
+                );
             }
         }
     }
@@ -537,7 +591,12 @@ impl View for Badge {
 
         let style = runic::TextStyle::new("SF Pro Text", font_size);
         let span = runic::TextSpan::new(&self.text, style);
-        let tw = if let Some(shaped) = renderer.shape_rich_text(&[span], None, runic::TextAlign::Start, runic::TextOverflow::Clip) {
+        let tw = if let Some(shaped) = renderer.shape_rich_text(
+            &[span],
+            None,
+            runic::TextAlign::Start,
+            runic::TextOverflow::Clip,
+        ) {
             shaped.width
         } else {
             renderer.measure_text(&self.text, font_size).0
@@ -545,7 +604,10 @@ impl View for Badge {
 
         if self.count_only {
             let diameter = height.max(tw + SPACE_SM);
-            return Size { width: diameter, height: diameter };
+            return Size {
+                width: diameter,
+                height: diameter,
+            };
         }
 
         let mut width = tw + h_pad * 2.0;

@@ -1,3 +1,5 @@
+#![allow(clippy::missing_fields_in_debug)]
+#![allow(clippy::field_reassign_with_default)]
 //! # CVKG SVG Filters
 //!
 //! WGPU-based SVG filter primitive evaluation.
@@ -49,6 +51,7 @@ pub struct GpuContext {
 /// Owns reusable textures for ping-pong rendering, samplers, and the
 /// filter shader pipeline. Created once and reused across frames.
 pub struct FilterEngine {
+    color_interpolation: usvg::filter::ColorInterpolation,
     gpu: GpuContext,
     /// Reusable textures for ping-pong rendering.
     temp_textures: Vec<wgpu::Texture>,
@@ -62,13 +65,13 @@ pub struct FilterEngine {
     /// Render pipeline for filter passes.
     pipeline: wgpu::RenderPipeline,
     /// Pipeline layout for filter passes.
-    render_pipeline_layout: wgpu::PipelineLayout,
+    _render_pipeline_layout: wgpu::PipelineLayout,
     /// Fullscreen quad vertex buffer (shared across all filter passes).
     quad_vertex_buffer: wgpu::Buffer,
     /// Uniform buffer for filter parameters.
     uniform_buffer: wgpu::Buffer,
     /// Shader module (kept alive for pipeline lifetime).
-    shader_module: wgpu::ShaderModule,
+    _shader_module: wgpu::ShaderModule,
 }
 
 /// Context for a single filter evaluation pass.
@@ -234,9 +237,11 @@ impl FilterGraph {
                 vec![Self::input_to_filter_input(gb.input())]
             }
             usvg::filter::Kind::Image(_) => vec![],
-            usvg::filter::Kind::Merge(merge) => {
-                merge.inputs().iter().map(Self::input_to_filter_input).collect()
-            }
+            usvg::filter::Kind::Merge(merge) => merge
+                .inputs()
+                .iter()
+                .map(Self::input_to_filter_input)
+                .collect(),
             usvg::filter::Kind::Morphology(m) => {
                 vec![Self::input_to_filter_input(m.input())]
             }
@@ -282,13 +287,13 @@ impl FilterGraph {
 
         for (i, node) in nodes.iter().enumerate() {
             for input in &node.inputs {
-                if let FilterInput::Reference(name) = input {
-                    if let Some(&dep_idx) = name_to_idx.get(name) {
-                        adj[dep_idx].push(i);
-                        in_degree[i] += 1;
-                    }
-                    // SourceGraphic/SourceAlpha have no dependency.
+                if let FilterInput::Reference(name) = input
+                    && let Some(&dep_idx) = name_to_idx.get(name)
+                {
+                    adj[dep_idx].push(i);
+                    in_degree[i] += 1;
                 }
+                // SourceGraphic/SourceAlpha have no dependency.
             }
         }
 
@@ -348,14 +353,12 @@ pub fn resolve_filter_region(
             let h = primitive_rect.height() / 100.0 * element_bbox.height();
             (x, y, w, h)
         }
-        FilterUnits::UserSpaceOnUse => {
-            (
-                primitive_rect.x(),
-                primitive_rect.y(),
-                primitive_rect.width(),
-                primitive_rect.height(),
-            )
-        }
+        FilterUnits::UserSpaceOnUse => (
+            primitive_rect.x(),
+            primitive_rect.y(),
+            primitive_rect.width(),
+            primitive_rect.height(),
+        ),
     };
 
     // Apply padding for filters that extend beyond their nominal region.
@@ -419,34 +422,34 @@ pub fn filter_padding(kind: &usvg::filter::Kind) -> f32 {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct FilterUniforms {
-    region:           [f32; 4],
-    src_size:         [f32; 4],
-    src2_size:        [f32; 4],
-    mode:             u32,
-    sub_mode:         u32,
-    param0:           f32,
-    param1:           f32,
-    param2:           f32,
-    param3:           f32,
-    cm_row0:          [f32; 4],
-    cm_row1:          [f32; 4],
-    cm_row2:          [f32; 4],
-    cm_row3:          [f32; 4],
-    flood_color:      [f32; 4],
-    offset:           [f32; 2],
-    _offset_pad:      [f32; 2],
-    kernel:           [f32; 4],
-    kernel2:          [f32; 4],
-    kernel3:          f32,
-    kernel_divisor:   f32,
-    kernel_bias:      f32,
-    _kpad:            f32,
-    disp_scale:       f32,
-    _dpad:            [f32; 3],
-    turb_base_freq:   [f32; 2],
-    turb_seed:        f32,
+    region: [f32; 4],
+    src_size: [f32; 4],
+    src2_size: [f32; 4],
+    mode: u32,
+    sub_mode: u32,
+    param0: f32,
+    param1: f32,
+    param2: f32,
+    param3: f32,
+    cm_row0: [f32; 4],
+    cm_row1: [f32; 4],
+    cm_row2: [f32; 4],
+    cm_row3: [f32; 4],
+    flood_color: [f32; 4],
+    offset: [f32; 2],
+    _offset_pad: [f32; 2],
+    kernel: [f32; 4],
+    kernel2: [f32; 4],
+    kernel3: f32,
+    kernel_divisor: f32,
+    kernel_bias: f32,
+    _kpad: f32,
+    disp_scale: f32,
+    _dpad: [f32; 3],
+    turb_base_freq: [f32; 2],
+    turb_seed: f32,
     turb_num_octaves: f32,
-    _tpad:            f32,
+    _tpad: f32,
 }
 
 impl Default for FilterUniforms {
@@ -455,18 +458,31 @@ impl Default for FilterUniforms {
             region: [0.0; 4],
             src_size: [1.0, 1.0, 0.0, 0.0],
             src2_size: [1.0, 1.0, 0.0, 0.0],
-            mode: 0, sub_mode: 0,
-            param0: 0.0, param1: 0.0, param2: 0.0, param3: 0.0,
+            mode: 0,
+            sub_mode: 0,
+            param0: 0.0,
+            param1: 0.0,
+            param2: 0.0,
+            param3: 0.0,
             cm_row0: [1.0, 0.0, 0.0, 0.0],
             cm_row1: [0.0, 1.0, 0.0, 0.0],
             cm_row2: [0.0, 0.0, 1.0, 0.0],
             cm_row3: [0.0, 0.0, 0.0, 1.0],
             flood_color: [0.0, 0.0, 0.0, 1.0],
-            offset: [0.0, 0.0], _offset_pad: [0.0; 2],
-            kernel: [0.0; 4], kernel2: [0.0; 4],
-            kernel3: 0.0, kernel_divisor: 1.0, kernel_bias: 0.0, _kpad: 0.0,
-            disp_scale: 0.0, _dpad: [0.0; 3],
-            turb_base_freq: [0.01, 0.01], turb_seed: 0.0, turb_num_octaves: 1.0, _tpad: 0.0,
+            offset: [0.0, 0.0],
+            _offset_pad: [0.0; 2],
+            kernel: [0.0; 4],
+            kernel2: [0.0; 4],
+            kernel3: 0.0,
+            kernel_divisor: 1.0,
+            kernel_bias: 0.0,
+            _kpad: 0.0,
+            disp_scale: 0.0,
+            _dpad: [0.0; 3],
+            turb_base_freq: [0.01, 0.01],
+            turb_seed: 0.0,
+            turb_num_octaves: 1.0,
+            _tpad: 0.0,
         }
     }
 }
@@ -476,113 +492,135 @@ const FILTER_SHADER_WGSL: &str = include_str!("svg_filters.wgsl");
 impl FilterEngine {
     pub fn new(gpu: GpuContext) -> Result<Self, FilterError> {
         let linear_sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("svg_filter_linear_sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::MipmapFilterMode::Linear,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            ..Default::default()
+            anisotropy_clamp: 1,
+            border_color: None,
+            compare: None,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 32.0,
         });
 
         let nearest_sampler = gpu.device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("svg_filter_nearest_sampler"),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            ..Default::default()
+            anisotropy_clamp: 1,
+            border_color: None,
+            compare: None,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 32.0,
         });
 
-        let shader_module = gpu.device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("svg_filter_shader"),
-            source: wgpu::ShaderSource::Wgsl(FILTER_SHADER_WGSL.into()),
-        });
-
-        let bind_group_layout =
-            gpu.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("svg_filter_bind_group_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 4,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
+        let shader_module = gpu
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some("svg_filter_shader"),
+                source: wgpu::ShaderSource::Wgsl(FILTER_SHADER_WGSL.into()),
             });
 
-        let render_pipeline_layout = gpu.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("svg_filter_pipeline_layout"),
-            bind_group_layouts: &[Some(&bind_group_layout)],
-            immediate_size: 0,
-        });
+        let bind_group_layout =
+            gpu.device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("svg_filter_bind_group_layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 4,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
 
-        let render_pipeline = gpu.device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("svg_filter_pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader_module,
-                entry_point: Some("vs_filter"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_module,
-                entry_point: Some("fs_filter"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Rgba8Unorm,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleStrip,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
+        let render_pipeline_layout =
+            gpu.device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("svg_filter_pipeline_layout"),
+                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    immediate_size: 0,
+                });
+
+        let render_pipeline = gpu
+            .device
+            .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("svg_filter_pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader_module,
+                    entry_point: Some("vs_filter"),
+                    buffers: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader_module,
+                    entry_point: Some("fs_filter"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: wgpu::TextureFormat::Rgba8Unorm,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::TriangleStrip,
+                    strip_index_format: None,
+                    front_face: wgpu::FrontFace::Ccw,
+                    cull_mode: None,
+                    unclipped_depth: false,
+                    polygon_mode: wgpu::PolygonMode::Fill,
+                    conservative: false,
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
-            cache: None,
-        });
+                cache: None,
+            });
 
         let quad_vertices: [f32; 8] = [-1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0, 1.0];
         let quad_vertex_buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
@@ -591,9 +629,10 @@ impl FilterEngine {
             usage: wgpu::BufferUsages::VERTEX,
             mapped_at_creation: true,
         });
-        quad_vertex_buffer.slice(..).get_mapped_range_mut().copy_from_slice(
-            bytemuck::cast_slice(&quad_vertices),
-        );
+        quad_vertex_buffer
+            .slice(..)
+            .get_mapped_range_mut()
+            .copy_from_slice(bytemuck::cast_slice(&quad_vertices));
         quad_vertex_buffer.unmap();
 
         let uniform_buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
@@ -605,19 +644,21 @@ impl FilterEngine {
 
         Ok(FilterEngine {
             gpu,
+            color_interpolation: usvg::filter::ColorInterpolation::SRGB,
             temp_textures: Vec::new(),
             temp_views: Vec::new(),
             linear_sampler,
             nearest_sampler,
             bind_group_layout,
             pipeline: render_pipeline,
-            render_pipeline_layout,
+            _render_pipeline_layout: render_pipeline_layout,
             quad_vertex_buffer,
             uniform_buffer,
-            shader_module,
+            _shader_module: shader_module,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_pass(
         &self,
         input_view: &wgpu::TextureView,
@@ -638,50 +679,62 @@ impl FilterEngine {
         if src2_size.0 > 0.0 {
             uniforms.src2_size = [src2_size.0, src2_size.1, 0.0, 0.0];
         }
-        self.gpu.queue.write_buffer(
-            &self.uniform_buffer,
-            0,
-            bytemuck::cast_slice(&[uniforms]),
-        );
+        self.gpu
+            .queue
+            .write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
 
         let src2_v = src2_view.unwrap_or(input_view);
         let src2_s = src2_sampler.unwrap_or(input_sampler);
 
-        let bind_group = self.gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("svg_filter_bind_group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.uniform_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(input_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::Sampler(input_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::TextureView(src2_v),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: wgpu::BindingResource::Sampler(src2_s),
-                },
-            ],
-        });
+        let bind_group = self
+            .gpu
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("svg_filter_bind_group"),
+                layout: &self.bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.uniform_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(input_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(input_sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(src2_v),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::Sampler(src2_s),
+                    },
+                ],
+            });
 
-        let mut encoder = self.gpu.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor { label: Some("svg_filter_encoder") },
-        );
+        let mut encoder = self
+            .gpu
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("svg_filter_encoder"),
+            });
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("svg_filter_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {                    view: output_view,
-                    depth_slice: None,                    resolve_target: None,                    ops: wgpu::Operations {                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),                        store: wgpu::StoreOp::Store,                    },                })],                depth_stencil_attachment: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: output_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
                 multiview_mask: None,
@@ -703,7 +756,11 @@ impl FilterEngine {
         }
         let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("svg_filter_temp"),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -754,10 +811,11 @@ impl FilterEngine {
                 .map(|input| match graph.resolve_input(input)? {
                     ResolvedInput::SourceGraphic => Ok(ctx.source_view),
                     ResolvedInput::SourceAlpha => Ok(ctx.source_view),
-                    ResolvedInput::NodeIndex(idx) => results
-                        .get(&idx)
-                        .map(|v| v.as_ref())
-                        .ok_or_else(|| FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))),
+                    ResolvedInput::NodeIndex(idx) => {
+                        results.get(&idx).map(|v| v.as_ref()).ok_or_else(|| {
+                            FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))
+                        })
+                    }
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -790,6 +848,7 @@ impl FilterEngine {
         element_bbox: usvg::NonZeroRect,
         color_interpolation: usvg::filter::ColorInterpolation,
     ) -> Result<FilterResult, FilterError> {
+        self.color_interpolation = color_interpolation;
         let w = rect.width().ceil().max(1.0) as u32;
         let h = rect.height().ceil().max(1.0) as u32;
 
@@ -806,9 +865,7 @@ impl FilterEngine {
             usvg::filter::Kind::Composite(comp) => {
                 self.apply_composite(input_views[0], input_views[1], w, h, comp)
             }
-            usvg::filter::Kind::Flood(flood) => {
-                self.apply_flood(w, h, flood)
-            }
+            usvg::filter::Kind::Flood(flood) => self.apply_flood(w, h, flood),
             usvg::filter::Kind::Offset(offset) => {
                 self.apply_offset(input_views[0], w, h, rect, element_bbox, offset)
             }
@@ -816,9 +873,7 @@ impl FilterEngine {
                 let views: Vec<&wgpu::TextureView> = input_views.to_vec();
                 self.apply_merge(&views, w, h, merge)
             }
-            usvg::filter::Kind::DropShadow(ds) => {
-                self.apply_drop_shadow(input_views[0], w, h, ds)
-            }
+            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(input_views[0], w, h, ds),
             usvg::filter::Kind::ComponentTransfer(ct) => {
                 self.apply_component_transfer(input_views[0], w, h, ct)
             }
@@ -828,22 +883,15 @@ impl FilterEngine {
             usvg::filter::Kind::DisplacementMap(dm) => {
                 self.apply_displacement_map(input_views[0], input_views[1], w, h, dm)
             }
-            usvg::filter::Kind::Morphology(m) => {
-                self.apply_morphology(input_views[0], w, h, m)
-            }
+            usvg::filter::Kind::Morphology(m) => self.apply_morphology(input_views[0], w, h, m),
             usvg::filter::Kind::Tile(tile) => {
                 self.apply_tile(input_views[0], w, h, rect, element_bbox, tile)
             }
-            usvg::filter::Kind::Turbulence(t) => {
-                self.apply_turbulence(w, h, t)
-            }
-            usvg::filter::Kind::DiffuseLighting(_)
-            | usvg::filter::Kind::SpecularLighting(_) => {
+            usvg::filter::Kind::Turbulence(t) => self.apply_turbulence(w, h, t),
+            usvg::filter::Kind::DiffuseLighting(_) | usvg::filter::Kind::SpecularLighting(_) => {
                 self.apply_passthrough(input_views[0], w, h)
             }
-            usvg::filter::Kind::Image(_) => {
-                self.apply_passthrough(input_views[0], w, h)
-            }
+            usvg::filter::Kind::Image(_) => self.apply_passthrough(input_views[0], w, h),
         }
     }
 
@@ -852,7 +900,8 @@ impl FilterEngine {
     fn apply_gaussian_blur(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         gb: &usvg::filter::GaussianBlur,
     ) -> Result<FilterResult, FilterError> {
         let std_x = gb.std_dev_x().get();
@@ -875,11 +924,16 @@ impl FilterEngine {
         params.param0 = radius_x as f32;
         params.param1 = std_x;
         self.render_pass(
-            input, sampler, input_size,
+            input,
+            sampler,
+            input_size,
             &temp_view,
             0, // MODE_GAUSSIAN_BLUR_H
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         // Vertical pass.
@@ -888,11 +942,16 @@ impl FilterEngine {
         params.param0 = radius_y as f32;
         params.param1 = std_y;
         self.render_pass(
-            &temp_view, sampler, input_size,
+            &temp_view,
+            sampler,
+            input_size,
             &output_view,
             1, // MODE_GAUSSIAN_BLUR_V
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         // Return the output texture and its surface as the result.
@@ -908,7 +967,8 @@ impl FilterEngine {
     fn apply_color_matrix(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         cm: &usvg::filter::ColorMatrix,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -916,7 +976,10 @@ impl FilterEngine {
 
         let values: &[f32] = match cm.kind() {
             usvg::filter::ColorMatrixKind::Matrix(v) => v.as_slice(),
-            _ => &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            _ => &[
+                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+            ],
         };
         let mut params = FilterUniforms::default();
         params.region = [0.0, 0.0, w as f32, h as f32];
@@ -926,17 +989,22 @@ impl FilterEngine {
         params.cm_row1 = [values[5], values[6], values[7], values[8]];
         params.cm_row2 = [values[10], values[11], values[12], values[13]];
         params.cm_row3 = [values[15], values[16], values[17], values[18]];
-        params.param0 = values[4];  // offset r
-        params.param1 = values[9];  // offset g
+        params.param0 = values[4]; // offset r
+        params.param1 = values[9]; // offset g
         params.param2 = values[14]; // offset b
         params.param3 = values[19]; // offset a
 
         self.render_pass(
-            input, &self.linear_sampler, input_size,
+            input,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             2, // MODE_COLOR_MATRIX
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -952,7 +1020,8 @@ impl FilterEngine {
         &mut self,
         input_a: &wgpu::TextureView,
         input_b: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         blend: &usvg::filter::Blend,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -971,11 +1040,16 @@ impl FilterEngine {
         params.region = [0.0, 0.0, w as f32, h as f32];
 
         self.render_pass(
-            input_a, &self.linear_sampler, input_size,
+            input_a,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             3, // MODE_BLEND
-            sub_mode, &params,
-            Some(input_b), Some(&self.linear_sampler), input_size,
+            sub_mode,
+            &params,
+            Some(input_b),
+            Some(&self.linear_sampler),
+            input_size,
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -991,7 +1065,8 @@ impl FilterEngine {
         &mut self,
         input_a: &wgpu::TextureView,
         input_b: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         comp: &usvg::filter::Composite,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1010,11 +1085,16 @@ impl FilterEngine {
         params.region = [0.0, 0.0, w as f32, h as f32];
 
         self.render_pass(
-            input_a, &self.linear_sampler, input_size,
+            input_a,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             4, // MODE_COMPOSITE
-            sub_mode, &params,
-            Some(input_b), Some(&self.linear_sampler), input_size,
+            sub_mode,
+            &params,
+            Some(input_b),
+            Some(&self.linear_sampler),
+            input_size,
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1028,7 +1108,8 @@ impl FilterEngine {
 
     fn apply_flood(
         &mut self,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         flood: &usvg::filter::Flood,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1037,14 +1118,24 @@ impl FilterEngine {
         let o = flood.opacity().get();
         let mut params = FilterUniforms::default();
         params.region = [0.0, 0.0, w as f32, h as f32];
-        params.flood_color = [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, o];
+        params.flood_color = [
+            c.red as f32 / 255.0,
+            c.green as f32 / 255.0,
+            c.blue as f32 / 255.0,
+            o,
+        ];
 
         self.render_pass(
-            &output_view, &self.nearest_sampler, (w as f32, h as f32),
+            &output_view,
+            &self.nearest_sampler,
+            (w as f32, h as f32),
             &output_view,
             5, // MODE_FLOOD
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1059,7 +1150,8 @@ impl FilterEngine {
     fn apply_offset(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         _rect: usvg::NonZeroRect,
         _element_bbox: usvg::NonZeroRect,
         offset: &usvg::filter::Offset,
@@ -1072,11 +1164,16 @@ impl FilterEngine {
         params.offset = [offset.dx() / w as f32, offset.dy() / h as f32];
 
         self.render_pass(
-            input, &self.linear_sampler, input_size,
+            input,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             6, // MODE_OFFSET
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1091,29 +1188,34 @@ impl FilterEngine {
     fn apply_merge(
         &mut self,
         inputs: &[&wgpu::TextureView],
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         _merge: &usvg::filter::Merge,
     ) -> Result<FilterResult, FilterError> {
         if inputs.is_empty() {
             return Err(FilterError::UnresolvedInput("merge: no inputs".into()));
         }
 
-        let output_view = self.get_temp_view(w, h)?;
         let input_size = (w as f32, h as f32);
 
         // Merge: composite all inputs using the merge shader.
         // For simplicity, we do pairwise merging.
         let mut result_view = inputs[0].clone();
-        for i in 1..inputs.len() {
+        for input in inputs.iter().skip(1) {
             let temp_out = self.get_temp_view(w, h)?;
             let mut params = FilterUniforms::default();
             params.region = [0.0, 0.0, w as f32, h as f32];
             self.render_pass(
-                &result_view, &self.linear_sampler, input_size,
+                &result_view,
+                &self.linear_sampler,
+                input_size,
                 &temp_out,
                 7, // MODE_MERGE
-                0, &params,
-                Some(inputs[i]), Some(&self.linear_sampler), input_size,
+                0,
+                &params,
+                Some(input),
+                Some(&self.linear_sampler),
+                input_size,
             )?;
             result_view = temp_out;
         }
@@ -1130,7 +1232,8 @@ impl FilterEngine {
     fn apply_drop_shadow(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         ds: &usvg::filter::DropShadow,
     ) -> Result<FilterResult, FilterError> {
         let std_x = ds.std_dev_x().get();
@@ -1145,11 +1248,23 @@ impl FilterEngine {
         let flood_view = self.get_temp_view(w, h)?;
         let mut params = FilterUniforms::default();
         params.region = [0.0, 0.0, w as f32, h as f32];
-        params.flood_color = [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, o];
+        params.flood_color = [
+            c.red as f32 / 255.0,
+            c.green as f32 / 255.0,
+            c.blue as f32 / 255.0,
+            o,
+        ];
         self.render_pass(
-            &flood_view, &self.nearest_sampler, input_size,
-            &flood_view, 5, 0, &params,
-            None, None, (0.0, 0.0),
+            &flood_view,
+            &self.nearest_sampler,
+            input_size,
+            &flood_view,
+            5,
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         // Step 2: Blur the flood.
@@ -1160,18 +1275,32 @@ impl FilterEngine {
             blur_params.param0 = radius_x as f32;
             blur_params.param1 = std_x;
             self.render_pass(
-                &flood_view, &self.linear_sampler, input_size,
-                &blur_temp, 0, 0, &blur_params,
-                None, None, (0.0, 0.0),
+                &flood_view,
+                &self.linear_sampler,
+                input_size,
+                &blur_temp,
+                0,
+                0,
+                &blur_params,
+                None,
+                None,
+                (0.0, 0.0),
             )?;
             let mut blur_params2 = FilterUniforms::default();
             blur_params2.region = [0.0, 0.0, w as f32, h as f32];
             blur_params2.param0 = radius_y as f32;
             blur_params2.param1 = std_y;
             self.render_pass(
-                &blur_temp, &self.linear_sampler, input_size,
-                &flood_view, 1, 0, &blur_params2,
-                None, None, (0.0, 0.0),
+                &blur_temp,
+                &self.linear_sampler,
+                input_size,
+                &flood_view,
+                1,
+                0,
+                &blur_params2,
+                None,
+                None,
+                (0.0, 0.0),
             )?;
         }
 
@@ -1181,9 +1310,16 @@ impl FilterEngine {
         offset_params.region = [0.0, 0.0, w as f32, h as f32];
         offset_params.offset = [ds.dx() / w as f32, ds.dy() / h as f32];
         self.render_pass(
-            &flood_view, &self.linear_sampler, input_size,
-            &offset_view, 6, 0, &offset_params,
-            None, None, (0.0, 0.0),
+            &flood_view,
+            &self.linear_sampler,
+            input_size,
+            &offset_view,
+            6,
+            0,
+            &offset_params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         // Step 4: Composite offset shadow over original (merge).
@@ -1191,9 +1327,16 @@ impl FilterEngine {
         let mut merge_params = FilterUniforms::default();
         merge_params.region = [0.0, 0.0, w as f32, h as f32];
         self.render_pass(
-            &offset_view, &self.linear_sampler, input_size,
-            &output_view, 7, 0, &merge_params,
-            Some(input), Some(&self.linear_sampler), input_size,
+            &offset_view,
+            &self.linear_sampler,
+            input_size,
+            &output_view,
+            7,
+            0,
+            &merge_params,
+            Some(input),
+            Some(&self.linear_sampler),
+            input_size,
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1208,7 +1351,8 @@ impl FilterEngine {
     fn apply_component_transfer(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         ct: &usvg::filter::ComponentTransfer,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1234,7 +1378,11 @@ impl FilterEngine {
                 params.param1 = *slope;
                 params.param2 = *intercept;
             }
-            usvg::filter::TransferFunction::Gamma { amplitude, exponent, offset } => {
+            usvg::filter::TransferFunction::Gamma {
+                amplitude,
+                exponent,
+                offset,
+            } => {
                 params.param0 = *amplitude;
                 params.param1 = *exponent;
                 params.param2 = *offset;
@@ -1243,11 +1391,16 @@ impl FilterEngine {
         }
 
         self.render_pass(
-            input, &self.linear_sampler, input_size,
+            input,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             8, // MODE_COMPONENT_XFER
-            sub_mode, &params,
-            None, None, (0.0, 0.0),
+            sub_mode,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1256,10 +1409,11 @@ impl FilterEngine {
             region: (0, 0, w, h),
         })
     }
-fn apply_convolve_matrix(
+    fn apply_convolve_matrix(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         cm: &usvg::filter::ConvolveMatrix,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1279,11 +1433,16 @@ fn apply_convolve_matrix(
         params.kernel_bias = cm.bias();
 
         self.render_pass(
-            input, &self.linear_sampler, input_size,
+            input,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             9, // MODE_CONVOLVE
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1299,7 +1458,8 @@ fn apply_convolve_matrix(
         &mut self,
         input: &wgpu::TextureView,
         displacement: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         dm: &usvg::filter::DisplacementMap,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1324,11 +1484,16 @@ fn apply_convolve_matrix(
         params.sub_mode = x_sel | (y_sel << 2);
 
         self.render_pass(
-            input, &self.linear_sampler, input_size,
+            input,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             10, // MODE_DISPLACEMENT
-            params.sub_mode, &params,
-            Some(displacement), Some(&self.linear_sampler), input_size,
+            params.sub_mode,
+            &params,
+            Some(displacement),
+            Some(&self.linear_sampler),
+            input_size,
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1343,7 +1508,8 @@ fn apply_convolve_matrix(
     fn apply_morphology(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         m: &usvg::filter::Morphology,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1362,11 +1528,16 @@ fn apply_convolve_matrix(
         params.param1 = ry.get();
 
         self.render_pass(
-            input, &self.nearest_sampler, input_size,
+            input,
+            &self.nearest_sampler,
+            input_size,
             &output_view,
             11, // MODE_MORPHOLOGY
-            sub_mode, &params,
-            None, None, (0.0, 0.0),
+            sub_mode,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1381,7 +1552,8 @@ fn apply_convolve_matrix(
     fn apply_tile(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         rect: usvg::NonZeroRect,
         _element_bbox: usvg::NonZeroRect,
         _tile: &usvg::filter::Tile,
@@ -1393,11 +1565,16 @@ fn apply_convolve_matrix(
         params.region = [rect.x(), rect.y(), rect.width(), rect.height()];
 
         self.render_pass(
-            input, &self.linear_sampler, input_size,
+            input,
+            &self.linear_sampler,
+            input_size,
             &output_view,
             12, // MODE_TILE
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1411,7 +1588,8 @@ fn apply_convolve_matrix(
 
     fn apply_turbulence(
         &mut self,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
         t: &usvg::filter::Turbulence,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
@@ -1425,11 +1603,16 @@ fn apply_convolve_matrix(
         params.turb_num_octaves = t.num_octaves() as f32;
 
         self.render_pass(
-            &output_view, &self.nearest_sampler, (w as f32, h as f32),
+            &output_view,
+            &self.nearest_sampler,
+            (w as f32, h as f32),
             &output_view,
             13, // MODE_TURBULENCE
-            0, &params,
-            None, None, (0.0, 0.0),
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
         )?;
 
         let output_surface = self.create_filter_surface(&output_view, w, h)?;
@@ -1444,7 +1627,8 @@ fn apply_convolve_matrix(
     fn apply_passthrough(
         &mut self,
         input: &wgpu::TextureView,
-        w: u32, h: u32,
+        w: u32,
+        h: u32,
     ) -> Result<FilterResult, FilterError> {
         Ok(FilterResult {
             output_view: std::sync::Arc::new(input.clone()),
@@ -1465,13 +1649,10 @@ fn apply_convolve_matrix(
         Ok(view.clone())
     }
 
+    /// Current version of the cvkg-svg-filters crate.
+    pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-
-/// Current version of the cvkg-svg-filters crate.
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-// ── Tests ────────────────────────────────────────────────────────────────────
-
+    // ── Tests ────────────────────────────────────────────────────────────────────
 }
 
 #[cfg(test)]
@@ -1495,9 +1676,10 @@ mod tests {
         let tree = usvg::Tree::from_str(svg, &usvg::Options::default()).unwrap();
         let root = tree.root();
         // The rect element should have a filter. Walk the tree to find it.
-        find_first_filter_kind(&root).expect("should find flood filter in parsed SVG")
+        find_first_filter_kind(root).expect("should find flood filter in parsed SVG")
     }
 
+    #[allow(dead_code)]
     fn gaussian_blur_kind() -> usvg::filter::Kind {
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
             <defs>
@@ -1509,23 +1691,20 @@ mod tests {
         </svg>"#;
         let tree = usvg::Tree::from_str(svg, &usvg::Options::default()).unwrap();
         let root = tree.root();
-        find_first_filter_kind(&root).expect("should find blur filter")
+        find_first_filter_kind(root).expect("should find blur filter")
     }
 
     fn find_first_filter_kind(group: &usvg::Group) -> Option<usvg::filter::Kind> {
         for child in group.children() {
-            match child {
-                usvg::Node::Group(g) => {
-                    for filter in g.filters() {
-                        for prim in filter.primitives() {
-                            return Some(prim.kind().clone());
-                        }
-                    }
-                    if let Some(kind) = find_first_filter_kind(g) {
-                        return Some(kind);
+            if let usvg::Node::Group(g) = child {
+                for filter in g.filters() {
+                    if let Some(prim) = filter.primitives().first() {
+                        return Some(prim.kind().clone());
                     }
                 }
-                _ => {}
+                if let Some(kind) = find_first_filter_kind(g) {
+                    return Some(kind);
+                }
             }
         }
         None

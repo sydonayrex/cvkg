@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// Vegvísir - A radial tactical menu (Norse compass)
@@ -47,6 +47,7 @@ impl View for Vegvísir {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.is_open || self.items.is_empty() {
+            renderer.set_aria_role("navigation");
             return;
         }
 
@@ -146,6 +147,7 @@ impl View for TacticalGauge {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
 
+        renderer.set_aria_role("meter");
         // 1. Label
         renderer.draw_text(
             &self.label,
@@ -241,11 +243,12 @@ impl View for GjallarAlert {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "GjallarAlert");
 
+        renderer.set_aria_role("alert");
         let t = renderer.elapsed_time();
         let accent_color = match self.kind {
-            AlertKind::Information => theme::accent(), // Cyan
-            AlertKind::Warning => theme::warning(),     // Orange
-            AlertKind::Critical => theme::error_color(),    // Red
+            AlertKind::Information => theme::accent(),   // Cyan
+            AlertKind::Warning => theme::warning(),      // Orange
+            AlertKind::Critical => theme::error_color(), // Red
         };
 
         // 1. Mimir's Refraction (Glass Depth)

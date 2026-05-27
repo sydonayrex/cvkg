@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A floating, semi-transparent 3D runic element.
@@ -29,7 +30,7 @@ impl View for HolographicRunestone {
         let scale = 1.0 + (t * 3.0).cos() * 0.05;
 
         // 2. Holographic Scanlines (Muspelheim effect)
-        let mut color = [0.0, 1.0, 1.0, 0.4];
+        let mut color = theme::accent();
         let flicker = if (t * 20.0).sin() > 0.95 { 0.2 } else { 1.0 };
         color[3] *= flicker;
 

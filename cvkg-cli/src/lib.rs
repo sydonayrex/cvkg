@@ -5,6 +5,8 @@ pub mod devtools;
 pub mod native_shell;
 pub mod patch_engine;
 pub mod runtime_connection;
+pub mod scaffold;
+pub mod token_export;
 pub mod ws_server;
 
 // Re-exports for convenient access to key types

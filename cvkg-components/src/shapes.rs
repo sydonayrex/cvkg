@@ -47,7 +47,7 @@ impl View for Hvergelmir {
             })
             .collect();
         renderer.fill_polygon(&vertices, self.color);
-        renderer.stroke_polygon(&vertices, [1.0, 1.0, 1.0, 0.8], self.stroke_width);
+        renderer.stroke_polygon(&vertices, theme::text(), self.stroke_width);
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {

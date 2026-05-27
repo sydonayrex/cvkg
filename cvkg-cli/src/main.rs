@@ -42,6 +42,7 @@ pub mod devtools_dashboard;
 pub mod patch_engine;
 pub mod runtime_connection;
 pub mod scaffold;
+pub mod token_export;
 pub mod webkit_server;
 pub mod ws_server;
 
@@ -164,6 +165,15 @@ enum Commands {
         /// Do not open the browser automatically
         #[arg(long)]
         no_open: bool,
+    },
+    /// Export design tokens to various formats (figma, css, swift, json)
+    Tokens {
+        /// Output format
+        #[arg(long, value_parser = ["figma", "css", "swift", "json"])]
+        format: String,
+        /// Output file path
+        #[arg(long)]
+        output: PathBuf,
     },
 }
 
@@ -490,6 +500,34 @@ fn main() {
                         eprintln!("{} Dashboard error: {}", style("❌").red(), e);
                     }
                 });
+        }
+        Commands::Tokens { format, output } => {
+            use console::style;
+            println!(
+                "{} Exporting design tokens (format: {})...",
+                style("🎨").cyan(),
+                style(&format).yellow()
+            );
+
+            let export = token_export::TokenExport::new();
+            let content = match export.generate(&format) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("{} Token export failed: {}", style("❌").red(), e);
+                    std::process::exit(1);
+                }
+            };
+
+            std::fs::write(&output, content).unwrap_or_else(|e| {
+                eprintln!("{} Failed to write output: {}", style("❌").red(), e);
+                std::process::exit(1);
+            });
+
+            println!(
+                "{} Tokens exported to {}",
+                style("✅").green(),
+                style(output.display()).bold()
+            );
         }
     }
 }

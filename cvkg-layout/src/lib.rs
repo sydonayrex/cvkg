@@ -501,53 +501,276 @@ impl LayoutView for Flex {
     }
 }
 
-/// Grid - lays out children in a 2D grid
+/// Track sizing strategy for a single grid track (row or column).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum GridTrack {
+    /// Exact pixel size.
+    Fixed(f32),
+    /// Proportional weight compared to other flex tracks.
+    Flex(f32),
+    /// Size based on the intrinsic size of the grid item.
+    Auto,
+    /// Size clamped between minimum and maximum bounds.
+    MinMax(f32, f32),
+}
+
+/// A layout engine that computes coordinates for children positioned in a 2D grid.
 pub struct Grid {
-    pub rows: usize,
-    pub cols: usize,
-    pub spacing: f32,
+    /// Column track sizing rules.
+    pub columns: Vec<GridTrack>,
+    /// Row track sizing rules.
+    pub rows: Vec<GridTrack>,
+    /// Empty space between columns.
+    pub column_gap: f32,
+    /// Empty space between rows.
+    pub row_gap: f32,
 }
 
 impl Grid {
-    pub fn new(rows: usize, cols: usize, spacing: f32) -> Self {
+    /// Creates a new Grid layout engine.
+    pub fn new(
+        columns: Vec<GridTrack>,
+        rows: Vec<GridTrack>,
+        column_gap: f32,
+        row_gap: f32,
+    ) -> Self {
         Self {
+            columns,
             rows,
-            cols,
-            spacing,
+            column_gap,
+            row_gap,
         }
     }
 
-    pub fn compute_layout(
-        rows: usize,
-        cols: usize,
-        spacing: f32,
+    /// Computes the rects for children based on track sizing and grid placements.
+    pub fn compute_layout_rects(
+        &self,
         bounds: Rect,
         subviews: &[&dyn LayoutView],
-        _cache: &mut LayoutCache,
+        placements: &[Option<cvkg_core::GridPlacement>],
+        cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        if subviews.is_empty() || rows == 0 || cols == 0 {
-            return Vec::new();
+        let col_count = self.columns.len();
+        let row_count = self.rows.len();
+        if col_count == 0 || row_count == 0 || subviews.is_empty() {
+            return vec![Rect::zero(); subviews.len()];
         }
 
-        let mut rects = Vec::with_capacity(subviews.len());
-        let item_width = (bounds.width - (cols - 1) as f32 * spacing) / cols as f32;
-        let item_height = (bounds.height - (rows - 1) as f32 * spacing) / rows as f32;
+        let mut rects = vec![Rect::zero(); subviews.len()];
 
-        for (i, _) in subviews.iter().enumerate() {
-            let r = i / cols;
-            let c = i % cols;
+        // 1. Resolve placements for all children.
+        // If a child has no placement, auto-position it in the next available cell in row-major order.
+        let mut resolved_placements = Vec::with_capacity(subviews.len());
+        let mut occupied = vec![vec![false; col_count]; row_count];
 
-            if r >= rows {
-                break;
+        for &opt_placement in placements.iter() {
+            let placement = if let Some(p) = opt_placement {
+                let resolved_col = if p.column < 0 {
+                    (col_count as i32 + p.column).max(0) as usize
+                } else {
+                    p.column as usize
+                };
+                let resolved_row = if p.row < 0 {
+                    (row_count as i32 + p.row).max(0) as usize
+                } else {
+                    p.row as usize
+                };
+                cvkg_core::GridPlacement {
+                    column: resolved_col as i32,
+                    column_span: p.column_span.max(1),
+                    row: resolved_row as i32,
+                    row_span: p.row_span.max(1),
+                }
+            } else {
+                // Find next unoccupied cell
+                let mut found_col = 0;
+                let mut found_row = 0;
+                let mut found = false;
+                for (r, row) in occupied.iter().enumerate() {
+                    for (c, cell) in row.iter().enumerate() {
+                        if !*cell {
+                            found_col = c;
+                            found_row = r;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if found {
+                        break;
+                    }
+                }
+                cvkg_core::GridPlacement {
+                    column: found_col as i32,
+                    column_span: 1,
+                    row: found_row as i32,
+                    row_span: 1,
+                }
+            };
+
+            // Mark occupied cells
+            let start_r = (placement.row as usize).min(row_count - 1);
+            let end_r = (start_r + placement.row_span as usize).min(row_count);
+            let start_c = (placement.column as usize).min(col_count - 1);
+            let end_c = (start_c + placement.column_span as usize).min(col_count);
+            for row in occupied.iter_mut().take(end_r).skip(start_r) {
+                for cell in row.iter_mut().take(end_c).skip(start_c) {
+                    *cell = true;
+                }
             }
 
-            rects.push(Rect {
-                x: bounds.x + c as f32 * (item_width + spacing),
-                y: bounds.y + r as f32 * (item_height + spacing),
-                width: item_width,
-                height: item_height,
-            });
+            resolved_placements.push(placement);
         }
+
+        // 2. Measure content sizes of children (for Auto and MinMax sizing).
+        // For simplicity, we calculate the sizes of Auto and MinMax tracks based on children that span a single track.
+        let mut col_content_widths = vec![0.0f32; col_count];
+        let mut row_content_heights = vec![0.0f32; row_count];
+
+        for (i, &placement) in resolved_placements.iter().enumerate() {
+            let child = subviews[i];
+            let size = child.size_that_fits(
+                SizeProposal::new(Some(bounds.width), Some(bounds.height)),
+                &[],
+                cache,
+            );
+
+            if placement.column_span == 1 {
+                let c = placement.column as usize;
+                if c < col_count {
+                    col_content_widths[c] = col_content_widths[c].max(size.width);
+                }
+            }
+            if placement.row_span == 1 {
+                let r = placement.row as usize;
+                if r < row_count {
+                    row_content_heights[r] = row_content_heights[r].max(size.height);
+                }
+            }
+        }
+
+        // 3. Resolve Column widths
+        let total_col_gaps = self.column_gap * (col_count - 1) as f32;
+        let mut remaining_width = (bounds.width - total_col_gaps).max(0.0);
+        let mut total_flex_weight_col = 0.0f32;
+        let mut col_widths = vec![0.0f32; col_count];
+
+        for (c, track) in self.columns.iter().enumerate() {
+            match track {
+                GridTrack::Fixed(w) => {
+                    col_widths[c] = *w;
+                    remaining_width = (remaining_width - *w).max(0.0);
+                }
+                GridTrack::Auto => {
+                    let w = col_content_widths[c];
+                    col_widths[c] = w;
+                    remaining_width = (remaining_width - w).max(0.0);
+                }
+                GridTrack::MinMax(min, max) => {
+                    let w = col_content_widths[c].clamp(*min, *max);
+                    col_widths[c] = w;
+                    remaining_width = (remaining_width - w).max(0.0);
+                }
+                GridTrack::Flex(weight) => {
+                    total_flex_weight_col += *weight;
+                }
+            }
+        }
+
+        if total_flex_weight_col > 0.0 {
+            for (c, track) in self.columns.iter().enumerate() {
+                if let GridTrack::Flex(weight) = track {
+                    col_widths[c] = (*weight / total_flex_weight_col) * remaining_width;
+                }
+            }
+        }
+
+        // 4. Resolve Row heights
+        let total_row_gaps = self.row_gap * (row_count - 1) as f32;
+        let mut remaining_height = (bounds.height - total_row_gaps).max(0.0);
+        let mut total_flex_weight_row = 0.0f32;
+        let mut row_heights = vec![0.0f32; row_count];
+
+        for (r, track) in self.rows.iter().enumerate() {
+            match track {
+                GridTrack::Fixed(h) => {
+                    row_heights[r] = *h;
+                    remaining_height = (remaining_height - *h).max(0.0);
+                }
+                GridTrack::Auto => {
+                    let h = row_content_heights[r];
+                    row_heights[r] = h;
+                    remaining_height = (remaining_height - h).max(0.0);
+                }
+                GridTrack::MinMax(min, max) => {
+                    let h = row_content_heights[r].clamp(*min, *max);
+                    row_heights[r] = h;
+                    remaining_height = (remaining_height - h).max(0.0);
+                }
+                GridTrack::Flex(weight) => {
+                    total_flex_weight_row += *weight;
+                }
+            }
+        }
+
+        if total_flex_weight_row > 0.0 {
+            for (r, track) in self.rows.iter().enumerate() {
+                if let GridTrack::Flex(weight) = track {
+                    row_heights[r] = (*weight / total_flex_weight_row) * remaining_height;
+                }
+            }
+        }
+
+        // 5. Compute grid line coordinates
+        let mut col_positions = vec![0.0f32; col_count + 1];
+        let mut x_acc = bounds.x;
+        for c in 0..col_count {
+            col_positions[c] = x_acc;
+            x_acc += col_widths[c] + self.column_gap;
+        }
+        col_positions[col_count] = x_acc - self.column_gap;
+
+        let mut row_positions = vec![0.0f32; row_count + 1];
+        let mut y_acc = bounds.y;
+        for r in 0..row_count {
+            row_positions[r] = y_acc;
+            y_acc += row_heights[r] + self.row_gap;
+        }
+        row_positions[row_count] = y_acc - self.row_gap;
+
+        // 6. Compute child rects based on placement and spans
+        for i in 0..subviews.len() {
+            let placement = resolved_placements[i];
+            let c_start = (placement.column as usize).min(col_count - 1);
+            let c_end = (c_start + placement.column_span as usize).min(col_count);
+            let r_start = (placement.row as usize).min(row_count - 1);
+            let r_end = (r_start + placement.row_span as usize).min(row_count);
+
+            let child_x = col_positions[c_start];
+            let child_y = row_positions[r_start];
+
+            // Width spans tracks and gaps:
+            let child_w = if c_end > c_start {
+                col_widths[c_start..c_end].iter().sum::<f32>()
+                    + self.column_gap * (c_end - c_start - 1) as f32
+            } else {
+                0.0
+            };
+
+            let child_h = if r_end > r_start {
+                row_heights[r_start..r_end].iter().sum::<f32>()
+                    + self.row_gap * (r_end - r_start - 1) as f32
+            } else {
+                0.0
+            };
+
+            rects[i] = Rect {
+                x: child_x,
+                y: child_y,
+                width: child_w,
+                height: child_h,
+            };
+        }
+
         rects
     }
 }
@@ -573,7 +796,8 @@ impl LayoutView for Grid {
     ) {
         let views: Vec<&dyn LayoutView> =
             subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
-        let rects = Self::compute_layout(self.rows, self.cols, self.spacing, bounds, &views, cache);
+        let placements = vec![None; subviews.len()];
+        let rects = self.compute_layout_rects(bounds, &views, &placements, cache);
 
         for (child, rect) in subviews.iter_mut().zip(rects) {
             child.place_subviews(rect, &mut [], cache);
@@ -738,7 +962,34 @@ mod tests {
             height: 210.0,
         };
 
-        let rects = Grid::compute_layout(2, 2, 10.0, bounds, &views, &mut cache);
+        let grid = Grid::new(
+            vec![GridTrack::Fixed(100.0), GridTrack::Fixed(100.0)],
+            vec![GridTrack::Fixed(100.0), GridTrack::Fixed(100.0)],
+            10.0,
+            10.0,
+        );
+        let placements = vec![
+            Some(cvkg_core::GridPlacement {
+                column: 0,
+                column_span: 1,
+                row: 0,
+                row_span: 1,
+            }),
+            Some(cvkg_core::GridPlacement {
+                column: 1,
+                column_span: 1,
+                row: 0,
+                row_span: 1,
+            }),
+            Some(cvkg_core::GridPlacement {
+                column: 0,
+                column_span: 1,
+                row: 1,
+                row_span: 1,
+            }),
+        ];
+
+        let rects = grid.compute_layout_rects(bounds, &views, &placements, &mut cache);
 
         assert_eq!(rects.len(), 3);
         assert_eq!(

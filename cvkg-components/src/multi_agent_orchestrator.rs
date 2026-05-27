@@ -1682,7 +1682,7 @@ impl MultiAgentOrchestrator {
                 height: nh,
             },
             6.0,
-            [0.0, 0.0, 0.0, 0.3],
+            theme::shadow(),
         );
 
         // Node body
@@ -1918,13 +1918,7 @@ impl MultiAgentOrchestrator {
                 4.0,
                 [0.8, 0.2, 0.2, 0.9],
             );
-            renderer.draw_text(
-                "■ Stop",
-                btn_x + 12.0,
-                btn_y + 6.0,
-                11.0,
-                theme::text(),
-            );
+            renderer.draw_text("■ Stop", btn_x + 12.0, btn_y + 6.0, 11.0, theme::text());
         } else {
             renderer.fill_rounded_rect(
                 Rect {
@@ -1936,13 +1930,7 @@ impl MultiAgentOrchestrator {
                 4.0,
                 [0.0, 0.7, 0.4, 0.9],
             );
-            renderer.draw_text(
-                "▶ Run",
-                btn_x + 16.0,
-                btn_y + 6.0,
-                11.0,
-                theme::text(),
-            );
+            renderer.draw_text("▶ Run", btn_x + 16.0, btn_y + 6.0, 11.0, theme::text());
         }
 
         // Execution progress
@@ -2859,14 +2847,7 @@ fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
 // Restored Rendering Methods
 // ============================================================
 impl MultiAgentOrchestrator {
-    fn render_output_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_output_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
@@ -2891,28 +2872,15 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_message_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_message_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-        renderer.draw_text(
-            "Agent Messages",
-            x + 12.0,
-            y + 8.0,
-            14.0,
-            theme::text(),
-        );
+        renderer.draw_text("Agent Messages", x + 12.0, y + 8.0, 14.0, theme::text());
         let mut cy = y + 30.0;
         for msg in state.message_log.iter().rev().take(20) {
             let color = match msg.message_type {
-                MessageType::Request => [0.3, 0.7, 1.0, 1.0],
+                MessageType::Request => theme::accent(),
                 MessageType::Response => [0.3, 1.0, 0.5, 1.0],
                 MessageType::Error => theme::error_color(),
                 MessageType::Info => theme::text_muted(),
@@ -2931,14 +2899,7 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_validation_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_validation_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
@@ -2965,14 +2926,7 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_skills_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_skills_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
@@ -3006,14 +2960,7 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_webhook_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_webhook_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
@@ -3052,14 +2999,7 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_schedule_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_schedule_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
@@ -3098,24 +3038,11 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_recurring_panel(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_recurring_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
-        renderer.draw_text(
-            "Recurring Runs",
-            x + 12.0,
-            y + 8.0,
-            14.0,
-            theme::text(),
-        );
+        renderer.draw_text("Recurring Runs", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.recurring_runs.is_empty() {
             renderer.draw_text(
                 "No recurring runs configured.",
@@ -3139,14 +3066,7 @@ impl MultiAgentOrchestrator {
         }
     }
 
-    fn render_minimap(
-        &self,
-        renderer: &mut dyn Renderer,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-    ) {
+    fn render_minimap(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 4.0, [0.06, 0.06, 0.1, 0.9]);
         renderer.stroke_rounded_rect(r(x, y, w, h), 4.0, [0.25, 0.25, 0.4, 1.0], 1.0);

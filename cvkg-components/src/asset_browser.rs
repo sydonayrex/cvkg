@@ -124,7 +124,7 @@ impl View for AssetBrowser {
                     width: rect.width,
                     height: row_h,
                 };
-                renderer.fill_rect(item_rect, [0.0, 0.0, 0.0, 0.0]);
+                renderer.fill_rect(item_rect, theme::button_ghost_bg());
                 renderer.draw_text(
                     &format!("{} {}", item.icon, item.name),
                     item_rect.x + 4.0,

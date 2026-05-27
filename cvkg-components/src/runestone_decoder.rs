@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::time::Duration;
 
 /// RunestoneDecoder - A text component that "deciphers" ancient runes into digital text.

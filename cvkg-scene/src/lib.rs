@@ -22,8 +22,8 @@
 //! This crate implements hierarchical AABB culling, automatic layering,
 //! and dirty-rect tracking for the Surtr GPU pipeline.
 
-pub mod test_renderer;
 pub mod quadtree;
+pub mod test_renderer;
 
 use quadtree::Quadtree;
 
@@ -252,9 +252,10 @@ impl SceneGraph {
                 if let Some(cell) = self.spatial_grid.get(&(cx, cy)) {
                     for id in cell {
                         if let Some(node) = self.nodes.get(id)
-                            && self.intersects(node.world_rect, rect) {
-                                candidates.push(*id);
-                            }
+                            && self.intersects(node.world_rect, rect)
+                        {
+                            candidates.push(*id);
+                        }
                     }
                 }
             }
@@ -275,10 +276,7 @@ impl SceneGraph {
 
             for cx in min_cell_x..=max_cell_x {
                 for cy in min_cell_y..=max_cell_y {
-                    self.spatial_grid
-                        .entry((cx, cy))
-                        .or_default()
-                        .push(*id);
+                    self.spatial_grid.entry((cx, cy)).or_default().push(*id);
                 }
             }
         }
@@ -296,10 +294,7 @@ impl SceneGraph {
         let mut layers: BTreeMap<u32, Vec<NodeId>> = BTreeMap::new();
         for id in visible_nodes {
             if let Some(node) = self.nodes.get(id) {
-                layers
-                    .entry(node.layer_id)
-                    .or_default()
-                    .push(*id);
+                layers.entry(node.layer_id).or_default().push(*id);
             }
         }
         // Sort nodes within each layer by z_index for correct draw order
@@ -392,12 +387,14 @@ impl SceneGraph {
                     // If they are exactly identical, we handle it too.
                     if let Some(j) = self.dirty_regions.iter().position(|r| *r == candidate)
                         && i != j
-                            && let Some(union) = rect_union(self.dirty_regions[i], self.dirty_regions[j]) {
-                                self.dirty_regions[i] = union;
-                                self.dirty_regions.remove(j);
-                                changed = true;
-                                break 'outer;
-                            }
+                        && let Some(union) =
+                            rect_union(self.dirty_regions[i], self.dirty_regions[j])
+                    {
+                        self.dirty_regions[i] = union;
+                        self.dirty_regions.remove(j);
+                        changed = true;
+                        break 'outer;
+                    }
                 }
             }
         }

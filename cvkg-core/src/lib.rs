@@ -86,6 +86,30 @@ pub struct KnowledgeState {
     // Component state storage for dynamic state
     #[serde(skip)]
     pub component_states: HashMap<u64, Arc<std::sync::RwLock<dyn std::any::Any + Send + Sync>>>,
+    /// Global undo/redo manager tracking document and input states.
+    #[serde(skip)]
+    pub undo_manager: UndoManager,
+    /// Active notification list.
+    #[serde(default)]
+    pub notifications: Vec<Notification>,
+    /// Flag indicating whether the notification center panel is visible.
+    #[serde(default)]
+    pub notification_center_visible: bool,
+    /// Modifier key state: shift key pressed.
+    #[serde(default)]
+    pub modifiers_shift: bool,
+    /// Modifier key state: control key pressed.
+    #[serde(default)]
+    pub modifiers_ctrl: bool,
+    /// Modifier key state: alt/option key pressed.
+    #[serde(default)]
+    pub modifiers_alt: bool,
+    /// Modifier key state: logo/command/windows key pressed.
+    #[serde(default)]
+    pub modifiers_logo: bool,
+    /// Whether the performance profiling overlay (Cmd+Shift+P) is currently visible.
+    #[serde(default)]
+    pub performance_overlay_visible: bool,
 }
 
 impl KnowledgeState {
@@ -206,6 +230,351 @@ pub struct TemporalEdge {
     pub relation: String,
     /// Weight/strength of the connection
     pub weight: f32,
+}
+
+/// A single action group representing an undo/redo step.
+pub struct UndoGroup {
+    /// Descriptive label of the action (e.g. "Type", "Delete").
+    pub label: String,
+    /// Time when the action was recorded, in seconds.
+    pub timestamp: f32,
+    /// Closure to revert the action.
+    pub undo: Arc<dyn Fn() + Send + Sync>,
+    /// Closure to re-apply the action.
+    pub redo: Arc<dyn Fn() + Send + Sync>,
+}
+
+impl Clone for UndoGroup {
+    /// Clone the undo/redo group. The closures are shared via Arc.
+    fn clone(&self) -> Self {
+        Self {
+            label: self.label.clone(),
+            timestamp: self.timestamp,
+            undo: Arc::clone(&self.undo),
+            redo: Arc::clone(&self.redo),
+        }
+    }
+}
+
+impl std::fmt::Debug for UndoGroup {
+    /// Debug format helper to avoid printing closures.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UndoGroup")
+            .field("label", &self.label)
+            .field("timestamp", &self.timestamp)
+            .finish()
+    }
+}
+
+/// Unified manager for undo and redo stacks.
+/// Supports grouping of actions, max undo depth clamping, and coalescing.
+pub struct UndoManager {
+    /// History stack of undo/redo groups.
+    stack: Vec<UndoGroup>,
+    /// Current position/index in the stack.
+    position: usize,
+    /// Maximum allowed undo steps before discarding oldest.
+    max_depth: usize,
+    /// Time window in seconds to coalesce consecutive actions of the same type.
+    coalesce_window: f32,
+}
+
+impl Default for UndoManager {
+    /// Create a default UndoManager with a depth of 100 and a 0.5s coalesce window.
+    fn default() -> Self {
+        Self {
+            stack: Vec::new(),
+            position: 0,
+            max_depth: 100,
+            coalesce_window: 0.5,
+        }
+    }
+}
+
+impl Clone for UndoManager {
+    /// Clone the undo manager, preserving stacks and position.
+    fn clone(&self) -> Self {
+        Self {
+            stack: self.stack.clone(),
+            position: self.position,
+            max_depth: self.max_depth,
+            coalesce_window: self.coalesce_window,
+        }
+    }
+}
+
+impl std::fmt::Debug for UndoManager {
+    /// Debug format helper for UndoManager.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UndoManager")
+            .field("stack_len", &self.stack.len())
+            .field("position", &self.position)
+            .field("max_depth", &self.max_depth)
+            .field("coalesce_window", &self.coalesce_window)
+            .finish()
+    }
+}
+
+impl UndoManager {
+    /// Create a new UndoManager with custom settings.
+    pub fn new(max_depth: usize, coalesce_window: f32) -> Self {
+        Self {
+            stack: Vec::new(),
+            position: 0,
+            max_depth,
+            coalesce_window,
+        }
+    }
+
+    /// Push a new undo/redo group to the stack, clearing any forward redo history.
+    pub fn push(
+        &mut self,
+        label: &str,
+        undo: impl Fn() + Send + Sync + 'static,
+        redo: impl Fn() + Send + Sync + 'static,
+    ) {
+        if self.position < self.stack.len() {
+            self.stack.truncate(self.position);
+        }
+
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f32();
+
+        self.stack.push(UndoGroup {
+            label: label.to_string(),
+            timestamp,
+            undo: Arc::new(undo),
+            redo: Arc::new(redo),
+        });
+
+        if self.stack.len() > self.max_depth {
+            self.stack.remove(0);
+        }
+        self.position = self.stack.len();
+    }
+
+    /// Perform the undo action if possible, moving the position back.
+    /// Returns the undo closure to be executed outside of any state lock.
+    pub fn undo(&mut self) -> Option<Arc<dyn Fn() + Send + Sync>> {
+        if self.can_undo() {
+            self.position -= 1;
+            Some(Arc::clone(&self.stack[self.position].undo))
+        } else {
+            None
+        }
+    }
+
+    /// Perform the redo action if possible, moving the position forward.
+    /// Returns the redo closure to be executed outside of any state lock.
+    pub fn redo(&mut self) -> Option<Arc<dyn Fn() + Send + Sync>> {
+        if self.can_redo() {
+            let group = &self.stack[self.position];
+            self.position += 1;
+            Some(Arc::clone(&group.redo))
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if there is an action that can be undone.
+    pub fn can_undo(&self) -> bool {
+        self.position > 0
+    }
+
+    /// Returns true if there is an action that can be redone.
+    pub fn can_redo(&self) -> bool {
+        self.position < self.stack.len()
+    }
+
+    /// Clear all undo/redo history.
+    pub fn clear(&mut self) {
+        self.stack.clear();
+        self.position = 0;
+    }
+
+    /// Push a new coalesceable action. If the last action in the stack matches the label,
+    /// is within the coalesce window, and the position is at the end of the stack, their undo/redo
+    /// functions will be combined instead of creating a new group.
+    pub fn push_coalesceable(
+        &mut self,
+        label: &str,
+        undo: impl Fn() + Send + Sync + 'static,
+        redo: impl Fn() + Send + Sync + 'static,
+    ) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f32();
+
+        if self.position == self.stack.len() && !self.stack.is_empty() {
+            let last_idx = self.stack.len() - 1;
+            let last = &self.stack[last_idx];
+            if last.label == label && (now - last.timestamp).abs() <= self.coalesce_window {
+                let old_undo = Arc::clone(&last.undo);
+                let old_redo = Arc::clone(&last.redo);
+                let new_undo = Arc::new(undo);
+                let new_redo = Arc::new(redo);
+
+                self.stack[last_idx].undo = Arc::new(move || {
+                    new_undo();
+                    old_undo();
+                });
+                self.stack[last_idx].redo = Arc::new(move || {
+                    old_redo();
+                    new_redo();
+                });
+                self.stack[last_idx].timestamp = now;
+                return;
+            }
+        }
+
+        self.push(label, undo, redo);
+    }
+}
+
+/// Unique identifier for a window instance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct WindowId(pub u64);
+
+/// Specifies the layering behavior of the window relative to other windows.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, Default,
+)]
+pub enum WindowLevel {
+    /// Standard window.
+    #[default]
+    Normal,
+    /// Window stays above all standard windows.
+    AlwaysOnTop,
+    /// Menu or pop-up level window.
+    PopUpMenu,
+}
+
+/// Configuration settings for creating a new window.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WindowConfig {
+    /// The window title bar text.
+    pub title: String,
+    /// Default width and height of the window.
+    pub size: (f32, f32),
+    /// Minimum allowed dimensions.
+    pub min_size: Option<(f32, f32)>,
+    /// Maximum allowed dimensions.
+    pub max_size: Option<(f32, f32)>,
+    /// Whether the window can be resized by the user.
+    pub resizable: bool,
+    /// Whether the window background is transparent.
+    pub transparent: bool,
+    /// Whether the window title bar and border decorations are drawn.
+    pub decorations: bool,
+    /// The window level layer.
+    pub level: WindowLevel,
+}
+
+impl Default for WindowConfig {
+    /// Create a standard default window configuration.
+    fn default() -> Self {
+        Self {
+            title: "CVKG Window".to_string(),
+            size: (800.0, 600.0),
+            min_size: None,
+            max_size: None,
+            resizable: true,
+            transparent: false,
+            decorations: true,
+            level: WindowLevel::Normal,
+        }
+    }
+}
+
+/// Abstract trait representing a platform-native window.
+/// Implementations delegate calls back to the platform renderers and events.
+pub trait Window: Send + Sync {
+    /// Request closing of the window.
+    fn close(&self);
+    /// Change the title bar text of the window.
+    fn set_title(&self, title: &str);
+    /// Update the window's physical dimensions.
+    fn set_size(&self, width: f32, height: f32);
+    /// Check if the window currently has keyboard focus.
+    fn is_key(&self) -> bool;
+    /// Check if this is the primary main application window.
+    fn is_main(&self) -> bool;
+    /// Check if the window is currently visible/mapped.
+    fn is_visible(&self) -> bool;
+    /// Hide or show the window.
+    fn set_visible(&self, visible: bool);
+    /// Bring the window to the front and focus it.
+    fn bring_to_front(&self);
+}
+
+/// A handle to a native window that can be used by application code.
+#[derive(Clone)]
+pub struct WindowHandle {
+    /// The unique identifier of this window.
+    pub id: WindowId,
+    /// Reference to the underlying platform window.
+    pub inner: Arc<dyn Window>,
+}
+
+impl std::fmt::Debug for WindowHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WindowHandle")
+            .field("id", &self.id)
+            .finish()
+    }
+}
+
+impl WindowHandle {
+    /// Create a new WindowHandle.
+    pub fn new(id: WindowId, inner: Arc<dyn Window>) -> Self {
+        Self { id, inner }
+    }
+    /// Request the window to close.
+    pub fn close(self) {
+        self.inner.close();
+    }
+    /// Set the title text of the window.
+    pub fn set_title(&self, title: &str) {
+        self.inner.set_title(title);
+    }
+    /// Resize the window.
+    pub fn set_size(&self, width: f32, height: f32) {
+        self.inner.set_size(width, height);
+    }
+    /// Returns true if this window has key focus.
+    pub fn is_key(&self) -> bool {
+        self.inner.is_key()
+    }
+    /// Returns true if this is the main application window.
+    pub fn is_main(&self) -> bool {
+        self.inner.is_main()
+    }
+    /// Returns true if the window is visible.
+    pub fn is_visible(&self) -> bool {
+        self.inner.is_visible()
+    }
+    /// Set visibility of the window.
+    pub fn set_visible(&self, visible: bool) {
+        self.inner.set_visible(visible);
+    }
+    /// Bring this window to the foreground.
+    pub fn bring_to_front(&self) {
+        self.inner.bring_to_front();
+    }
+}
+
+/// Action to take when a window close request event is received.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum WindowCloseAction {
+    /// Close the window immediately.
+    Allow,
+    /// Request confirmation from the user (e.g. show dialog).
+    Confirm,
+    /// Ignore the close request.
+    Deny,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -343,6 +712,11 @@ pub trait View: Sized + Send {
         0.0
     }
 
+    /// Returns the grid placement configuration for this view if it is laid out in a Grid.
+    fn get_grid_placement(&self) -> Option<GridPlacement> {
+        None
+    }
+
     /// Provided modifier entry point
     fn modifier<M: ViewModifier>(self, m: M) -> ModifiedView<Self, M> {
         ModifiedView::new(self, m)
@@ -418,13 +792,43 @@ pub trait View: Sized + Send {
     }
 
     /// Constrain this view to an explicit width and/or height.
+    /// Constrains the size of this view using fixed width/height values.
     fn frame(self, width: Option<f32>, height: Option<f32>) -> ModifiedView<Self, FrameModifier> {
-        self.modifier(FrameModifier { width, height })
+        self.modifier(FrameModifier {
+            width,
+            height,
+            min_width: None,
+            max_width: None,
+            min_height: None,
+            max_height: None,
+            alignment: Alignment::Center,
+        })
     }
 
     /// Give this view a flex weight for proportional space distribution in stacks.
     fn flex(self, weight: f32) -> ModifiedView<Self, FlexModifier> {
         self.modifier(FlexModifier { weight })
+    }
+
+    /// Specify the grid placement configuration (column, row, column_span, row_span) for this view.
+    fn grid_placement(self, placement: GridPlacement) -> ModifiedView<Self, GridPlacementModifier> {
+        self.modifier(GridPlacementModifier { placement })
+    }
+
+    /// Overlay a view on top of this view, aligned and offset relative to it.
+    fn overlay<O: View + Clone + 'static>(
+        self,
+        overlay: O,
+        alignment: Alignment,
+        offset: [f32; 2],
+        on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
+    ) -> ModifiedView<Self, OverlayModifier> {
+        self.modifier(OverlayModifier {
+            overlay: overlay.erase(),
+            alignment,
+            offset,
+            on_dismiss,
+        })
     }
 
     /// Automatically add padding to avoid overlapping with platform safe areas (notches, bars).
@@ -584,6 +988,7 @@ pub trait ErasedView: Send {
     fn name(&self) -> &'static str;
     fn flex_weight_erased(&self) -> f32;
     fn layout_erased(&self) -> Option<&dyn layout::LayoutView>;
+    fn grid_placement_erased(&self) -> Option<GridPlacement>;
     fn clone_box(&self) -> Box<dyn ErasedView>;
 }
 
@@ -602,6 +1007,10 @@ impl<V: View + Clone + 'static> ErasedView for V {
 
     fn layout_erased(&self) -> Option<&dyn layout::LayoutView> {
         self.layout()
+    }
+
+    fn grid_placement_erased(&self) -> Option<GridPlacement> {
+        self.get_grid_placement()
     }
 
     fn clone_box(&self) -> Box<dyn ErasedView> {
@@ -683,6 +1092,10 @@ impl View for AnyView {
 
     fn layout(&self) -> Option<&dyn layout::LayoutView> {
         self.inner.layout_erased()
+    }
+
+    fn get_grid_placement(&self) -> Option<GridPlacement> {
+        self.inner.grid_placement_erased()
     }
 }
 
@@ -1786,10 +2199,21 @@ impl<V: View, M: ViewModifier> View for ModifiedView<V, M> {
     fn layout(&self) -> Option<&dyn layout::LayoutView> {
         self.modifier.layout().or_else(|| self.view.layout())
     }
+
+    fn get_grid_placement(&self) -> Option<GridPlacement> {
+        self.modifier
+            .get_grid_placement()
+            .or_else(|| self.view.get_grid_placement())
+    }
 }
 
 pub trait ViewModifier: Send + Clone {
     fn modify<V: View>(self, content: V) -> impl View;
+
+    /// Returns the grid placement configuration if this modifier defines one.
+    fn get_grid_placement(&self) -> Option<GridPlacement> {
+        None
+    }
 
     /// Core rendering hook called before child views.
     fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
@@ -2171,7 +2595,7 @@ pub trait Renderer: ElapsedTime + Send {
     /// This transform should be applied to all subsequent draw calls until popped.
     /// Transform-only animations use this to avoid re-triggering the layout engine.
     fn push_transform(&mut self, _translation: [f32; 2], _scale: [f32; 2], _rotation: f32) {}
-    /// Push a raw 2D affine transform matrix [a, b, c, d, e, f] corresponding to 
+    /// Push a raw 2D affine transform matrix [a, b, c, d, e, f] corresponding to
     /// [m11, m12, m21, m22, tx, ty].
     fn push_affine(&mut self, _transform: [f32; 6]) {}
     /// Pop the last 2D transform from the stack.
@@ -2203,7 +2627,9 @@ pub trait Renderer: ElapsedTime + Send {
     }
     /// Calculate magnetic coordinate warp towards an anchor.
     fn magnetic_warp(&self, pointer: [f32; 2], anchor_rect: Rect, strength: f32) -> [f32; 2] {
-        if strength <= 0.0 { return pointer; }
+        if strength <= 0.0 {
+            return pointer;
+        }
         let cx = anchor_rect.x + anchor_rect.width / 2.0;
         let cy = anchor_rect.y + anchor_rect.height / 2.0;
         let dx = pointer[0] - cx;
@@ -2222,7 +2648,11 @@ pub trait Renderer: ElapsedTime + Send {
         let cx = bounds.x + bounds.width / 2.0;
         let cy = bounds.y + bounds.height / 2.0;
         let dist = ((pointer[0] - cx).powi(2) + (pointer[1] - cy).powi(2)).sqrt();
-        if dist < radius { (1.0 - dist / radius).clamp(0.0, 1.0) } else { 0.0 }
+        if dist < radius {
+            (1.0 - dist / radius).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
     }
     /// Calculate dynamic element attention (scaling/morphing) statelessly per frame.
     fn fafnir_evolve(&self, pointer: [f32; 2], bounds: Rect, max_scale: f32) -> f32 {
@@ -2702,7 +3132,7 @@ pub fn load_system_state() -> arc_swap::Guard<Arc<KnowledgeState>> {
 }
 pub fn update_system_state<F>(f: F)
 where
-    F: Fn(&KnowledgeState) -> KnowledgeState,
+    F: FnOnce(&KnowledgeState) -> KnowledgeState,
 {
     let _lock = STATE_WRITE_MUTEX.lock().unwrap();
     if is_rendering() {
@@ -2957,6 +3387,18 @@ pub enum Orientation {
     Horizontal,
     Vertical,
 }
+/// Placement configuration for placing a view within a Grid layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GridPlacement {
+    /// 0-based column index. Negative values count from the end of columns.
+    pub column: i32,
+    /// Number of columns the view spans (default is 1).
+    pub column_span: u32,
+    /// 0-based row index. Negative values count from the end of rows.
+    pub row: i32,
+    /// Number of rows the view spans (default is 1).
+    pub row_span: u32,
+}
 /// Cross-axis alignment for layout containers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum Alignment {
@@ -3094,6 +3536,30 @@ impl Color {
     /// Convert the color to a [r, g, b, a] array.
     pub fn as_array(&self) -> [f32; 4] {
         [self.r, self.g, self.b, self.a]
+    }
+
+    /// Return a new color with lightness increased by `amount`.
+    ///
+    /// Adds `amount` to each RGB channel and clamps to [0.0, 1.0].
+    /// This is a simple sRGB lightness adjustment, not perceptually uniform.
+    /// For perceptually uniform adjustments, use OKLCH via cvkg-themes.
+    pub fn lighten(&self, amount: f32) -> Self {
+        Self {
+            r: (self.r + amount).clamp(0.0, 1.0),
+            g: (self.g + amount).clamp(0.0, 1.0),
+            b: (self.b + amount).clamp(0.0, 1.0),
+            a: self.a,
+        }
+    }
+
+    /// Return a new color with lightness decreased by `amount`.
+    pub fn darken(&self, amount: f32) -> Self {
+        Self {
+            r: (self.r - amount).clamp(0.0, 1.0),
+            g: (self.g - amount).clamp(0.0, 1.0),
+            b: (self.b - amount).clamp(0.0, 1.0),
+            a: self.a,
+        }
     }
 }
 impl View for Color {
@@ -3516,47 +3982,196 @@ impl EdgeInsets {
     }
 }
 
-/// Modifier to set the size of a view
+/// Modifier to set the size and alignment constraints of a view.
+/// This determines the proposal size passed to the child and how the child is aligned
+/// within the layout rect allocated to the frame.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FrameModifier {
+    /// Exact width to assign to the child view.
     pub width: Option<f32>,
+    /// Exact height to assign to the child view.
     pub height: Option<f32>,
+    /// Minimum width constraint for the view.
+    pub min_width: Option<f32>,
+    /// Maximum width constraint for the view.
+    pub max_width: Option<f32>,
+    /// Minimum height constraint for the view.
+    pub min_height: Option<f32>,
+    /// Maximum height constraint for the view.
+    pub max_height: Option<f32>,
+    /// The alignment strategy for positioning the child view within the frame.
+    pub alignment: Alignment,
 }
 
 impl Default for FrameModifier {
+    /// Returns the default frame configuration which has no constraints and center alignment.
     fn default() -> Self {
         Self::new()
     }
 }
 
 impl FrameModifier {
+    /// Creates a new FrameModifier with all dimensions unspecified and center alignment.
     pub fn new() -> Self {
         Self {
             width: None,
             height: None,
+            min_width: None,
+            max_width: None,
+            min_height: None,
+            max_height: None,
+            alignment: Alignment::Center,
         }
     }
 
+    /// Sets the fixed width of the frame.
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
         self
     }
 
+    /// Sets the fixed height of the frame.
     pub fn height(mut self, height: f32) -> Self {
         self.height = Some(height);
         self
     }
 
+    /// Sets both the fixed width and height of the frame.
     pub fn size(mut self, width: f32, height: f32) -> Self {
         self.width = Some(width);
         self.height = Some(height);
         self
     }
+
+    /// Sets the minimum width constraint.
+    pub fn min_width(mut self, min_width: f32) -> Self {
+        self.min_width = Some(min_width);
+        self
+    }
+
+    /// Sets the maximum width constraint.
+    pub fn max_width(mut self, max_width: f32) -> Self {
+        self.max_width = Some(max_width);
+        self
+    }
+
+    /// Sets the minimum height constraint.
+    pub fn min_height(mut self, min_height: f32) -> Self {
+        self.min_height = Some(min_height);
+        self
+    }
+
+    /// Sets the maximum height constraint.
+    pub fn max_height(mut self, max_height: f32) -> Self {
+        self.max_height = Some(max_height);
+        self
+    }
+
+    /// Sets the alignment strategy for the child within the frame's layout bounds.
+    pub fn alignment(mut self, alignment: Alignment) -> Self {
+        self.alignment = alignment;
+        self
+    }
 }
 
 impl ViewModifier for FrameModifier {
+    /// Wraps the child view in a ModifiedView using this frame modifier.
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
+    }
+
+    /// Transforms the layout size proposal offered to the child to comply with frame constraints.
+    fn transform_proposal(&self, proposal: SizeProposal) -> SizeProposal {
+        let w = if let Some(width) = self.width {
+            Some(width)
+        } else {
+            proposal.width.map(|pw| {
+                pw.clamp(
+                    self.min_width.unwrap_or(0.0),
+                    self.max_width.unwrap_or(f32::INFINITY),
+                )
+            })
+        };
+        let h = if let Some(height) = self.height {
+            Some(height)
+        } else {
+            proposal.height.map(|ph| {
+                ph.clamp(
+                    self.min_height.unwrap_or(0.0),
+                    self.max_height.unwrap_or(f32::INFINITY),
+                )
+            })
+        };
+        SizeProposal {
+            width: w,
+            height: h,
+        }
+    }
+
+    /// Constraints and transforms the child's resulting size to fit the frame's bounds.
+    fn transform_size(&self, child_size: Size) -> Size {
+        let w = if let Some(width) = self.width {
+            width
+        } else {
+            child_size.width.clamp(
+                self.min_width.unwrap_or(0.0),
+                self.max_width.unwrap_or(f32::INFINITY),
+            )
+        };
+        let h = if let Some(height) = self.height {
+            height
+        } else {
+            child_size.height.clamp(
+                self.min_height.unwrap_or(0.0),
+                self.max_height.unwrap_or(f32::INFINITY),
+            )
+        };
+        Size {
+            width: w,
+            height: h,
+        }
+    }
+
+    /// Renders the frame's child view aligned within the layout rect.
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        self.render(renderer, rect);
+        let child_proposal =
+            self.transform_proposal(SizeProposal::new(Some(rect.width), Some(rect.height)));
+        let child_size = view.intrinsic_size(renderer, child_proposal);
+
+        let mut child_x = rect.x;
+        let mut child_y = rect.y;
+
+        match self.alignment {
+            Alignment::Leading => {
+                child_y = rect.y + (rect.height - child_size.height) / 2.0;
+            }
+            Alignment::Trailing => {
+                child_x = rect.x + rect.width - child_size.width;
+                child_y = rect.y + (rect.height - child_size.height) / 2.0;
+            }
+            Alignment::Top => {
+                child_x = rect.x + (rect.width - child_size.width) / 2.0;
+            }
+            Alignment::Bottom => {
+                child_x = rect.x + (rect.width - child_size.width) / 2.0;
+                child_y = rect.y + rect.height - child_size.height;
+            }
+            Alignment::Center => {
+                child_x = rect.x + (rect.width - child_size.width) / 2.0;
+                child_y = rect.y + (rect.height - child_size.height) / 2.0;
+            }
+        }
+
+        let child_rect = Rect {
+            x: child_x,
+            y: child_y,
+            width: child_size.width,
+            height: child_size.height,
+        };
+
+        view.render(renderer, child_rect);
+        self.post_render(renderer, rect);
     }
 }
 
@@ -3573,6 +4188,116 @@ impl ViewModifier for FlexModifier {
 
     fn child_flex_weight<V: View>(&self, _view: &V) -> f32 {
         self.weight
+    }
+}
+
+/// Modifier that specifies the column and row placement of a view inside a Grid layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GridPlacementModifier {
+    /// The grid placement settings containing column/row indexes and spans.
+    pub placement: GridPlacement,
+}
+
+impl ViewModifier for GridPlacementModifier {
+    /// Wraps the child view in a ModifiedView using this modifier.
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    /// Exposes the grid placement metadata to parent layout engines.
+    fn get_grid_placement(&self) -> Option<GridPlacement> {
+        Some(self.placement)
+    }
+}
+
+/// Modifier to render a popover, tooltip, or menu view overlaying an anchored view.
+/// It supports alignment positioning and outside-click dismissal.
+#[derive(Clone)]
+pub struct OverlayModifier {
+    /// The overlay content view.
+    pub overlay: AnyView,
+    /// Where the overlay is aligned relative to the anchored view.
+    pub alignment: Alignment,
+    /// Additional offset in logical pixels.
+    pub offset: [f32; 2],
+    /// Optional dismissal callback triggered by click-outside events.
+    pub on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl ViewModifier for OverlayModifier {
+    /// Wraps the child view in a ModifiedView using this overlay modifier.
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    /// Renders the overlay content positioned above the child view.
+    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
+        // 1. Render primary anchored view
+        view.render(renderer, rect);
+
+        // 2. Measure overlay content
+        let overlay_size = self
+            .overlay
+            .intrinsic_size(renderer, SizeProposal::unspecified());
+
+        // 3. Align overlay rect relative to anchored rect
+        let mut overlay_x;
+        let mut overlay_y;
+
+        match self.alignment {
+            Alignment::Leading => {
+                overlay_x = rect.x - overlay_size.width;
+                overlay_y = rect.y + (rect.height - overlay_size.height) / 2.0;
+            }
+            Alignment::Trailing => {
+                overlay_x = rect.x + rect.width;
+                overlay_y = rect.y + (rect.height - overlay_size.height) / 2.0;
+            }
+            Alignment::Top => {
+                overlay_x = rect.x + (rect.width - overlay_size.width) / 2.0;
+                overlay_y = rect.y - overlay_size.height;
+            }
+            Alignment::Bottom => {
+                overlay_x = rect.x + (rect.width - overlay_size.width) / 2.0;
+                overlay_y = rect.y + rect.height;
+            }
+            Alignment::Center => {
+                overlay_x = rect.x + (rect.width - overlay_size.width) / 2.0;
+                overlay_y = rect.y + (rect.height - overlay_size.height) / 2.0;
+            }
+        }
+
+        overlay_x += self.offset[0];
+        overlay_y += self.offset[1];
+
+        let overlay_rect = Rect {
+            x: overlay_x,
+            y: overlay_y,
+            width: overlay_size.width,
+            height: overlay_size.height,
+        };
+
+        // 4. Handle click-outside dismissal
+        if let Some(on_dismiss) = &self.on_dismiss {
+            let dismiss = on_dismiss.clone();
+            renderer.register_handler(
+                "pointerdown",
+                Arc::new(move |event| {
+                    if let Event::PointerDown { x, y, .. } = event {
+                        let click_inside = x >= overlay_rect.x
+                            && x <= overlay_rect.x + overlay_rect.width
+                            && y >= overlay_rect.y
+                            && y <= overlay_rect.y + overlay_rect.height;
+                        if !click_inside {
+                            dismiss();
+                        }
+                    }
+                }),
+            );
+        }
+
+        // 5. Render overlay view
+        self.overlay.render(renderer, overlay_rect);
     }
 }
 
@@ -3971,8 +4696,8 @@ pub mod runtime;
 pub mod scene_graph;
 pub mod sdf_shadow;
 
-pub use scene_graph::{NodeId, bifrost_registry};
 pub use material::DrawMaterial;
+pub use scene_graph::{NodeId, bifrost_registry};
 
 // Duplicate AssetState removed - original definition at line 67
 
@@ -3983,6 +4708,19 @@ pub trait AssetManager: Send + Sync {
 
     /// Pre-load an image into the cache.
     fn preload_image(&self, url: &str);
+}
+
+/// The phase of a touch or gesture event in its lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum TouchPhase {
+    /// The touch/gesture has just begun.
+    Began,
+    /// The touch/gesture is moving.
+    Moved,
+    /// The touch/gesture has ended normally.
+    Ended,
+    /// The touch/gesture was cancelled (e.g., by the system).
+    Cancelled,
 }
 
 /// User input event types
@@ -4082,16 +4820,28 @@ pub enum Event {
         touch_id: u64,
     },
     /// Multi-touch pinch gesture.
+    /// `center` is the gesture anchor point in device-independent pixels.
+    /// `scale` is the relative pinch scale (>1 = expand, <1 = contract).
+    /// `velocity` is the instantaneous velocity of the pinch.
+    /// `phase` indicates the current phase of the gesture lifecycle.
     GesturePinch {
+        center: [f32; 2],
         scale: f32,
         velocity: f32,
+        phase: TouchPhase,
     },
     /// Multi-touch swipe/pan gesture.
+    /// `direction` is the normalized direction vector [dx, dy].
+    /// `velocity` is the instantaneous velocity of the swipe.
+    /// `phase` indicates the current phase of the gesture lifecycle.
     GestureSwipe {
-        dx: f32,
-        dy: f32,
-        velocity_x: f32,
-        velocity_y: f32,
+        direction: [f32; 2],
+        velocity: f32,
+        phase: TouchPhase,
+    },
+    /// Drag-and-drop: external file dropped onto window.
+    FileDrop {
+        path: String,
     },
 }
 
@@ -4124,6 +4874,7 @@ impl Event {
             Self::TouchCancel { .. } => "touchcancel",
             Self::GesturePinch { .. } => "gesturepinch",
             Self::GestureSwipe { .. } => "gestureswipe",
+            Self::FileDrop { .. } => "filedrop",
         }
     }
 }
@@ -4346,8 +5097,12 @@ mod vili_tests {
 
     struct DummyRenderer;
     impl ElapsedTime for DummyRenderer {
-        fn elapsed_time(&self) -> f32 { 0.0 }
-        fn delta_time(&self) -> f32 { 0.0 }
+        fn elapsed_time(&self) -> f32 {
+            0.0
+        }
+        fn delta_time(&self) -> f32 {
+            0.0
+        }
     }
     impl Renderer for DummyRenderer {
         fn fill_rect(&mut self, _r: Rect, _c: [f32; 4]) {}
@@ -4358,22 +5113,29 @@ mod vili_tests {
         fn stroke_ellipse(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
         fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
         fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
-        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) { (0.0, 0.0) }
+        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) {
+            (0.0, 0.0)
+        }
         fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
     }
 
     #[test]
     fn test_magnetic_warp() {
         let renderer = DummyRenderer;
-        let anchor = Rect { x: 100.0, y: 100.0, width: 50.0, height: 50.0 };
+        let anchor = Rect {
+            x: 100.0,
+            y: 100.0,
+            width: 50.0,
+            height: 50.0,
+        };
         // Pointer is near the anchor (distance < 120)
-        let pointer = [125.0, 50.0]; 
+        let pointer = [125.0, 50.0];
         // distance from center (125, 125) is 75.
         // force = (1.0 - 75/120) * strength
         let warp = renderer.magnetic_warp(pointer, anchor, 1.0);
         // It should pull closer to (125, 125), so Y should be > 50
         assert!(warp[1] > 50.0);
-        
+
         // Out of range pointer should remain unchanged
         let far_pointer = [500.0, 500.0];
         let far_warp = renderer.magnetic_warp(far_pointer, anchor, 1.0);
@@ -4383,7 +5145,12 @@ mod vili_tests {
     #[test]
     fn test_mani_glow() {
         let renderer = DummyRenderer;
-        let bounds = Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let pointer_inside = [50.0, 50.0];
         let glow_max = renderer.mani_glow_intensity(pointer_inside, bounds, 120.0);
         assert_eq!(glow_max, 1.0);
@@ -4396,9 +5163,1646 @@ mod vili_tests {
     #[test]
     fn test_fafnir_evolve() {
         let renderer = DummyRenderer;
-        let bounds = Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let pointer_inside = [50.0, 50.0];
         let scale = renderer.fafnir_evolve(pointer_inside, bounds, 1.2);
         assert_eq!(scale, 1.2); // Full scale when hovering center
     }
+
+    #[test]
+    fn test_undo_manager_basic() {
+        let mut manager = UndoManager::new(3, 0.5);
+        let val = std::sync::Arc::new(std::sync::Mutex::new(0));
+
+        let v1 = val.clone();
+        let v2 = val.clone();
+        manager.push(
+            "Add",
+            move || *v1.lock().unwrap() -= 1,
+            move || *v2.lock().unwrap() += 1,
+        );
+
+        assert!(manager.can_undo());
+        assert!(!manager.can_redo());
+
+        let undo = manager.undo().unwrap();
+        undo();
+        assert_eq!(*val.lock().unwrap(), -1);
+        assert!(!manager.can_undo());
+        assert!(manager.can_redo());
+
+        let redo = manager.redo().unwrap();
+        redo();
+        assert_eq!(*val.lock().unwrap(), 0);
+    }
+
+    #[test]
+    fn test_undo_manager_depth_limit() {
+        let mut manager = UndoManager::new(2, 0.5);
+        manager.push("1", || {}, || {});
+        manager.push("2", || {}, || {});
+        manager.push("3", || {}, || {});
+
+        assert_eq!(manager.stack.len(), 2);
+        assert_eq!(manager.position, 2);
+    }
+
+    #[test]
+    fn test_undo_manager_coalescing() {
+        let mut manager = UndoManager::new(10, 1.0);
+        let count = std::sync::Arc::new(std::sync::Mutex::new(0));
+
+        let c = count.clone();
+        manager.push_coalesceable("Type", move || *c.lock().unwrap() -= 1, || {});
+
+        let c = count.clone();
+        manager.push_coalesceable("Type", move || *c.lock().unwrap() -= 1, || {});
+
+        assert_eq!(manager.stack.len(), 1);
+
+        let undo = manager.undo().unwrap();
+        undo();
+        assert_eq!(*count.lock().unwrap(), -2);
+    }
 }
+
+// =============================================================================
+// THEME CONTEXT — Thread-local theme access for components
+// =============================================================================
+//
+// Components call `use_theme()` to get the current SemanticColors.
+// The native renderer sets this via `set_current_theme()` before each frame.
+// Falls back to dark theme defaults if no theme has been set.
+//
+// We store SemanticColors directly (not the full Theme) to avoid depending
+// on cvkg-themes from cvkg-core. The colors are cloned into thread-local storage.
+
+use std::cell::RefCell;
+
+thread_local! {
+    /// Thread-local semantic colors for the current frame.
+    static THEME_CONTEXT: RefCell<Option<color::SemanticColors>> = const { RefCell::new(None) };
+}
+
+/// Semantic colors extracted from the theme for use by components.
+/// This is a standalone type defined in cvkg-core so cvkg-components
+/// can use it without depending on cvkg-themes.
+///
+/// Components should access these via `use_theme()` rather than hardcoding RGBA.
+pub use color::SemanticColors;
+
+/// Set the current semantic colors for this thread.
+/// Called by the native renderer before each frame.
+pub fn set_current_theme(colors: color::SemanticColors) {
+    THEME_CONTEXT.with(|cell| {
+        *cell.borrow_mut() = Some(colors);
+    });
+}
+
+/// Clear the current theme. Called after each frame.
+pub fn clear_current_theme() {
+    THEME_CONTEXT.with(|cell| {
+        *cell.borrow_mut() = None;
+    });
+}
+
+/// Access the current semantic colors from within a component's `render()` method.
+///
+/// Returns the colors set by the most recent `set_current_theme()` call.
+/// Falls back to dark theme defaults if no theme has been set.
+///
+/// # Example
+/// ```no_run
+/// use cvkg_core::{use_theme, Renderer, Rect};
+///
+/// fn render_button(renderer: &mut dyn Renderer, rect: Rect) {
+///     let colors = use_theme();
+///     renderer.fill_rounded_rect(rect, 8.0, [colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a]);
+/// }
+/// ```
+pub fn use_theme() -> color::SemanticColors {
+    THEME_CONTEXT.with(|cell| {
+        cell.borrow()
+            .clone()
+            .unwrap_or_else(color::SemanticColors::dark)
+    })
+}
+
+// =============================================================================
+// COLOR MODULE — Standalone semantic colors type
+// =============================================================================
+//
+// This module provides `SemanticColors`, a self-contained color palette that
+// components can use without depending on `cvkg-themes`. The `use_theme()`
+// function returns the current `SemanticColors` from thread-local storage.
+
+pub mod color {
+    use super::Color;
+
+    /// A complete set of semantic colors for UI components.
+    ///
+    /// Each color serves a specific role in the UI. Components should reference
+    /// these semantic roles rather than hardcoding RGBA values.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use cvkg_core::{use_theme, Renderer, Rect};
+    ///
+    /// fn render_button(renderer: &mut dyn Renderer, rect: Rect) {
+    ///     let colors = use_theme();
+    ///     // Use accent color for the button background
+    ///     renderer.fill_rounded_rect(rect, 8.0,
+    ///         [colors.accent.r, colors.accent.g, colors.accent.b, colors.accent.a]);
+    /// }
+    /// ```
+    #[derive(Debug, Clone)]
+    pub struct SemanticColors {
+        /// Primary brand color — used for key interactive elements.
+        pub primary: Color,
+        /// Secondary color — used for less prominent interactive elements.
+        pub secondary: Color,
+        /// Accent color — used for highlights, focus rings, CTAs.
+        pub accent: Color,
+        /// Page/window background color.
+        pub background: Color,
+        /// Surface color — used for cards, panels, sheets.
+        pub surface: Color,
+        /// Error color — used for destructive actions, error messages.
+        pub error: Color,
+        /// Warning color — used for caution indicators.
+        pub warning: Color,
+        /// Success color — used for positive feedback.
+        pub success: Color,
+        /// Primary text color.
+        pub text: Color,
+        /// Dimmed/disabled text color.
+        pub text_dim: Color,
+    }
+
+    impl SemanticColors {
+        /// Dark theme semantic colors (default fallback).
+        pub fn dark() -> Self {
+            Self {
+                primary: Color::new(1.0, 0.84, 0.0, 1.0),      // Viking Gold
+                secondary: Color::new(1.0, 0.0, 1.0, 1.0),     // Magenta Liquid
+                accent: Color::new(1.0, 0.0, 0.4, 1.0),        // Crimson Flash
+                background: Color::new(0.02, 0.02, 0.05, 1.0), // Deep Void
+                surface: Color::new(0.05, 0.05, 0.07, 1.0),    // Tactical Obsidian
+                error: Color::new(1.0, 0.2, 0.2, 1.0),         // Red
+                warning: Color::new(1.0, 0.8, 0.0, 1.0),       // Yellow
+                success: Color::new(0.0, 1.0, 0.5, 1.0),       // Green
+                text: Color::new(0.95, 0.95, 1.0, 1.0),        // Near-white
+                text_dim: Color::new(0.6, 0.6, 0.7, 1.0),      // Gray
+            }
+        }
+
+        /// Light theme semantic colors.
+        pub fn light() -> Self {
+            Self {
+                primary: Color::new(0.35, 0.30, 0.70, 1.0),
+                secondary: Color::new(0.30, 0.50, 0.30, 1.0),
+                accent: Color::new(0.30, 0.35, 0.75, 1.0),
+                background: Color::new(0.97, 0.97, 0.98, 1.0),
+                surface: Color::new(0.93, 0.93, 0.95, 1.0),
+                error: Color::new(0.75, 0.15, 0.15, 1.0),
+                warning: Color::new(0.80, 0.60, 0.0, 1.0),
+                success: Color::new(0.15, 0.65, 0.30, 1.0),
+                text: Color::new(0.08, 0.08, 0.10, 1.0),
+                text_dim: Color::new(0.40, 0.40, 0.45, 1.0),
+            }
+        }
+
+        /// Convert the accent color semantic color into interactive state colors.
+        ///
+        /// This provides hover/active/focus/disabled variants derived from the
+        /// accent color, matching the pattern that `cvkg-themes::StateColors` uses.
+        pub fn accent_states(&self) -> InteractiveColorStates {
+            InteractiveColorStates::from_color(self.accent)
+        }
+
+        /// Convert the primary color into interactive state colors.
+        pub fn primary_states(&self) -> InteractiveColorStates {
+            InteractiveColorStates::from_color(self.primary)
+        }
+
+        /// Convert the error color into interactive state colors.
+        pub fn error_states(&self) -> InteractiveColorStates {
+            InteractiveColorStates::from_color(self.error)
+        }
+
+        /// Convert the success color into interactive state colors.
+        pub fn success_states(&self) -> InteractiveColorStates {
+            InteractiveColorStates::from_color(self.success)
+        }
+    }
+
+    /// Interactive state colors derived from a single base color.
+    ///
+    /// Provides hover/active/focus/disabled variants for any color,
+    /// derived via simple lightness adjustments in sRGB space.
+    #[derive(Debug, Clone)]
+    pub struct InteractiveColorStates {
+        pub default: Color,
+        pub hover: Color,
+        pub active: Color,
+        pub focus: Color,
+        pub disabled: Color,
+        pub focus_ring: Color,
+    }
+
+    impl InteractiveColorStates {
+        /// Derive interactive state colors from a base sRGB color.
+        ///
+        /// Uses simple lightness adjustments:
+        /// - Hover: +15% lightness
+        /// - Active: -15% lightness
+        /// - Focus: same as default
+        /// - Disabled: 40% opacity
+        /// - Focus ring: base color at 70% opacity
+        pub fn from_color(base: Color) -> Self {
+            Self {
+                default: base,
+                hover: base.lighten(0.15),
+                active: base.darken(0.15),
+                focus: base,
+                disabled: Color::new(base.r, base.g, base.b, base.a * 0.4),
+                focus_ring: Color::new(base.r, base.g, base.b, base.a * 0.7),
+            }
+        }
+
+        /// Get the color for a specific interactive state.
+        pub fn color_for(&self, state: InteractiveState) -> Color {
+            match state {
+                InteractiveState::Default => self.default,
+                InteractiveState::Hover => self.hover,
+                InteractiveState::Active => self.active,
+                InteractiveState::Focus => self.focus,
+                InteractiveState::Disabled => self.disabled,
+            }
+        }
+    }
+
+    /// Interactive state for a component.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum InteractiveState {
+        Default,
+        Hover,
+        Active,
+        Focus,
+        Disabled,
+    }
+}
+
+// =============================================================================
+// USE_STATE HOOK — Local component state with automatic re-render
+// =============================================================================
+//
+// Components call `use_state(id, initial)` to get a `(getter, setter)` pair.
+// The setter updates the global system state and triggers a re-render.
+//
+// This is the minimal state primitive needed for interactive components.
+// For complex state, use the global `KnowledgeState` directly.
+
+/// Local state hook for components.
+///
+/// Returns a `(getter, setter)` pair:
+/// - `getter()` returns the current value of type `T`
+/// - `setter(value)` updates the value and triggers a re-render
+///
+/// The `id` must be unique per component instance (use a hash of the
+/// component's label or a generated UUID).
+pub fn use_state<T: Clone + Send + Sync + 'static>(
+    id: u64,
+    initial: T,
+) -> (impl Fn() -> T, impl Fn(T)) {
+    // Initialize the state if not already present
+    let already_exists = load_system_state().get_component_state::<T>(id).is_some();
+    if !already_exists {
+        update_system_state(|s| {
+            let mut ns = s.clone();
+            ns.set_component_state(id, initial.clone());
+            ns
+        });
+    }
+
+    let getter = move || -> T {
+        load_system_state()
+            .get_component_state::<T>(id)
+            .map(|arc_lock| {
+                arc_lock
+                    .read()
+                    .ok()
+                    .map(|guard| (*guard).clone())
+                    .unwrap_or_else(|| initial.clone())
+            })
+            .unwrap_or_else(|| initial.clone())
+    };
+
+    let setter = {
+        move |value| {
+            update_system_state(|s| {
+                let mut ns = s.clone();
+                ns.set_component_state(id, value);
+                ns
+            });
+        }
+    };
+
+    (getter, setter)
+}
+
+/// Generate a stable hash ID from a string key.
+///
+/// Use this to create unique IDs for `use_state` based on component labels
+/// or other stable identifiers.
+///
+/// # Example
+/// ```no_run
+/// use cvkg_core::{use_state, use_state_hash};
+/// let id = use_state_hash("my-checkbox");
+/// let (value, set_value) = use_state(id, false);
+/// ```
+pub fn use_state_hash(key: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut s = std::collections::hash_map::DefaultHasher::new();
+    key.hash(&mut s);
+    s.finish()
+}
+
+// =============================================================================
+// ACCESSIBILITY PREFERENCES — System accessibility settings
+// =============================================================================
+//
+// Components and the renderer query these to adapt behavior:
+// - Reduce Motion: disable non-essential animations
+// - Reduce Transparency: replace glass materials with opaque surfaces
+// - Increase Contrast: make borders visible, minimum alpha 0.5
+
+thread_local! {
+    /// Thread-local accessibility preferences.
+    /// Defaults to no restrictions (all false).
+    static ACCESSIBILITY_PREFS: std::cell::RefCell<AccessibilityPreferences> =
+        std::cell::RefCell::new(AccessibilityPreferences::default());
+}
+
+/// System accessibility preferences that components and the renderer must honor.
+///
+/// These map to macOS System Settings > Accessibility:
+/// - `reduce_motion`: Disables non-essential animations (spring, bounce, etc.)
+/// - `reduce_transparency`: Replaces glass/transparent materials with opaque surfaces
+/// - `increase_contrast`: Makes all borders visible, minimum alpha 0.5 for all elements
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AccessibilityPreferences {
+    /// User prefers reduced motion. Animations should be instant or very short.
+    pub reduce_motion: bool,
+    /// User prefers reduced transparency. Glass materials should be opaque.
+    pub reduce_transparency: bool,
+    /// User prefers increased contrast. Borders must be visible, min alpha 0.5.
+    pub increase_contrast: bool,
+}
+
+impl AccessibilityPreferences {
+    /// Detect system accessibility preferences (macOS).
+    ///
+    /// On non-macOS platforms, returns defaults (all false).
+    /// In a production implementation, this would query the OS APIs.
+    pub fn detect_from_system() -> Self {
+        #[cfg(target_os = "macos")]
+        {
+            // Try to read macOS accessibility preferences via defaults command
+            let reduce_motion = std::process::Command::new("defaults")
+                .args(["read", "-g", "com.apple.universalaccess", "reduceMotion"])
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim() == "1")
+                .unwrap_or(false);
+
+            let reduce_transparency = std::process::Command::new("defaults")
+                .args([
+                    "read",
+                    "-g",
+                    "com.apple.universalaccess",
+                    "reduceTransparency",
+                ])
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim() == "1")
+                .unwrap_or(false);
+
+            let increase_contrast = std::process::Command::new("defaults")
+                .args([
+                    "read",
+                    "-g",
+                    "com.apple.universalaccess",
+                    "increaseContrast",
+                ])
+                .output()
+                .ok()
+                .and_then(|o| String::from_utf8(o.stdout).ok())
+                .map(|s| s.trim() == "1")
+                .unwrap_or(false);
+
+            Self {
+                reduce_motion,
+                reduce_transparency,
+                increase_contrast,
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            Self::default()
+        }
+    }
+
+    /// Apply a minimum alpha constraint for increase-contrast mode.
+    pub fn min_alpha(&self, requested: f32) -> f32 {
+        if self.increase_contrast {
+            requested.max(0.5)
+        } else {
+            requested
+        }
+    }
+
+    /// Returns true if glass effects should be replaced with opaque surfaces.
+    pub fn should_disable_glass(&self) -> bool {
+        self.reduce_transparency
+    }
+
+    /// Returns true if animations should be instant.
+    pub fn should_reduce_motion(&self) -> bool {
+        self.reduce_motion
+    }
+
+    /// Returns true if borders should be made visible.
+    pub fn should_increase_contrast(&self) -> bool {
+        self.increase_contrast
+    }
+}
+
+/// Get the current accessibility preferences for this thread.
+pub fn accessibility_preferences() -> AccessibilityPreferences {
+    ACCESSIBILITY_PREFS.with(|p| *p.borrow())
+}
+
+/// Set the accessibility preferences for this thread.
+///
+/// The native renderer should call this on startup and when system
+/// preferences change (via `detect_from_system()`).
+pub fn set_accessibility_preferences(prefs: AccessibilityPreferences) {
+    ACCESSIBILITY_PREFS.with(|p| {
+        *p.borrow_mut() = prefs;
+    });
+}
+
+// =============================================================================
+// CLIPBOARD — System clipboard access
+// =============================================================================
+
+/// Trait for clipboard operations.
+///
+/// The native renderer implements this via `arboard` on desktop platforms.
+/// On WASM, it uses the browser Clipboard API.
+pub trait ClipboardProvider: Send + Sync {
+    /// Read text from the system clipboard.
+    fn read_text(&self) -> Option<String>;
+    /// Write text to the system clipboard.
+    fn write_text(&self, text: &str);
+}
+
+/// Default clipboard implementation using `arboard`.
+/// Note: This is only available when the `arboard` feature is enabled.
+/// The renderer provides the concrete implementation.
+#[cfg(not(target_arch = "wasm32"))]
+pub struct SystemClipboard;
+
+#[cfg(not(target_arch = "wasm32"))]
+impl ClipboardProvider for SystemClipboard {
+    fn read_text(&self) -> Option<String> {
+        use std::process::Command;
+        // Fallback: try pbpaste on macOS
+        Command::new("pbpaste")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+    }
+
+    fn write_text(&self, text: &str) {
+        use std::process::Command;
+        // Fallback: try pbcopy on macOS
+        if let Ok(mut child) = Command::new("pbcopy")
+            .stdin(std::process::Stdio::piped())
+            .spawn()
+        {
+            if let Some(stdin) = child.stdin.as_mut() {
+                use std::io::Write;
+                let _ = stdin.write_all(text.as_bytes());
+            }
+            let _ = child.wait();
+        }
+    }
+}
+
+// =============================================================================
+// TEXT INPUT — Direction enum for cursor movement
+// =============================================================================
+
+/// Direction for cursor movement in text input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextDirection {
+    Forward,
+    Backward,
+    Up,
+    Down,
+    LineStart,
+    LineEnd,
+    WordForward,
+    WordBackward,
+}
+
+/// Text input state managed by the renderer.
+///
+/// Components don't store this directly — the renderer maintains it
+/// and components query/modify it through the Renderer trait methods.
+#[derive(Debug, Clone, Default)]
+pub struct TextInputState {
+    /// The full text content.
+    pub text: String,
+    /// Cursor position as byte offset into the text.
+    pub cursor_pos: usize,
+    /// Selection anchor. If Some, the selection is from anchor to cursor.
+    /// If None, there is no selection.
+    pub selection_anchor: Option<usize>,
+    /// Whether the input is focused (shows cursor, accepts keyboard).
+    pub focused: bool,
+    /// Whether the caret is currently visible (for blinking).
+    pub caret_visible: bool,
+    /// Last edit timestamp for undo coalescing.
+    pub last_edit_time: f32,
+}
+
+impl TextInputState {
+    /// Create a new TextInputState with the given initial text.
+    pub fn new(text: impl Into<String>) -> Self {
+        let text = text.into();
+        let cursor_pos = text.len();
+        Self {
+            text,
+            cursor_pos,
+            selection_anchor: None,
+            focused: false,
+            caret_visible: true,
+            last_edit_time: 0.0,
+        }
+    }
+
+    /// Get the selection range as (start, end) byte offsets.
+    /// Returns None if there is no selection.
+    pub fn selection_range(&self) -> Option<(usize, usize)> {
+        self.selection_anchor.map(|anchor| {
+            if anchor <= self.cursor_pos {
+                (anchor, self.cursor_pos)
+            } else {
+                (self.cursor_pos, anchor)
+            }
+        })
+    }
+
+    /// Get the selected text, or empty string if no selection.
+    pub fn selected_text(&self) -> String {
+        self.selection_range()
+            .map(|(start, end)| self.text[start..end].to_string())
+            .unwrap_or_default()
+    }
+
+    /// Insert text at the current cursor position, replacing any selection.
+    pub fn insert(&mut self, new_text: &str) {
+        if let Some((start, end)) = self.selection_range() {
+            self.text.replace_range(start..end, new_text);
+            self.cursor_pos = start + new_text.len();
+        } else {
+            self.text.insert_str(self.cursor_pos, new_text);
+            self.cursor_pos += new_text.len();
+        }
+        self.selection_anchor = None;
+    }
+
+    /// Delete characters. If there's a selection, delete it.
+    /// Otherwise delete `count` characters backward (backspace) or forward (delete).
+    pub fn delete(&mut self, backward: bool, count: usize) -> String {
+        if let Some((start, end)) = self.selection_range() {
+            let deleted = self.text[start..end].to_string();
+            self.text.replace_range(start..end, "");
+            self.cursor_pos = start;
+            self.selection_anchor = None;
+            return deleted;
+        }
+
+        if backward && self.cursor_pos > 0 {
+            let start = self.cursor_pos.saturating_sub(count);
+            let deleted = self.text[start..self.cursor_pos].to_string();
+            self.text.replace_range(start..self.cursor_pos, "");
+            self.cursor_pos = start;
+            deleted
+        } else if !backward && self.cursor_pos < self.text.len() {
+            let end = (self.cursor_pos + count).min(self.text.len());
+            let deleted = self.text[self.cursor_pos..end].to_string();
+            self.text.replace_range(self.cursor_pos..end, "");
+            deleted
+        } else {
+            String::new()
+        }
+    }
+
+    /// Move the cursor in the given direction.
+    pub fn move_cursor(&mut self, direction: TextDirection, extend_selection: bool) {
+        if !extend_selection {
+            self.selection_anchor = None;
+        } else if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(self.cursor_pos);
+        }
+
+        match direction {
+            TextDirection::Forward if self.cursor_pos < self.text.len() => {
+                // Move to next character boundary (UTF-8 safe)
+                let next = self.text[self.cursor_pos..]
+                    .char_indices()
+                    .nth(1)
+                    .map(|(i, _)| self.cursor_pos + i)
+                    .unwrap_or(self.text.len());
+                self.cursor_pos = next;
+            }
+            TextDirection::Backward if self.cursor_pos > 0 => {
+                let prev = self.text[..self.cursor_pos]
+                    .char_indices()
+                    .next_back()
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                self.cursor_pos = prev;
+            }
+            TextDirection::LineStart => {
+                self.cursor_pos = 0;
+            }
+            TextDirection::LineEnd => {
+                self.cursor_pos = self.text.len();
+            }
+            TextDirection::WordForward => {
+                // Find next word boundary
+                let rest = &self.text[self.cursor_pos..];
+                // Skip current word chars
+                let after_word = rest
+                    .char_indices()
+                    .find(|(_, c)| !c.is_alphanumeric())
+                    .map(|(i, _)| i)
+                    .unwrap_or(rest.len());
+                // Skip whitespace
+                let after_space = rest[after_word..]
+                    .char_indices()
+                    .find(|(_, c)| !c.is_whitespace())
+                    .map(|(i, _)| after_word + i)
+                    .unwrap_or(rest.len());
+                self.cursor_pos = (self.cursor_pos + after_space).min(self.text.len());
+            }
+            TextDirection::WordBackward => {
+                let before = &self.text[..self.cursor_pos];
+                // Skip whitespace going backward
+                let before_word = before
+                    .char_indices()
+                    .rev()
+                    .find(|(_, c)| !c.is_whitespace())
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                // Skip word chars going backward
+                let word_start = before[..before_word]
+                    .char_indices()
+                    .rev()
+                    .find(|(_, c)| !c.is_alphanumeric())
+                    .map(|(i, _)| i)
+                    .unwrap_or(0);
+                self.cursor_pos = word_start;
+            }
+            _ => {} // Up/Down handled by multi-line components
+        }
+
+        if !extend_selection {
+            self.selection_anchor = None;
+        }
+    }
+
+    /// Select all text.
+    pub fn select_all(&mut self) {
+        self.cursor_pos = self.text.len();
+        self.selection_anchor = Some(0);
+    }
+
+    /// Get the byte offset of the cursor.
+    pub fn cursor_byte_pos(&self) -> usize {
+        self.cursor_pos
+    }
+}
+
+/// Action details for interactive buttons inside a notification.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NotificationAction {
+    /// Unique identifier of the action.
+    pub id: String,
+    /// The text label to display on the action button.
+    pub title: String,
+    /// Indicates whether the action performs a destructive task (e.g. Delete).
+    pub is_destructive: bool,
+}
+
+/// Priority tier of a notification.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NotificationPriority {
+    /// Placed silently into the notification center without visual alerts.
+    Passive,
+    /// Triggers a visual alert (toast) but does not interrupt focus.
+    #[default]
+    Active,
+    /// Important alert that bypasses standard DND/Focus bounds.
+    TimeSensitive,
+}
+
+/// A structured notification representation.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+pub struct Notification {
+    /// Unique identifier for this notification.
+    pub id: String,
+    /// App or source identifier spawning this notification.
+    pub app_name: Option<String>,
+    /// The bold heading/title text.
+    pub title: String,
+    /// The detailed descriptive body text.
+    pub body: String,
+    /// Optional URI or path to an icon asset.
+    pub icon: Option<String>,
+    /// Optional sound identifier to play when posting.
+    pub sound: Option<String>,
+    /// Interactive actions available on this notification.
+    pub actions: Vec<NotificationAction>,
+    /// Timer duration in seconds after which the toast auto-dismisses.
+    pub timeout: Option<f32>,
+    /// Priority level for delivery logic.
+    pub priority: NotificationPriority,
+    /// Time (in seconds since renderer startup) when this notification was posted.
+    pub timestamp: f32,
+    /// Whether the notification has been dismissed/read.
+    pub dismissed: bool,
+}
+
+/// Error type indicating a failure in generating or posting a notification.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+pub enum NotificationError {
+    /// Permissions denied.
+    #[error("Notification permission denied")]
+    PermissionDenied,
+    /// Failed to post the notification.
+    #[error("Failed to post notification")]
+    PostFailed,
+}
+
+/// State of notification permissions.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NotificationPermission {
+    /// Explicitly allowed.
+    Granted,
+    /// Explicitly blocked.
+    Denied,
+    /// Prompt has not been shown or decided yet.
+    #[default]
+    NotDetermined,
+}
+
+/// Core interface for routing and dispatching notification events.
+pub trait NotificationHandler: Send + Sync {
+    /// Posts a new notification.
+    fn show(&self, notification: Notification) -> Result<(), NotificationError>;
+    /// Dismisses a notification by ID.
+    fn dismiss(&self, id: &str) -> Result<(), NotificationError>;
+    /// Requests delivery permission.
+    fn request_permission(&self) -> NotificationPermission;
+}
+
+static NEXT_NOTIFICATION_ID: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(1);
+
+/// Default in-app notification handler that writes state to KnowledgeState.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DefaultNotificationHandler;
+
+impl NotificationHandler for DefaultNotificationHandler {
+    /// Save the notification to the global system state (history) and auto-assign an ID if empty.
+    fn show(&self, notification: Notification) -> Result<(), NotificationError> {
+        let mut notif = notification;
+        if notif.id.is_empty() {
+            let id = NEXT_NOTIFICATION_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            notif.id = format!("notif_{}", id);
+        }
+        update_system_state(|state| {
+            let mut new_state = state.clone();
+            new_state.notifications.push(notif.clone());
+            new_state
+        });
+        Ok(())
+    }
+
+    /// Mark a notification as dismissed/read in the global system state.
+    fn dismiss(&self, id: &str) -> Result<(), NotificationError> {
+        update_system_state(|state| {
+            let mut new_state = state.clone();
+            for notif in &mut new_state.notifications {
+                if notif.id == id {
+                    notif.dismissed = true;
+                }
+            }
+            new_state
+        });
+        Ok(())
+    }
+
+    /// Returns the permission state (always Granted for internal in-app notifications).
+    fn request_permission(&self) -> NotificationPermission {
+        NotificationPermission::Granted
+    }
+}
+
+static NOTIFICATION_HANDLER: once_cell::sync::OnceCell<std::sync::Arc<dyn NotificationHandler>> =
+    once_cell::sync::OnceCell::new();
+
+/// Sets the global notification handler.
+pub fn set_notification_handler(handler: std::sync::Arc<dyn NotificationHandler>) {
+    let _ = NOTIFICATION_HANDLER.set(handler);
+}
+
+/// Gets the global notification handler, fallback to DefaultNotificationHandler.
+pub fn get_notification_handler() -> std::sync::Arc<dyn NotificationHandler> {
+    NOTIFICATION_HANDLER
+        .get_or_init(|| std::sync::Arc::new(DefaultNotificationHandler))
+        .clone()
+}
+
+/// Filter mapping name to extension list for a file dialog.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FileFilter {
+    /// Friendly name of the filter (e.g. "Images").
+    pub name: String,
+    /// List of file extensions (e.g. ["png", "jpg"]).
+    pub extensions: Vec<String>,
+}
+
+/// The mode/purpose of the file dialog.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum FileDialogMode {
+    /// Pick a single or multiple files to open.
+    #[default]
+    OpenFile,
+    /// Pick a directory path.
+    OpenDirectory,
+    /// Prompt for a location/name to save a file.
+    SaveFile,
+}
+
+/// Dialog options for picking files or directories.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FileDialog {
+    /// Title displayed in the dialog window.
+    pub title: String,
+    /// Optional starting directory path.
+    pub default_path: Option<String>,
+    /// Extensions used to filter selection.
+    pub filters: Vec<FileFilter>,
+    /// Open/save mode.
+    pub mode: FileDialogMode,
+    /// Allows selecting multiple files if in OpenFile mode.
+    pub allow_multiple: bool,
+}
+
+/// Errors returned by the file dialog.
+#[derive(Debug, thiserror::Error)]
+pub enum FileDialogError {
+    /// The user closed the dialog without selecting anything.
+    #[error("File dialog cancelled")]
+    Cancelled,
+    /// An input/output error occurred.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    /// Platform-specific error.
+    #[error("Platform error: {0}")]
+    Platform(String),
+}
+
+impl FileDialog {
+    /// Creates a new FileDialog with the given mode.
+    pub fn new(mode: FileDialogMode) -> Self {
+        Self {
+            mode,
+            ..Default::default()
+        }
+    }
+
+    /// Sets the dialog title.
+    pub fn title(mut self, title: impl Into<String>) -> Self {
+        self.title = title.into();
+        self
+    }
+
+    /// Adds a file filter.
+    pub fn add_filter(mut self, name: &str, extensions: &[&str]) -> Self {
+        self.filters.push(FileFilter {
+            name: name.to_string(),
+            extensions: extensions.iter().map(|s| s.to_string()).collect(),
+        });
+        self
+    }
+
+    /// Sets the default starting directory path.
+    pub fn default_path(mut self, path: impl Into<String>) -> Self {
+        self.default_path = Some(path.into());
+        self
+    }
+
+    /// Sets whether selecting multiple files is allowed.
+    pub fn allow_multiple(mut self, allow: bool) -> Self {
+        self.allow_multiple = allow;
+        self
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl FileDialog {
+    /// Pick file(s) or folder based on current mode configuration.
+    pub fn pick(self) -> Result<Vec<std::path::PathBuf>, FileDialogError> {
+        let mut dialog = rfd::FileDialog::new();
+        dialog = dialog.set_title(&self.title);
+        if let Some(path) = &self.default_path {
+            dialog = dialog.set_directory(path);
+        }
+        for filter in &self.filters {
+            let refs: Vec<&str> = filter.extensions.iter().map(|s| s.as_str()).collect();
+            dialog = dialog.add_filter(&filter.name, &refs);
+        }
+
+        match self.mode {
+            FileDialogMode::OpenFile => {
+                if self.allow_multiple {
+                    dialog.pick_files().ok_or(FileDialogError::Cancelled)
+                } else {
+                    Ok(dialog.pick_file().into_iter().collect())
+                }
+            }
+            FileDialogMode::OpenDirectory => Ok(dialog.pick_folder().into_iter().collect()),
+            FileDialogMode::SaveFile => Ok(dialog.save_file().into_iter().collect()),
+        }
+    }
+
+    /// Helper to pick a single file/directory, returning None if cancelled.
+    pub fn pick_single(self) -> Result<Option<std::path::PathBuf>, FileDialogError> {
+        let results = self.pick()?;
+        Ok(results.into_iter().next())
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl FileDialog {
+    /// Pick is unsupported/mocked on WASM.
+    pub fn pick(self) -> Result<Vec<std::path::PathBuf>, FileDialogError> {
+        Err(FileDialogError::Platform(
+            "FileDialog is not supported synchronously on WebAssembly".to_string(),
+        ))
+    }
+
+    /// Helper to pick a single file/directory, returning None if cancelled.
+    pub fn pick_single(self) -> Result<Option<std::path::PathBuf>, FileDialogError> {
+        Err(FileDialogError::Platform(
+            "FileDialog is not supported synchronously on WebAssembly".to_string(),
+        ))
+    }
+}
+
+/// Error type representing a failure in Document load/save/parse operations.
+#[derive(Debug, thiserror::Error)]
+pub enum DocumentError {
+    /// An input/output error occurred.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    /// Failure during deserialization or parsing.
+    #[error("Parse error: {0}")]
+    Parse(String),
+    /// Failure during serialization.
+    #[error("Serialization error: {0}")]
+    Serialize(String),
+}
+
+/// A document interface mapping to local filesystem persistence.
+pub trait Document: Send + Sync {
+    /// Loads the document from the specified path.
+    fn read_from(path: &std::path::Path) -> Result<Self, DocumentError>
+    where
+        Self: Sized;
+
+    /// Saves the document to the specified path.
+    fn write_to(&self, path: &std::path::Path) -> Result<(), DocumentError>;
+
+    /// Returns true if the document has unsaved modifications.
+    fn is_dirty(&self) -> bool;
+
+    /// Marks the document as clean/saved.
+    fn mark_clean(&mut self);
+}
+
+/// Periodic auto-save coordinator for open Documents.
+pub struct AutoSaveManager {
+    /// Time interval in seconds between auto-saves.
+    pub interval: f32,
+    /// Elapsed timer tracker.
+    pub timer: f32,
+    /// Registered open documents under management.
+    pub documents: Vec<(std::path::PathBuf, Box<dyn Document>)>,
+}
+
+impl AutoSaveManager {
+    /// Creates a new AutoSaveManager with the specified check interval.
+    pub fn new(interval: f32) -> Self {
+        Self {
+            interval,
+            timer: 0.0,
+            documents: Vec::new(),
+        }
+    }
+
+    /// Register a document with its current file path.
+    pub fn register(&mut self, path: std::path::PathBuf, doc: Box<dyn Document>) {
+        self.documents.push((path, doc));
+    }
+
+    /// Advance the timer and auto-save any dirty documents when the interval is reached.
+    pub fn tick(&mut self, dt: f32) {
+        self.timer += dt;
+        if self.timer >= self.interval {
+            self.timer = 0.0;
+            for (path, doc) in &mut self.documents {
+                if doc.is_dirty() {
+                    match doc.write_to(path) {
+                        Ok(()) => {
+                            doc.mark_clean();
+                            log::info!("[AutoSaveManager] Auto-saved document to {:?}", path);
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "[AutoSaveManager] Failed to auto-save document to {:?}: {:?}",
+                                path,
+                                e
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Menu Bar API ──────────────────────────────────────────────────────────────
+
+/// Keyboard modifier flags used by [`KeyboardShortcut`].
+///
+/// On macOS, `cmd` maps to the Command (⌘) key.
+/// On all other platforms, `cmd` maps to the Control key.
+/// This is enforced at the renderer level, not here; the data model is OS-agnostic.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Modifiers {
+    /// Command on macOS, Control on Windows/Linux.
+    pub cmd: bool,
+    /// Shift key.
+    pub shift: bool,
+    /// Alt/Option key.
+    pub alt: bool,
+    /// Control key (distinct from cmd on all platforms).
+    pub ctrl: bool,
+}
+
+/// A keyboard shortcut binding to a menu action.
+#[derive(Debug, Clone)]
+pub struct KeyboardShortcut {
+    /// The key character or name, e.g. `"s"`, `"z"`, `"Return"`.
+    pub key: String,
+    /// The required modifier combination.
+    pub modifiers: Modifiers,
+}
+
+impl KeyboardShortcut {
+    /// Convenience constructor: cmd (or ctrl on non-macOS) + `key`.
+    pub fn cmd(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            modifiers: Modifiers {
+                cmd: true,
+                ..Default::default()
+            },
+        }
+    }
+
+    /// Convenience constructor: cmd+Shift + `key`.
+    pub fn cmd_shift(key: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            modifiers: Modifiers {
+                cmd: true,
+                shift: true,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+/// A single entry in a [`MenuBar`].
+///
+/// Actions hold a callback that is invoked when the user activates the item
+/// (either via the menu UI or via the associated keyboard shortcut).
+/// Separators provide visual grouping. Submenus allow hierarchical menus.
+pub enum MenuItem {
+    /// An activatable menu entry with an optional shortcut and enabled/disabled state.
+    Action {
+        label: String,
+        shortcut: Option<KeyboardShortcut>,
+        action: std::sync::Arc<dyn Fn() + Send + Sync>,
+        enabled: bool,
+    },
+    /// A nested submenu.
+    Submenu { label: String, items: Vec<MenuItem> },
+    /// A visual separator line between groups of items.
+    Separator,
+}
+
+impl std::fmt::Debug for MenuItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Action { label, enabled, .. } => f
+                .debug_struct("Action")
+                .field("label", label)
+                .field("enabled", enabled)
+                .finish(),
+            Self::Submenu { label, items } => f
+                .debug_struct("Submenu")
+                .field("label", label)
+                .field("items", items)
+                .finish(),
+            Self::Separator => write!(f, "Separator"),
+        }
+    }
+}
+
+/// A top-level menu bar containing [`MenuItem`]s.
+///
+/// The menu bar is a data model only; rendering it into an OS-native menu is
+/// handled by the platform renderer (`cvkg-render-native`).
+pub struct MenuBar {
+    /// Ordered list of top-level menu items.
+    pub items: Vec<MenuItem>,
+}
+
+impl MenuBar {
+    /// Create an empty menu bar.
+    pub fn new() -> Self {
+        Self { items: Vec::new() }
+    }
+
+    /// Append a menu item to the bar.
+    pub fn add_item(&mut self, item: MenuItem) {
+        self.items.push(item);
+    }
+
+    /// Build the standard CVKG menu structure with all conventional shortcuts.
+    ///
+    /// The `cmd` modifier maps to ⌘ on macOS and Ctrl on Windows/Linux — this
+    /// translation is enforced by the renderer, not here.
+    ///
+    /// Menus included:
+    /// - **File**: New, Open, Save, Close
+    /// - **Edit**: Undo, Redo, Cut, Copy, Paste, Select All, Find
+    /// - **View**: Zoom In, Zoom Out, Fullscreen
+    /// - **Window**: Minimize, Zoom, Bring All to Front
+    /// - **Help**: Search Help
+    #[allow(clippy::too_many_arguments)]
+    pub fn standard(
+        new_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        open_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        save_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        close_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        quit_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        undo_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        redo_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        cut_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        copy_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        paste_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        select_all_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+        find_fn: std::sync::Arc<dyn Fn() + Send + Sync>,
+    ) -> Self {
+        let mut bar = Self::new();
+
+        // ── File ──────────────────────────────────────────────────────────────
+        bar.add_item(MenuItem::Submenu {
+            label: "File".to_string(),
+            items: vec![
+                MenuItem::Action {
+                    label: "New".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("n")),
+                    action: new_fn,
+                    enabled: true,
+                },
+                MenuItem::Action {
+                    label: "Open…".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("o")),
+                    action: open_fn,
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Save".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("s")),
+                    action: save_fn,
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Close".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("w")),
+                    action: close_fn,
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Quit".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("q")),
+                    action: quit_fn,
+                    enabled: true,
+                },
+            ],
+        });
+
+        // ── Edit ──────────────────────────────────────────────────────────────
+        bar.add_item(MenuItem::Submenu {
+            label: "Edit".to_string(),
+            items: vec![
+                MenuItem::Action {
+                    label: "Undo".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("z")),
+                    action: undo_fn,
+                    enabled: true,
+                },
+                MenuItem::Action {
+                    label: "Redo".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd_shift("z")),
+                    action: redo_fn,
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Cut".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("x")),
+                    action: cut_fn,
+                    enabled: true,
+                },
+                MenuItem::Action {
+                    label: "Copy".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("c")),
+                    action: copy_fn,
+                    enabled: true,
+                },
+                MenuItem::Action {
+                    label: "Paste".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("v")),
+                    action: paste_fn,
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Select All".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("a")),
+                    action: select_all_fn,
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Find…".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("f")),
+                    action: find_fn,
+                    enabled: true,
+                },
+            ],
+        });
+
+        // ── View ──────────────────────────────────────────────────────────────
+        // View items carry no application-level callbacks at the model layer;
+        // zoom and fullscreen are handled by the renderer directly.
+        let noop: std::sync::Arc<dyn Fn() + Send + Sync> = std::sync::Arc::new(|| {});
+        bar.add_item(MenuItem::Submenu {
+            label: "View".to_string(),
+            items: vec![
+                MenuItem::Action {
+                    label: "Zoom In".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("=")),
+                    action: noop.clone(),
+                    enabled: true,
+                },
+                MenuItem::Action {
+                    label: "Zoom Out".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("-")),
+                    action: noop.clone(),
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Toggle Fullscreen".to_string(),
+                    shortcut: Some(KeyboardShortcut {
+                        key: "f".to_string(),
+                        modifiers: Modifiers {
+                            ctrl: true,
+                            ..Default::default()
+                        },
+                    }),
+                    action: noop.clone(),
+                    enabled: true,
+                },
+            ],
+        });
+
+        // ── Window ────────────────────────────────────────────────────────────
+        bar.add_item(MenuItem::Submenu {
+            label: "Window".to_string(),
+            items: vec![
+                MenuItem::Action {
+                    label: "Minimize".to_string(),
+                    shortcut: Some(KeyboardShortcut::cmd("m")),
+                    action: noop.clone(),
+                    enabled: true,
+                },
+                MenuItem::Action {
+                    label: "Zoom".to_string(),
+                    shortcut: None,
+                    action: noop.clone(),
+                    enabled: true,
+                },
+                MenuItem::Separator,
+                MenuItem::Action {
+                    label: "Bring All to Front".to_string(),
+                    shortcut: None,
+                    action: noop.clone(),
+                    enabled: true,
+                },
+            ],
+        });
+
+        // ── Help ──────────────────────────────────────────────────────────────
+        bar.add_item(MenuItem::Submenu {
+            label: "Help".to_string(),
+            items: vec![MenuItem::Action {
+                label: "Search Help".to_string(),
+                shortcut: None,
+                action: noop,
+                enabled: true,
+            }],
+        });
+
+        bar
+    }
+}
+
+impl Default for MenuBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// LOCALIZATION — Item 12: Localization / Internationalization
+// =============================================================================
+// OS-agnostic: works on all platforms. No platform-specific string loading.
+
+use std::sync::RwLock;
+
+/// Layout direction for UI elements (LTR or RTL).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Direction {
+    #[default]
+    LTR,
+    RTL,
+    Auto,
+}
+
+impl Direction {
+    pub fn is_rtl(self) -> bool {
+        matches!(self, Direction::RTL)
+    }
+}
+#[derive(Clone, Debug)]
+pub struct L10nBundle {
+    pub locale: String,
+    pub strings: HashMap<String, String>,
+    pub is_rtl: bool,
+}
+
+impl L10nBundle {
+    pub fn new(locale: impl Into<String>) -> Self {
+        Self {
+            locale: locale.into(),
+            strings: HashMap::new(),
+            is_rtl: false,
+        }
+    }
+
+    pub fn add(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.strings.insert(key.into(), value.into());
+        self
+    }
+
+    pub fn from_strings_format(locale: impl Into<String>, input: &str) -> Self {
+        let mut bundle = Self::new(locale);
+        for line in input.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+            if let Some(eq_pos) = line.find(" = ") {
+                let key = line[..eq_pos].trim_matches('"').to_string();
+                let val = line[eq_pos + 3..]
+                    .trim_end_matches(';')
+                    .trim_matches('"')
+                    .to_string();
+                bundle.strings.insert(key, val);
+            }
+        }
+        bundle
+    }
+    /// Get a translated string by key. Returns the key itself if not found.
+    pub fn t(&self, key: &str) -> String {
+        self.strings
+            .get(key)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| key.to_string())
+    }
+
+    /// Translate with interpolation. Replaces {0}, {1}, etc. with args.
+    pub fn tf(&self, key: &str, args: &[&str]) -> String {
+        let mut result = self.t(key);
+        for (i, arg) in args.iter().enumerate() {
+            result = result.replace(&format!("{{{}}}", i), arg);
+        }
+        result
+    }
+}
+
+/// Global localization manager.
+pub struct L10n {
+    bundles: HashMap<String, L10nBundle>,
+    current: String,
+}
+
+impl L10n {
+    pub fn new(default_locale: &str) -> Self {
+        Self {
+            bundles: HashMap::new(),
+            current: default_locale.to_string(),
+        }
+    }
+
+    pub fn add_bundle(&mut self, bundle: L10nBundle) {
+        self.bundles.insert(bundle.locale.clone(), bundle);
+    }
+
+    pub fn set_locale(&mut self, locale: &str) {
+        self.current = locale.to_string();
+    }
+    pub fn current_locale(&self) -> &str {
+        &self.current
+    }
+
+    pub fn is_rtl(&self) -> bool {
+        self.bundles
+            .get(self.current.as_str())
+            .map(|b| b.is_rtl)
+            .unwrap_or(false)
+    }
+
+    pub fn t(&self, key: &str) -> String {
+        self.bundles
+            .get(self.current.as_str())
+            .map(|b| b.t(key))
+            .unwrap_or_else(|| key.to_string())
+    }
+
+    pub fn tf(&self, key: &str, args: &[&str]) -> String {
+        let mut result = self.t(key);
+        for (i, arg) in args.iter().enumerate() {
+            result = result.replace(&format!("{{{}}}", i), arg);
+        }
+        result
+    }
+
+    pub fn direction(&self) -> Direction {
+        if self.is_rtl() {
+            Direction::RTL
+        } else {
+            Direction::LTR
+        }
+    }
+}
+
+static L10N: once_cell::sync::Lazy<Arc<RwLock<L10n>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(L10n::new("en"))));
+
+pub fn init_l10n(l10n: L10n) {
+    if let Ok(mut guard) = L10N.write() {
+        *guard = l10n;
+    }
+}
+
+pub fn l10n() -> Arc<RwLock<L10n>> {
+    L10N.clone()
+}
+
+pub fn t(key: &str) -> String {
+    L10N.read()
+        .map(|g| g.t(key).to_string())
+        .unwrap_or_else(|_| key.to_string())
+}
+
+pub fn tf(key: &str, args: &[&str]) -> String {
+    L10N.read()
+        .map(|g| g.tf(key, args))
+        .unwrap_or_else(|_| key.to_string())
+}
+
+pub fn set_locale(locale: &str) {
+    if let Ok(mut guard) = L10N.write() {
+        guard.set_locale(locale);
+    }
+}
+
+pub fn current_locale() -> String {
+    L10N.read()
+        .map(|g| g.current_locale().to_string())
+        .unwrap_or_else(|_| "en".to_string())
+}
+
+pub fn is_rtl() -> bool {
+    L10N.read().map(|g| g.is_rtl()).unwrap_or(false)
+}
+
+// =============================================================================
+// SYSTEM THEME DETECTION — Dark/Light mode detection
+// =============================================================================
+//
+// OS-agnostic theme detection. Checks the CVKG_THEME environment variable first,
+// then falls back to dark mode (safe default).
+//
+// Platform backends may override this with native OS queries (e.g.,
+// dark-light crate on desktop, prefers-color-scheme on web).
+
+/// The detected system theme.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum SystemTheme {
+    /// Dark mode (default).
+    #[default]
+    Dark,
+    /// Light mode.
+    Light,
+}
+
+/// Detect the current system theme.
+///
+/// Checks `CVKG_THEME` environment variable first:
+/// - `"dark"` → `SystemTheme::Dark`
+/// - `"light"` → `SystemTheme::Light`
+/// - unset or any other value → `SystemTheme::Dark` (default)
+///
+/// Platform backends can call this and override with native detection
+/// (e.g., `dark-light` crate on desktop, `prefers-color-scheme` on web).
+pub fn detect_system_theme() -> SystemTheme {
+    std::env::var("CVKG_THEME")
+        .ok()
+        .and_then(|v| match v.as_str() {
+            "light" => Some(SystemTheme::Light),
+            "dark" => Some(SystemTheme::Dark),
+            _ => None,
+        })
+        .unwrap_or(SystemTheme::Dark)
+}
+
+// =============================================================================
+// AUDIO / HAPTIC — Item 14: Spatial Audio / Haptic Feedback
+// =============================================================================
+// OS-agnostic: pure trait abstractions. Platform backends via cfg in renderer.
+
+pub mod audio_haptic;
+pub use audio_haptic::{
+    AudioEngine, HapticEngine, HapticIntensity, NullAudioEngine, NullHapticEngine, haptic_error,
+    haptic_impact, haptic_selection, haptic_success, play_sound, set_audio_engine,
+    set_haptic_engine, sounds,
+};

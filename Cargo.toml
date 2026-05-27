@@ -19,6 +19,7 @@ members = [
     "cvkg-macros",
     "cvkg-runic-text", "cvkg-test",
     "demos/niflheim-web", "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
+    "demos/showcase",
     "cvkg-flow",
     "berserker",
 ]
@@ -89,6 +90,10 @@ kurbo = "0.11"
 rfd = "0.15"
 # System clipboard read/write
 arboard = "3.4"
+# Audio playback backend for native targets
+rodio = { version = "0.21", default-features = false, features = ["wav", "mp3"] }
+# Cross-platform native OS menu bar (NSMenu on macOS, HMENU on Windows, GtkMenuBar on Linux)
+muda = "0.19.2"
 # SVG serializer (write path) -- usvg is read-only
 quick-xml = "0.37"
 # SVG parsing and serialization (usvg provides both read and write)

@@ -1,7 +1,4 @@
 use cvkg_flow::*;
-use cvkg_flow::types::*;
-use cvkg_flow::port::*;
-use cvkg_flow::interaction::*;
 
 /// This example shows how to configure the interactive settings of the FlowCanvas.
 pub fn setup_interactive_flow() -> FlowCanvas {

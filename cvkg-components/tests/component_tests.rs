@@ -18,7 +18,7 @@ impl ElapsedTime for MockRenderer {
         0.0
     }
     fn delta_time(&self) -> f32 {
-        0.0
+        1.0 / 60.0
     }
 }
 
@@ -219,5 +219,87 @@ fn test_lokiglitch_rendering() {
             .commands
             .iter()
             .any(|c| c.contains("DrawText(ERROR)"))
+    );
+}
+
+#[test]
+fn test_notification_system() {
+    // 1. Post a notification using the global/default handler
+    let handler = cvkg_core::get_notification_handler();
+    let notif = cvkg_core::Notification {
+        id: "test_notif_1".to_string(),
+        app_name: Some("TestApp".to_string()),
+        title: "Test Alert".to_string(),
+        body: "Something happened".to_string(),
+        priority: cvkg_core::NotificationPriority::Active,
+        ..Default::default()
+    };
+
+    let res = handler.show(notif);
+    assert!(res.is_ok());
+
+    // 2. Verify that it was stored in system state
+    let state = cvkg_core::load_system_state();
+    let stored_notif = state.notifications.iter().find(|n| n.id == "test_notif_1");
+    assert!(stored_notif.is_some());
+    let stored_notif = stored_notif.unwrap();
+    assert_eq!(stored_notif.title, "Test Alert");
+    assert_eq!(stored_notif.body, "Something happened");
+
+    // 3. Test ToastManager ingestion
+    let mut toast_mgr = cvkg_components::toast::ToastManager::new();
+    assert_eq!(toast_mgr.len(), 0);
+    toast_mgr.update(0.0);
+    assert_eq!(toast_mgr.len(), 1);
+    assert_eq!(toast_mgr.toasts[0].title, "Test Alert");
+
+    // 4. Set Notification Center visible and render
+    cvkg_core::update_system_state(|st| {
+        let mut new_st = st.clone();
+        new_st.notification_center_visible = true;
+        new_st
+    });
+
+    let mut renderer = MockRenderer::new();
+    let panel = cvkg_components::notification_center::NotificationCenterPanel::new();
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 1024.0,
+        height: 768.0,
+    };
+    panel.render(&mut renderer, rect);
+
+    // Verify NotificationCenterPanel pushed its node and drew texts
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(NotificationCenterPanel)"))
+    );
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("DrawText(Notification Center)"))
+    );
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("DrawText(Test Alert)"))
+    );
+
+    // 5. Dismiss and verify
+    let dismiss_res = handler.dismiss("test_notif_1");
+    assert!(dismiss_res.is_ok());
+    let state_after = cvkg_core::load_system_state();
+    assert!(
+        state_after
+            .notifications
+            .iter()
+            .find(|n| n.id == "test_notif_1")
+            .unwrap()
+            .dismissed
     );
 }

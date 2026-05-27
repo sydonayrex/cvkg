@@ -278,7 +278,6 @@ mod tests {
         assert_eq!(window.height, 768);
     }
 
-
     #[test]
     fn test_window_set_title() {
         let mut win = ShellWindow {

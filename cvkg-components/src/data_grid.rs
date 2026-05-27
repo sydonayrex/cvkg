@@ -1,8 +1,8 @@
+use crate::theme;
 use cvkg_core::{
     AnyView, Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
-use crate::theme;
 use std::sync::Arc;
 
 /// Column definition for a DataGrid.
@@ -152,7 +152,11 @@ where
                 theme::surface_elevated()
             };
             renderer.fill_rect(col_rect, header_bg);
-            renderer.stroke_rect(col_rect, [0.3, 0.5, 0.8, if is_sorted { 0.8 } else { 0.4 }], 1.0);
+            renderer.stroke_rect(
+                col_rect,
+                [0.3, 0.5, 0.8, if is_sorted { 0.8 } else { 0.4 }],
+                1.0,
+            );
 
             let sort_indicator = if is_sorted {
                 match self.sort_order {
@@ -167,7 +171,11 @@ where
                 col_rect.x + 8.0,
                 col_rect.y + 10.0,
                 13.0,
-                if is_sorted { theme::accent() } else { theme::text() },
+                if is_sorted {
+                    theme::accent()
+                } else {
+                    theme::text()
+                },
             );
 
             // ── Sort click handler ──
@@ -179,17 +187,16 @@ where
                 renderer.register_handler(
                     "pointerclick",
                     Arc::new(move |event| {
-                        if let Event::PointerClick { x, y, .. } = event {
-                            if cr.contains(x, y) {
-                                if let Some(ref cb) = on_sort {
-                                    let new_order = if current_order == SortOrder::Asc {
-                                        SortOrder::Desc
-                                    } else {
-                                        SortOrder::Asc
-                                    };
-                                    (cb)(col_name.clone(), new_order);
-                                }
-                            }
+                        if let Event::PointerClick { x, y, .. } = event
+                            && cr.contains(x, y)
+                            && let Some(ref cb) = on_sort
+                        {
+                            let new_order = if current_order == SortOrder::Asc {
+                                SortOrder::Desc
+                            } else {
+                                SortOrder::Asc
+                            };
+                            (cb)(col_name.clone(), new_order);
                         }
                     }),
                 );
@@ -217,7 +224,8 @@ where
 
         for idx in start_idx..end_idx {
             if let Some(item) = self.data.get(idx) {
-                let row_y = rect.y + header_h + idx as f32 * self.row_height - start_idx as f32 * self.row_height;
+                let row_y = rect.y + header_h + idx as f32 * self.row_height
+                    - start_idx as f32 * self.row_height;
                 let row_rect = Rect {
                     x: rect.x,
                     y: row_y,
@@ -259,12 +267,11 @@ where
                 renderer.register_handler(
                     "pointerclick",
                     Arc::new(move |event| {
-                        if let Event::PointerClick { x, y, .. } = event {
-                            if rr.contains(x, y) {
-                                if let Some(ref cb) = on_select {
-                                    (cb)(row_idx);
-                                }
-                            }
+                        if let Event::PointerClick { x, y, .. } = event
+                            && rr.contains(x, y)
+                            && let Some(ref cb) = on_select
+                        {
+                            (cb)(row_idx);
                         }
                     }),
                 );

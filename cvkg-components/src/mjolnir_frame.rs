@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// MjolnirFrame - A geometric, non-rectangular UI frame with chromatic aberration.
@@ -30,7 +31,7 @@ impl MjolnirFrame {
     /// - Defaults to a cyan border, 1.5 width, 20.0 bevel size, and 0.1 glitch intensity.
     pub fn new() -> Self {
         Self {
-            border_color: [0.0, 1.0, 1.0, 0.8], // Cyan Default
+            border_color: theme::accent(), // Cyan Default
             border_width: 1.5,
             bevel_size: 20.0,
             glitch_intensity: 0.1,
@@ -77,31 +78,32 @@ impl MjolnirFrame {
         let bevel = bevel.min(rect.width / 2.0).min(rect.height / 2.0);
 
         // Check top-left bevel: (px - rect.x) + (py - rect.y) >= bevel in top-left region
-        if (px - rect.x) < bevel && (py - rect.y) < bevel {
-            if (px - rect.x) + (py - rect.y) < bevel {
-                return false;
-            }
+        if (px - rect.x) < bevel && (py - rect.y) < bevel && (px - rect.x) + (py - rect.y) < bevel {
+            return false;
         }
 
         // Check top-right bevel: ((rect.x + rect.width) - px) + (py - rect.y) >= bevel in top-right region
-        if ((rect.x + rect.width) - px) < bevel && (py - rect.y) < bevel {
-            if ((rect.x + rect.width) - px) + (py - rect.y) < bevel {
-                return false;
-            }
+        if ((rect.x + rect.width) - px) < bevel
+            && (py - rect.y) < bevel
+            && ((rect.x + rect.width) - px) + (py - rect.y) < bevel
+        {
+            return false;
         }
 
         // Check bottom-right bevel: ((rect.x + rect.width) - px) + ((rect.y + rect.height) - py) >= bevel in bottom-right region
-        if ((rect.x + rect.width) - px) < bevel && ((rect.y + rect.height) - py) < bevel {
-            if ((rect.x + rect.width) - px) + ((rect.y + rect.height) - py) < bevel {
-                return false;
-            }
+        if ((rect.x + rect.width) - px) < bevel
+            && ((rect.y + rect.height) - py) < bevel
+            && ((rect.x + rect.width) - px) + ((rect.y + rect.height) - py) < bevel
+        {
+            return false;
         }
 
         // Check bottom-left bevel: (px - rect.x) + ((rect.y + rect.height) - py) >= bevel in bottom-left region
-        if (px - rect.x) < bevel && ((rect.y + rect.height) - py) < bevel {
-            if (px - rect.x) + ((rect.y + rect.height) - py) < bevel {
-                return false;
-            }
+        if (px - rect.x) < bevel
+            && ((rect.y + rect.height) - py) < bevel
+            && (px - rect.x) + ((rect.y + rect.height) - py) < bevel
+        {
+            return false;
         }
 
         true

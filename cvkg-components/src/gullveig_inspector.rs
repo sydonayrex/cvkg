@@ -104,7 +104,7 @@ impl View for GullveigInspector {
         let mut current_y = rect.y + 52.0;
         for attr in &self.attributes {
             let bg = if current_y as usize % 56 < 28 {
-                [0.05, 0.05, 0.07, 1.0]
+                theme::surface()
             } else {
                 [0.06, 0.06, 0.08, 1.0]
             };

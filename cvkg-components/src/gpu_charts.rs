@@ -436,7 +436,7 @@ impl RadarChart {
         Self {
             data: Vec::new(),
             labels: Vec::new(),
-            color: [0.2, 0.6, 1.0, 1.0],
+            color: theme::accent(),
         }
     }
 

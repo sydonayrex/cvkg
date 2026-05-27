@@ -42,7 +42,7 @@ fn test_interactive_snapshots() {
 fn test_container_snapshots() {
     let _nav = NavigationStack::new(Text::new("Root"));
     let _split = NavigationSplitView::new(Text::new("Side"), Text::new("Detail"));
-    let _tab = TabView::new(Text::new("Tab"));
+    let _tab = TabView::new(vec![("Tab".to_string(), 1)]);
     // let _sheet = Sheet::new(Text::new("Content"), true);
     let _menu = Menu::new(Text::new("Item"));
     let _list = VStack::new(0.0).child(Text::new("Row"));

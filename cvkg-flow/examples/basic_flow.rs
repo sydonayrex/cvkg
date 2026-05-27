@@ -1,6 +1,6 @@
-use cvkg_flow::*;
-use cvkg_flow::types::*;
 use cvkg_flow::port::*;
+use cvkg_flow::types::*;
+use cvkg_flow::*;
 
 /// This example demonstrates how to create a basic graph with two nodes and a connection.
 pub fn create_basic_flow() -> FlowGraph {

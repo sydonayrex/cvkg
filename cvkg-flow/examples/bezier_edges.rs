@@ -1,6 +1,6 @@
-use cvkg_flow::*;
-use cvkg_flow::types::*;
 use cvkg_flow::port::*;
+use cvkg_flow::types::*;
+use cvkg_flow::*;
 
 /// This example demonstrates different edge path types, specifically Bezier curves.
 pub fn create_bezier_demo() -> FlowGraph {

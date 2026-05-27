@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// ToastKind - The severity / category of a toast notification.
@@ -163,12 +163,9 @@ impl ToastManager {
     /// # Example
     /// ```
     /// use cvkg_components::toast::ToastManager;
-    /// use std::sync::Mutex;
-    /// let mut dismissed = Vec::new();
-    /// let manager = ToastManager::new()
-    ///     .with_dismiss_callback(move |id| {
-    ///         dismissed.push(id);
-    ///     });
+    /// let _manager = ToastManager::new().with_dismiss_callback(|id| {
+    ///     // handle dismiss
+    /// });
     /// ```
     pub fn with_dismiss_callback<F>(mut self, callback: F) -> Self
     where
@@ -243,6 +240,22 @@ impl ToastManager {
     pub fn dismiss(&mut self, id: u64) {
         if let Some(toast) = self.toasts.iter_mut().find(|t| t.id == id) {
             toast.dismissed = true;
+
+            // Also dismiss the corresponding notification in the system state
+            let state = cvkg_core::load_system_state();
+            let mut matched_notif_id = None;
+            for notif in &state.notifications {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                std::hash::Hash::hash(&notif.id, &mut hasher);
+                let target_id = std::hash::Hasher::finish(&hasher);
+                if target_id == id {
+                    matched_notif_id = Some(notif.id.clone());
+                    break;
+                }
+            }
+            if let Some(notif_id) = matched_notif_id {
+                let _ = cvkg_core::get_notification_handler().dismiss(&notif_id);
+            }
         }
     }
 
@@ -251,9 +264,49 @@ impl ToastManager {
         self.toasts.clear();
     }
 
-    /// Updates the toast manager lifecycle, initializing timestamps and purging expired toasts.
+    /// Updates the toast manager lifecycle, initializing timestamps, purging expired toasts,
+    /// and ingesting new Active/TimeSensitive notifications from system state.
     pub fn update(&mut self, current_time: f32) {
         self.init_timestamps(current_time);
+
+        // Ingest new notifications from system state
+        let state = cvkg_core::load_system_state();
+        for notif in &state.notifications {
+            if notif.dismissed {
+                continue;
+            }
+            if notif.priority == cvkg_core::NotificationPriority::Passive {
+                continue;
+            }
+
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            std::hash::Hash::hash(&notif.id, &mut hasher);
+            let target_id = std::hash::Hasher::finish(&hasher);
+
+            if !self.toasts.iter().any(|t| t.id == target_id) {
+                let kind = match notif.priority {
+                    cvkg_core::NotificationPriority::TimeSensitive => ToastKind::Error,
+                    _ => ToastKind::Info,
+                };
+                let duration = notif.timeout.unwrap_or(4.0);
+
+                let toast = Toast::new(
+                    target_id,
+                    notif.title.clone(),
+                    notif.body.clone(),
+                    kind,
+                    duration,
+                    current_time,
+                );
+                self.toasts.push(toast);
+
+                // Enforce max_visible: remove oldest toasts first
+                while self.toasts.len() > self.max_visible {
+                    self.toasts.remove(0);
+                }
+            }
+        }
+
         self.purge_expired(current_time);
     }
 
@@ -265,10 +318,11 @@ impl ToastManager {
             if !expired_or_dismissed {
                 return true;
             }
-            
+
             // Check if animation has settled
             let anim_hash = t.id.wrapping_add(88888);
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash) {
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
+            {
                 let solver = solver_arc.read().unwrap();
                 if solver.is_settled() {
                     return false; // Settled at 0.0, purge it
@@ -276,7 +330,7 @@ impl ToastManager {
                     return true; // Still animating out
                 }
             }
-            
+
             false // No solver created, just purge
         });
     }
@@ -377,21 +431,35 @@ impl ToastManager {
         let t = current_time;
 
         let anim_hash = toast.id.wrapping_add(88888);
-        let target = if toast.is_expired(current_time) || toast.dismissed { 0.0 } else { 1.0 };
+        let target = if toast.is_expired(current_time) || toast.dismissed {
+            0.0
+        } else {
+            1.0
+        };
         let mut t_val = 0.0;
         {
             let s = cvkg_core::load_system_state();
-            if s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash).is_none() {
+            if s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
+                .is_none()
+            {
                 cvkg_core::update_system_state(|st| {
                     let mut new_st = st.clone();
-                    new_st.set_component_state(anim_hash, cvkg_anim::SleipnirSolver::new(cvkg_anim::SleipnirParams::snappy(), target, 0.0));
+                    new_st.set_component_state(
+                        anim_hash,
+                        cvkg_anim::SleipnirSolver::new(
+                            cvkg_anim::SleipnirParams::snappy(),
+                            target,
+                            0.0,
+                        ),
+                    );
                     new_st
                 });
             }
         }
         {
             let s = cvkg_core::load_system_state();
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash) {
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
+            {
                 let mut solver = solver_arc.write().unwrap();
                 solver.set_target(target);
                 t_val = solver.tick(renderer.delta_time());
@@ -622,6 +690,7 @@ mod tests {
         let id = manager.toasts[0].id;
         assert_eq!(manager.len(), 1);
         manager.dismiss(id);
+        manager.purge_expired(0.0);
         assert!(manager.is_empty());
     }
 

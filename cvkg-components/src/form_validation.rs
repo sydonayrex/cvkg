@@ -1,6 +1,6 @@
+use crate::theme;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
-use crate::theme;
 
 /// Validation rules that can be applied to form fields.
 #[derive(Clone, Debug)]

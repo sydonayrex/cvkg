@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 use cvkg_vdom::VDom;
 // No imports needed from crate for now
 
@@ -78,13 +78,7 @@ impl VdomInspector {
             let indent = depth as f32 * 15.0;
             let node_label = format!("{} (ID: {})", node.component_type, id.0);
 
-            renderer.draw_text(
-                &node_label,
-                x + indent,
-                current_y,
-                12.0,
-                theme::text(),
-            );
+            renderer.draw_text(&node_label, x + indent, current_y, 12.0, theme::text());
             current_y += 20.0;
 
             for child_id in &node.children {
@@ -246,8 +240,8 @@ impl Default for ConstraintOverlay {
     fn default() -> Self {
         Self {
             enabled: true,
-            constraint_color: theme::accent(), // Cyan
-            padding_color: [1.0, 0.0, 1.0, 0.3],    // Magenta (semi-transparent)
+            constraint_color: theme::accent(),   // Cyan
+            padding_color: [1.0, 0.0, 1.0, 0.3], // Magenta (semi-transparent)
             show_margins: true,
             show_padding: true,
         }

@@ -1,9 +1,9 @@
 use cvkg_core::{Rect, Renderer};
-use cvkg_flow::*;
 use cvkg_flow::types::*;
+use cvkg_flow::*;
 
 /// This example shows how to render a FlowCanvas which automatically includes the mini-map.
-pub fn render_flow_with_minimap(renderer: &mut dyn Renderer, canvas_rect: Rect) {
+pub fn render_flow_with_minimap(_renderer: &mut dyn Renderer, _canvas_rect: Rect) {
     let mut graph = FlowGraph::new();
 
     // Create a large sparse graph to show off the minimap

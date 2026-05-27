@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A code editor with runic syntax highlighting.
 /// Section 4.3: "Scriptorium components for runic logic definition."
@@ -59,7 +59,7 @@ impl View for RunestoneEditor {
                 let color = match word {
                     "fn" | "let" | "pub" | "use" => theme::warning(), // Gold keywords
                     "rune" | "spell" | "incantation" => theme::accent(), // Cyan "magic" types
-                    _ => theme::text(),                            // White text
+                    _ => theme::text(),                               // White text
                 };
 
                 renderer.draw_text(word, current_x, y, 14.0, color);

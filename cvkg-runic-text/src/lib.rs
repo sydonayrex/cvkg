@@ -1102,7 +1102,10 @@ impl RunicTextEngine {
                             glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
                             glyphs[i].y = (pos.y_offset as f32) * scale;
 
-                            let fallback_key = fallback.font_ref().map(|r| r.key.value()).unwrap_or(resolved.cache_key);
+                            let fallback_key = fallback
+                                .font_ref()
+                                .map(|r| r.key.value())
+                                .unwrap_or(resolved.cache_key);
                             glyphs[i].cache_key = Self::calculate_glyph_cache_key(
                                 fallback_key,
                                 style.font_size,
@@ -1685,13 +1688,15 @@ impl RunicTextEngine {
         for id in face_ids {
             if let Some(font_data) = self.get_font_data(id)
                 && let Some(font_ref) = font_data.font_ref()
-                    && font_ref.key.value() == ck.font_cache_key {
-                        if let Some(face) = self.db.face(id)
-                            && let Some((name, _)) = face.families.first() {
-                                family = name.clone();
-                            }
-                        break;
-                    }
+                && font_ref.key.value() == ck.font_cache_key
+            {
+                if let Some(face) = self.db.face(id)
+                    && let Some((name, _)) = face.families.first()
+                {
+                    family = name.clone();
+                }
+                break;
+            }
         }
 
         let mut style = TextStyle::new(&family, ck.font_size as f32 / 2.0);

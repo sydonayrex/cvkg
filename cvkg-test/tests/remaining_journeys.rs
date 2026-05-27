@@ -1,8 +1,8 @@
 use cvkg_anim::{RunicEmitter, SleipnirParams, SleipnirSolver};
 use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
-use cvkg_flow::{FlowEdge, FlowGraph, FlowNode};
-use cvkg_flow::types::{EdgeId, NodeId as FlowNodeId, PortDirection, PortId, PortPosition};
 use cvkg_flow::port::FlowPort;
+use cvkg_flow::types::{NodeId as FlowNodeId, PortDirection, PortId, PortPosition};
+use cvkg_flow::{FlowEdge, FlowGraph, FlowNode};
 use cvkg_layout::HStack;
 use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
 use std::collections::HashMap;

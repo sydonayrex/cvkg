@@ -4,7 +4,6 @@
 // demerit minimization. Produces visually balanced line breaks by considering
 // all possible break points and scoring them with a badness/demerit function.
 
-
 /// Classification of a potential break point in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BreakKind {

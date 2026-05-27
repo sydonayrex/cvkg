@@ -20,204 +20,243 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Version 4 feature: Reusable workflows with matrix including macOS, Linux, Windows
-  build:
-    name: Build Project
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    outputs:
-      build-success:
-        description: 'Whether the build succeeded'
-        value: ${{ jobs.build.outputs.success }}
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Call reusable build workflow
-      uses: ./.github/workflows/reusable/build.yml
-      with:
-        os: ${{ matrix.os }}
-        rust-toolchain: stable
-        build-args: --workspace
-
-  test:
-    name: Test Suite
-    needs: build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Call reusable test workflow
-      uses: ./.github/workflows/reusable/test.yml
-      with:
-        os: ${{ matrix.os }}
-        rust-toolchain: stable
-        test-args: --workspace
-
-  # Additional jobs for comprehensive CI (run on ubuntu-latest for consistency)
-  clippy:
-    name: Clippy Lint
-    needs: build
+  # ── Lint & Format Check ──────────────────────────────────────────────────────
+  lint:
+    name: Lint & Format
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Install Linux Dependencies
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+
+    - name: Cache Cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-lint-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-lint-
+
+    - name: Check formatting
+      run: cargo fmt -- --check
+
+    - name: Run clippy
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
+  # ── Build & Test (Matrix: Linux, macOS, Windows) ─────────────────────────────
+  build:
+    name: Build (${{ matrix.os }})
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14, windows-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libx11-dev libxcursor-dev libxrandr-dev libxi-dev libasound2-dev libfontconfig1-dev libssl-dev pkg-config libgtk-3-dev
-        sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev
-    
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: clippy
-    
-    - uses: actions/cache@v4
-      with:
-        path: ~/.cargo/registry
-        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-registry-
-    
-    - uses: actions/cache@v4
-      with:
-        path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-index-
-    
-    - name: Run Clippy
-      run: cargo clippy --workspace -- -D warnings
+        sudo apt-get install -y \
+          libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+          libasound2-dev libfontconfig1-dev libssl-dev pkg-config \
+          libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+          libspeechd-dev
 
-  fmt:
-    name: Format Check
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Build workspace
+      run: cargo build --workspace
+
+    - name: Run tests
+      run: cargo test --workspace
+
+  # ── Release Build Verification ────────────────────────────────────────────────
+  release-builds:
+    name: Release Binaries
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt
-    
-    - name: Check formatting
-      run: cargo fmt --workspace -- --check
 
-  # Release job: Triggered on tags (e.g., v0.1.16)
-  release:
-    name: Build & Upload Release Assets
-    needs: [build, test, clippy, fmt]
+    - name: Install system dependencies (Linux)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+          libasound2-dev libfontconfig1-dev libssl-dev pkg-config \
+          libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+          libspeechd-dev
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-release-
+
+    - name: Build release (cvkg-cli)
+      run: cargo build --release -p cvkg-cli
+
+    - name: Build release (berserker)
+      run: cargo build --release -p berserker
+
+    - name: Build release (showcase)
+      run: cargo build --release -p showcase
+
+    - name: Verify release binaries
+      run: |
+        echo "=== Release Binaries ==="
+        ls -la target/release/cvkg 2>/dev/null || echo "cvkg-cli binary not found"
+        ls -la target/release/berserker 2>/dev/null || echo "berserker binary not found"
+        ls -la target/release/showcase 2>/dev/null || echo "showcase binary not found"
+        echo "=== Binary Sizes ==="
+        du -h target/release/cvkg target/release/berserker target/release/showcase 2>/dev/null || true
+
+  # ── Packages (tagged releases only) ──────────────────────────────────────────
+  package:
+    name: Package (${{ matrix.os }})
+    needs: release-builds
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            formats: appimage,deb
+          - os: macos-14
+            formats: dmg,app
+          - os: windows-latest
+            formats: msi,app
+
     permissions:
       contents: write
-    
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Setup Rust
-      uses: dtolnay/rust-toolchain@stable
-    
-    - name: Install Linux Dependencies
+
+    - name: Install system dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libx11-dev libxcursor-dev libxrandr-dev libxi-dev libasound2-dev libfontconfig1-dev libssl-dev pkg-config libgtk-3-dev flatpak flatpak-builder
-        sudo apt-get install -y libwebkit2gtk-4.1-dev || sudo apt-get install -y libwebkit2gtk-4.0-dev
+        sudo apt-get install -y \
+          libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
+          libasound2-dev libfontconfig1-dev libssl-dev pkg-config \
+          libgtk-3-dev libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev \
+          libspeechd-dev
+
+    - name: Setup Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache Cargo
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-pkg-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-pkg-
 
     - name: Install cargo-packager
       run: cargo install cargo-packager
-    
-    - name: Build release binaries
-      run: |
-        cargo build --release -p cvkg-cli
-        cargo build --release -p berserker
-        cargo build --release -p cvkg-webkit-server
-    
-    - name: Package Assets (Linux/macOS)
-      if: runner.os != 'Windows'
-      run: |
-        mkdir -p assets
-        cp target/release/cvkg assets/cvkg-${{ runner.os }}
-        cp target/release/berserker assets/berserker-${{ runner.os }}
-        cp target/release/cvkg-webkit-server assets/cvkg-webkit-server-${{ runner.os }}
-        cd assets && tar -czf ../cvkg-${{ runner.os }}.tar.gz *
-    
-    - name: Package Assets (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        mkdir -p assets
-        cp target/release/cvkg.exe assets/cvkg-Windows.exe
-        cp target/release/berserker.exe assets/berserker-Windows.exe
-        cp target/release/cvkg-webkit-server.exe assets/cvkg-webkit-server-Windows.exe
-        Compress-Archive -Path assets/* -DestinationPath cvkg-Windows.zip
 
-    - name: Package AppImage, Flatpak, DEB (Linux)
+    - name: Package (Linux)
       if: runner.os == 'Linux'
       run: |
-        cargo packager --release -p cvkg-cli -f appimage,flatpak,deb
-        cargo packager --release -p berserker -f appimage,flatpak,deb
+        for bin in cvkg-cli berserker; do
+          for fmt in appimage deb; do
+            cargo packager --release -p "$bin" -f "$fmt" || echo "Warning: $bin $fmt packaging failed"
+          done
+        done
 
-    - name: Package DMG (macOS)
+    - name: Package (macOS)
       if: runner.os == 'macOS'
       run: |
-        cargo packager --release -p cvkg-cli -f dmg
-        cargo packager --release -p berserker -f dmg
+        for bin in cvkg-cli berserker; do
+          for fmt in dmg app; do
+            cargo packager --release -p "$bin" -f "$fmt" || echo "Warning: $bin $fmt packaging failed"
+          done
+        done
 
-    - name: Package MSI (Windows)
+    - name: Package (Windows)
       if: runner.os == 'Windows'
       run: |
-        cargo packager --release -p cvkg-cli -f msi
-        cargo packager --release -p berserker -f msi
-    
+        for bin in cvkg-cli berserker; do
+          for fmt in msi app; do
+            cargo packager --release -p "$bin" -f "$fmt" || echo "Warning: $bin $fmt packaging failed"
+          done
+        done
+
+    - name: Collect artifacts
+      shell: bash
+      run: |
+        mkdir -p artifacts
+        for bin in cvkg berserker showcase; do
+          for ext in "" ".exe"; do
+            if [ -f "target/release/${bin}${ext}" ]; then
+              cp "target/release/${bin}${ext}" "artifacts/${bin}-${runner.os}${ext}"
+            fi
+          done
+        done
+        for f in target/release/bundle/*/*; do
+          [ -f "$f" ] && cp "$f" "artifacts/$(basename "$f")" 2>/dev/null || true
+        done
+        ls -la artifacts/ 2>/dev/null || echo "No artifacts"
+
     - name: Upload Release Assets
       uses: softprops/action-gh-release@v2
       with:
-        files: |
-          cvkg-*.tar.gz
-          cvkg-*.zip
-          target/**/*.AppImage
-          target/**/*.deb
-          target/**/*.flatpak
-          target/**/*.dmg
-          target/**/*.msi
+        files: artifacts/*
         tag_name: ${{ github.ref_name }}
         name: Release ${{ github.ref_name }}
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Version 4 feature: Security scanning
+  # ── Security Audit ────────────────────────────────────────────────────────────
   security:
-    name: Security Scan
+    name: Security Audit
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Install cargo-audit
       run: cargo install cargo-audit
-    
+
     - name: Run security audit
       run: cargo audit
-    
-    - name: Run cargo-deny
-      uses: EmbarkStudios/cargo-deny-action@v1

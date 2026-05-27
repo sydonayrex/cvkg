@@ -250,17 +250,15 @@ pub fn format_svg_float(value: f32, decimal_places: usize) -> String {
     }
 
     let abs = value.abs();
-    if abs < SMALL_THRESHOLD || abs > LARGE_THRESHOLD {
+    if !(SMALL_THRESHOLD..=LARGE_THRESHOLD).contains(&abs) {
         format!("{value:.1e}")
     } else {
         let formatted = format!("{:.*}", decimal_places, value);
         if formatted.contains('.') {
-            let trimmed = formatted.trim_end_matches('0');
-            if trimmed.ends_with('.') {
-                trimmed[..trimmed.len() - 1].to_string()
-            } else {
-                trimmed.to_string()
-            }
+            formatted
+                .trim_end_matches('0')
+                .trim_end_matches('.')
+                .to_string()
         } else {
             formatted
         }
@@ -380,10 +378,10 @@ impl SerializableNode for usvg::Node {
                 if !p.id().is_empty() {
                     attrs.push(("id", p.id().to_string()));
                 }
-                if let Some(ref fill) = p.fill() {
+                if let Some(fill) = p.fill() {
                     attrs.extend(fill_to_svg_attrs(fill));
                 }
-                if let Some(ref stroke) = p.stroke() {
+                if let Some(stroke) = p.stroke() {
                     attrs.extend(stroke_to_svg_attrs(stroke));
                 }
             }
@@ -566,8 +564,9 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_format_svg_float_decimal() {
-        assert_eq!(format_svg_float(3.14159, 3), "3.142");
+        assert_eq!(format_svg_float(3.14159_f32, 3), "3.142");
     }
 
     #[test]
@@ -578,7 +577,10 @@ mod tests {
     #[test]
     fn test_format_svg_float_scientific_small() {
         let result = format_svg_float(0.0000001, 3);
-        assert!(result.contains("e"), "Expected scientific notation, got: {result}");
+        assert!(
+            result.contains("e"),
+            "Expected scientific notation, got: {result}"
+        );
     }
 
     #[test]
@@ -613,22 +615,28 @@ mod tests {
     #[test]
     fn test_serialize_basic_rect() {
         let svg_input = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="red"/></svg>"#;
-        let tree = usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
+        let tree =
+            usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
         let result = serialize_svg(&tree);
         assert!(result.is_ok());
         let xml = result.unwrap();
-        assert!(xml.contains("#ff0000"), "Expected red fill in output: {xml}");
-        
+        assert!(
+            xml.contains("#ff0000"),
+            "Expected red fill in output: {xml}"
+        );
     }
 
     #[test]
     fn test_serialize_with_config() {
-        let mut config = SerializerConfig::default();
-        config.indent = 0;
-        config.decimal_places = 1;
+        let config = SerializerConfig {
+            indent: 0,
+            decimal_places: 1,
+            ..Default::default()
+        };
 
         let svg_input = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="blue"/></svg>"#;
-        let tree = usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
+        let tree =
+            usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
         let result = serialize_svg_with_config(&tree, config);
         assert!(result.is_ok());
     }
@@ -636,7 +644,8 @@ mod tests {
     #[test]
     fn test_serialize_empty_svg() {
         let svg_input = r#"<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>"#;
-        let tree = usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
+        let tree =
+            usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
         let result = serialize_svg(&tree);
         assert!(result.is_ok());
     }
@@ -644,7 +653,8 @@ mod tests {
     #[test]
     fn test_serialize_nested_groups() {
         let svg_input = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><g id="a"><g id="b"><rect width="50" height="50"/></g></g></svg>"#;
-        let tree = usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
+        let tree =
+            usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
         let result = serialize_svg(&tree);
         assert!(result.is_ok());
     }
@@ -652,7 +662,8 @@ mod tests {
     #[test]
     fn test_serialization_stats() {
         let svg_input = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100"/></svg>"#;
-        let tree = usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
+        let tree =
+            usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
         let mut serializer = SvgSerializer::new();
         let _ = serializer.serialize(&tree).unwrap();
         let stats = serializer.stats();
@@ -685,4 +696,3 @@ mod tests {
         assert!(result.contains("20"), "Expected 20 in: {result}");
     }
 }
-

@@ -3,6 +3,24 @@ use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_sy
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+/// Mode for DatePicker: single date or range selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DatePickerMode {
+    /// Select a single date.
+    Single,
+    /// Select a date range (start and end).
+    Range,
+}
+
+/// Represents a date range (inclusive start, inclusive end).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DateRange {
+    /// Start date as (day, month, year).
+    pub start: (u32, u32, u32),
+    /// End date as (day, month, year).
+    pub end: (u32, u32, u32),
+}
+
 /// Global counter for generating unique DatePicker instance IDs.
 static DATEPICKER_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
@@ -77,12 +95,12 @@ fn today_date() -> (u32, u32, u32) {
 /// A DatePicker component that displays a text field showing the selected date
 /// and a calendar popover on click.
 ///
-/// The calendar shows the current month with a 7-column day grid, supports
-/// month navigation, and highlights the selected day and today.
+/// Supports single-date and range selection modes, month/year navigation,
+/// and proper accessibility via AccessKit textbox role.
 ///
 /// # Examples
 /// ```
-/// use cvkg_components::datepicker::DatePicker;
+/// use cvkg_components::datepicker::{DatePicker, DatePickerMode};
 /// let picker = DatePicker::new(|day, month, year| {
 ///     println!("Selected: {}/{}/{}", day, month, year);
 /// })
@@ -91,10 +109,18 @@ fn today_date() -> (u32, u32, u32) {
 pub struct DatePicker {
     /// The currently selected date as (day, month, year).
     selected_date: Option<(u32, u32, u32)>,
+    /// Optional end date for range selection mode.
+    range_end: Option<(u32, u32, u32)>,
     /// Whether the calendar popover is open.
     is_open: bool,
+    /// Selection mode: single date or range.
+    mode: DatePickerMode,
+    /// In range mode, tracks whether the user is picking the start or end date.
+    range_picking_end: bool,
     /// Callback invoked when a date is selected.
     on_change: Arc<dyn Fn(u32, u32, u32) + Send + Sync>,
+    /// Optional callback for range selection: (start, end).
+    on_range_change: Option<Arc<dyn Fn(DateRange) + Send + Sync>>,
     /// Stable per-instance hash used to identify this component in the system state store.
     id_hash: u64,
 }
@@ -102,7 +128,7 @@ pub struct DatePicker {
 impl DatePicker {
     /// Create a new DatePicker with the given change callback.
     ///
-    /// The picker defaults to no selected date and closed state.
+    /// The picker defaults to no selected date, closed state, and Single mode.
     pub fn new(on_change: impl Fn(u32, u32, u32) + Send + Sync + 'static) -> Self {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         let counter = DATEPICKER_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -112,8 +138,12 @@ impl DatePicker {
 
         Self {
             selected_date: None,
+            range_end: None,
             is_open: false,
+            mode: DatePickerMode::Single,
+            range_picking_end: false,
             on_change: Arc::new(on_change),
+            on_range_change: None,
             id_hash,
         }
     }
@@ -121,6 +151,23 @@ impl DatePicker {
     /// Set the initially selected date (day, month, year).
     pub fn selected(mut self, day: u32, month: u32, year: u32) -> Self {
         self.selected_date = Some((day, month, year));
+        self
+    }
+
+    /// Set the initially selected range. Only meaningful in Range mode.
+    pub fn range(mut self, start: (u32, u32, u32), end: (u32, u32, u32)) -> Self {
+        self.selected_date = Some(start);
+        self.range_end = Some(end);
+        self
+    }
+
+    /// Set the picker to Range selection mode with an optional range change callback.
+    pub fn with_range_mode(
+        mut self,
+        on_range_change: impl Fn(DateRange) + Send + Sync + 'static,
+    ) -> Self {
+        self.mode = DatePickerMode::Range;
+        self.on_range_change = Some(Arc::new(on_range_change));
         self
     }
 
@@ -169,17 +216,33 @@ impl DatePicker {
     }
 
     /// Format the selected date as DD/MM/YYYY, or return a placeholder.
+    /// In range mode, formats as "DD/MM/YYYY – DD/MM/YYYY".
     fn format_date(&self) -> String {
-        if let Some((day, month, year)) = self.selected_date {
-            format!("{:02}/{:02}/{}", day, month, year)
-        } else {
-            "DD/MM/YYYY".to_string()
+        match self.mode {
+            DatePickerMode::Range => {
+                if let Some((sd, sm, sy)) = self.selected_date {
+                    if let Some((ed, em, ey)) = self.range_end {
+                        return format!("{:02}/{:02}/{} – {:02}/{:02}/{}", sd, sm, sy, ed, em, ey);
+                    }
+                    return format!("{:02}/{:02}/{} –", sd, sm, sy);
+                }
+                "Select range...".to_string()
+            }
+            DatePickerMode::Single => {
+                if let Some((day, month, year)) = self.selected_date {
+                    format!("{:02}/{:02}/{}", day, month, year)
+                } else {
+                    "DD/MM/YYYY".to_string()
+                }
+            }
         }
     }
 
     /// Render the text field portion of the date picker.
     fn render_text_field(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePickerField");
+        renderer.set_aria_role("textbox");
+        renderer.set_aria_label("Date picker");
 
         // Background
         renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.14, 1.0]);
@@ -379,10 +442,28 @@ impl DatePicker {
                             sd == day_num && sm == display_month && sy == display_year
                         })
                         .unwrap_or(false);
+                    let is_range_end = self
+                        .range_end
+                        .map(|(ed, em, ey)| {
+                            ed == day_num && em == display_month && ey == display_year
+                        })
+                        .unwrap_or(false);
+                    let is_in_range = match (self.selected_date, self.range_end) {
+                        (Some((sd, sm, sy)), Some((ed, em, ey))) => {
+                            let date_val = |d: u32, m: u32, y: u32| -> u64 {
+                                y as u64 * 10000 + m as u64 * 100 + d as u64
+                            };
+                            let v = date_val(day_num, display_month, display_year);
+                            let sv = date_val(sd, sm, sy);
+                            let ev = date_val(ed, em, ey);
+                            self.mode == DatePickerMode::Range && v >= sv && v <= ev
+                        }
+                        _ => false,
+                    };
                     let is_today =
                         day_num == today.0 && display_month == today.1 && display_year == today.2;
 
-                    // Highlight selected day
+                    // Highlight selected day, range end, or in-range days
                     if is_selected {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -391,6 +472,23 @@ impl DatePicker {
                             height: 24.0,
                         };
                         renderer.fill_rounded_rect(highlight_rect, 12.0, [0.0, 0.7, 0.85, 0.9]);
+                    } else if is_range_end {
+                        let highlight_rect = Rect {
+                            x: cell_x + (cell_w - 24.0) / 2.0,
+                            y: cell_y + (cell_h - 24.0) / 2.0,
+                            width: 24.0,
+                            height: 24.0,
+                        };
+                        renderer.fill_rounded_rect(highlight_rect, 12.0, [0.0, 0.5, 0.7, 0.85]);
+                    } else if is_in_range {
+                        // Subtle range highlight
+                        let range_rect = Rect {
+                            x: cell_x + 2.0,
+                            y: cell_y + (cell_h - 20.0) / 2.0,
+                            width: cell_w - 4.0,
+                            height: 20.0,
+                        };
+                        renderer.fill_rounded_rect(range_rect, 4.0, [0.0, 0.4, 0.6, 0.3]);
                     } else if is_today {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -408,9 +506,9 @@ impl DatePicker {
 
                     let day_str = format!("{}", day_num);
                     let (tw, _th) = renderer.measure_text(&day_str, 12.0);
-                    let text_color = if is_selected {
+                    let text_color = if is_selected || is_range_end {
                         theme::text()
-                    } else if is_today {
+                    } else if is_in_range || is_today {
                         theme::accent()
                     } else {
                         theme::text()
@@ -477,6 +575,9 @@ impl DatePicker {
         );
 
         // Day cell clicks
+        let mode = self.mode;
+        let range_picking_end = self.range_picking_end;
+        let on_range_change = self.on_range_change.clone();
         for row in 0..num_rows {
             for col in 0..7 {
                 let cell_idx = row * 7 + col;
@@ -494,6 +595,7 @@ impl DatePicker {
                     if d <= num_days {
                         let oc = on_change.clone();
                         let id2 = id;
+                        let orc = on_range_change.clone();
                         renderer.register_handler(
                             "pointerclick",
                             Arc::new(move |event: Event| {
@@ -501,11 +603,48 @@ impl DatePicker {
                                     && cell_rect.contains(x, y)
                                 {
                                     (oc)(d, display_month, display_year);
-                                    update_system_state(move |s| {
-                                        let mut s = s.clone();
-                                        s.set_component_state(id2, false);
-                                        s
-                                    });
+                                    if mode == DatePickerMode::Range {
+                                        // In range mode, toggle between picking start and end
+                                        if !range_picking_end {
+                                            // First click: set start, prepare for end
+                                            update_system_state(move |s| {
+                                                let mut s = s.clone();
+                                                s.set_component_state(id2 + 2, true); // range_picking_end = true
+                                                s.set_component_state(id2, false);
+                                                s
+                                            });
+                                        } else {
+                                            // Second click: set end, fire range callback, close
+                                            if let Some(ref cb) = orc {
+                                                let start: (u32, u32, u32) = {
+                                                    let s = load_system_state();
+                                                    s.get_component_state::<(u32, u32, u32)>(
+                                                        id2 + 3,
+                                                    )
+                                                    .map(|v| *v.read().unwrap())
+                                                    .unwrap_or((d, display_month, display_year))
+                                                };
+                                                let range = DateRange {
+                                                    start,
+                                                    end: (d, display_month, display_year),
+                                                };
+                                                (cb)(range);
+                                            }
+                                            update_system_state(move |s| {
+                                                let mut s = s.clone();
+                                                s.set_component_state(id2 + 2, false); // reset range_picking_end
+                                                s.set_component_state(id2, false); // close
+                                                s
+                                            });
+                                        }
+                                    } else {
+                                        // Single mode: close after selection
+                                        update_system_state(move |s| {
+                                            let mut s = s.clone();
+                                            s.set_component_state(id2, false);
+                                            s
+                                        });
+                                    }
                                 }
                             }),
                         );

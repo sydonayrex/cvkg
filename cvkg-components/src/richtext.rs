@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// Text alignment options for RichText.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -313,10 +313,6 @@ impl RichText {
             TextAlign::Justify => x,
         }
     }
-
-
-
-
 }
 
 impl View for RichText {
@@ -329,7 +325,7 @@ impl View for RichText {
         let mut y = rect.y;
 
         let mut text_spans = Vec::new();
-        
+
         let runic_align = match self.align {
             TextAlign::Left => cvkg_runic_text::TextAlign::Start,
             TextAlign::Center => cvkg_runic_text::TextAlign::Center,
@@ -350,8 +346,9 @@ impl View for RichText {
                     ..
                 } => {
                     let seg_color = color.unwrap_or(self.text_color);
-                    
-                    let mut runic_style = cvkg_runic_text::TextStyle::new("SF Pro Text", self.text_size);
+
+                    let mut runic_style =
+                        cvkg_runic_text::TextStyle::new("SF Pro Text", self.text_size);
                     if style.bold {
                         runic_style = runic_style.with_weight(700);
                     }
@@ -367,7 +364,7 @@ impl View for RichText {
                         (seg_color[2] * 255.0) as u8,
                         (seg_color[3] * 255.0) as u8,
                     ];
-                    
+
                     text_spans.push(cvkg_runic_text::TextSpan::new(content, runic_style));
                 }
                 RichTextSegment::Code(c) => {
@@ -471,17 +468,18 @@ impl View for RichText {
                 }
             }
         }
-        
+
         // Flush remaining text spans
-        if !text_spans.is_empty() && y < rect.y + rect.height {
-            if let Some(shaped) = renderer.shape_rich_text(
+        if !text_spans.is_empty()
+            && y < rect.y + rect.height
+            && let Some(shaped) = renderer.shape_rich_text(
                 &text_spans,
                 if self.wrap { Some(rect.width) } else { None },
                 runic_align,
                 cvkg_runic_text::TextOverflow::WordWrap,
-            ) {
-                renderer.draw_shaped_text(&shaped, rect.x, y);
-            }
+            )
+        {
+            renderer.draw_shaped_text(&shaped, rect.x, y);
         }
     }
 }
@@ -490,7 +488,7 @@ impl View for RichText {
 #[cfg(test)]
 trait RichTextExt {
     fn text_content(&self) -> Option<&str>;
-    fn effective_align(&self, seg: &RichTextSegment) -> cvkg_core::TextAlign;
+    fn effective_align(&self, seg: &RichTextSegment) -> TextAlign;
 }
 
 #[cfg(test)]
@@ -499,10 +497,9 @@ impl RichTextExt for RichText {
         self.segments.first().and_then(|s| s.text_content())
     }
 
-    fn effective_align(&self, seg: &RichTextSegment) -> cvkg_core::TextAlign {
+    fn effective_align(&self, seg: &RichTextSegment) -> TextAlign {
         match seg {
             RichTextSegment::Text { align: Some(a), .. } => *a,
-            RichTextSegment::Link { align: Some(a), .. } => *a,
             _ => self.align,
         }
     }
@@ -604,7 +601,7 @@ mod tests {
             .underline("underlined")
             .color("red text", theme::error_color())
             .aligned("right", TextAlign::Right)
-            .styled("styled", true, true, true, [0.5, 0.5, 0.5, 1.0])
+            .styled("styled", true, true, true, theme::text_muted())
             .code("code")
             .image("img.png", 32.0, 32.0)
             .inline_image("icon.png", 1.2, Some(2.0))

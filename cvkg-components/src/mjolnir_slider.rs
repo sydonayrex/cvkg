@@ -42,7 +42,7 @@ impl View for MjolnirSlider {
 
         // 1. Heavy Metallic Base
         renderer.fill_rounded_rect(rect, 4.0, theme::surface());
-        renderer.stroke_rounded_rect(rect, 4.0, [0.3, 0.3, 0.4, 0.5], 1.5);
+        renderer.stroke_rounded_rect(rect, 4.0, theme::border(), 1.5);
 
         // 2. Energy Fill (Cyan Pulse)
         let t = renderer.elapsed_time();

@@ -431,3 +431,34 @@ pub fn font_code() -> f32 {
     14.0
 }
 
+// === Additional color helpers for components ===
+
+/// Viking Gold accent color (#FFD700 / [1.0, 0.84, 0.0, 1.0])
+#[inline]
+pub fn viking_gold() -> [f32; 4] {
+    [1.0, 0.84, 0.0, 1.0]
+}
+
+/// Magenta Liquid accent color (#FF00FF / [1.0, 0.0, 1.0, 1.0])
+#[inline]
+pub fn magenta_liquid() -> [f32; 4] {
+    [1.0, 0.0, 1.0, 1.0]
+}
+
+/// Critical red color for error/danger states ([1.0, 0.2, 0.2, 1.0])
+#[inline]
+pub fn critical_red() -> [f32; 4] {
+    [1.0, 0.2, 0.2, 1.0]
+}
+
+/// Warning orange color ([1.0, 0.5, 0.0, 1.0])
+#[inline]
+pub fn warning_orange() -> [f32; 4] {
+    [1.0, 0.5, 0.0, 1.0]
+}
+
+/// Hazard/danger border color (orange-red [1.0, 0.2, 0.0, 1.0])
+#[inline]
+pub fn hazard_orange() -> [f32; 4] {
+    [1.0, 0.2, 0.0, 1.0]
+}

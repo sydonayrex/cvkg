@@ -62,8 +62,7 @@ impl CommandBuckets {
 }
 
 /// Damage tracking information for a single frame.
-#[derive(Debug)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct DamageInfo {
     /// IDs of layers that were modified this frame.
     pub dirty_layers: Vec<LayerId>,
@@ -72,7 +71,6 @@ pub struct DamageInfo {
     /// True if the entire tree needs re-flattening (structural changes).
     pub full_rebuild_needed: bool,
 }
-
 
 /// The compositor engine that orchestrates the retained-mode layer tree.
 pub struct CompositorEngine {
@@ -169,16 +167,31 @@ impl CompositorEngine {
 
         // Flatten the tree depth-first, back-to-front.
         let roots = self.layer_tree.roots().to_vec();
-        Self::flatten_tree(&mut self.layer_tree, &roots, &mut self.flatten_buffer, &mut self.z_counter);
+        Self::flatten_tree(
+            &mut self.layer_tree,
+            &roots,
+            &mut self.flatten_buffer,
+            &mut self.z_counter,
+        );
 
         // Route into buckets by material.
         for cmd in &self.flatten_buffer {
             match cmd.material {
-                Material::Opaque | Material::Multiply | Material::Screen
-                | Material::BlendOverlay | Material::Darken | Material::Lighten
-                | Material::ColorDodge | Material::ColorBurn | Material::HardLight
-                | Material::SoftLight | Material::Difference | Material::Exclusion
-                | Material::Hue | Material::Saturation | Material::Color
+                Material::Opaque
+                | Material::Multiply
+                | Material::Screen
+                | Material::BlendOverlay
+                | Material::Darken
+                | Material::Lighten
+                | Material::ColorDodge
+                | Material::ColorBurn
+                | Material::HardLight
+                | Material::SoftLight
+                | Material::Difference
+                | Material::Exclusion
+                | Material::Hue
+                | Material::Saturation
+                | Material::Color
                 | Material::Luminosity => {
                     buckets.scene_commands.push(cmd.clone());
                 }
@@ -231,7 +244,10 @@ impl CompositorEngine {
         let layer = match layer_tree.get_layer(layer_id) {
             Some(l) => l,
             None => {
-                warn!("CompositorEngine: referenced layer {:?} not found in tree", layer_id);
+                warn!(
+                    "CompositorEngine: referenced layer {:?} not found in tree",
+                    layer_id
+                );
                 return;
             }
         };

@@ -3,6 +3,7 @@
 //! Gerd the Vanir giantess represents fierce protection and boundary defense -
 //! this telemetry system monitors and protects system boundaries with reactive insights.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -137,7 +138,7 @@ impl View for GerdTelemetry {
                     width: rect.width - 20.0,
                     height: 20.0,
                 },
-                [0.1, 0.1, 0.12, 1.0],
+                theme::surface(),
             );
             renderer.draw_text(
                 &format!("⚠ {}", alert.message),

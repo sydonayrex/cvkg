@@ -226,8 +226,8 @@ pub mod gullveig_inspector;
 pub mod idunn_persistence;
 pub mod layer_system;
 pub mod njord_theme;
-pub mod theme;
 pub mod skadi_scripting;
+pub mod theme;
 pub mod timeline_editor;
 
 pub use advanced_forms::{Calendar, EikonaForm};
@@ -241,14 +241,14 @@ pub use collaboration::*;
 pub use command::*;
 pub use command_palette::{BifrostLauncher, MimirSpotlight};
 pub use container::{
-    GarmAlert, GeriDialog, DialogAction, Form, GjallarSplitter, HStack, LazyVStack, Menu,
-    NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, GraniSheet, SheetPosition,
-    SheetModifier, TabView, Table, VStack,
+    DialogAction, Form, GarmAlert, GeriDialog, GjallarSplitter, GraniSheet, HStack, LazyVStack,
+    Menu, NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, SheetModifier,
+    SheetPosition, TabView, Table, VStack,
 };
-pub use dropdown_menu::{DropdownItem, DropdownMenu};
 pub use data_grid::RunesTable;
 pub use devtools::*;
 pub use docking_workspace::*;
+pub use dropdown_menu::{DropdownItem, DropdownMenu};
 pub use effects::*;
 pub use error::*;
 pub use file_tree::{FileItem, FileKind, YggdrasilTree};
@@ -262,8 +262,8 @@ pub use hud::{AlertKind, GjallarAlert, TacticalGauge, Vegvísir};
 pub use idunn_persistence::*;
 pub use image::*;
 pub use interactive::{
-    BifrostColorPicker, Button, Checkbox, Dropdown, HringrPagination, Input, Picker,
-    SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating, GeriTransfer,
+    BifrostColorPicker, Button, Checkbox, Dropdown, GeriTransfer, HringrPagination, Input, Picker,
+    SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
 };
 pub use layer_system::*;
 pub use memory::*;
@@ -289,42 +289,54 @@ pub use valkyrie_indicator::ValkyrieIndicator;
 pub use virtual_list::*;
 pub use virtual_table::*;
 pub use visual::{
-    AvatarStatus, ChartType, DraumaSkeleton, MuninAvatar, EmptyState, Gauge, MerkiBadge,
-    MimirsWell, SkollProgress, RuneScript, RunicTooltip, SleipnirGait, HatiSpinner, SpinnerVariant,
-    StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan, HatiCarousel,
+    AvatarStatus, ChartType, DraumaSkeleton, EmptyState, Gauge, HatiCarousel, HatiSpinner,
+    MerkiBadge, MimirsWell, MuninAvatar, RuneScript, RunicTooltip, SkollProgress, SleipnirGait,
+    SpinnerVariant, StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan,
 };
 pub use window::{GinnungagapWindow, HiminnModal, YggdrasilWindow};
 pub use wyrd_hud::WyrdHUD;
+pub mod advanced;
 pub mod autocomplete;
 pub mod bragi_creative;
 pub mod combobox;
-pub mod advanced;
 pub use advanced::*;
 pub mod ai_components;
 pub use ai_components::*;
+pub mod a11y_inspector;
 pub mod datepicker;
 pub mod eir_motion;
 pub mod form_validation;
 pub mod hlin_accessibility;
 pub mod keyboard_nav;
+pub mod notification_center;
+pub mod outline_view;
+pub mod perf_overlay;
 pub mod popover;
+pub mod radio_group;
+pub mod text_editor;
 pub mod toast;
 pub mod tooltip;
 pub mod transitions;
 pub mod tyr_security;
 
+pub use a11y_inspector::{A11yInspector, A11yNode};
 pub use autocomplete::*;
 pub use bragi_creative::*;
 pub use combobox::*;
+pub use cvkg_layout as layout;
+pub use datepicker::*;
 pub use eir_motion::*;
 pub use hlin_accessibility::*;
+pub use notification_center::*;
+pub use outline_view::{OutlineNode, OutlineView};
+pub use perf_overlay::PerfOverlay;
 pub use popover::*;
+pub use radio_group::*;
+pub use text_editor::TextEditor;
 pub use toast::*;
 pub use tooltip::*;
 pub use transitions::*;
 pub use tyr_security::*;
-// Re-export layout components
-pub use cvkg_layout as layout;
 
 // Internal Never type for primitive views
 #[doc(hidden)]
@@ -349,3 +361,75 @@ pub trait ViewExt: cvkg_core::View + Sized {
 
 // Blanket implementation for all Views
 impl<T: cvkg_core::View + Sized> ViewExt for T {}
+
+// =============================================================================
+// MICRO-FEEDBACK — Wrapper view that provides haptic/audio feedback hooks
+// =============================================================================
+
+/// A wrapper view that provides haptic and audio feedback for any content.
+///
+/// `MicroFeedback` wraps any view and injects haptic/audio feedback hooks
+/// that child views can invoke through the renderer. This is useful as a
+/// top-level wrapper for screens that want consistent feedback behavior.
+///
+/// The haptic and audio engines can be overridden at construction time;
+/// by default they use the global system engines.
+pub struct MicroFeedback<V: cvkg_core::View> {
+    /// The wrapped content view.
+    pub content: V,
+    /// Haptic engine reference for tactile feedback.
+    pub haptic: std::sync::Arc<dyn cvkg_core::HapticEngine>,
+    /// Audio engine reference for sound feedback.
+    pub audio: std::sync::Arc<dyn cvkg_core::AudioEngine>,
+}
+
+impl<V: cvkg_core::View> MicroFeedback<V> {
+    /// Create a new `MicroFeedback` wrapper around `content` using the
+    /// global default haptic and audio engines.
+    pub fn new(content: V) -> Self {
+        Self {
+            content,
+            haptic: std::sync::Arc::new(cvkg_core::NullHapticEngine),
+            audio: std::sync::Arc::new(cvkg_core::NullAudioEngine),
+        }
+    }
+
+    /// Set a custom haptic engine.
+    pub fn with_haptic(mut self, engine: std::sync::Arc<dyn cvkg_core::HapticEngine>) -> Self {
+        self.haptic = engine;
+        self
+    }
+
+    /// Set a custom audio engine.
+    pub fn with_audio(mut self, engine: std::sync::Arc<dyn cvkg_core::AudioEngine>) -> Self {
+        self.audio = engine;
+        self
+    }
+
+    /// Trigger a haptic impact through this wrapper's engine.
+    pub fn trigger_haptic(&self, intensity: cvkg_core::HapticIntensity) {
+        self.haptic.impact(intensity);
+    }
+
+    /// Trigger a selection haptic through this wrapper's engine.
+    pub fn trigger_selection(&self) {
+        self.haptic.selection();
+    }
+
+    /// Play a named sound through this wrapper's engine.
+    pub fn play_audio(&self, name: &str, volume: f32) {
+        self.audio.play_sound(name, volume);
+    }
+}
+
+impl<V: cvkg_core::View> cvkg_core::View for MicroFeedback<V> {
+    type Body = V::Body;
+
+    fn body(self) -> Self::Body {
+        self.content.body()
+    }
+
+    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
+        self.content.render(renderer, rect);
+    }
+}

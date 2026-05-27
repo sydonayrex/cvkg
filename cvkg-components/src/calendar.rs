@@ -166,7 +166,7 @@ impl View for TyrCalendar {
                 });
 
                 if is_selected {
-                    renderer.fill_rounded_rect(cell_rect, 4.0, [0.0, 0.8, 1.0, 0.4]);
+                    renderer.fill_rounded_rect(cell_rect, 4.0, theme::accent());
                 } else if is_disabled {
                     renderer.fill_rounded_rect(cell_rect, 4.0, [0.1, 0.1, 0.1, 0.2]);
                 }

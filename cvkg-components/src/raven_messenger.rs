@@ -1,5 +1,5 @@
-use cvkg_core::{
-Never, Rect, Renderer, View};
+use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A single chat message with role, content, timestamp, and optional code blocks.
 #[derive(Clone)]
@@ -134,11 +134,29 @@ impl View for RavenMessenger {
 
             // Role icon and label
             let (icon, role_label, bubble_color, text_color, align_right) = if is_user {
-                ('ᚢ', "You", [0.15, 0.2, 0.35, 0.85], [1.0, 1.0, 1.0, 0.95], true)
+                (
+                    'ᚢ',
+                    "You",
+                    [0.15, 0.2, 0.35, 0.85],
+                    [1.0, 1.0, 1.0, 0.95],
+                    true,
+                )
             } else if is_system {
-                ('ᛊ', "System", [0.1, 0.1, 0.15, 0.7], [0.7, 0.7, 0.8, 0.9], false)
+                (
+                    'ᛊ',
+                    "System",
+                    [0.1, 0.1, 0.15, 0.7],
+                    [0.7, 0.7, 0.8, 0.9],
+                    false,
+                )
             } else {
-                ('ᚻ', "Assistant", [0.05, 0.08, 0.15, 0.85], [0.9, 0.95, 1.0, 0.95], false)
+                (
+                    'ᚻ',
+                    "Assistant",
+                    [0.05, 0.08, 0.15, 0.85],
+                    [0.9, 0.95, 1.0, 0.95],
+                    false,
+                )
             };
 
             let max_bubble_w = rect.width * 0.75;
@@ -151,7 +169,7 @@ impl View for RavenMessenger {
             // ── Role header (icon + label + timestamp) ──
             if !is_system {
                 let header_color = if is_user {
-                    [0.0, 0.8, 1.0, 0.8]
+                    theme::accent()
                 } else {
                     [0.0, 1.0, 0.8, 0.8]
                 };
@@ -197,7 +215,13 @@ impl View for RavenMessenger {
                                 1.0,
                             );
                         }
-                        renderer.draw_text(text, text_rect.x + 8.0, text_rect.y + 4.0, 13.0, text_color);
+                        renderer.draw_text(
+                            text,
+                            text_rect.x + 8.0,
+                            text_rect.y + 4.0,
+                            13.0,
+                            text_color,
+                        );
                         seg_y += text_h + 2.0;
                     }
                     ContentSegment::CodeBlock(code, lang) => {
@@ -227,12 +251,25 @@ impl View for RavenMessenger {
 
                         // Code lines with line numbers
                         for (line_idx, line) in lines.iter().enumerate() {
-                            let line_y = code_rect.y + code_block_padding + 4.0 + line_idx as f32 * 15.0;
+                            let line_y =
+                                code_rect.y + code_block_padding + 4.0 + line_idx as f32 * 15.0;
                             // Line number (dim)
                             let line_num = format!("{:>3} ", line_idx + 1);
-                            renderer.draw_text(&line_num, code_rect.x + 4.0, line_y, 10.0, [0.25, 0.25, 0.35, 0.6]);
+                            renderer.draw_text(
+                                &line_num,
+                                code_rect.x + 4.0,
+                                line_y,
+                                10.0,
+                                [0.25, 0.25, 0.35, 0.6],
+                            );
                             // Code text
-                            renderer.draw_text(line, code_rect.x + 34.0, line_y, 11.0, [0.8, 0.9, 0.7, 0.9]);
+                            renderer.draw_text(
+                                line,
+                                code_rect.x + 34.0,
+                                line_y,
+                                11.0,
+                                [0.8, 0.9, 0.7, 0.9],
+                            );
                         }
                         seg_y += code_h + 2.0;
                     }
@@ -310,7 +347,10 @@ fn parse_code_blocks(content: &str) -> Vec<ContentSegment> {
                 remaining = &remaining[code_start + end_pos + 3..];
             } else {
                 // Unclosed code block - render rest as code
-                segments.push(ContentSegment::CodeBlock(after_fence[newline_pos + 1..].to_string(), lang));
+                segments.push(ContentSegment::CodeBlock(
+                    after_fence[newline_pos + 1..].to_string(),
+                    lang,
+                ));
                 break;
             }
         } else {

@@ -649,7 +649,11 @@ mod wasm_impl {
 
                 if let Ok(adp) = diagnostic_adapter {
                     let info = adp.get_info();
-                    log::error!("WebGPU DIAGNOSTIC: Found adapter {:?} ({:?}) but it is INCOMPATIBLE with the current surface target.", info.name, info.backend);
+                    log::error!(
+                        "WebGPU DIAGNOSTIC: Found adapter {:?} ({:?}) but it is INCOMPATIBLE with the current surface target.",
+                        info.name,
+                        info.backend
+                    );
                 }
             }
 
@@ -2085,9 +2089,9 @@ mod wasm_impl {
 
                     // Position absolute to match CVKG layout
                     let style_str = format!(
-                    "position: absolute; left: {}px; top: {}px; width: {}px; height: {}px; opacity: 0;",
-                    node.layout.x, node.layout.y, node.layout.width, node.layout.height
-                );
+                        "position: absolute; left: {}px; top: {}px; width: {}px; height: {}px; opacity: 0;",
+                        node.layout.x, node.layout.y, node.layout.width, node.layout.height
+                    );
                     el.set_attribute("style", &style_str)?;
 
                     let root = document

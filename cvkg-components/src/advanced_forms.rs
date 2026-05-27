@@ -64,13 +64,7 @@ impl View for DatePicker {
         );
 
         // Calendar icon
-        renderer.draw_text(
-            "📅",
-            rect.x + 8.0,
-            rect.y + 10.0,
-            14.0,
-            theme::info(),
-        );
+        renderer.draw_text("📅", rect.x + 8.0, rect.y + 10.0, 14.0, theme::info());
     }
 }
 
@@ -150,13 +144,7 @@ impl View for TimePicker {
             theme::text(),
         );
 
-        renderer.draw_text(
-            "🕐",
-            rect.x + 8.0,
-            rect.y + 10.0,
-            14.0,
-            theme::info(),
-        );
+        renderer.draw_text("🕐", rect.x + 8.0, rect.y + 10.0, 14.0, theme::info());
     }
 }
 

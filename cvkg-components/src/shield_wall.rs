@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A futuristic Scifi-Viking frame.
 /// Features animated glowing borders and 'shield' corner brackets.

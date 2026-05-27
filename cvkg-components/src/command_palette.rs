@@ -1,10 +1,10 @@
+use crate::theme;
 use cvkg_core::load_system_state;
 use cvkg_core::update_system_state;
 use cvkg_core::{
     Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
-use crate::theme;
 use std::sync::Arc;
 
 // System-state hash keys for the command palette
@@ -115,8 +115,7 @@ impl MimirSpotlight {
 
     /// Pre-select a command index via the builder API.
     pub fn select(mut self, index: usize) -> Self {
-        self.selected_index = index
-            .min(self.all_commands.len().saturating_sub(1));
+        self.selected_index = index.min(self.all_commands.len().saturating_sub(1));
         self
     }
 
@@ -130,11 +129,7 @@ impl MimirSpotlight {
             .iter()
             .filter_map(|cmd| {
                 let score = fuzzy_match(&cmd.label, search_text);
-                if score > 0 {
-                    Some((cmd, score))
-                } else {
-                    None
-                }
+                if score > 0 { Some((cmd, score)) } else { None }
             })
             .collect();
         matched.sort_by_key(|(_, score)| std::cmp::Reverse(*score));
@@ -167,14 +162,8 @@ impl View for MimirSpotlight {
                 update_system_state(|s| {
                     let mut s = s.clone();
                     s.set_component_state(SPOTLIGHT_OPEN_HASH, self.is_open);
-                    s.set_component_state(
-                        SPOTLIGHT_SELECTED_HASH,
-                        self.selected_index as u64,
-                    );
-                    s.set_component_state(
-                        SPOTLIGHT_SEARCH_HASH,
-                        self.search_text.clone(),
-                    );
+                    s.set_component_state(SPOTLIGHT_SELECTED_HASH, self.selected_index as u64);
+                    s.set_component_state(SPOTLIGHT_SEARCH_HASH, self.search_text.clone());
                     s
                 });
             }
@@ -220,9 +209,7 @@ impl View for MimirSpotlight {
                             update_system_state(|s| {
                                 let mut s = s.clone();
                                 let current: u64 = s
-                                    .get_component_state::<u64>(
-                                        SPOTLIGHT_SELECTED_HASH,
-                                    )
+                                    .get_component_state::<u64>(SPOTLIGHT_SELECTED_HASH)
                                     .map(|v| *v.read().unwrap())
                                     .unwrap_or(0);
                                 let next = if current == 0 {
@@ -238,9 +225,7 @@ impl View for MimirSpotlight {
                             update_system_state(|s| {
                                 let mut s = s.clone();
                                 let current: u64 = s
-                                    .get_component_state::<u64>(
-                                        SPOTLIGHT_SELECTED_HASH,
-                                    )
+                                    .get_component_state::<u64>(SPOTLIGHT_SELECTED_HASH)
                                     .map(|v| *v.read().unwrap())
                                     .unwrap_or(0);
                                 let next = if filtered_count == 0 {
@@ -262,16 +247,16 @@ impl View for MimirSpotlight {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
-                    if key == "Escape" {
-                        update_system_state(|s| {
-                            let mut s = s.clone();
-                            s.set_component_state(SPOTLIGHT_OPEN_HASH, false);
-                            s.set_component_state(SPOTLIGHT_SELECTED_HASH, 0u64);
-                            s.set_component_state(SPOTLIGHT_SEARCH_HASH, String::new());
-                            s
-                        });
-                    }
+                if let Event::KeyDown { key } = event
+                    && key == "Escape"
+                {
+                    update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(SPOTLIGHT_OPEN_HASH, false);
+                        s.set_component_state(SPOTLIGHT_SELECTED_HASH, 0u64);
+                        s.set_component_state(SPOTLIGHT_SEARCH_HASH, String::new());
+                        s
+                    });
                 }
             }),
         );
@@ -284,16 +269,16 @@ impl View for MimirSpotlight {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let Event::KeyDown { key } = event {
-                        if key == "Return" || key == "Enter" {
-                            let state = load_system_state();
-                            let open = state
-                                .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
-                                .map(|v| *v.read().unwrap())
-                                .unwrap_or(false);
-                            if open {
-                                (action)();
-                            }
+                    if let Event::KeyDown { key } = event
+                        && (key == "Return" || key == "Enter")
+                    {
+                        let state = load_system_state();
+                        let open = state
+                            .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
+                            .map(|v| *v.read().unwrap())
+                            .unwrap_or(false);
+                        if open {
+                            (action)();
                         }
                     }
                 }),
@@ -307,8 +292,7 @@ impl View for MimirSpotlight {
         let palette_width = 480.0;
         let item_height = 36.0;
         let top_padding = 56.0;
-        let palette_height =
-            (filtered_count as f32 * item_height).min(rect.height - 40.0);
+        let palette_height = (filtered_count as f32 * item_height).min(rect.height - 40.0);
         let palette_x = rect.x + (rect.width - palette_width) / 2.0;
         let palette_y = rect.y + (rect.height - palette_height) / 2.0;
 
@@ -339,12 +323,7 @@ impl View for MimirSpotlight {
             width: search_rect.width + 4.0,
             height: search_rect.height + 4.0,
         };
-        renderer.stroke_rounded_rect(
-            outline_rect,
-            6.0,
-            [0.0, 0.8, 1.0, 0.8],
-            2.0,
-        );
+        renderer.stroke_rounded_rect(outline_rect, 6.0, theme::accent(), 2.0);
 
         renderer.draw_text(
             &format!("> {}", search_text),
@@ -374,12 +353,7 @@ impl View for MimirSpotlight {
 
             // Selection highlight stroke (focus ring for selected item)
             if is_selected {
-                renderer.stroke_rounded_rect(
-                    cmd_rect,
-                    4.0,
-                    theme::accent(),
-                    1.0,
-                );
+                renderer.stroke_rounded_rect(cmd_rect, 4.0, theme::accent(), 1.0);
             }
 
             let text_color = if is_selected {

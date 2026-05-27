@@ -1,5 +1,4 @@
-use cvkg_core::{
-Event, Never, Rect, Renderer, View};
+use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// Liquid glass tabs with chromatic aberration.
@@ -103,8 +102,6 @@ impl View for BifrostTabs {
                 // Close button hit target
                 if let Some(on_close) = self.on_close.as_ref() {
                     let on_close = on_close.clone();
-                    let close_x = close_x;
-                    let close_y = close_y;
                     let close_sz = close_size;
                     let idx = i;
                     renderer.register_handler(
@@ -152,29 +149,25 @@ impl View for BifrostTabs {
             Arc::new(move |event| {
                 if let Event::KeyDown { key } = event {
                     match key.as_str() {
-                        "ArrowRight" => {
-                            if tab_count > 0 {
-                                let next = (selected + 1) % tab_count;
-                                on_select(next);
-                            }
+                        "ArrowRight" if tab_count > 0 => {
+                            let next = (selected + 1) % tab_count;
+                            on_select(next);
                         }
-                        "ArrowLeft" => {
-                            if tab_count > 0 {
-                                let prev = if selected == 0 { tab_count - 1 } else { selected - 1 };
-                                on_select(prev);
-                            }
+                        "ArrowLeft" if tab_count > 0 => {
+                            let prev = if selected == 0 {
+                                tab_count - 1
+                            } else {
+                                selected - 1
+                            };
+                            on_select(prev);
                         }
-                        "Tab" => {
-                            if tab_count > 0 {
-                                let next = (selected + 1) % tab_count;
-                                on_select(next);
-                            }
+                        "Tab" if tab_count > 0 => {
+                            let next = (selected + 1) % tab_count;
+                            on_select(next);
                         }
                         "w" | "W" => {
-                            if closable {
-                                if let Some(ref cb) = on_close {
-                                    cb(selected);
-                                }
+                            if closable && let Some(ref cb) = on_close {
+                                cb(selected);
                             }
                         }
                         _ => {}

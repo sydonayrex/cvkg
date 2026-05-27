@@ -38,6 +38,9 @@ version = "0.30"
 [dependencies.arc-swap]
 version = "1.9"
 
+[dependencies.arboard]
+version = "3.4"
+
 [dependencies.cvkg-core]
 version = "0.1.22"
 
@@ -45,6 +48,9 @@ version = "0.1.22"
 version = "0.1.22"
 
 [dependencies.cvkg-vdom]
+version = "0.1.22"
+
+[dependencies.cvkg-themes]
 version = "0.1.22"
 
 [dependencies.image]
@@ -75,3 +81,13 @@ default-features = false
 
 [dependencies.winit]
 version = "0.30"
+
+[dependencies.muda]
+version = "0.19.2"
+
+[dependencies.rodio]
+version = "0.21"
+
+[target.'cfg(target_os = "linux")'.dependencies.muda]
+version = "0.19.2"
+features = ["gtk"]

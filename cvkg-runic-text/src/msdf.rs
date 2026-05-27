@@ -4,7 +4,6 @@
 // text rendering. Generates SDF from rasterized bitmaps and packs them into
 // a shelf-packed atlas.
 
-
 /// A single glyph in the MSDF atlas.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MsdfGlyph {

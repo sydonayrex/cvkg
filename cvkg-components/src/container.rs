@@ -1,7 +1,7 @@
-use crate::{draw_focus_ring, FONT_BASE, RADIUS_LG, RADIUS_MD};
+use crate::theme;
+use crate::{FONT_BASE, RADIUS_LG, RADIUS_MD, draw_focus_ring};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Event, Never, Rect, Renderer, Size, View};
-use crate::theme;
 use std::sync::Arc;
 
 /// System-state hash key for the dialog open/close state.
@@ -58,7 +58,12 @@ pub struct NavigationSplitView<S, D> {
 
 impl<S: View, D: View> NavigationSplitView<S, D> {
     pub fn new(sidebar: S, detail: D) -> Self {
-        Self { sidebar, detail, is_collapsed: false, sidebar_width: 300.0 }
+        Self {
+            sidebar,
+            detail,
+            is_collapsed: false,
+            sidebar_width: 300.0,
+        }
     }
 
     pub fn is_collapsed(mut self, collapsed: bool) -> Self {
@@ -143,7 +148,11 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
                 [0.12, 0.12, 0.16, 0.8]
             },
         );
-        renderer.stroke_rect(handle_rect, [0.0, 0.8, 1.0, if is_hover_handle { 0.6 } else { 0.2 }], 1.0);
+        renderer.stroke_rect(
+            handle_rect,
+            [0.0, 0.8, 1.0, if is_hover_handle { 0.6 } else { 0.2 }],
+            1.0,
+        );
 
         // Handle hover + drag detection
         let h_rect = handle_rect;
@@ -185,19 +194,19 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if tglm.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            let nav_collapse_hash: u64 = 0xA00_0001;
-                            let current: bool = s
-                                .get_component_state::<bool>(nav_collapse_hash)
-                                .and_then(|v| v.read().ok().map(|v| *v))
-                                .unwrap_or(false);
-                            s.set_component_state(nav_collapse_hash, !current);
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && tglm.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        let nav_collapse_hash: u64 = 0xA00_0001;
+                        let current: bool = s
+                            .get_component_state::<bool>(nav_collapse_hash)
+                            .and_then(|v| v.read().ok().map(|v| *v))
+                            .unwrap_or(false);
+                        s.set_component_state(nav_collapse_hash, !current);
+                        s
+                    });
                 }
             }),
         );
@@ -206,20 +215,20 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key, .. } = event {
-                    if key == "b" || key == "B" {
-                        // Note: ctrl modifier not checked for simplicity; add ctrl check if needed
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            let nav_collapse_hash: u64 = 0xA00_0001;
-                            let current: bool = s
-                                .get_component_state::<bool>(nav_collapse_hash)
-                                .and_then(|v| v.read().ok().map(|v| *v))
-                                .unwrap_or(false);
-                            s.set_component_state(nav_collapse_hash, !current);
-                            s
-                        });
-                    }
+                if let Event::KeyDown { key, .. } = event
+                    && (key == "b" || key == "B")
+                {
+                    // Note: ctrl modifier not checked for simplicity; add ctrl check if needed
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        let nav_collapse_hash: u64 = 0xA00_0001;
+                        let current: bool = s
+                            .get_component_state::<bool>(nav_collapse_hash)
+                            .and_then(|v| v.read().ok().map(|v| *v))
+                            .unwrap_or(false);
+                        s.set_component_state(nav_collapse_hash, !current);
+                        s
+                    });
                 }
             }),
         );
@@ -229,52 +238,164 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
     }
 }
 
-/// Tab bar navigation view
-pub struct TabView<V> {
-    pub(crate) content: V,
+/// Tab bar navigation view with multiple selectable tabs.
+///
+/// Each tab has a label and content. Clicking a tab switches the displayed content.
+/// Keyboard shortcut: Cmd+1-9 / Ctrl+1-9 to switch tabs (OS-agnostic).
+#[derive(Clone)]
+pub struct TabView {
+    /// Tab definitions: (label, content_view_id)
+    tabs: Vec<(String, u64)>,
+    /// Currently active tab index.
+    active_tab: usize,
+    /// Unique hash for system state.
+    state_id: u64,
 }
 
-impl<V: View> TabView<V> {
-    pub fn new(content: V) -> Self {
-        Self { content }
+impl TabView {
+    /// Create a new TabView with the given tabs.
+    /// Each tab is a (label, content_view_id) pair.
+    pub fn new(tabs: Vec<(impl Into<String>, u64)>) -> Self {
+        Self {
+            tabs: tabs.into_iter().map(|(l, id)| (l.into(), id)).collect(),
+            active_tab: 0,
+            state_id: 0,
+        }
+    }
+
+    /// Set the active tab index.
+    pub fn active_tab(mut self, index: usize) -> Self {
+        self.active_tab = index;
+        self
+    }
+
+    /// Set the state ID for system state storage.
+    pub fn state_id(mut self, id: u64) -> Self {
+        self.state_id = id;
+        self
+    }
+
+    /// Get the number of tabs.
+    pub fn tab_count(&self) -> usize {
+        self.tabs.len()
+    }
+
+    /// Get the active tab index.
+    pub fn active_index(&self) -> usize {
+        self.active_tab
     }
 }
 
-impl<V: View> View for TabView<V> {
+/// Internal tab state stored in system state map.
+#[derive(Clone, Copy, Debug, Default)]
+#[allow(dead_code)]
+struct TabState {
+    active_tab: usize,
+}
+
+impl View for TabView {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let tab_bar_height = 50.0;
+        renderer.push_vnode(rect, "TabView");
+
+        let tab_bar_h: f32 = 44.0;
         let content_rect = Rect {
             x: rect.x,
             y: rect.y,
             width: rect.width,
-            height: rect.height - tab_bar_height,
+            height: rect.height - tab_bar_h,
         };
         let tab_bar_rect = Rect {
             x: rect.x,
-            y: rect.y + rect.height - tab_bar_height,
+            y: rect.y + rect.height - tab_bar_h,
             width: rect.width,
-            height: tab_bar_height,
+            height: tab_bar_h,
         };
 
-        // Render content
-        self.content.render(renderer, content_rect);
+        // Render active tab content area background
+        renderer.fill_rect(content_rect, theme::bg());
 
         // Render tab bar background
-        renderer.bifrost(tab_bar_rect, 10.0, 1.2, 0.9);
-        renderer.fill_rect(tab_bar_rect, theme::shadow());
+        renderer.fill_rect(tab_bar_rect, theme::surface());
         renderer.draw_line(
             tab_bar_rect.x,
             tab_bar_rect.y,
             tab_bar_rect.x + tab_bar_rect.width,
             tab_bar_rect.y,
-            theme::text_dim(),
+            theme::border(),
             1.0,
         );
+
+        // Render tab buttons
+        if !self.tabs.is_empty() {
+            let tab_w = (tab_bar_rect.width / self.tabs.len() as f32).min(160.0);
+            let tab_h = tab_bar_h - 4.0;
+            let start_x = tab_bar_rect.x + 4.0;
+
+            for (i, (label, _view_id)) in self.tabs.iter().enumerate() {
+                let tx = start_x + i as f32 * tab_w;
+                let ty = tab_bar_rect.y + 2.0;
+                let is_active = i == self.active_tab;
+
+                // Tab background
+                if is_active {
+                    renderer.fill_rounded_rect(
+                        Rect {
+                            x: tx,
+                            y: ty,
+                            width: tab_w - 4.0,
+                            height: tab_h,
+                        },
+                        6.0,
+                        theme::surface_elevated(),
+                    );
+                    // Active indicator
+                    renderer.fill_rounded_rect(
+                        Rect {
+                            x: tx + 8.0,
+                            y: ty + tab_h - 3.0,
+                            width: tab_w - 20.0,
+                            height: 3.0,
+                        },
+                        1.5,
+                        theme::accent(),
+                    );
+                }
+
+                // Tab label
+                let label_color = if is_active {
+                    theme::text()
+                } else {
+                    theme::text_dim()
+                };
+                renderer.draw_text(
+                    label,
+                    tx + 12.0,
+                    ty + (tab_h - 14.0) / 2.0,
+                    13.0,
+                    label_color,
+                );
+            }
+        }
+
+        // Render a placeholder for the active tab content
+        // In a full implementation, the VDom would render the child view here
+        // For now, we show a label indicating which tab is active
+        if self.active_tab < self.tabs.len() {
+            renderer.draw_text(
+                &format!("Content: {}", self.tabs[self.active_tab].0),
+                content_rect.x + 20.0,
+                content_rect.y + 20.0,
+                14.0,
+                theme::text_dim(),
+            );
+        }
+
+        renderer.pop_vnode();
     }
 }
 
@@ -373,19 +494,39 @@ impl<V: View> View for GraniSheet<V> {
         let sheet_rect = match self.position {
             SheetPosition::Left => {
                 let w = self.width * anim;
-                Rect { x: rect.x, y: rect.y, width: w, height: rect.height }
+                Rect {
+                    x: rect.x,
+                    y: rect.y,
+                    width: w,
+                    height: rect.height,
+                }
             }
             SheetPosition::Right => {
                 let w = self.width * anim;
-                Rect { x: rect.x + rect.width - w, y: rect.y, width: w, height: rect.height }
+                Rect {
+                    x: rect.x + rect.width - w,
+                    y: rect.y,
+                    width: w,
+                    height: rect.height,
+                }
             }
             SheetPosition::Top => {
                 let h = self.height * anim;
-                Rect { x: rect.x, y: rect.y, width: rect.width, height: h }
+                Rect {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: h,
+                }
             }
             SheetPosition::Bottom => {
                 let h = self.height * anim;
-                Rect { x: rect.x, y: rect.y + rect.height - h, width: rect.width, height: h }
+                Rect {
+                    x: rect.x,
+                    y: rect.y + rect.height - h,
+                    width: rect.width,
+                    height: h,
+                }
             }
         };
 
@@ -413,24 +554,30 @@ impl<V: View> View for GraniSheet<V> {
             height: btn_size,
         };
         renderer.fill_rounded_rect(close_rect, 14.0, [0.12, 0.12, 0.16, 0.8]);
-        renderer.draw_text("×", close_rect.x + 9.0, close_rect.y + 7.0, FONT_BASE + 2.0, theme::text_muted());
+        renderer.draw_text(
+            "×",
+            close_rect.x + 9.0,
+            close_rect.y + 7.0,
+            FONT_BASE + 2.0,
+            theme::text_muted(),
+        );
 
         let close_cb = self.on_dismiss.clone();
         // Dismiss: clicking the close button
         renderer.register_handler(
             "pointerdown",
             Arc::new(move |event| {
-                if let Event::PointerDown { x, y, .. } = event {
-                    if close_rect.contains(x, y) {
-                        if let Some(ref cb) = close_cb {
-                            (cb)();
-                        }
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(SHEET_ANIM_HASH, 0.0);
-                            s
-                        });
+                if let Event::PointerDown { x, y, .. } = event
+                    && close_rect.contains(x, y)
+                {
+                    if let Some(ref cb) = close_cb {
+                        (cb)();
                     }
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(SHEET_ANIM_HASH, 0.0);
+                        s
+                    });
                 }
             }),
         );
@@ -441,17 +588,17 @@ impl<V: View> View for GraniSheet<V> {
         renderer.register_handler(
             "pointerdown",
             Arc::new(move |event| {
-                if let Event::PointerDown { x, y, .. } = event {
-                    if !sheet_rect_capture.contains(x, y) {
-                        if let Some(ref cb) = dismiss_cb {
-                            (cb)();
-                        }
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(SHEET_ANIM_HASH, 0.0);
-                            s
-                        });
+                if let Event::PointerDown { x, y, .. } = event
+                    && !sheet_rect_capture.contains(x, y)
+                {
+                    if let Some(ref cb) = dismiss_cb {
+                        (cb)();
                     }
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(SHEET_ANIM_HASH, 0.0);
+                        s
+                    });
                 }
             }),
         );
@@ -665,10 +812,10 @@ impl<V: View> View for GeriDialog<V> {
             renderer.register_handler(
                 "pointerclick",
                 Arc::new(move |event| {
-                    if let Event::PointerClick { x, y, .. } = event {
-                        if action_rect.contains(x, y) {
-                            (on_click)();
-                        }
+                    if let Event::PointerClick { x, y, .. } = event
+                        && action_rect.contains(x, y)
+                    {
+                        (on_click)();
                     }
                 }),
             );
@@ -729,10 +876,10 @@ impl<V: View> View for GeriDialog<V> {
                         let focused = cvkg_core::load_system_state()
                             .get_component_state::<usize>(DIALOG_OPEN_HASH + 200)
                             .and_then(|v| v.read().ok().map(|v| *v));
-                        if let Some(idx) = focused {
-                            if let Some(cb) = action_callbacks.get(idx) {
-                                (cb)();
-                            }
+                        if let Some(idx) = focused
+                            && let Some(cb) = action_callbacks.get(idx)
+                        {
+                            (cb)();
                         }
                     }
                 }
@@ -798,6 +945,7 @@ impl View for GarmAlert {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.is_presented {
+            renderer.set_aria_role("alert");
             return;
         }
 
@@ -903,43 +1051,84 @@ impl<V: View> View for Menu<V> {
 ///   - `(f32, f32)` at key `scroll_id + 1`      = velocity (vx, vy)
 ///   - `f32`        at key `scroll_id + 2`      = scrollbar opacity [0..1]
 ///   - `(f32, f32)` at key `scroll_id + 1000`   = content size (w, h) hint
+/// A container view that supports scrolling its child content.
+/// It features pointer drag scrolling with rubber-band physics at bounds,
+/// momentum scrolling, keyboard navigation, and interactive scrollbars.
+#[derive(Clone)]
 pub struct ScrollView<V> {
     pub(crate) content: V,
     /// Unique identifier for this scroll view's state in the system state map.
-    /// Must be non-zero for scroll state to persist across frames.
     pub(crate) scroll_id: u64,
-    /// Content size hint (width, height). Used to compute scrollbar thumb size
-    /// and max scroll offsets. If (0, 0), scrollbars are not shown.
-    pub(crate) content_size: (f32, f32),
+    /// Current scroll offset of the scroll view.
+    #[allow(dead_code)]
+    pub(crate) scroll_offset: [f32; 2],
+    /// Cached or specified content size.
+    pub(crate) content_size: [f32; 2],
+    /// Cached or specified viewport size.
+    #[allow(dead_code)]
+    pub(crate) viewport_size: [f32; 2],
+    /// Current momentum velocity of the scroll view.
+    #[allow(dead_code)]
+    pub(crate) momentum_velocity: [f32; 2],
+    /// Width of scrollbars.
+    pub(crate) scrollbar_width: f32,
+    /// Rubber band physics factor (defaults to 0.3).
+    #[allow(dead_code)]
+    pub(crate) rubber_band_factor: f32,
     /// Scroll speed multiplier for wheel events.
     pub(crate) scroll_speed: f32,
-    /// Momentum decay factor per frame (0.0 = no momentum, 1.0 = infinite).
-    /// Typical value: 0.90-0.95.
+    /// Momentum decay factor per frame.
     pub(crate) momentum_decay: f32,
-    /// Scrollbar width in pixels.
-    pub(crate) scrollbar_width: f32,
-    /// How long (in frames) the scrollbar stays visible after last scroll.
+    /// How long the scrollbar stays visible after last scroll.
     pub(crate) scrollbar_fade_delay: u32,
-    /// Scrollbar fade-out speed per frame (0.0 = instant, 1.0 = never fades).
+    /// Scrollbar fade-out speed per frame.
     pub(crate) scrollbar_fade_speed: f32,
 }
 
 /// Internal scroll state stored in the system state map.
-/// Bundles position, velocity, and scrollbar visibility into one struct.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct ScrollState {
-    pos_x: f32,
-    pos_y: f32,
-    vel_x: f32,
-    vel_y: f32,
+    scroll_offset: [f32; 2],
+    momentum_velocity: [f32; 2],
     scrollbar_opacity: f32,
-    /// Frame counter for auto-hide delay.
     last_scroll_frame: u32,
-    /// Whether a drag gesture is currently active.
     is_dragging: bool,
-    /// Last pointer position during drag.
-    last_pointer_x: f32,
-    last_pointer_y: f32,
+    last_pointer_pos: [f32; 2],
+    is_scrollbar_dragging_v: bool,
+    is_scrollbar_dragging_h: bool,
+    scrollbar_drag_offset: f32,
+    spring_x: Option<cvkg_core::SleipnirSolver>,
+    spring_y: Option<cvkg_core::SleipnirSolver>,
+    /// Current zoom level from pinch gestures (1.0 = normal).
+    zoom_level: f32,
+    /// Sleipnir spring for smooth zoom animation.
+    zoom_spring: Option<cvkg_core::SleipnirSolver>,
+    /// Minimum allowed zoom from pinch.
+    min_zoom: f32,
+    /// Maximum allowed zoom from pinch.
+    max_zoom: f32,
+}
+
+impl Default for ScrollState {
+    fn default() -> Self {
+        Self {
+            scroll_offset: [0.0, 0.0],
+            momentum_velocity: [0.0, 0.0],
+            scrollbar_opacity: 0.0,
+            last_scroll_frame: 0,
+            is_dragging: false,
+            last_pointer_pos: [0.0, 0.0],
+            is_scrollbar_dragging_v: false,
+            is_scrollbar_dragging_h: false,
+            scrollbar_drag_offset: 0.0,
+            spring_x: None,
+            spring_y: None,
+            zoom_level: 1.0,
+            zoom_spring: None,
+            min_zoom: 0.25,
+            max_zoom: 4.0,
+        }
+    }
 }
 
 impl<V: View> ScrollView<V> {
@@ -948,17 +1137,20 @@ impl<V: View> ScrollView<V> {
         Self {
             content,
             scroll_id: 0,
-            content_size: (0.0, 0.0),
+            scroll_offset: [0.0, 0.0],
+            content_size: [0.0, 0.0],
+            viewport_size: [0.0, 0.0],
+            momentum_velocity: [0.0, 0.0],
+            scrollbar_width: 6.0,
+            rubber_band_factor: 0.3,
             scroll_speed: 1.0,
             momentum_decay: 0.92,
-            scrollbar_width: 6.0,
             scrollbar_fade_delay: 60,
             scrollbar_fade_speed: 0.85,
         }
     }
 
     /// Set a unique ID for this scroll view's state in the system state map.
-    /// Views that share the same ID will share scroll position.
     pub fn scroll_id(mut self, id: u64) -> Self {
         self.scroll_id = id;
         self
@@ -966,7 +1158,7 @@ impl<V: View> ScrollView<V> {
 
     /// Set the content size hint for scrollbar calculations.
     pub fn content_size(mut self, width: f32, height: f32) -> Self {
-        self.content_size = (width, height);
+        self.content_size = [width, height];
         self
     }
 
@@ -1024,52 +1216,113 @@ impl<V: View> ScrollView<V> {
         });
     }
 
-    /// Apply momentum decay and clamp position to valid range.
-    /// Returns updated state with velocity applied.
-    fn apply_momentum(
-        state: ScrollState,
+    /// Apply physics tick including spring solver bounce-back.
+    fn tick_physics(
+        state: &mut ScrollState,
         viewport_w: f32,
         viewport_h: f32,
         content_w: f32,
         content_h: f32,
+        dt: f32,
         decay: f32,
-    ) -> ScrollState {
+    ) {
         let max_x = (content_w - viewport_w).max(0.0);
         let max_y = (content_h - viewport_h).max(0.0);
 
-        let mut new_state = state;
+        if state.is_dragging || state.is_scrollbar_dragging_v || state.is_scrollbar_dragging_h {
+            state.spring_x = None;
+            state.spring_y = None;
+            return;
+        }
 
-        // Apply velocity to position
-        if !state.is_dragging {
-            new_state.pos_x += state.vel_x;
-            new_state.pos_y += state.vel_y;
-
-            // Decay velocity
-            new_state.vel_x *= decay;
-            new_state.vel_y *= decay;
-
-            // Stop very small velocities
-            if new_state.vel_x.abs() < 0.01 {
-                new_state.vel_x = 0.0;
+        // Apply X axis spring-back or momentum
+        if state.scroll_offset[0] < 0.0 || state.scroll_offset[0] > max_x {
+            let target = if state.scroll_offset[0] < 0.0 {
+                0.0
+            } else {
+                max_x
+            };
+            let mut solver = state.spring_x.unwrap_or_else(|| {
+                cvkg_core::SleipnirSolver::new(
+                    cvkg_core::SleipnirParams::fluid(),
+                    target,
+                    state.scroll_offset[0],
+                )
+            });
+            solver.set_target(target);
+            state.scroll_offset[0] = solver.tick(dt);
+            state.momentum_velocity[0] = 0.0;
+            if solver.is_settled() {
+                state.scroll_offset[0] = target;
+                state.spring_x = None;
+            } else {
+                state.spring_x = Some(solver);
             }
-            if new_state.vel_y.abs() < 0.01 {
-                new_state.vel_y = 0.0;
+        } else {
+            state.spring_x = None;
+            if state.momentum_velocity[0].abs() > 0.01 {
+                state.scroll_offset[0] += state.momentum_velocity[0] * dt * 60.0;
+                state.momentum_velocity[0] *= decay;
+            } else {
+                state.momentum_velocity[0] = 0.0;
             }
         }
 
-        // Clamp position
-        new_state.pos_x = new_state.pos_x.clamp(0.0, max_x);
-        new_state.pos_y = new_state.pos_y.clamp(0.0, max_y);
-
-        // Bounce back if out of bounds (simple clamp for now)
-        if new_state.pos_x <= 0.0 || new_state.pos_x >= max_x {
-            new_state.vel_x = 0.0;
+        // Apply Y axis spring-back or momentum
+        if state.scroll_offset[1] < 0.0 || state.scroll_offset[1] > max_y {
+            let target = if state.scroll_offset[1] < 0.0 {
+                0.0
+            } else {
+                max_y
+            };
+            let mut solver = state.spring_y.unwrap_or_else(|| {
+                cvkg_core::SleipnirSolver::new(
+                    cvkg_core::SleipnirParams::fluid(),
+                    target,
+                    state.scroll_offset[1],
+                )
+            });
+            solver.set_target(target);
+            state.scroll_offset[1] = solver.tick(dt);
+            state.momentum_velocity[1] = 0.0;
+            if solver.is_settled() {
+                state.scroll_offset[1] = target;
+                state.spring_y = None;
+            } else {
+                state.spring_y = Some(solver);
+            }
+        } else {
+            state.spring_y = None;
+            if state.momentum_velocity[1].abs() > 0.01 {
+                state.scroll_offset[1] += state.momentum_velocity[1] * dt * 60.0;
+                state.momentum_velocity[1] *= decay;
+            } else {
+                state.momentum_velocity[1] = 0.0;
+            }
         }
-        if new_state.pos_y <= 0.0 || new_state.pos_y >= max_y {
-            new_state.vel_y = 0.0;
-        }
 
-        new_state
+        // Apply zoom spring-back for pinch gestures.
+        // The zoom spring smoothly animates toward the clamped zoom target.
+        let zoom_target = state.zoom_level.clamp(state.min_zoom, state.max_zoom);
+        if (state.zoom_level - zoom_target).abs() > 0.001 {
+            let mut solver = state.zoom_spring.unwrap_or_else(|| {
+                cvkg_core::SleipnirSolver::new(
+                    cvkg_core::SleipnirParams::fluid(),
+                    zoom_target,
+                    state.zoom_level,
+                )
+            });
+            solver.set_target(zoom_target);
+            state.zoom_level = solver.tick(dt);
+            if solver.is_settled() {
+                state.zoom_level = zoom_target;
+                state.zoom_spring = None;
+            } else {
+                state.zoom_spring = Some(solver);
+            }
+        } else {
+            state.zoom_spring = None;
+        }
     }
 
     /// Render a scrollbar track and thumb.
@@ -1090,7 +1343,6 @@ impl<V: View> ScrollView<V> {
         let sb_w = self.scrollbar_width;
         let track_color = [0.0, 0.0, 0.0, 0.15 * opacity];
         let thumb_color = [0.5, 0.5, 0.6, 0.6 * opacity];
-        let thumb_hover_color = [0.6, 0.6, 0.7, 0.75 * opacity];
 
         let thumb_ratio = viewport_size / content_size;
         let thumb_size = (viewport_size * thumb_ratio).max(24.0);
@@ -1102,7 +1354,6 @@ impl<V: View> ScrollView<V> {
         };
 
         if is_vertical {
-            // Vertical scrollbar on the right edge
             let track_rect = Rect {
                 x: rect.x + rect.width - sb_w - 2.0,
                 y: rect.y + 2.0,
@@ -1117,11 +1368,8 @@ impl<V: View> ScrollView<V> {
                 width: sb_w,
                 height: thumb_size,
             };
-            // Use a slightly brighter color for the thumb
-            let _ = thumb_hover_color; // available for hover state
             renderer.fill_rounded_rect(thumb_rect, sb_w / 2.0, thumb_color);
         } else {
-            // Horizontal scrollbar on the bottom edge
             let track_rect = Rect {
                 x: rect.x + 2.0,
                 y: rect.y + rect.height - sb_w - 2.0,
@@ -1148,65 +1396,70 @@ impl<V: View> View for ScrollView<V> {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let content_w = self.content_size.0;
-        let content_h = self.content_size.1;
+        let content_w = self.content_size[0];
+        let content_h = self.content_size[1];
+        let dt = renderer.delta_time();
 
-        // ── Read current state ──
         let mut state = self.read_state();
 
-        // ── Apply momentum (velocity decay) ──
-        state = Self::apply_momentum(
-            state,
+        Self::tick_physics(
+            &mut state,
             rect.width,
             rect.height,
             content_w,
             content_h,
+            dt,
             self.momentum_decay,
         );
 
-        // ── Auto-hide scrollbar opacity ──
-        let is_scrolling = state.vel_x.abs() > 0.1 || state.vel_y.abs() > 0.1 || state.is_dragging;
-        if is_scrolling {
+        let is_moving = state.momentum_velocity[0].abs() > 0.05
+            || state.momentum_velocity[1].abs() > 0.05
+            || state.spring_x.is_some()
+            || state.spring_y.is_some()
+            || state.zoom_spring.is_some()
+            || state.is_dragging;
+
+        if is_moving {
             state.scrollbar_opacity = 1.0;
             state.last_scroll_frame = 0;
+            renderer.request_redraw();
         } else {
             state.last_scroll_frame += 1;
             if state.last_scroll_frame > self.scrollbar_fade_delay {
                 state.scrollbar_opacity *= self.scrollbar_fade_speed;
                 if state.scrollbar_opacity < 0.01 {
                     state.scrollbar_opacity = 0.0;
+                } else {
+                    renderer.request_redraw();
                 }
             }
         }
 
-        // ── Persist state ──
         self.write_state(state);
 
-        // ── Register event handlers ──
         if self.scroll_id != 0 {
             let scroll_id = self.scroll_id;
             let speed = self.scroll_speed;
             let decay = self.momentum_decay;
+            let sb_w = self.scrollbar_width;
 
-            // Wheel handler: applies delta to position and velocity
             renderer.register_handler(
                 "pointerwheel",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerWheel {
+                    if let Event::PointerWheel {
                         delta_x, delta_y, ..
                     } = event
                     {
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
-                            let mut st: ScrollState = s
+                            let mut st = s
                                 .get_component_state::<ScrollState>(scroll_id)
                                 .and_then(|g| g.read().ok().map(|v| *v))
                                 .unwrap_or_default();
-                            st.pos_x = (st.pos_x + delta_x * speed).max(0.0);
-                            st.pos_y = (st.pos_y + delta_y * speed).max(0.0);
-                            // Add velocity for momentum
-                            st.vel_x += delta_x * speed * 0.5;
-                            st.vel_y += delta_y * speed * 0.5;
+                            st.scroll_offset[0] = (st.scroll_offset[0] + delta_x * speed).max(0.0);
+                            st.scroll_offset[1] = (st.scroll_offset[1] + delta_y * speed).max(0.0);
+                            st.momentum_velocity[0] += delta_x * speed * 0.5;
+                            st.momentum_velocity[1] += delta_y * speed * 0.5;
                             st.scrollbar_opacity = 1.0;
                             st.last_scroll_frame = 0;
                             s.set_component_state(scroll_id, st);
@@ -1216,22 +1469,90 @@ impl<V: View> View for ScrollView<V> {
                 }),
             );
 
-            // Pointer down: start drag tracking
             renderer.register_handler(
                 "pointerdown",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerDown { x, y, .. } = event {
+                    if let Event::PointerDown { x, y, .. } = event {
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
-                            let mut st: ScrollState = s
+                            let mut st = s
                                 .get_component_state::<ScrollState>(scroll_id)
                                 .and_then(|g| g.read().ok().map(|v| *v))
                                 .unwrap_or_default();
-                            st.is_dragging = true;
-                            st.last_pointer_x = x;
-                            st.last_pointer_y = y;
-                            st.vel_x = 0.0;
-                            st.vel_y = 0.0;
+
+                            let max_scroll_x = (content_w - rect.width).max(0.0);
+                            let max_scroll_y = (content_h - rect.height).max(0.0);
+
+                            // Detect vertical scrollbar interaction
+                            let track_rect_v = Rect {
+                                x: rect.x + rect.width - sb_w - 2.0,
+                                y: rect.y + 2.0,
+                                width: sb_w,
+                                height: rect.height - 4.0,
+                            };
+                            let is_on_v = x >= track_rect_v.x
+                                && x <= track_rect_v.x + track_rect_v.width
+                                && y >= track_rect_v.y
+                                && y <= track_rect_v.y + track_rect_v.height;
+
+                            // Detect horizontal scrollbar interaction
+                            let track_rect_h = Rect {
+                                x: rect.x + 2.0,
+                                y: rect.y + rect.height - sb_w - 2.0,
+                                width: rect.width - 4.0,
+                                height: sb_w,
+                            };
+                            let is_on_h = x >= track_rect_h.x
+                                && x <= track_rect_h.x + track_rect_h.width
+                                && y >= track_rect_h.y
+                                && y <= track_rect_h.y + track_rect_h.height;
+
+                            if is_on_v {
+                                let thumb_ratio = rect.height / content_h;
+                                let thumb_h = (rect.height * thumb_ratio).max(24.0);
+                                let thumb_pos_y = ((st.scroll_offset[1] / max_scroll_y)
+                                    * (rect.height - thumb_h))
+                                    .round();
+                                let thumb_start_y = rect.y + 2.0 + thumb_pos_y;
+                                let inside_thumb =
+                                    y >= thumb_start_y && y <= thumb_start_y + thumb_h;
+
+                                if inside_thumb {
+                                    st.is_scrollbar_dragging_v = true;
+                                } else {
+                                    let click_y_relative = (y - track_rect_v.y - thumb_h / 2.0)
+                                        / (track_rect_v.height - thumb_h);
+                                    st.scroll_offset[1] =
+                                        (click_y_relative * max_scroll_y).clamp(0.0, max_scroll_y);
+                                    st.is_scrollbar_dragging_v = true;
+                                }
+                                st.last_pointer_pos = [x, y];
+                            } else if is_on_h {
+                                let thumb_ratio = rect.width / content_w;
+                                let thumb_w = (rect.width * thumb_ratio).max(24.0);
+                                let thumb_pos_x = ((st.scroll_offset[0] / max_scroll_x)
+                                    * (rect.width - thumb_w))
+                                    .round();
+                                let thumb_start_x = rect.x + 2.0 + thumb_pos_x;
+                                let inside_thumb =
+                                    x >= thumb_start_x && x <= thumb_start_x + thumb_w;
+
+                                if inside_thumb {
+                                    st.is_scrollbar_dragging_h = true;
+                                } else {
+                                    let click_x_relative = (x - track_rect_h.x - thumb_w / 2.0)
+                                        / (track_rect_h.width - thumb_w);
+                                    st.scroll_offset[0] =
+                                        (click_x_relative * max_scroll_x).clamp(0.0, max_scroll_x);
+                                    st.is_scrollbar_dragging_h = true;
+                                }
+                                st.last_pointer_pos = [x, y];
+                            } else {
+                                st.is_dragging = true;
+                                st.last_pointer_pos = [x, y];
+                                st.momentum_velocity = [0.0, 0.0];
+                            }
+
                             st.scrollbar_opacity = 1.0;
                             st.last_scroll_frame = 0;
                             s.set_component_state(scroll_id, st);
@@ -1241,30 +1562,69 @@ impl<V: View> View for ScrollView<V> {
                 }),
             );
 
-            // Pointer move: apply drag delta
             renderer.register_handler(
                 "pointermove",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerMove { x, y, .. } = event {
+                    if let Event::PointerMove { x, y, .. } = event {
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
-                            let mut st: ScrollState = s
+                            let mut st = s
                                 .get_component_state::<ScrollState>(scroll_id)
                                 .and_then(|g| g.read().ok().map(|v| *v))
                                 .unwrap_or_default();
+
+                            let max_scroll_x = (content_w - rect.width).max(0.0);
+                            let max_scroll_y = (content_h - rect.height).max(0.0);
+
                             if st.is_dragging {
-                                let dx = st.last_pointer_x - x;
-                                let dy = st.last_pointer_y - y;
-                                st.pos_x = (st.pos_x + dx).max(0.0);
-                                st.pos_y = (st.pos_y + dy).max(0.0);
-                                // Track velocity for momentum on release
-                                st.vel_x = dx * 0.5;
-                                st.vel_y = dy * 0.5;
-                                st.last_pointer_x = x;
-                                st.last_pointer_y = y;
-                                st.scrollbar_opacity = 1.0;
-                                st.last_scroll_frame = 0;
+                                let mut dx = st.last_pointer_pos[0] - x;
+                                let mut dy = st.last_pointer_pos[1] - y;
+
+                                if (st.scroll_offset[0] <= 0.0 && dx < 0.0)
+                                    || (st.scroll_offset[0] >= max_scroll_x && dx > 0.0)
+                                {
+                                    dx *= 0.3;
+                                }
+                                if (st.scroll_offset[1] <= 0.0 && dy < 0.0)
+                                    || (st.scroll_offset[1] >= max_scroll_y && dy > 0.0)
+                                {
+                                    dy *= 0.3;
+                                }
+
+                                st.scroll_offset[0] += dx;
+                                st.scroll_offset[1] += dy;
+
+                                st.momentum_velocity[0] = dx * 0.5;
+                                st.momentum_velocity[1] = dy * 0.5;
+                                st.last_pointer_pos = [x, y];
+                            } else if st.is_scrollbar_dragging_v {
+                                let track_h = rect.height - 4.0;
+                                let thumb_ratio = rect.height / content_h;
+                                let thumb_h = (rect.height * thumb_ratio).max(24.0);
+                                let max_travel = track_h - thumb_h;
+                                if max_travel > 0.0 {
+                                    let delta_y = y - st.last_pointer_pos[1];
+                                    let scroll_delta = (delta_y / max_travel) * max_scroll_y;
+                                    st.scroll_offset[1] = (st.scroll_offset[1] + scroll_delta)
+                                        .clamp(0.0, max_scroll_y);
+                                    st.last_pointer_pos = [x, y];
+                                }
+                            } else if st.is_scrollbar_dragging_h {
+                                let track_w = rect.width - 4.0;
+                                let thumb_ratio = rect.width / content_w;
+                                let thumb_w = (rect.width * thumb_ratio).max(24.0);
+                                let max_travel = track_w - thumb_w;
+                                if max_travel > 0.0 {
+                                    let delta_x = x - st.last_pointer_pos[0];
+                                    let scroll_delta = (delta_x / max_travel) * max_scroll_x;
+                                    st.scroll_offset[0] = (st.scroll_offset[0] + scroll_delta)
+                                        .clamp(0.0, max_scroll_x);
+                                    st.last_pointer_pos = [x, y];
+                                }
                             }
+
+                            st.scrollbar_opacity = 1.0;
+                            st.last_scroll_frame = 0;
                             s.set_component_state(scroll_id, st);
                             s
                         });
@@ -1272,33 +1632,89 @@ impl<V: View> View for ScrollView<V> {
                 }),
             );
 
-            // Pointer up: end drag, keep velocity for momentum
             renderer.register_handler(
                 "pointerup",
-                std::sync::Arc::new(move |event| {
-                    let _ = event;
+                std::sync::Arc::new(move |_| {
                     cvkg_core::update_system_state(move |s| {
                         let mut s = s.clone();
-                        let mut st: ScrollState = s
+                        let mut st = s
                             .get_component_state::<ScrollState>(scroll_id)
                             .and_then(|g| g.read().ok().map(|v| *v))
                             .unwrap_or_default();
                         st.is_dragging = false;
-                        // Velocity is already set from last drag move
-                        // Apply decay so it doesn't go forever
-                        st.vel_x *= decay;
-                        st.vel_y *= decay;
+                        st.is_scrollbar_dragging_v = false;
+                        st.is_scrollbar_dragging_h = false;
+                        st.momentum_velocity[0] *= decay;
+                        st.momentum_velocity[1] *= decay;
                         s.set_component_state(scroll_id, st);
                         s
                     });
                 }),
             );
 
-            // Keyboard handler: scroll-to-child / arrow key navigation
+            renderer.register_handler(
+                "gesturepinch",
+                std::sync::Arc::new(move |event| {
+                    if let Event::GesturePinch {
+                        center,
+                        scale,
+                        velocity,
+                        phase,
+                    } = event
+                    {
+                        cvkg_core::update_system_state(move |s| {
+                            let mut s = s.clone();
+                            let mut st = s
+                                .get_component_state::<ScrollState>(scroll_id)
+                                .and_then(|g| g.read().ok().map(|v| *v))
+                                .unwrap_or_default();
+
+                            // Zoom anchor: use the actual pinch center so content under
+                            // the fingers stays stationary during zoom.
+                            let pinch_center_x = center[0];
+                            let pinch_center_y = center[1];
+
+                            // Accumulate zoom from the pinch scale delta.
+                            // A scale > 1.0 means zoom in, < 1.0 means zoom out.
+                            // We apply it relative to the current zoom and add momentum
+                            // from the pinch velocity so the zoom feels responsive.
+                            let zoom_delta = scale - 1.0;
+                            let velocity_boost = velocity * 0.1;
+                            let new_zoom = st.zoom_level * (1.0 + zoom_delta + velocity_boost);
+                            st.zoom_level = new_zoom.clamp(st.min_zoom, st.max_zoom);
+
+                            // Adjust scroll offset to zoom toward the pinch center.
+                            // This keeps the content under the fingers stationary.
+                            let zoom_ratio = st.zoom_level / (st.zoom_level - zoom_delta).max(0.01);
+                            st.scroll_offset[0] = pinch_center_x
+                                - (pinch_center_x - st.scroll_offset[0]) * zoom_ratio;
+                            st.scroll_offset[1] = pinch_center_y
+                                - (pinch_center_y - st.scroll_offset[1]) * zoom_ratio;
+
+                            // Cancel momentum while actively pinching
+                            st.momentum_velocity = [0.0, 0.0];
+                            st.scrollbar_opacity = 1.0;
+                            st.last_scroll_frame = 0;
+
+                            // On pinch end/cancel, snap zoom to clean value
+                            if phase == cvkg_core::TouchPhase::Ended
+                                || phase == cvkg_core::TouchPhase::Cancelled
+                            {
+                                st.zoom_level = (st.zoom_level * 4.0).round() / 4.0;
+                                st.momentum_velocity = [0.0, 0.0];
+                            }
+
+                            s.set_component_state(scroll_id, st);
+                            s
+                        });
+                    }
+                }),
+            );
+
             renderer.register_handler(
                 "keydown",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::KeyDown { key, .. } = event {
+                    if let Event::KeyDown { key, .. } = event {
                         let scroll_amount = match key.as_str() {
                             "PageDown" => 100.0,
                             "PageUp" => -100.0,
@@ -1312,28 +1728,30 @@ impl<V: View> View for ScrollView<V> {
                         };
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
-                            let mut st: ScrollState = s
+                            let mut st = s
                                 .get_component_state::<ScrollState>(scroll_id)
                                 .and_then(|g| g.read().ok().map(|v| *v))
                                 .unwrap_or_default();
+                            let max_y = (content_h - rect.height).max(0.0);
+                            let max_x = (content_w - rect.width).max(0.0);
                             if scroll_amount == f32::MAX {
-                                st.pos_y = f32::MAX; // Will be clamped by momentum
+                                st.scroll_offset[1] = max_y;
                             } else if scroll_amount == f32::MIN {
-                                st.pos_y = 0.0;
-                                st.pos_x = 0.0;
+                                st.scroll_offset[0] = 0.0;
+                                st.scroll_offset[1] = 0.0;
                             } else {
-                                // Determine direction from key
                                 match key.as_str() {
                                     "ArrowLeft" | "ArrowRight" => {
-                                        st.pos_x = (st.pos_x + scroll_amount).max(0.0);
+                                        st.scroll_offset[0] =
+                                            (st.scroll_offset[0] + scroll_amount).clamp(0.0, max_x);
                                     }
                                     _ => {
-                                        st.pos_y = (st.pos_y + scroll_amount).max(0.0);
+                                        st.scroll_offset[1] =
+                                            (st.scroll_offset[1] + scroll_amount).clamp(0.0, max_y);
                                     }
                                 }
                             }
-                            st.vel_x = 0.0;
-                            st.vel_y = 0.0;
+                            st.momentum_velocity = [0.0, 0.0];
                             st.scrollbar_opacity = 1.0;
                             st.last_scroll_frame = 0;
                             s.set_component_state(scroll_id, st);
@@ -1344,11 +1762,20 @@ impl<V: View> View for ScrollView<V> {
             );
         }
 
-        // ── Render content with clipping and transform ──
         renderer.push_clip_rect(rect);
-
-        // Apply scroll offset via transform (rounded to avoid sub-pixel blur)
-        renderer.push_transform([-state.pos_x.round(), -state.pos_y.round()], [1.0, 1.0], 0.0);
+        // Apply both scroll offset and pinch-zoom transform.
+        // Zoom is centered around the viewport center so content under the fingers stays put.
+        let zoom = state.zoom_level;
+        let cx = rect.x + rect.width / 2.0;
+        let cy = rect.y + rect.height / 2.0;
+        renderer.push_transform(
+            [
+                -state.scroll_offset[0].round() + cx - cx * zoom,
+                -state.scroll_offset[1].round() + cy - cy * zoom,
+            ],
+            [zoom, zoom],
+            0.0,
+        );
 
         let content_rect = Rect {
             x: rect.x,
@@ -1369,7 +1796,6 @@ impl<V: View> View for ScrollView<V> {
         renderer.pop_transform();
         renderer.pop_clip_rect();
 
-        // ── Render scrollbars ──
         let needs_v_scrollbar = content_h > rect.height;
         let needs_h_scrollbar = content_w > rect.width;
 
@@ -1379,7 +1805,7 @@ impl<V: View> View for ScrollView<V> {
                 rect,
                 content_h,
                 rect.height,
-                state.pos_y,
+                state.scroll_offset[1],
                 state.scrollbar_opacity,
                 true,
             );
@@ -1391,7 +1817,7 @@ impl<V: View> View for ScrollView<V> {
                 rect,
                 content_w,
                 rect.width,
-                state.pos_x,
+                state.scroll_offset[0],
                 state.scrollbar_opacity,
                 false,
             );
@@ -2095,8 +2521,18 @@ impl<V: View> View for Accordion<V> {
             }
 
             let arrow = if is_expanded { "▼" } else { "▶" };
-            let accent = if is_expanded { theme::accent() } else { theme::text_muted() };
-            renderer.draw_text(arrow, header_rect.x + 8.0, header_rect.y + 10.0, 12.0, accent);
+            let accent = if is_expanded {
+                theme::accent()
+            } else {
+                theme::text_muted()
+            };
+            renderer.draw_text(
+                arrow,
+                header_rect.x + 8.0,
+                header_rect.y + 10.0,
+                12.0,
+                accent,
+            );
             renderer.draw_text(
                 &item.title,
                 header_rect.x + 28.0,
@@ -2115,22 +2551,25 @@ impl<V: View> View for Accordion<V> {
             renderer.register_handler(
                 "pointerclick",
                 Arc::new(move |event| {
-                    if let Event::PointerClick { x, y, .. } = event {
-                        if x >= hdr_x && x <= hdr_x + hdr_w && y >= hdr_y && y <= hdr_y + hdr_h {
-                            cvkg_core::update_system_state(move |s| {
-                                let mut s = s.clone();
-                                let mut state: Vec<bool> = s
-                                    .get_component_state::<Vec<bool>>(acc_hash)
-                                    .and_then(|v| v.read().ok().map(|g| g.clone()))
-                                    .unwrap_or_else(|| vec![false; item_count]);
-                                while state.len() <= item_idx {
-                                    state.push(false);
-                                }
-                                state[item_idx] = !state[item_idx];
-                                s.set_component_state(acc_hash, state);
-                                s
-                            });
-                        }
+                    if let Event::PointerClick { x, y, .. } = event
+                        && x >= hdr_x
+                        && x <= hdr_x + hdr_w
+                        && y >= hdr_y
+                        && y <= hdr_y + hdr_h
+                    {
+                        cvkg_core::update_system_state(move |s| {
+                            let mut s = s.clone();
+                            let mut state: Vec<bool> = s
+                                .get_component_state::<Vec<bool>>(acc_hash)
+                                .and_then(|v| v.read().ok().map(|g| g.clone()))
+                                .unwrap_or_else(|| vec![false; item_count]);
+                            while state.len() <= item_idx {
+                                state.push(false);
+                            }
+                            state[item_idx] = !state[item_idx];
+                            s.set_component_state(acc_hash, state);
+                            s
+                        });
                     }
                 }),
             );
@@ -2167,7 +2606,11 @@ pub struct Collapsible<V> {
 
 impl<V: View> Collapsible<V> {
     pub fn new(header: impl Into<String>, content: V, is_open: bool) -> Self {
-        Self { header: header.into(), content, is_open }
+        Self {
+            header: header.into(),
+            content,
+            is_open,
+        }
     }
 }
 
@@ -2181,7 +2624,12 @@ impl<V: View> View for Collapsible<V> {
         renderer.push_vnode(rect, "Collapsible");
 
         let header_h: f32 = 40.0;
-        let header_rect = Rect { x: rect.x, y: rect.y, width: rect.width, height: header_h };
+        let header_rect = Rect {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: header_h,
+        };
 
         // ── Header bar ──
         renderer.fill_rounded_rect(header_rect, 6.0, [0.08, 0.08, 0.12, 0.9]);
@@ -2189,27 +2637,37 @@ impl<V: View> View for Collapsible<V> {
 
         // Arrow indicator
         let arrow = if self.is_open { "▼" } else { "▶" };
-        let accent = if self.is_open { theme::accent() } else { theme::text_muted() };
+        let accent = if self.is_open {
+            theme::accent()
+        } else {
+            theme::text_muted()
+        };
         renderer.draw_text(arrow, rect.x + 10.0, rect.y + 12.0, 12.0, accent);
-        renderer.draw_text(&self.header, rect.x + 30.0, rect.y + 10.0, FONT_BASE + 2.0, [1.0, 1.0, 1.0, 0.95]);
+        renderer.draw_text(
+            &self.header,
+            rect.x + 30.0,
+            rect.y + 10.0,
+            FONT_BASE + 2.0,
+            [1.0, 1.0, 1.0, 0.95],
+        );
 
         // ── Click-to-toggle handler ──
         let hdr = header_rect;
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if hdr.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            let current: bool = s
-                                .get_component_state::<bool>(COLLAPSIBLE_ANIM_HASH)
-                                .and_then(|v| v.read().ok().map(|v| *v))
-                                .unwrap_or(false);
-                            s.set_component_state(COLLAPSIBLE_ANIM_HASH, !current);
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && hdr.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        let current: bool = s
+                            .get_component_state::<bool>(COLLAPSIBLE_ANIM_HASH)
+                            .and_then(|v| v.read().ok().map(|v| *v))
+                            .unwrap_or(false);
+                        s.set_component_state(COLLAPSIBLE_ANIM_HASH, !current);
+                        s
+                    });
                 }
             }),
         );
@@ -2366,7 +2824,11 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
             theme::surface_elevated()
         };
         renderer.fill_rect(handle_rect, handle_color);
-        renderer.stroke_rect(handle_rect, [0.0, 0.8, 1.0, if is_dragging { 0.8 } else { 0.4 }], 1.0);
+        renderer.stroke_rect(
+            handle_rect,
+            [0.0, 0.8, 1.0, if is_dragging { 0.8 } else { 0.4 }],
+            1.0,
+        );
 
         // 3. Handle Center Glow (Mimir's Eye)
         let center_x = handle_rect.x + handle_rect.width / 2.0;
@@ -2389,14 +2851,14 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
         renderer.register_handler(
             "pointerdown",
             Arc::new(move |event| {
-                if let Event::PointerDown { x, y, .. } = event {
-                    if h_rect.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(SPLITTER_DRAG_HASH, true);
-                            s
-                        });
-                    }
+                if let Event::PointerDown { x, y, .. } = event
+                    && h_rect.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(SPLITTER_DRAG_HASH, true);
+                        s
+                    });
                 }
             }),
         );

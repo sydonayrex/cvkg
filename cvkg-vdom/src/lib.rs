@@ -856,9 +856,10 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     fn set_sdf_shape(&mut self, shape: cvkg_core::layout::SdfShape) {
         if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id) {
-                node.sdf_shape = Some(shape);
-            }
+            && let Some(node) = self.nodes.get_mut(id)
+        {
+            node.sdf_shape = Some(shape);
+        }
     }
 
     fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4], width: f32) {
@@ -1405,10 +1406,21 @@ impl VDom {
         res
     }
 
-    fn sdf_distance(shape: Option<&cvkg_core::layout::SdfShape>, layout: &LayoutRect, x: f32, y: f32) -> f32 {
-        let shape = shape.copied().unwrap_or(cvkg_core::layout::SdfShape::Rect(cvkg_core::layout::Rect {
-            x: layout.x, y: layout.y, width: layout.width, height: layout.height
-        }));
+    fn sdf_distance(
+        shape: Option<&cvkg_core::layout::SdfShape>,
+        layout: &LayoutRect,
+        x: f32,
+        y: f32,
+    ) -> f32 {
+        let shape =
+            shape
+                .copied()
+                .unwrap_or(cvkg_core::layout::SdfShape::Rect(cvkg_core::layout::Rect {
+                    x: layout.x,
+                    y: layout.y,
+                    width: layout.width,
+                    height: layout.height,
+                }));
         match shape {
             cvkg_core::layout::SdfShape::Rect(r) => {
                 let dx = (r.x - x).max(x - (r.x + r.width)).max(0.0);
@@ -1418,12 +1430,14 @@ impl VDom {
                     let in_y = (y - r.y).min(r.y + r.height - y);
                     -in_x.min(in_y)
                 } else {
-                    (dx*dx + dy*dy).sqrt()
+                    (dx * dx + dy * dy).sqrt()
                 }
             }
             cvkg_core::layout::SdfShape::RoundedRect { rect: r, radius } => {
-                let hw = r.width / 2.0; let hh = r.height / 2.0;
-                let cx = r.x + hw; let cy = r.y + hh;
+                let hw = r.width / 2.0;
+                let hh = r.height / 2.0;
+                let cx = r.x + hw;
+                let cy = r.y + hh;
                 let dx = (x - cx).abs() - hw + radius;
                 let dy = (y - cy).abs() - hh + radius;
                 dx.max(0.0).hypot(dy.max(0.0)) + dx.max(dy).min(0.0) - radius
@@ -1451,9 +1465,11 @@ impl VDom {
             for child_id in node.children.iter().rev() {
                 if let Some((hit, hit_prox)) = self.hit_test_recursive(*child_id, x, y) {
                     if let Some(child_node) = self.nodes.get(&hit)
-                        && child_node.aria_role == "presentation" && self.event_handlers.contains_key(&node_id) {
-                            return Some((node_id, proximity.max(hit_prox)));
-                        }
+                        && child_node.aria_role == "presentation"
+                        && self.event_handlers.contains_key(&node_id)
+                    {
+                        return Some((node_id, proximity.max(hit_prox)));
+                    }
                     return Some((hit, hit_prox));
                 }
             }
@@ -1490,10 +1506,18 @@ impl VDom {
                 };
                 log::info!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
 
-                if let cvkg_core::Event::PointerMove { ref mut proximity_field, .. } = event {
+                if let cvkg_core::Event::PointerMove {
+                    ref mut proximity_field,
+                    ..
+                } = event
+                {
                     *proximity_field = proximity;
                 }
-                if let cvkg_core::Event::PointerDown { ref mut proximity_field, .. } = event {
+                if let cvkg_core::Event::PointerDown {
+                    ref mut proximity_field,
+                    ..
+                } = event
+                {
                     *proximity_field = proximity;
                 }
 
@@ -1573,10 +1597,11 @@ impl VDom {
 
         loop {
             if let Some(handlers) = self.event_handlers.get(&current_id)
-                && let Some(handler) = handlers.get(event_name) {
-                    handler(event.clone());
-                    processed = true;
-                }
+                && let Some(handler) = handlers.get(event_name)
+            {
+                handler(event.clone());
+                processed = true;
+            }
 
             if let Some(parent_id) = self.parents.get(&current_id) {
                 current_id = *parent_id;
@@ -1799,6 +1824,41 @@ impl VDom {
     }
 }
 
+/// State management hook primitive for the Virtual DOM.
+///
+/// Returns a tuple containing:
+/// 1. The current state value of type `T`.
+/// 2. A setter `Arc<dyn Fn(T)>` to update the state.
+pub fn use_state<T: Clone + Send + Sync + 'static>(
+    id_hash: u64,
+    default: T,
+) -> (T, std::sync::Arc<dyn Fn(T) + Send + Sync>) {
+    let current = {
+        let s = cvkg_core::load_system_state();
+        match s.get_component_state::<T>(id_hash) {
+            Some(arc_val) => arc_val.read().unwrap().clone(),
+            None => {
+                cvkg_core::update_system_state(|s| {
+                    let mut s = s.clone();
+                    s.set_component_state(id_hash, default.clone());
+                    s
+                });
+                default.clone()
+            }
+        }
+    };
+
+    let setter = std::sync::Arc::new(move |new_val: T| {
+        cvkg_core::update_system_state(move |s| {
+            let mut s = s.clone();
+            s.set_component_state(id_hash, new_val.clone());
+            s
+        });
+    });
+
+    (current, setter)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1954,9 +2014,17 @@ mod tests {
         vdom.root = Some(NodeId(1));
 
         let mut node = dummy_node(1, "Button");
-        node.layout = LayoutRect { x: 100.0, y: 100.0, width: 50.0, height: 50.0 };
+        node.layout = LayoutRect {
+            x: 100.0,
+            y: 100.0,
+            width: 50.0,
+            height: 50.0,
+        };
         // Set an SDF shape
-        node.sdf_shape = Some(cvkg_core::layout::SdfShape::Circle { center: [125.0, 125.0], radius: 25.0 });
+        node.sdf_shape = Some(cvkg_core::layout::SdfShape::Circle {
+            center: [125.0, 125.0],
+            radius: 25.0,
+        });
         // Add an event handler so it is hit testable via proximity
         vdom.event_handlers.insert(NodeId(1), HashMap::new());
         vdom.nodes.insert(NodeId(1), node);
@@ -1969,7 +2037,7 @@ mod tests {
         // Proximity hit outside the circle (radius is 25, so at (125, 175) distance is 25 from edge)
         let (id2, prox2) = vdom.hit_test(125.0, 175.0).unwrap();
         assert_eq!(id2, NodeId(1));
-        // distance to circle = 50 - 25 = 25. 
+        // distance to circle = 50 - 25 = 25.
         // proximity = 1.0 - 25.0/150.0 = 1.0 - 0.1666... = 0.8333...
         assert!(prox2 > 0.8 && prox2 < 0.9);
 
@@ -1981,8 +2049,13 @@ mod tests {
     #[test]
     fn test_sdf_computation() {
         use cvkg_core::layout::SdfShape;
-        let rect = LayoutRect { x: 10.0, y: 10.0, width: 50.0, height: 50.0 };
-        
+        let rect = LayoutRect {
+            x: 10.0,
+            y: 10.0,
+            width: 50.0,
+            height: 50.0,
+        };
+
         // Test basic Rect
         let dist1 = VDom::sdf_distance(None, &rect, 10.0, 10.0);
         assert!(dist1 <= 0.0);
@@ -1991,7 +2064,10 @@ mod tests {
         assert_eq!(dist2, 10.0); // 10 units away horizontally
 
         // Test Circle
-        let circle = SdfShape::Circle { center: [35.0, 35.0], radius: 25.0 };
+        let circle = SdfShape::Circle {
+            center: [35.0, 35.0],
+            radius: 25.0,
+        };
         let dist_center = VDom::sdf_distance(Some(&circle), &rect, 35.0, 35.0);
         assert_eq!(dist_center, -25.0); // exactly at center
         let dist_edge = VDom::sdf_distance(Some(&circle), &rect, 60.0, 35.0);

@@ -179,13 +179,7 @@ impl View for IdunnPersistence {
                 },
                 [0.05, 0.07, 0.05, 1.0],
             );
-            renderer.draw_text(
-                &snap.name,
-                rect.x + 20.0,
-                y + 6.0,
-                10.0,
-                theme::success(),
-            );
+            renderer.draw_text(&snap.name, rect.x + 20.0, y + 6.0, 10.0, theme::success());
             renderer.draw_text(
                 &age_str,
                 rect.x + rect.width - 60.0,

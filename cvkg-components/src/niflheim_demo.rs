@@ -1,254 +1,149 @@
-//! # Niflheim Mist Demo
+//! # Niflheim Layout Engine Showcase Demo
 //!
-//! A high-fidelity demonstration of the CVKG Phase 6 aesthetics:
-//! - **Bifrost**: Frosted glass backdrop blur (Mist of Niflheim)
-//! - **Gungnir**: Neon cyan glow
-//! - **Ginnungagap**: Deep void background
-//! - **Mjolnir**: Geometric shattering and lightning arcs
+//! A high-fidelity layout demonstration showing:
+//! - **ScrollView** with scrollbar indicators and keyboard nav
+//! - **Grid** container with flexible columns and gaps
+//! - **Frame and Padding** modifiers with alignment support
+//! - **Overlay** modifier with click-outside dismissal
 
-use crate::primitive::{Canvas, Shape, Text};
-use cvkg_core::{AnyView, Color, Never, Rect, Renderer, StyleResolver, View};
+use crate::container::{ScrollView, VStack};
+use crate::grid::{Grid, GridTrack};
+use crate::interactive::Button;
+use cvkg_core::{GridPlacement, View};
 
-/// A simple Z-ordered stack of views.
-#[derive(Clone)]
-struct ZStack {
-    children: Vec<AnyView>,
-}
-
-impl ZStack {
-    fn new() -> Self {
-        Self {
-            children: Vec::new(),
-        }
-    }
-    fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
-        self.children.push(AnyView::new(view));
-        self
-    }
-}
-
-impl View for ZStack {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        log::info!("ZStack rendering {} children", self.children.len());
-        renderer.push_vnode(rect, "ZStack");
-        for (i, child) in self.children.iter().enumerate() {
-            log::info!("  Rendering child {}", i);
-            child.render(renderer, rect);
-        }
-        renderer.pop_vnode();
-    }
-}
-
-/// Returns a view demonstrating the Niflheim/Bifrost aesthetic.
+/// Returns a layout showcase view demonstrating the completed layout engine features.
 pub fn niflheim_demo() -> impl View + Clone {
-    // Resolve tokens from the Yggdrasil environment
-    let nifl_cyan = StyleResolver::color("primary");
-    let _muspel_magenta = StyleResolver::color("secondary");
+    let scroll_id = 0x5c80_1111;
+    let popover_state_hash = 0x5c80_2222;
 
-    // Z-ordered layer stack
-    ZStack::new()
-        .child(cyberpunk_background())
-        .child(fresnel_boxes())
-        .child(lightning_arcs())
-        .child(floating_fire_ball())
-        .child(niflheim_card(nifl_cyan))
-}
+    // Load popover state from system state to check if popover is open
+    let show_popover = cvkg_core::load_system_state()
+        .get_component_state::<bool>(popover_state_hash)
+        .map(|v| *v.read().unwrap())
+        .unwrap_or(false);
 
-fn cyberpunk_background() -> impl View + Clone {
-    Canvas::new(|renderer, rect| {
-        // Draw deep Ginnungagap nebula
-        renderer.draw_radial_gradient(
-            rect,
-            [0.02, 0.01, 0.05, 1.0], // Deep violet void
-            [0.0, 0.0, 0.0, 1.0],    // Absolute black
-        );
-
-        // Draw Tactical Grid
-        let grid_size = 60.0;
-        let color = [0.0, 0.5, 0.6, 0.1]; // Subtle cyber-cyan
-        for x in (0..(rect.width as i32)).step_by(grid_size as usize) {
-            renderer.draw_line(
-                rect.x + x as f32,
-                rect.y,
-                rect.x + x as f32,
-                rect.y + rect.height,
-                color,
-                1.0,
-            );
-        }
-        for y in (0..(rect.height as i32)).step_by(grid_size as usize) {
-            renderer.draw_line(
-                rect.x,
-                rect.y + y as f32,
-                rect.x + rect.width,
-                rect.y + y as f32,
-                color,
-                1.0,
-            );
-        }
-    })
-}
-
-fn fresnel_boxes() -> impl View + Clone {
-    ZStack::new()
-        .child(
-            Shape::rounded_rect(32.0)
-                .fill(Color::new(0.05, 0.05, 0.1, 0.2))
-                .bifrost(40.0, 1.5, 0.6)
-                .gungnir("#00FFFF", 25.0, 1.2)
-                .padding(140.0),
-        )
-        .child(
-            Shape::rounded_rect(16.0)
-                .fill(Color::new(0.0, 1.0, 1.0, 0.05))
-                .bifrost(20.0, 1.2, 0.4)
-                .gungnir("#00FFFF", 10.0, 0.8)
-                .padding(200.0),
-        )
-}
-
-fn lightning_arcs() -> impl View + Clone {
-    Canvas::new(move |renderer, _rect| {
-        let t = renderer.delta_time(); // In real app we'd use a cumulative time
-        // Just a placeholder to ensure the lightning_arcs function signature matches
-        let _ = t;
-    })
-}
-
-use std::sync::{Arc, Mutex};
-
-struct Particle {
-    pos: [f32; 2],
-    vel: [f32; 2],
-    color: [f32; 4],
-    life: f32,
-    size: f32,
-}
-
-struct Lcg {
-    state: u32,
-}
-impl Lcg {
-    fn new(seed: u32) -> Self {
-        Self { state: seed }
+    // Sidebar: Scrollable list of 15 buttons
+    let mut list_vstack = VStack::new(10.0)
+        .alignment(cvkg_core::Alignment::Leading)
+        .distribution(cvkg_core::Distribution::Leading);
+    for i in 1..=15 {
+        list_vstack = list_vstack
+            .child(Button::new(format!("Item {}", i), move || {}).frame(Some(160.0), Some(30.0)));
     }
-    fn next_f32(&mut self) -> f32 {
-        self.state = self.state.wrapping_mul(1103515245).wrapping_add(12345);
-        (self.state & 0x7FFFFFFF) as f32 / 2147483647.0
-    }
-}
 
-pub fn floating_fire_ball() -> impl View + Clone {
-    let particles = Arc::new(Mutex::new(Vec::<Particle>::new()));
-    let last_time = Arc::new(Mutex::new(0.0f32));
-    let rng = Arc::new(Mutex::new(Lcg::new(42)));
+    let scroll_sidebar = ScrollView::new(list_vstack)
+        .scroll_id(scroll_id)
+        .content_size(180.0, 600.0)
+        .scrollbar_width(6.0);
 
-    Canvas::new(move |renderer, rect| {
-        let t = renderer.elapsed_time();
-        let mut last_t_lock = last_time.lock().unwrap();
-        let dt = (t - *last_t_lock).max(0.0).min(0.1);
-        *last_t_lock = t;
-
-        // Flying position (Berserker Fire motion)
-        let cx = rect.x
-            + rect.width * 0.5
-            + (t * 1.4).cos() * (rect.width * 0.35)
-            + (t * 2.5).sin() * 40.0;
-        let cy = rect.y
-            + rect.height * 0.5
-            + (t * 1.1).sin() * (rect.height * 0.3)
-            + (t * 3.1).cos() * 20.0;
-
-        let mut p_list = particles.lock().unwrap();
-        let mut rng_lock = rng.lock().unwrap();
-
-        // 1. Spawn particles
-        for _ in 0..3 {
-            p_list.push(Particle {
-                pos: [cx, cy],
-                vel: [
-                    rng_lock.next_f32() * 200.0 - 100.0,
-                    rng_lock.next_f32() * 200.0 - 100.0,
-                ],
-                color: [1.0, 0.4 + rng_lock.next_f32() * 0.4, 0.1, 1.0],
-                life: 1.0,
-                size: 4.0 + rng_lock.next_f32() * 12.0,
+    // Main section: 2x2 Grid of cards
+    let card_grid = Grid::new(
+        vec![GridTrack::Flex(1.0), GridTrack::Flex(1.0)],
+        vec![GridTrack::Flex(1.0), GridTrack::Flex(1.0)],
+    )
+    .gap(15.0)
+    .child(
+        Button::new("Card A", || {})
+            .frame(Some(120.0), Some(80.0))
+            .grid_placement(GridPlacement {
+                column: 0,
+                column_span: 1,
+                row: 0,
+                row_span: 1,
+            }),
+    )
+    .child(
+        Button::new("Card B", || {})
+            .frame(Some(120.0), Some(80.0))
+            .grid_placement(GridPlacement {
+                column: 1,
+                column_span: 1,
+                row: 0,
+                row_span: 1,
+            }),
+    )
+    .child(
+        // Card C triggers a popover overlay when clicked
+        Button::new("Info Popover", move || {
+            cvkg_core::update_system_state(move |s| {
+                let mut s = s.clone();
+                s.set_component_state(popover_state_hash, !show_popover);
+                s
             });
-        }
+        })
+        .frame(Some(120.0), Some(80.0))
+        .grid_placement(GridPlacement {
+            column: 0,
+            column_span: 1,
+            row: 1,
+            row_span: 1,
+        }),
+    )
+    .child(
+        Button::new("Card D", || {})
+            .frame(Some(120.0), Some(80.0))
+            .grid_placement(GridPlacement {
+                column: 1,
+                column_span: 1,
+                row: 1,
+                row_span: 1,
+            }),
+    );
 
-        // 2. Update and Draw Particles
-        p_list.retain_mut(|p| {
-            p.pos[0] += p.vel[0] * dt;
-            p.pos[1] += p.vel[1] * dt;
-            p.life -= dt * 1.5;
-            p.size *= 0.98;
+    // Main layout: 2-column grid splitting sidebar and main grid
+    let main_layout = Grid::new(
+        vec![GridTrack::Fixed(200.0), GridTrack::Flex(1.0)],
+        vec![GridTrack::Flex(1.0)],
+    )
+    .column_gap(20.0)
+    .child(scroll_sidebar.grid_placement(GridPlacement {
+        column: 0,
+        column_span: 1,
+        row: 0,
+        row_span: 1,
+    }))
+    .child(card_grid.grid_placement(GridPlacement {
+        column: 1,
+        column_span: 1,
+        row: 0,
+        row_span: 1,
+    }));
 
-            let mut p_color = p.color;
-            p_color[3] *= p.life;
-            renderer.fill_ellipse(
-                Rect {
-                    x: p.pos[0] - p.size / 2.0,
-                    y: p.pos[1] - p.size / 2.0,
-                    width: p.size,
-                    height: p.size,
-                },
-                p_color,
-            );
-            p.life > 0.0
+    // Apply overlay popover if active
+    let popup_view = Button::new("Close Popover", move || {
+        cvkg_core::update_system_state(move |s| {
+            let mut s = s.clone();
+            s.set_component_state(popover_state_hash, false);
+            s
+        });
+    })
+    .frame(Some(140.0), Some(60.0));
+
+    let decorated_layout = main_layout.padding(15.0);
+
+    if show_popover {
+        let dismiss_fn = std::sync::Arc::new(move || {
+            cvkg_core::update_system_state(move |s| {
+                let mut s = s.clone();
+                s.set_component_state(popover_state_hash, false);
+                s
+            });
         });
 
-        // 3. Main Fireball Core
-        renderer.gungnir(
-            Rect {
-                x: cx - 40.0,
-                y: cy - 40.0,
-                width: 80.0,
-                height: 80.0,
-            },
-            [1.0, 0.5, 0.1, 1.0],
-            25.0,
-            1.5,
-        );
-        renderer.draw_radial_gradient(
-            Rect {
-                x: cx - 20.0,
-                y: cy - 20.0,
-                width: 40.0,
-                height: 40.0,
-            },
-            [1.0, 0.9, 0.5, 1.0],
-            [1.0, 0.2, 0.0, 0.0],
-        );
-
-        // 4. Lightning Arcs (Mjolnir)
-        if (t * 4.0).sin() > 0.95 {
-            let target_x = rect.x + rect.width * 0.5;
-            let target_y = rect.y + rect.height * 0.5;
-            renderer.draw_mjolnir_bolt([cx, cy], [target_x, target_y], [1.0, 0.8, 0.2, 1.0]);
-        }
-
-        renderer.request_redraw();
-    })
-}
-
-fn niflheim_card(color: String) -> impl View + Clone {
-    Shape::rounded_rect(24.0)
-        .fill(Color::new(0.02, 0.02, 0.05, 0.3)) // Translucent glass base
-        .bifrost(30.0, 1.3, 0.7) // Stronger Bifrost
-        .gungnir(color.clone(), 20.0, 1.5) // Radiant Gungnir
-        .mjolnir_slice(15.0, 0.0)
-        .padding(60.0)
-}
-
-/// A more complex composite demo
-pub fn berserker_card() -> impl View + Clone {
-    let nifl_cyan = StyleResolver::color("primary");
-
-    Text::new("BERSERKER PROTOCOL")
-        .gungnir(nifl_cyan, 10.0, 2.0)
-        .bifrost(10.0, 1.0, 0.9)
+        // Render overlay centered relative to the whole dashboard
+        decorated_layout.overlay(
+            popup_view,
+            cvkg_core::Alignment::Center,
+            [0.0, 0.0],
+            Some(dismiss_fn),
+        )
+    } else {
+        // Return without overlay
+        decorated_layout.overlay(
+            cvkg_core::EmptyView,
+            cvkg_core::Alignment::Center,
+            [0.0, 0.0],
+            None,
+        )
+    }
 }

@@ -727,7 +727,7 @@ impl View for NodeGraphEditor {
                     height: node.height,
                 },
                 6.0,
-                [0.0, 0.0, 0.0, 0.3],
+                theme::shadow(),
                 8.0,
                 0.0,
             );

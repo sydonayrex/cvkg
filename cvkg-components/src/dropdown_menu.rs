@@ -1,7 +1,6 @@
-use crate::{FONT_BASE, RADIUS_MD, RADIUS_SM};
-use cvkg_core::{
-Event, Never, Rect, Renderer, View};
 use crate::theme;
+use crate::{FONT_BASE, RADIUS_MD, RADIUS_SM};
+use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// System-state hash key for the dropdown open/close state.
@@ -95,18 +94,18 @@ impl<T: View> View for DropdownMenu<T> {
         renderer.register_handler(
             "pointerdown",
             Arc::new(move |event| {
-                if let Event::PointerDown { x, y, .. } = event {
-                    if trigger_rect.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            let current: bool = s
-                                .get_component_state::<bool>(DROPDOWN_OPEN_HASH)
-                                .map(|v| *v.read().unwrap())
-                                .unwrap_or(false);
-                            s.set_component_state(DROPDOWN_OPEN_HASH, !current);
-                            s
-                        });
-                    }
+                if let Event::PointerDown { x, y, .. } = event
+                    && trigger_rect.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        let current: bool = s
+                            .get_component_state::<bool>(DROPDOWN_OPEN_HASH)
+                            .map(|v| *v.read().unwrap())
+                            .unwrap_or(false);
+                        s.set_component_state(DROPDOWN_OPEN_HASH, !current);
+                        s
+                    });
                 }
             }),
         );
@@ -229,14 +228,14 @@ impl<T: View> View for DropdownMenu<T> {
             renderer.register_handler(
                 "pointermove",
                 Arc::new(move |event| {
-                    if let Event::PointerMove { x, y, .. } = event {
-                        if item_rect_capture.contains(x, y) {
-                            cvkg_core::update_system_state(move |s| {
-                                let mut s = s.clone();
-                                s.set_component_state(hover_hash, item_idx);
-                                s
-                            });
-                        }
+                    if let Event::PointerMove { x, y, .. } = event
+                        && item_rect_capture.contains(x, y)
+                    {
+                        cvkg_core::update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(hover_hash, item_idx);
+                            s
+                        });
                     }
                 }),
             );
@@ -247,15 +246,15 @@ impl<T: View> View for DropdownMenu<T> {
             renderer.register_handler(
                 "pointerdown",
                 Arc::new(move |event| {
-                    if let Event::PointerDown { x, y, .. } = event {
-                        if item_rect_click.contains(x, y) {
-                            (on_click)();
-                            cvkg_core::update_system_state(move |s| {
-                                let mut s = s.clone();
-                                s.set_component_state(DROPDOWN_OPEN_HASH, false);
-                                s
-                            });
-                        }
+                    if let Event::PointerDown { x, y, .. } = event
+                        && item_rect_click.contains(x, y)
+                    {
+                        (on_click)();
+                        cvkg_core::update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(DROPDOWN_OPEN_HASH, false);
+                            s
+                        });
                     }
                 }),
             );
@@ -269,14 +268,15 @@ impl<T: View> View for DropdownMenu<T> {
         renderer.register_handler(
             "pointerdown",
             Arc::new(move |event| {
-                if let Event::PointerDown { x, y, .. } = event {
-                    if !panel.contains(x, y) && !trigger.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(DROPDOWN_OPEN_HASH, false);
-                            s
-                        });
-                    }
+                if let Event::PointerDown { x, y, .. } = event
+                    && !panel.contains(x, y)
+                    && !trigger.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(DROPDOWN_OPEN_HASH, false);
+                        s
+                    });
                 }
             }),
         );

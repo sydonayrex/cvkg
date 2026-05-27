@@ -59,10 +59,42 @@ impl Quadtree {
         let d = self.depth + 1;
 
         let mut children = Box::new([
-            Quadtree::new_with_depth(Rect { x, y, width: hw, height: hh }, d),
-            Quadtree::new_with_depth(Rect { x: x + hw, y, width: hw, height: hh }, d),
-            Quadtree::new_with_depth(Rect { x, y: y + hh, width: hw, height: hh }, d),
-            Quadtree::new_with_depth(Rect { x: x + hw, y: y + hh, width: hw, height: hh }, d),
+            Quadtree::new_with_depth(
+                Rect {
+                    x,
+                    y,
+                    width: hw,
+                    height: hh,
+                },
+                d,
+            ),
+            Quadtree::new_with_depth(
+                Rect {
+                    x: x + hw,
+                    y,
+                    width: hw,
+                    height: hh,
+                },
+                d,
+            ),
+            Quadtree::new_with_depth(
+                Rect {
+                    x,
+                    y: y + hh,
+                    width: hw,
+                    height: hh,
+                },
+                d,
+            ),
+            Quadtree::new_with_depth(
+                Rect {
+                    x: x + hw,
+                    y: y + hh,
+                    width: hw,
+                    height: hh,
+                },
+                d,
+            ),
         ]);
 
         for rect in self.rects.drain(..) {

@@ -1,9 +1,9 @@
+use crate::theme;
 use cvkg_core::{
-    layout::{LayoutCache, LayoutView, SizeProposal},
     Never, Rect, Renderer, Size, View,
+    layout::{LayoutCache, LayoutView, SizeProposal},
 };
 use cvkg_layout::HStack;
-use crate::theme;
 use std::sync::Arc;
 
 /// Breadcrumb navigation component.
@@ -48,24 +48,34 @@ impl View for Breadcrumb {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Collect label and separator widths for layout computation
-        let elements: Vec<(String, bool)> = self.items.iter().enumerate().flat_map(|(i, item)| {
-            let mut v = vec![(item.label.clone(), false)];
-            if i < self.items.len() - 1 {
-                v.push(("/".to_string(), true));
-            }
-            v
-        }).collect();
+        let elements: Vec<(String, bool)> = self
+            .items
+            .iter()
+            .enumerate()
+            .flat_map(|(i, item)| {
+                renderer.set_aria_role("navigation");
+                let mut v = vec![(item.label.clone(), false)];
+                if i < self.items.len() - 1 {
+                    v.push(("/".to_string(), true));
+                }
+                v
+            })
+            .collect();
 
         let mut cache = LayoutCache::new();
         let layouts: Vec<&dyn LayoutView> = vec![];
         let spacing = 8.0;
 
         // Delegate horizontal geometry to HStack::compute_layout
-        let element_widths: Vec<f32> = elements.iter().map(|(text, _)| {
-            let (tw, _) = renderer.measure_text(text, 14.0);
-            tw
-        }).collect();
-        let total_width: f32 = element_widths.iter().sum::<f32>() + spacing * (elements.len().saturating_sub(1)) as f32;
+        let element_widths: Vec<f32> = elements
+            .iter()
+            .map(|(text, _)| {
+                let (tw, _) = renderer.measure_text(text, 14.0);
+                tw
+            })
+            .collect();
+        let total_width: f32 = element_widths.iter().sum::<f32>()
+            + spacing * (elements.len().saturating_sub(1)) as f32;
 
         let stack_rect = Rect {
             x: rect.x,
@@ -73,15 +83,14 @@ impl View for Breadcrumb {
             width: total_width,
             height: rect.height,
         };
-        let _computed =
-            HStack::compute_layout(
-                spacing,
-                cvkg_core::Alignment::Center,
-                cvkg_core::Distribution::Leading,
-                stack_rect,
-                &layouts,
-                &mut cache,
-            );
+        let _computed = HStack::compute_layout(
+            spacing,
+            cvkg_core::Alignment::Center,
+            cvkg_core::Distribution::Leading,
+            stack_rect,
+            &layouts,
+            &mut cache,
+        );
 
         // Render using layout-engine-delegated positions
         let mut current_x = rect.x;
@@ -89,7 +98,9 @@ impl View for Breadcrumb {
             let (tw, th) = renderer.measure_text(text, 14.0);
             let color = if *is_sep {
                 theme::text_dim()
-            } else if i < self.items.len() && self.items[i / (1 + (i > 0) as usize)].on_click.is_some() {
+            } else if i < self.items.len()
+                && self.items[i / (1 + (i > 0) as usize)].on_click.is_some()
+            {
                 theme::accent()
             } else {
                 theme::text_muted()
@@ -154,15 +165,14 @@ impl cvkg_core::layout::LayoutView for Breadcrumb {
         let layouts: Vec<&dyn LayoutView> = vec![];
         let spacing = 8.0;
         // Delegate geometry calculation to the layout engine
-        let _computed =
-            HStack::compute_layout(
-                spacing,
-                cvkg_core::Alignment::Center,
-                cvkg_core::Distribution::Leading,
-                bounds,
-                &layouts,
-                cache,
-            );
+        let _computed = HStack::compute_layout(
+            spacing,
+            cvkg_core::Alignment::Center,
+            cvkg_core::Distribution::Leading,
+            bounds,
+            &layouts,
+            cache,
+        );
     }
 }
 
@@ -230,9 +240,19 @@ impl View for Pagination {
 
         // Previous button
         let prev_rect = if !computed_rects.is_empty() {
-            Rect { x: computed_rects[0].x, y: rect.y, width: btn_w, height: rect.height }
+            Rect {
+                x: computed_rects[0].x,
+                y: rect.y,
+                width: btn_w,
+                height: rect.height,
+            }
         } else {
-            Rect { x: rect.x, y: rect.y, width: btn_w, height: rect.height }
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: btn_w,
+                height: rect.height,
+            }
         };
         renderer.push_vnode(prev_rect, "PaginationPrev");
         renderer.fill_rounded_rect(prev_rect, 4.0, theme::surface_elevated());
@@ -259,10 +279,20 @@ impl View for Pagination {
         for (idx, p) in (1..=self.total_pages.min(5)).enumerate() {
             let rect_idx = idx + 1;
             let page_rect = if rect_idx < computed_rects.len() {
-                Rect { x: computed_rects[rect_idx].x, y: rect.y, width: btn_w, height: rect.height }
+                Rect {
+                    x: computed_rects[rect_idx].x,
+                    y: rect.y,
+                    width: btn_w,
+                    height: rect.height,
+                }
             } else {
                 let offset = rect_idx as f32 * (btn_w + spacing);
-                Rect { x: rect.x + offset, y: rect.y, width: btn_w, height: rect.height }
+                Rect {
+                    x: rect.x + offset,
+                    y: rect.y,
+                    width: btn_w,
+                    height: rect.height,
+                }
             };
             renderer.push_vnode(page_rect, "PaginationPage");
             let is_current = p == self.current_page;
@@ -294,10 +324,20 @@ impl View for Pagination {
         // Next button
         let next_idx = labels.len() - 1;
         let next_rect = if next_idx < computed_rects.len() {
-            Rect { x: computed_rects[next_idx].x, y: rect.y, width: btn_w, height: rect.height }
+            Rect {
+                x: computed_rects[next_idx].x,
+                y: rect.y,
+                width: btn_w,
+                height: rect.height,
+            }
         } else {
             let offset = next_idx as f32 * (btn_w + spacing);
-            Rect { x: rect.x + offset, y: rect.y, width: btn_w, height: rect.height }
+            Rect {
+                x: rect.x + offset,
+                y: rect.y,
+                width: btn_w,
+                height: rect.height,
+            }
         };
         renderer.push_vnode(next_rect, "PaginationNext");
         renderer.fill_rounded_rect(next_rect, 4.0, theme::surface_elevated());
@@ -363,14 +403,13 @@ impl cvkg_core::layout::LayoutView for Pagination {
         let layouts: Vec<&dyn LayoutView> = vec![];
         let spacing = 8.0;
         // Delegate geometry calculation to the layout engine
-        let _computed =
-            HStack::compute_layout(
-                spacing,
-                cvkg_core::Alignment::Center,
-                cvkg_core::Distribution::Leading,
-                bounds,
-                &layouts,
-                cache,
-            );
+        let _computed = HStack::compute_layout(
+            spacing,
+            cvkg_core::Alignment::Center,
+            cvkg_core::Distribution::Leading,
+            bounds,
+            &layouts,
+            cache,
+        );
     }
 }

@@ -105,7 +105,7 @@ impl View for SemanticMemoryExplorer {
             let color = if self.highlighted.as_deref() == Some(&cluster.id) {
                 theme::accent()
             } else {
-                [0.2, 0.4, 0.8, 1.0]
+                theme::info()
             };
 
             let cluster_rect = Rect {

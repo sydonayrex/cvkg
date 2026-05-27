@@ -23,8 +23,7 @@ pub struct LayerId(pub u64);
 /// `Isolated` triggers off-screen buffer rendering: the layer and all its
 /// children are rendered to a separate texture, then composited back into the
 /// main scene. This matches the SVG `isolation` property.
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum Material {
     /// Opaque or standard UI. Rendered in the initial Scene Capture pass
     /// with standard alpha compositing (src-over).
@@ -32,13 +31,20 @@ pub enum Material {
     Opaque,
     /// Glassmorphism elements. Rendered in the Material Composite pass,
     /// sampling from the Kawase Blur pyramid.
-    Glass { blur_radius: f32 },
+    /// The `blur_radius` controls the blur intensity.
+    /// The `depth_index` (0=foreground, higher=more background) controls
+    /// depth-aware tinting: background windows get stronger tint.
+    Glass {
+        blur_radius: f32,
+        /// Z-order depth for depth-aware tinting. 0 = key/foreground window.
+        /// Higher values = more background. Default: 0.
+        depth_index: u32,
+    },
     /// Overlay UI (crisp text, focus rings, edge lighting).
     /// Rendered in the final Foreground pass, on top of glass.
     Overlay,
 
     // ── SVG Blend Modes (CSS Compositing Level 1) ──────────────────────────
-
     /// Multiplied blend: multiplies source and destination colors.
     /// Formula: result = src * dst
     Multiply,
@@ -88,7 +94,6 @@ pub enum Material {
     Isolated,
 }
 
-
 /// A draw command within a layer.
 /// This is a simplified representation that the compositor produces
 /// and the renderer consumes.
@@ -132,10 +137,7 @@ impl Default for Layer {
             id: LayerId::default(),
             bounds: Rect::zero(),
             transform: [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
+                1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
             ],
             material: Material::Opaque,
             draw_list: Vec::new(),

@@ -525,8 +525,8 @@ impl View for TokenStreamViewer {
             let color = match token.token_type {
                 TokenType::Word => theme::text(),
                 TokenType::Punctuation => [0.8, 0.6, 0.2, 1.0],
-                TokenType::Space => [0.3, 0.3, 0.3, 1.0],
-                TokenType::NewLine => [0.4, 0.4, 0.4, 1.0],
+                TokenType::Space => theme::text_dim(),
+                TokenType::NewLine => theme::text_dim(),
             };
             renderer.draw_text(&token.text, current_x, y, 12.0, color);
             current_x += token.text.len() as f32 * 7.0;

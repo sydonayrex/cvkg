@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// SkollProgress indicator component.
 #[derive(Clone)]
@@ -273,6 +273,8 @@ impl View for ValkyrieAnalytics {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ValkyrieAnalytics");
+
+        renderer.set_aria_role("status");
         if self.data.is_empty() {
             renderer.pop_vnode();
             return;
@@ -386,6 +388,7 @@ impl View for TelemetryView {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+            renderer.set_aria_role("status");
             renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.12, 0.15, 0.1]);
             renderer.stroke_rect(rect, theme::surface(), 1.0);
             return;
@@ -1165,6 +1168,7 @@ impl View for DraumaSkeleton {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DraumaSkeleton");
 
+        renderer.set_aria_role("status");
         let t = renderer.elapsed_time();
 
         // 1. Mimir's Refraction (Skeletal Depth)
@@ -1254,6 +1258,7 @@ impl View for HatiSpinner {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
 
+        renderer.set_aria_role("progressbar");
         match self.variant {
             SpinnerVariant::Circle => {
                 let dim = self.size;
@@ -1324,7 +1329,12 @@ impl View for HatiSpinner {
                         height: dot_size,
                     };
 
-                    let dot_color = [self.color[0], self.color[1], self.color[2], self.color[3] * alpha];
+                    let dot_color = [
+                        self.color[0],
+                        self.color[1],
+                        self.color[2],
+                        self.color[3] * alpha,
+                    ];
                     renderer.fill_ellipse(dot_rect, dot_color);
                 }
             }
@@ -1465,6 +1475,7 @@ impl View for EmptyState {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         use crate::{Button, ButtonVariant, FONT_BASE, FONT_LG, SPACE_LG, SPACE_SM};
 
+        renderer.set_aria_role("status");
         let mut y = rect.y;
         let center_x = rect.x + rect.width / 2.0;
 
@@ -1526,7 +1537,7 @@ impl View for EmptyState {
         renderer: &mut dyn Renderer,
         proposal: cvkg_core::SizeProposal,
     ) -> cvkg_core::Size {
-        use crate::{FONT_BASE, FONT_LG, FONT_3XL, SPACE_LG, SPACE_SM};
+        use crate::{FONT_3XL, FONT_BASE, FONT_LG, SPACE_LG, SPACE_SM};
 
         let mut height = 0.0;
 
@@ -1551,10 +1562,9 @@ impl View for EmptyState {
     }
 }
 
-
 // --- HatiCarousel ---
-use cvkg_core::layout::SizeProposal;
 use cvkg_core::Size;
+use cvkg_core::layout::SizeProposal;
 #[derive(Clone)]
 pub struct HatiCarousel<V> {
     children: Vec<V>,
@@ -1573,7 +1583,7 @@ impl<V: View> HatiCarousel<V> {
         self.children.push(child);
         self
     }
-    
+
     pub fn current_index(mut self, idx: usize) -> Self {
         self.current_index = idx;
         self
@@ -1588,17 +1598,19 @@ impl<V: View> Default for HatiCarousel<V> {
 
 impl<V: View> View for HatiCarousel<V> {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HatiCarousel");
         // Clip children to bounds
         renderer.push_clip_rect(rect);
-        
+
         if let Some(active_child) = self.children.get(self.current_index) {
             active_child.render(renderer, rect);
         }
-        
+
         renderer.pop_clip_rect();
         renderer.pop_vnode();
     }
@@ -1611,6 +1623,9 @@ impl<V: View> View for HatiCarousel<V> {
             max_w = max_w.max(size.width);
             max_h = max_h.max(size.height);
         }
-        Size { width: max_w, height: max_h }
+        Size {
+            width: max_w,
+            height: max_h,
+        }
     }
 }

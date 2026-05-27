@@ -3,11 +3,11 @@
 //! Hlin the Aesir goddess provides comfort and protection - this accessibility
 //! system ensures inclusive design with keyboard nav, screen readers, and semantic support.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
-use crate::theme;
 
 /// Accessibility node for tree structure
 #[derive(Debug, Clone)]
@@ -77,10 +77,10 @@ impl HlinAccessibility {
     /// Checks environment variables and platform-specific settings.
     fn detect_reduced_motion() -> bool {
         // Check GTK/GNOME setting
-        if let Ok(val) = std::env::var("GTK_THEME") {
-            if val.to_lowercase().contains("reduced") || val.to_lowercase().contains("no-anim") {
-                return true;
-            }
+        if let Ok(val) = std::env::var("GTK_THEME")
+            && (val.to_lowercase().contains("reduced") || val.to_lowercase().contains("no-anim"))
+        {
+            return true;
         }
         // Check GNOME accessibility setting via gsettings (if available)
         if let Ok(output) = std::process::Command::new("gsettings")
@@ -93,22 +93,22 @@ impl HlinAccessibility {
             }
         }
         // Check macOS reduced motion
-        if let Ok(val) = std::env::var("MACOS_REDUCED_MOTION") {
-            if val == "1" || val.to_lowercase() == "true" {
-                return true;
-            }
+        if let Ok(val) = std::env::var("MACOS_REDUCED_MOTION")
+            && (val == "1" || val.to_lowercase() == "true")
+        {
+            return true;
         }
         // Check Windows accessibility (via environment)
-        if let Ok(val) = std::env::var("ACCESSIBILITY_REDUCED_MOTION") {
-            if val == "1" || val.to_lowercase() == "true" {
-                return true;
-            }
+        if let Ok(val) = std::env::var("ACCESSIBILITY_REDUCED_MOTION")
+            && (val == "1" || val.to_lowercase() == "true")
+        {
+            return true;
         }
         // Check generic NO_ANIMATIONS flag
-        if let Ok(val) = std::env::var("NO_ANIMATIONS") {
-            if val == "1" || val.to_lowercase() == "true" {
-                return true;
-            }
+        if let Ok(val) = std::env::var("NO_ANIMATIONS")
+            && (val == "1" || val.to_lowercase() == "true")
+        {
+            return true;
         }
         false
     }
@@ -190,7 +190,12 @@ impl HlinAccessibility {
         }
         let next = match &self.focus_state.focused_id {
             Some(current) => {
-                if let Some(pos) = self.focus_state.focus_order.iter().position(|id| id == current) {
+                if let Some(pos) = self
+                    .focus_state
+                    .focus_order
+                    .iter()
+                    .position(|id| id == current)
+                {
                     let next_pos = (pos + 1) % self.focus_state.focus_order.len();
                     Some(self.focus_state.focus_order[next_pos].clone())
                 } else {
@@ -209,7 +214,12 @@ impl HlinAccessibility {
         }
         let prev = match &self.focus_state.focused_id {
             Some(current) => {
-                if let Some(pos) = self.focus_state.focus_order.iter().position(|id| id == current) {
+                if let Some(pos) = self
+                    .focus_state
+                    .focus_order
+                    .iter()
+                    .position(|id| id == current)
+                {
                     let prev_pos = if pos == 0 {
                         self.focus_state.focus_order.len() - 1
                     } else {
@@ -234,7 +244,7 @@ impl View for HlinAccessibility {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let bg = if self.high_contrast {
-            [0.0, 0.0, 0.0, 1.0]
+            theme::bg()
         } else {
             theme::surface_elevated()
         };
@@ -262,13 +272,7 @@ impl View for HlinAccessibility {
         };
 
         renderer.draw_text(hc_text, rect.x + 10.0, status_y, 10.0, theme::success());
-        renderer.draw_text(
-            rm_text,
-            rect.x + 130.0,
-            status_y,
-            10.0,
-            theme::success(),
-        );
+        renderer.draw_text(rm_text, rect.x + 130.0, status_y, 10.0, theme::success());
 
         // Focus indicator
         if let Some(focused) = &self.focus_state.focused_id {

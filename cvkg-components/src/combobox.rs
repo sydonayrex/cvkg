@@ -1,6 +1,5 @@
-use cvkg_core::{
-Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use crate::theme;
+use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::sync::Arc;
 
 // System-state hash keys for the combobox
@@ -122,6 +121,7 @@ impl View for Combobox {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Combobox");
+        renderer.set_aria_role("combobox");
 
         // ── Sync builder-API state into system state on first render ──
         {
@@ -135,10 +135,7 @@ impl View for Combobox {
                 update_system_state(|s| {
                     let mut s = s.clone();
                     s.set_component_state(COMBO_OPEN_HASH, false);
-                    s.set_component_state(
-                        COMBO_SELECTED_HASH,
-                        self.selected.unwrap_or(usize::MAX),
-                    );
+                    s.set_component_state(COMBO_SELECTED_HASH, self.selected.unwrap_or(usize::MAX));
                     s.set_component_state(COMBO_SEARCH_HASH, String::new());
                     s
                 });
@@ -192,8 +189,9 @@ impl View for Combobox {
         let dropdown_padding = 4.0;
         let search_height = 32.0;
         let max_dropdown_height = 240.0;
-        let dropdown_height = (filtered_count as f32 * item_height + search_height + dropdown_padding * 3.0)
-            .min(max_dropdown_height);
+        let dropdown_height =
+            (filtered_count as f32 * item_height + search_height + dropdown_padding * 3.0)
+                .min(max_dropdown_height);
 
         let dropdown_rect = Rect {
             x: rect.x,
@@ -226,11 +224,18 @@ impl View for Combobox {
         } else {
             theme::text()
         };
-        renderer.draw_text(display_text, search_rect.x + 8.0, search_rect.y + 10.0, 13.0, text_color);
+        renderer.draw_text(
+            display_text,
+            search_rect.x + 8.0,
+            search_rect.y + 10.0,
+            13.0,
+            text_color,
+        );
 
         // ── Render filtered options ──
         let list_start_y = search_rect.y + search_rect.height + dropdown_padding;
-        let max_visible = ((dropdown_height - search_height - dropdown_padding * 3.0) / item_height) as usize;
+        let max_visible =
+            ((dropdown_height - search_height - dropdown_padding * 3.0) / item_height) as usize;
 
         for (i, &original_idx) in filtered.iter().enumerate().take(max_visible) {
             let item_rect = Rect {
@@ -249,7 +254,7 @@ impl View for Combobox {
             renderer.fill_rounded_rect(item_rect, 4.0, bg);
 
             if is_selected {
-                renderer.stroke_rounded_rect(item_rect, 4.0, [0.0, 0.8, 1.0, 0.8], 1.0);
+                renderer.stroke_rounded_rect(item_rect, 4.0, theme::accent(), 1.0);
             }
 
             let opt_text_color = if is_selected {
@@ -334,31 +339,31 @@ impl View for Combobox {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
-                    if key == "Return" || key == "Enter" {
-                        let state = load_system_state();
-                        let open = state
-                            .get_component_state::<bool>(COMBO_OPEN_HASH)
+                if let Event::KeyDown { key } = event
+                    && (key == "Return" || key == "Enter")
+                {
+                    let state = load_system_state();
+                    let open = state
+                        .get_component_state::<bool>(COMBO_OPEN_HASH)
+                        .map(|v| *v.read().unwrap())
+                        .unwrap_or(false);
+                    if open {
+                        let sel: usize = state
+                            .get_component_state::<usize>(COMBO_SELECTED_HASH)
                             .map(|v| *v.read().unwrap())
-                            .unwrap_or(false);
-                        if open {
-                            let sel: usize = state
-                                .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                                .map(|v| *v.read().unwrap())
-                                .unwrap_or(usize::MAX);
-                            let sel_option = if sel < options_enter.len() {
-                                Some(sel)
-                            } else {
-                                None
-                            };
-                            update_system_state(|s| {
-                                let mut s = s.clone();
-                                s.set_component_state(COMBO_OPEN_HASH, false);
-                                s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                                s
-                            });
-                            (on_change_enter)(sel_option);
-                        }
+                            .unwrap_or(usize::MAX);
+                        let sel_option = if sel < options_enter.len() {
+                            Some(sel)
+                        } else {
+                            None
+                        };
+                        update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(COMBO_OPEN_HASH, false);
+                            s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                            s
+                        });
+                        (on_change_enter)(sel_option);
                     }
                 }
             }),
@@ -368,15 +373,15 @@ impl View for Combobox {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
-                    if key == "Escape" {
-                        update_system_state(|s| {
-                            let mut s = s.clone();
-                            s.set_component_state(COMBO_OPEN_HASH, false);
-                            s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                            s
-                        });
-                    }
+                if let Event::KeyDown { key } = event
+                    && key == "Escape"
+                {
+                    update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(COMBO_OPEN_HASH, false);
+                        s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                        s
+                    });
                 }
             }),
         );

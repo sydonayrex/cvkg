@@ -1,8 +1,8 @@
+use crate::theme;
 use cvkg_core::{
     AnyView, Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
-use crate::theme;
 use std::sync::Arc;
 
 /// System-state hash keys for VirtualList interaction state.
@@ -72,12 +72,12 @@ where
         // Read system state for hover + selection
         let hover_state: Option<usize> = cvkg_core::load_system_state()
             .get_component_state::<Option<usize>>(VL_HOVER_HASH)
-            .and_then(|v| v.read().ok().map(|g| g.clone()))
+            .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(None);
 
         let selected_state: Option<usize> = cvkg_core::load_system_state()
             .get_component_state::<Option<usize>>(VL_SELECTED_HASH)
-            .and_then(|v| v.read().ok().map(|g| g.clone()))
+            .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(None);
 
         let scroll_offset: f32 = cvkg_core::load_system_state()
@@ -104,9 +104,7 @@ where
                 // Background: alternate + hover + selected
                 let bg = if Some(idx) == selected_state {
                     theme::list_item_selected()
-                } else if Some(idx) == hover_state {
-                    theme::surface_elevated()
-                } else if idx % 2 == 0 {
+                } else if Some(idx) == hover_state || idx % 2 == 0 {
                     theme::surface_elevated()
                 } else {
                     theme::input_bg()
@@ -127,14 +125,14 @@ where
                 renderer.register_handler(
                     "pointermove",
                     Arc::new(move |event| {
-                        if let Event::PointerMove { x, y, .. } = event {
-                            if ir.contains(x, y) {
-                                cvkg_core::update_system_state(move |s| {
-                                    let mut s = s.clone();
-                                    s.set_component_state(VL_HOVER_HASH, Some(idx));
-                                    s
-                                });
-                            }
+                        if let Event::PointerMove { x, y, .. } = event
+                            && ir.contains(x, y)
+                        {
+                            cvkg_core::update_system_state(move |s| {
+                                let mut s = s.clone();
+                                s.set_component_state(VL_HOVER_HASH, Some(idx));
+                                s
+                            });
                         }
                     }),
                 );
@@ -145,16 +143,16 @@ where
                 renderer.register_handler(
                     "pointerclick",
                     Arc::new(move |event| {
-                        if let Event::PointerClick { x, y, .. } = event {
-                            if ir2.contains(x, y) {
-                                cvkg_core::update_system_state(move |s| {
-                                    let mut s = s.clone();
-                                    s.set_component_state(VL_SELECTED_HASH, Some(idx));
-                                    s
-                                });
-                                if let Some(cb) = on_select.as_ref() {
-                                    cb(idx);
-                                }
+                        if let Event::PointerClick { x, y, .. } = event
+                            && ir2.contains(x, y)
+                        {
+                            cvkg_core::update_system_state(move |s| {
+                                let mut s = s.clone();
+                                s.set_component_state(VL_SELECTED_HASH, Some(idx));
+                                s
+                            });
+                            if let Some(cb) = on_select.as_ref() {
+                                cb(idx);
                             }
                         }
                     }),
@@ -170,7 +168,7 @@ where
                 if let Event::KeyDown { key, .. } = event {
                     let current: Option<usize> = cvkg_core::load_system_state()
                         .get_component_state::<Option<usize>>(VL_SELECTED_HASH)
-                        .and_then(|v| v.read().ok().map(|g| g.clone()))
+                        .and_then(|v| v.read().ok().map(|g| *g))
                         .unwrap_or(None);
 
                     let new_selected = match key.as_str() {
@@ -252,7 +250,13 @@ impl View for ListItem {
         let x = rect.x + 12.0;
         if let Some(icon) = &self.icon {
             renderer.draw_text(icon, x, rect.y + 2.0, 14.0, theme::info());
-            renderer.draw_text(&self.label, x + 20.0, rect.y + 2.0, 14.0, [1.0, 1.0, 1.0, 0.95]);
+            renderer.draw_text(
+                &self.label,
+                x + 20.0,
+                rect.y + 2.0,
+                14.0,
+                [1.0, 1.0, 1.0, 0.95],
+            );
         } else {
             renderer.draw_text(&self.label, x, rect.y + 2.0, 14.0, [1.0, 1.0, 1.0, 0.95]);
         }

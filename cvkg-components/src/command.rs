@@ -1,5 +1,5 @@
-use cvkg_core::{Never, Rect, Renderer, View};
 use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// Command palette component for quick actions and navigation.
@@ -108,7 +108,7 @@ impl View for Command {
 
             renderer.push_vnode(item_rect, "CommandItem");
             // Hover state simulation (just a subtle highlight for now)
-            renderer.fill_rounded_rect(item_rect, 4.0, [0.1, 0.1, 0.15, 0.5]);
+            renderer.fill_rounded_rect(item_rect, 4.0, theme::hover());
 
             renderer.draw_text(
                 &item.label,
