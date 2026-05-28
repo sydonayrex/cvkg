@@ -5215,8 +5215,11 @@ impl SurtrRenderer {
                 label: Some("Surtr Headless Forge"),
                 required_features,
                 required_limits: wgpu::Limits {
-                    max_bindings_per_bind_group: 256,
-                    max_binding_array_elements_per_shader_stage: 256,
+                    max_bindings_per_bind_group: adapter.limits().max_bindings_per_bind_group.min(256),
+                    max_binding_array_elements_per_shader_stage: adapter
+                        .limits()
+                        .max_binding_array_elements_per_shader_stage
+                        .min(256),
                     ..wgpu::Limits::default()
                 },
                 memory_hints: wgpu::MemoryHints::default(),
