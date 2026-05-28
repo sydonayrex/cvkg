@@ -8,8 +8,8 @@ repository.workspace = true
 description = "Automated visual regression testing harness for CVKG"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.1.22" }
-cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.22" }
+cvkg-core = { path = "../cvkg-core", version = "0.2.0" }
+cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.2.0" }
 image = "0.25"
 bytemuck = "1.13"
 pollster = "0.3"
@@ -19,14 +19,14 @@ tokio = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
 walkdir = "2.3"
-cvkg-macros = { path = "../cvkg-macros", version = "0.1.22" }
-cvkg-components = { path = "../cvkg-components", version = "0.1.22" }
-cvkg-layout = { path = "../cvkg-layout", version = "0.1.22" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.1.22" }
-cvkg-render-web = { path = "../cvkg-render-web", version = "0.1.22" }
-cvkg-scene = { path = "../cvkg-scene", version = "0.1.22" }
-cvkg-anim = { path = "../cvkg-anim", version = "0.1.22" }
-cvkg-flow = { path = "../cvkg-flow", version = "0.1.22" }
+cvkg-macros = { path = "../cvkg-macros", version = "0.2.0" }
+cvkg-components = { path = "../cvkg-components", version = "0.2.0" }
+cvkg-layout = { path = "../cvkg-layout", version = "0.2.0" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.2.0" }
+cvkg-render-web = { path = "../cvkg-render-web", version = "0.2.0" }
+cvkg-scene = { path = "../cvkg-scene", version = "0.2.0" }
+cvkg-anim = { path = "../cvkg-anim", version = "0.2.0" }
+cvkg-flow = { path = "../cvkg-flow", version = "0.2.0" }
 serde_json = "1.0"
 insta = { version = "1.34", features = ["json"] }
 # Property-based testing

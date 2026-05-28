@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "adele-web-demo"
-version = "0.1.22"
+version = "0.2.0"
 edition = "2021"
 
 [features]
@@ -12,12 +12,12 @@ default = ["webgpu"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core", version = "0.1.22" }
-cvkg-render-web = { path = "../../cvkg-render-web", version = "0.1.22" }
-cvkg-vdom = { path = "../../cvkg-vdom", version = "0.1.22" }
-cvkg-components = { path = "../../cvkg-components", version = "0.1.22" }
-cvkg-themes = { path = "../../cvkg-themes", version = "0.1.22" }
-cvkg-layout = { path = "../../cvkg-layout", version = "0.1.22" }
+cvkg-core = { path = "../../cvkg-core", version = "0.2.0" }
+cvkg-render-web = { path = "../../cvkg-render-web", version = "0.2.0" }
+cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.0" }
+cvkg-components = { path = "../../cvkg-components", version = "0.2.0" }
+cvkg-themes = { path = "../../cvkg-themes", version = "0.2.0" }
+cvkg-layout = { path = "../../cvkg-layout", version = "0.2.0" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1"
