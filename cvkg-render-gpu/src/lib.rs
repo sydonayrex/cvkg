@@ -5205,13 +5205,10 @@ impl SurtrRenderer {
             info.name, info.device_type, info.backend
         );
         println!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
-        let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
-        let mut required_features =
-            wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                | wgpu::Features::TEXTURE_BINDING_ARRAY;
-        if supports_timestamps {
-            required_features |= wgpu::Features::TIMESTAMP_QUERY;
-        }
+        let required_features = adapter.features()
+            & (wgpu::Features::TIMESTAMP_QUERY
+                | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | wgpu::Features::TEXTURE_BINDING_ARRAY);
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
