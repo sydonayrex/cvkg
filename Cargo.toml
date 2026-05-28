@@ -120,3 +120,11 @@ cvkg-webkit-server = { path = "cvkg-webkit-server" }
 cvkg-test = { path = "cvkg-test" }
 cvkg-flow = { path = "cvkg-flow" }
 cvkg = { path = "cvkg" }
+
+[profile.dev]
+# Limit debug info to prevent memory exhaustion (Bus error) in GitHub Actions
+debug = 0
+
+[profile.test]
+# Keep some debug info for tests, but limit it to line tables
+debug = 1
