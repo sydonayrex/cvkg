@@ -8,10 +8,10 @@ description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI frame
 
 [dependencies]
 cvkg-core = "0.1.22"
-glam = { version = "0.29", features = ["serde", "bytemuck"] }
+glam = { version = "0.30", features = ["serde", "bytemuck"] }
 log = "0.4"
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 

@@ -7,6 +7,6 @@ repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 
 [dependencies]
-usvg = "0.44"
-quick-xml = "0.37"
-thiserror = "1.0"
+usvg = "0.47"
+quick-xml = "0.40"
+thiserror = "2.0"

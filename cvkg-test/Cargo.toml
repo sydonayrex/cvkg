@@ -10,11 +10,11 @@ description = "Automated visual regression testing harness for CVKG"
 [dependencies]
 cvkg-core = { path = "../cvkg-core", version = "0.1.22" }
 cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.1.22" }
-image = "0.24"
+image = "0.25"
 bytemuck = "1.13"
 pollster = "0.3"
 log = "0.4"
-env_logger = "0.10"
+env_logger = "0.11"
 tokio = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]

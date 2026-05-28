@@ -82,12 +82,6 @@ default-features = false
 [dependencies.winit]
 version = "0.30"
 
-[dependencies.muda]
-version = "0.19.2"
-
 [dependencies.rodio]
 version = "0.21"
 
-[target.'cfg(target_os = "linux")'.dependencies.muda]
-version = "0.19.2"
-features = ["gtk"]

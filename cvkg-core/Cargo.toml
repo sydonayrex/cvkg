@@ -40,7 +40,7 @@ version = "1.14"
 features = ["derive"]
 
 [dependencies.glam]
-version = "0.29"
+version = "0.30"
 features = [
     "serde",
     "bytemuck",
@@ -66,7 +66,7 @@ version = "0.1.22"
 version = "0.7"
 
 [dependencies.thiserror]
-version = "1.0"
+version = "2.0"
 
 [dependencies.tobj]
 version = "4.0"
