@@ -2176,6 +2176,12 @@ pub struct RodioAudioEngine {
     _stream: rodio::OutputStream,
 }
 
+// OutputStream is not Send+Sync on macOS due to CoreAudio, but we only use it
+// from the main thread. The AudioEngine trait requires Send+Sync for use in
+// App struct fields, which is safe here because we never move it across threads.
+unsafe impl Send for RodioAudioEngine {}
+unsafe impl Sync for RodioAudioEngine {}
+
 impl RodioAudioEngine {
     /// Create a new audio engine. Falls back to None if audio init fails.
     pub fn new() -> Option<Self> {
