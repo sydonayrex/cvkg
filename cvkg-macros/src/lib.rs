@@ -1,7 +1,8 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, FnArg, ItemFn, ItemStruct, Pat, parse_macro_input};
+use syn::{DeriveInput, FnArg, ItemFn, ItemStruct, Pat, parse_macro_input, Expr, braced};
+use syn::parse::{Parse, ParseStream};
 
 /// State attribute macro — derives common traits for state structs
 ///
@@ -197,20 +198,79 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// view! macro — DSL for declarative UI definition
+enum HamrNode {
+    Expr(Expr),
+    Block {
+        expr: Expr,
+        children: Vec<HamrNode>,
+    },
+}
+
+impl Parse for HamrNode {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let expr: Expr = input.parse()?;
+        if input.peek(syn::token::Brace) {
+            let content;
+            braced!(content in input);
+            let mut children = Vec::new();
+            while !content.is_empty() {
+                children.push(content.parse()?);
+            }
+            Ok(HamrNode::Block { expr, children })
+        } else {
+            Ok(HamrNode::Expr(expr))
+        }
+    }
+}
+
+struct HamrRoot {
+    nodes: Vec<HamrNode>,
+}
+
+impl Parse for HamrRoot {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut nodes = Vec::new();
+        while !input.is_empty() {
+            nodes.push(input.parse()?);
+        }
+        Ok(HamrRoot { nodes })
+    }
+}
+
+impl quote::ToTokens for HamrNode {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        match self {
+            HamrNode::Expr(expr) => {
+                expr.to_tokens(tokens);
+            }
+            HamrNode::Block { expr, children } => {
+                let mut output = quote::quote! { #expr };
+                for child in children {
+                    output = quote::quote! { #output.child(#child) };
+                }
+                tokens.extend(output);
+            }
+        }
+    }
+}
+
+/// hamr! macro — DSL for declarative UI definition
 ///
 /// Example:
-/// view! {
-///     VStack {
+/// hamr! {
+///     VStack::new(16.0) {
 ///         Text::new("Hello")
 ///         Button::new("Click", || {})
 ///     }
 /// }
 #[proc_macro]
-pub fn view(input: TokenStream) -> TokenStream {
-    // For now, we just pass through the input as it's often a single expression
-    // in the current CVKG architecture. In the future, this will be a full DSL parser.
-    input
+pub fn hamr(input: TokenStream) -> TokenStream {
+    let root = parse_macro_input!(input as HamrRoot);
+    let nodes = root.nodes;
+    let expanded = quote! {
+        #(#nodes)*
+    };
+    TokenStream::from(expanded)
 }
 
 /// cvkg_model! macro — generates data models with VDOM metadata

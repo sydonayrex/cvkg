@@ -106,7 +106,7 @@ pub struct OutlineView {
 #[derive(Clone, Copy, Debug, Default)]
 #[allow(dead_code)]
 struct OutlineState {
-    scroll_offset: u32,
+    scroll_offset: f32,
 }
 
 impl OutlineView {
@@ -203,14 +203,44 @@ impl View for OutlineView {
         renderer.push_clip_rect(content_rect);
 
         let flat = self.flatten();
-        let _start_idx = 0; // TODO: use scroll offset
+        let max_scroll = ((flat.len() as f32 * item_h) - (rect.height - pad * 2.0)).max(0.0);
 
-        for (i, (depth, has_children, selectable)) in flat.iter().enumerate() {
-            if i >= max_visible {
-                break;
-            }
+        let state_id = self.state_id;
+        let mut scroll_offset = 0.0;
+        
+        if state_id != 0 {
+            scroll_offset = cvkg_core::load_system_state()
+                .get_component_state::<OutlineState>(state_id)
+                .and_then(|g| g.read().ok().map(|v| v.scroll_offset))
+                .unwrap_or(0.0)
+                .clamp(0.0, max_scroll);
+                
+            renderer.register_handler(
+                "pointerwheel",
+                Arc::new(move |event| {
+                    if let cvkg_core::Event::PointerWheel { delta_y, .. } = event {
+                        cvkg_core::update_system_state(move |s| {
+                            let mut s = s.clone();
+                            let mut st = s
+                                .get_component_state::<OutlineState>(state_id)
+                                .and_then(|g| g.read().ok().map(|v| *v))
+                                .unwrap_or_default();
+                            st.scroll_offset = (st.scroll_offset + delta_y).clamp(0.0, max_scroll);
+                            s.set_component_state(state_id, st);
+                            s
+                        });
+                    }
+                }),
+            );
+        }
 
-            let y = content_rect.y + i as f32 * item_h;
+        let start_idx = (scroll_offset / item_h).floor() as usize;
+        let y_offset = scroll_offset % item_h;
+        let end_idx = (start_idx + max_visible + 2).min(flat.len());
+
+        for (visual_i, i) in (start_idx..end_idx).enumerate() {
+            let (depth, has_children, selectable) = flat[i];
+            let y = content_rect.y + (visual_i as f32 * item_h) - y_offset;
             let is_selected = self.selected_index == Some(i);
 
             // Selection highlight
@@ -232,10 +262,10 @@ impl View for OutlineView {
                 );
             }
 
-            let x = content_rect.x + *depth as f32 * 16.0;
+            let x = content_rect.x + depth as f32 * 16.0;
 
             // Disclosure triangle
-            if *has_children {
+            if has_children {
                 let tri_size: f32 = 10.0;
                 let tri_x = x + 4.0;
                 let tri_y = y + (item_h - tri_size) / 2.0;
@@ -253,8 +283,8 @@ impl View for OutlineView {
             }
 
             // Label
-            let label_x = x + if *has_children { 20.0 } else { 4.0 };
-            let label_color = if *selectable {
+            let label_x = x + if has_children { 20.0 } else { 4.0 };
+            let label_color = if selectable {
                 theme::text()
             } else {
                 theme::text_dim()
@@ -275,6 +305,13 @@ impl View for OutlineView {
             let sb_x = rect.x + rect.width - 6.0;
             let sb_h = rect.height - pad * 2.0;
             let thumb_h = (sb_h * max_visible as f32 / visible_count as f32).max(20.0);
+            
+            let thumb_y = if max_scroll > 0.0 {
+                content_rect.y + (scroll_offset / max_scroll) * (sb_h - thumb_h)
+            } else {
+                content_rect.y
+            };
+
             renderer.fill_rounded_rect(
                 Rect {
                     x: sb_x,
@@ -288,7 +325,7 @@ impl View for OutlineView {
             renderer.fill_rounded_rect(
                 Rect {
                     x: sb_x,
-                    y: content_rect.y,
+                    y: thumb_y,
                     width: 4.0,
                     height: thumb_h,
                 },
