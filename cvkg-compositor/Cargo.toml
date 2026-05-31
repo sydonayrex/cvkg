@@ -1,6 +1,6 @@
 [package]
 name = "cvkg-compositor"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -14,5 +14,4 @@ anyhow = "1.0"
 thiserror = "2.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]

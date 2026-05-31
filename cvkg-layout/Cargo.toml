@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-layout"
-version = "0.2.2"
+version = "0.2.3"
 build = false
 autolib = false
 autobins = false
@@ -34,7 +34,7 @@ name = "cvkg_layout"
 path = "src/lib.rs"
 
 [dependencies.cvkg-core]
-version = "0.2.2"
+version = "0.2.3"
 
 [dependencies.rayon]
 version = "1.12"

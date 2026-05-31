@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg"
-version = "0.2.0"
+version = "0.2.3"
 build = false
 autolib = false
 autobins = false
@@ -48,37 +48,37 @@ name = "shatter_demo"
 path = "examples/shatter_demo.rs"
 
 [dependencies.cvkg-anim]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.cvkg-components]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.cvkg-core]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.cvkg-layout]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.cvkg-macros]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.cvkg-render-gpu]
-version = "0.2.0"
+version = "0.2.3"
 optional = true
 
 [dependencies.cvkg-render-native]
-version = "0.2.0"
+version = "0.2.3"
 optional = true
 
 [dependencies.cvkg-render-web]
-version = "0.2.0"
+version = "0.2.3"
 optional = true
 
 [dependencies.cvkg-scene]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.cvkg-themes]
-version = "0.2.0"
+version = "0.2.3"
 
 [dependencies.rand]
 version = "0.8"
