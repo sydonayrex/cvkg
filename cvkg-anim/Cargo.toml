@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-anim"
-version = "0.2.1"
+version = "0.2.2"
 build = false
 autolib = false
 autobins = false
@@ -30,7 +30,7 @@ name = "cvkg_anim"
 path = "src/lib.rs"
 
 [dependencies.cvkg-core]
-version = "0.2.1"
+version = "0.2.2"
 
 [dependencies.glam]
 version = "0.30"

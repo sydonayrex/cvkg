@@ -1040,7 +1040,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             proximity_field: 0.0,
                             tilt: None,
                             azimuth: None,
-                            pressure: 1.0,
+                            pressure: Some(1.0),
                             barrel_rotation: None,
                         });
                     }
@@ -1077,7 +1077,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     proximity_field: 0.0,
                                     tilt: None,
                                     azimuth: None,
-                                    pressure: 1.0,
+                                    pressure: Some(1.0),
                                     barrel_rotation: None,
                                 });
                             }
@@ -1089,7 +1089,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     button: btn_id,
                                     tilt: None,
                                     azimuth: None,
-                                    pressure: 0.0,
+                                    pressure: Some(0.0),
                                     barrel_rotation: None,
                                 });
                             }
@@ -1381,7 +1381,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         button: 0, // Assume left click for accessibility actions
                         tilt: None,
                         azimuth: None,
-                        pressure: 1.0,
+                        pressure: Some(1.0),
                         barrel_rotation: None,
                     };
                     vdom.dispatch_event(event);
@@ -1840,7 +1840,7 @@ fn convert_mouse_event(
             proximity_field: 0.0,
             tilt: None,
             azimuth: None,
-            pressure: 1.0,
+            pressure: Some(1.0),
             barrel_rotation: None,
         },
         winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
@@ -1849,7 +1849,7 @@ fn convert_mouse_event(
             button,
             tilt: None,
             azimuth: None,
-            pressure: 0.0,
+            pressure: Some(0.0),
             barrel_rotation: None,
         },
     }
