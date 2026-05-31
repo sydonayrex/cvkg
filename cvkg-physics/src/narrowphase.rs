@@ -205,172 +205,240 @@ fn minkowski_support_3d(
 
 /// 3D world-space support point.
 fn world_support_3d(shape: &Shape, pos: Vec3, rot: &glam::Quat, dir: Vec3) -> Vec3 {
-    // Transform direction into local space
     let inv_rot = rot.inverse();
     let local_dir = inv_rot * dir;
     let local_support = shape.support_3d(local_dir);
-    // Transform back to world space
     pos + rot * local_support
 }
 
 /// 3D GJK result.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct GjkResult3D {
     pub overlapping: bool,
-    /// Tetrahedron simplex (4 vertices).
-    pub simplex: [Vec3; 4],
-    /// Number of valid vertices in the simplex (3 or 4).
-    pub simplex_count: usize,
+    /// Simplex vertices (1-4 points).
+    pub simplex: Vec<Vec3>,
 }
 
-/// 3D GJK algorithm.
+/// 3D GJK algorithm using Johnson's distance algorithm for simplex processing.
+/// Returns whether the shapes overlap and the final simplex for EPA warm-start.
 pub fn gjk_3d(
     shape_a: &Shape, pos_a: Vec3, rot_a: &glam::Quat,
     shape_b: &Shape, pos_b: Vec3, rot_b: &glam::Quat,
 ) -> GjkResult3D {
     let mut dir = pos_b - pos_a;
-    if dir.length_squared() < 1e-12 { dir = Vec3::X; }
+    if dir.length_squared() < 1e-12 {
+        dir = Vec3::X;
+    }
 
-    let mut simplex = [Vec3::ZERO; 4];
-    let mut count = 1usize;
-    simplex[0] = minkowski_support_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir);
+    let mut simplex: Vec<Vec3> = Vec::with_capacity(4);
+    simplex.push(minkowski_support_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir));
     dir = -simplex[0];
 
     for _ in 0..64 {
         let p = minkowski_support_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir);
-        if p.dot(dir) < 0.0 {
-            return GjkResult3D { overlapping: false, simplex, simplex_count: count };
+        // If the support point doesn't pass the origin in the search direction,
+        // the origin is outside the Minkowski difference → no overlap.
+        // Use a small negative tolerance for numerical robustness (touching = overlap).
+        if p.dot(dir) < -1e-10 {
+            return GjkResult3D { overlapping: false, simplex };
         }
-        // Insert new point at the beginning, shift only valid entries
-        if count < 4 {
-            for i in (1..=count).rev() {
-                simplex[i] = simplex[i - 1];
+        // Skip duplicate points (degenerate case).
+        if simplex.iter().any(|s| (*s - p).length_squared() < 1e-12) {
+            // For touching case, if we've been oscillating, treat as overlap.
+            if p.dot(dir) < 1e-6 {
+                return GjkResult3D { overlapping: true, simplex };
             }
-            count += 1;
-        } else {
-            // Simplex is full (4 points), shift all but the last
-            for i in 1..4 {
-                simplex[i - 1] = simplex[i];
-            }
+            return GjkResult3D { overlapping: false, simplex };
         }
-        simplex[0] = p;
-        // Check that the new point is not already in the simplex (degenerate)
-        let is_dup = (0..count).any(|j| (simplex[j] - p).length_squared() < 1e-12);
-        if is_dup {
-            continue;
+        simplex.push(p);
+        // Process the simplex: find the closest feature to the origin
+        // and update the search direction.
+        let (contains_origin, new_dir) = process_simplex_3d(&mut simplex);
+        if contains_origin {
+            return GjkResult3D { overlapping: true, simplex };
         }
-
-        let (nd, origin) = process_simplex_3d(&mut simplex);
-        if origin {
-            return GjkResult3D { overlapping: true, simplex, simplex_count: count };
-        }
-        dir = nd;
+        dir = new_dir;
         if dir.length_squared() < 1e-12 {
-            dir = Vec3::X;
+            // Degenerate direction — origin is on the simplex boundary.
+            return GjkResult3D { overlapping: true, simplex };
         }
     }
-    GjkResult3D { overlapping: false, simplex, simplex_count: count }
+    GjkResult3D { overlapping: false, simplex }
 }
 
-/// 3D simplex processing. Returns (new_direction, contains_origin).
-fn process_simplex_3d(s: &mut [Vec3; 4]) -> (Vec3, bool) {
-    let a = s[0];
-    let ao = -a; // direction toward origin from a
-
-    if s[3] != Vec3::ZERO {
-        // Tetrahedron case (4 points: a=0, b=1, c=2, d=3)
-        let ab = s[1] - a;
-        let ac = s[2] - a;
-        let ad = s[3] - a;
-
-        // Compute face normals pointing OUTWARD from the tetrahedron
-        // Face ABC (opposite to D): normal = ab × ac, flip if it points toward D
-        let mut abc = ab.cross(ac);
-        if abc.dot(ad) > 0.0 { abc = -abc; }
-
-        // Face ACD (opposite to B): normal = ac × ad, flip if it points toward B
-        let mut acd = ac.cross(ad);
-        if acd.dot(ab) > 0.0 { acd = -acd; }
-
-        // Face ADB (opposite to C): normal = ad × ab, flip if it points toward C
-        let mut adb = ad.cross(ab);
-        if adb.dot(ac) > 0.0 { adb = -adb; }
-
-        // Check which face the origin is on the outside of
-        if abc.dot(ao) > 0.0 {
-            s[3] = Vec3::ZERO; // Remove d
-            return (abc, false);
+/// Process a 3D simplex (1-4 points) using Johnson's distance algorithm.
+/// Returns `(contains_origin, new_search_direction)`.
+/// The simplex is modified in-place to contain only the closest feature.
+fn process_simplex_3d(simplex: &mut Vec<Vec3>) -> (bool, Vec3) {
+    match simplex.len() {
+        1 => {
+            // Single point: direction is toward origin from the point.
+            let ao = -simplex[0];
+            (false, ao)
         }
-        if acd.dot(ao) > 0.0 {
-            s[1] = s[3]; // Replace b with d
-            s[3] = Vec3::ZERO;
-            return (acd, false);
-        }
-        if adb.dot(ao) > 0.0 {
-            s[2] = s[1]; // Replace c with b
-            s[1] = s[3]; // Replace b with d
-            s[3] = Vec3::ZERO;
-            return (adb, false);
-        }
-        return (Vec3::ZERO, true); // Origin inside tetrahedron
-    }
-
-    if s[2] != Vec3::ZERO {
-        // Triangle case (3 points: a=0, b=1, c=2)
-        let ab = s[1] - a;
-        let ac = s[2] - a;
-        let abc = ab.cross(ac);
-
-        if abc.dot(ao) > 0.0 {
-            s[2] = Vec3::ZERO;
-            return (abc, false);
-        }
-        // Check edge AC
-        let ac_perp = ac.cross(abc);
-        if ac_perp.dot(ao) > 0.0 {
-            s[1] = s[2];
-            s[2] = Vec3::ZERO;
-            let new_dir = ac.cross(ao.cross(ac));
-            if new_dir.length_squared() < 1e-12 {
-                return (ac.any_orthogonal_vector(), false);
+        2 => {
+            // Line segment AB: find closest point on segment to origin.
+            let a = simplex[0];
+            let b = simplex[1];
+            let ab = b - a;
+            let ao = -a;
+            // Project origin onto AB line.
+            let ab_dot_ao = ab.dot(ao);
+            let ab_dot_ab = ab.dot(ab);
+            if ab_dot_ao <= 0.0 {
+                // Closest to A.
+                simplex.remove(1);
+                (false, ao)
+            } else if ab_dot_ao >= ab_dot_ab {
+                // Closest to B.
+                simplex.remove(0);
+                (false, -b)
+            } else {
+                // Closest to interior of AB.
+                // New direction is perpendicular to AB, toward origin.
+                let t = ab_dot_ao / ab_dot_ab;
+                let closest = a + ab * t;
+                let new_dir = -closest;
+                if new_dir.length_squared() < 1e-12 {
+                    // Origin is on the line — pick perpendicular.
+                    return (false, ab.any_orthogonal_vector());
+                }
+                (false, new_dir)
             }
-            return (new_dir, false);
         }
-        // Edge AB
-        let ab_perp = abc.cross(ab);
-        if ab_perp.dot(ao) > 0.0 {
-            s[2] = Vec3::ZERO;
-            let new_dir = ab.cross(ao.cross(ab));
-            if new_dir.length_squared() < 1e-12 {
-                return (ab.any_orthogonal_vector(), false);
-            }
-            return (new_dir, false);
-        }
-        // Origin is above or below the triangle — pick a perpendicular
-        if abc.length_squared() < 1e-12 {
-            return (abc.any_orthogonal_vector(), false);
-        }
-        return (abc, false);
-    }
+        3 => {
+            // Triangle ABC: find closest point on triangle to origin.
+            let a = simplex[0];
+            let b = simplex[1];
+            let c = simplex[2];
+            let ab = b - a;
+            let ac = c - a;
+            let ao = -a;
+            let n = ab.cross(ac);
 
-    if s[1] != Vec3::ZERO {
-        // Line case (2 points)
-        let ab = s[1] - a;
-        let ab_dot_ao = ab.dot(ao);
-        if ab_dot_ao > 0.0 {
-            let new_dir = ab.cross(ao.cross(ab));
-            if new_dir.length_squared() < 1e-12 {
-                return (ab.any_orthogonal_vector(), false);
+            // Check if origin is above/below the triangle (same side as normal).
+            let n_dot_ao = n.dot(ao);
+            if n_dot_ao.abs() < 1e-12 {
+                // Origin is in the triangle plane.
+                // Check if it's inside the triangle using barycentric coords.
+                let d1 = ab.dot(ao);
+                let d2 = ac.dot(ao);
+                let d3 = ab.dot(ab);
+                let d4 = ac.dot(ac);
+                let d5 = ab.dot(ac);
+                let denom = d3 * d4 - d5 * d5;
+                if denom.abs() < 1e-12 {
+                    // Degenerate triangle.
+                    return (false, n.any_orthogonal_vector());
+                }
+                let v = (d4 * d1 - d5 * d2) / denom;
+                let w = (d3 * d2 - d5 * d1) / denom;
+                let u = 1.0 - v - w;
+                if u >= -1e-10 && v >= -1e-10 && w >= -1e-10 {
+                    // Origin is inside the triangle (in the plane).
+                    return (true, Vec3::ZERO);
+                }
             }
-            return (new_dir, false);
-        }
-        // Origin is closest to A
-        s[1] = Vec3::ZERO;
-        return (ao, false);
-    }
 
-    // Single point — direction is toward origin
-    (ao, false)
+            // Check Voronoi regions of edges.
+            // Edge AB
+            let ab_perp = ab.cross(n);
+            if ab_perp.dot(ao) > 0.0 && ab.dot(ao) > 0.0 {
+                // Closest to edge AB.
+                simplex.remove(2); // Remove C.
+                let t = ab.dot(ao) / ab.dot(ab);
+                let closest = a + ab * t;
+                let new_dir = -closest;
+                if new_dir.length_squared() < 1e-12 {
+                    return (false, ab.any_orthogonal_vector());
+                }
+                return (false, new_dir);
+            }
+            // Edge AC
+            let ac_perp = n.cross(ac);
+            if ac_perp.dot(ao) > 0.0 && ac.dot(ao) > 0.0 {
+                // Closest to edge AC.
+                simplex.remove(1); // Remove B.
+                let t = ac.dot(ao) / ac.dot(ac);
+                let closest = a + ac * t;
+                let new_dir = -closest;
+                if new_dir.length_squared() < 1e-12 {
+                    return (false, ac.any_orthogonal_vector());
+                }
+                return (false, new_dir);
+            }
+            // Check if closest to vertex A or to the triangle face.
+            if ab.dot(ao) <= 0.0 && ac.dot(ao) <= 0.0 {
+                // Closest to A.
+                simplex.remove(2);
+                simplex.remove(1);
+                return (false, ao);
+            }
+            // Closest to the triangle face.
+            if n_dot_ao > 0.0 {
+                (false, n)
+            } else {
+                (false, -n)
+            }
+        }
+        4 => {
+            // Tetrahedron ABCD: find closest point on tetrahedron to origin.
+            let a = simplex[0];
+            let b = simplex[1];
+            let c = simplex[2];
+            let d = simplex[3];
+            let ab = b - a;
+            let ac = c - a;
+            let ad = d - a;
+            let ao = -a;
+
+            // Face normals (pointing outward from the tetrahedron).
+            // Face ABC (opposite D): normal = (b-a) × (c-a), points away from D if
+            // (normal · (d-a)) < 0.
+            let n_abc = ab.cross(ac);
+            let n_abc_outward = if n_abc.dot(ad) > 0.0 { -n_abc } else { n_abc };
+
+            // Face ABD (opposite C)
+            let n_abd = ad.cross(ab);
+            let n_abd_outward = if n_abd.dot(ac) > 0.0 { -n_abd } else { n_abd };
+
+            // Face ACD (opposite B)
+            let n_acd = ac.cross(ad);
+            let n_acd_outward = if n_acd.dot(ab) > 0.0 { -n_acd } else { n_acd };
+
+            // Face BCD (opposite A): normal = (c-b) × (d-b)
+            let bc = c - b;
+            let bd = d - b;
+            let n_bcd = bc.cross(bd);
+            let n_bcd_outward = if n_bcd.dot(ao) > 0.0 { -n_bcd } else { n_bcd };
+
+            // Check if origin is outside any face.
+            if n_abc_outward.dot(ao) > 0.0 {
+                // Outside face ABC — remove D, process as triangle.
+                simplex.remove(3);
+                return process_simplex_3d(simplex);
+            }
+            if n_abd_outward.dot(ao) > 0.0 {
+                // Outside face ABD — remove C, process as triangle.
+                simplex.remove(2);
+                return process_simplex_3d(simplex);
+            }
+            if n_acd_outward.dot(ao) > 0.0 {
+                // Outside face ACD — remove B, process as triangle.
+                simplex.remove(1);
+                return process_simplex_3d(simplex);
+            }
+            if n_bcd_outward.dot(-b) > 0.0 {
+                // Outside face BCD — remove A, process as triangle with B,C,D.
+                simplex.remove(0);
+                return process_simplex_3d(simplex);
+            }
+
+            // Origin is inside all faces → inside tetrahedron.
+            (true, Vec3::ZERO)
+        }
+        _ => (false, Vec3::X),
+    }
 }
 
 /// 3D overlap check.
@@ -398,34 +466,81 @@ pub fn epa_with_simplex_3d(
 ) -> Option<Contact3D> {
     if !gr.overlapping { return None; }
 
-    // Build initial tetrahedron from GJK simplex
-    let mut polyhedron: Vec<Vec3> = Vec::with_capacity(64);
-    for i in 0..gr.simplex_count {
-        polyhedron.push(gr.simplex[i]);
-    }
+    let mut polyhedron: Vec<Vec3> = gr.simplex.clone();
 
-    // If we only have 3 points, create a tetrahedron by adding a point
-    // in a direction perpendicular to the triangle
-    if polyhedron.len() == 3 {
-        let ab = polyhedron[1] - polyhedron[0];
-        let ac = polyhedron[2] - polyhedron[0];
-        let normal = ab.cross(ac);
-        if normal.length_squared() > 1e-12 {
-            polyhedron.push(minkowski_support_3d(a, pa, ra, b, pb, rb, normal.normalize()));
-        } else {
-            return None;
+    // Ensure we have at least 4 non-coplanar points for a tetrahedron.
+    if polyhedron.len() < 4 {
+        let dirs = [
+            Vec3::X,
+            Vec3::Y,
+            Vec3::Z,
+            Vec3::new(1.0, 1.0, 1.0).normalize(),
+            Vec3::new(-1.0, 1.0, 0.0).normalize(),
+            Vec3::new(0.0, -1.0, 1.0).normalize(),
+        ];
+        for dir in &dirs {
+            if polyhedron.len() >= 6 { break; }
+            let p = minkowski_support_3d(a, pa, ra, b, pb, rb, *dir);
+            if !polyhedron.iter().any(|v| (*v - p).length_squared() < 1e-8) {
+                polyhedron.push(p);
+            }
+        }
+    }
+    if polyhedron.len() < 4 { return None; }
+
+    // Check if the polyhedron has non-zero volume. If all points are coplanar
+    // or collinear, find a perpendicular direction and add offset points.
+    {
+        let mut has_volume = false;
+        for i in 0..polyhedron.len() {
+            for j in (i + 1)..polyhedron.len() {
+                for k in (j + 1)..polyhedron.len() {
+                    let e1 = polyhedron[j] - polyhedron[i];
+                    let e2 = polyhedron[k] - polyhedron[i];
+                    let n = e1.cross(e2);
+                    if n.length_squared() > 1e-8 {
+                        has_volume = true;
+                        break;
+                    }
+                }
+                if has_volume { break; }
+            }
+            if has_volume { break; }
+        }
+        if !has_volume {
+            // All points are collinear/coplanar. Add offset points perpendicular
+            // to the primary axis.
+            let axis = if polyhedron.len() >= 2 {
+                (polyhedron[1] - polyhedron[0]).normalize_or(Vec3::X)
+            } else {
+                Vec3::X
+            };
+            let perp1 = if axis.x.abs() < 0.9 {
+                Vec3::X.cross(axis).normalize()
+            } else {
+                Vec3::Y.cross(axis).normalize()
+            };
+            let perp2 = axis.cross(perp1).normalize();
+            for perp in [&perp1, &perp2] {
+                let offset = 0.01; // Small offset for numerical stability
+                let p1 = minkowski_support_3d(a, pa, ra, b, pb, rb, *perp);
+                let p2 = minkowski_support_3d(a, pa, ra, b, pb, rb, -*perp);
+                // Add offset points slightly displaced from the support surface
+                polyhedron.push(p1 + perp * offset);
+                polyhedron.push(p2 - perp * offset);
+                if polyhedron.len() >= 6 { break; }
+            }
         }
     }
 
     let (mut best_normal, mut best_depth) = (Vec3::ZERO, f32::MAX);
 
     for _ in 0..64 {
-        // Find the face closest to the origin
+        // Find the triangular face closest to the origin.
         let mut best_dist = f32::MAX;
         let mut best_face_normal = Vec3::ZERO;
-
-        // Iterate over all triangular faces of the polyhedron
         let mut found_face = false;
+
         for i in 0..polyhedron.len() {
             for j in (i + 1)..polyhedron.len() {
                 for k in (j + 1)..polyhedron.len() {
@@ -439,9 +554,11 @@ pub fn epa_with_simplex_3d(
                     if n_len < 1e-12 { continue; }
                     let n = n / n_len;
                     let d = n.dot(p0);
-                    if d >= 0.0 && d < best_dist {
-                        best_dist = d;
-                        best_face_normal = n;
+                    // Use absolute distance — the face normal might point away from origin.
+                    let dist = d.abs();
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_face_normal = if d >= 0.0 { n } else { -n };
                         found_face = true;
                     }
                 }
@@ -450,20 +567,20 @@ pub fn epa_with_simplex_3d(
 
         if !found_face { break; }
 
-        // Get support point in the direction of the closest face normal
         let support = minkowski_support_3d(a, pa, ra, b, pb, rb, best_face_normal);
         let support_dist = support.dot(best_face_normal);
 
-        // Check for convergence
         if (support_dist - best_dist).abs() < 1e-6 {
             best_normal = best_face_normal;
             best_depth = best_dist;
             break;
         }
 
-        // Add support point to polyhedron
-        polyhedron.push(support);
-        if polyhedron.len() > 64 { break; }
+        // Avoid adding duplicate points.
+        if !polyhedron.iter().any(|v| (*v - support).length_squared() < 1e-12) {
+            polyhedron.push(support);
+        }
+        if polyhedron.len() > 128 { break; }
     }
 
     if best_depth < f32::MAX {
@@ -511,6 +628,184 @@ pub fn collide_3d(
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// Continuous Collision Detection (CCD)
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Continuous collision detection result.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CcdResult3D {
+    /// Time of impact, in range [0, 1]. 0 = start of frame, 1 = end.
+    pub toi: f32,
+    /// Contact point at time of impact.
+    pub point: Vec3,
+    /// Contact normal at time of impact.
+    pub normal: Vec3,
+}
+
+/// Swept GJK for continuous collision detection.
+/// Casts shape_a from `pos_a` to `pos_a + vel_a * t` against
+/// shape_b from `pos_b` to `pos_b + vel_b * t`.
+/// Returns the earliest time of impact in [0, 1], or None if no collision.
+///
+/// Uses conservative advancement: iteratively refines the TOI by
+/// computing the distance between shapes at the current time estimate
+/// and advancing time by distance / relative_speed.
+pub fn gjk_ccd_3d(
+    shape_a: &Shape, pos_a: Vec3, rot_a: &glam::Quat, vel_a: Vec3,
+    shape_b: &Shape, pos_b: Vec3, rot_b: &glam::Quat, vel_b: Vec3,
+    radius_a: f32, radius_b: f32,
+) -> Option<CcdResult3D> {
+    let rel_vel = vel_a - vel_b;
+    let rel_speed = rel_vel.length();
+    let sum_radii = radius_a + radius_b;
+
+    // If relative speed is zero, fall back to static GJK.
+    if rel_speed < 1e-10 {
+        if gjk_overlap_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b) {
+            return Some(CcdResult3D {
+                toi: 0.0,
+                point: (pos_a + pos_b) * 0.5,
+                normal: (pos_b - pos_a).normalize_or(Vec3::X),
+            });
+        }
+        return None;
+    }
+
+    let mut t = 0.0;
+    for _ in 0..32 {
+        let cur_a = pos_a + vel_a * t;
+        let cur_b = pos_b + vel_b * t;
+
+        // Check overlap at current time.
+        if gjk_overlap_3d(shape_a, cur_a, rot_a, shape_b, cur_b, rot_b) {
+            // Compute contact info via EPA.
+            if let Some(epa) = epa_3d(shape_a, cur_a, rot_a, shape_b, cur_b, rot_b) {
+                return Some(CcdResult3D {
+                    toi: t,
+                    point: epa.point,
+                    normal: epa.normal,
+                });
+            }
+            return Some(CcdResult3D {
+                toi: t,
+                point: (cur_a + cur_b) * 0.5,
+                normal: (cur_b - cur_a).normalize_or(Vec3::X),
+            });
+        }
+
+        // Compute distance between shapes using GJK simplex.
+        let gr = gjk_3d(shape_a, cur_a, rot_a, shape_b, cur_b, rot_b);
+        let distance = if gr.simplex.is_empty() {
+            0.0
+        } else {
+            // Approximate distance from simplex.
+            gr.simplex.iter().map(|p| p.length()).fold(f32::MAX, f32::min)
+        };
+
+        // If distance is less than sum of radii, we have a potential collision.
+        if distance < sum_radii {
+            // Narrow the time step.
+            let penetration = sum_radii - distance;
+            let dt = penetration / rel_speed;
+            t += dt;
+            if t >= 1.0 { return None; }
+            continue;
+        }
+
+        // Advance time: how long until the distance closes to sum_radii?
+        let closing_speed = rel_speed;
+        if closing_speed < 1e-10 { return None; }
+        let dt = (distance - sum_radii) / closing_speed;
+        if dt < 1e-10 {
+            // Very close — check one more time.
+            let next_t = (t + 1e-4).min(1.0);
+            let next_a = pos_a + vel_a * next_t;
+            let next_b = pos_b + vel_b * next_t;
+            if gjk_overlap_3d(shape_a, next_a, rot_a, shape_b, next_b, rot_b) {
+                if let Some(epa) = epa_3d(shape_a, next_a, rot_a, shape_b, next_b, rot_b) {
+                    return Some(CcdResult3D { toi: next_t, point: epa.point, normal: epa.normal });
+                }
+                return Some(CcdResult3D {
+                    toi: next_t,
+                    point: (next_a + next_b) * 0.5,
+                    normal: (next_b - next_a).normalize_or(Vec3::X),
+                });
+            }
+            return None;
+        }
+        t += dt;
+        if t >= 1.0 { return None; }
+    }
+    None
+}
+
+/// 2D continuous collision detection (swept circles / AABBs).
+pub fn gjk_ccd(
+    shape_a: &Shape, pos_a: Vec2, angle_a: f32, vel_a: Vec2,
+    shape_b: &Shape, pos_b: Vec2, angle_b: f32, vel_b: Vec2,
+    radius_a: f32, radius_b: f32,
+) -> Option<(f32, Vec2, Vec2)> {
+    let rel_vel = vel_a - vel_b;
+    let rel_speed = rel_vel.length();
+    let sum_radii = radius_a + radius_b;
+
+    if rel_speed < 1e-10 {
+        if gjk_overlap(shape_a, pos_a, angle_a, shape_b, pos_b, angle_b) {
+            let normal = (pos_b - pos_a).normalize_or(Vec2::X);
+            return Some((0.0, (pos_a + pos_b) * 0.5, normal));
+        }
+        return None;
+    }
+
+    let mut t = 0.0;
+    for _ in 0..32 {
+        let cur_a = pos_a + vel_a * t;
+        let cur_b = pos_b + vel_b * t;
+
+        if gjk_overlap(shape_a, cur_a, angle_a, shape_b, cur_b, angle_b) {
+            if let Some(epa) = epa(shape_a, cur_a, angle_a, shape_b, cur_b, angle_b) {
+                return Some((t, epa.point, epa.normal));
+            }
+            let normal = (cur_b - cur_a).normalize_or(Vec2::X);
+            return Some((t, (cur_a + cur_b) * 0.5, normal));
+        }
+
+        // Distance check.
+        let gr = gjk(shape_a, cur_a, angle_a, shape_b, cur_b, angle_b);
+        let distance = if gr.simplex.is_empty() {
+            0.0
+        } else {
+            gr.simplex.iter().take(gr.simplex_count).map(|p| p.length()).fold(f32::MAX, f32::min)
+        };
+
+        if distance < sum_radii {
+            let penetration = sum_radii - distance;
+            t += penetration / rel_speed;
+            if t >= 1.0 { return None; }
+            continue;
+        }
+
+        let dt = (distance - sum_radii) / rel_speed;
+        if dt < 1e-10 {
+            let next_t = (t + 1e-4).min(1.0);
+            let next_a = pos_a + vel_a * next_t;
+            let next_b = pos_b + vel_b * next_t;
+            if gjk_overlap(shape_a, next_a, angle_a, shape_b, next_b, angle_b) {
+                if let Some(epa) = epa(shape_a, next_a, angle_a, shape_b, next_b, angle_b) {
+                    return Some((next_t, epa.point, epa.normal));
+                }
+                let normal = (next_b - next_a).normalize_or(Vec2::X);
+                return Some((next_t, (next_a + next_b) * 0.5, normal));
+            }
+            return None;
+        }
+        t += dt;
+        if t >= 1.0 { return None; }
+    }
+    None
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // Tests
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -554,7 +849,6 @@ mod tests {
     // 2D GJK/EPA is fully tested and working above.
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging - tetrahedron case"]
     fn test_gjk_3d_sphere_overlap() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
@@ -563,7 +857,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging"]
     fn test_gjk_3d_sphere_separated() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
@@ -572,7 +865,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging"]
     fn test_gjk_3d_sphere_touching() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
@@ -581,7 +873,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging"]
+    #[ignore = "EPA degenerate simplex handling needs refinement"]
     fn test_epa_3d_sphere_overlap() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
@@ -595,7 +887,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging"]
+    #[ignore = "EPA degenerate simplex handling needs refinement"]
     fn test_collide_3d_spheres() {
         let a = Shape::sphere(3.0);
         let b = Shape::sphere(3.0);
@@ -620,7 +912,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging"]
     fn test_gjk_3d_box_sphere() {
         let sphere = Shape::sphere(2.0);
         let box3d = Shape::box3d(Vec3::new(3.0, 3.0, 3.0));
@@ -630,7 +921,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "3D GJK simplex processing needs debugging"]
     fn test_gjk_3d_rotated_box() {
         let box_a = Shape::box3d(Vec3::new(2.0, 2.0, 2.0));
         let box_b = Shape::box3d(Vec3::new(2.0, 2.0, 2.0));
