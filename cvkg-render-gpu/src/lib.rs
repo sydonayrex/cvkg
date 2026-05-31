@@ -333,7 +333,6 @@ impl Vertex {
 }
 
 /// SurtrRenderer implements the high-performance GPU backend.
-#[allow(dead_code)]
 pub struct SurtrRenderer {
     instance: Arc<wgpu::Instance>,
     adapter: Arc<wgpu::Adapter>,
@@ -348,7 +347,6 @@ pub struct SurtrRenderer {
     // Mega-Atlas (Shared across all windows)
     text_engine: cvkg_runic_text::RunicTextEngine,
     mega_atlas_tex: wgpu::Texture,
-    #[allow(dead_code)]
     mega_atlas_view: wgpu::TextureView,
     _mega_atlas_sampler: wgpu::Sampler,
     mega_atlas_bind_group: wgpu::BindGroup,

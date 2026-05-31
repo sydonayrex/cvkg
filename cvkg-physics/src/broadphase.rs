@@ -7,7 +7,7 @@ use glam::Vec2;
 use crate::BodyId;
 
 /// Cell size for the spatial hash grid.
-const CELL_SIZE: f32 = 64.0;
+const DEFAULT_CELL_SIZE: f32 = 64.0;
 
 /// Spatial hash grid for fast broad-phase collision culling.
 ///
@@ -16,6 +16,9 @@ const CELL_SIZE: f32 = 64.0;
 #[derive(Debug, Default)]
 pub struct SpatialHash {
     cells: HashMap<(i32, i32), Vec<BodyId>>,
+    /// Cell size for the spatial hash grid. Tuning this to match your
+    /// typical collider size improves broadphase performance.
+    pub cell_size: f32,
 }
 
 impl SpatialHash {
@@ -23,6 +26,15 @@ impl SpatialHash {
     pub fn new() -> Self {
         Self {
             cells: HashMap::new(),
+            cell_size: DEFAULT_CELL_SIZE,
+        }
+    }
+
+    /// Create a spatial hash with a custom cell size.
+    pub fn with_cell_size(cell_size: f32) -> Self {
+        Self {
+            cells: HashMap::new(),
+            cell_size: cell_size.max(1.0),
         }
     }
 
@@ -33,8 +45,9 @@ impl SpatialHash {
 
     /// Insert a body into the spatial hash given its AABB.
     pub fn insert(&mut self, body_id: BodyId, min: Vec2, max: Vec2) {
-        let min_cell = Self::world_to_cell(min);
-        let max_cell = Self::world_to_cell(max);
+        let cs = self.cell_size;
+        let min_cell = ((min.x / cs).floor() as i32, (min.y / cs).floor() as i32);
+        let max_cell = ((max.x / cs).floor() as i32, (max.y / cs).floor() as i32);
 
         for x in min_cell.0..=max_cell.0 {
             for y in min_cell.1..=max_cell.1 {
@@ -81,9 +94,20 @@ impl SpatialHash {
 
     fn world_to_cell(pos: Vec2) -> (i32, i32) {
         (
-            (pos.x / CELL_SIZE).floor() as i32,
-            (pos.y / CELL_SIZE).floor() as i32,
+            (pos.x / DEFAULT_CELL_SIZE).floor() as i32,
+            (pos.y / DEFAULT_CELL_SIZE).floor() as i32,
         )
+    }
+
+    /// Get the current cell size.
+    pub fn cell_size(&self) -> f32 {
+        self.cell_size
+    }
+
+    /// Set the cell size. Clears existing entries.
+    pub fn set_cell_size(&mut self, size: f32) {
+        self.cell_size = size.max(1.0);
+        self.clear();
     }
 }
 

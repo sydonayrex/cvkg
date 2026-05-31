@@ -50,6 +50,10 @@ pub struct GraphState {
     pub edges: Vec<EdgeInfo>,
     pub themes: HashMap<String, Vec<f32>>,
     pub events: Vec<EventInfo>,
+    /// Last known frame time in milliseconds (from renderer telemetry).
+    pub frame_time_ms: f32,
+    /// Last known GPU memory usage in MB (from renderer telemetry).
+    pub gpu_memory_mb: f32,
 }
 
 /// Node information for the dashboard.

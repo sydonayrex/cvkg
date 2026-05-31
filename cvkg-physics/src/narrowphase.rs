@@ -120,9 +120,28 @@ pub fn collide(
     ib: usize, sb: &Shape, bb: &RigidBody,
 ) -> Option<ContactManifold> {
     if gjk_overlap(sa, ba.position, ba.angle, sb, bb.position, bb.angle) {
-        epa(sa, ba.position, ba.angle, sb, bb.position, bb.angle)
-            .map(|c| ContactManifold { body_a: ia, body_b: ib, contacts: vec![c] })
-    } else { None }
+        // Compute a better contact point: use the support points along the EPA normal
+        if let Some(epa_contact) = epa(sa, ba.position, ba.angle, sb, bb.position, bb.angle) {
+            // Refine contact point using support points in the normal direction
+            let normal = epa_contact.normal;
+            let support_a = world_support(sa, ba.position, ba.angle, normal);
+            let support_b = world_support(sb, bb.position, bb.angle, -normal);
+            let contact_point = (support_a + support_b) * 0.5;
+            Some(ContactManifold {
+                body_a: ia,
+                body_b: ib,
+                contacts: vec![Contact {
+                    point: contact_point,
+                    normal: epa_contact.normal,
+                    depth: epa_contact.depth,
+                }],
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
 
 fn process_simplex(s: &mut [Vec2; 3]) -> (Vec2, bool) {

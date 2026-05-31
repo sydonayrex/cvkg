@@ -447,11 +447,15 @@ pub fn start_file_watcher(
         if let Some(ds) = crate::devtools_dashboard::dashboard_state() {
             let guard = ds.lock().unwrap_or_else(|e| e.into_inner());
             crate::devtools::update_metrics(crate::devtools::PerfMetrics {
-                frame_time_ms: 16.67, // TODO: measure actual frame time
-                fps: 60.0,
+                frame_time_ms: guard.frame_time_ms,
+                fps: if guard.frame_time_ms > 0.0 {
+                    1000.0 / guard.frame_time_ms
+                } else {
+                    0.0
+                },
                 node_count: guard.nodes.len(),
                 edge_count: guard.edges.len(),
-                gpu_memory_mb: 0.0, // TODO: query actual GPU memory
+                gpu_memory_mb: guard.gpu_memory_mb,
             });
         }
 
