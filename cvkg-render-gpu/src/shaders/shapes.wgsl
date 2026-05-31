@@ -1,37 +1,44 @@
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    
-    // Apply 2D Transform: Rotate -> Scale -> Translate
+
     var pos = in.position.xy;
-    
+
+    // ── Mode 13 (3D Surface): Skip 2D transforms, use full MVP ──────────
+    if (in.mode == 13u) {
+        // Position is already model-space (transformed on CPU by draw_mesh_3d).
+        // Apply only view and projection on GPU.
+        out.clip_position = scene.proj * scene.view * vec4<f32>(in.position, 1.0);
+    } else {
+    // Apply 2D Transform: Rotate -> Scale -> Translate
     // Rotation
-    let s = sin(in.rotation);
-    let c = cos(in.rotation);
-    let rot_matrix = mat2x2<f32>(c, s, -s, c);
+    let s2 = sin(in.rotation);
+    let c2 = cos(in.rotation);
+    let rot_matrix = mat2x2<f32>(c2, s2, -s2, c2);
     pos = rot_matrix * pos;
-    
+
     // Scale
     pos = pos * in.scale;
-    
+
     // Translation
     pos = pos + in.translation;
-    
+
     // ── Hardware Shatter Effect (Berserker Physics) ─────────────────────
     let shatter_dt = scene.time - scene.shatter_time;
     if (shatter_dt > 0.0 && shatter_dt < 2.0) {
         // Calculate displacement from shatter origin
         let dist = distance(pos, scene.shatter_origin);
         let dir = normalize(pos - scene.shatter_origin + vec2<f32>(1e-5, 1e-5));
-        
+
         // Force falloff: stronger near origin, decays over time
         let explosion = (1.0 / (dist * 0.01 + 0.1)) * scene.shatter_force;
         let expansion = explosion * shatter_dt * 100.0;
-        
+
         pos += dir * expansion;
     }
-    
+
     out.clip_position = scene.proj * scene.view * vec4<f32>(pos, in.position.z, 1.0);
+    }
     out.uv = in.uv;
     out.color = in.color;
     out.mode = in.mode;
@@ -163,6 +170,50 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         
         color = vec4<f32>(final_rgb, 0.01 + fresnel * 0.01);
         color.a *= (1.0 - smoothstep(-fw, fw, d_sdf));
+
+} else if in.mode == 13u {
+        // ── Mode 13: 3D Surface — Basic PBR Lighting Model ──────────────
+        // slice.x = metallic, slice.y = roughness, slice.z = opacity
+        let metallic = in.slice.x;
+        let roughness = in.slice.y;
+        let opacity  = in.slice.z;
+
+        // Normalize the interpolated normal
+        let n = normalize(in.normal);
+
+        // Basic directional light (top-right-front)
+        let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.6));
+        let light_color = vec3<f32>(1.0, 0.95, 0.9);
+
+        // Diffuse (Lambert)
+        let n_dot_l = max(dot(n, light_dir), 0.0);
+        let diffuse = n_dot_l * light_color;
+
+        // Specular (Blinn-Phong with roughness control)
+        let view_dir = vec3<f32>(0.0, 0.0, 1.0); // Approximate view direction
+        let half_dir = normalize(light_dir + view_dir);
+        let n_dot_h = max(dot(n, half_dir), 0.0);
+        // Shininess from roughness: lower roughness = higher shininess
+        let shininess = mix(8.0, 256.0, 1.0 - roughness);
+        let spec = pow(n_dot_h, shininess) * light_color;
+
+        // Fresnel approximation (Schlick)
+        let f0 = mix(vec3<f32>(0.04), in.color.rgb, metallic);
+        let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - max(dot(n, -view_dir), 0.0), 5.0);
+
+        // Ambient with theme influence
+        let ambient = vec3<f32>(0.06, 0.07, 0.1);
+
+        // Combine: diffuse for dielectrics, specular tinted by base color for metals
+        var lit_color = in.color.rgb * (ambient + diffuse);
+        lit_color += spec * mix(vec3<f32>(1.0), in.color.rgb, metallic) * fresnel;
+
+        // Simple fog falloff for depth perception
+        let depth = in.clip_position.z;
+        let fog_factor = clamp(1.0 - depth * 0.0005, 0.7, 1.0);
+        lit_color *= fog_factor;
+
+        color = vec4<f32>(lit_color, in.color.a * opacity);
 
     } else if in.mode == 18u {
         // Drop Shadow Logic (Mode 18u)
