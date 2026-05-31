@@ -1567,8 +1567,23 @@ mod wasm_impl {
             }
         }
 
+        fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &cvkg_core::Material3D, _transform: &cvkg_core::Transform3D) {
+            // TODO: Implement 3D mesh rendering via WebGL/WebGPU
+        }
+
+        fn set_camera_3d(&mut self, _camera: &cvkg_core::Camera3D) {
+            // TODO: Set 3D projection matrix for WebGL/WebGPU
+        }
+
+        fn push_transform_3d(&mut self, _transform: &cvkg_core::Transform3D) {
+            // TODO: Push 3D transform onto WebGL/WebGPU stack
+        }
+
+        fn pop_transform_3d(&mut self) {
+            // TODO: Pop 3D transform from WebGL/WebGPU stack
+        }
+
         fn push_vnode(&mut self, rect: Rect, name: &'static str) {
-            if self.tier == RenderTier::Tier3Fallback {
                 if let Some(ref gl) = self.canvas_context {
                     // Debug layout visualization
                     gl.save();
@@ -1586,15 +1601,14 @@ mod wasm_impl {
                     gl.restore();
                 }
             }
-        }
 
-        fn set_debug_layout(&mut self, _enabled: bool) {}
+            fn set_debug_layout(&mut self, _enabled: bool) {}
 
-        fn get_debug_layout(&self) -> bool {
-            false
-        }
+            fn get_debug_layout(&self) -> bool {
+                false
+            }
 
-        fn register_shared_element(&mut self, id: &str, rect: Rect) {
+            fn register_shared_element(&mut self, id: &str, rect: Rect) {
             log::trace!("Web: register_shared_element '{}' {:?}", id, rect);
         }
         fn request_redraw(&mut self) {

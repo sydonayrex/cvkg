@@ -4347,6 +4347,68 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
     }
 
+    fn draw_mesh_3d(&mut self, mesh: &Mesh, material: &cvkg_core::Material3D, transform: &cvkg_core::Transform3D) {
+        let base_idx = self.vertices.len() as u32;
+        let screen = [self.current_width() as f32, self.current_height() as f32];
+        let model_matrix = transform.to_matrix();
+
+        for i in 0..mesh.vertices.len() {
+            let pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
+            let norm = model_matrix.transform_vector3(glam::Vec3::from(mesh.normals[i]));
+
+            self.vertices.push(Vertex {
+                position: [pos.x, pos.y, pos.z],
+                normal: [norm.x, norm.y, norm.z],
+                uv: [0.0, 0.0],
+                color: material.base_color,
+                mode: 13, // Mode 13: 3D Surface
+                radius: 0.0,
+                slice: [material.metallic, material.roughness, material.opacity, 1.0],
+                logical: [0.0, 0.0],
+                size: [0.0, 0.0],
+                screen,
+                clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                translation: [0.0, 0.0],
+                scale: [1.0, 1.0],
+                rotation: 0.0,
+                tex_index: 0,
+            });
+        }
+
+        for idx in &mesh.indices {
+            self.indices.push(base_idx + idx);
+        }
+
+        self.draw_calls.push(DrawCall {
+            texture_id: None,
+            scissor_rect: self.clip_stack.last().copied(),
+            index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
+            index_count: mesh.indices.len() as u32,
+            material: cvkg_core::DrawMaterial::Opaque,
+        });
+    }
+
+    fn set_camera_3d(&mut self, camera: &cvkg_core::Camera3D) {
+        self.current_scene.proj = camera.projection_matrix();
+        self.current_scene.view = camera.view_matrix();
+    }
+
+    fn push_transform_3d(&mut self, transform: &cvkg_core::Transform3D) {
+        // Push a 2D-compatible transform for the existing pipeline
+        let m = transform.to_matrix();
+        let translation = [m.w_axis.x, m.w_axis.y];
+        let scale = [m.x_axis.x, m.y_axis.y];
+        let rotation = m.x_axis.y.atan2(m.x_axis.x);
+        self.push_transform(translation, scale, rotation);
+    }
+
+    fn pop_transform_3d(&mut self) {
+        self.pop_transform();
+        if !self.transform_stack.is_empty() {
+            self.transform_stack.pop();
+        }
+    }
+
     fn register_shared_element(&mut self, id: &str, rect: Rect) {
         self.shared_elements.put(id.to_string(), rect);
     }

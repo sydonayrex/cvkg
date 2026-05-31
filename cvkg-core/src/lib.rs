@@ -2774,7 +2774,20 @@ pub trait Renderer: ElapsedTime + Send {
     /// Draw a 3D mesh.
     fn draw_mesh(&mut self, _mesh: &Mesh, _color: [f32; 4], _transform: glam::Mat4) {}
 
-    // ── Advanced Visual Effects ──────────────────────────────────────────
+    /// Draw a 3D mesh with full material and transform support.
+    fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {}
+
+    /// Set the 3D camera for perspective/orthographic projection.
+    /// If not called, rendering defaults to the 2D orthographic projection.
+    fn set_camera_3d(&mut self, _camera: &Camera3D) {}
+
+    /// Push a 3D transform onto the transform stack.
+    /// All subsequent drawing is affected until `pop_transform_3d`.
+    fn push_transform_3d(&mut self, _transform: &Transform3D) {}
+
+    /// Pop the most recently pushed 3D transform.
+    fn pop_transform_3d(&mut self) {}
+
     /// Draw a linear gradient between two colors at the specified angle.
     fn draw_linear_gradient(
         &mut self,
@@ -3241,6 +3254,156 @@ impl Mesh {
         })
     }
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3D TYPES — Phase 1: Camera, Transform, and 2.5D layer support
+// ══════════════════════════════════════════════════════════════════════════
+
+/// A 3D transform: position, rotation (quaternion), and scale.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transform3D {
+    pub position: glam::Vec3,
+    pub rotation: glam::Quat,
+    pub scale: glam::Vec3,
+}
+
+impl Default for Transform3D {
+    fn default() -> Self {
+        Self {
+            position: glam::Vec3::ZERO,
+            rotation: glam::Quat::IDENTITY,
+            scale: glam::Vec3::ONE,
+        }
+    }
+}
+
+impl Transform3D {
+    /// Convert this transform to a 4x4 model matrix.
+    pub fn to_matrix(&self) -> glam::Mat4 {
+        glam::Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+    }
+
+    /// Create a 2D-compatible transform (z=0, no rotation on z axis).
+    pub fn from_2d(x: f32, y: f32, rotation: f32) -> Self {
+        Self {
+            position: glam::Vec3::new(x, y, 0.0),
+            rotation: glam::Quat::from_rotation_z(rotation),
+            scale: glam::Vec3::ONE,
+        }
+    }
+}
+
+/// Camera definition for 3D rendering.
+#[derive(Debug, Clone, Copy)]
+pub struct Camera3D {
+    /// World-space camera position.
+    pub position: glam::Vec3,
+    /// World-space point the camera looks at.
+    pub target: glam::Vec3,
+    /// World-space up vector.
+    pub up: glam::Vec3,
+    /// Field of view in radians (perspective) or half-height (orthographic).
+    pub fov_y: f32,
+    /// Near clipping plane distance.
+    pub near: f32,
+    /// Far clipping plane distance.
+    pub far: f32,
+    /// If true, use perspective projection. If false, use orthographic.
+    pub perspective: bool,
+    /// Aspect ratio (width / height). Used for perspective projection.
+    pub aspect: f32,
+}
+
+/// Material properties for 3D rendering.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Material3D {
+    /// Base color (RGBA).
+    pub base_color: [f32; 4],
+    /// Metallic factor (0 = dielectric, 1 = metallic).
+    pub metallic: f32,
+    /// Roughness factor (0 = mirror, 1 = fully diffuse).
+    pub roughness: f32,
+    /// Emissive color (RGB) for self-illumination.
+    pub emissive: [f32; 3],
+    /// Opacity (0 = transparent, 1 = opaque).
+    pub opacity: f32,
+}
+
+impl Default for Material3D {
+    fn default() -> Self {
+        Self {
+            base_color: [1.0, 1.0, 1.0, 1.0],
+            metallic: 0.0,
+            roughness: 0.5,
+            emissive: [0.0, 0.0, 0.0],
+            opacity: 1.0,
+        }
+    }
+}
+
+impl Material3D {
+    /// Create a simple unlit material with just a color.
+    pub fn unlit(color: [f32; 4]) -> Self {
+        Self {
+            base_color: color,
+            metallic: 0.0,
+            roughness: 1.0,
+            emissive: [0.0, 0.0, 0.0],
+            opacity: color[3],
+        }
+    }
+
+    /// Create a metallic material.
+    pub fn metallic(color: [f32; 4], roughness: f32) -> Self {
+        Self {
+            base_color: color,
+            metallic: 1.0,
+            roughness: roughness.clamp(0.0, 1.0),
+            emissive: [0.0, 0.0, 0.0],
+            opacity: color[3],
+        }
+    }
+}
+
+impl Default for Camera3D {
+    fn default() -> Self {
+        Self {
+            position: glam::Vec3::new(0.0, 0.0, 10.0),
+            target: glam::Vec3::ZERO,
+            up: glam::Vec3::Y,
+            fov_y: 45.0f32.to_radians(),
+            near: 0.1,
+            far: 1000.0,
+            perspective: true,
+            aspect: 16.0 / 9.0,
+        }
+    }
+}
+
+impl Camera3D {
+    /// Compute the view matrix (world → camera space).
+    pub fn view_matrix(&self) -> glam::Mat4 {
+        glam::Mat4::look_at_lh(self.position, self.target, self.up)
+    }
+
+    /// Compute the projection matrix.
+    pub fn projection_matrix(&self) -> glam::Mat4 {
+        if self.perspective {
+            glam::Mat4::perspective_lh(self.fov_y, self.aspect, self.near, self.far)
+        } else {
+            // Orthographic with fov_y as half-height
+            let top = self.fov_y;
+            let right = top * self.aspect;
+            glam::Mat4::orthographic_lh(-right, right, -top, top, self.near, self.far)
+        }
+    }
+
+    /// Compute the combined view-projection matrix.
+    pub fn view_projection(&self) -> glam::Mat4 {
+        self.projection_matrix() * self.view_matrix()
+    }
+}
+
 /// FrameRenderer extends Renderer with frame lifecycle management.
 /// It is typically implemented by the host windowing/rendering environment.
 pub trait FrameRenderer<E = ()>: Renderer {
@@ -5492,6 +5655,10 @@ mod vili_tests {
             (0.0, 0.0)
         }
         fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
+        fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {}
+        fn set_camera_3d(&mut self, _camera: &Camera3D) {}
+        fn push_transform_3d(&mut self, _transform: &Transform3D) {}
+        fn pop_transform_3d(&mut self) {}
     }
 
     #[test]
