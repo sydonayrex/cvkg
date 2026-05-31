@@ -2788,6 +2788,25 @@ pub trait Renderer: ElapsedTime + Send {
     /// Pop the most recently pushed 3D transform.
     fn pop_transform_3d(&mut self) {}
 
+    /// Render a 3D scene graph node. Reads position_3d, rotation_3d, scale_3d
+    /// from the node and emits the appropriate draw call.
+    /// Default implementation is a no-op; 3D renderers override this.
+    ///
+    /// `position`: [x, y, z] world-space position
+    /// `rotation`: [x, y, z, w] quaternion rotation
+    /// `scale`: [x, y, z] scale factors
+    /// `color`: [r, g, b, a] base color for unlit rendering
+    fn render_scene_node_3d(
+        &mut self,
+        _position: [f32; 3],
+        _rotation: [f32; 4],
+        _scale: [f32; 3],
+        _color: [f32; 4],
+        _meshes: &[Mesh],
+    ) {
+        // Default no-op: 2D renderers ignore 3D scene nodes
+    }
+
     /// Draw a linear gradient between two colors at the specified angle.
     fn draw_linear_gradient(
         &mut self,

@@ -4409,6 +4409,25 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
     }
 
+    fn render_scene_node_3d(
+        &mut self,
+        position: [f32; 3],
+        rotation: [f32; 4],
+        scale: [f32; 3],
+        color: [f32; 4],
+        meshes: &[Mesh],
+    ) {
+        let transform = cvkg_core::Transform3D {
+            position: glam::Vec3::from(position),
+            rotation: glam::Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3]),
+            scale: glam::Vec3::from(scale),
+        };
+        if !meshes.is_empty() {
+            let material = cvkg_core::Material3D::unlit(color);
+            self.draw_mesh_3d(&meshes[0], &material, &transform);
+        }
+    }
+
     fn register_shared_element(&mut self, id: &str, rect: Rect) {
         self.shared_elements.put(id.to_string(), rect);
     }

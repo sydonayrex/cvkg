@@ -1,15 +1,22 @@
 //! Scene bridge: maps physics bodies to cvkg-scene nodes and writes transforms back.
 //!
-//! This is the key architectural module that connects the physics world to
-//! the visual rendering pipeline. After each simulation step, the bridge
-//! writes computed transforms back into the cvkg-scene `SceneGraph`, and
-//! the renderer picks them up naturally.
+//! Supports both 2D and 3D physics bodies. For 3D bodies, the bridge writes
+//! position_3d, rotation_3d, and scale_3d into the corresponding VNode's
+//! 3D transform fields.
 
 use glam::Vec2;
+use glam::Vec3;
 
 use cvkg_scene::{NodeId, SceneGraph};
 
 use crate::BodyId;
+
+/// Data for a 3D body to be synced to the scene graph.
+#[derive(Debug, Clone, Copy)]
+pub struct Body3DTransform {
+    pub position: Vec3,
+    pub rotation: glam::Quat,
+}
 
 /// Maps physics bodies to scene graph nodes and syncs transforms.
 pub struct SceneBridge {
@@ -41,10 +48,7 @@ impl SceneBridge {
         self.mappings.retain(|(b, _)| *b != body_id);
     }
 
-    /// Write physics transforms into the scene graph.
-    ///
-    /// For each bound body, update the local_rect and position
-    /// of the corresponding scene graph node.
+    /// Write 2D physics transforms into the scene graph.
     #[allow(clippy::collapsible_if)]
     pub fn sync_to_scene(
         &self,
@@ -63,9 +67,42 @@ impl SceneBridge {
                     {
                         node.local_rect.x = new_x;
                         node.local_rect.y = new_y;
-                        // Store rotation in the z-index field as a convention
-                        // (proper transform support would need scene graph extensions)
                         node.z_index = *angle;
+                        node.is_dirty = true;
+                    }
+                }
+            }
+        }
+        scene.update_transforms();
+    }
+
+    /// Write 3D physics transforms into the scene graph.
+    ///
+    /// For each bound 3D body, update the position_3d and rotation_3d
+    /// fields of the corresponding scene graph node. The renderer will
+    /// use these to construct model matrices for draw_mesh_3d calls.
+    pub fn sync_3d_to_scene(
+        &self,
+        body_transforms: &std::collections::HashMap<BodyId, Body3DTransform>,
+        scene: &mut SceneGraph,
+    ) {
+        for (body_id, node_id) in &self.mappings {
+            if let Some(xform) = body_transforms.get(body_id) {
+                if let Some(node) = scene.nodes.get_mut(node_id) {
+                    let new_pos = [xform.position.x, xform.position.y, xform.position.z];
+                    let new_rot = [xform.rotation.x, xform.rotation.y, xform.rotation.z, xform.rotation.w];
+
+                    // Only mark dirty if actually changed
+                    let pos_changed = (0..3).any(|i| (new_pos[i] - node.position_3d[i]).abs() > 0.001);
+                    let rot_changed = (0..4).any(|i| (new_rot[i] - node.rotation_3d[i]).abs() > 0.001);
+
+                    if pos_changed || rot_changed {
+                        node.position_3d = new_pos;
+                        node.rotation_3d = new_rot;
+                        node.is_3d = true;
+                        // Derive 2D fallback from 3D position for compatibility
+                        node.local_rect.x = new_pos[0] - node.local_rect.width * 0.5;
+                        node.local_rect.y = new_pos[1] - node.local_rect.height * 0.5;
                         node.is_dirty = true;
                     }
                 }
@@ -105,5 +142,35 @@ mod tests {
 
         bridge.unbind(BodyId(1));
         assert_eq!(bridge.len(), 1);
+    }
+
+    #[test]
+    fn test_sync_3d_to_scene() {
+        let mut bridge = SceneBridge::new();
+        let mut scene = SceneGraph::new();
+
+        // Create a node with 3D transform
+        let node_id = NodeId(42);
+        scene.nodes.insert(node_id, cvkg_scene::VNode::new(
+            node_id,
+            "Cube",
+            cvkg_core::Rect::new(-0.5, -0.5, 1.0, 1.0),
+        ));
+        let body_id = BodyId(1);
+        bridge.bind(body_id, node_id);
+
+        // Sync a 3D transform
+        let mut transforms = std::collections::HashMap::new();
+        transforms.insert(body_id, Body3DTransform {
+            position: Vec3::new(10.0, 20.0, 5.0),
+            rotation: glam::Quat::from_rotation_z(0.5),
+        });
+        bridge.sync_3d_to_scene(&transforms, &mut scene);
+
+        let node = scene.nodes.get(&node_id).unwrap();
+        assert!(node.is_3d);
+        assert_eq!(node.position_3d, [10.0, 20.0, 5.0]);
+        assert!((node.rotation_3d[3] - 0.9689).abs() < 0.01); // w component of quat
+        assert!(node.is_dirty);
     }
 }

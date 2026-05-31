@@ -46,7 +46,7 @@ pub struct VNode {
     pub component_type: String,
     pub children: Vec<NodeId>,
 
-    /// Local bounds relative to parent
+    /// Local bounds relative to parent (2D fallback)
     pub local_rect: Rect,
     /// Absolute world-space bounds (computed during layout pass)
     pub world_rect: Rect,
@@ -57,12 +57,23 @@ pub struct VNode {
     /// Layer identifier for GPU batching (0 = default UI, 100 = Glass, etc.)
     pub layer_id: u32,
 
-    /// Z-index for depth sorting
+    /// Z-index for depth sorting (2D fallback)
     pub z_index: f32,
 
     /// Cached grid cells this node currently occupies
     #[serde(skip, default)]
     pub spatial_cells: Vec<(u32, u32)>,
+
+    // ── 3D Transform (used when is_3d is true) ──────────────────────────────
+    /// Whether this node uses 3D transforms. When true, the 3D fields below
+    /// are authoritative and the 2D fields (local_rect, z_index) are derived.
+    pub is_3d: bool,
+    /// 3D world-space position. When is_3d is true, local_rect.x/y/z are derived from this.
+    pub position_3d: [f32; 3],
+    /// 3D rotation as quaternion (x, y, z, w). Default: identity.
+    pub rotation_3d: [f32; 4],
+    /// 3D scale. Default: (1, 1, 1).
+    pub scale_3d: [f32; 3],
 }
 
 impl VNode {
@@ -77,6 +88,10 @@ impl VNode {
             layer_id: 0,
             z_index: 0.0,
             spatial_cells: Vec::new(),
+            is_3d: false,
+            position_3d: [0.0, 0.0, 0.0],
+            rotation_3d: [0.0, 0.0, 0.0, 1.0],
+            scale_3d: [1.0, 1.0, 1.0],
         }
     }
 }
