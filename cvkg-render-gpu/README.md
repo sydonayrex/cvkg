@@ -13,6 +13,7 @@ This crate is the authoritative drawing backend for CVKG. It does NOT handle win
 - Executing real-time parsing and evaluation of Animated SVGs via `roxmltree` and `usvg`.
 - Propagating full 3x3 affine transformation matrices for complex nested scaling, skew, and rotation.
 - Implementing advanced shader effects: Bifrost (frost), Gungnir (glow), and Mjolnir (geometric clipping/shattering).
+- Color blindness simulation post-process (Protanopia, Deuteranopia, Tritanopia + anomalous variants) via Brettel/Viénot Daltonization matrices.
 - Optimizing VRAM usage via LRU-based cache eviction and atlas recycling.
 
 ## Public API Overview

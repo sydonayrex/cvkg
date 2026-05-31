@@ -27,6 +27,9 @@ pub struct SubpixelGlyph {
     pub x_subpixel: i32,
     /// Y offset in whole pixels.
     pub y_pixel: i32,
+    /// Y offset in sub-pixel units (1/4 pixel resolution).
+    /// E.g., 1 = 1/4 pixel, 2 = 1/2 pixel, 4 = 1 full pixel.
+    pub y_subpixel: i32,
     /// Coverage for the R subpixel column (0..255).
     pub coverage_r: u8,
     /// Coverage for the G subpixel column (0..255).
@@ -55,6 +58,7 @@ impl SubpixelGlyph {
             glyph_id,
             x_subpixel,
             y_pixel,
+            y_subpixel: y_pixel * 4,
             coverage_r,
             coverage_g,
             coverage_b: coverage_b as u8,
@@ -76,6 +80,16 @@ impl SubpixelGlyph {
     /// Returns true if the glyph is at a whole-pixel boundary.
     pub fn is_pixel_aligned(&self) -> bool {
         self.x_subpixel % 3 == 0
+    }
+
+    /// Returns the whole-pixel y position (y_subpixel / 4).
+    pub fn y_pixel_2d(&self) -> i32 {
+        self.y_subpixel / 4
+    }
+
+    /// Returns the fractional part of y position (0, 1, 2, or 3).
+    pub fn y_fraction(&self) -> i32 {
+        self.y_subpixel.rem_euclid(4)
     }
 }
 
@@ -160,6 +174,7 @@ pub fn layout_subpixel(
             glyph_id,
             x_subpixel,
             y_pixel: 0,
+            y_subpixel: 0,
             coverage_r: r,
             coverage_g: g,
             coverage_b: b,
@@ -172,6 +187,60 @@ pub fn layout_subpixel(
         // Safety: prevent infinite loops on zero advances
         if advance <= 0.0 && i < glyph_ids.len() - 1 {
             x_accum += 3; // minimum 1 pixel advance
+        }
+    }
+
+    result
+}
+
+/// Lays out glyphs with full 2D subpixel positioning.
+///
+/// # Contract
+/// Translates horizontal advances and vertical offsets into a 2D subpixel grid,
+/// quantizing horizontal shifts to 1/3-pixel steps (for horizontal LCD subpixels)
+/// and vertical shifts to 1/4-pixel steps (for smooth vertical scrolling).
+pub fn layout_subpixel_2d(
+    glyph_ids: &[u32],
+    advances: &[f32],
+    y_offsets: &[f32],
+    dpi_scale: f32,
+    order: SubpixelOrder,
+) -> Vec<SubpixelGlyph> {
+    if glyph_ids.is_empty() || advances.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result = Vec::new();
+    let mut x_accum: i32 = 0;
+
+    for (i, (&glyph_id, &advance)) in glyph_ids.iter().zip(advances.iter()).enumerate() {
+        let y_offset = y_offsets.get(i).copied().unwrap_or(0.0);
+        let advance_subpx = (advance * dpi_scale * 3.0).round() as i32;
+        let x_subpixel = x_accum;
+        let y_subpixel = (y_offset * dpi_scale * 4.0).round() as i32;
+
+        let fraction = x_subpixel.rem_euclid(3);
+        let (r, g, b) = subpixel_coverage(fraction, order);
+
+        let width = (advance * dpi_scale).max(1.0).ceil() as u32;
+        let height = (dpi_scale * 16.0).max(1.0).ceil() as u32;
+
+        result.push(SubpixelGlyph {
+            glyph_id,
+            x_subpixel,
+            y_pixel: y_subpixel / 4,
+            y_subpixel,
+            coverage_r: r,
+            coverage_g: g,
+            coverage_b: b,
+            width,
+            height,
+        });
+
+        x_accum += advance_subpx;
+
+        if advance <= 0.0 && i < glyph_ids.len() - 1 {
+            x_accum += 3;
         }
     }
 
@@ -221,16 +290,28 @@ pub fn render_lcd(
                 let subpixel_phase = (local_x * 3.0) as i32 % 3;
                 let (sr, sg, sb) = subpixel_coverage(subpixel_phase, SubpixelOrder::Rgb);
 
-                // Blend subpixel coverage with text color
-                let blend = |text: u8, sub: u8| -> u8 {
-                    let coverage = (sub as f32 / 255.0) * (ta as f32 / 255.0);
-                    let val = text as f32 * coverage;
-                    val.min(255.0) as u8
+                // Perceptual gamma-corrected blending (sRGB transfer curve approximation: gamma = 2.2).
+                // Blends the physical light output instead of linear RGB values to prevent
+                // text bloating on dark backgrounds and text thinning on light backgrounds.
+                let gamma = 2.2f32;
+                let blend_gamma = |bg: u8, text: u8, sub_coverage: u8| -> u8 {
+                    let alpha = (sub_coverage as f32 / 255.0) * (ta as f32 / 255.0);
+                    if alpha <= 0.0 {
+                        return bg;
+                    }
+                    if alpha >= 1.0 {
+                        return text;
+                    }
+                    let bg_f = bg as f32 / 255.0;
+                    let text_f = text as f32 / 255.0;
+                    let blended = ((1.0 - alpha) * bg_f.powf(gamma) + alpha * text_f.powf(gamma))
+                        .powf(1.0 / gamma);
+                    (blended * 255.0).clamp(0.0, 255.0).round() as u8
                 };
 
-                framebuffer[idx] = framebuffer[idx].saturating_add(blend(tr, sr));
-                framebuffer[idx + 1] = framebuffer[idx + 1].saturating_add(blend(tg, sg));
-                framebuffer[idx + 2] = framebuffer[idx + 2].saturating_add(blend(tb, sb));
+                framebuffer[idx] = blend_gamma(framebuffer[idx], tr, sr);
+                framebuffer[idx + 1] = blend_gamma(framebuffer[idx + 1], tg, sg);
+                framebuffer[idx + 2] = blend_gamma(framebuffer[idx + 2], tb, sb);
                 // Alpha channel stays as-is (pre-multiplied)
             }
         }
@@ -367,5 +448,51 @@ mod subpixel_tests {
         let glyphs = vec![SubpixelGlyph::new(1, 0, 0, 255, 0, 0, 10, 16)];
         render_lcd(&mut fb, 0, 0, &glyphs, (255, 255, 255, 255));
         // Should not panic
+    }
+
+    #[test]
+    fn test_layout_subpixel_2d() {
+        let glyphs = layout_subpixel_2d(
+            &[1, 2],
+            &[8.0, 12.0],
+            &[0.5, -0.25],
+            1.0,
+            SubpixelOrder::Rgb,
+        );
+        assert_eq!(glyphs.len(), 2);
+        assert_eq!(glyphs[0].y_subpixel, 2); // 0.5 * 4 = 2
+        assert_eq!(glyphs[0].y_fraction(), 2);
+        assert_eq!(glyphs[1].y_subpixel, -1); // -0.25 * 4 = -1
+        assert_eq!(glyphs[1].y_fraction(), 3); // -1.rem_euclid(4) = 3
+    }
+
+    #[test]
+    fn test_render_lcd_gamma_blending() {
+        // Create a framebuffer initialized to mid-gray (127)
+        let mut fb = vec![127u8; 100 * 100 * 4];
+
+        // Single glyph at (0, 0) with width=10, height=16.
+        let glyphs = vec![SubpixelGlyph::new(1, 0, 0, 255, 0, 0, 10, 16)];
+
+        // Render text color as white with 50% opacity (128): (255, 255, 255, 128)
+        render_lcd(&mut fb, 100, 100, &glyphs, (255, 255, 255, 128));
+
+        // Check pixel values of first rendered pixel in the glyph
+        // R subpixel has full coverage (255) and 128 text alpha -> alpha = 128/255 = ~0.50196
+        // Background is 127, Text is 255.
+        // Gamma blend: ((1 - 0.50196) * (127/255)^2.2 + 0.50196 * (255/255)^2.2)^(1/2.2) * 255 = 204
+        let r_val = fb[0];
+        let g_val = fb[1];
+        let b_val = fb[2];
+
+        assert_eq!(r_val, 204, "R subpixel should be gamma blended to 204");
+        assert_eq!(
+            g_val, 127,
+            "G subpixel has 0 coverage so it must remain 127"
+        );
+        assert_eq!(
+            b_val, 127,
+            "B subpixel has 0 coverage so it must remain 127"
+        );
     }
 }

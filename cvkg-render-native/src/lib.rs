@@ -1038,6 +1038,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             x: state.cursor_pos[0],
                             y: state.cursor_pos[1],
                             proximity_field: 0.0,
+                            tilt: None,
+                            azimuth: None,
+                            pressure: 1.0,
+                            barrel_rotation: None,
                         });
                     }
                     state.window.request_redraw();
@@ -1071,6 +1075,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     y: state.cursor_pos[1],
                                     button: btn_id,
                                     proximity_field: 0.0,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: 1.0,
+                                    barrel_rotation: None,
                                 });
                             }
                             winit::event::ElementState::Released => {
@@ -1079,6 +1087,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     x: state.cursor_pos[0],
                                     y: state.cursor_pos[1],
                                     button: btn_id,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: 0.0,
+                                    barrel_rotation: None,
                                 });
                             }
                         }
@@ -1367,6 +1379,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         x: node.layout.x + node.layout.width / 2.0,
                         y: node.layout.y + node.layout.height / 2.0,
                         button: 0, // Assume left click for accessibility actions
+                        tilt: None,
+                        azimuth: None,
+                        pressure: 1.0,
+                        barrel_rotation: None,
                     };
                     vdom.dispatch_event(event);
                 }
@@ -1822,11 +1838,19 @@ fn convert_mouse_event(
             y: position[1],
             button,
             proximity_field: 0.0,
+            tilt: None,
+            azimuth: None,
+            pressure: 1.0,
+            barrel_rotation: None,
         },
         winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
             x: position[0],
             y: position[1],
             button,
+            tilt: None,
+            azimuth: None,
+            pressure: 0.0,
+            barrel_rotation: None,
         },
     }
 }

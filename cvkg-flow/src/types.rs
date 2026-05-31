@@ -39,6 +39,19 @@ pub enum EdgePath {
     Straight,
 }
 
+/// Level of detail (LoD) rendering state for flow canvas components.
+///
+/// Maps visual rendering details and layout complexity based on camera zoom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum LevelOfDetail {
+    /// Render full details (e.g. text labels, ports, shadows, rich materials).
+    Detailed,
+    /// Render intermediate details (e.g. basic shapes and labels, omit sub-labels/shadows).
+    Medium,
+    /// Render highly simplified outlines or colored blocks (culled details).
+    Simplified,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

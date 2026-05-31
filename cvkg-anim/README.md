@@ -26,6 +26,10 @@ This crate manages the temporal evolution of UI properties. It does NOT handle l
 - `Motion`: Handles the lifecycle of an animation (Start, Settle, Interrupt).
 - `ActiveAnimation`: Tracks the runtime state and elapsed time of an executing animation.
 
+### Spring Snap Events
+- `SnapTracker`: Tracks spring animation values and emits snap events (CrossedTarget, Overshoot, Settled, DirectionChange) for haptic/audio feedback.
+- `HapticBinding`: Configures which snap events trigger callbacks with intensity control.
+
 ## Usage Example
 
 ```rust

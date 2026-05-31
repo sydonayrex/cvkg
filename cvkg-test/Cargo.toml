@@ -34,3 +34,5 @@ proptest = "1.4"
 arbitrary = { version = "1.3", features = ["derive"] }
 # Fuzz testing support
 libfuzzer-sys = "0.4"
+cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.2.0" }
+glam = { version = "0.30" }

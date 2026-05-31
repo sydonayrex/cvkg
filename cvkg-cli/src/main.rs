@@ -10,17 +10,17 @@
 //!
 //! ── CVKG Extended Protocols (5–7) ────────────────────────────────────────
 //! 5. TRIPLE-PASS     — Read the target, its surrounding context, and its full call graph
-//                      at least THREE TIMES before making any edit or revision.
+//!                      at least THREE TIMES before making any edit or revision.
 //! 6. COMMENT ALL     — Every major pub fn, unsafe block, and non-trivial algorithm in
-//                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
-//                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
+//!                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
+//!                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
 //! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
-//                      After 3 consecutive identical failures, stop, write BLOCKED.md,
-//                      and move to unblocked work. Never silently accept a broken state.
+//!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
+//!                      and move to unblocked work. Never silently accept a broken state.
 //!
 //! Sources:
-//   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
-//   CVKG Extended: Section 2 of the CVKG Design Specification
+//!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
+//!   CVKG Extended: Section 2 of the CVKG Design Specification
 
 //! CVKG CLI toolchain, dev server, and hot reload orchestrator
 //!
@@ -29,22 +29,16 @@
 //! - `cvkg dev` for starting the development server with hot reload
 //! - `cvkg build` for building for target platforms
 //! - `cvkg serve` for starting the WebKit preview server
-//  and other development tools.
+//!  and other development tools.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
-pub mod agent_replay;
-pub mod asset_pipeline;
-pub mod build_pipeline;
-pub mod dev_runtime;
-pub mod devtools_dashboard;
-pub mod patch_engine;
-pub mod runtime_connection;
-pub mod scaffold;
-pub mod token_export;
-pub mod webkit_server;
-pub mod ws_server;
+// Use the library's public API instead of re-declaring modules
+use cvkg_cli::{
+    CliConfig, asset_pipeline, build_pipeline, devtools_dashboard, scaffold, token_export,
+    webkit_server, ws_server,
+};
 
 /// CVKG Command Line Interface
 #[derive(Parser)]
@@ -79,6 +73,9 @@ enum Commands {
         /// Enable the inspector
         #[arg(long)]
         inspector: bool,
+        /// Respect reduced-motion accessibility preference
+        #[arg(long)]
+        reduced_motion: bool,
     },
     /// Build for a specified target platform
     Build {
@@ -180,6 +177,9 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
+    // Load config file and merge with CLI flags
+    let mut config = CliConfig::load();
+
     match cli.command {
         Commands::New {
             name,
@@ -202,9 +202,14 @@ fn main() {
             target,
             port,
             inspector,
+            reduced_motion,
         } => {
             use console::style;
-            let target_str = target.as_deref().unwrap_or("native");
+            config.merge_cli(target, Some(port), inspector, reduced_motion);
+
+            let target_str = config.target.as_deref().unwrap_or("native");
+            let port = config.port.unwrap_or(3000);
+
             println!("{} Starting CVKG development engine...", style("🚀").cyan());
             println!(
                 "   {} Target: {}",
@@ -215,12 +220,19 @@ fn main() {
             println!(
                 "   {} Inspector: {}",
                 style("•").dim(),
-                if inspector {
+                if config.inspector.unwrap_or(false) {
                     style("Enabled").green()
                 } else {
                     style("Disabled").dim()
                 }
             );
+            if config.reduced_motion.unwrap_or(false) {
+                println!(
+                    "   {} Reduced motion: {}",
+                    style("•").dim(),
+                    style("Enabled").green()
+                );
+            }
 
             let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
 
@@ -258,10 +270,30 @@ fn main() {
         }
         Commands::Serve {
             port,
-            open: _,
-            inspector: _,
+            open,
+            inspector,
         } => {
-            println!("Starting WebKit preview server on port {}", port);
+            use console::style;
+            let url = format!("http://localhost:{}", port);
+            println!(
+                "{} Starting WebKit preview server on {}",
+                style("🌐").blue(),
+                style(&url).bold()
+            );
+
+            if open {
+                println!("{} Opening browser...", style("🖥️").cyan());
+                let _ = webbrowser::open(&url);
+            }
+
+            if inspector {
+                println!(
+                    "{} Inspector enabled on ws://localhost:{}/ws/devtools",
+                    style("🔍").yellow(),
+                    port
+                );
+            }
+
             let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
 
             tokio::runtime::Builder::new_multi_thread()
@@ -270,41 +302,83 @@ fn main() {
                 .unwrap_or_else(|e| panic!("Failed to build runtime: {}", e))
                 .block_on(async {
                     if let Err(e) = webkit_server::start_server(addr).await {
-                        eprintln!("Failed to start preview server: {}", e);
+                        eprintln!(
+                            "{} Failed to start preview server: {}",
+                            style("❌").red(),
+                            e
+                        );
+                        std::process::exit(1);
                     }
                 });
         }
-        Commands::Check { all: _, target: _ } => {
+        Commands::Check { all, target } => {
             use console::style;
-            println!(
-                "{} Running CVKG type-check and layout audit...",
-                style("🔍").blue()
-            );
-            let status = std::process::Command::new("cargo")
-                .arg("check")
-                .status()
-                .expect("Failed to execute cargo check");
+            let mut failed = false;
 
-            if status.success() {
+            // Always run cargo check
+            println!("{} Running cargo check...", style("🔍").blue());
+            let mut check_cmd = std::process::Command::new("cargo");
+            check_cmd.arg("check");
+            if let Some(t) = &target {
+                check_cmd.arg("--target").arg(t);
+            }
+            let status = check_cmd.status().expect("Failed to execute cargo check");
+            if !status.success() {
+                eprintln!("{} cargo check failed.", style("❌").red());
+                failed = true;
+            }
+
+            // When --all, also run clippy and fmt
+            if all {
+                println!("{} Running cargo clippy...", style("📎").blue());
+                let mut clippy_cmd = std::process::Command::new("cargo");
+                clippy_cmd.arg("clippy");
+                clippy_cmd.arg("--");
+                clippy_cmd.arg("-D").arg("warnings");
+                if let Some(t) = &target {
+                    clippy_cmd.arg("--target").arg(t);
+                }
+                let clippy_status = clippy_cmd.status().expect("Failed to execute cargo clippy");
+                if !clippy_status.success() {
+                    eprintln!("{} cargo clippy found issues.", style("❌").red());
+                    failed = true;
+                }
+
+                println!("{} Running cargo fmt --check...", style("📝").blue());
+                let fmt_status = std::process::Command::new("cargo")
+                    .arg("fmt")
+                    .arg("--")
+                    .arg("--check")
+                    .status()
+                    .expect("Failed to execute cargo fmt");
+                if !fmt_status.success() {
+                    eprintln!("{} cargo fmt found formatting issues.", style("❌").red());
+                    failed = true;
+                }
+            }
+
+            if failed {
+                eprintln!("{} Check failed.", style("❌").red());
+                std::process::exit(1);
+            } else {
                 println!(
                     "{} Check complete: All systems nominal.",
                     style("✅").green()
                 );
-            } else {
-                eprintln!("{} Check failed.", style("❌").red());
-                std::process::exit(1);
             }
         }
-        Commands::Test { ui: _, target: _ } => {
+        Commands::Test { ui, target } => {
             use console::style;
-            println!(
-                "{} Running CVKG unit and snapshot tests...",
-                style("🧪").magenta()
-            );
-            let status = std::process::Command::new("cargo")
-                .arg("test")
-                .status()
-                .expect("Failed to execute cargo test");
+            println!("{} Running CVKG tests...", style("🧪").magenta());
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.arg("test");
+            if let Some(t) = &target {
+                cmd.arg("--target").arg(t);
+            }
+            if ui {
+                cmd.arg("ui");
+            }
+            let status = cmd.status().expect("Failed to execute cargo test");
 
             if status.success() {
                 println!(
@@ -316,41 +390,87 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Inspect { url: _, ws_port } => {
+        Commands::Inspect { url, ws_port } => {
             println!("🔍 Launching CVKG Telemetry Inspector...");
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
                 .unwrap_or_else(|e| panic!("Failed to build runtime: {}", e))
                 .block_on(async {
-                    let ws_url = format!("ws://localhost:{}/ws/devtools", ws_port);
+                    let ws_url = if url.is_empty() {
+                        format!("ws://localhost:{}/ws/devtools", ws_port)
+                    } else {
+                        format!("{}/ws/devtools", url)
+                    };
                     println!("Connecting to dev server at {}...", ws_url);
 
                     match tokio_tungstenite::connect_async(&ws_url).await {
                         Ok((mut ws_stream, _)) => {
                             println!("✅ Connected to CVKG DevTools Stream");
-                            println!("Waiting for telemetry data...\n");
+                            println!("Sending metrics query...\n");
 
-                            use futures_util::StreamExt;
+                            use futures_util::{SinkExt, StreamExt};
+                            use std::io::Write;
+
+                            let query = serde_json::json!({"command": "query_metrics"});
+                            if let Err(e) = ws_stream
+                                .send(tokio_tungstenite::tungstenite::Message::Text(
+                                    query.to_string().into(),
+                                ))
+                                .await
+                            {
+                                eprintln!("❌ Failed to send query: {}", e);
+                                return;
+                            }
+
                             while let Some(msg) = ws_stream.next().await {
-                                if let Ok(msg) = msg
-                                    && let Ok(text) = msg.to_text()
-                                    && let Ok(json) =
-                                        serde_json::from_str::<serde_json::Value>(text)
-                                {
-                                    if let Some(fps) = json.get("fps") {
-                                        print!("{esc}[2K\r", esc = 27 as char);
-                                        print!(
-                                            "📊 FPS: {} | VRAM: {} MB | VDOM Diff: {} ms",
-                                            fps,
-                                            json.get("vram_mb").unwrap_or(&serde_json::json!(0)),
-                                            json.get("diff_ms").unwrap_or(&serde_json::json!(0))
-                                        );
-                                        use std::io::Write;
-                                        std::io::stdout().flush().unwrap_or_default();
-                                    } else {
-                                        println!("📡 Event: {}", text);
+                                match msg {
+                                    Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
+                                        if let Ok(json) =
+                                            serde_json::from_str::<serde_json::Value>(&text)
+                                        {
+                                            match json.get("type").and_then(|t| t.as_str()) {
+                                                Some("metrics") => {
+                                                    print!("{esc}[2K\r", esc = 27 as char);
+                                                    print!(
+                                                        "📊 FPS: {:.1} | Frame: {:.2} ms | Nodes: {} | Edges: {} | GPU: {:.1} MB",
+                                                        json.get("fps").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                                        json.get("frame_time_ms").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                                        json.get("node_count").and_then(|v| v.as_u64()).unwrap_or(0),
+                                                        json.get("edge_count").and_then(|v| v.as_u64()).unwrap_or(0),
+                                                        json.get("gpu_memory_mb").and_then(|v| v.as_f64()).unwrap_or(0.0),
+                                                    );
+                                                    std::io::stdout().flush().unwrap_or_default();
+                                                }
+                                                Some("pong") => {
+                                                    print!("{esc}[2K\r", esc = 27 as char);
+                                                    print!("📡 Connected — waiting for metrics...");
+                                                    std::io::stdout().flush().unwrap_or_default();
+                                                }
+                                                Some("error") => {
+                                                    eprintln!(
+                                                        "❌ Server error: {}",
+                                                        json.get("message")
+                                                            .and_then(|v| v.as_str())
+                                                            .unwrap_or("unknown")
+                                                    );
+                                                    break;
+                                                }
+                                                _ => {
+                                                    println!("📡 Event: {}", text);
+                                                }
+                                            }
+                                        }
                                     }
+                                    Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => {
+                                        println!("📡 Stream closed by server.");
+                                        break;
+                                    }
+                                    Err(e) => {
+                                        eprintln!("❌ WebSocket error: {}", e);
+                                        break;
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -359,7 +479,7 @@ fn main() {
                 });
         }
         Commands::Export {
-            base_path: _,
+            base_path,
             optimize,
         } => {
             if let Err(e) = asset_pipeline::AssetPipeline::run("assets") {
@@ -389,12 +509,26 @@ fn main() {
                     .to_str()
                     .unwrap()
                     .replace('-', "_");
+
+                let base_tag = if base_path.is_empty() {
+                    String::new()
+                } else {
+                    format!(r#"<base href="{}">"#, base_path)
+                };
+
+                let script_path = if base_path.is_empty() {
+                    format!("./pkg/{}.js", project_name)
+                } else {
+                    format!("{}/pkg/{}.js", base_path, project_name)
+                };
+
                 let html = format!(
                     r#"<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
     <title>CVKG Application</title>
+    {}
     <style>
         body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0b0b14; }}
         canvas {{ width: 100%; height: 100%; display: block; }}
@@ -403,12 +537,12 @@ fn main() {
 <body>
     <canvas id="cvkg-canvas"></canvas>
     <script type="module">
-        import init from './pkg/{}.js';
+        import init from '{}';
         init();
     </script>
 </body>
 </html>"#,
-                    project_name
+                    base_tag, script_path
                 );
 
                 std::fs::write(dist_dir.join("index.html"), html)
@@ -429,57 +563,160 @@ fn main() {
             }
         }
         Commands::Add { name, features } => {
-            println!("Adding CVKG component crate: {}", name);
+            use console::style;
+
+            // Validate crate name
+            if name.is_empty() {
+                eprintln!("{} Crate name cannot be empty.", style("❌").red());
+                std::process::exit(1);
+            }
+
+            // Crate names must be valid Rust identifiers: lowercase alphanumeric + hyphens/underscores
+            let valid = name
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+                && !name.starts_with('-')
+                && !name.ends_with('-')
+                && !name.is_empty();
+            if !valid {
+                eprintln!(
+                    "{} Invalid crate name '{}'. Use lowercase alphanumeric characters, hyphens, or underscores.",
+                    style("❌").red(),
+                    name
+                );
+                std::process::exit(1);
+            }
+
+            println!(
+                "{} Adding CVKG component crate: {}",
+                style("📦").cyan(),
+                style(&name).yellow()
+            );
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("add").arg(&name);
             if !features.is_empty() {
                 cmd.arg("--features").arg(features.join(","));
             }
-            let status = cmd.status().expect("Failed to execute cargo add");
-            if !status.success() {
-                eprintln!("Failed to add crate.");
+            let status = cmd.status().unwrap_or_else(|e| {
+                eprintln!("{} Failed to execute cargo add: {}", style("❌").red(), e);
+                std::process::exit(1);
+            });
+            if status.success() {
+                println!(
+                    "{} Successfully added {}",
+                    style("✅").green(),
+                    style(&name).bold()
+                );
+            } else {
+                eprintln!("{} Failed to add crate '{}'.", style("❌").red(), name);
+                std::process::exit(1);
             }
         }
         Commands::Theme { input, output } => {
+            use console::style;
             println!(
-                "Generating theme from {} to {}",
-                input.display(),
-                output.display()
+                "{} Generating theme from {} to {}",
+                style("🎨").cyan(),
+                style(input.display()).yellow(),
+                style(output.display()).yellow()
             );
-            let json_str = std::fs::read_to_string(&input).expect("Failed to read theme JSON");
-            let tokens: serde_json::Value =
-                serde_json::from_str(&json_str).expect("Invalid theme JSON");
+            let json_str = std::fs::read_to_string(&input).unwrap_or_else(|e| {
+                eprintln!("{} Failed to read theme JSON: {}", style("❌").red(), e);
+                std::process::exit(1);
+            });
+            let tokens: serde_json::Value = serde_json::from_str(&json_str).unwrap_or_else(|e| {
+                eprintln!("{} Invalid theme JSON: {}", style("❌").red(), e);
+                std::process::exit(1);
+            });
+
+            let mut declarations = Vec::new();
+            let mut values = Vec::new();
+            let mut skipped = Vec::new();
+
+            if let Some(obj) = tokens.as_object() {
+                for (key, val) in obj {
+                    match val {
+                        serde_json::Value::Array(arr) if arr.len() == 4 => {
+                            let parse_f64 = |v: &serde_json::Value| -> f64 {
+                                v.as_f64()
+                                    .or_else(|| v.as_i64().map(|i| i as f64))
+                                    .or_else(|| v.as_u64().map(|u| u as f64))
+                                    .unwrap_or(0.0)
+                            };
+                            let r = parse_f64(&arr[0]);
+                            let g = parse_f64(&arr[1]);
+                            let b = parse_f64(&arr[2]);
+                            let a = parse_f64(&arr[3]);
+                            declarations.push(format!("    pub {}: [f32; 4],", key));
+                            values.push(format!(
+                                "    {}: [{:.4}, {:.4}, {:.4}, {:.4}],",
+                                key, r, g, b, a
+                            ));
+                        }
+                        serde_json::Value::String(s) if s.starts_with('#') => {
+                            if let Some(rgba) = parse_hex_color(s) {
+                                declarations.push(format!("    pub {}: [f32; 4],", key));
+                                values.push(format!(
+                                    "    {}: [{:.4}, {:.4}, {:.4}, {:.4}],",
+                                    key, rgba.0, rgba.1, rgba.2, rgba.3
+                                ));
+                            } else {
+                                skipped.push((key.clone(), format!("invalid hex color: {}", s)));
+                            }
+                        }
+                        serde_json::Value::Number(n) => {
+                            let v = n.as_f64().unwrap_or(0.0);
+                            declarations.push(format!("    pub {}: f32,", key));
+                            values.push(format!("    {}: {:.2},", key, v));
+                        }
+                        serde_json::Value::Object(_) => {
+                            skipped.push((key.clone(), "nested objects not supported".to_string()));
+                        }
+                        other => {
+                            skipped.push((key.clone(), format!("unsupported type: {:?}", other)));
+                        }
+                    }
+                }
+            }
+
+            if !skipped.is_empty() {
+                eprintln!(
+                    "{} Skipped {} token(s):",
+                    style("⚠️").yellow(),
+                    skipped.len()
+                );
+                for (key, reason) in &skipped {
+                    eprintln!("  - {}: {}", key, reason);
+                }
+            }
 
             let mut rs_content = String::from("/// Generated CVKG Theme\n");
+            rs_content.push_str(&format!("/// Source: {}\n", input.display()));
+            rs_content.push_str("#[derive(Debug, Clone)]\n");
             rs_content.push_str("pub struct Theme {\n");
-            if let Some(obj) = tokens.as_object() {
-                for key in obj.keys() {
-                    rs_content.push_str(&format!("    pub {}: [f32; 4],\n", key));
-                }
+            for decl in &declarations {
+                rs_content.push_str(decl);
+                rs_content.push('\n');
             }
             rs_content.push_str("}\n\n");
 
             rs_content.push_str("pub const CUSTOM_THEME: Theme = Theme {\n");
-            if let Some(obj) = tokens.as_object() {
-                for (key, val) in obj {
-                    if let Some(arr) = val.as_array()
-                        && arr.len() == 4
-                    {
-                        let r = arr[0].as_f64().unwrap_or(0.0);
-                        let g = arr[1].as_f64().unwrap_or(0.0);
-                        let b = arr[2].as_f64().unwrap_or(0.0);
-                        let a = arr[3].as_f64().unwrap_or(1.0);
-                        rs_content.push_str(&format!(
-                            "    {}: [{:.2}, {:.2}, {:.2}, {:.2}],\n",
-                            key, r, g, b, a
-                        ));
-                    }
-                }
+            for val in &values {
+                rs_content.push_str(val);
+                rs_content.push('\n');
             }
             rs_content.push_str("};\n");
 
-            std::fs::write(&output, rs_content).expect("Failed to write theme RS file");
-            println!("Theme generation successful.");
+            std::fs::write(&output, &rs_content).unwrap_or_else(|e| {
+                eprintln!("{} Failed to write output: {}", style("❌").red(), e);
+                std::process::exit(1);
+            });
+            println!(
+                "{} Theme generation successful. {} tokens written to {}",
+                style("✅").green(),
+                declarations.len(),
+                style(output.display()).bold()
+            );
         }
         Commands::Dashboard { port, no_open } => {
             use console::style;
@@ -529,5 +766,26 @@ fn main() {
                 style(output.display()).bold()
             );
         }
+    }
+}
+
+/// Parse a hex color string like "#RRGGBB" or "#RRGGBBAA" into (r, g, b, a) as 0.0–1.0 f32 values.
+fn parse_hex_color(hex: &str) -> Option<(f32, f32, f32, f32)> {
+    let hex = hex.strip_prefix('#')?;
+    match hex.len() {
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+            Some((r, g, b, 1.0))
+        }
+        8 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+            let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+            let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+            let a = u8::from_str_radix(&hex[6..8], 16).ok()? as f32 / 255.0;
+            Some((r, g, b, a))
+        }
+        _ => None,
     }
 }

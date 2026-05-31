@@ -85,10 +85,10 @@ impl PatchEngine {
 
         self.previous_view = Some(artifact.view);
 
-        if patches.len() == 1 {
-            patches.remove(0)
-        } else {
-            RuntimePatch::Batch(patches)
+        match patches.len() {
+            0 => RuntimePatch::Batch(vec![]),
+            1 => patches.remove(0),
+            _ => RuntimePatch::Batch(patches),
         }
     }
 
@@ -176,14 +176,13 @@ mod tests {
         engine.generate_patch(artifact1);
         let patch = engine.generate_patch(artifact2);
 
-        // Should return a batch with no patches (or empty batch)
-        if let RuntimePatch::Batch(patches) = patch {
-            assert!(patches.is_empty());
-        } else {
-            // Depending on implementation, might return the singular patch or empty batch
-            // The current code returns the "last" if only one, but here zero?
-            // Actually `patches.remove(0)` would panic if empty.
-            // Let's check implementation of generate_patch.
+        // Identical views should produce an empty batch
+        match patch {
+            RuntimePatch::Batch(patches) => assert!(patches.is_empty()),
+            _ => panic!(
+                "Expected RuntimePatch::Batch for identical views, got: {:?}",
+                patch
+            ),
         }
     }
 }

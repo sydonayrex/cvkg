@@ -10,8 +10,6 @@ use std::fmt;
 /// The rendering backend used for the native shell window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShellBackend {
-    /// Use the Wry (WebView) library for the native window.
-    Wry,
     /// Headless mode — no actual window, useful for testing and CI.
     Headless,
 }
@@ -156,14 +154,12 @@ pub enum WindowEvent {
 
 /// Create a native window from the given [`NativeShell`] configuration.
 ///
-/// The actual backend used depends on the `backend` field:
-/// - [`ShellBackend::Wry`] — creates a Wry webview window.
-/// - [`ShellBackend::Headless`] — creates an in-memory window handle
-///   suitable for testing.
+/// Currently only [`ShellBackend::Headless`] is supported, which creates
+/// an in-memory window handle suitable for testing and CI.
 ///
 /// # Errors
 ///
-/// Returns a [`ShellError`] if the window could not be created (e.g. the
+/// Returns a [`ShellError`] if the window could not be created.
 /// requested backend is not available on the current platform).
 ///
 /// # Examples
@@ -176,15 +172,6 @@ pub enum WindowEvent {
 /// ```
 pub fn create_window(shell: &NativeShell) -> Result<ShellWindow, ShellError> {
     match shell.backend {
-        ShellBackend::Wry => {
-            // In a real implementation this would call wry::WebViewBuilder
-            Ok(ShellWindow {
-                id: 1,
-                title: shell.window_title.clone(),
-                width: shell.width,
-                height: shell.height,
-            })
-        }
         ShellBackend::Headless => Ok(ShellWindow {
             id: 0,
             title: shell.window_title.clone(),
@@ -241,19 +228,19 @@ mod tests {
 
     #[test]
     fn test_shell_backend() {
-        let shell = NativeShell::new("Backend").backend(ShellBackend::Wry);
-        assert_eq!(shell.backend, ShellBackend::Wry);
+        let shell = NativeShell::new("Backend").backend(ShellBackend::Headless);
+        assert_eq!(shell.backend, ShellBackend::Headless);
     }
 
     #[test]
     fn test_shell_builder_chain() {
         let shell = NativeShell::new("Chained")
             .with_size(800, 600)
-            .backend(ShellBackend::Wry);
+            .backend(ShellBackend::Headless);
         assert_eq!(shell.window_title, "Chained");
         assert_eq!(shell.width, 800);
         assert_eq!(shell.height, 600);
-        assert_eq!(shell.backend, ShellBackend::Wry);
+        assert_eq!(shell.backend, ShellBackend::Headless);
     }
 
     #[test]
@@ -264,18 +251,6 @@ mod tests {
         assert_eq!(window.title, "Headless Win");
         assert_eq!(window.width, 1280);
         assert_eq!(window.height, 720);
-    }
-
-    #[test]
-    fn test_create_window_wry() {
-        let shell = NativeShell::new("Wry Win")
-            .with_size(1024, 768)
-            .backend(ShellBackend::Wry);
-        let window = create_window(&shell).expect("Wry window creation should succeed");
-        assert_eq!(window.id, 1);
-        assert_eq!(window.title, "Wry Win");
-        assert_eq!(window.width, 1024);
-        assert_eq!(window.height, 768);
     }
 
     #[test]

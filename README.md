@@ -55,6 +55,7 @@ cargo run -p berserker
 | [cvkg-scene](file:///D/rex/projects/cvkg/cvkg-scene) | Retained scene graph utilizing bounding box acceleration for culling. |
 | [cvkg-layout](file:///D/rex/projects/cvkg/cvkg-layout) | Coordinate layout engines distributing spacer proposed bounds. |
 | [cvkg-anim](file:///D/rex/projects/cvkg/cvkg-anim) | Physics-based RK4 Sleipnir spring motion solver system. |
+| [cvkg-physics](file:///D/rex/projects/cvkg/cvkg-physics) | Tyr rigid body physics engine: collision detection, constraint solving, scene graph bridge. |
 | [cvkg-render-gpu](file:///D/rex/projects/cvkg/cvkg-render-gpu) | Surtr graphics pipeline rendering custom GPU shader pipelines. |
 | [cvkg-render-native](file:///D/rex/projects/cvkg/cvkg-render-native) | Desktop platform windowing and event loops wrapping `winit`. |
 | [cvkg-render-web](file:///D/rex/projects/cvkg/cvkg-render-web) | Browser canvas drawing wrapper executing on WebGPU or WebGL2. |

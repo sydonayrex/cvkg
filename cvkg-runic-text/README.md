@@ -82,7 +82,14 @@ graph TD
 | `GlyphInstance` | Spatial details of a shaped glyph (advance width, cluster ID, absolute baseline coordinates). |
 | `GlyphImage` | A rasterized RGBA bitmap output for direct GPU texture atlas uploading. |
 | `LineInfo` | Bounding information for an individual visual line of text. |
-| `FontMetrics` | Ascent, descent, and line gap values mapped in screen-space pixels. |
+|| `FontMetrics` | Ascent, descent, and line gap values mapped in screen-space pixels. |
+| `FontAxisInfo` | Describes a single variable font axis (tag, name, min/max/default values). |
+
+### Engine Methods
+
+| Method | Description |
+| :--- | :--- |
+| `query_font_axes(family, font_size)` | Query a font's variable axes from the `fvar` table. Returns `Ok(None)` for non-variable fonts. |
 
 ### Configuration Enums
 

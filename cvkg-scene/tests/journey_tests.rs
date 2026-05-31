@@ -50,12 +50,20 @@ fn journey_button_click_flow() {
         x: button_node.layout.x + button_node.layout.width / 2.0,
         y: button_node.layout.y + button_node.layout.height / 2.0,
         proximity_field: 0.0,
+        tilt: None,
+        azimuth: None,
+        pressure: 0.0,
+        barrel_rotation: None,
     });
 
     vdom.dispatch_event(Event::PointerClick {
         x: button_node.layout.x + button_node.layout.width / 2.0,
         y: button_node.layout.y + button_node.layout.height / 2.0,
         button: 0,
+        tilt: None,
+        azimuth: None,
+        pressure: 0.0,
+        barrel_rotation: None,
     });
 
     // 4. VERIFICATION: Check if state updated

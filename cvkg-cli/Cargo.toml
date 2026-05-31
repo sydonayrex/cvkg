@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-cli"
-version = "0.2.0"
+version = "0.2.1"
 build = false
 autolib = false
 autobins = false
@@ -54,6 +54,12 @@ version = "0.16.3"
 [dependencies.cvkg-core]
 version = "0.2.0"
 
+[dependencies.cvkg-physics]
+version = "0.2.0"
+
+[dependencies.cvkg-anim]
+version = "0.2.0"
+
 [dependencies.cvkg-macros]
 version = "0.2.0"
 
@@ -83,6 +89,7 @@ features = [
     "rt",
     "macros",
     "rt-multi-thread",
+    "signal",
 ]
 default-features = false
 
@@ -94,7 +101,11 @@ version = "0.5"
 features = [
     "cors",
     "fs",
+    "trace",
 ]
+
+[dependencies.toml]
+version = "0.8"
 
 [dependencies.tracing]
 version = "0.1.44"
@@ -104,3 +115,15 @@ version = "2.5.0"
 
 [dependencies.webbrowser]
 version = "1.0"
+
+[dependencies.naga]
+version = "29"
+features = ["wgsl-in"]
+
+[dependencies.tempfile]
+version = "3.0"
+
+[dependencies.image]
+version = "0.25"
+default-features = false
+features = ["png", "jpeg"]

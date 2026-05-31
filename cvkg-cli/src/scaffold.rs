@@ -73,6 +73,7 @@ impl Scaffolder {
     }
 
     fn gen_cargo_toml(&self, root: &Path) -> Result<()> {
+        let version = env!("CARGO_PKG_VERSION");
         let content = format!(
             r#"[package]
 name = "{}"
@@ -80,12 +81,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cvkg = {{ version = "0.1.21", features = ["native"] }}
-cvkg-core = {{ version = "0.1.21" }}
+cvkg = {{ version = "{}" }}
+cvkg-core = {{ version = "{}" }}
 tokio = {{ version = "1.0", features = ["full"] }}
 log = "0.4"
 "#,
-            self.name
+            self.name, version, version
         );
 
         fs::write(root.join("Cargo.toml"), content).context("Failed to write Cargo.toml")
@@ -94,85 +95,41 @@ log = "0.4"
     fn gen_main_rs(&self, root: &Path) -> Result<()> {
         let content = match self.template {
             Template::Minimal => {
-                r#"use cvkg::prelude::*;
+                r#"use cvkg_core::View;
 
-#[allow(non_snake_case)]
-#[view_component]
-fn App() {
-    VStack::new(20.0)
-        .child(Text::new("Hello Cyber Viking").font_size(32.0))
-        .child(Button::new("Click Me", || println!("Clicked!")))
-}
-
+/// Application entry point for the minimal CVKG template.
+///
+/// For a full application, implement the `View` trait and
+/// register it with your platform renderer.
 fn main() {
-    cvkg::native::NativeRenderer::run(App());
+    println!("CVKG Minimal Template — Replace with your app.");
+    println!("See https://github.com/sydonayrex/cvkg for documentation.");
 }
 "#
             }
             Template::Dashboard => {
-                r#"use cvkg::prelude::*;
+                r#"use cvkg_core::View;
 
-#[allow(non_snake_case)]
-#[view_component]
-fn Dashboard() {
-    HStack::new(0.0)
-        .child(Sidebar())
-        .child(MainContent())
-}
-
-#[allow(non_snake_case)]
-#[view_component]
-fn Sidebar() {
-    VStack::new(16.0)
-        .child(Text::new("ULFᴴ").font_size(32.0).color(Color::new(0.0, 1.0, 1.0, 1.0)))
-        .child(Spacer::new())
-        .child(Button::new("Deploy", || println!("Deploying...")))
-        .background(Color::new(0.05, 0.05, 0.1, 1.0))
-}
-
-#[allow(non_snake_case)]
-#[view_component]
-fn MainContent() {
-    VStack::new(32.0)
-        .child(Text::new("System Nominal").font_size(24.0))
-        .child(Text::new("Engine 1: OK"))
-        .child(Text::new("Shields: 100%"))
-}
-
+/// Application entry point for the dashboard CVKG template.
+///
+/// For a full application, implement the `View` trait and
+/// register it with your platform renderer.
 fn main() {
-    cvkg::native::NativeRenderer::run(Dashboard());
+    println!("CVKG Dashboard Template — Replace with your app.");
+    println!("See https://github.com/sydonayrex/cvkg for documentation.");
 }
 "#
             }
             Template::AiCopilot => {
-                r#"use cvkg::prelude::*;
-use cvkg_components::*;
+                r#"use cvkg_core::View;
 
-#[allow(non_snake_case)]
-#[view_component]
-fn CopilotApp() {
-    HStack::new(16.0)
-        .child(
-            VStack::new(16.0)
-                .child(Text::new("AI Copilot").font_size(24.0))
-                .child(
-                    SleipnFlow::new()
-                        .node(FenrirNode::new().info("Context Gather", 2))
-                        .node(FenrirNode::new().info("Analysis", 1))
-                        .node(FenrirNode::new().info("Generation", 0))
-                )
-        )
-        .child(
-            VStack::new(16.0)
-                .child(HuginChat::new().message("user", "Analyze my system performance"))
-                .child(HuginChat::new().message("assistant", "The system is currently running nominally with 98% shields."))
-                .child(Spacer::new())
-                .child(GeriPrompt::new().text("What about engine 2?"))
-        )
-}
-
+/// Application entry point for the AI Copilot CVKG template.
+///
+/// For a full application, implement the `View` trait and
+/// register it with your platform renderer.
 fn main() {
-    cvkg::native::NativeRenderer::run(CopilotApp());
+    println!("CVKG AI Copilot Template — Replace with your app.");
+    println!("See https://github.com/sydonayrex/cvkg for documentation.");
 }
 "#
             }

@@ -81,6 +81,48 @@ impl std::fmt::Display for ShapingError {
 
 impl std::error::Error for ShapingError {}
 
+// ── FontAxisInfo ─────────────────────────────────────────────────────────────
+
+/// Describes a single variable font axis.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FontAxisInfo {
+    /// The 4-byte axis tag (e.g. `b"wght"`, `b"wdth"`, `b"ital"`).
+    pub tag: u32,
+    /// The axis tag as a human-readable string.
+    pub tag_string: String,
+    /// Minimum value for this axis.
+    pub min: f32,
+    /// Maximum value for this axis.
+    pub max: f32,
+    /// Default value for this axis.
+    pub default: f32,
+    /// Whether this axis is a standard registered axis.
+    pub is_standard: bool,
+}
+
+impl FontAxisInfo {
+    /// Get the standard name for known axes, or the raw tag string for custom axes.
+    pub fn display_name(&self) -> &str {
+        match &self.tag_string[..] {
+            "wght" => "Weight",
+            "wdth" => "Width",
+            "ital" => "Italic",
+            "slnt" => "Slant",
+            "opsz" => "Optical Size",
+            "GRAD" => "Grade",
+            "XTRA" => "X Tra Bold",
+            "XOPQ" => "X Opacity",
+            "YOPQ" => "Y Opacity",
+            "YTLC" => "Y Tall Cap Height",
+            "YTUC" => "Y Uppercase Height",
+            "YTAS" => "Y Tall Ascender",
+            "YTDE" => "Y Tall Descender",
+            "YTFI" => "Y Tall Figure Height",
+            _ => &self.tag_string,
+        }
+    }
+}
+
 // ── TextStyle ────────────────────────────────────────────────────────────────
 
 /// Text decoration flags.
@@ -198,6 +240,151 @@ impl VariableAxis {
     }
 }
 
+/// A Bezier spline path for positioning and rotating glyphs along arbitrary curves.
+///
+/// # Contract
+/// The path is constructed from control points. The `sample` method interpolates
+/// along the path at normalized parameter `t` (0.0 to 1.0) and returns the 2D position
+/// and the tangent rotation angle in radians for orienting characters correctly.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextPath {
+    /// Control points for the Bezier spline segments.
+    pub control_points: Vec<(f32, f32)>,
+}
+
+impl TextPath {
+    /// Create a new text path from control points.
+    pub fn new(control_points: Vec<(f32, f32)>) -> Self {
+        TextPath { control_points }
+    }
+
+    /// Sample the position and tangent rotation angle (radians) at normalized parameter `t` (0.0..=1.0).
+    pub fn sample(&self, t: f32) -> ((f32, f32), f32) {
+        if self.control_points.is_empty() {
+            return ((0.0, 0.0), 0.0);
+        }
+        let n = self.control_points.len();
+        if n == 1 {
+            return (self.control_points[0], 0.0);
+        }
+        if n == 3 {
+            // Quadratic Bezier interpolation
+            let p0 = self.control_points[0];
+            let p1 = self.control_points[1];
+            let p2 = self.control_points[2];
+            let u = 1.0 - t;
+            let tt = t * t;
+            let uu = u * u;
+            let x = uu * p0.0 + 2.0 * u * t * p1.0 + tt * p2.0;
+            let y = uu * p0.1 + 2.0 * u * t * p1.1 + tt * p2.1;
+            let tx = 2.0 * u * (p1.0 - p0.0) + 2.0 * t * (p2.0 - p1.0);
+            let ty = 2.0 * u * (p1.1 - p0.1) + 2.0 * t * (p2.1 - p1.1);
+            let angle = ty.atan2(tx);
+            ((x, y), angle)
+        } else if n == 4 {
+            // Cubic Bezier interpolation
+            let p0 = self.control_points[0];
+            let p1 = self.control_points[1];
+            let p2 = self.control_points[2];
+            let p3 = self.control_points[3];
+            let u = 1.0 - t;
+            let tt = t * t;
+            let uu = u * u;
+            let uuu = uu * u;
+            let ttt = tt * t;
+            let x = uuu * p0.0 + 3.0 * uu * t * p1.0 + 3.0 * u * tt * p2.0 + ttt * p3.0;
+            let y = uuu * p0.1 + 3.0 * uu * t * p1.1 + 3.0 * u * tt * p2.1 + ttt * p3.1;
+            let tx =
+                3.0 * uu * (p1.0 - p0.0) + 6.0 * u * t * (p2.0 - p1.0) + 3.0 * tt * (p3.0 - p2.0);
+            let ty =
+                3.0 * uu * (p1.1 - p0.1) + 6.0 * u * t * (p2.1 - p1.1) + 3.0 * tt * (p3.1 - p2.1);
+            let angle = ty.atan2(tx);
+            ((x, y), angle)
+        } else {
+            // Fallback: Linear polyline interpolation
+            let segments = n - 1;
+            let scaled_t = t * segments as f32;
+            let idx = (scaled_t.floor() as usize).min(segments - 1);
+            let local_t = scaled_t - idx as f32;
+            let p0 = self.control_points[idx];
+            let p1 = self.control_points[idx + 1];
+            let x = p0.0 + (p1.0 - p0.0) * local_t;
+            let y = p0.1 + (p1.1 - p0.1) * local_t;
+            let tx = p1.0 - p0.0;
+            let ty = p1.1 - p0.1;
+            let angle = ty.atan2(tx);
+            ((x, y), angle)
+        }
+    }
+}
+
+/// Boundary shapes used for non-rectangular text wrapping.
+///
+/// # Contract
+/// Represents geometric limits within which text flows are allowed or clipped.
+/// The layouter checks collision with boundaries during the line reflow calculations.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutBoundary {
+    /// Circular boundary: center x, center y, radius.
+    Circle {
+        /// Center X coordinate.
+        cx: f32,
+        /// Center Y coordinate.
+        cy: f32,
+        /// Radius of boundary circle.
+        r: f32,
+    },
+    /// Convex polygon boundary defined by a set of clockwise vertices.
+    Polygon {
+        /// Vertices (x, y) defining the polygon boundary.
+        vertices: Vec<(f32, f32)>,
+    },
+}
+
+impl LayoutBoundary {
+    /// Compute the allowed horizontal span `[x_min, x_max]` at a vertical coordinate `y`.
+    ///
+    /// # Contract
+    /// Checks intersection of a horizontal line at `y` with the boundary shape.
+    /// Returns `Some((x_min, x_max))` if the line intersects the boundary, otherwise `None`.
+    pub fn allowed_span(&self, y: f32) -> Option<(f32, f32)> {
+        match self {
+            LayoutBoundary::Circle { cx, cy, r } => {
+                let dy = y - cy;
+                if dy.abs() < *r {
+                    let dx = (r * r - dy * dy).sqrt();
+                    Some((cx - dx, cx + dx))
+                } else {
+                    None
+                }
+            }
+            LayoutBoundary::Polygon { vertices } => {
+                if vertices.len() < 3 {
+                    return None;
+                }
+                let mut intersections = Vec::new();
+                for i in 0..vertices.len() {
+                    let p0 = vertices[i];
+                    let p1 = vertices[(i + 1) % vertices.len()];
+                    let y_min = p0.1.min(p1.1);
+                    let y_max = p0.1.max(p1.1);
+                    if y >= y_min && y <= y_max && (p1.1 - p0.1).abs() > 1e-5 {
+                        let t = (y - p0.1) / (p1.1 - p0.1);
+                        let x = p0.0 + t * (p1.0 - p0.0);
+                        intersections.push(x);
+                    }
+                }
+                if intersections.len() >= 2 {
+                    intersections.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    Some((intersections[0], intersections[intersections.len() - 1]))
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
 /// An OpenType feature to enable during shaping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OpenTypeFeature {
@@ -268,6 +455,10 @@ pub struct TextStyle {
     pub synthesize_styles: bool,
     /// Rendering mode for glyph rasterization.
     pub render_mode: RenderMode,
+    /// Whether to render glyphs as resolution-independent vector outlines.
+    pub outline_rendering: bool,
+    /// Unique identifier for dynamic material and visual rendering effects.
+    pub material_effect_id: u32,
 }
 
 impl Default for TextStyle {
@@ -292,6 +483,8 @@ impl Default for TextStyle {
             variable_axes: vec![],
             synthesize_styles: false,
             render_mode: RenderMode::default(),
+            outline_rendering: false,
+            material_effect_id: 0,
         }
     }
 }
@@ -371,19 +564,66 @@ impl TextStyle {
         self.decorations.strikethrough = true;
         self
     }
+
+    /// Set whether outline vector path rendering is enabled.
+    pub fn with_outline_rendering(mut self, enabled: bool) -> Self {
+        self.outline_rendering = enabled;
+        self
+    }
+
+    /// Set the material effect ID for dynamic visual rendering.
+    pub fn with_material_effect(mut self, effect_id: u32) -> Self {
+        self.material_effect_id = effect_id;
+        self
+    }
 }
 
 // ── TextSpan ─────────────────────────────────────────────────────────────────
 
-/// A span of text with associated styling.
+/// Vertical alignment strategies for inline UI portals within a text line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PortalAlignment {
+    /// Align the bottom of the portal box to the text baseline.
+    #[default]
+    Baseline,
+    /// Align the top of the portal box to the top of the line height.
+    Top,
+    /// Center the portal box vertically within the line height.
+    Center,
+    /// Align the bottom of the portal box to the bottom of the line height.
+    Bottom,
+}
+
+/// Identifies the layout behavior of a TextSpan (standard text vs inline portal).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum TextSpanKind {
+    /// Standard text flow.
+    #[default]
+    Text,
+    /// An inline interactive widget box.
+    Portal {
+        /// Width of the portal box in pixels.
+        width: f32,
+        /// Height of the portal box in pixels.
+        height: f32,
+        /// Vertical alignment mode.
+        alignment: PortalAlignment,
+        /// Unique identifier for downstream portal instantiation.
+        id: String,
+    },
+}
+
+/// A span of text or an inline UI portal with associated styling.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TextSpan {
-    /// The text content.
+    /// The text content (stores "\u{FFFC}" object placeholder for portals).
     pub text: String,
     /// The style to apply.
     pub style: TextStyle,
     /// Byte offset in the full text where this span starts.
     pub byte_offset: usize,
+    /// Layout category of the span.
+    pub kind: TextSpanKind,
 }
 
 impl TextSpan {
@@ -393,6 +633,7 @@ impl TextSpan {
             text: text.to_string(),
             style,
             byte_offset: 0,
+            kind: TextSpanKind::Text,
         }
     }
 
@@ -402,6 +643,50 @@ impl TextSpan {
             text: text.to_string(),
             style,
             byte_offset,
+            kind: TextSpanKind::Text,
+        }
+    }
+
+    /// Create a new inline UI portal span.
+    pub fn portal(
+        width: f32,
+        height: f32,
+        alignment: PortalAlignment,
+        id: &str,
+        style: TextStyle,
+    ) -> Self {
+        TextSpan {
+            text: "\u{FFFC}".to_string(),
+            style,
+            byte_offset: 0,
+            kind: TextSpanKind::Portal {
+                width,
+                height,
+                alignment,
+                id: id.to_string(),
+            },
+        }
+    }
+
+    /// Create a new inline UI portal span at a specific byte offset.
+    pub fn portal_at(
+        width: f32,
+        height: f32,
+        alignment: PortalAlignment,
+        id: &str,
+        style: TextStyle,
+        byte_offset: usize,
+    ) -> Self {
+        TextSpan {
+            text: "\u{FFFC}".to_string(),
+            style,
+            byte_offset,
+            kind: TextSpanKind::Portal {
+                width,
+                height,
+                alignment,
+                id: id.to_string(),
+            },
         }
     }
 }
@@ -487,6 +772,8 @@ pub struct GlyphInstance {
     pub x: f32,
     /// Y position (pixels from origin, baseline-relative).
     pub y: f32,
+    /// Rotation angle in radians (used when rendering text along curves).
+    pub angle: f32,
     /// Advance width in pixels.
     pub advance_width: f32,
     /// Advance height in pixels.
@@ -497,6 +784,56 @@ pub struct GlyphInstance {
     pub is_rtl: bool,
     /// Unique composite cache key for rasterization lookup, incorporating font identity, size, styling, and glyph ID.
     pub cache_key: u64,
+}
+
+/// A segment in a glyph vector outline path.
+///
+/// Exposes raw quadratic and cubic Bezier control points to be processed
+/// and evaluated directly by GPU shaders for resolution-independent rendering.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RunicPathSegment {
+    /// Move the pen to the specified point. Starts a new subpath.
+    MoveTo {
+        /// X coordinate of destination point.
+        x: f32,
+        /// Y coordinate of destination point.
+        y: f32,
+    },
+    /// Draw a straight line segment to the specified point.
+    LineTo {
+        /// X coordinate of destination point.
+        x: f32,
+        /// Y coordinate of destination point.
+        y: f32,
+    },
+    /// Draw a quadratic Bezier curve to the specified point using one control point.
+    QuadTo {
+        /// X coordinate of the Bezier control point.
+        cx: f32,
+        /// Y coordinate of the Bezier control point.
+        cy: f32,
+        /// X coordinate of destination point.
+        x: f32,
+        /// Y coordinate of destination point.
+        y: f32,
+    },
+    /// Draw a cubic Bezier curve to the specified point using two control points.
+    CubicTo {
+        /// X coordinate of the first Bezier control point.
+        cx1: f32,
+        /// Y coordinate of the first Bezier control point.
+        cy1: f32,
+        /// X coordinate of the second Bezier control point.
+        cx2: f32,
+        /// Y coordinate of the second Bezier control point.
+        cy2: f32,
+        /// X coordinate of destination point.
+        x: f32,
+        /// Y coordinate of destination point.
+        y: f32,
+    },
+    /// Close the current subpath by drawing a straight line back to the start.
+    Close,
 }
 
 /// A rasterized glyph image.
@@ -1064,6 +1401,7 @@ impl RunicTextEngine {
                 glyph_id: info.glyph_id as u16,
                 x: x_offset + (pos.x_offset as f32) * scale,
                 y: (pos.y_offset as f32) * scale,
+                angle: 0.0,
                 advance_width: advance + style.letter_spacing + letter_space,
                 advance_height: (pos.y_advance as f32) * scale,
                 cluster: info.cluster,
@@ -1177,6 +1515,24 @@ impl RunicTextEngine {
         align: TextAlign,
         overflow: TextOverflow,
     ) -> Result<ShapedText, ShapingError> {
+        self.shape_layout_ex(spans, max_width, align, overflow, None, None)
+    }
+
+    /// Shape and layout text with advanced capabilities (curved text paths and boundaries).
+    ///
+    /// # Contract
+    /// Performs shaping over the spans and applies line breaking. If a `path` is provided,
+    /// positions and rotates glyphs along the Bezier curve. If a `boundary` is provided,
+    /// wrapping reflows dynamically to fit within the geometry.
+    pub fn shape_layout_ex(
+        &mut self,
+        spans: &[TextSpan],
+        max_width: Option<f32>,
+        align: TextAlign,
+        overflow: TextOverflow,
+        path: Option<TextPath>,
+        boundary: Option<LayoutBoundary>,
+    ) -> Result<ShapedText, ShapingError> {
         if spans.is_empty() {
             return Ok(ShapedText {
                 glyphs: vec![],
@@ -1223,7 +1579,22 @@ impl RunicTextEngine {
                 Direction::LeftToRight
             };
 
-            let mut glyphs = self.shape_run(&span.text, &span.style, direction)?;
+            let mut glyphs = match &span.kind {
+                TextSpanKind::Text => self.shape_run(&span.text, &span.style, direction)?,
+                TextSpanKind::Portal { width, height, .. } => {
+                    vec![GlyphInstance {
+                        glyph_id: 0xFFFF,
+                        x: 0.0,
+                        y: 0.0,
+                        angle: 0.0,
+                        advance_width: *width,
+                        advance_height: *height,
+                        cluster: span.byte_offset as u32,
+                        is_rtl: false,
+                        cache_key: 0,
+                    }]
+                }
+            };
 
             // Offset glyph x positions by accumulated width
             let span_offset_x = all_glyphs
@@ -1262,6 +1633,9 @@ impl RunicTextEngine {
             primary_metrics.1,
             primary_metrics.2,
             primary_line_height_px,
+            path.as_ref(),
+            boundary.as_ref(),
+            spans,
         );
 
         // Compute total dimensions
@@ -1307,6 +1681,9 @@ impl RunicTextEngine {
         _descent: f32,
         _line_gap: f32,
         line_height_px: f32,
+        path: Option<&TextPath>,
+        boundary: Option<&LayoutBoundary>,
+        spans: &[TextSpan],
     ) -> Vec<LineInfo> {
         let mut lines = Vec::new();
         let mut current_y = ascent;
@@ -1315,7 +1692,7 @@ impl RunicTextEngine {
             return lines;
         }
 
-        if let Some(max_w) = max_width {
+        if max_width.is_some() || boundary.is_some() {
             // Word wrapping mode
             let mut line_start_glyph = 0;
             let mut line_start_byte = 0;
@@ -1340,6 +1717,14 @@ impl RunicTextEngine {
                     last_word_break_byte = byte_pos;
                 }
 
+                // Query constraints for the current line
+                let (line_x_start, line_max_w) = if let Some(b) = boundary {
+                    b.allowed_span(current_y)
+                        .unwrap_or((0.0, max_width.unwrap_or(f32::MAX)))
+                } else {
+                    (0.0, max_width.unwrap_or(f32::MAX))
+                };
+
                 let glyph_right_edge = glyph.x + glyph.advance_width;
                 let line_left = if line_start_glyph < glyphs.len() {
                     glyphs[line_start_glyph].x
@@ -1348,7 +1733,7 @@ impl RunicTextEngine {
                 };
                 let line_content_width = glyph_right_edge - line_left;
 
-                if line_content_width > max_w && i > line_start_glyph {
+                if line_content_width > line_max_w && i > line_start_glyph {
                     // Need to break
                     let break_glyph = if last_word_break_glyph > line_start_glyph {
                         last_word_break_glyph
@@ -1377,20 +1762,48 @@ impl RunicTextEngine {
                         .map(|g| g.advance_width)
                         .sum();
 
-                    let x_offset = Self::compute_x_offset(
-                        align,
-                        max_w,
-                        line_width,
-                        glyphs,
-                        line_start_glyph,
-                        break_glyph,
-                    );
+                    let x_offset = line_x_start
+                        + Self::compute_x_offset(
+                            align,
+                            line_max_w,
+                            line_width,
+                            glyphs,
+                            line_start_glyph,
+                            break_glyph,
+                        );
 
                     // Position glyphs
                     let mut x = x_offset;
                     for g in &mut glyphs[line_start_glyph..break_glyph] {
                         g.x = x;
-                        g.y = current_y;
+                        if g.glyph_id == 0xFFFF {
+                            let mut portal_h = g.advance_height;
+                            let mut alignment = PortalAlignment::Baseline;
+                            for span in spans {
+                                if let TextSpanKind::Portal {
+                                    height,
+                                    alignment: align_mode,
+                                    ..
+                                } = &span.kind
+                                    && span.byte_offset as u32 == g.cluster
+                                {
+                                    portal_h = *height;
+                                    alignment = *align_mode;
+                                    break;
+                                }
+                            }
+                            let y_offset = match alignment {
+                                PortalAlignment::Baseline => 0.0,
+                                PortalAlignment::Top => -ascent,
+                                PortalAlignment::Center => {
+                                    -ascent + (line_height_px - portal_h) / 2.0
+                                }
+                                PortalAlignment::Bottom => -ascent + line_height_px - portal_h,
+                            };
+                            g.y = current_y + y_offset;
+                        } else {
+                            g.y = current_y;
+                        }
                         x += g.advance_width;
                     }
 
@@ -1414,25 +1827,60 @@ impl RunicTextEngine {
 
             // Last line
             if line_start_glyph < glyphs.len() {
+                let (line_x_start, line_max_w) = if let Some(b) = boundary {
+                    b.allowed_span(current_y)
+                        .unwrap_or((0.0, max_width.unwrap_or(f32::MAX)))
+                } else {
+                    (0.0, max_width.unwrap_or(f32::MAX))
+                };
+
                 let line_width: f32 = glyphs[line_start_glyph..]
                     .iter()
                     .map(|g| g.advance_width)
                     .sum();
 
                 let glyph_end = glyphs.len();
-                let x_offset = Self::compute_x_offset(
-                    align,
-                    max_w,
-                    line_width,
-                    glyphs,
-                    line_start_glyph,
-                    glyph_end,
-                );
+                let x_offset = line_x_start
+                    + Self::compute_x_offset(
+                        align,
+                        line_max_w,
+                        line_width,
+                        glyphs,
+                        line_start_glyph,
+                        glyph_end,
+                    );
 
                 let mut x = x_offset;
                 for g in &mut glyphs[line_start_glyph..] {
                     g.x = x;
-                    g.y = current_y;
+                    if g.glyph_id == 0xFFFF {
+                        // Locate matching portal span configuration by matching byte offset cluster index
+                        let mut portal_h = g.advance_height;
+                        let mut alignment = PortalAlignment::Baseline;
+                        for span in spans {
+                            if let TextSpanKind::Portal {
+                                height,
+                                alignment: align_mode,
+                                ..
+                            } = &span.kind
+                                && span.byte_offset as u32 == g.cluster
+                            {
+                                portal_h = *height;
+                                alignment = *align_mode;
+                                break;
+                            }
+                        }
+                        // Adjust Y offset depending on portal alignment relative to baseline/line height
+                        let y_offset = match alignment {
+                            PortalAlignment::Baseline => 0.0,
+                            PortalAlignment::Top => -ascent,
+                            PortalAlignment::Center => -ascent + (line_height_px - portal_h) / 2.0,
+                            PortalAlignment::Bottom => -ascent + line_height_px - portal_h,
+                        };
+                        g.y = current_y + y_offset;
+                    } else {
+                        g.y = current_y;
+                    }
                     x += g.advance_width;
                 }
 
@@ -1455,7 +1903,34 @@ impl RunicTextEngine {
             let mut x = 0.0;
             for g in glyphs.iter_mut() {
                 g.x = x;
-                g.y = current_y;
+                if g.glyph_id == 0xFFFF {
+                    // Locate matching portal span configuration by matching byte offset cluster index
+                    let mut portal_h = g.advance_height;
+                    let mut alignment = PortalAlignment::Baseline;
+                    for span in spans {
+                        if let TextSpanKind::Portal {
+                            height,
+                            alignment: align_mode,
+                            ..
+                        } = &span.kind
+                            && span.byte_offset as u32 == g.cluster
+                        {
+                            portal_h = *height;
+                            alignment = *align_mode;
+                            break;
+                        }
+                    }
+                    // Adjust Y offset depending on portal alignment relative to baseline/line height
+                    let y_offset = match alignment {
+                        PortalAlignment::Baseline => 0.0,
+                        PortalAlignment::Top => -ascent,
+                        PortalAlignment::Center => -ascent + (line_height_px - portal_h) / 2.0,
+                        PortalAlignment::Bottom => -ascent + line_height_px - portal_h,
+                    };
+                    g.y = current_y + y_offset;
+                } else {
+                    g.y = current_y;
+                }
                 x += g.advance_width;
             }
 
@@ -1507,6 +1982,27 @@ impl RunicTextEngine {
 
                     lines[line_idx].glyph_end = trunc_glyph_end;
                     lines[line_idx].width = trunc_width;
+                }
+            }
+        }
+
+        // Apply path layout constraint if present
+        if let Some(tp) = path
+            && let Some(last_glyph) = glyphs.last()
+        {
+            let total_x_len = last_glyph.x + last_glyph.advance_width;
+            if total_x_len > 0.0 {
+                for glyph in glyphs.iter_mut() {
+                    let t = (glyph.x / total_x_len).clamp(0.0, 1.0);
+                    let (pos, angle) = tp.sample(t);
+                    // Offset perpendicularly by the baseline relative coordinate
+                    let dy = glyph.y - ascent;
+                    let perp_x = -angle.sin() * dy;
+                    let perp_y = angle.cos() * dy;
+
+                    glyph.x = pos.0 + perp_x;
+                    glyph.y = pos.1 + perp_y;
+                    glyph.angle = angle;
                 }
             }
         }
@@ -1644,6 +2140,97 @@ impl RunicTextEngine {
         )))
     }
 
+    /// Extract the vector outline path for a given glyph at the specified size.
+    ///
+    /// # Contract
+    /// Resolves the font using the provided TextStyle and extracts its Bezier outline.
+    /// Returns a list of `RunicPathSegment` representing the raw MoveTo, LineTo, QuadTo,
+    /// CubicTo, and Close commands of the glyph contours, scaled to the given size.
+    /// If the font does not contain outline data or the glyph is empty, returns an empty path.
+    pub fn extract_glyph_path(
+        &mut self,
+        glyph_id: u16,
+        size: f32,
+        style: &TextStyle,
+    ) -> Result<Vec<RunicPathSegment>, ShapingError> {
+        let resolved = self.resolve_font(style)?;
+        let font_ref = resolved
+            .primary
+            .font_ref()
+            .ok_or(ShapingError::InvalidFontData)?;
+
+        let mut scaler = self.scale_context.builder(font_ref).size(size).build();
+
+        // Helper closure to map Outline points and verbs directly into RunicPathSegment vector
+        let map_outline_to_segments =
+            |outline: swash::scale::outline::Outline| -> Vec<RunicPathSegment> {
+                let mut segments = Vec::new();
+                let mut points_iter = outline.points().iter();
+                for verb in outline.verbs() {
+                    match verb {
+                        swash::zeno::Verb::MoveTo => {
+                            if let Some(p) = points_iter.next() {
+                                segments.push(RunicPathSegment::MoveTo { x: p.x, y: p.y });
+                            }
+                        }
+                        swash::zeno::Verb::LineTo => {
+                            if let Some(p) = points_iter.next() {
+                                segments.push(RunicPathSegment::LineTo { x: p.x, y: p.y });
+                            }
+                        }
+                        swash::zeno::Verb::QuadTo => {
+                            if let Some(cp) = points_iter.next()
+                                && let Some(p) = points_iter.next()
+                            {
+                                segments.push(RunicPathSegment::QuadTo {
+                                    cx: cp.x,
+                                    cy: cp.y,
+                                    x: p.x,
+                                    y: p.y,
+                                });
+                            }
+                        }
+                        swash::zeno::Verb::CurveTo => {
+                            if let Some(cp1) = points_iter.next()
+                                && let Some(cp2) = points_iter.next()
+                                && let Some(p) = points_iter.next()
+                            {
+                                segments.push(RunicPathSegment::CubicTo {
+                                    cx1: cp1.x,
+                                    cy1: cp1.y,
+                                    cx2: cp2.x,
+                                    cy2: cp2.y,
+                                    x: p.x,
+                                    y: p.y,
+                                });
+                            }
+                        }
+                        swash::zeno::Verb::Close => {
+                            segments.push(RunicPathSegment::Close);
+                        }
+                    }
+                }
+                segments
+            };
+
+        // Use swash's outline scaler to retrieve raw curves
+        if let Some(outline) = scaler.scale_outline(glyph_id) {
+            return Ok(map_outline_to_segments(outline));
+        }
+
+        // Try fallbacks
+        for fallback in &resolved.fallbacks {
+            if let Some(font_ref) = fallback.font_ref() {
+                let mut scaler = self.scale_context.builder(font_ref).size(size).build();
+                if let Some(outline) = scaler.scale_outline(glyph_id) {
+                    return Ok(map_outline_to_segments(outline));
+                }
+            }
+        }
+
+        Ok(Vec::new())
+    }
+
     /// Get font metrics for a style.
     pub fn font_metrics(&mut self, style: &TextStyle) -> Result<FontMetrics, ShapingError> {
         let resolved = self.resolve_font(style)?;
@@ -1673,6 +2260,108 @@ impl RunicTextEngine {
     /// Get the number of faces in the database.
     pub fn font_count(&self) -> usize {
         self.db.faces().count()
+    }
+
+    /// Query the variable font axes available for a given font family.
+    ///
+    /// Returns `Ok(None)` if the font is not variable.
+    /// Returns `Err` if the font cannot be found.
+    ///
+    /// # Arguments
+    /// * `family` — Font family name.
+    /// * `font_size` — Font size for resolving the face.
+    pub fn query_font_axes(
+        &mut self,
+        family: &str,
+        _font_size: f32,
+    ) -> Result<Option<Vec<FontAxisInfo>>, ShapingError> {
+        let query = Query {
+            families: &[Family::Name(family)],
+            weight: Weight::NORMAL,
+            stretch: Stretch::Normal,
+            style: Style::Normal,
+        };
+
+        let id = self
+            .db
+            .query(&query)
+            .ok_or_else(|| ShapingError::NoFontFound(family.to_string()))?;
+        let data = self
+            .get_font_data(id)
+            .ok_or(ShapingError::InvalidFontData)?;
+        let _font_ref = data.font_ref().ok_or(ShapingError::InvalidFontData)?;
+
+        // Use ttf-parser to read the fvar table
+        let ttf_face = rustybuzz::ttf_parser::Face::parse(data.as_bytes(), data.index)
+            .map_err(|_| ShapingError::InvalidFontData)?;
+
+        // Check if this is a variable font
+        let fvar_data = match ttf_face
+            .raw_face()
+            .table(rustybuzz::ttf_parser::Tag(u32::from_be_bytes(*b"fvar")))
+        {
+            Some(d) => d,
+            None => return Ok(None), // Not a variable font
+        };
+
+        // Parse the fvar table manually
+        // fvar table format: version(4), offsetToData(2), reserved(2), axisCount(2), axisSize(2), instanceCount(2), instanceSize(2)
+        if fvar_data.len() < 16 {
+            return Ok(None);
+        }
+
+        let axis_count = u16::from_be_bytes([fvar_data[8], fvar_data[9]]) as usize;
+        let axis_size = u16::from_be_bytes([fvar_data[10], fvar_data[11]]) as usize;
+        let data_offset = u16::from_be_bytes([fvar_data[4], fvar_data[5]]) as usize;
+
+        let mut axes = Vec::new();
+        for i in 0..axis_count {
+            let offset = data_offset + i * axis_size;
+            if offset + axis_size > fvar_data.len() {
+                break;
+            }
+
+            let axis_data = &fvar_data[offset..offset + axis_size];
+
+            // fvar axis record: tag(4), minValue(4), defaultValue(4), maxValue(4), flags(2), nameID(2)
+            if axis_data.len() < 20 {
+                break;
+            }
+
+            let tag = u32::from_be_bytes([axis_data[0], axis_data[1], axis_data[2], axis_data[3]]);
+            let min_val =
+                f32::from_be_bytes([axis_data[4], axis_data[5], axis_data[6], axis_data[7]]);
+            let default_val =
+                f32::from_be_bytes([axis_data[8], axis_data[9], axis_data[10], axis_data[11]]);
+            let max_val =
+                f32::from_be_bytes([axis_data[12], axis_data[13], axis_data[14], axis_data[15]]);
+            let _name_id = u16::from_be_bytes([axis_data[18], axis_data[19]]);
+
+            let tag_bytes = tag.to_be_bytes();
+            let tag_string = String::from_utf8_lossy(&tag_bytes).trim().to_string();
+
+            // Standard axes: wght, wdth, ital, slnt, opsz, plus many more
+            let standard_tags: &[&[u8]] = &[
+                b"wght", b"wdth", b"ital", b"slnt", b"opsz", b"GRAD", b"XTRA", b"XOPQ", b"YOPQ",
+                b"YTLC", b"YTUC", b"YTAS", b"YTDE", b"YTFI", b"wdth",
+            ];
+            let is_standard = standard_tags.contains(&tag_bytes.as_slice());
+
+            axes.push(FontAxisInfo {
+                tag,
+                tag_string,
+                min: min_val,
+                max: max_val,
+                default: default_val,
+                is_standard,
+            });
+        }
+
+        if axes.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(axes))
+        }
     }
 
     // ── Backward-compatible API for cvkg-render-gpu ──────────────────────────
@@ -2109,5 +2798,242 @@ mod tests {
     fn test_jupiteroid_font_available() {
         let engine = RunicTextEngine::new_test();
         assert!(engine.font_count() > 0, "Should have fonts loaded");
+    }
+
+    #[test]
+    fn test_extract_glyph_path() {
+        let mut engine = RunicTextEngine::new_test();
+        let style = TextStyle::new("Jupiteroid", 16.0);
+
+        // Shape a character to get a guaranteed valid glyph ID in the test font
+        let glyphs = engine
+            .shape_run("A", &style, Direction::LeftToRight)
+            .unwrap();
+        assert!(!glyphs.is_empty(), "Shaping 'A' should yield a glyph");
+        let glyph_id = glyphs[0].glyph_id;
+
+        // Extract the outline vector path for this glyph
+        let path = engine.extract_glyph_path(glyph_id, 16.0, &style).unwrap();
+
+        // Verify that the outline path is not empty and starts with MoveTo, containing at least one Close
+        assert!(!path.is_empty(), "Glyph path for 'A' should not be empty");
+        match path[0] {
+            RunicPathSegment::MoveTo { x, y } => {
+                assert!(x.is_finite());
+                assert!(y.is_finite());
+            }
+            _ => panic!("Expected first segment to be a MoveTo, got {:?}", path[0]),
+        }
+
+        let has_close = path
+            .iter()
+            .any(|seg| matches!(seg, RunicPathSegment::Close));
+        assert!(
+            has_close,
+            "Expected glyph path to contain at least one Close command"
+        );
+
+        // Assert all segment coordinates are finite values
+        for segment in &path {
+            match *segment {
+                RunicPathSegment::MoveTo { x, y } => {
+                    assert!(x.is_finite());
+                    assert!(y.is_finite());
+                }
+                RunicPathSegment::LineTo { x, y } => {
+                    assert!(x.is_finite());
+                    assert!(y.is_finite());
+                }
+                RunicPathSegment::QuadTo { cx, cy, x, y } => {
+                    assert!(cx.is_finite());
+                    assert!(cy.is_finite());
+                    assert!(x.is_finite());
+                    assert!(y.is_finite());
+                }
+                RunicPathSegment::CubicTo {
+                    cx1,
+                    cy1,
+                    cx2,
+                    cy2,
+                    x,
+                    y,
+                } => {
+                    assert!(cx1.is_finite());
+                    assert!(cy1.is_finite());
+                    assert!(cx2.is_finite());
+                    assert!(cy2.is_finite());
+                    assert!(x.is_finite());
+                    assert!(y.is_finite());
+                }
+                RunicPathSegment::Close => {}
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_text_style_fields() {
+        let style = TextStyle::new("Jupiteroid", 16.0)
+            .with_outline_rendering(true)
+            .with_material_effect(42);
+
+        assert!(style.outline_rendering);
+        assert_eq!(style.material_effect_id, 42);
+    }
+
+    #[test]
+    fn test_text_path_sampling() {
+        // Curve: (0,0) -> (100, 100) -> (200, 0)
+        let tp = TextPath::new(vec![(0.0, 0.0), (100.0, 100.0), (200.0, 0.0)]);
+        let ((x_start, y_start), angle_start) = tp.sample(0.0);
+        let ((x_mid, y_mid), angle_mid) = tp.sample(0.5);
+
+        assert_eq!(x_start, 0.0);
+        assert_eq!(y_start, 0.0);
+        assert!(angle_start > 0.0);
+
+        assert_eq!(x_mid, 100.0);
+        assert_eq!(y_mid, 50.0);
+        assert!(angle_mid.abs() < 1e-4); // peak tangent is horizontal (angle=0)
+    }
+
+    #[test]
+    fn test_layout_boundary_circle() {
+        let boundary = LayoutBoundary::Circle {
+            cx: 100.0,
+            cy: 100.0,
+            r: 50.0,
+        };
+        // At y = 100 (center of circle), allowed span should be [50.0, 150.0]
+        let span = boundary.allowed_span(100.0).unwrap();
+        assert_eq!(span.0, 50.0);
+        assert_eq!(span.1, 150.0);
+
+        // At y = 150 (edge), dy = 50 -> dx = 0 -> allowed span [100.0, 100.0]
+        let span_edge = boundary.allowed_span(150.0);
+        assert!(span_edge.is_none() || span_edge.unwrap().0 >= 100.0);
+    }
+
+    #[test]
+    fn test_shape_layout_with_path_and_boundary() {
+        let mut engine = RunicTextEngine::new_test();
+        let style = TextStyle::new("Jupiteroid", 16.0);
+        let spans = vec![TextSpan::new(
+            "Hello World Curved Layout Test String",
+            style,
+        )];
+
+        // Test with curve path
+        let tp = TextPath::new(vec![(0.0, 0.0), (100.0, 50.0), (200.0, 0.0)]);
+        let shaped_path = engine
+            .shape_layout_ex(
+                &spans,
+                None,
+                TextAlign::Start,
+                TextOverflow::WordWrap,
+                Some(tp),
+                None,
+            )
+            .unwrap();
+        assert!(!shaped_path.glyphs.is_empty());
+        // Verify glyph angles are non-zero due to curve tangent mapping
+        let has_angles = shaped_path.glyphs.iter().any(|g| g.angle != 0.0);
+        assert!(has_angles);
+
+        // Test with boundary circle
+        let boundary = LayoutBoundary::Circle {
+            cx: 100.0,
+            cy: 100.0,
+            r: 50.0,
+        };
+        let shaped_boundary = engine
+            .shape_layout_ex(
+                &spans,
+                None,
+                TextAlign::Start,
+                TextOverflow::WordWrap,
+                None,
+                Some(boundary),
+            )
+            .unwrap();
+        assert!(!shaped_boundary.glyphs.is_empty());
+    }
+
+    #[test]
+    fn test_portal_alignment() {
+        let mut engine = RunicTextEngine::new_test();
+        let style = TextStyle::new("Jupiteroid", 16.0);
+
+        // Construct portal spans with different vertical alignment modes using correct byte offsets
+        let spans = vec![
+            TextSpan::at("Txt ", style.clone(), 0),
+            TextSpan::portal_at(
+                30.0,
+                20.0,
+                PortalAlignment::Baseline,
+                "p_base",
+                style.clone(),
+                4,
+            ),
+            TextSpan::portal_at(30.0, 20.0, PortalAlignment::Top, "p_top", style.clone(), 7),
+            TextSpan::portal_at(
+                30.0,
+                20.0,
+                PortalAlignment::Center,
+                "p_center",
+                style.clone(),
+                10,
+            ),
+            TextSpan::portal_at(
+                30.0,
+                20.0,
+                PortalAlignment::Bottom,
+                "p_bottom",
+                style.clone(),
+                13,
+            ),
+        ];
+
+        // 1. Verify single-line layout (no wrapping)
+        let shaped_single = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
+
+        let portals_s: Vec<_> = shaped_single
+            .glyphs
+            .iter()
+            .filter(|g| g.glyph_id == 0xFFFF)
+            .collect();
+        assert_eq!(portals_s.len(), 4);
+
+        let baseline_y = shaped_single.lines[0].baseline_y;
+        let ascent = shaped_single.ascent;
+        let line_height_px = shaped_single.lines[0].height;
+
+        // Baseline alignment -> y = baseline_y
+        assert_eq!(portals_s[0].y, baseline_y);
+
+        // Top alignment -> y = baseline_y - ascent
+        assert_eq!(portals_s[1].y, baseline_y - ascent);
+
+        // Center alignment -> y = baseline_y - ascent + (line_height - portal_h) / 2
+        assert_eq!(
+            portals_s[2].y,
+            baseline_y - ascent + (line_height_px - 20.0) / 2.0
+        );
+
+        // Bottom alignment -> y = baseline_y - ascent + line_height - portal_h
+        assert_eq!(portals_s[3].y, baseline_y - ascent + line_height_px - 20.0);
+
+        // 2. Verify wrapped line layouts
+        let shaped_wrapped = engine
+            .shape_layout(&spans, Some(50.0), TextAlign::Start, TextOverflow::WordWrap)
+            .unwrap();
+
+        let portals_w: Vec<_> = shaped_wrapped
+            .glyphs
+            .iter()
+            .filter(|g| g.glyph_id == 0xFFFF)
+            .collect();
+        assert_eq!(portals_w.len(), 4);
     }
 }

@@ -3,13 +3,83 @@ use crate::node::FlowNode;
 use crate::types::{EdgeId, NodeId, PortId};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
+
+/// A spatial hashing grid to index and accelerate queries on node bounding boxes.
+///
+/// Divides 2D canvas space into fixed-size grid cells and maps each cell coordinate
+/// to a list of node IDs whose bounding boxes overlap the cell.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpatialHashGrid {
+    /// Dimension of each grid cell.
+    pub cell_size: f32,
+    /// Maps 2D cell coordinate (x, y) to a list of node IDs.
+    pub cells: HashMap<(i32, i32), Vec<NodeId>>,
+}
+
+impl Default for SpatialHashGrid {
+    fn default() -> Self {
+        Self {
+            cell_size: 200.0,
+            cells: HashMap::new(),
+        }
+    }
+}
+
+impl SpatialHashGrid {
+    /// Creates a new spatial hash grid with the specified cell size.
+    pub fn new(cell_size: f32) -> Self {
+        Self {
+            cell_size: cell_size.max(1.0),
+            cells: HashMap::new(),
+        }
+    }
+
+    /// Clears all cells in the index.
+    pub fn clear(&mut self) {
+        self.cells.clear();
+    }
+
+    /// Indexes a node in the grid based on its bounding box boundaries.
+    pub fn insert_node(&mut self, node_id: NodeId, position: (f32, f32), size: (f32, f32)) {
+        let (nx, ny) = position;
+        let (nw, nh) = size;
+        let min_x = (nx / self.cell_size).floor() as i32;
+        let max_x = ((nx + nw) / self.cell_size).floor() as i32;
+        let min_y = (ny / self.cell_size).floor() as i32;
+        let max_y = ((ny + nh) / self.cell_size).floor() as i32;
+
+        for cy in min_y..=max_y {
+            for cx in min_x..=max_x {
+                self.cells.entry((cx, cy)).or_default().push(node_id);
+            }
+        }
+    }
+}
 
 /// FlowGraph - collection of nodes and edges.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FlowGraph {
     pub nodes: HashMap<NodeId, FlowNode>,
     pub edges: HashMap<EdgeId, FlowEdge>,
+    /// Index to accelerate spatial queries.
+    #[serde(skip)]
+    pub spatial_index: RefCell<SpatialHashGrid>,
+    /// Tracks if the spatial index needs rebuilding.
+    #[serde(skip)]
+    pub spatial_index_dirty: Cell<bool>,
+}
+
+impl Default for FlowGraph {
+    fn default() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            edges: HashMap::new(),
+            spatial_index: RefCell::new(SpatialHashGrid::default()),
+            spatial_index_dirty: Cell::new(true),
+        }
+    }
 }
 
 impl FlowGraph {
@@ -18,9 +88,10 @@ impl FlowGraph {
         Self::default()
     }
 
-    /// Adds a node to the graph.
+    /// Adds a node to the graph and invalidates the spatial index.
     pub fn add_node(&mut self, node: FlowNode) {
         self.nodes.insert(node.id, node);
+        self.spatial_index_dirty.set(true);
     }
 
     /// Adds an edge to the graph.
@@ -37,65 +108,113 @@ impl FlowGraph {
 
     /// Returns all node IDs whose bounding rectangles intersect the given query rectangle.
     ///
-    /// The query rectangle is defined by its origin `(x, y)` and size `(width, height)`.
-    /// A node is considered intersecting if its axis-aligned bounding box overlaps the
-    /// query rectangle by any amount (edge-touching counts as intersection).
-    ///
-    /// This performs a linear scan over all nodes. For very large graphs, consider
-    /// maintaining a spatial index (e.g. an R-tree) and calling `rebuild_spatial_index`
-    /// after mutations.
+    /// # Contract
+    /// Checks cell overlaps in the spatial grid index to quickly filter candidate nodes,
+    /// falling back to bounds checking. Resolves queries in average O(1) time.
     pub fn nodes_in_rect(&self, x: f32, y: f32, width: f32, height: f32) -> Vec<NodeId> {
+        if self.spatial_index_dirty.get() {
+            let mut grid = self.spatial_index.borrow_mut();
+            grid.clear();
+            for (id, node) in &self.nodes {
+                grid.insert_node(*id, node.position, node.size);
+            }
+            self.spatial_index_dirty.set(false);
+        }
+
+        let grid = self.spatial_index.borrow();
         let q_min_x = x;
         let q_min_y = y;
         let q_max_x = x + width;
         let q_max_y = y + height;
 
-        self.nodes
-            .iter()
-            .filter_map(|(id, node)| {
-                let (nx, ny) = node.position;
-                let (nw, nh) = node.size;
-                let n_max_x = nx + nw;
-                let n_max_y = ny + nh;
+        let cell_min_x = (q_min_x / grid.cell_size).floor() as i32;
+        let cell_max_x = (q_max_x / grid.cell_size).floor() as i32;
+        let cell_min_y = (q_min_y / grid.cell_size).floor() as i32;
+        let cell_max_y = (q_max_y / grid.cell_size).floor() as i32;
 
-                let intersects =
-                    nx <= q_max_x && n_max_x >= q_min_x && ny <= q_max_y && n_max_y >= q_min_y;
+        let mut matched = HashSet::new();
+        for cy in cell_min_y..=cell_max_y {
+            for cx in cell_min_x..=cell_max_x {
+                if let Some(node_ids) = grid.cells.get(&(cx, cy)) {
+                    for &id in node_ids {
+                        if let Some(node) = self.nodes.get(&id) {
+                            let (nx, ny) = node.position;
+                            let (nw, nh) = node.size;
+                            let n_max_x = nx + nw;
+                            let n_max_y = ny + nh;
 
-                if intersects { Some(*id) } else { None }
-            })
-            .collect()
+                            let intersects = nx <= q_max_x
+                                && n_max_x >= q_min_x
+                                && ny <= q_max_y
+                                && n_max_y >= q_min_y;
+
+                            if intersects {
+                                matched.insert(id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        matched.into_iter().collect()
     }
 
     /// Returns all node IDs whose bounding rectangles are within `radius` of `point`.
     ///
-    /// The distance is measured from the query point to the nearest edge of each
-    /// node's axis-aligned bounding box. If the point is inside a node's bounds,
-    /// the distance is zero and that node is always included.
-    ///
-    /// # Arguments
-    /// * `point` - The query point in graph space.
-    /// * `radius` - Maximum distance in logical pixels. Must be non-negative.
+    /// # Contract
+    /// Accelerates search by checking spatial cells overlapping the bounding region of
+    /// `point` and `radius`, then validating exact distance. Resolves in average O(1) time.
     pub fn nodes_near_point(&self, point: Vec2, radius: f32) -> Vec<NodeId> {
+        if self.spatial_index_dirty.get() {
+            let mut grid = self.spatial_index.borrow_mut();
+            grid.clear();
+            for (id, node) in &self.nodes {
+                grid.insert_node(*id, node.position, node.size);
+            }
+            self.spatial_index_dirty.set(false);
+        }
+
+        let grid = self.spatial_index.borrow();
         let r = radius.max(0.0);
         let r_sq = r * r;
 
-        self.nodes
-            .iter()
-            .filter_map(|(id, node)| {
-                let (nx, ny) = node.position;
-                let (nw, nh) = node.size;
+        let q_min_x = point.x - r;
+        let q_min_y = point.y - r;
+        let q_max_x = point.x + r;
+        let q_max_y = point.y + r;
 
-                // Compute closest point on the node's AABB to the query point
-                let closest_x = point.x.clamp(nx, nx + nw);
-                let closest_y = point.y.clamp(ny, ny + nh);
+        let cell_min_x = (q_min_x / grid.cell_size).floor() as i32;
+        let cell_max_x = (q_max_x / grid.cell_size).floor() as i32;
+        let cell_min_y = (q_min_y / grid.cell_size).floor() as i32;
+        let cell_max_y = (q_max_y / grid.cell_size).floor() as i32;
 
-                let dx = point.x - closest_x;
-                let dy = point.y - closest_y;
-                let dist_sq = dx * dx + dy * dy;
+        let mut matched = HashSet::new();
+        for cy in cell_min_y..=cell_max_y {
+            for cx in cell_min_x..=cell_max_x {
+                if let Some(node_ids) = grid.cells.get(&(cx, cy)) {
+                    for &id in node_ids {
+                        if let Some(node) = self.nodes.get(&id) {
+                            let (nx, ny) = node.position;
+                            let (nw, nh) = node.size;
 
-                if dist_sq <= r_sq { Some(*id) } else { None }
-            })
-            .collect()
+                            let closest_x = point.x.clamp(nx, nx + nw);
+                            let closest_y = point.y.clamp(ny, ny + nh);
+
+                            let dx = point.x - closest_x;
+                            let dy = point.y - closest_y;
+                            let dist_sq = dx * dx + dy * dy;
+
+                            if dist_sq <= r_sq {
+                                matched.insert(id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        matched.into_iter().collect()
     }
 }
 

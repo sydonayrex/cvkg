@@ -1,8 +1,8 @@
 extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, FnArg, ItemFn, ItemStruct, Pat, parse_macro_input, Expr, braced};
 use syn::parse::{Parse, ParseStream};
+use syn::{DeriveInput, Expr, FnArg, ItemFn, ItemStruct, Pat, braced, parse_macro_input};
 
 /// State attribute macro — derives common traits for state structs
 ///
@@ -200,10 +200,7 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 enum HamrNode {
     Expr(Expr),
-    Block {
-        expr: Expr,
-        children: Vec<HamrNode>,
-    },
+    Block { expr: Expr, children: Vec<HamrNode> },
 }
 
 impl Parse for HamrNode {

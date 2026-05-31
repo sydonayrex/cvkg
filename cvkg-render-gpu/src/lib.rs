@@ -222,8 +222,12 @@ const WGSL_SRC: &str = concat!(
     include_str!("shaders/common.wgsl"),
     include_str!("shaders/shapes.wgsl"),
     include_str!("shaders/bifrost.wgsl"),
-    include_str!("shaders/bloom.wgsl")
+    include_str!("shaders/bloom.wgsl"),
+    include_str!("shaders/color_blind.wgsl")
 );
+
+/// Color blindness simulation module.
+pub mod color_blindness;
 
 /// SvgModel — A collection of tessellated triangles representing a vector icon.
 #[derive(Clone, Debug)]

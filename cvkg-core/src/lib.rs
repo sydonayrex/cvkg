@@ -980,6 +980,365 @@ pub trait View: Sized + Send {
     {
         AnyView::new(self)
     }
+
+    // =============================================================================
+    // ACCESSIBILITY
+    // =============================================================================
+
+    /// Return accessibility properties for this view.
+    /// Override to expose semantic role, label, state to assistive technology.
+    /// Default returns `None` (view is not explicitly accessible).
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        None
+    }
+
+    /// Handle a keyboard navigation event.
+    /// Return true if consumed, false to bubble.
+    fn on_key_event(&self, _key: &str, _modifiers: KeyModifiers) -> bool {
+        false
+    }
+
+    /// Return keyboard shortcuts this view responds to.
+    fn key_shortcuts(&self) -> Vec<KeyShortcut> {
+        vec![]
+    }
+}
+
+// =============================================================================
+// ARIA PROPERTIES
+// =============================================================================
+
+/// Semantic role for assistive technology (WCAG 2.1 §4.1.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AriaRole {
+    Alert,
+    Alertdialog,
+    Article,
+    Banner,
+    Button,
+    Checkbox,
+    Columnheader,
+    Combobox,
+    Complementary,
+    Contentinfo,
+    Dialog,
+    Form,
+    Grid,
+    Gridcell,
+    Heading,
+    Img,
+    Link,
+    List,
+    Listbox,
+    Listitem,
+    Main,
+    Menu,
+    Menubar,
+    Menuitem,
+    Menuitemcheckbox,
+    Menuitemradio,
+    Navigation,
+    None,
+    Note,
+    Option,
+    Presentation,
+    Progressbar,
+    Radio,
+    Radiogroup,
+    Region,
+    Row,
+    Rowgroup,
+    Rowheader,
+    Search,
+    Separator,
+    Slider,
+    Spinbutton,
+    Status,
+    Switch,
+    Tab,
+    Table,
+    Tablist,
+    Tabpanel,
+    Textbox,
+    Toolbar,
+    Tooltip,
+    Tree,
+    Treeitem,
+}
+
+/// Accessible properties for a view, describing its semantic role and state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AriaProperties {
+    pub role: AriaRole,
+    pub label: String,
+    pub description: Option<String>,
+    pub value: Option<String>,
+    pub pressed: Option<bool>,
+    pub checked: Option<bool>,
+    pub expanded: Option<bool>,
+    pub disabled: bool,
+    pub hidden: bool,
+    pub level: Option<u8>,
+    pub shortcut: Option<String>,
+    pub focused: bool,
+    pub live: Option<String>,
+    pub atomic: bool,
+}
+
+impl AriaProperties {
+    pub fn new(role: AriaRole, label: impl Into<String>) -> Self {
+        Self {
+            role,
+            label: label.into(),
+            description: None,
+            value: None,
+            pressed: None,
+            checked: None,
+            expanded: None,
+            disabled: false,
+            hidden: false,
+            level: None,
+            shortcut: None,
+            focused: false,
+            live: None,
+            atomic: false,
+        }
+    }
+
+    pub fn description(mut self, d: impl Into<String>) -> Self {
+        self.description = Some(d.into());
+        self
+    }
+    pub fn value(mut self, v: impl Into<String>) -> Self {
+        self.value = Some(v.into());
+        self
+    }
+    pub fn checked(mut self, c: bool) -> Self {
+        self.checked = Some(c);
+        self
+    }
+    pub fn disabled(mut self, d: bool) -> Self {
+        self.disabled = d;
+        self
+    }
+    pub fn expanded(mut self, e: bool) -> Self {
+        self.expanded = Some(e);
+        self
+    }
+    pub fn level(mut self, l: u8) -> Self {
+        self.level = Some(l.clamp(1, 6));
+        self
+    }
+    pub fn shortcut(mut self, s: impl Into<String>) -> Self {
+        self.shortcut = Some(s.into());
+        self
+    }
+    pub fn focused(mut self, f: bool) -> Self {
+        self.focused = f;
+        self
+    }
+}
+
+// =============================================================================
+// KEYBOARD NAVIGATION
+// =============================================================================
+
+/// Modifier keys for keyboard events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct KeyModifiers {
+    pub shift: bool,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub meta: bool,
+}
+
+/// A keyboard shortcut binding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyShortcut {
+    pub key: String,
+    pub modifiers: KeyModifiers,
+    pub description: String,
+}
+
+impl KeyShortcut {
+    pub fn new(key: impl Into<String>, desc: impl Into<String>) -> Self {
+        Self {
+            key: key.into(),
+            modifiers: KeyModifiers::default(),
+            description: desc.into(),
+        }
+    }
+    pub fn with_ctrl(mut self) -> Self {
+        self.modifiers.ctrl = true;
+        self
+    }
+    pub fn with_shift(mut self) -> Self {
+        self.modifiers.shift = true;
+        self
+    }
+    pub fn with_alt(mut self) -> Self {
+        self.modifiers.alt = true;
+        self
+    }
+    pub fn with_meta(mut self) -> Self {
+        self.modifiers.meta = true;
+        self
+    }
+}
+
+// =============================================================================
+// FOCUS MANAGEMENT
+// =============================================================================
+
+/// Unique ID for a focusable element.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct FocusableId(String);
+
+impl From<&str> for FocusableId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+impl From<String> for FocusableId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+/// Focus trap for confining Tab navigation (e.g., modals).
+#[derive(Debug, Clone)]
+pub struct FocusTrap {
+    pub id: FocusableId,
+    pub order: Vec<FocusableId>,
+    pub wrap: bool,
+}
+
+impl FocusTrap {
+    pub fn new(id: impl Into<FocusableId>, order: Vec<FocusableId>) -> Self {
+        Self {
+            id: id.into(),
+            order,
+            wrap: true,
+        }
+    }
+}
+
+/// Manages focus order, Tab/Shift+Tab navigation, and focus traps.
+#[derive(Debug, Default)]
+pub struct FocusManager {
+    order: Vec<FocusableId>,
+    focused: Option<FocusableId>,
+    traps: Vec<FocusTrap>,
+}
+
+impl FocusManager {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn register(&mut self, id: impl Into<FocusableId>) {
+        let id = id.into();
+        if !self.order.contains(&id) {
+            self.order.push(id);
+        }
+    }
+
+    pub fn unregister(&mut self, id: &FocusableId) {
+        self.order.retain(|x| x != id);
+        if self.focused.as_ref() == Some(id) {
+            self.focused = None;
+        }
+    }
+
+    pub fn focused(&self) -> Option<&FocusableId> {
+        self.focused.as_ref()
+    }
+
+    pub fn focus(&mut self, id: impl Into<FocusableId>) -> bool {
+        let id = id.into();
+        if self.order.contains(&id) || self.traps.iter().any(|t| t.order.contains(&id)) {
+            self.focused = Some(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn focus_next(&mut self) -> Option<&FocusableId> {
+        let order = self.effective_order();
+        if order.is_empty() {
+            return None;
+        }
+        let idx = self
+            .focused
+            .as_ref()
+            .and_then(|f| order.iter().position(|x| x == f));
+        let next = match idx {
+            Some(i) if i + 1 < order.len() => &order[i + 1],
+            _ => &order[0],
+        };
+        self.focused = Some(next.clone());
+        self.focused.as_ref()
+    }
+
+    pub fn focus_prev(&mut self) -> Option<&FocusableId> {
+        let order = self.effective_order();
+        if order.is_empty() {
+            return None;
+        }
+        let idx = self
+            .focused
+            .as_ref()
+            .and_then(|f| order.iter().position(|x| x == f));
+        let prev = match idx {
+            Some(i) if i > 0 => &order[i - 1],
+            _ => &order[order.len() - 1],
+        };
+        self.focused = Some(prev.clone());
+        self.focused.as_ref()
+    }
+
+    pub fn push_trap(&mut self, trap: FocusTrap) -> FocusableId {
+        let id = trap.id.clone();
+        self.traps.push(trap);
+        id
+    }
+
+    pub fn pop_trap(&mut self) {
+        self.traps.pop();
+    }
+    pub fn trap_count(&self) -> usize {
+        self.traps.len()
+    }
+
+    fn effective_order(&self) -> &[FocusableId] {
+        self.traps
+            .last()
+            .map(|t| t.order.as_slice())
+            .unwrap_or(&self.order)
+    }
+}
+
+// =============================================================================
+// REDUCED MOTION
+// =============================================================================
+
+/// Detects OS-level reduced motion preference.
+pub fn is_reduced_motion() -> bool {
+    std::env::var("GTK_THEME")
+        .map(|v| v.to_lowercase().contains("reduced"))
+        .unwrap_or(false)
+        || std::env::var("NO_ANIMATIONS")
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false)
+        || std::env::var("ACCESSIBILITY_REDUCED_MOTION")
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false)
+}
+
+/// Returns effective animation duration (0.0 if reduced motion is active).
+pub fn effective_duration(secs: f32) -> f32 {
+    if is_reduced_motion() { 0.0 } else { secs }
 }
 
 /// An object-safe version of the View trait for type erasure.

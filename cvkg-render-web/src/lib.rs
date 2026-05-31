@@ -1994,17 +1994,38 @@ mod wasm_impl {
                 x,
                 y,
                 button: 0,
+                proximity_field: 0.0,
+                tilt: None,
+                azimuth: None,
+                pressure: 1.0,
+                barrel_rotation: None,
             })?;
             on_pointer_event("pointerup", |x, y| cvkg_core::Event::PointerUp {
                 x,
                 y,
                 button: 0,
+                tilt: None,
+                azimuth: None,
+                pressure: 0.0,
+                barrel_rotation: None,
             })?;
-            on_pointer_event("pointermove", |x, y| cvkg_core::Event::PointerMove { x, y })?;
+            on_pointer_event("pointermove", |x, y| cvkg_core::Event::PointerMove {
+                x,
+                y,
+                proximity_field: 0.0,
+                tilt: None,
+                azimuth: None,
+                pressure: 0.0,
+                barrel_rotation: None,
+            })?;
             on_pointer_event("click", |x, y| cvkg_core::Event::PointerClick {
                 x,
                 y,
                 button: 0,
+                tilt: None,
+                azimuth: None,
+                pressure: 0.0,
+                barrel_rotation: None,
             })?;
 
             // Keyboard events

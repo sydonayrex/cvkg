@@ -66,6 +66,8 @@ These are our newly minted, high-fidelity widgets designed to enrich user experi
 | `GjallarSplitter` | Struct | Drag-to-resize multi-view structural layout. | [container.rs](file:///D/rex/projects/cvkg/cvkg-components/src/container.rs) |
 | `OracleOrb` | Struct | Floating AI Agent state visualizer. | [oracle_orb.rs](file:///D/rex/projects/cvkg/cvkg-components/src/oracle_orb.rs) |
 | `Vegvísir` | Struct | Specialized directional nav and layout compass. | [hud.rs](file:///D/rex/projects/cvkg/cvkg-components/src/hud.rs) |
+| `FontAxisPanel` | Struct | Variable font axis slider panel with COLRv1 toggle. | [font_axis_panel.rs](file:///D/rex/projects/cvkg/cvkg-components/src/font_axis_panel.rs) |
+| `RadialMenu` | Struct | Pie-sector radial menu with polar hit-testing. | [radial_menu.rs](file:///D/rex/projects/cvkg/cvkg-components/src/radial_menu.rs) |
 
 ---
 

@@ -18,6 +18,7 @@ members = [
     "cvkg-themes",
     "cvkg-macros",
     "cvkg-runic-text", "cvkg-test",
+    "cvkg-physics",
     "demos/niflheim-web", "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
     "demos/showcase",
     "cvkg-flow",
@@ -39,6 +40,7 @@ cvkg-anim = { path = "cvkg-anim", version = "0.2.0" }
 cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.0" }
 runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.0" }
 cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.0" }
+cvkg-physics = { path = "cvkg-physics", version = "0.2.0" }
 cvkg-themes = { path = "cvkg-themes", version = "0.2.0" }
 cvkg-macros = { path = "cvkg-macros", version = "0.2.0" }
 cvkg-components = { path = "cvkg-components", version = "0.2.0" }
@@ -113,6 +115,7 @@ cvkg-compositor = { path = "cvkg-compositor" }
 cvkg-themes = { path = "cvkg-themes" }
 cvkg-macros = { path = "cvkg-macros" }
 cvkg-runic-text = { path = "cvkg-runic-text" }
+cvkg-physics = { path = "cvkg-physics" }
 cvkg-cli = { path = "cvkg-cli" }
 cvkg-svg-serialize = { path = "cvkg-svg-serialize" }
 cvkg-svg-filters = { path = "cvkg-svg-filters" }

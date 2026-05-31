@@ -207,14 +207,14 @@ impl View for OutlineView {
 
         let state_id = self.state_id;
         let mut scroll_offset = 0.0;
-        
+
         if state_id != 0 {
             scroll_offset = cvkg_core::load_system_state()
                 .get_component_state::<OutlineState>(state_id)
                 .and_then(|g| g.read().ok().map(|v| v.scroll_offset))
                 .unwrap_or(0.0)
                 .clamp(0.0, max_scroll);
-                
+
             renderer.register_handler(
                 "pointerwheel",
                 Arc::new(move |event| {
@@ -305,7 +305,7 @@ impl View for OutlineView {
             let sb_x = rect.x + rect.width - 6.0;
             let sb_h = rect.height - pad * 2.0;
             let thumb_h = (sb_h * max_visible as f32 / visible_count as f32).max(20.0);
-            
+
             let thumb_y = if max_scroll > 0.0 {
                 content_rect.y + (scroll_offset / max_scroll) * (sb_h - thumb_h)
             } else {

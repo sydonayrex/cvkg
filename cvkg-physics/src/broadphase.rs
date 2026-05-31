@@ -1,0 +1,120 @@
+//! Spatial hashing broad-phase collision detection.
+
+use std::collections::HashMap;
+
+use glam::Vec2;
+
+use crate::BodyId;
+
+/// Cell size for the spatial hash grid.
+const CELL_SIZE: f32 = 64.0;
+
+/// Spatial hash grid for fast broad-phase collision culling.
+///
+/// Maps bodies to grid cells based on their AABB. Querying returns
+/// candidate pairs that need narrow-phase testing.
+#[derive(Debug, Default)]
+pub struct SpatialHash {
+    cells: HashMap<(i32, i32), Vec<BodyId>>,
+}
+
+impl SpatialHash {
+    /// Create a new empty spatial hash.
+    pub fn new() -> Self {
+        Self {
+            cells: HashMap::new(),
+        }
+    }
+
+    /// Clear all cells.
+    pub fn clear(&mut self) {
+        self.cells.clear();
+    }
+
+    /// Insert a body into the spatial hash given its AABB.
+    pub fn insert(&mut self, body_id: BodyId, min: Vec2, max: Vec2) {
+        let min_cell = Self::world_to_cell(min);
+        let max_cell = Self::world_to_cell(max);
+
+        for x in min_cell.0..=max_cell.0 {
+            for y in min_cell.1..=max_cell.1 {
+                self.cells.entry((x, y)).or_default().push(body_id);
+            }
+        }
+    }
+
+    /// Query all body IDs that might overlap the given AABB.
+    pub fn query(&self, min: Vec2, max: Vec2) -> Vec<BodyId> {
+        let mut result = Vec::new();
+        let min_cell = Self::world_to_cell(min);
+        let max_cell = Self::world_to_cell(max);
+
+        for x in min_cell.0..=max_cell.0 {
+            for y in min_cell.1..=max_cell.1 {
+                if let Some(ids) = self.cells.get(&(x, y)) {
+                    result.extend(ids);
+                }
+            }
+        }
+        result
+    }
+
+    /// Generate all candidate collision pairs from the spatial hash.
+    pub fn candidate_pairs(&self) -> Vec<(BodyId, BodyId)> {
+        let mut pairs = Vec::new();
+        let mut seen = HashMap::new();
+
+        for ids in self.cells.values() {
+            for i in 0..ids.len() {
+                for j in (i + 1)..ids.len() {
+                    let a = ids[i].0;
+                    let b = ids[j].0;
+                    let key = if a < b { (a, b) } else { (b, a) };
+                    if seen.insert(key, true).is_none() {
+                        pairs.push((ids[i], ids[j]));
+                    }
+                }
+            }
+        }
+        pairs
+    }
+
+    fn world_to_cell(pos: Vec2) -> (i32, i32) {
+        (
+            (pos.x / CELL_SIZE).floor() as i32,
+            (pos.y / CELL_SIZE).floor() as i32,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_insert_and_query() {
+        let mut grid = SpatialHash::new();
+        grid.insert(BodyId(1), Vec2::new(0.0, 0.0), Vec2::new(32.0, 32.0));
+        grid.insert(BodyId(2), Vec2::new(10.0, 10.0), Vec2::new(42.0, 42.0));
+        grid.insert(BodyId(3), Vec2::new(200.0, 200.0), Vec2::new(232.0, 232.0));
+
+        let result = grid.query(Vec2::new(0.0, 0.0), Vec2::new(64.0, 64.0));
+        assert!(result.contains(&BodyId(1)));
+        assert!(result.contains(&BodyId(2)));
+        assert!(!result.contains(&BodyId(3)));
+    }
+
+    #[test]
+    fn test_candidate_pairs() {
+        let mut grid = SpatialHash::new();
+        grid.insert(BodyId(1), Vec2::new(0.0, 0.0), Vec2::new(32.0, 32.0));
+        grid.insert(BodyId(2), Vec2::new(10.0, 10.0), Vec2::new(42.0, 42.0));
+        grid.insert(BodyId(3), Vec2::new(200.0, 200.0), Vec2::new(232.0, 232.0));
+
+        let pairs = grid.candidate_pairs();
+        // Bodies 1 and 2 share a cell; body 3 is in its own cell
+        assert!(pairs.iter().any(|(a, b)| {
+            (*a == BodyId(1) && *b == BodyId(2)) || (*a == BodyId(2) && *b == BodyId(1))
+        }));
+    }
+}

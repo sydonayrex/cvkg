@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CVKG DevTools Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'JetBrains Mono', 'Fira Code', monospace; background: #0b0b14; color: #c0c0c8; height: 100vh; display: flex; flex-direction: column; }
+.header { background: #141428; padding: 12px 20px; border-bottom: 1px solid #2a2a4a; display: flex; align-items: center; gap: 12px; }
+.header h1 { font-size: 14px; color: #7a7aff; font-weight: 600; }
+.header .status { font-size: 11px; color: #4a8a4a; margin-left: auto; }
+.main { display: flex; flex: 1; overflow: hidden; }
+.sidebar { width: 280px; background: #10101f; border-right: 1px solid #2a2a4a; overflow-y: auto; padding: 12px; }
+.sidebar h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6a6a8a; margin-bottom: 8px; }
+.node-list, .edge-list { list-style: none; }
+.node-list li, .edge-list li { padding: 6px 8px; margin-bottom: 2px; border-radius: 4px; font-size: 11px; cursor: pointer; }
+.node-list li:hover, .edge-list li:hover { background: #1a1a3a; }
+.node-list li .id { color: #7a7aff; margin-right: 6px; }
+.node-list li .type { color: #4a8a4a; font-size: 10px; }
+.content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.graph-view { flex: 1; position: relative; overflow: hidden; }
+.graph-view svg { width: 100%; height: 100%; }
+.graph-view .node-rect { fill: #1a1a3a; stroke: #3a3a6a; stroke-width: 1; rx: 4; }
+.graph-view .node-rect.ai-node { fill: #1a254a; stroke: #4a7aff; stroke-width: 2; }
+.graph-view .node-label { fill: #c0c0c8; font-size: 10px; text-anchor: middle; }
+.graph-view .edge-line { stroke: #3a3a6a; stroke-width: 1.5; fill: none; }
+.graph-view .edge-label { fill: #6a6a8a; font-size: 9px; text-anchor: middle; }
+.bottom-panel { height: 180px; background: #10101f; border-top: 1px solid #2a2a4a; display: flex; }
+.theme-panel { flex: 1; padding: 12px; border-right: 1px solid #2a2a4a; overflow-y: auto; }
+.theme-panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6a6a8a; margin-bottom: 8px; }
+.color-swatch { display: inline-block; width: 24px; height: 24px; border-radius: 4px; margin: 2px; border: 1px solid #2a2a4a; }
+.event-log { flex: 1; padding: 12px; overflow-y: auto; }
+.event-log h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6a6a8a; margin-bottom: 8px; }
+.event-log .entry { font-size: 10px; padding: 3px 0; border-bottom: 1px solid #1a1a2a; }
+.event-log .entry .time { color: #5a5a7a; margin-right: 8px; }
+.event-log .entry .type { color: #7a7aff; margin-right: 6px; }
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>⚡ CVKG DevTools</h1>
+    <span class="status" id="status">● Connected</span>
+</div>
+<div class="main">
+    <div class="sidebar">
+        <h2>Nodes</h2>
+        <ul class="node-list" id="node-list"></ul>
+        <h2 style="margin-top:16px">Edges</h2>
+        <ul class="edge-list" id="edge-list"></ul>
+    </div>
+    <div class="content">
+        <div class="graph-view" id="graph-view">
+            <svg id="graph-svg"></svg>
+        </div>
+        <div class="bottom-panel">
+            <div class="theme-panel" id="theme-panel">
+                <h2>Theme Tokens</h2>
+                <div id="color-swatches"></div>
+            </div>
+            <div class="event-log" id="event-log">
+                <h2>Event Log</h2>
+                <div id="event-entries"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+const API = '';
+let state = { nodes: [], edges: [], themes: {}, events: [] };
+
+async function fetchJSON(path) {
+    try {
+        const r = await fetch(API + path);
+        return await r.json();
+    } catch (e) {
+        console.error('Fetch error:', e);
+        return null;
+    }
+}
+
+function renderGraph() {
+    const svg = document.getElementById('graph-svg');
+    const view = document.getElementById('graph-view');
+    const w = view.clientWidth || 800;
+    const h = view.clientHeight || 400;
+
+    let svgContent = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+
+    state.edges.forEach(edge => {
+        const src = state.nodes.find(n => n.id === edge.source);
+        const tgt = state.nodes.find(n => n.id === edge.target);
+        if (!src || !tgt) return;
+        const sx = src.x + src.width / 2;
+        const sy = src.y + src.height / 2;
+        const tx = tgt.x + tgt.width / 2;
+        const ty = tgt.y + tgt.height / 2;
+        const mx = (sx + tx) / 2;
+        const my = (sy + ty) / 2 - 30;
+        svgContent += `<path class="edge-line" d="M${sx},${sy} Q${mx},${my} ${tx},${ty}" />`;
+        svgContent += `<text class="edge-label" x="${mx}" y="${my - 5}">${edge.label || ''}</text>`;
+    });
+
+    state.nodes.forEach(node => {
+        let isAiNode = node.node_type === "FenrirNode" || node.node_type === "SleipnFlow";
+        let rectClass = isAiNode ? "node-rect ai-node" : "node-rect";
+        svgContent += `<rect class="${rectClass}" x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" />`;
+        svgContent += `<text class="node-label" x="${node.x + node.width / 2}" y="${node.y + node.height / 2 + 4}">${node.label}</text>`;
+    });
+
+    svgContent += '</svg>';
+    svg.outerHTML = svgContent;
+}
+
+function renderSidebar() {
+    const nodeList = document.getElementById('node-list');
+    nodeList.innerHTML = state.nodes.map(n =>
+        `<li><span class="id">#${n.id}</span>${n.label}<span class="type">${n.node_type}</span></li>`
+    ).join('');
+
+    const edgeList = document.getElementById('edge-list');
+    edgeList.innerHTML = state.edges.map(e =>
+        `<li><span class="id">#${e.id}</span>${e.source} → ${e.target}</li>`
+    ).join('');
+}
+
+function renderThemes() {
+    const container = document.getElementById('color-swatches');
+    container.innerHTML = Object.entries(state.themes).map(([name, rgba]) => {
+        const [r, g, b, a] = rgba;
+        const color = `rgba(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)},${a})`;
+        return `<div class="color-swatch" style="background:${color}" title="${name}"></div>`;
+    }).join('');
+}
+
+function renderEvents() {
+    const container = document.getElementById('event-entries');
+    container.innerHTML = state.events.slice(-50).map(e =>
+        `<div class="entry"><span class="time">${e.timestamp}</span><span class="type">${e.event_type}</span>${e.message}</div>`
+    ).join('');
+}
+
+async function refresh() {
+    const graph = await fetchJSON('/api/graph');
+    if (graph) {
+        state = graph;
+        renderGraph();
+        renderSidebar();
+        renderThemes();
+        renderEvents();
+        document.getElementById('status').textContent = '● Connected';
+        document.getElementById('status').style.color = '#4a8a4a';
+    } else {
+        document.getElementById('status').textContent = '● Disconnected';
+        document.getElementById('status').style.color = '#8a4a4a';
+    }
+}
+
+refresh();
+setInterval(refresh, 2000);
+window.addEventListener('resize', renderGraph);
+</script>
+</body>
+</html>

@@ -109,6 +109,84 @@ pub fn tessellate_bezier(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, segments: usize
     points
 }
 
+/// Tessellates a cubic Bezier curve into a polyline with uniform arc-length spacing.
+///
+/// # Contract
+/// Generates a list of vertices positioned at uniform physical distance increments along the
+/// Bezier contour. Returns the list of 2D coordinates and their corresponding normalized distance
+/// fractions (0.0 to 1.0) along the curve to ensure smooth, constant-speed shader animations.
+pub fn tessellate_bezier_uniform(
+    p0: Vec2,
+    p1: Vec2,
+    p2: Vec2,
+    p3: Vec2,
+    segments: usize,
+) -> (Vec<Vec2>, Vec<f32>) {
+    if segments == 0 {
+        return (vec![p0], vec![0.0]);
+    }
+
+    // 1. High-resolution sampling to approximate cumulative arc length
+    const SAMPLE_COUNT: usize = 64;
+    let mut t_samples = Vec::with_capacity(SAMPLE_COUNT + 1);
+    let mut points_raw = Vec::with_capacity(SAMPLE_COUNT + 1);
+    for i in 0..=SAMPLE_COUNT {
+        let t = i as f32 / SAMPLE_COUNT as f32;
+        let mt = 1.0 - t;
+        let p = mt * mt * mt * p0 + 3.0 * mt * mt * t * p1 + 3.0 * mt * t * t * p2 + t * t * t * p3;
+        points_raw.push(p);
+        t_samples.push(t);
+    }
+
+    let mut cumulative_lengths = Vec::with_capacity(SAMPLE_COUNT + 1);
+    cumulative_lengths.push(0.0f32);
+    let mut current_length = 0.0f32;
+    for i in 1..=SAMPLE_COUNT {
+        current_length += points_raw[i].distance(points_raw[i - 1]);
+        cumulative_lengths.push(current_length);
+    }
+
+    let total_length = current_length;
+
+    // 2. Query target points at uniform physical distance steps
+    let mut points = Vec::with_capacity(segments + 1);
+    let mut uvs = Vec::with_capacity(segments + 1);
+
+    for i in 0..=segments {
+        let target_fraction = i as f32 / segments as f32;
+        let target_dist = target_fraction * total_length;
+
+        // Locate cumulative length interval
+        let mut idx = 0;
+        while idx < SAMPLE_COUNT && cumulative_lengths[idx + 1] < target_dist {
+            idx += 1;
+        }
+
+        let t = if idx >= SAMPLE_COUNT {
+            1.0f32
+        } else {
+            let l0 = cumulative_lengths[idx];
+            let l1 = cumulative_lengths[idx + 1];
+            let segment_len = l1 - l0;
+            let factor = if segment_len > 0.0 {
+                (target_dist - l0) / segment_len
+            } else {
+                0.0
+            };
+            let t0 = t_samples[idx];
+            let t1 = t_samples[idx + 1];
+            t0 + factor * (t1 - t0)
+        };
+
+        let mt = 1.0 - t;
+        let p = mt * mt * mt * p0 + 3.0 * mt * mt * t * p1 + 3.0 * mt * t * t * p2 + t * t * t * p3;
+        points.push(p);
+        uvs.push(target_fraction);
+    }
+
+    (points, uvs)
+}
+
 /// Computes the center position of a port on a node.
 ///
 /// The port position is determined by the port's `PortPosition` variant
@@ -192,8 +270,8 @@ pub fn build_ribbon_batch(edges: &[FlowEdge], nodes: &HashMap<NodeId, FlowNode>)
         let p2 = tgt_center + tgt_dir * handle_offset;
         let p3 = tgt_center;
 
-        // Tessellate the bezier curve
-        let points = tessellate_bezier(p0, p1, p2, p3, SEGMENTS);
+        // Tessellate the bezier curve using uniform physical spacing
+        let (points, uvs) = tessellate_bezier_uniform(p0, p1, p2, p3, SEGMENTS);
 
         // Get effective color and width from edge (includes hover/selection state)
         let color = edge.effective_color();
@@ -202,7 +280,7 @@ pub fn build_ribbon_batch(edges: &[FlowEdge], nodes: &HashMap<NodeId, FlowNode>)
         // Generate quad strip
         let base_index = batch.vertices.len() as u32;
         for (i, point) in points.iter().enumerate() {
-            let t = i as f32 / SEGMENTS as f32;
+            let t = uvs[i];
 
             // Compute tangent for perpendicular offset
             let tangent = if i + 1 < points.len() {
@@ -393,5 +471,35 @@ mod tests {
         assert_eq!(port_direction(PortPosition::Left), Vec2::new(-1.0, 0.0));
         assert_eq!(port_direction(PortPosition::Top), Vec2::new(0.0, -1.0));
         assert_eq!(port_direction(PortPosition::Bottom), Vec2::new(0.0, 1.0));
+    }
+
+    #[test]
+    fn test_tessellate_bezier_uniform() {
+        let p0 = Vec2::new(0.0, 0.0);
+        let p1 = Vec2::new(10.0, 20.0);
+        let p2 = Vec2::new(20.0, -10.0);
+        let p3 = Vec2::new(30.0, 0.0);
+
+        let (points, uvs) = tessellate_bezier_uniform(p0, p1, p2, p3, 8);
+        assert_eq!(points.len(), 9);
+        assert_eq!(uvs.len(), 9);
+
+        // Verify boundaries
+        assert_eq!(points[0], p0);
+        assert_eq!(points[8], p3);
+        assert_eq!(uvs[0], 0.0);
+        assert_eq!(uvs[8], 1.0);
+
+        // Verify uniform step distances
+        let first_dist = points[1].distance(points[0]);
+        for i in 1..8 {
+            let dist = points[i + 1].distance(points[i]);
+            assert!(
+                (dist - first_dist).abs() < 0.25,
+                "Expected uniform step distance, got {} vs {}",
+                dist,
+                first_dist
+            );
+        }
     }
 }

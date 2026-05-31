@@ -2,7 +2,7 @@ use crate::edge::FlowEdge;
 use crate::graph::FlowGraph;
 use crate::node::FlowNode;
 use crate::ribbon::{RibbonBatch, build_ribbon_batch};
-use crate::types::{EdgeId, NodeId};
+use crate::types::{EdgeId, LevelOfDetail, NodeId};
 use cvkg_core::Rect;
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
@@ -86,6 +86,23 @@ impl Camera {
             y: tl.y,
             width: br.x - tl.x,
             height: br.y - tl.y,
+        }
+    }
+
+    /// Returns the current Level of Detail (LoD) based on camera zoom factor.
+    ///
+    /// # Contract
+    /// Categorizes rendering complexity thresholds:
+    /// - Detailed: zoom >= 0.7
+    /// - Medium: 0.35 <= zoom < 0.7
+    /// - Simplified: zoom < 0.35
+    pub fn level_of_detail(&self) -> LevelOfDetail {
+        if self.zoom >= 0.7 {
+            LevelOfDetail::Detailed
+        } else if self.zoom >= 0.35 {
+            LevelOfDetail::Medium
+        } else {
+            LevelOfDetail::Simplified
         }
     }
 }
@@ -245,6 +262,7 @@ impl FlowCanvas {
     /// Marks the ribbon batch as dirty (needs rebuild).
     pub fn invalidate_ribbons(&mut self) {
         self.ribbon_dirty = true;
+        self.graph.spatial_index_dirty.set(true);
     }
 
     /// Returns a reference to the current ribbon batch, rebuilding if necessary.
@@ -274,6 +292,7 @@ impl FlowCanvas {
     /// Removes a node from the canvas by ID.
     pub fn remove_node(&mut self, id: NodeId) {
         self.graph.nodes.remove(&id);
+        self.graph.spatial_index_dirty.set(true);
         self.invalidate_ribbons();
     }
 
@@ -350,6 +369,11 @@ impl FlowCanvas {
     pub fn visible_rect(&self) -> Rect {
         self.camera
             .visible_canvas_rect(self.screen_width, self.screen_height)
+    }
+
+    /// Returns the current Level of Detail (LoD) for the canvas based on the camera zoom.
+    pub fn level_of_detail(&self) -> LevelOfDetail {
+        self.camera.level_of_detail()
     }
 }
 
@@ -591,5 +615,45 @@ mod tests {
         assert!(!batch.is_empty());
         assert!(canvas.ribbon_vertex_count() > 0);
         assert!(canvas.ribbon_index_count() > 0);
+    }
+
+    #[test]
+    fn test_spatial_hash_grid_correctness() {
+        let mut canvas = FlowCanvas::new();
+        canvas.add_node(FlowNode::new(NodeId(1), "NodeA", (10.0, 10.0)));
+        canvas.add_node(FlowNode::new(NodeId(2), "NodeB", (500.0, 500.0)));
+        canvas.add_node(FlowNode::new(NodeId(3), "NodeC", (1000.0, 10.0)));
+
+        let in_rect = canvas.graph.nodes_in_rect(0.0, 0.0, 600.0, 600.0);
+        assert_eq!(in_rect.len(), 2);
+        assert!(in_rect.contains(&NodeId(1)));
+        assert!(in_rect.contains(&NodeId(2)));
+        assert!(!in_rect.contains(&NodeId(3)));
+
+        let near_b = canvas
+            .graph
+            .nodes_near_point(glam::Vec2::new(510.0, 510.0), 30.0);
+        assert_eq!(near_b.len(), 1);
+        assert_eq!(near_b[0], NodeId(2));
+    }
+
+    #[test]
+    fn test_camera_lod_bounds() {
+        let mut canvas = FlowCanvas::new();
+
+        canvas.camera.zoom = 1.0;
+        assert_eq!(canvas.level_of_detail(), LevelOfDetail::Detailed);
+
+        canvas.camera.zoom = 0.7;
+        assert_eq!(canvas.level_of_detail(), LevelOfDetail::Detailed);
+
+        canvas.camera.zoom = 0.5;
+        assert_eq!(canvas.level_of_detail(), LevelOfDetail::Medium);
+
+        canvas.camera.zoom = 0.35;
+        assert_eq!(canvas.level_of_detail(), LevelOfDetail::Medium);
+
+        canvas.camera.zoom = 0.2;
+        assert_eq!(canvas.level_of_detail(), LevelOfDetail::Simplified);
     }
 }

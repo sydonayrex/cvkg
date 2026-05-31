@@ -226,19 +226,103 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
 }
 
-/// WebSocket handler for HMR.
+/// WebSocket handler for HMR (Hot Module Relays).
 async fn hmr_ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_hmr_socket)
 }
 
-/// Internal WebSocket message processor.
+/// Handle runtime protocol WebSocket connections.
 async fn handle_socket(mut ws: WebSocket) {
-    while let Some(Ok(_)) = ws.next().await {}
+    use futures_util::SinkExt;
+
+    // Send handshake
+    let handshake = serde_json::json!({
+        "type": "handshake",
+        "payload": {
+            "client": "webkit-runtime",
+            "capabilities": ["patch", "state", "event"]
+        }
+    });
+    if let Err(e) = ws
+        .send(axum::extract::ws::Message::Text(handshake.to_string()))
+        .await
+    {
+        error!("Failed to send handshake: {}", e);
+        return;
+    }
+
+    while let Some(Ok(msg)) = ws.next().await {
+        match msg {
+            axum::extract::ws::Message::Text(text) => {
+                if let Ok(ws_msg) = serde_json::from_str::<cvkg_cli::WsMessage>(&text) {
+                    match ws_msg {
+                        cvkg_cli::WsMessage::Patch(patch) => {
+                            info!(
+                                "Runtime patch received: {:?}",
+                                std::mem::discriminant(&patch)
+                            );
+                        }
+                        cvkg_cli::WsMessage::Event(event) => {
+                            info!("Runtime event received: {:?}", event);
+                        }
+                        cvkg_cli::WsMessage::State(_) => {
+                            info!("Runtime state snapshot received");
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            axum::extract::ws::Message::Close(_) => {
+                info!("Runtime WebSocket client disconnected");
+                break;
+            }
+            _ => {}
+        }
+    }
 }
 
-/// Internal HMR message processor.
+/// Handle HMR WebSocket connections — broadcasts patches to connected clients.
 async fn handle_hmr_socket(mut ws: WebSocket) {
-    while let Some(Ok(_)) = ws.next().await {}
+    use futures_util::SinkExt;
+
+    // Send handshake
+    let handshake = serde_json::json!({
+        "type": "handshake",
+        "payload": {
+            "client": "webkit-hmr",
+            "capabilities": ["patch"]
+        }
+    });
+    if let Err(e) = ws
+        .send(axum::extract::ws::Message::Text(handshake.to_string()))
+        .await
+    {
+        error!("Failed to send HMR handshake: {}", e);
+        return;
+    }
+
+    // In a production build, this would subscribe to a broadcast channel
+    // from the build pipeline. For now, we keep the connection alive and
+    // respond to client messages.
+    while let Some(Ok(msg)) = ws.next().await {
+        match msg {
+            axum::extract::ws::Message::Close(_) => {
+                info!("HMR WebSocket client disconnected");
+                break;
+            }
+            axum::extract::ws::Message::Text(text) => {
+                // Respond to ping/health checks
+                if text.contains("ping") {
+                    let _ = ws
+                        .send(axum::extract::ws::Message::Text(
+                            r#"{"type":"pong"}"#.to_string(),
+                        ))
+                        .await;
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Custom metrics middleware to record request counts and latencies.

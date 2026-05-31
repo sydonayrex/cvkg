@@ -198,7 +198,7 @@ impl View for YggdrasilTree {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let Event::PointerClick { x, y, button } = event
+                if let Event::PointerClick { x, y, button, .. } = event
                     && button != 2
                 {
                     let state = get_tree_state(tree_id);
@@ -560,7 +560,7 @@ impl YggdrasilTree {
             renderer.register_handler(
                 "pointerclick",
                 Arc::new(move |ev| {
-                    if let Event::PointerClick { x, y, button } = ev {
+                    if let Event::PointerClick { x, y, button, .. } = ev {
                         let state = get_tree_state(tree_id);
 
                         if button == 2 {

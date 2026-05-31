@@ -1,6 +1,6 @@
 use crate::theme;
 use crate::{ButtonSize, ButtonVariant, FONT_BASE, RADIUS_MD, RADIUS_SM};
-use cvkg_core::{Never, Rect, Renderer, View};
+use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 // =============================================================================
@@ -485,6 +485,23 @@ impl View for Button {
             height: self.height(),
         }
     }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        Some(AriaProperties::new(AriaRole::Button, &self.label).disabled(self.disabled))
+    }
+
+    fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {
+        if self.disabled {
+            return false;
+        }
+        match key {
+            "Enter" | " " => {
+                (self.on_click)();
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 impl cvkg_core::layout::LayoutView for Button {
@@ -670,6 +687,24 @@ impl View for Toggle {
             height: th.max(20.0) + 4.0,
         }
     }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        Some(
+            AriaProperties::new(AriaRole::Switch, &self.label)
+                .checked(self.is_on)
+                .value(if self.is_on { "on" } else { "off" }),
+        )
+    }
+
+    fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {
+        match key {
+            "Enter" | " " => {
+                (self.on_change)(!self.is_on);
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -830,6 +865,36 @@ impl View for Slider {
             width: proposal.width.unwrap_or(150.0),
             height: 24.0,
         }
+    }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        let range = *self.range.end() - *self.range.start();
+        let pct = if range > 0.0 {
+            ((self.value - *self.range.start()) / range * 100.0).clamp(0.0, 100.0)
+        } else {
+            0.0
+        };
+        Some(AriaProperties::new(AriaRole::Slider, "Slider").value(format!("{:.0}%", pct)))
+    }
+
+    fn on_key_event(&self, key: &str, modifiers: KeyModifiers) -> bool {
+        let range = *self.range.end() - *self.range.start();
+        let step = self.step.unwrap_or_else(|| {
+            if modifiers.shift {
+                range / 10.0
+            } else {
+                range / 100.0
+            }
+        });
+        let new_val = match key {
+            "ArrowRight" | "ArrowUp" => (self.value + step).min(*self.range.end()),
+            "ArrowLeft" | "ArrowDown" => (self.value - step).max(*self.range.start()),
+            "Home" => *self.range.start(),
+            "End" => *self.range.end(),
+            _ => return false,
+        };
+        (self.on_change)(new_val);
+        true
     }
 }
 
@@ -1589,6 +1654,14 @@ impl View for Input {
             height: 44.0,
         }
     }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        Some(
+            AriaProperties::new(AriaRole::Textbox, &self.placeholder)
+                .value(self.text.clone())
+                .focused(self.is_focused),
+        )
+    }
 }
 
 impl Input {
@@ -2225,6 +2298,39 @@ impl View for Dropdown {
             height: 32.0,
         }
     }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        let label = self
+            .options
+            .get(self.selection)
+            .map(|s| s.as_str())
+            .unwrap_or("Select");
+        Some(
+            AriaProperties::new(AriaRole::Combobox, label)
+                .expanded(false)
+                .value(label.to_string()),
+        )
+    }
+
+    fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {
+        let len = self.options.len();
+        if len == 0 {
+            return false;
+        }
+        let new_sel = match key {
+            "ArrowDown" => (self.selection + 1) % len,
+            "ArrowUp" => {
+                if self.selection == 0 {
+                    len - 1
+                } else {
+                    self.selection - 1
+                }
+            }
+            _ => return false,
+        };
+        (self.on_change)(new_sel);
+        true
+    }
 }
 
 /// Picker for selection from a list of options#[derive(Clone)]
@@ -2565,6 +2671,34 @@ impl View for Checkbox {
                     0.0
                 },
             height: 22.0,
+        }
+    }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        let label = self.label.as_deref().unwrap_or("Checkbox");
+        let checked = match self.state {
+            CheckboxState::Checked => Some(true),
+            CheckboxState::Unchecked => Some(false),
+            CheckboxState::Indeterminate => None,
+        };
+        let mut aria = AriaProperties::new(AriaRole::Checkbox, label);
+        if let Some(c) = checked {
+            aria = aria.checked(c);
+        }
+        Some(aria)
+    }
+
+    fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {
+        match key {
+            "Enter" | " " => {
+                let new_state = match self.state {
+                    CheckboxState::Checked => false,
+                    CheckboxState::Unchecked | CheckboxState::Indeterminate => true,
+                };
+                (self.on_change)(new_state);
+                true
+            }
+            _ => false,
         }
     }
 }

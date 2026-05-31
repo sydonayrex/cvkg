@@ -40,6 +40,10 @@ pub use particles::*;
 
 pub mod physics;
 
+pub mod spring_snap;
+
+pub mod verlet;
+
 /// Sleipnir spring parameters for the physics solver
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SleipnirParams {
@@ -101,6 +105,25 @@ pub enum Easing {
     EaseInOut,
 }
 
+impl Easing {
+    /// Evaluate the easing function for a parameter `t` in [0.0, 1.0].
+    pub fn evaluate(&self, t: f32) -> f32 {
+        let t = t.clamp(0.0, 1.0);
+        match self {
+            Easing::Linear => t,
+            Easing::EaseIn => t * t,
+            Easing::EaseOut => 1.0 - (1.0 - t) * (1.0 - t),
+            Easing::EaseInOut => {
+                if t < 0.5 {
+                    2.0 * t * t
+                } else {
+                    1.0 - (-2.0 * t + 2.0).powi(2) / 2.0
+                }
+            }
+        }
+    }
+}
+
 /// High-level Animation Primitive
 #[derive(Clone)]
 pub enum Animation {
@@ -119,7 +142,6 @@ pub enum Animation {
     Parallel(Vec<Animation>),
     /// Coordination: Multiple animations in sequence
     Sequence(Vec<Animation>),
-    /// Coordination: Staggered start for multiple animations
     /// Coordination: Staggered start for multiple animations
     Stagger {
         animations: Vec<Animation>,
@@ -225,6 +247,12 @@ impl SleipnirSolver {
 
     pub fn set_target(&mut self, target: f32) {
         self.target = target;
+    }
+
+    /// Set the starting velocity for the solver.
+    pub fn with_velocity(mut self, velocity: f32) -> Self {
+        self.state.v = velocity;
+        self
     }
 
     /// Advance the simulation by dt seconds using RK4 integration.
@@ -368,10 +396,160 @@ impl ActiveAnimation {
                     self.is_finished = true;
                 }
             }
-            _ => {
-                // Fallback for complex variants (Stagger, Transitions)
-                self.is_finished = true;
-                self.current_value = end_val;
+            Animation::Hybrid { keyframes, settle } => {
+                // Phase 1: Walk through keyframes in order.
+                if self.current_index < keyframes.len() {
+                    let prev_value = if self.current_index == 0 {
+                        start_val
+                    } else {
+                        keyframes[self.current_index - 1].value
+                    };
+
+                    let kf = &keyframes[self.current_index];
+                    let kf_start_time = if self.current_index == 0 {
+                        0.0
+                    } else {
+                        keyframes[self.current_index - 1].time.as_secs_f32()
+                    };
+                    let kf_end_time = kf.time.as_secs_f32();
+                    let kf_duration = (kf_end_time - kf_start_time).max(0.001);
+                    let local_t = ((t - kf_start_time) / kf_duration).clamp(0.0, 1.0);
+                    let eased_t = kf.easing.evaluate(local_t);
+
+                    self.current_value = prev_value + (kf.value - prev_value) * eased_t;
+
+                    if local_t >= 1.0 {
+                        self.current_index += 1;
+                        if self.current_index >= keyframes.len() {
+                            self.solver =
+                                Some(SleipnirSolver::new(*settle, end_val, self.current_value));
+                        }
+                    }
+                } else {
+                    let solver = self.solver.get_or_insert_with(|| {
+                        SleipnirSolver::new(*settle, end_val, self.current_value)
+                    });
+                    self.current_value = solver.tick(dt.as_secs_f32());
+                    if solver.is_settled() {
+                        self.is_finished = true;
+                    }
+                }
+            }
+            Animation::Stagger {
+                animations,
+                interval,
+            } => {
+                if self.child_states.is_empty() {
+                    self.child_states = animations
+                        .iter()
+                        .map(|a| ActiveAnimation::new(a.clone()))
+                        .collect();
+                }
+
+                let interval_secs = interval.as_secs_f32();
+                let mut all_finished = true;
+                let mut sum_val = 0.0;
+
+                for (i, child) in self.child_states.iter_mut().enumerate() {
+                    let delay = interval_secs * i as f32;
+                    if t > delay {
+                        sum_val += child.update(dt, start_val, end_val);
+                    } else {
+                        child.current_value = start_val;
+                    }
+                    if !child.is_finished {
+                        all_finished = false;
+                    }
+                }
+
+                self.current_value = if !animations.is_empty() {
+                    sum_val / animations.len() as f32
+                } else {
+                    end_val
+                };
+                if all_finished {
+                    self.is_finished = true;
+                }
+            }
+            Animation::BifrostFade { duration } => {
+                let d = duration.as_secs_f32();
+                if t >= d {
+                    self.is_finished = true;
+                    self.current_value = end_val;
+                } else {
+                    let progress = (t / d).clamp(0.0, 1.0);
+                    let base_t = Easing::EaseInOut.evaluate(progress);
+                    let fade_factor = if progress < 0.5 {
+                        1.0 - 2.0 * progress
+                    } else {
+                        2.0 * progress - 1.0
+                    };
+                    let opacity = 0.5 + 0.5 * fade_factor;
+                    self.current_value = start_val + (end_val - start_val) * base_t * opacity;
+                }
+            }
+            Animation::MjolnirSlice { duration } => {
+                let d = duration.as_secs_f32();
+                if t >= d {
+                    self.is_finished = true;
+                    self.current_value = end_val;
+                } else {
+                    let progress = Easing::EaseInOut.evaluate((t / d).clamp(0.0, 1.0));
+                    self.current_value = start_val + (end_val - start_val) * progress;
+                }
+            }
+            Animation::MjolnirShatter {
+                duration,
+                pieces,
+                force,
+            } => {
+                let piece_count = (*pieces as usize).max(1);
+                let force_val = *force;
+                let stiff = force_val.max(1.0) * 10.0;
+
+                if self.child_states.is_empty() {
+                    for i in 0..piece_count {
+                        let offset = ((i as f32 + 1.0) / piece_count as f32) * force_val * 0.1;
+                        let piece_start = end_val + offset * (if i % 2 == 0 { 1.0 } else { -1.0 });
+                        let params = SleipnirParams {
+                            stiffness: stiff,
+                            damping: 8.0,
+                            mass: 1.0,
+                        };
+                        let mut child = ActiveAnimation::new(Animation::Sleipnir(params));
+                        child.solver = Some(SleipnirSolver::new(params, end_val, piece_start));
+                        self.child_states.push(child);
+                    }
+                }
+
+                let total_d = duration.as_secs_f32();
+                if t >= total_d {
+                    self.is_finished = true;
+                    self.current_value = end_val;
+                    for child in &mut self.child_states {
+                        child.is_finished = true;
+                        child.current_value = end_val;
+                    }
+                } else {
+                    let mut sum_val = 0.0;
+                    let mut all_finished = true;
+                    for child in &mut self.child_states {
+                        let solver = child.solver.as_mut().unwrap();
+                        child.current_value = solver.tick(dt.as_secs_f32());
+                        if !solver.is_settled() {
+                            all_finished = false;
+                        }
+                        sum_val += child.current_value;
+                    }
+                    self.current_value = if piece_count > 0 {
+                        sum_val / piece_count as f32
+                    } else {
+                        end_val
+                    };
+                    if all_finished {
+                        self.is_finished = true;
+                    }
+                }
             }
         }
         self.current_value

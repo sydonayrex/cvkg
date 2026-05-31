@@ -321,11 +321,21 @@ impl DevToolsDashboard {
     }
 }
 
-/// Capture current performance metrics from the CVKG core.
+use std::sync::RwLock;
+
+/// Global metrics store updated by the dev server.
+static METRICS: RwLock<PerfMetrics> = RwLock::new(PerfMetrics {
+    frame_time_ms: 0.0,
+    fps: 0.0,
+    node_count: 0,
+    edge_count: 0,
+    gpu_memory_mb: 0.0,
+});
+
+/// Capture current performance metrics.
 ///
-/// Reads frame timing, scene graph statistics, and GPU memory usage
-/// from the running application. When not connected to a live runtime,
-/// returns default (zero) values.
+/// Returns live metrics populated by the dev server, or default zeros
+/// if the server is not running or metrics have not been set.
 ///
 /// # Examples
 ///
@@ -337,9 +347,16 @@ impl DevToolsDashboard {
 /// assert_eq!(metrics.node_count, 0);
 /// ```
 pub fn capture_metrics() -> PerfMetrics {
-    // In a real implementation this would query cvkg-core for live data.
-    // For now we return default/placeholder values.
-    PerfMetrics::default()
+    METRICS.read().map(|m| m.clone()).unwrap_or_default()
+}
+
+/// Update the global metrics store with new values.
+///
+/// Called by the dev server or build pipeline to publish live metrics.
+pub fn update_metrics(metrics: PerfMetrics) {
+    if let Ok(mut m) = METRICS.write() {
+        *m = metrics;
+    }
 }
 
 /// Format a [`LogEntry`] into a human-readable string.
