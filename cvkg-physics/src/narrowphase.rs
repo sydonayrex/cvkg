@@ -242,11 +242,23 @@ pub fn gjk_3d(
             return GjkResult3D { overlapping: false, simplex, simplex_count: count };
         }
         // Insert new point at the beginning, shift only valid entries
-        for i in (1..=count).rev() {
-            simplex[i] = simplex[i - 1];
+        if count < 4 {
+            for i in (1..=count).rev() {
+                simplex[i] = simplex[i - 1];
+            }
+            count += 1;
+        } else {
+            // Simplex is full (4 points), shift all but the last
+            for i in 1..4 {
+                simplex[i - 1] = simplex[i];
+            }
         }
         simplex[0] = p;
-        if count < 4 { count += 1; }
+        // Check that the new point is not already in the simplex (degenerate)
+        let is_dup = (0..count).any(|j| (simplex[j] - p).length_squared() < 1e-12);
+        if is_dup {
+            continue;
+        }
 
         let (nd, origin) = process_simplex_3d(&mut simplex);
         if origin {
@@ -535,9 +547,11 @@ mod tests {
     }
 
     // ── 3D tests ──────────────────────────────────────────────────────────
-    // NOTE: 3D GJK/EPA is functional for basic cases but the simplex
-    // processing needs refinement for edge cases. The 2D path is fully
-    // tested and working. TODO: debug process_simplex_3d for robust 3D.
+    // NOTE: 3D GJK/EPA infrastructure is in place (types, shapes, support functions)
+    // but process_simplex_3d needs debugging for degenerate cases (collinear/coplanar points).
+    // The sphere-sphere case degenerates because all Minkowski support points lie on a line.
+    // TODO: replace with robust GJK implementation or add degenerate simplex handling.
+    // 2D GJK/EPA is fully tested and working above.
 
     #[test]
     #[ignore = "3D GJK simplex processing needs debugging - tetrahedron case"]
