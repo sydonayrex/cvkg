@@ -69,8 +69,6 @@ pub use shape::{Shape, ShapeKind};
 pub use solver::ImpulseSolver;
 pub use world::PhysicsWorld;
 pub use world::WorldConfig;
-
-/// Callback fired when a body goes to sleep (velocity drops below threshold).
 ///
 /// This is the handoff point to cvkg-anim: application code can use this
 /// to trigger a Sleipnir spring animation to snap to grid/guide positions.

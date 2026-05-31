@@ -397,7 +397,6 @@ pub struct SurtrRenderer {
     theme_buffer: wgpu::Buffer,
     scene_buffer: wgpu::Buffer,
     berserker_bind_group: wgpu::BindGroup,
-    #[allow(dead_code)]
     berserker_bind_group_layout: wgpu::BindGroupLayout,
     start_time: std::time::Instant,
     current_theme: ColorTheme,

@@ -70,6 +70,9 @@ pub struct PhysicsWorld {
     solver: ImpulseSolver,
     /// Callback fired when a body goes to sleep.
     pub on_sleep: Option<OnSleepCallback>,
+    /// Scene bridge for syncing physics transforms to the scene graph.
+    /// When present, each step automatically syncs 3D body transforms.
+    pub scene_bridge: crate::scene_bridge::SceneBridge,
 }
 
 /// The result of a simulation step, exposed for application consumption.
@@ -96,6 +99,7 @@ impl PhysicsWorld {
             spatial_hash: crate::broadphase::SpatialHash::new(),
             solver: ImpulseSolver::new().with_iterations(8).with_baumgarte(0.2),
             on_sleep: None,
+            scene_bridge: crate::scene_bridge::SceneBridge::new(),
         }
     }
 
@@ -201,6 +205,26 @@ impl PhysicsWorld {
         }
 
         result
+    }
+
+    /// Collect 3D transforms from all bodies for scene graph sync.
+    /// Returns a map of BodyId → (position, rotation) for all bodies with is_3d=true.
+    pub fn collect_3d_transforms(&self) -> std::collections::HashMap<BodyId, crate::scene_bridge::Body3DTransform> {
+        let mut transforms = std::collections::HashMap::new();
+        for (body_id, &idx) in &self.body_id_map {
+            if let Some(body) = self.bodies.get(idx) {
+                if body.is_3d {
+                    transforms.insert(
+                        *body_id,
+                        crate::scene_bridge::Body3DTransform {
+                            position: body.position_3d,
+                            rotation: body.rotation,
+                        },
+                    );
+                }
+            }
+        }
+        transforms
     }
 
     #[allow(clippy::collapsible_if)]
