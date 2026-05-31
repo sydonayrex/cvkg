@@ -26,32 +26,32 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 [workspace.dependencies]
-cvkg-core = { path = "cvkg-core", version = "0.2.0" }
-cvkg-vdom = { path = "cvkg-vdom", version = "0.2.0" }
-cvkg-scene = { path = "cvkg-scene", version = "0.2.0" }
-cvkg-layout = { path = "cvkg-layout", version = "0.2.0" }
-cvkg-anim = { path = "cvkg-anim", version = "0.2.0" }
-cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.0" }
-runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.0" }
-cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.0" }
-cvkg-physics = { path = "cvkg-physics", version = "0.2.0" }
-cvkg-themes = { path = "cvkg-themes", version = "0.2.0" }
-cvkg-macros = { path = "cvkg-macros", version = "0.2.0" }
-cvkg-components = { path = "cvkg-components", version = "0.2.0" }
-cvkg-test = { path = "cvkg-test", version = "0.2.0" }
-cvkg-flow = { path = "cvkg-flow", version = "0.2.0" }
-cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.0" }
-cvkg-compositor = { path = "cvkg-compositor", version = "0.2.0" }
-cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.0" }
-cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.0" }
-cvkg-cli = { path = "cvkg-cli", version = "0.2.0" }
-cvkg = { path = "cvkg", version = "0.2.0" }
+cvkg-core = { path = "cvkg-core", version = "0.2.1" }
+cvkg-vdom = { path = "cvkg-vdom", version = "0.2.1" }
+cvkg-scene = { path = "cvkg-scene", version = "0.2.1" }
+cvkg-layout = { path = "cvkg-layout", version = "0.2.1" }
+cvkg-anim = { path = "cvkg-anim", version = "0.2.1" }
+cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.1" }
+runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.1" }
+cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.1" }
+cvkg-physics = { path = "cvkg-physics", version = "0.2.1" }
+cvkg-themes = { path = "cvkg-themes", version = "0.2.1" }
+cvkg-macros = { path = "cvkg-macros", version = "0.2.1" }
+cvkg-components = { path = "cvkg-components", version = "0.2.1" }
+cvkg-test = { path = "cvkg-test", version = "0.2.1" }
+cvkg-flow = { path = "cvkg-flow", version = "0.2.1" }
+cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.1" }
+cvkg-compositor = { path = "cvkg-compositor", version = "0.2.1" }
+cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.1" }
+cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.1" }
+cvkg-cli = { path = "cvkg-cli", version = "0.2.1" }
+cvkg = { path = "cvkg", version = "0.2.1" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", default-features = false, features = ["sync", "rt", "macros"] }
