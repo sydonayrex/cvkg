@@ -410,6 +410,8 @@ pub struct SurtrRenderer {
     pipeline: wgpu::RenderPipeline,
     background_pipeline: wgpu::RenderPipeline,
     bloom_extract_pipeline: wgpu::RenderPipeline,
+    /// Identity copy pipeline for Pass 2 backdrop blur (all pixels, no luminance gate).
+    copy_pipeline: wgpu::RenderPipeline,
     blur_h_pipeline: wgpu::RenderPipeline,
     blur_v_pipeline: wgpu::RenderPipeline,
     composite_pipeline: wgpu::RenderPipeline,
@@ -420,6 +422,8 @@ pub struct SurtrRenderer {
 
     /// Configuration for render-loop frame timing and degradation strategies.
     pub frame_budget: cvkg_core::FrameBudget,
+    /// Staging buffer for windowed frame capture.
+    capture_staging_buffer: Option<wgpu::Buffer>,
     /// Instant at the start of the last redraw, used for measuring frame timings.
     pub last_redraw_start: std::time::Instant,
     /// Instant at the start of the last frame, used for frame_time_ms calculation.
@@ -436,6 +440,8 @@ pub struct SurtrRenderer {
     transform_stack: Vec<glam::Mat3>,
     /// Whether a redraw has been requested for the next frame.
     pub redraw_requested: bool,
+    /// Cursor for compositor draw call submission tracking.
+    compositor_index_cursor: u32,
 
     // Timestamp Queries (Norse: Skuld = future/time/debt)
     skuld_queries: Option<wgpu::QuerySet>,
@@ -454,31 +460,10 @@ pub struct SurtrRenderer {
         Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>,
     >,
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // Backdrop Capture Architecture — Kawase Blur Pyramid
-    // ══════════════════════════════════════════════════════════════════════════
-    /// Off-screen texture holding the mip-chain blur pyramid for glass sampling.
-    glass_blur_texture: wgpu::Texture,
-    /// Per-mip-level views into glass_blur_texture.
-    glass_blur_views: Vec<wgpu::TextureView>,
-    /// Bind groups for the downsample pass (one per mip level).
-    glass_blur_down_bind_groups: Vec<wgpu::BindGroup>,
-    /// Bind groups for the upsample pass (one per mip level).
-    glass_blur_up_bind_groups: Vec<wgpu::BindGroup>,
-    /// Uniform buffer for blur parameters (src_size, mip_level, kernel_width, mode).
-    glass_blur_uniform_buffer: wgpu::Buffer,
-    /// Render pipeline for Kawase downsample passes.
-    glass_blur_pipeline: wgpu::RenderPipeline,
-    /// Render pipeline for Kawase upsample passes.
-    glass_blur_upsample_pipeline: wgpu::RenderPipeline,
-    /// Bind group layout for blur passes (uniform + texture + sampler).
-    glass_blur_bind_group_layout: wgpu::BindGroupLayout,
     /// Bind group layout for reading blur output in glass composite pass.
     glass_output_bind_group_layout: wgpu::BindGroupLayout,
     /// Current material state — draw calls are tagged with this material.
     current_draw_material: cvkg_core::DrawMaterial,
-    /// Number of mip levels in the glass blur pyramid.
-    blur_pyramid_mip_count: u32,
 }
 
 struct SurfaceContext {
@@ -997,6 +982,34 @@ impl SurtrRenderer {
                 cache: None,
             });
 
+        // Muspelheim Copy Pipeline (identity copy for backdrop blur Pass 2)
+        let copy_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Muspelheim Copy"),
+                layout: Some(&post_process_layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs_fullscreen"),
+                    buffers: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs_copy"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: None,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: None,
+            });
+
         // Muspelheim Blur Pipelines (H and V)
         let blur_h_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim Horizontal Blur"),
@@ -1073,8 +1086,8 @@ impl SurtrRenderer {
                             operation: wgpu::BlendOperation::Add,
                         },
                         alpha: wgpu::BlendComponent {
-                            src_factor: wgpu::BlendFactor::One,
-                            dst_factor: wgpu::BlendFactor::One,
+                            src_factor: wgpu::BlendFactor::SrcAlpha,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
                             operation: wgpu::BlendOperation::Add,
                         },
                     }),
@@ -1300,33 +1313,7 @@ impl SurtrRenderer {
 
         let staging_belt = wgpu::util::StagingBelt::new((*device).clone(), 1024 * 1024);
 
-        // Clone bind group layouts before they are moved into the Self struct
-        let glass_blur_bind_group_layout = env_bind_group_layout.clone();
         let glass_output_bind_group_layout = env_bind_group_layout.clone();
-        let glass_blur_pipeline = pipeline.clone();
-        let glass_blur_upsample_pipeline = pipeline.clone();
-
-        // Create glass blur pyramid resources (must be before Self struct, which moves device)
-        let glass_blur_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Glass Blur Pyramid"),
-            size: wgpu::Extent3d {
-                width: width.max(1),
-                height: height.max(1),
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba16Float,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            view_formats: &[],
-        });
-        let glass_blur_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Glass Blur Uniform"),
-            size: 64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
 
         Self {
             instance,
@@ -1338,6 +1325,7 @@ impl SurtrRenderer {
             headless_context,
             pipeline,
             bloom_extract_pipeline,
+            copy_pipeline,
             blur_h_pipeline,
             blur_v_pipeline,
             composite_pipeline,
@@ -1367,7 +1355,12 @@ impl SurtrRenderer {
                 mipmap_filter: wgpu::MipmapFilterMode::Linear,
                 ..Default::default()
             }),
-            filter_engine: None,
+            filter_engine: Some(cvkg_svg_filters::FilterEngine::new(
+                cvkg_svg_filters::GpuContext {
+                    device: device.clone(),
+                    queue: queue.clone(),
+                },
+            ).expect("Failed to create SVG filter engine")),
             filter_batches: Vec::new(),
             dummy_texture_bind_group,
             dummy_env_bind_group,
@@ -1397,6 +1390,8 @@ impl SurtrRenderer {
             last_frame_start: std::time::Instant::now(),
             last_redraw_start: std::time::Instant::now(),
             frame_budget: cvkg_core::FrameBudget::default(),
+            capture_staging_buffer: None,
+            compositor_index_cursor: 0,
             vram_buffers_bytes: 0,
             vram_textures_bytes: 0,
             _debug_layout: false,
@@ -1411,18 +1406,8 @@ impl SurtrRenderer {
             event_handlers: std::collections::HashMap::new(),
             staging_belt,
             staging_command_buffers: Vec::new(),
-            // Backdrop Capture Architecture — Kawase Blur Pyramid
-            glass_blur_texture,
-            glass_blur_views: Vec::new(),
-            glass_blur_down_bind_groups: Vec::new(),
-            glass_blur_up_bind_groups: Vec::new(),
-            glass_blur_uniform_buffer,
-            glass_blur_pipeline,
-            glass_blur_upsample_pipeline,
-            glass_blur_bind_group_layout,
             glass_output_bind_group_layout,
             current_draw_material: cvkg_core::DrawMaterial::Opaque,
-            blur_pyramid_mip_count: 1,
         }
     }
 
@@ -1645,6 +1630,7 @@ impl SurtrRenderer {
         self.slice_stack.clear();
         self.transform_stack.clear();
         self.current_z = 0.0;
+        self.compositor_index_cursor = self.indices.len() as u32;
         self.vnode_stack.clear();
         self.event_handlers.clear();
 
@@ -2875,7 +2861,7 @@ impl SurtrRenderer {
                 })],
                 ..Default::default()
             });
-            p.set_pipeline(&self.bloom_extract_pipeline); // Use extract as a direct copy for now
+            p.set_pipeline(&self.copy_pipeline); // Identity copy for backdrop blur (all pixels)
             p.set_bind_group(0, ctx_scene_texture_bind_group, &[]);
             p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &self.berserker_bind_group, &[]);
@@ -4757,14 +4743,22 @@ impl SurtrRenderer {
     /// Submit a single routed draw command through the internal pipeline.
     fn submit_routed(&mut self, routed: &cvkg_compositor::RoutedDrawCommand) {
         let cmd = &routed.command;
-        self.fill_rect_with_full_params(
-            cvkg_core::Rect::new(0.0, 0.0, 1.0, 1.0),
-            [1.0, 1.0, 1.0, 1.0],
-            0,
-            cmd.texture_id,
-            0.0,
-            cvkg_core::Rect::new(0.0, 0.0, 1.0, 1.0),
-        );
+        let current_tail = self.indices.len() as u32;
+        let index_count = current_tail - self.compositor_index_cursor;
+        if index_count == 0 { return; }
+        let material = match routed.material {
+            cvkg_compositor::Material::Glass { blur_radius, .. } => cvkg_core::DrawMaterial::Glass { blur_radius },
+            cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
+            _ => cvkg_core::DrawMaterial::Opaque,
+        };
+        self.draw_calls.push(DrawCall {
+            texture_id: cmd.texture_id,
+            scissor_rect: cmd.scissor_rect,
+            index_start: self.compositor_index_cursor,
+            index_count,
+            material,
+        });
+        self.compositor_index_cursor = current_tail;
     }
 }
 
@@ -5126,10 +5120,10 @@ impl SurtrRenderer {
             self.indices.push(base_idx + *idx);
         }
 
-        let material = if mode == 7 {
-            cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
-        } else {
-            cvkg_core::DrawMaterial::TopUI
+        let material = match mode {
+            7 => cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 },
+            0 => cvkg_core::DrawMaterial::Opaque,
+            _ => cvkg_core::DrawMaterial::TopUI,
         };
         let tid = self.get_texture_id("__mega_atlas");
 

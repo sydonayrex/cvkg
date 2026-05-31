@@ -1997,7 +1997,7 @@ mod tests {
             proximity_field: 0.0,
             tilt: None,
             azimuth: None,
-            pressure: 1.0,
+            pressure: Some(1.0),
             barrel_rotation: None,
         });
         assert_eq!(vdom.focused_node.lock().unwrap().unwrap(), NodeId(1));
@@ -2010,7 +2010,7 @@ mod tests {
             proximity_field: 0.0,
             tilt: None,
             azimuth: None,
-            pressure: 1.0,
+            pressure: Some(1.0),
             barrel_rotation: None,
         });
         assert!(vdom.focused_node.lock().unwrap().is_none());

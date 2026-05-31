@@ -20,9 +20,8 @@ members = [
     "cvkg-runic-text", "cvkg-test",
     "cvkg-physics",
     "demos/niflheim-web", "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
-    "demos/showcase",
+    "demos/showcase", "demos/berserker",
     "cvkg-flow",
-    "berserker",
 ]
 
 [workspace.package]

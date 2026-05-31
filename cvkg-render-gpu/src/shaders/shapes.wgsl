@@ -82,11 +82,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let aa = fwidth(d);
         color.a *= 1.0 - smoothstep(0.0, aa, d);
     } else if in.mode == 7u {
-        // 1. Screen-Space UV & Hard Clipping
-        let uv = in.uv; 
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-            discard;
-        }
+        // 1. Screen-Space UV & Clamped Sampling
+        let uv = clamp(in.uv, vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 1.0));
         
         let panel_id = floor(in.uv.x * 3.0);
         let seed = fract(sin(panel_id * 91.7) * 47453.5453);
@@ -267,6 +264,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         } else {
             discard;
         }
+    } else if in.mode == 8u {
+        // Neon Glow (Gungnir) — expanding additive glow layers
+        let center = in.size * 0.5;
+        let dist = length(in.logical - center) / max(in.size.x, in.size.y);
+        let glow = exp(-dist * 4.0) * 1.5;
+        color = vec4<f32>(color.rgb * glow, color.a);
     }
     
     let rage = scene.berzerker_rage;

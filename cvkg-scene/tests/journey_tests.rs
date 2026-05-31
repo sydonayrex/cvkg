@@ -52,7 +52,7 @@ fn journey_button_click_flow() {
         proximity_field: 0.0,
         tilt: None,
         azimuth: None,
-        pressure: 0.0,
+        pressure: Some(0.0),
         barrel_rotation: None,
     });
 
@@ -62,7 +62,7 @@ fn journey_button_click_flow() {
         button: 0,
         tilt: None,
         azimuth: None,
-        pressure: 0.0,
+        pressure: Some(0.0),
         barrel_rotation: None,
     });
 
