@@ -3,7 +3,7 @@
 //! Supports both 2D and 3D collision detection. The 2D path uses the original
 //! `gjk`/`epa`/`collide` functions. The 3D path uses `gjk_3d`/`epa_3d`/`collide_3d`.
 
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3};
 
 use crate::RigidBody;
 use crate::shape::Shape;
@@ -409,7 +409,6 @@ pub fn epa_with_simplex_3d(
 
     for _ in 0..64 {
         // Find the face closest to the origin
-        let mut best_face = 0usize;
         let mut best_dist = f32::MAX;
         let mut best_face_normal = Vec3::ZERO;
 
