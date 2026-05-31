@@ -232,55 +232,71 @@ pub fn gjk_3d(
     if dir.length_squared() < 1e-12 { dir = Vec3::X; }
 
     let mut simplex = [Vec3::ZERO; 4];
+    let mut count = 1usize;
     simplex[0] = minkowski_support_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir);
     dir = -simplex[0];
 
     for _ in 0..64 {
         let p = minkowski_support_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir);
         if p.dot(dir) < 0.0 {
-            return GjkResult3D { overlapping: false, simplex, simplex_count: 1 };
+            return GjkResult3D { overlapping: false, simplex, simplex_count: count };
         }
-        simplex[3] = simplex[2];
-        simplex[2] = simplex[1];
-        simplex[1] = simplex[0];
+        // Insert new point at the beginning, shift only valid entries
+        for i in (1..=count).rev() {
+            simplex[i] = simplex[i - 1];
+        }
         simplex[0] = p;
+        if count < 4 { count += 1; }
 
         let (nd, origin) = process_simplex_3d(&mut simplex);
         if origin {
-            return GjkResult3D { overlapping: true, simplex, simplex_count: 4 };
+            return GjkResult3D { overlapping: true, simplex, simplex_count: count };
         }
         dir = nd;
+        if dir.length_squared() < 1e-12 {
+            dir = Vec3::X;
+        }
     }
-    GjkResult3D { overlapping: false, simplex, simplex_count: 4 }
+    GjkResult3D { overlapping: false, simplex, simplex_count: count }
 }
 
 /// 3D simplex processing. Returns (new_direction, contains_origin).
 fn process_simplex_3d(s: &mut [Vec3; 4]) -> (Vec3, bool) {
     let a = s[0];
-    let ao = -a;
+    let ao = -a; // direction toward origin from a
 
     if s[3] != Vec3::ZERO {
-        // Tetrahedron case (4 points)
+        // Tetrahedron case (4 points: a=0, b=1, c=2, d=3)
         let ab = s[1] - a;
         let ac = s[2] - a;
         let ad = s[3] - a;
-        let abc = ab.cross(ac);
-        let acd = ac.cross(ad);
-        let adb = ad.cross(ab);
+
+        // Compute face normals pointing OUTWARD from the tetrahedron
+        // Face ABC (opposite to D): normal = ab × ac, flip if it points toward D
+        let mut abc = ab.cross(ac);
+        if abc.dot(ad) > 0.0 { abc = -abc; }
+
+        // Face ACD (opposite to B): normal = ac × ad, flip if it points toward B
+        let mut acd = ac.cross(ad);
+        if acd.dot(ab) > 0.0 { acd = -acd; }
+
+        // Face ADB (opposite to C): normal = ad × ab, flip if it points toward C
+        let mut adb = ad.cross(ab);
+        if adb.dot(ac) > 0.0 { adb = -adb; }
 
         // Check which face the origin is on the outside of
         if abc.dot(ao) > 0.0 {
-            s[3] = Vec3::ZERO;
+            s[3] = Vec3::ZERO; // Remove d
             return (abc, false);
         }
         if acd.dot(ao) > 0.0 {
-            s[1] = s[3];
+            s[1] = s[3]; // Replace b with d
             s[3] = Vec3::ZERO;
             return (acd, false);
         }
         if adb.dot(ao) > 0.0 {
-            s[2] = s[1];
-            s[1] = s[3];
+            s[2] = s[1]; // Replace c with b
+            s[1] = s[3]; // Replace b with d
             s[3] = Vec3::ZERO;
             return (adb, false);
         }
@@ -288,7 +304,7 @@ fn process_simplex_3d(s: &mut [Vec3; 4]) -> (Vec3, bool) {
     }
 
     if s[2] != Vec3::ZERO {
-        // Triangle case (3 points)
+        // Triangle case (3 points: a=0, b=1, c=2)
         let ab = s[1] - a;
         let ac = s[2] - a;
         let abc = ab.cross(ac);
