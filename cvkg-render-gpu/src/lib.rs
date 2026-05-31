@@ -4421,7 +4421,35 @@ impl cvkg_core::Renderer for SurtrRenderer {
             rotation: glam::Quat::from_xyzw(rotation[0], rotation[1], rotation[2], rotation[3]),
             scale: glam::Vec3::from(scale),
         };
-        if !meshes.is_empty() {
+        // Use provided mesh or generate a default unit cube
+        if meshes.is_empty() {
+            // Generate a unit cube mesh on the stack
+            let h = 0.5f32;
+            let cube = Mesh {
+                vertices: vec![
+                    [-h, -h, -h], [h, -h, -h], [h, h, -h], [-h, h, -h],
+                    [-h, -h, h], [h, -h, h], [h, h, h], [-h, h, h],
+                ],
+                normals: vec![
+                    [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0],
+                    [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0],
+                    [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0],
+                    [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0],
+                    [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0],
+                ],
+                indices: vec![
+                    0, 1, 2, 0, 2, 3,       // front
+                    5, 4, 7, 5, 7, 6,       // back
+                    4, 0, 3, 4, 3, 7,       // left
+                    1, 5, 6, 1, 6, 2,       // right
+                    3, 2, 6, 3, 6, 7,       // top
+                    4, 5, 1, 4, 1, 0,       // bottom
+                ],
+            };
+            let material = cvkg_core::Material3D::unlit(color);
+            self.draw_mesh_3d(&cube, &material, &transform);
+        } else {
             let material = cvkg_core::Material3D::unlit(color);
             self.draw_mesh_3d(&meshes[0], &material, &transform);
         }
