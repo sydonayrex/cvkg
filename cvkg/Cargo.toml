@@ -47,6 +47,10 @@ path = "examples/hit_test_demo.rs"
 name = "shatter_demo"
 path = "examples/shatter_demo.rs"
 
+[[example]]
+name = "physics_3d_demo"
+path = "examples/physics_3d_demo.rs"
+
 [dependencies.cvkg-anim]
 version = "0.2.3"
 
