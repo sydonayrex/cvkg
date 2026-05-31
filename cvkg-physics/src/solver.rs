@@ -139,6 +139,12 @@ impl ImpulseSolver {
             } => {
                 self.solve_angular_limit(body_a, body_b, *min_angle, *max_angle, dt);
             }
+            ConstraintKind::BallSocket3D { anchor } => {
+                self.solve_ball_socket_3d(body_a, body_b, anchor, dt);
+            }
+            ConstraintKind::Hinge3D { anchor, axis } => {
+                self.solve_hinge_3d(body_a, body_b, anchor, axis, dt);
+            }
         }
     }
 
@@ -289,6 +295,70 @@ impl ImpulseSolver {
         if !b.is_static {
             b.angle += correction_angle * b.inv_inertia;
             b.angular_velocity += correction_angle * b.inv_inertia * 0.5;
+        }
+    }
+
+    /// Solve a 3D ball-and-socket constraint: keep both bodies at the anchor point.
+    fn solve_ball_socket_3d(
+        &self,
+        a: &mut RigidBody,
+        b: &mut RigidBody,
+        anchor: &glam::Vec3,
+        _dt: f32,
+    ) {
+        let delta = *anchor - a.position_3d;
+        let delta_b = *anchor - b.position_3d;
+        // Simple position correction: move both bodies toward the anchor
+        let total_inv_mass = a.inv_mass + b.inv_mass;
+        if total_inv_mass < 1e-10 {
+            return;
+        }
+        let correction = (delta - delta_b) * 0.5;
+        if !a.is_static {
+            a.position_3d += correction * a.inv_mass / total_inv_mass;
+        }
+        if !b.is_static {
+            b.position_3d -= correction * b.inv_mass / total_inv_mass;
+        }
+    }
+
+    /// Solve a 3D hinge constraint: bodies rotate around a shared axis.
+    fn solve_hinge_3d(
+        &self,
+        a: &mut RigidBody,
+        b: &mut RigidBody,
+        anchor: &glam::Vec3,
+        axis: &glam::Vec3,
+        _dt: f32,
+    ) {
+        // Position correction: keep anchor points aligned
+        let delta = *anchor - a.position_3d;
+        let delta_b = *anchor - b.position_3d;
+        let total_inv_mass = a.inv_mass + b.inv_mass;
+        if total_inv_mass < 1e-10 {
+            return;
+        }
+        let correction = (delta - delta_b) * 0.5;
+        if !a.is_static {
+            a.position_3d += correction * a.inv_mass / total_inv_mass;
+        }
+        if !b.is_static {
+            b.position_3d -= correction * b.inv_mass / total_inv_mass;
+        }
+
+        // Rotation correction: align the axis
+        // Simplified: just damp angular velocity around the hinge axis
+        let rel_ang_vel = a.angular_velocity_3d - b.angular_velocity_3d;
+        let axis_component = axis * rel_ang_vel.dot(*axis);
+        let perp_component = rel_ang_vel - axis_component;
+        // Remove perpendicular angular velocity (keep rotation around axis only)
+        let total_inv_inertia = 1.0 / (a.inv_inertia_3d.x + b.inv_inertia_3d.x + 1e-10);
+        let angular_impulse = perp_component * total_inv_inertia * 0.5;
+        if !a.is_static {
+            a.angular_velocity_3d -= angular_impulse;
+        }
+        if !b.is_static {
+            b.angular_velocity_3d += angular_impulse;
         }
     }
 }

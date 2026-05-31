@@ -58,6 +58,15 @@ pub enum ConstraintKind {
         /// Damping coefficient.
         damping: f32,
     },
+    /// Ball-and-socket joint in 3D: pins two bodies at a world-space point.
+    BallSocket3D {
+        anchor: glam::Vec3,
+    },
+    /// Hinge joint in 3D: bodies rotate around a shared axis.
+    Hinge3D {
+        anchor: glam::Vec3,
+        axis: glam::Vec3,
+    },
 }
 
 /// A constraint connecting two bodies.
@@ -157,5 +166,39 @@ impl Constraint {
             },
             enabled: true,
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3D Constraints
+// ══════════════════════════════════════════════════════════════════════════
+
+/// Ball-and-socket joint in 3D: pins two bodies together at a world-space point.
+/// Allows free rotation but prevents translation away from the anchor.
+pub fn ball_socket_constraint(
+    body_a: BodyId,
+    body_b: BodyId,
+    anchor: glam::Vec3,
+) -> super::Constraint {
+    super::Constraint {
+        body_a,
+        body_b,
+        kind: ConstraintKind::BallSocket3D { anchor },
+        enabled: true,
+    }
+}
+
+/// Hinge joint in 3D: bodies rotate around a shared axis passing through an anchor point.
+pub fn hinge_constraint_3d(
+    body_a: BodyId,
+    body_b: BodyId,
+    anchor: glam::Vec3,
+    axis: glam::Vec3,
+) -> super::Constraint {
+    super::Constraint {
+        body_a,
+        body_b,
+        kind: ConstraintKind::Hinge3D { anchor, axis },
+        enabled: true,
     }
 }

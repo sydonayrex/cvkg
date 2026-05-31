@@ -67,3 +67,58 @@ pub fn update_sleep(body: &mut RigidBody, sleep_threshold: f32, sleep_delay: u32
     }
     false
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// 3D Integration
+// ══════════════════════════════════════════════════════════════════════════
+
+use glam::Vec3;
+
+/// Integrate a 3D rigid body forward by `dt` using semi-implicit Euler.
+///
+/// Uses quaternion for rotation and Vec3 for angular velocity/torque.
+pub fn semi_implicit_euler_3d(body: &mut RigidBody, dt: f32, gravity: Vec3) {
+    if body.is_static || body.is_sleeping {
+        return;
+    }
+
+    // Linear acceleration = force / mass + gravity
+    let acceleration = body.force_3d * body.inv_mass + gravity * body.gravity_scale;
+
+    // Update linear velocity
+    body.velocity_3d += acceleration * dt;
+
+    // Apply linear damping
+    body.velocity_3d *= 1.0 / (1.0 + dt * body.linear_damping);
+
+    // Update position
+    body.position_3d += body.velocity_3d * dt;
+
+    // Angular integration (3D)
+    // Angular acceleration = torque * inv_inertia (component-wise)
+    let angular_acceleration = body.torque_3d * body.inv_inertia_3d;
+    body.angular_velocity_3d += angular_acceleration * dt;
+
+    // Apply angular damping
+    body.angular_velocity_3d *= 1.0 / (1.0 + dt * body.angular_damping);
+
+    // Update rotation via quaternion derivative
+    // dq/dt = 0.5 * omega * q
+    let omega = body.angular_velocity_3d;
+    let half_dt = 0.5 * dt;
+    // Quaternion multiplication: omega * q (treating omega as pure quaternion)
+    let omega_quat = glam::Quat::from_xyzw(omega.x, omega.y, omega.z, 0.0);
+    let q_dot = omega_quat * body.rotation;
+    body.rotation = glam::Quat::from_xyzw(
+        body.rotation.x + q_dot.x * half_dt,
+        body.rotation.y + q_dot.y * half_dt,
+        body.rotation.z + q_dot.z * half_dt,
+        body.rotation.w + q_dot.w * half_dt,
+    );
+    // Normalize to prevent drift
+    body.rotation = body.rotation.normalize();
+
+    // Clear accumulated forces
+    body.force_3d = Vec3::ZERO;
+    body.torque_3d = Vec3::ZERO;
+}

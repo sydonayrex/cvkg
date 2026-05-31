@@ -3,10 +3,11 @@
 use std::collections::HashMap;
 
 use glam::Vec2;
+use glam::Vec3;
 
 use crate::collider::Collider;
 use crate::constraint::Constraint;
-use crate::integration::{semi_implicit_euler, update_sleep, wake};
+use crate::integration::{semi_implicit_euler, semi_implicit_euler_3d, update_sleep, wake};
 use crate::narrowphase::collide;
 use crate::solver::ImpulseSolver;
 use crate::{BodyId, OnSleepCallback, RigidBody};
@@ -14,8 +15,10 @@ use crate::{BodyId, OnSleepCallback, RigidBody};
 /// Physics world configuration.
 #[derive(Debug, Clone)]
 pub struct WorldConfig {
-    /// Gravity vector (pixels/s²).
+    /// Gravity vector (pixels/s²) for 2D simulation.
     pub gravity: Vec2,
+    /// Gravity vector (pixels/s²) for 3D simulation.
+    pub gravity_3d: Vec3,
     /// Number of substeps per simulation tick.
     pub substeps: u32,
     /// Sleep delay: number of steps below threshold before sleeping.
@@ -35,6 +38,7 @@ impl Default for WorldConfig {
     fn default() -> Self {
         Self {
             gravity: Vec2::new(0.0, 500.0),
+            gravity_3d: Vec3::new(0.0, -9.81, 0.0),
             substeps: 4,
             sleep_delay: 60,
             default_linear_damping: 0.01,
@@ -201,16 +205,30 @@ impl PhysicsWorld {
 
     #[allow(clippy::collapsible_if)]
     fn step_substep(&mut self, dt: f32, result: &mut StepResult) {
-        // 1. Integrate velocities and positions with velocity clamping for CCD
+        // 1. Integrate velocities and positions with velocity clamping
         for body in &mut self.bodies {
-            semi_implicit_euler(body, dt, self.config.gravity);
+            if body.is_3d {
+                semi_implicit_euler_3d(body, dt, self.config.gravity_3d);
+            } else {
+                semi_implicit_euler(body, dt, self.config.gravity);
+            }
             // Clamp velocity to prevent tunneling (continuous collision prevention)
             let max_v = self.config.max_velocity_per_substep;
-            if body.velocity.length_squared() > max_v * max_v {
-                body.velocity = body.velocity.normalize() * max_v;
-            }
-            if body.angular_velocity.abs() > max_v {
-                body.angular_velocity = body.angular_velocity.signum() * max_v;
+            if body.is_3d {
+                if body.velocity_3d.length_squared() > max_v * max_v {
+                    body.velocity_3d = body.velocity_3d.normalize() * max_v;
+                }
+                let ang_speed = body.angular_velocity_3d.length();
+                if ang_speed > max_v {
+                    body.angular_velocity_3d = body.angular_velocity_3d / ang_speed * max_v;
+                }
+            } else {
+                if body.velocity.length_squared() > max_v * max_v {
+                    body.velocity = body.velocity.normalize() * max_v;
+                }
+                if body.angular_velocity.abs() > max_v {
+                    body.angular_velocity = body.angular_velocity.signum() * max_v;
+                }
             }
         }
 
