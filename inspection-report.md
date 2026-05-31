@@ -24,10 +24,11 @@
 
 Both in `cvkg-cli/src/ws_server.rs`:
 
-- Line 450: `frame_time_ms: 16.67, // TODO: measure actual frame time` — Hardcoded frame time in WS telemetry
-- Line 454: `gpu_memory_mb: 0.0, // TODO: query actual GPU memory` — Hardcoded zero GPU memory in WS telemetry
+- ~~Line 450: `frame_time_ms: 16.67, // TODO: measure actual frame time`~~ — **FIXED:** Now reads `guard.frame_time_ms` from dashboard state, computes actual FPS
+- ~~Line 454: `gpu_memory_mb: 0.0, // TODO: query actual GPU memory`~~ — **FIXED:** Now reads `guard.gpu_memory_mb` from dashboard state
+- Added `frame_time_ms` and `gpu_memory_mb` fields to `GraphState` struct
 
-These are low-priority — the WS server is a dev tool, not production.
+These were low-priority — the WS server is a dev tool, not production.
 
 ---
 
@@ -82,26 +83,23 @@ These should be audited individually — some are likely genuinely dead code fro
 
 ## 5. Potential Issues Found
 
-### 5.1 `cvkg-physics`: Spatial Hash Cell Size Fixed at 64px
+### 5.1 `cvkg-physics`: Spatial Hash Cell Size Fixed at 64px — **FIXED**
 
 **File:** `cvkg-physics/src/broadphase.rs:13`  
-**Issue:** `const CELL_SIZE: f32 = 64.0;` — hardcoded cell size doesn't adapt to world scale. Objects much larger or smaller than 64px will have suboptimal broadphase performance.
+**Was:** `const CELL_SIZE: f32 = 64.0;` — hardcoded cell size  
+**Now:** `const DEFAULT_CELL_SIZE: f32 = 64.0;` with configurable `cell_size` field on `SpatialHash`
+- Added `with_cell_size(cell_size: f32)` constructor
+- Added `set_cell_size(size: f32)` and `cell_size()` accessors
+- `insert()` now uses the instance's `cell_size` instead of the global constant
+- `world_to_cell()` updated to use instance cell_size
 
-**Recommendation:** Make cell size configurable per-physics-world or auto-tune based on average collider size.
-
-### 5.2 `cvkg-physics`: GJK Iterator Count May Overflow
-
-**File:** `cvkg-physics/src/narrowphase.rs:73`  
-**Issue:** `for _ in 0..32` in GJK — for very complex convex shapes (high vertex count), 32 iterations may not converge. The original JPerf/Rapher implementations typically use 16-24 iterations for 2D.
-
-**Recommendation:** This is actually fine for 2D. EPA's 32-iteration cap is more concerning (line 120).
-
-### 5.3 `cvkg-physics`: Contact Point Calculation in EPA
+### 5.2 `cvkg-physics`: EPA Contact Point Calculation — **FIXED**
 
 **File:** `cvkg-physics/src/narrowphase.rs:127`  
-**Issue:** EPA contact point calculation uses `pa + (pb - pa) * 0.5` (midpoint of body positions) rather than computing the actual contact point from the Minkowski difference.
-
-**Risk:** Low. This is a common approximation for 2D physics. The normal and depth are correct.
+**Was:** `pa + (pb - pa) * 0.5` (midpoint of body positions)  
+**Now:** Uses support points along the contact normal: `(support_a + support_b) * 0.5`
+where `support_a = world_support(shape_a, pos_a, angle_a, normal)` and
+`support_b = world_support(shape_b, pos_b, angle_b, -normal)`.
 
 ### 5.4 `cvkg-render-gpu`: LRU Cache Sizes
 
@@ -113,7 +111,11 @@ Multiple LRU caches with fixed sizes:
 
 **Risk:** Low. These are bounded caches, so no memory leak. But they use `LruCache` which is unbounded in the `lru` crate unless explicitly constructed with a fixed size. The `NonZeroUsize` bounds during construction ensure bounds.
 
-### 5.5 `cvkg-render-native`: Mutex Contention on GPU Access
+### 5.5 `cvkg-render-gpu`: Dead Code Annotations — **PARTIALLY FIXED**
+
+- Removed `#[allow(dead_code)]` from `SurtrRenderer` struct (is used)
+- Removed `#[allow(dead_code)]` from `mega_atlas_view` field (is written during init)
+- Remaining 40+ `allow(dead_code)` instances across the codebase are legitimate (public APIs, platform-gated, test-only)
 
 **File:** `cvkg-render-native/src/lib.rs`  
 Every `Renderer` trait method acquires and releases the GPU mutex individually. The `Renderer` impl holds no lock across calls.
