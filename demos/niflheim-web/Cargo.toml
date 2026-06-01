@@ -12,11 +12,11 @@ default = ["webgpu"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core", version = "0.2.6" }
+cvkg-core = { path = "../../cvkg-core", version = "0.2.7" }
 cvkg-render-web = { path = "../../cvkg-render-web", version = "0.2.6" }
-cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.6" }
-cvkg-components = { path = "../../cvkg-components", version = "0.2.6" }
-cvkg-themes = { path = "../../cvkg-themes", version = "0.2.6" }
+cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.7" }
+cvkg-components = { path = "../../cvkg-components", version = "0.2.7" }
+cvkg-themes = { path = "../../cvkg-themes", version = "0.2.7" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1"
