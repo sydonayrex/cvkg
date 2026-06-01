@@ -78,7 +78,7 @@ fn aces_tonemap(x: vec3<f32>) -> vec3<f32> {
 @fragment
 fn fs_composite(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv_screen = in.uv;
-    let scene_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
+    let scene_color = textureSample(t_diffuse[0], s_diffuse, in.uv);
     let bloom_color = textureSample(t_env, s_env, in.uv);
 
     // HDR Bloom Fusion (Restrained Apple-style discipline)

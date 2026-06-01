@@ -333,6 +333,7 @@ impl Vertex {
 }
 
 /// SurtrRenderer implements the high-performance GPU backend.
+#[allow(dead_code)]
 pub struct SurtrRenderer {
     instance: Arc<wgpu::Instance>,
     adapter: Arc<wgpu::Adapter>,
@@ -347,8 +348,6 @@ pub struct SurtrRenderer {
     // Mega-Atlas (Shared across all windows)
     text_engine: cvkg_runic_text::RunicTextEngine,
     mega_atlas_tex: wgpu::Texture,
-    mega_atlas_view: wgpu::TextureView,
-    _mega_atlas_sampler: wgpu::Sampler,
     mega_atlas_bind_group: wgpu::BindGroup,
     text_cache: LruCache<u64, (Rect, f32, f32)>,
     atlas_packer: YggdrasilPacker,
@@ -359,12 +358,6 @@ pub struct SurtrRenderer {
     svg_cache: LruCache<String, SvgModel>,
     /// Parsed SVG trees for serialization and filter application.
     svg_trees: LruCache<String, usvg::Tree>,
-    /// WGPU device for filter operations (cloned from main device).
-    filter_device: Option<Arc<wgpu::Device>>,
-    /// WGPU queue for filter operations (cloned from main queue).
-    filter_queue: Option<Arc<wgpu::Queue>>,
-    /// Clamp-to-edge sampler for SVG filter operations.
-    filter_sampler: wgpu::Sampler,
     /// SVG filter evaluation engine.
     filter_engine: Option<cvkg_svg_filters::FilterEngine>,
     /// Pending filter batches accumulated during tessellation.
@@ -1331,8 +1324,6 @@ impl SurtrRenderer {
             env_bind_group_layout,
             text_engine: cvkg_runic_text::RunicTextEngine::default(),
             mega_atlas_tex,
-            mega_atlas_view: mega_atlas_view_obj,
-            _mega_atlas_sampler: text_sampler,
             mega_atlas_bind_group,
             text_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
             atlas_packer: YggdrasilPacker::new(4096, 4096),
@@ -1342,18 +1333,6 @@ impl SurtrRenderer {
             dummy_sampler,
             svg_cache: LruCache::new(NonZeroUsize::new(128).unwrap()),
             svg_trees: LruCache::new(NonZeroUsize::new(128).unwrap()),
-            filter_device: Some(device.clone()),
-            filter_queue: Some(queue.clone()),
-            filter_sampler: device.create_sampler(&wgpu::SamplerDescriptor {
-                label: Some("SVG Filter Sampler"),
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::MipmapFilterMode::Linear,
-                ..Default::default()
-            }),
             filter_engine: Some(cvkg_svg_filters::FilterEngine::new(
                 cvkg_svg_filters::GpuContext {
                     device: device.clone(),
@@ -1749,15 +1728,46 @@ impl SurtrRenderer {
             .expect("Failed to create surface");
         let caps = surface.get_capabilities(&self.adapter);
         let format = caps.formats[0];
+
+        // Dynamic present mode selection — Mailbox not available on all platforms (e.g. Wayland)
+        let present_mode = if caps
+            .present_modes
+            .contains(&wgpu::PresentMode::Mailbox)
+        {
+            wgpu::PresentMode::Mailbox
+        } else {
+            log::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync)");
+            wgpu::PresentMode::Fifo
+        };
+
+        let alpha_mode = if caps
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::PostMultiplied)
+        {
+            wgpu::CompositeAlphaMode::PostMultiplied
+        } else if caps
+            .alpha_modes
+            .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
+        {
+            wgpu::CompositeAlphaMode::PreMultiplied
+        } else {
+            caps.alpha_modes[0]
+        };
+
+        log::info!(
+            "[GPU] Configuring surface: {}x{} | {:?} | {:?}",
+            size.width, size.height, present_mode, alpha_mode
+        );
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width: size.width,
             height: size.height,
-            present_mode: wgpu::PresentMode::Mailbox,
-            alpha_mode: caps.alpha_modes[0],
+            present_mode,
+            alpha_mode,
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
         };
         surface.configure(&self.device, &config);
 
@@ -2719,9 +2729,14 @@ impl SurtrRenderer {
                     ctx.surface.configure(&self.device, &ctx.config);
                     t
                 }
-                _ => {
-                    log::warn!("[GPU] Surface texture acquisition failed, reconfiguring surface");
+                other => {
+                    log::warn!("[GPU] Surface texture acquisition failed ({:?}), reconfiguring surface", other);
                     ctx.surface.configure(&self.device, &ctx.config);
+                    // Skip presentation this frame — surface may be temporarily unavailable
+                    // (e.g. Wayland resize, occlusion). Don't drop GPU work; submit encoder
+                    // so pipeline state isn't lost, but no present() call.
+                    let finished = encoder.finish();
+                    self.queue.submit(std::iter::once(finished));
                     return;
                 }
             };
