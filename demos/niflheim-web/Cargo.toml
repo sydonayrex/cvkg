@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "niflheim-web-demo"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2021"
 
 [features]
@@ -12,11 +12,11 @@ default = ["webgpu"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core", version = "0.2.7" }
+cvkg-core = { path = "../../cvkg-core", version = "0.2.8" }
 cvkg-render-web = { path = "../../cvkg-render-web", version = "0.2.6" }
-cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.7" }
-cvkg-components = { path = "../../cvkg-components", version = "0.2.7" }
-cvkg-themes = { path = "../../cvkg-themes", version = "0.2.7" }
+cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.8" }
+cvkg-components = { path = "../../cvkg-components", version = "0.2.8" }
+cvkg-themes = { path = "../../cvkg-themes", version = "0.2.8" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1"

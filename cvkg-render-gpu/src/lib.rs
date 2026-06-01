@@ -934,7 +934,7 @@ impl SurtrRenderer {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: Some(true),
+                depth_write_enabled: Some(false),
                 depth_compare: Some(wgpu::CompareFunction::Always),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
@@ -2574,6 +2574,8 @@ impl SurtrRenderer {
             cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
         } else if mode == 6 {
             cvkg_core::DrawMaterial::TopUI
+        } else if mode == 0 {
+            cvkg_core::DrawMaterial::Opaque
         } else {
             self.current_draw_material
         };
@@ -2810,12 +2812,14 @@ impl SurtrRenderer {
                 multiview_mask: None,
             });
 
-            // 1a. Background Atmosphere
-            p.set_pipeline(&self.background_pipeline);
-            p.set_bind_group(0, &self.dummy_texture_bind_group, &[]);
-            p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]); // Use previous frame's blur for background depth
-            p.set_bind_group(2, &self.berserker_bind_group, &[]);
-            p.draw(0..6, 0..1);
+            // 1a. Background Atmosphere (only when scene is AURORA)
+            if self.current_scene.scene_type == cvkg_core::SCENE_AURORA {
+                p.set_pipeline(&self.background_pipeline);
+                p.set_bind_group(0, &self.dummy_texture_bind_group, &[]);
+                p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
+                p.set_bind_group(2, &self.berserker_bind_group, &[]);
+                p.draw(0..6, 0..1);
+            }
 
             // 1b. Opaque Main Elements (non-glass, non-ui)
             if !self.draw_calls.is_empty() {
@@ -3897,11 +3901,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
             };
 
             if w > 0.0 {
-                // Map physical glyph dimensions and positions back to logical units
-                // so the logical orthographic projection matrix places them correctly.
+                // Position glyph relative to baseline.
+                // glyph.x/y are in physical pixels, baseline-relative.
+                // shaped.ascent gives the baseline offset from the text origin (y).
+                let baseline_y = y + shaped.ascent / self.current_scale_factor();
                 let glyph_rect = Rect {
                     x: x + glyph.x / self.current_scale_factor(),
-                    y: y + glyph.y / self.current_scale_factor(),
+                    y: baseline_y + glyph.y / self.current_scale_factor(),
                     width: w / self.current_scale_factor(),
                     height: h / self.current_scale_factor(),
                 };
@@ -4029,9 +4035,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
             if w > 0.0 {
                 let sf = self.current_scale_factor();
+                // Position glyph relative to baseline.
+                // glyph.x/y are in physical pixels, baseline-relative.
+                // shaped.ascent gives the baseline offset from the text origin (y).
+                let baseline_y = y + shaped.ascent / sf;
                 let glyph_rect = Rect {
                     x: x + glyph.x / sf,
-                    y: y + glyph.y / sf,
+                    y: baseline_y + glyph.y / sf,
                     width: w / sf,
                     height: h / sf,
                 };
