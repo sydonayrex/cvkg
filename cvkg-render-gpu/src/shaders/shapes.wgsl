@@ -281,6 +281,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         } else {
             color *= tex_color;
         }
+    } else if in.mode == 12u {
+        // Heatmap — sample texture and apply heatmap palette
+        let val = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv).r;
+        color = vec4<f32>(heatmap_palette(val), in.color.a);
+    } else if in.mode == 20u {
+        // 9-slice — textured rect with UV remapping handled on CPU via uv_rect
+        // uv_rect.xy = inner_left, uv_rect.zw = inner_right (CPU-computed slice boundaries)
+        let tex_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
+        color *= tex_color;
     } else if in.mode == 21u {
         // High-Fidelity Raymarched Cube (Mode 21u)
         let uv = (in.uv - 0.5) * 2.0;
