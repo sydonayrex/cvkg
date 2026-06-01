@@ -161,7 +161,7 @@ fn gaussian_weight(offset: f32, sigma: f32) -> f32 {
     return exp(-0.5 * (offset * offset) / (s * s));
 }
 
-fn gaussian_blur_h(in: VertexOutput) -> @location(0) vec4<f32> {
+fn gaussian_blur_h(in: VertexOutput) -> vec4<f32> {
     let radius = i32(params.param0);
     let sigma = params.param1;
     let texel = 1.0 / params.src_size.xy;
@@ -178,7 +178,7 @@ fn gaussian_blur_h(in: VertexOutput) -> @location(0) vec4<f32> {
     return color / max(weight_sum, 0.001);
 }
 
-fn gaussian_blur_v(in: VertexOutput) -> @location(0) vec4<f32> {
+fn gaussian_blur_v(in: VertexOutput) -> vec4<f32> {
     let radius = i32(params.param0);
     let sigma = params.param1;
     let texel = 1.0 / params.src_size.xy;
@@ -197,7 +197,7 @@ fn gaussian_blur_v(in: VertexOutput) -> @location(0) vec4<f32> {
 
 // ── Color Matrix ────────────────────────────────────────────────────────────
 
-fn color_matrix(in: VertexOutput) -> @location(0) vec4<f32> {
+fn color_matrix(in: VertexOutput) -> vec4<f32> {
     let src = textureSample(t_src, s_src, in.texcoord);
     let r = dot(params.cm_row0, vec4<f32>(src.rgb, 1.0));
     let g = dot(params.cm_row1, vec4<f32>(src.rgb, 1.0));
@@ -214,7 +214,7 @@ fn blend_screen(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> { return a + b - a * b;
 fn blend_darken(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> { return min(a, b); }
 fn blend_lighten(a: vec4<f32>, b: vec4<f32>) -> vec4<f32> { return max(a, b); }
 
-fn blend(in: VertexOutput) -> @location(0) vec4<f32> {
+fn blend(in: VertexOutput) -> vec4<f32> {
     let a = textureSample(t_src, s_src, in.texcoord);
     let b = textureSample(t_src2, s_src2, in.texcoord);
     switch params.sub_mode {
@@ -228,7 +228,7 @@ fn blend(in: VertexOutput) -> @location(0) vec4<f32> {
 
 // ── Composite ────────────────────────────────────────────────────────────────
 
-fn composite(in: VertexOutput) -> @location(0) vec4<f32> {
+fn composite(in: VertexOutput) -> vec4<f32> {
     let a = textureSample(t_src, s_src, in.texcoord);
     let b = textureSample(t_src2, s_src2, in.texcoord);
     let fa = a.a;
@@ -257,13 +257,13 @@ fn composite(in: VertexOutput) -> @location(0) vec4<f32> {
 
 // ── Flood ───────────────────────────────────────────────────────────────────
 
-fn flood(in: VertexOutput) -> @location(0) vec4<f32> {
+fn flood(in: VertexOutput) -> vec4<f32> {
     return params.flood_color;
 }
 
 // ── Offset ──────────────────────────────────────────────────────────────────
 
-fn offset(in: VertexOutput) -> @location(0) vec4<f32> {
+fn offset(in: VertexOutput) -> vec4<f32> {
     let uv = in.texcoord - params.offset / params.src_size.xy;
     return textureSample(t_src, s_src, uv);
 }
@@ -272,7 +272,7 @@ fn offset(in: VertexOutput) -> @location(0) vec4<f32> {
 // Merge layers multiple inputs by simple alpha compositing (over).
 // For 2 inputs: src over src2. For more, we'd need multiple passes.
 
-fn merge(in: VertexOutput) -> @location(0) vec4<f32> {
+fn merge(in: VertexOutput) -> vec4<f32> {
     let a = textureSample(t_src, s_src, in.texcoord);
     let b = textureSample(t_src2, s_src2, in.texcoord);
     // Alpha compositing: a over b
@@ -288,7 +288,7 @@ fn merge(in: VertexOutput) -> @location(0) vec4<f32> {
 // sub_mode: 0=identity, 1=table, 2=discrete, 3=linear, 4=gamma
 // param0 = gamma (for gamma mode), param1 = linear slope, param2 = linear intercept
 
-fn component_transfer(in: VertexOutput) -> @location(0) vec4<f32> {
+fn component_transfer(in: VertexOutput) -> vec4<f32> {
     let src = textureSample(t_src, s_src, in.texcoord);
     switch params.sub_mode {
         case XFER_LINEAR: {
@@ -320,7 +320,7 @@ fn component_transfer(in: VertexOutput) -> @location(0) vec4<f32> {
 // kernel: k0-k8 stored in params.kernel (vec4), params.kernel2 (vec4), params.kernel3.x
 // kernel_divisor, kernel_bias
 
-fn convolve(in: VertexOutput) -> @location(0) vec4<f32> {
+fn convolve(in: VertexOutput) -> vec4<f32> {
     let texel = 1.0 / params.src_size.xy;
     let k = array<vec4<f32>, 3>(
         params.kernel,
@@ -359,7 +359,7 @@ fn channel_from_select(sample: vec4<f32>, sel: u32) -> f32 {
     }
 }
 
-fn displacement(in: VertexOutput) -> @location(0) vec4<f32> {
+fn displacement(in: VertexOutput) -> vec4<f32> {
     let scale = params.disp_scale;
     let x_sel = params.sub_mode & 3u;
     let y_sel = (params.sub_mode >> 2u) & 3u;
@@ -374,7 +374,7 @@ fn displacement(in: VertexOutput) -> @location(0) vec4<f32> {
 // sub_mode: 0=erode, 1=dilate
 // param0 = radius_x, param1 = radius_y
 
-fn morphology(in: VertexOutput) -> @location(0) vec4<f32> {
+fn morphology(in: VertexOutput) -> vec4<f32> {
     let rx = i32(params.param0);
     let ry = i32(params.param1);
     let texel = 1.0 / params.src_size.xy;
@@ -406,7 +406,7 @@ fn morphology(in: VertexOutput) -> @location(0) vec4<f32> {
 // ── Tile ────────────────────────────────────────────────────────────────────
 // Tile the source (alpha-only) into the filter region.
 
-fn tile(in: VertexOutput) -> @location(0) vec4<f32> {
+fn tile(in: VertexOutput) -> vec4<f32> {
     let src_w = params.src_size.x;
     let src_h = params.src_size.y;
     let region = params.region;
@@ -439,7 +439,7 @@ fn noise(p: vec2<f32>) -> f32 {
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-fn turbulence(in: VertexOutput) -> @location(0) vec4<f32> {
+fn turbulence(in: VertexOutput) -> vec4<f32> {
     let region = params.region;
     let pos = in.texcoord * region.zw;
     let base_freq = params.turb_base_freq;

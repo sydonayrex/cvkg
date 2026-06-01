@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-flow"
-version = "0.2.4"
+version = "0.2.5"
 build = false
 autolib = false
 autobins = false
@@ -58,13 +58,13 @@ name = "graph_interaction"
 path = "tests/graph_interaction.rs"
 
 [dependencies.cvkg-core]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-scene]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-themes]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.glam]
 version = "0.30"

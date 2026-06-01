@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg"
-version = "0.2.4"
+version = "0.2.5"
 build = false
 autolib = false
 autobins = false
@@ -52,37 +52,37 @@ name = "physics_3d_demo"
 path = "examples/physics_3d_demo.rs"
 
 [dependencies.cvkg-anim]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-components]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-core]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-layout]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-macros]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-render-gpu]
-version = "0.2.4"
+version = "0.2.5"
 optional = true
 
 [dependencies.cvkg-render-native]
-version = "0.2.4"
+version = "0.2.5"
 optional = true
 
 [dependencies.cvkg-render-web]
-version = "0.2.4"
+version = "0.2.5"
 optional = true
 
 [dependencies.cvkg-scene]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.cvkg-themes]
-version = "0.2.4"
+version = "0.2.5"
 
 [dependencies.rand]
 version = "0.8"
