@@ -31,8 +31,7 @@ struct BlurUniforms {
     _pad2:        u32,
 };
 
-@Override
-group(0) @binding(0) var<uniform> blur: BlurUniforms;
+@group(0) @binding(0) var<uniform> blur: BlurUniforms;
 
 // Source texture (the mip level to read from)
 @group(0) @binding(1) var t_src: texture_2d<f32>;

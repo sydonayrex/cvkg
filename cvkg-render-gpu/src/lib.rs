@@ -263,6 +263,7 @@ use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, FillVertexConstructor, StrokeOptions,
     StrokeTessellator, StrokeVertex, StrokeVertexConstructor, VertexBuffers,
 };
+use lyon::math::point;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -454,6 +455,10 @@ pub struct SurtrRenderer {
     glass_output_bind_group_layout: wgpu::BindGroupLayout,
     /// Current material state — draw calls are tagged with this material.
     current_draw_material: cvkg_core::DrawMaterial,
+
+    /// Memoization cache for frame-level render skipping.
+    /// Tracks (id, data_hash) -> skip_render for deduplication.
+    memo_cache: std::collections::HashMap<u64, u64>,
 }
 
 struct SurfaceContext {
@@ -463,11 +468,18 @@ struct SurfaceContext {
     scene_bind_group: wgpu::BindGroup,
     scene_texture_bind_group: wgpu::BindGroup,
     depth_texture_view: wgpu::TextureView,
+    // Dedicated backdrop blur textures - used only for glass backdrop blur
     blur_texture_a: wgpu::TextureView,
     blur_texture_b: wgpu::TextureView,
     blur_bind_group_a: wgpu::BindGroup,
     blur_bind_group_b: wgpu::BindGroup,
     blur_env_bind_group_a: wgpu::BindGroup,
+    // Dedicated bloom textures - used only for bloom extraction and blur
+    bloom_texture_a: wgpu::TextureView,
+    bloom_texture_b: wgpu::TextureView,
+    bloom_bind_group_a: wgpu::BindGroup,
+    bloom_bind_group_b: wgpu::BindGroup,
+    bloom_env_bind_group_a: wgpu::BindGroup,
     scale_factor: f32,
     sampler: wgpu::Sampler,
 }
@@ -478,11 +490,18 @@ pub struct HeadlessContext {
     pub scene_bind_group: wgpu::BindGroup,
     pub scene_texture_bind_group: wgpu::BindGroup,
     pub depth_texture_view: wgpu::TextureView,
+    // Dedicated backdrop blur textures - used only for glass backdrop blur
     pub blur_texture_a: wgpu::TextureView,
     pub blur_texture_b: wgpu::TextureView,
     pub blur_bind_group_a: wgpu::BindGroup,
     pub blur_bind_group_b: wgpu::BindGroup,
     pub blur_env_bind_group_a: wgpu::BindGroup,
+    // Dedicated bloom textures - used only for bloom extraction and blur
+    pub bloom_texture_a: wgpu::TextureView,
+    pub bloom_texture_b: wgpu::TextureView,
+    pub bloom_bind_group_a: wgpu::BindGroup,
+    pub bloom_bind_group_b: wgpu::BindGroup,
+    pub bloom_env_bind_group_a: wgpu::BindGroup,
     pub scale_factor: f32,
     pub sampler: wgpu::Sampler,
     pub width: u32,
@@ -1001,6 +1020,7 @@ impl SurtrRenderer {
             });
 
         // Muspelheim Blur Pipelines (H and V)
+        // NOTE: No blending - blur is a full-screen filter that replaces the destination
         let blur_h_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim Horizontal Blur"),
             layout: Some(&post_process_layout),
@@ -1015,7 +1035,7 @@ impl SurtrRenderer {
                 entry_point: Some("fs_blur_h"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: None, // Full-screen filter - replace, not blend
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -1041,7 +1061,7 @@ impl SurtrRenderer {
                 entry_point: Some("fs_blur_v"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    blend: None, // Full-screen filter - replace, not blend
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -1386,6 +1406,7 @@ impl SurtrRenderer {
             staging_command_buffers: Vec::new(),
             glass_output_bind_group_layout,
             current_draw_material: cvkg_core::DrawMaterial::Opaque,
+            memo_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -1611,6 +1632,9 @@ impl SurtrRenderer {
         self.compositor_index_cursor = self.indices.len() as u32;
         self.vnode_stack.clear();
         self.event_handlers.clear();
+        
+        // Clear memoization cache at the start of each frame
+        self.memo_cache.clear();
 
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;
@@ -1687,6 +1711,9 @@ impl SurtrRenderer {
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
+        
+        // Clear memoization cache at the start of each frame
+        self.memo_cache.clear();
 
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;
@@ -1836,6 +1863,13 @@ impl SurtrRenderer {
         let blur_tex_b = device.create_texture(&blur_texture_desc);
         let blur_texture_b = blur_tex_b.create_view(&wgpu::TextureViewDescriptor::default());
 
+        // Create dedicated bloom textures (full resolution for proper bloom, separate from backdrop blur)
+        let bloom_tex_a = device.create_texture(&blur_texture_desc);
+        let bloom_texture_a = bloom_tex_a.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let bloom_tex_b = device.create_texture(&blur_texture_desc);
+        let bloom_texture_b = bloom_tex_b.create_view(&wgpu::TextureViewDescriptor::default());
+
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -1922,6 +1956,54 @@ impl SurtrRenderer {
             label: Some("Headless Blur Env Bind Group A"),
         });
 
+        // Bloom bind groups (dedicated textures to avoid clobbering backdrop blur)
+        let bloom_views_a: Vec<&wgpu::TextureView> = (0..256).map(|_| &bloom_texture_a).collect();
+        let bloom_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&bloom_views_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Bloom Bind Group A"),
+        });
+
+        let bloom_views_b: Vec<&wgpu::TextureView> = (0..256).map(|_| &bloom_texture_b).collect();
+        let bloom_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&bloom_views_b),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Bloom Bind Group B"),
+        });
+
+        let bloom_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bloom_texture_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Bloom Env Bind Group A"),
+        });
+
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Headless Depth Texture"),
             size: wgpu::Extent3d {
@@ -1966,6 +2048,11 @@ impl SurtrRenderer {
             blur_bind_group_a,
             blur_bind_group_b,
             blur_env_bind_group_a,
+            bloom_texture_a,
+            bloom_texture_b,
+            bloom_bind_group_a,
+            bloom_bind_group_b,
+            bloom_env_bind_group_a,
             scale_factor: 1.0,
             sampler,
             width,
@@ -2028,6 +2115,13 @@ impl SurtrRenderer {
 
         let blur_tex_b = device.create_texture(&blur_texture_desc);
         let blur_texture_b = blur_tex_b.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create dedicated bloom textures (full resolution for proper bloom, separate from backdrop blur)
+        let bloom_tex_a = device.create_texture(&blur_texture_desc);
+        let bloom_texture_a = bloom_tex_a.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let bloom_tex_b = device.create_texture(&blur_texture_desc);
+        let bloom_texture_b = bloom_tex_b.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -2131,6 +2225,54 @@ impl SurtrRenderer {
             label: Some("Blur Env Bind Group A"),
         });
 
+        // Bloom bind groups (dedicated textures to avoid clobbering backdrop blur)
+        let bloom_views_a: Vec<&wgpu::TextureView> = (0..256).map(|_| &bloom_texture_a).collect();
+        let bloom_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&bloom_views_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Bloom Bind Group A"),
+        });
+
+        let bloom_views_b: Vec<&wgpu::TextureView> = (0..256).map(|_| &bloom_texture_b).collect();
+        let bloom_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&bloom_views_b),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Bloom Bind Group B"),
+        });
+
+        let bloom_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bloom_texture_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Bloom Env Bind Group A"),
+        });
+
         SurfaceContext {
             surface,
             config,
@@ -2143,6 +2285,11 @@ impl SurtrRenderer {
             blur_bind_group_a,
             blur_bind_group_b,
             blur_env_bind_group_a,
+            bloom_texture_a,
+            bloom_texture_b,
+            bloom_bind_group_a,
+            bloom_bind_group_b,
+            bloom_env_bind_group_a,
             scale_factor,
             sampler,
         }
@@ -2719,6 +2866,11 @@ impl SurtrRenderer {
             _ctx_sampler,
             ctx_blur_bind_group_a,
             ctx_blur_bind_group_b,
+            ctx_bloom_texture_a,
+            ctx_bloom_texture_b,
+            ctx_bloom_bind_group_a,
+            ctx_bloom_bind_group_b,
+            ctx_bloom_env_bind_group_a,
             scale,
         ) = if let Some(window_id) = self.current_window {
             let ctx = self
@@ -2757,6 +2909,11 @@ impl SurtrRenderer {
                 &ctx.sampler,
                 &ctx.blur_bind_group_a,
                 &ctx.blur_bind_group_b,
+                &ctx.bloom_texture_a,
+                &ctx.bloom_texture_b,
+                &ctx.bloom_bind_group_a,
+                &ctx.bloom_bind_group_b,
+                &ctx.bloom_env_bind_group_a,
                 ctx.scale_factor,
             )
         } else {
@@ -2776,6 +2933,11 @@ impl SurtrRenderer {
                 &ctx.sampler,
                 &ctx.blur_bind_group_a,
                 &ctx.blur_bind_group_b,
+                &ctx.bloom_texture_a,
+                &ctx.bloom_texture_b,
+                &ctx.bloom_bind_group_a,
+                &ctx.bloom_bind_group_b,
+                &ctx.bloom_env_bind_group_a,
                 self.current_scale_factor(),
             )
         };
@@ -2818,7 +2980,7 @@ impl SurtrRenderer {
                 p.set_bind_group(0, &self.dummy_texture_bind_group, &[]);
                 p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
                 p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..6, 0..1);
+                p.draw(0..3, 0..1);
             }
 
             // 1b. Opaque Main Elements (non-glass, non-ui)
@@ -2883,7 +3045,7 @@ impl SurtrRenderer {
             p.set_bind_group(0, ctx_scene_texture_bind_group, &[]);
             p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &self.berserker_bind_group, &[]);
-            p.draw(0..6, 0..1);
+            p.draw(0..3, 0..1);
         }
 
         let blur_iters: u32 = 4;
@@ -2911,7 +3073,7 @@ impl SurtrRenderer {
                 p.set_bind_group(0, ctx_blur_bind_group_a, &[]);
                 p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
                 p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..6, 0..1);
+                p.draw(0..3, 0..1);
             }
             {
                 let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2936,7 +3098,7 @@ impl SurtrRenderer {
                 p.set_bind_group(0, ctx_blur_bind_group_b, &[]);
                 p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
                 p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..6, 0..1);
+                p.draw(0..3, 0..1);
             }
         }
 
@@ -2946,200 +3108,31 @@ impl SurtrRenderer {
         let rt_w = self.current_width() as i32;
         let rt_h = self.current_height() as i32;
 
-        // 2. Parallel Encoding Phase: Glass & UI ─────────────────────────────
-        // We utilize rayon to record these independent passes in parallel.
-        let (glass_cb, ui_cb) = rayon::join(
-            || {
-                let mut glass_encoder =
-                    self.device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("Parallel Glass Encoder"),
-                        });
-                {
-                    let mut p = glass_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Surtr P3 Liquid Glass"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: ctx_scene_texture,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                            depth_slice: None,
-                        })],
-                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                            view: ctx_depth_texture_view,
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None,
-                        }),
-                        ..Default::default()
-                    });
+        // 2. Sequential Encoding Phase: Glass & UI ─────────────────────────────
+        // NOTE: Previously used rayon::join for parallel encoding, but both passes
+        // write to ctx_scene_texture with LoadOp::Load. Parallel encoding on CPU
+        // while referencing the same texture view is undefined behavior in wgpu.
+        // Encoding sequentially ensures proper render target synchronization.
 
-                    p.set_pipeline(&self.pipeline);
-                    p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                    p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
-                    p.set_bind_group(2, &self.berserker_bind_group, &[]);
-
-                    for call in self
-                        .draw_calls
-                        .iter()
-                        .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. }))
-                    {
-                        let bg = if let Some(id) = call.texture_id {
-                            if id == 0 {
-                                &self.mega_atlas_bind_group
-                            } else {
-                                self.texture_bind_groups
-                                    .get(id as usize)
-                                    .unwrap_or(&self.dummy_texture_bind_group)
-                            }
-                        } else {
-                            &self.dummy_texture_bind_group
-                        };
-                        p.set_bind_group(0, bg, &[]);
-                        if let Some(rect) = call.scissor_rect {
-                            // Scissor rect clamping logic:
-                            // wgpu validation requires that the scissor rect is entirely contained within
-                            // the physical render target dimensions and has a non-zero area (width > 0, height > 0).
-                            // We compute the physical boundaries using the current render target size and scale factor,
-                            // intersect/clamp them to the render target viewport, and fallback to a minimal 1x1 region
-                            // if the intersection results in zero/negative area.
-                            if rt_w > 0 && rt_h > 0 {
-                                let x1 = (rect.x * scale).round() as i32;
-                                let y1 = (rect.y * scale).round() as i32;
-                                let x2 = ((rect.x + rect.width) * scale).round() as i32;
-                                let y2 = ((rect.y + rect.height) * scale).round() as i32;
-
-                                let x1_clamped = x1.clamp(0, rt_w);
-                                let y1_clamped = y1.clamp(0, rt_h);
-                                let x2_clamped = x2.clamp(0, rt_w);
-                                let y2_clamped = y2.clamp(0, rt_h);
-
-                                let w = x2_clamped - x1_clamped;
-                                let h = y2_clamped - y1_clamped;
-
-                                if w > 0 && h > 0 {
-                                    p.set_scissor_rect(
-                                        x1_clamped as u32,
-                                        y1_clamped as u32,
-                                        w as u32,
-                                        h as u32,
-                                    );
-                                } else {
-                                    p.set_scissor_rect(0, 0, 1, 1);
-                                }
-                            }
-                        }
-                        p.draw_indexed(
-                            call.index_start..call.index_start + call.index_count,
-                            0,
-                            0..1,
-                        );
-                    }
-                }
-                glass_encoder.finish()
-            },
-            || {
-                let mut ui_encoder =
-                    self.device
-                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                            label: Some("Parallel UI Encoder"),
-                        });
-                {
-                    let mut p = ui_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        label: Some("Surtr P4 UI Layer"),
-                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                            view: ctx_scene_texture,
-                            resolve_target: None,
-                            ops: wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            },
-                            depth_slice: None,
-                        })],
-                        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                            view: ctx_depth_texture_view,
-                            depth_ops: Some(wgpu::Operations {
-                                load: wgpu::LoadOp::Load,
-                                store: wgpu::StoreOp::Store,
-                            }),
-                            stencil_ops: None,
-                        }),
-                        ..Default::default()
-                    });
-
-                    p.set_pipeline(&self.pipeline);
-                    p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                    p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                    p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
-                    p.set_bind_group(2, &self.berserker_bind_group, &[]);
-
-                    for call in self
-                        .draw_calls
-                        .iter()
-                        .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI))
-                    {
-                        let bg = if let Some(id) = call.texture_id {
-                            if id == 0 {
-                                &self.mega_atlas_bind_group
-                            } else {
-                                self.texture_bind_groups
-                                    .get(id as usize)
-                                    .unwrap_or(&self.dummy_texture_bind_group)
-                            }
-                        } else {
-                            &self.dummy_texture_bind_group
-                        };
-                        p.set_bind_group(0, bg, &[]);
-                        if let Some(rect) = call.scissor_rect {
-                            // Scissor rect clamping logic:
-                            // wgpu validation requires that the scissor rect is entirely contained within
-                            // the physical render target dimensions and has a non-zero area (width > 0, height > 0).
-                            // We compute the physical boundaries using the current render target size and scale factor,
-                            // intersect/clamp them to the render target viewport, and fallback to a minimal 1x1 region
-                            // if the intersection results in zero/negative area.
-                            if rt_w > 0 && rt_h > 0 {
-                                let x1 = (rect.x * scale).round() as i32;
-                                let y1 = (rect.y * scale).round() as i32;
-                                let x2 = ((rect.x + rect.width) * scale).round() as i32;
-                                let y2 = ((rect.y + rect.height) * scale).round() as i32;
-
-                                let x1_clamped = x1.clamp(0, rt_w);
-                                let y1_clamped = y1.clamp(0, rt_h);
-                                let x2_clamped = x2.clamp(0, rt_w);
-                                let y2_clamped = y2.clamp(0, rt_h);
-
-                                let w = x2_clamped - x1_clamped;
-                                let h = y2_clamped - y1_clamped;
-
-                                if w > 0 && h > 0 {
-                                    p.set_scissor_rect(
-                                        x1_clamped as u32,
-                                        y1_clamped as u32,
-                                        w as u32,
-                                        h as u32,
-                                    );
-                                } else {
-                                    p.set_scissor_rect(0, 0, 1, 1);
-                                }
-                            }
-                        }
-                        p.draw_indexed(
-                            call.index_start..call.index_start + call.index_count,
-                            0,
-                            0..1,
-                        );
-                    }
-                }
-                ui_encoder.finish()
-            },
+        // Encode Glass pass (Pass 3)
+        let glass_cb = self.encode_glass_pass(
+            &ctx_scene_texture,
+            &ctx_depth_texture_view,
+            ctx_blur_env_bind_group_a,
+            scale,
+            rt_w,
+            rt_h,
         );
-
         self.staging_command_buffers.push(glass_cb);
+
+        // Encode UI pass (Pass 4) - runs after Glass to read its output correctly
+        let ui_cb = self.encode_ui_pass(
+            &ctx_scene_texture,
+            &ctx_depth_texture_view,
+            scale,
+            rt_w,
+            rt_h,
+        );
         self.staging_command_buffers.push(ui_cb);
 
         // Update telemetry for parallel work
@@ -3176,11 +3169,12 @@ impl SurtrRenderer {
                 });
 
         // ── Pass 5: Bloom Extract (Complete Scene) ──────────────────────────
+        // NOTE: Uses dedicated bloom_texture_a to avoid overwriting backdrop blur_texture_a
         {
             let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Surtr Bloom Extract"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: ctx_blur_texture_a,
+                    view: ctx_bloom_texture_a,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -3199,16 +3193,17 @@ impl SurtrRenderer {
             p.set_bind_group(0, ctx_scene_texture_bind_group, &[]);
             p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &self.berserker_bind_group, &[]);
-            p.draw(0..6, 0..1);
+            p.draw(0..3, 0..1);
         }
 
         // ── Pass 6: Blur Bloom ──────────────────────────────────────────────
+        // Uses dedicated bloom textures (bloom_texture_a/b) instead of shared blur textures
         for _ in 0..2 {
             {
                 let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Bloom Blur H"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: ctx_blur_texture_b,
+                        view: ctx_bloom_texture_b,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -3224,16 +3219,16 @@ impl SurtrRenderer {
                     ..Default::default()
                 });
                 p.set_pipeline(&self.blur_h_pipeline);
-                p.set_bind_group(0, ctx_blur_bind_group_a, &[]);
+                p.set_bind_group(0, ctx_bloom_bind_group_a, &[]);
                 p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
                 p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..6, 0..1);
+                p.draw(0..3, 0..1);
             }
             {
                 let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Bloom Blur V"),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: ctx_blur_texture_a,
+                        view: ctx_bloom_texture_a,
                         resolve_target: None,
                         ops: wgpu::Operations {
                             load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -3249,10 +3244,10 @@ impl SurtrRenderer {
                     ..Default::default()
                 });
                 p.set_pipeline(&self.blur_v_pipeline);
-                p.set_bind_group(0, ctx_blur_bind_group_b, &[]);
+                p.set_bind_group(0, ctx_bloom_bind_group_b, &[]);
                 p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
                 p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..6, 0..1);
+                p.draw(0..3, 0..1);
             }
         }
 
@@ -3282,9 +3277,9 @@ impl SurtrRenderer {
             });
             p.set_pipeline(&self.composite_pipeline);
             p.set_bind_group(0, ctx_scene_texture_bind_group, &[]);
-            p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
+            p.set_bind_group(1, ctx_bloom_env_bind_group_a, &[]); // Bloom result, not backdrop blur
             p.set_bind_group(2, &self.berserker_bind_group, &[]);
-            p.draw(0..6, 0..1);
+            p.draw(0..3, 0..1);
             self.telemetry.draw_calls += 1;
         }
 
@@ -3797,20 +3792,15 @@ impl cvkg_core::Renderer for SurtrRenderer {
             return;
         }
 
-        let c = self.apply_opacity(color);
-        let tid = self.get_texture_id("__mega_atlas");
+        // Create a proper line path using Lyon for correct tessellation
+        // The stroke_path function will apply the current transform, which handles rotation
+        let mut builder = lyon::path::Path::builder();
+        builder.begin(point(x1, y1));
+        builder.line_to(point(x2, y2));
+        builder.close();
+        let path = builder.build();
 
-        self.fill_rect_with_mode(
-            Rect {
-                x: (x1 + x2) / 2.0 - len / 2.0,
-                y: (y1 + y2) / 2.0 - stroke_width / 2.0,
-                width: len,
-                height: stroke_width,
-            },
-            c,
-            1, // Gungnir Mode for glowing lines
-            tid,
-        );
+        self.stroke_path(&path, color, stroke_width);
     }
 
     fn draw_image(&mut self, image_name: &str, rect: Rect) {
@@ -3852,7 +3842,16 @@ impl cvkg_core::Renderer for SurtrRenderer {
                     } else {
                         // RECLAIM & RETRY: Atlas is full, quench the forge and try again.
                         self.reclaim_vram();
-                        self.atlas_packer.pack(gw, gh).unwrap_or((0, 0))
+                        match self.atlas_packer.pack(gw, gh) {
+                            Some(pos) => pos,
+                            None => {
+                                log::error!(
+                                    "Glyph atlas critically full after reclaim: cannot pack {}x{} glyph for '{}', skipping",
+                                    gw, gh, text
+                                );
+                                continue; // Skip this glyph rather than corrupting atlas origin
+                            }
+                        }
                     };
 
                     let mut rgba_data = Vec::with_capacity((gw * gh * 4) as usize);
@@ -3919,8 +3918,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     /// measure_text — Calculates the dimensions of a text string without rendering.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        let shaped = self.shape_text_with_stack(text, size);
-        (shaped.width, shaped.height)
+        let sf = self.current_scale_factor();
+        let shaped = self.shape_text_with_stack(text, size * sf);
+        // Convert physical pixels back to logical units
+        (shaped.width / sf, shaped.height / sf)
     }
 
     fn shape_rich_text(
@@ -3985,7 +3986,16 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         pos
                     } else {
                         self.reclaim_vram();
-                        self.atlas_packer.pack(gw, gh).unwrap_or((0, 0))
+                        match self.atlas_packer.pack(gw, gh) {
+                            Some(pos) => pos,
+                            None => {
+                                log::error!(
+                                    "Glyph atlas critically full after reclaim: cannot pack {}x{} glyph, skipping",
+                                    gw, gh
+                                );
+                                continue; // Skip this glyph rather than corrupting atlas origin
+                            }
+                        }
                     };
 
                     let mut rgba_data = Vec::with_capacity((gw * gh * 4) as usize);
@@ -4161,8 +4171,17 @@ impl cvkg_core::Renderer for SurtrRenderer {
         ))
     }
 
-    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        render_fn(self);
+    fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        // Check if we've already rendered this content with the same hash this frame
+        // The cache stores the last-seen hash for each ID
+        let should_skip = self.memo_cache.get(&id) == Some(&data_hash);
+        
+        if !should_skip {
+            // Update cache with current hash
+            self.memo_cache.insert(id, data_hash);
+            render_fn(self);
+        }
+        // If should_skip is true, we skip rendering as the content hasn't changed
     }
 
     fn push_opacity(&mut self, opacity: f32) {
@@ -4421,18 +4440,22 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn push_transform_3d(&mut self, transform: &cvkg_core::Transform3D) {
         // Push a 2D-compatible transform for the existing pipeline
-        let m = transform.to_matrix();
-        let translation = [m.w_axis.x, m.w_axis.y];
-        let scale = [m.x_axis.x, m.y_axis.y];
-        let rotation = m.x_axis.y.atan2(m.x_axis.x);
+        // Use proper matrix decomposition to extract scale correctly (handles rotated matrices)
+        let (translation, rotation_quat, scale_glam) = transform.to_matrix().to_scale_rotation_translation();
+        let translation = [translation.x, translation.y];
+        let scale = [scale_glam.x, scale_glam.y];
+        // Convert quaternion to angle for 2D transform stack
+        let rotation = if rotation_quat.length_squared() > 0.0 {
+            rotation_quat.to_axis_angle().1 / std::f32::consts::PI * 180.0 // Convert to degrees
+        } else {
+            0.0
+        };
         self.push_transform(translation, scale, rotation);
     }
 
     fn pop_transform_3d(&mut self) {
+        // Only pop the single transform that was pushed - no double pop
         self.pop_transform();
-        if !self.transform_stack.is_empty() {
-            self.transform_stack.pop();
-        }
     }
 
     fn render_scene_node_3d(
@@ -4603,6 +4626,7 @@ impl SurtrRenderer {
         let mut tessellator = StrokeTessellator::new();
         let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
         let base_vertex_idx = self.vertices.len() as u32;
+        let base_index_idx = self.indices.len() as u32;
 
         let (translation, scale, rotation, _, _) = self.current_transform();
         let screen = [self.current_width() as f32, self.current_height() as f32];
@@ -4651,7 +4675,7 @@ impl SurtrRenderer {
             self.draw_calls.push(DrawCall {
                 texture_id: tid,
                 scissor_rect: self.clip_stack.last().copied(),
-                index_start: base_vertex_idx,
+                index_start: base_index_idx,
                 index_count: buffers.indices.len() as u32,
                 material,
             });
@@ -5042,7 +5066,13 @@ impl SurtrRenderer {
     /// load_svg — Parses an SVG file and tessellates its paths into GPU triangles.
     pub fn load_svg(&mut self, name: &str, data: &[u8]) {
         let opt = usvg::Options::default();
-        let tree = usvg::Tree::from_data(data, &opt).expect("Failed to parse SVG");
+        let tree = match usvg::Tree::from_data(data, &opt) {
+            Ok(t) => t,
+            Err(e) => {
+                log::error!("Failed to parse SVG '{}': {:?}, skipping load", name, e);
+                return;
+            }
+        };
 
         let view_box = Rect {
             x: 0.0,
@@ -5055,13 +5085,15 @@ impl SurtrRenderer {
 
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let mut tessellator = FillTessellator::new();
+        let mut fill_tessellator = FillTessellator::new();
+        let mut stroke_tessellator = StrokeTessellator::new();
         let mut finalized_animations = Vec::new();
 
         for child in tree.root().children() {
             self.tessellate_node(
                 child,
-                &mut tessellator,
+                &mut fill_tessellator,
+                &mut stroke_tessellator,
                 &mut vertices,
                 &mut indices,
                 &parsed_animations,
@@ -5084,7 +5116,8 @@ impl SurtrRenderer {
     fn tessellate_node(
         &self,
         node: &usvg::Node,
-        tessellator: &mut FillTessellator,
+        fill_tessellator: &mut FillTessellator,
+        stroke_tessellator: &mut StrokeTessellator,
         vertices: &mut Vec<Vertex>,
         indices: &mut Vec<u32>,
         parsed_animations: &[SvgAnimation],
@@ -5101,49 +5134,115 @@ impl SurtrRenderer {
             for child in group.children() {
                 self.tessellate_node(
                     child,
-                    tessellator,
+                    fill_tessellator,
+                    stroke_tessellator,
                     vertices,
                     indices,
                     parsed_animations,
                     finalized_animations,
                 );
             }
-        } else if let usvg::Node::Path(ref path) = *node
-            && let Some(fill) = path.fill()
-        {
-            let color = match fill.paint() {
-                usvg::Paint::Color(c) => [
-                    c.red as f32 / 255.0,
-                    c.green as f32 / 255.0,
-                    c.blue as f32 / 255.0,
-                    fill.opacity().get(),
-                ],
-                _ => [1.0, 1.0, 1.0, 1.0],
-            };
+        } else if let usvg::Node::Path(ref path) = *node {
+            let has_fill = path.fill().is_some();
+            let has_stroke = path.stroke().is_some();
+
+            // If neither fill nor stroke, log and skip
+            if !has_fill && !has_stroke {
+                log::debug!("SVG path '{}' has no fill or stroke, skipping", node_id);
+                return;
+            }
 
             let lyon_path = usvg_to_lyon(path);
-            let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-            let base_vertex_idx = vertices.len() as u32;
+            let screen = [4096.0, 4096.0]; // Placeholder, will be overridden if needed
+            let clip = [-10000.0, -10000.0, 20000.0, 20000.0]; // Default clip
 
-            tessellator
-                .tessellate_path(
-                    &lyon_path,
-                    &FillOptions::default(),
-                    &mut BuffersBuilder::new(
-                        &mut buffers,
-                        SceneVertexConstructor {
-                            color,
-                            translation: [0.0, 0.0],
-                            scale: [1.0, 1.0],
-                            rotation: 0.0,
-                        },
-                    ),
-                )
-                .unwrap();
+            // Tessellate fill if present
+            if has_fill {
+                if let Some(fill) = path.fill() {
+                    let color = match fill.paint() {
+                        usvg::Paint::Color(c) => [
+                            c.red as f32 / 255.0,
+                            c.green as f32 / 255.0,
+                            c.blue as f32 / 255.0,
+                            fill.opacity().get(),
+                        ],
+                        usvg::Paint::LinearGradient(_) | usvg::Paint::RadialGradient(_) | usvg::Paint::Pattern(_) => {
+                            log::warn!("SVG path '{}' uses gradient/pattern fill which is not supported, using white fallback", node_id);
+                            [1.0, 1.0, 1.0, 1.0]
+                        }
+                    };
 
-            vertices.extend(buffers.vertices);
-            for idx in buffers.indices {
-                indices.push(base_vertex_idx + idx);
+                    let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+                    let base_index_idx = indices.len() as u32;
+
+                    if let Err(e) = fill_tessellator.tessellate_path(
+                        &lyon_path,
+                        &FillOptions::default(),
+                        &mut BuffersBuilder::new(
+                            &mut buffers,
+                            SceneVertexConstructor {
+                                color,
+                                translation: [0.0, 0.0],
+                                scale: [1.0, 1.0],
+                                rotation: 0.0,
+                            },
+                        ),
+                    ) {
+                        log::warn!("SVG fill tessellation failed for path '{}': {:?}, skipping", node_id, e);
+                        return;
+                    }
+
+                    vertices.extend(buffers.vertices);
+                    for idx in buffers.indices {
+                        indices.push(base_index_idx + idx);
+                    }
+                }
+            }
+
+            // Tessellate stroke if present
+            if has_stroke {
+                if let Some(stroke) = path.stroke() {
+                    let stroke_index_idx = indices.len() as u32; // New base for stroke indices
+                    let stroke_width = stroke.width().get(); // Direct float value
+                    let color = match stroke.paint() {
+                        usvg::Paint::Color(c) => [
+                            c.red as f32 / 255.0,
+                            c.green as f32 / 255.0,
+                            c.blue as f32 / 255.0,
+                            stroke.opacity().get(),
+                        ],
+                        usvg::Paint::LinearGradient(_) | usvg::Paint::RadialGradient(_) | usvg::Paint::Pattern(_) => {
+                            log::warn!("SVG path '{}' uses gradient/pattern stroke which is not supported, using white fallback", node_id);
+                            [1.0, 1.0, 1.0, 1.0]
+                        }
+                    };
+
+                    let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+
+                    if let Err(e) = stroke_tessellator.tessellate_path(
+                        &lyon_path,
+                        &StrokeOptions::default().with_line_width(stroke_width),
+                        &mut BuffersBuilder::new(
+                            &mut buffers,
+                            CustomStrokeVertexConstructor {
+                                color,
+                                translation: [0.0, 0.0],
+                                scale: [1.0, 1.0],
+                                rotation: 0.0,
+                                screen,
+                                clip,
+                            },
+                        ),
+                    ) {
+                        log::warn!("SVG stroke tessellation failed for path '{}': {:?}, skipping", node_id, e);
+                        return;
+                    }
+
+                    vertices.extend(buffers.vertices);
+                    for idx in buffers.indices {
+                        indices.push(stroke_index_idx + idx);
+                    }
+                }
             }
         }
 
@@ -5496,5 +5595,193 @@ impl SurtrRenderer {
             .iter()
             .find(|f| f.id() == filter_id)
             .map(|arc| arc.as_ref())
+    }
+
+    /// Encode the Glass pass (Pass 3) - liquid glass geometry with backdrop blur sampling.
+    /// This was previously encoded in parallel with UI pass, but that caused UB due to
+    /// shared render target access.
+    fn encode_glass_pass(
+        &self,
+        ctx_scene_texture: &wgpu::TextureView,
+        ctx_depth_texture_view: &wgpu::TextureView,
+        ctx_blur_env_bind_group_a: &wgpu::BindGroup,
+        scale: f32,
+        rt_w: i32,
+        rt_h: i32,
+    ) -> wgpu::CommandBuffer {
+        let mut glass_encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Glass Encoder"),
+            });
+        {
+            let mut p = glass_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Surtr P3 Liquid Glass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: ctx_scene_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: ctx_depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..Default::default()
+            });
+
+            p.set_pipeline(&self.pipeline);
+            p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
+            p.set_bind_group(2, &self.berserker_bind_group, &[]);
+
+            for call in self
+                .draw_calls
+                .iter()
+                .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. }))
+            {
+                let bg = if let Some(id) = call.texture_id {
+                    if id == 0 {
+                        &self.mega_atlas_bind_group
+                    } else {
+                        self.texture_bind_groups
+                            .get(id as usize)
+                            .unwrap_or(&self.dummy_texture_bind_group)
+                    }
+                } else {
+                    &self.dummy_texture_bind_group
+                };
+                p.set_bind_group(0, bg, &[]);
+                if let Some(rect) = call.scissor_rect {
+                    if rt_w > 0 && rt_h > 0 {
+                        let x1 = (rect.x * scale).round() as i32;
+                        let y1 = (rect.y * scale).round() as i32;
+                        let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                        let y2 = ((rect.y + rect.height) * scale).round() as i32;
+
+                        let x1_clamped = x1.clamp(0, rt_w);
+                        let y1_clamped = y1.clamp(0, rt_h);
+                        let x2_clamped = x2.clamp(0, rt_w);
+                        let y2_clamped = y2.clamp(0, rt_h);
+
+                        let w = x2_clamped - x1_clamped;
+                        let h = y2_clamped - y1_clamped;
+
+                        if w > 0 && h > 0 {
+                            p.set_scissor_rect(x1_clamped as u32, y1_clamped as u32, w as u32, h as u32);
+                        } else {
+                            p.set_scissor_rect(0, 0, 1, 1);
+                        }
+                    }
+                }
+                p.draw_indexed(
+                    call.index_start..call.index_start + call.index_count,
+                    0,
+                    0..1,
+                );
+            }
+        }
+        glass_encoder.finish()
+    }
+
+    /// Encode the UI pass (Pass 4) - top layer UI elements.
+    /// Runs after Glass pass to ensure proper render target ordering.
+    fn encode_ui_pass(
+        &self,
+        ctx_scene_texture: &wgpu::TextureView,
+        ctx_depth_texture_view: &wgpu::TextureView,
+        scale: f32,
+        rt_w: i32,
+        rt_h: i32,
+    ) -> wgpu::CommandBuffer {
+        let mut ui_encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("UI Encoder"),
+            });
+        {
+            let mut p = ui_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Surtr P4 UI Layer"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: ctx_scene_texture,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: ctx_depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                ..Default::default()
+            });
+
+            p.set_pipeline(&self.pipeline);
+            p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
+            p.set_bind_group(2, &self.berserker_bind_group, &[]);
+
+            for call in self
+                .draw_calls
+                .iter()
+                .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI))
+            {
+                let bg = if let Some(id) = call.texture_id {
+                    if id == 0 {
+                        &self.mega_atlas_bind_group
+                    } else {
+                        self.texture_bind_groups
+                            .get(id as usize)
+                            .unwrap_or(&self.dummy_texture_bind_group)
+                    }
+                } else {
+                    &self.dummy_texture_bind_group
+                };
+                p.set_bind_group(0, bg, &[]);
+                if let Some(rect) = call.scissor_rect {
+                    if rt_w > 0 && rt_h > 0 {
+                        let x1 = (rect.x * scale).round() as i32;
+                        let y1 = (rect.y * scale).round() as i32;
+                        let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                        let y2 = ((rect.y + rect.height) * scale).round() as i32;
+
+                        let x1_clamped = x1.clamp(0, rt_w);
+                        let y1_clamped = y1.clamp(0, rt_h);
+                        let x2_clamped = x2.clamp(0, rt_w);
+                        let y2_clamped = y2.clamp(0, rt_h);
+
+                        let w = x2_clamped - x1_clamped;
+                        let h = y2_clamped - y1_clamped;
+
+                        if w > 0 && h > 0 {
+                            p.set_scissor_rect(x1_clamped as u32, y1_clamped as u32, w as u32, h as u32);
+                        } else {
+                            p.set_scissor_rect(0, 0, 1, 1);
+                        }
+                    }
+                }
+                p.draw_indexed(
+                    call.index_start..call.index_start + call.index_count,
+                    0,
+                    0..1,
+                );
+            }
+        }
+        ui_encoder.finish()
     }
 }

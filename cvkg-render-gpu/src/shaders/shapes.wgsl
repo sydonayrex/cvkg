@@ -168,7 +168,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let spec = smoothstep(0.45, 0.55, l) * 0.12;
         final_rgb += spec;
         
-        color = vec4<f32>(final_rgb, 0.01 + fresnel * 0.01);
+        color = vec4<f32>(final_rgb, 0.02 + fresnel * 0.15);
         color.a *= (1.0 - smoothstep(-fw, fw, d_sdf));
 
 } else if in.mode == 13u {
