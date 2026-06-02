@@ -23,15 +23,9 @@
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
 #![allow(clippy::type_complexity, clippy::unwrap_or_default)]
 
-//! # Surtr Render Pipeline
-//!
-//! The "Fiery Giant" of the CVKG architecture. This is the authoritative GPU renderer
-//! powered by `wgpu`. It manages the heat of the GPU to forge high-fidelity
-//! "Berserker" aesthetics.
-//!
-//! - **The Flaming Sword**: Command submission and synchronization.
-//! - **Muspelheim Passes**: Multi-pass Gaussian blur and bloom for Bifrost/Gungnir.
-//! - **Reclaim & Quench**: LRU-based cache eviction and atlas recycling.
+mod kvasir;
+
+// Kvasir render graph module — see kvasir/ for implementation.
 
 use cvkg_core::Rect;
 use lru::LruCache;
