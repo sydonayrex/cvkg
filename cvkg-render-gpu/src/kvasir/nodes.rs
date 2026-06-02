@@ -1,281 +1,140 @@
-//! Kvasir node implementations for each render pass.
+//! Kvasir render pass nodes for the Surtr renderer.
 //!
-//! Nodes are data carriers — they hold resource IDs and parameters but do NOT
-//! hold references to renderer-internal types like `DrawCall`. The actual GPU
-//! encoding happens in `SurtrRenderer::execute_node()` which has full access.
-//!
-//! Each node declares its resource I/O so the planner can derive correct order.
+//! Each node identifies a render pass by `PassId`. During execution,
+//! `SurtrRenderer::execute_node()` dispatches to the correct encoding method.
+//! This avoids importing renderer-internal types into the kvasir module.
 
 use super::ExecutionContext;
 use super::KvasirError;
 use super::KvasirNode;
 use super::ResourceRegistry;
-use super::ResourceId;
 
-// ── Pass 1: Background + Opaque Geometry ────────────────────────────────────
-
-/// Clears scene+depth, draws background atmosphere (if AURORA), then draws
-/// all opaque draw calls from the renderer's draw call list.
-pub struct GeometryPassNode {
-    pub draw_call_count: u32,
-    pub vertex_count: u32,
-    pub has_atmosphere: bool,
+/// Identifies which render pass a node represents.
+/// The SurtrRenderer dispatches `execute_node(node.id(), ...)` to the correct encoder.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PassId {
+    /// Clear scene+depth, draw atmosphere, draw opaque geometry
+    Geometry,
+    /// Identity copy scene → blur texture
+    BackdropCopy,
+    /// Gaussian blur on backdrop texture (4 H+V iterations)
+    BackdropBlur,
+    /// Draw glass panels with backdrop blur sampling
+    Glass,
+    /// Draw UI overlay
+    UI,
+    /// Luminance-gated extract → bloom texture
+    BloomExtract,
+    /// Gaussian blur on bloom texture (2 H+V iterations)
+    BloomBlur,
+    /// Additive composite scene+bloom → swapchain + ACES tonemap
+    Composite,
+    /// Color blindness transform (final post-process)
+    Accessibility,
+    /// Present swapchain
+    Present,
 }
 
-impl KvasirNode for GeometryPassNode {
-    fn label(&self) -> &'static str {
-        "geometry_pass"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!(
-            "[Kvasir] {}: calls={} verts={} atmosphere={}",
-            self.label(),
-            self.draw_call_count,
-            self.vertex_count,
-            self.has_atmosphere
-        );
-        Ok(())
-    }
-}
-
-// ── Pass 2: Backdrop Copy ───────────────────────────────────────────────────
-
-/// Identity copy of scene texture → blur texture. ALL pixels (no luminance gate).
-pub struct BackdropCopyNode;
-
-impl KvasirNode for BackdropCopyNode {
-    fn label(&self) -> &'static str {
-        "backdrop_copy"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}", self.label());
-        Ok(())
-    }
-}
-
-// ── Pass 3: Backdrop Blur ───────────────────────────────────────────────────
-
-/// Gaussian H+V ping-pong blur on backdrop texture.
-pub struct BackdropBlurNode {
-    pub iterations: u32,
-}
-
-impl KvasirNode for BackdropBlurNode {
-    fn label(&self) -> &'static str {
-        "backdrop_blur"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}: iters={}", self.label(), self.iterations);
-        Ok(())
-    }
-}
-
-// ── Pass 4: Glass ───────────────────────────────────────────────────────────
-
-pub struct GlassPassNode {
-    pub draw_call_count: u32,
-    pub vertex_count: u32,
-}
-
-impl KvasirNode for GlassPassNode {
-    fn label(&self) -> &'static str {
-        "glass_pass"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}: calls={}", self.label(), self.draw_call_count);
-        Ok(())
-    }
-}
-
-// ── Pass 5: UI Overlay ──────────────────────────────────────────────────────
-
-pub struct UIPassNode {
-    pub draw_call_count: u32,
-    pub vertex_count: u32,
-}
-
-impl KvasirNode for UIPassNode {
-    fn label(&self) -> &'static str {
-        "ui_pass"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}: calls={}", self.label(), self.draw_call_count);
-        Ok(())
-    }
-}
-
-// ── Pass 6: Bloom Extract ───────────────────────────────────────────────────
-
-pub struct BloomExtractNode;
-
-impl KvasirNode for BloomExtractNode {
-    fn label(&self) -> &'static str {
-        "bloom_extract"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}", self.label());
-        Ok(())
-    }
-}
-
-// ── Pass 7: Bloom Blur ──────────────────────────────────────────────────────
-
-pub struct BloomBlurNode {
-    pub iterations: u32,
-}
-
-impl KvasirNode for BloomBlurNode {
-    fn label(&self) -> &'static str {
-        "bloom_blur"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}: iters={}", self.label(), self.iterations);
-        Ok(())
-    }
-}
-
-// ── Pass 8: Composite ───────────────────────────────────────────────────────
-
-pub struct CompositePassNode;
-
-impl KvasirNode for CompositePassNode {
-    fn label(&self) -> &'static str {
-        "composite_pass"
-    }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}", self.label());
-        Ok(())
-    }
-}
-
-// ── Pass 9: Accessibility ───────────────────────────────────────────────────
-
-pub struct AccessibilityPassNode {
+/// A render graph node.
+pub struct PassNode {
+    pub id: PassId,
     pub enabled: bool,
 }
 
-impl KvasirNode for AccessibilityPassNode {
+impl PassNode {
+    pub const fn new(id: PassId) -> Self {
+        Self { id, enabled: true }
+    }
+
+    pub const fn disabled(id: PassId) -> Self {
+        Self { id, enabled: false }
+    }
+}
+
+impl KvasirNode for PassNode {
     fn label(&self) -> &'static str {
-        "accessibility_pass"
+        match self.id {
+            PassId::Geometry => "geometry",
+            PassId::BackdropCopy => "backdrop_copy",
+            PassId::BackdropBlur => "backdrop_blur",
+            PassId::Glass => "glass",
+            PassId::UI => "ui",
+            PassId::BloomExtract => "bloom_extract",
+            PassId::BloomBlur => "bloom_blur",
+            PassId::Composite => "composite",
+            PassId::Accessibility => "accessibility",
+            PassId::Present => "present",
+        }
     }
-    fn inputs(&self) -> &[ResourceId] {
+
+    fn inputs(&self) -> &[super::ResourceId] {
         &[]
     }
-    fn outputs(&self) -> &[ResourceId] {
+
+    fn outputs(&self) -> &[super::ResourceId] {
         &[]
     }
+
     fn execute(
         &self,
         _ctx: &mut ExecutionContext<'_>,
         _registry: &mut ResourceRegistry,
     ) -> Result<(), KvasirError> {
-        if self.enabled {
-            log::trace!("[Kvasir] {}: color transform active", self.label());
-        }
+        // The actual GPU encoding is performed by SurtrRenderer::execute_pass()
+        // which is called from the graph execution loop with full &mut self access.
+        // This placeholder exists to satisfy the trait; the real work happens
+        // in the renderer's dispatch method.
+        log::trace!("[Kvasir] {} (enabled={})", self.label(), self.enabled);
         Ok(())
     }
 }
 
-// ── Pass 10: Present ────────────────────────────────────────────────────────
+impl PassId {
+    /// Returns `true` if this pass writes to the scene texture.
+    pub const fn writes_scene(self) -> bool {
+        matches!(
+            self,
+            PassId::Geometry | PassId::Glass | PassId::UI | PassId::Composite
+        )
+    }
 
-pub struct PresentNode;
+    /// Returns `true` if this pass reads from the scene texture.
+    pub const fn reads_scene(self) -> bool {
+        matches!(
+            self,
+            PassId::BackdropCopy | PassId::BloomExtract | PassId::Composite | PassId::Present
+        )
+    }
+}
 
-impl KvasirNode for PresentNode {
-    fn label(&self) -> &'static str {
-        "present"
+// Re-export for use in graph construction
+pub use PassId::*;
+
+/// Helper: create the standard 10-pass frame graph.
+/// Caller must supply the SurtrRenderer to execute it.
+pub fn build_frame_graph(
+    has_glass: bool,
+    has_bloom: bool,
+    accessibility_enabled: bool,
+) -> Vec<PassNode> {
+    let mut nodes = Vec::with_capacity(10);
+    nodes.push(PassNode::new(Geometry));
+    if has_glass {
+        nodes.push(PassNode::new(BackdropCopy));
+        nodes.push(PassNode::new(BackdropBlur));
+        nodes.push(PassNode::new(Glass));
     }
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
+    nodes.push(PassNode::new(UI));
+    if has_bloom {
+        nodes.push(PassNode::new(BloomExtract));
+        nodes.push(PassNode::new(BloomBlur));
     }
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        log::trace!("[Kvasir] {}", self.label());
-        Ok(())
-    }
+    nodes.push(PassNode::new(Composite));
+    nodes.push(if accessibility_enabled {
+        PassNode::new(Accessibility)
+    } else {
+        PassNode::disabled(Accessibility)
+    });
+    nodes.push(PassNode::new(Present));
+    nodes
 }
