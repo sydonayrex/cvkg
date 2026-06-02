@@ -3098,27 +3098,146 @@ impl SurtrRenderer {
     fn execute_pass_backdrop_blur(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        blur_a: &wgpu::TextureView,
-        _blur_b: &wgpu::TextureView,
-        _blur_bg_a: &wgpu::BindGroup,
-        _blur_bg_b: &wgpu::BindGroup,
+        blur_tex: &wgpu::Texture,
+        blur_width: u32,
+        blur_height: u32,
     ) {
-        // TODO: Implement full Kawase mip chain with per-mip views and uniform buffers.
-        // For now, fall back to a single Gaussian-like pass to maintain render output.
-        // The Kawase pipelines (kawase_down_pipeline, kawase_up_pipeline) and bind
-        // group layout (kawase_bind_group_layout) are created in forge_internal.
+        // Kawase blur pyramid: downsample 0→4, then upsample 4→0
+        // Each pass uses the Kawase shader with a diagonal 4-tap kernel.
         //
-        // Full implementation requires:
-        // 1. Create 5 per-mip TextureViews of blur_a (mip 0-4)
-        // 2. Create a BlurUniforms buffer with params (size, mip_level, kernel_width)
-        // 3. Downsample chain: for mip in 1..5 { draw kawase_down reading mip-1 writing mip }
-        // 4. Upsample chain: for mip in (1..5).rev() { draw kawase_up reading mip writing mip-1 }
-        // 5. Glass samples from blur_a at the appropriate mip level for its blur_radius
-        //
-        // Falling back to identity until mip views are wired:
-        let _ = blur_a;
-        let _ = encoder;
-        log::trace!("[Kvasir] backdrop_blur: Kawase pyramid (placeholder)");
+        // The uniform buffer provides: [texture_size.xy, mip_level, kernel_width]
+        // per the BlurUniforms struct in blur_pyramid.wgsl.
+
+        // Create a uniform buffer for the Kawase params.
+        // Each downsample iteration uses kernel_width = iteration_index (0,1,2,3)
+        // Each upsample iteration uses the same pattern in reverse.
+        let uniform_data: [[f32; 4]; 2] = [
+            [blur_width as f32, blur_height as f32, 0.0, 0.0], // params.xy = size, params.z = mip, params.w = kernel_width
+            [0.0, 0.0, 0.0, 0.0], // padding to 32 bytes (min_binding_size)
+        ];
+        // Use queue.write_buffer to upload uniforms each iteration.
+        // For simplicity, create one buffer and re-write it per pass.
+        let kawase_uniform = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Kawase Uniform"),
+            size: 32,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create per-mip views of the blur texture.
+        let mip_views: Vec<wgpu::TextureView> = (0..5)
+            .map(|mip| {
+                blur_tex.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some(&format!("blur_mip_{}", mip)),
+                    base_mip_level: mip,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                })
+            })
+            .collect();
+
+        // Create bind groups: each mip gets a bind group with the source texture view,
+        // the sampler, and the uniform buffer.
+        let kawase_bind_groups: Vec<wgpu::BindGroup> = (0..5)
+            .map(|mip| {
+                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("kawase_bg_{}", mip)),
+                    layout: &self.kawase_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(
+                                wgpu::BufferBinding {
+                                    buffer: &kawase_uniform,
+                                    offset: 0,
+                                    size: wgpu::BufferSize::new(32),
+                                },
+                            ),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(&mip_views[mip as usize]),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(&self.surfaces.iter().next().map(|(_,ctx)| ctx.sampler.clone()).unwrap_or_else(|| self.device.create_sampler(&wgpu::SamplerDescriptor::default()))),
+                        },
+                    ],
+                })
+            })
+            .collect();
+
+        let mip_scales = [
+            (blur_width as f32, blur_height as f32, 1.0_f32),       // mip 0: full res
+            (blur_width as f32 / 2.0, blur_height as f32 / 2.0, 2.0), // mip 1: half
+            (blur_width as f32 / 4.0, blur_height as f32 / 4.0, 3.0), // mip 2: quarter
+            (blur_width as f32 / 8.0, blur_height as f32 / 8.0, 4.0), // mip 3: eighth
+            (blur_width as f32 / 16.0, blur_height as f32 / 16.0, 5.0), // mip 4: sixteenth
+        ];
+
+        // Downsample chain: read from mip N-1, write to mip N
+        for mip in 1..5 {
+            let kernel_width = mip_scales[mip as usize].2;
+            // Update uniform buffer
+            let uniform_data: [f32; 8] = [
+                mip_scales[(mip - 1) as usize].0, mip_scales[(mip - 1) as usize].1,
+                (mip - 1) as f32, kernel_width,
+                0.0, 0.0, 0.0, 0.0,
+            ];
+            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..4]));
+
+            let w = mip_scales[mip as usize].0.max(1.0) as u32;
+            let h = mip_scales[mip as usize].1.max(1.0) as u32;
+
+            let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("Kawase Down {}", mip)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &mip_views[mip as usize],
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                ..Default::default()
+            });
+            p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
+            p.set_pipeline(&self.kawase_down_pipeline);
+            p.set_bind_group(0, &kawase_bind_groups[(mip - 1) as usize], &[]);
+            p.draw(0..3, 0..1);
+        }
+
+        // Upsample chain: read from mip N, write to mip N-1
+        for mip in (1..5).rev() {
+            let kernel_width = mip_scales[mip as usize].2;
+            let uniform_data: [f32; 8] = [
+                mip_scales[mip as usize].0, mip_scales[mip as usize].1,
+                mip as f32, kernel_width,
+                0.0, 0.0, 0.0, 0.0,
+            ];
+            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..4]));
+
+            let w = mip_scales[(mip - 1) as usize].0.max(1.0) as u32;
+            let h = mip_scales[(mip - 1) as usize].1.max(1.0) as u32;
+
+            let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("Kawase Up {}", mip)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &mip_views[(mip - 1) as usize],
+                    resolve_target: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    depth_slice: None,
+                })],
+                ..Default::default()
+            });
+            p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
+            p.set_pipeline(&self.kawase_up_pipeline);
+            p.set_bind_group(0, &kawase_bind_groups[mip as usize], &[]);
+            p.draw(0..3, 0..1);
+        }
+
+        log::trace!("[Kvasir] backdrop_blur: Kawase pyramid ({}x{})", blur_width, blur_height);
     }
 
     /// Pass 4: Glass panels with backdrop blur sampling.
@@ -3258,57 +3377,146 @@ impl SurtrRenderer {
         p.draw(0..3, 0..1);
     }
 
-    /// Pass 7: Bloom blur (2 iterations).
+    /// Pass 7: Bloom blur using Kawase pyramid (2 iterations).
+    /// Uses the same Kawase pipelines as backdrop blur but on bloom textures.
     fn execute_pass_bloom_blur(
         &mut self,
         post_encoder: &mut wgpu::CommandEncoder,
-        bloom_a: &wgpu::TextureView,
-        bloom_b: &wgpu::TextureView,
-        bloom_bg_a: &wgpu::BindGroup,
-        bloom_bg_b: &wgpu::BindGroup,
+        bloom_tex: &wgpu::Texture,
+        bloom_width: u32,
+        bloom_height: u32,
     ) {
-        for _ in 0..2 {
-            {
-                let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Bloom Blur H"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: bloom_b,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                        depth_slice: None,
-                    })],
+        // Create uniform buffer for Kawase params
+        let kawase_uniform = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Kawase Bloom Uniform"),
+            size: 32,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Create per-mip views of the bloom texture
+        let mip_views: Vec<wgpu::TextureView> = (0..5)
+            .map(|mip| {
+                bloom_tex.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some(&format!("bloom_mip_{}", mip)),
+                    base_mip_level: mip,
+                    mip_level_count: Some(1),
                     ..Default::default()
-                });
-                p.set_pipeline(&self.blur_h_pipeline);
-                p.set_bind_group(0, bloom_bg_a, &[]);
-                p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
-                p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..3, 0..1);
-            }
-            {
-                let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Bloom Blur V"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: bloom_a,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }),
-                            store: wgpu::StoreOp::Store,
-                        },
-                        depth_slice: None,
-                    })],
-                    ..Default::default()
-                });
-                p.set_pipeline(&self.blur_v_pipeline);
-                p.set_bind_group(0, bloom_bg_b, &[]);
-                p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
-                p.set_bind_group(2, &self.berserker_bind_group, &[]);
-                p.draw(0..3, 0..1);
-            }
+                })
+            })
+            .collect();
+
+        let mip_scales = [
+            (bloom_width as f32, bloom_height as f32, 1.0_f32),
+            (bloom_width as f32 / 2.0, bloom_height as f32 / 2.0, 2.0),
+            (bloom_width as f32 / 4.0, bloom_height as f32 / 4.0, 3.0),
+            (bloom_width as f32 / 8.0, bloom_height as f32 / 8.0, 4.0),
+            (bloom_width as f32 / 16.0, bloom_height as f32 / 16.0, 5.0),
+        ];
+
+        // Downsample chain
+        for mip in 1..5 {
+            let kernel_width = mip_scales[mip as usize].2;
+            let uniform_data: [f32; 4] = [
+                mip_scales[(mip - 1) as usize].0, mip_scales[(mip - 1) as usize].1,
+                (mip - 1) as f32, kernel_width,
+            ];
+            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
+
+            let w = mip_scales[mip as usize].0.max(1.0) as u32;
+            let h = mip_scales[mip as usize].1.max(1.0) as u32;
+
+            // Re-create bind group for this mip level
+            let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("kawase_bloom_bg_{}", mip)),
+                layout: &self.kawase_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &kawase_uniform, offset: 0, size: wgpu::BufferSize::new(32),
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&mip_views[(mip - 1) as usize]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.surfaces.iter().next().map(|(_,ctx)| ctx.sampler.clone()).unwrap_or_else(|| self.device.create_sampler(&wgpu::SamplerDescriptor::default()))),
+                    },
+                ],
+            });
+
+            let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("Kawase Bloom Down {}", mip)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &mip_views[mip as usize],
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                ..Default::default()
+            });
+            p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
+            p.set_pipeline(&self.kawase_down_pipeline);
+            p.set_bind_group(0, &bg, &[]);
+            p.draw(0..3, 0..1);
         }
+
+        // Upsample chain
+        for mip in (1..5).rev() {
+            let kernel_width = mip_scales[mip as usize].2;
+            let uniform_data: [f32; 4] = [
+                mip_scales[mip as usize].0, mip_scales[mip as usize].1,
+                mip as f32, kernel_width,
+            ];
+            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
+
+            let w = mip_scales[(mip - 1) as usize].0.max(1.0) as u32;
+            let h = mip_scales[(mip - 1) as usize].1.max(1.0) as u32;
+
+            let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("kawase_bloom_up_{}", mip)),
+                layout: &self.kawase_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &kawase_uniform, offset: 0, size: wgpu::BufferSize::new(32),
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&mip_views[mip as usize]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.surfaces.iter().next().map(|(_,ctx)| ctx.sampler.clone()).unwrap_or_else(|| self.device.create_sampler(&wgpu::SamplerDescriptor::default()))),
+                    },
+                ],
+            });
+
+            let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("Kawase Bloom Up {}", mip)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &mip_views[(mip - 1) as usize],
+                    resolve_target: None,
+                    ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                    depth_slice: None,
+                })],
+                ..Default::default()
+            });
+            p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
+            p.set_pipeline(&self.kawase_up_pipeline);
+            p.set_bind_group(0, &bg, &[]);
+            p.draw(0..3, 0..1);
+        }
+
+        log::trace!("[Kvasir] bloom_blur: Kawase pyramid ({}x{})", bloom_width, bloom_height);
     }
 
     /// Pass 8: Composite scene+bloom → swapchain.
@@ -3378,12 +3586,16 @@ impl SurtrRenderer {
             ctx_depth_texture_view,
             ctx_blur_env_bind_group_a,
             ctx_scene_texture_bind_group,
+            ctx_blur_tex_a,
             ctx_blur_texture_a,
+            ctx_blur_tex_b,
             ctx_blur_texture_b,
             ctx_sampler,
             ctx_blur_bind_group_a,
             ctx_blur_bind_group_b,
+            ctx_bloom_tex_a,
             ctx_bloom_texture_a,
+            ctx_bloom_tex_b,
             ctx_bloom_texture_b,
             ctx_bloom_bind_group_a,
             ctx_bloom_bind_group_b,
@@ -3418,12 +3630,16 @@ impl SurtrRenderer {
                 ctx.depth_texture_view.clone(),
                 ctx.blur_env_bind_group_a.clone(),
                 ctx.scene_texture_bind_group.clone(),
+                ctx.blur_tex_a.clone(),
                 ctx.blur_texture_a.clone(),
+                ctx.blur_tex_b.clone(),
                 ctx.blur_texture_b.clone(),
                 ctx.sampler.clone(),
                 ctx.blur_bind_group_a.clone(),
                 ctx.blur_bind_group_b.clone(),
+                ctx.bloom_tex_a.clone(),
                 ctx.bloom_texture_a.clone(),
+                ctx.bloom_tex_b.clone(),
                 ctx.bloom_texture_b.clone(),
                 ctx.bloom_bind_group_a.clone(),
                 ctx.bloom_bind_group_b.clone(),
@@ -3442,12 +3658,16 @@ impl SurtrRenderer {
                 ctx.depth_texture_view.clone(),
                 ctx.blur_env_bind_group_a.clone(),
                 ctx.scene_texture_bind_group.clone(),
+                ctx.blur_tex_a.clone(),
                 ctx.blur_texture_a.clone(),
+                ctx.blur_tex_b.clone(),
                 ctx.blur_texture_b.clone(),
                 ctx.sampler.clone(),
                 ctx.blur_bind_group_a.clone(),
                 ctx.blur_bind_group_b.clone(),
+                ctx.bloom_tex_a.clone(),
                 ctx.bloom_texture_a.clone(),
+                ctx.bloom_tex_b.clone(),
                 ctx.bloom_texture_b.clone(),
                 ctx.bloom_bind_group_a.clone(),
                 ctx.bloom_bind_group_b.clone(),
@@ -3477,7 +3697,7 @@ impl SurtrRenderer {
         // Phase 2: Backdrop (if glass present)
         if has_glass {
             self.execute_pass_backdrop_copy(&mut encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group);
-            self.execute_pass_backdrop_blur(&mut encoder, &ctx_blur_texture_a, &ctx_blur_texture_b, &ctx_blur_bind_group_a, &ctx_blur_bind_group_b);
+            self.execute_pass_backdrop_blur(&mut encoder, &ctx_blur_tex_a, self.current_width(), self.current_height());
             self.execute_pass_glass(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, &ctx_blur_env_bind_group_a, scale);
         }
 
@@ -3486,7 +3706,7 @@ impl SurtrRenderer {
 
         // Phase 4: Post-processing (bloom extract → blur → composite)
         self.execute_pass_bloom_extract(&mut post_encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a);
-        self.execute_pass_bloom_blur(&mut post_encoder, &ctx_bloom_texture_a, &ctx_bloom_texture_b, &ctx_bloom_bind_group_a, &ctx_bloom_bind_group_b);
+        self.execute_pass_bloom_blur(&mut post_encoder, &ctx_bloom_tex_a, self.current_width() / 2, self.current_height() / 2);
         self.execute_pass_composite(&mut post_encoder, &target_view, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a, &ctx_bloom_env_bind_group_a);
 
         // Phase 5: Accessibility (if enabled)
