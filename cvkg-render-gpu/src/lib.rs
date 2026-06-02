@@ -3013,10 +3013,50 @@ impl SurtrRenderer {
         ctx_blur_env_bind_group_a: &wgpu::BindGroup,
         scale: f32,
     ) {
-        // Reuse the existing encode_glass_pass logic
-        // For now, inline the pass setup
-        let _ = (encoder, ctx_scene_texture, ctx_depth_texture_view, ctx_blur_env_bind_group_a, scale);
-        // TODO: full glass pass implementation from encode_glass_pass
+        let rt_w = self.current_width() as i32;
+        let rt_h = self.current_height() as i32;
+        let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Surtr P3 Liquid Glass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: ctx_scene_texture,
+                resolve_target: None,
+                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: ctx_depth_texture_view,
+                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        p.set_pipeline(&self.pipeline);
+        p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
+        p.set_bind_group(2, &self.berserker_bind_group, &[]);
+        for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. })) {
+            let bg = if let Some(id) = call.texture_id {
+                if id == 0 { &self.mega_atlas_bind_group }
+                else { self.texture_bind_groups.get(id as usize).unwrap_or(&self.dummy_texture_bind_group) }
+            } else { &self.dummy_texture_bind_group };
+            p.set_bind_group(0, bg, &[]);
+            if let Some(rect) = call.scissor_rect {
+                if rt_w > 0 && rt_h > 0 {
+                    let x1 = (rect.x * scale).round() as i32;
+                    let y1 = (rect.y * scale).round() as i32;
+                    let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                    let y2 = ((rect.y + rect.height) * scale).round() as i32;
+                    let w = (x2 - x1).clamp(0, rt_w);
+                    let h = (y2 - y1).clamp(0, rt_h);
+                    if w > 0 && h > 0 { p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32); }
+                    else { p.set_scissor_rect(0, 0, 1, 1); }
+                }
+            }
+            p.draw_indexed(call.index_start..call.index_start + call.index_count, 0, 0..1);
+            self.telemetry.draw_calls += 1;
+            self.telemetry.vertices += call.index_count;
+        }
     }
 
     /// Pass 5: UI overlay.
@@ -3027,8 +3067,50 @@ impl SurtrRenderer {
         ctx_depth_texture_view: &wgpu::TextureView,
         scale: f32,
     ) {
-        // Reuse the existing encode_ui_pass logic
-        let _ = (encoder, ctx_scene_texture, ctx_depth_texture_view, scale);
+        let rt_w = self.current_width() as i32;
+        let rt_h = self.current_height() as i32;
+        let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Surtr P4 UI Layer"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: ctx_scene_texture,
+                resolve_target: None,
+                ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: ctx_depth_texture_view,
+                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
+                stencil_ops: None,
+            }),
+            ..Default::default()
+        });
+        p.set_pipeline(&self.pipeline);
+        p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
+        p.set_bind_group(2, &self.berserker_bind_group, &[]);
+        for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI)) {
+            let bg = if let Some(id) = call.texture_id {
+                if id == 0 { &self.mega_atlas_bind_group }
+                else { self.texture_bind_groups.get(id as usize).unwrap_or(&self.dummy_texture_bind_group) }
+            } else { &self.dummy_texture_bind_group };
+            p.set_bind_group(0, bg, &[]);
+            if let Some(rect) = call.scissor_rect {
+                if rt_w > 0 && rt_h > 0 {
+                    let x1 = (rect.x * scale).round() as i32;
+                    let y1 = (rect.y * scale).round() as i32;
+                    let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                    let y2 = ((rect.y + rect.height) * scale).round() as i32;
+                    let w = (x2 - x1).clamp(0, rt_w);
+                    let h = (y2 - y1).clamp(0, rt_h);
+                    if w > 0 && h > 0 { p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32); }
+                    else { p.set_scissor_rect(0, 0, 1, 1); }
+                }
+            }
+            p.draw_indexed(call.index_start..call.index_start + call.index_count, 0, 0..1);
+            self.telemetry.draw_calls += 1;
+            self.telemetry.vertices += call.index_count;
+        }
     }
 
     /// Pass 6: Bloom extract (luminance-gated).
