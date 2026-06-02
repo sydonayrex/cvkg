@@ -402,6 +402,12 @@ pub struct SurtrRenderer {
     composite_pipeline: wgpu::RenderPipeline,
     /// Color blindness simulation pipeline (fullscreen triangle).
     color_blind_pipeline: wgpu::RenderPipeline,
+    /// Kawase blur pyramid downsample pipeline (separate shader module).
+    kawase_down_pipeline: wgpu::RenderPipeline,
+    /// Kawase blur pyramid upsample pipeline (separate shader module).
+    kawase_up_pipeline: wgpu::RenderPipeline,
+    /// Kawase blur bind group layout (uniform + texture + sampler).
+    kawase_bind_group_layout: wgpu::BindGroupLayout,
     /// Environment bind group layout (texture + sampler).
     env_bind_group_layout: wgpu::BindGroupLayout,
 
@@ -1077,6 +1083,82 @@ impl SurtrRenderer {
             cache: None,
         });
 
+        // Kawase blur pyramid pipelines (separate shader module — conflicting bindings)
+        // NOTE: Compiled separately because blur_pyramid.wgsl defines its own
+        // @group(0) bindings (BlurUniforms + texture + sampler) that conflict
+        // with the main WGSL_SRC pipeline layout.
+        let kawase_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Kawase Blur Pyramid"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                include_str!("shaders/blur_pyramid.wgsl"),
+            )),
+        });
+        let kawase_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Kawase Blur BGL"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0, visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(32),
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1, visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2, visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let kawase_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Kawase Pipeline Layout"),
+            bind_group_layouts: &[Some(&kawase_bgl)],
+            immediate_size: 0,
+        });
+        let kawase_down_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Kawase Downsample"),
+            layout: Some(&kawase_layout),
+            vertex: wgpu::VertexState {
+                module: &kawase_shader, entry_point: Some("vs_blur"),
+                buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &kawase_shader, entry_point: Some("fs_kawase_down"),
+                targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None, cache: None,
+        });
+        let kawase_up_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Kawase Upsample"),
+            layout: Some(&kawase_layout),
+            vertex: wgpu::VertexState {
+                module: &kawase_shader, entry_point: Some("vs_blur"),
+                buffers: &[], compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &kawase_shader, entry_point: Some("fs_kawase_up"),
+                targets: &[Some(wgpu::ColorTargetState { format, blend: None, write_mask: wgpu::ColorWrites::ALL })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None, cache: None,
+        });
+
         // Muspelheim Composite Pipeline (additive blend onto screen)
         let composite_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim Composite"),
@@ -1442,6 +1524,9 @@ impl SurtrRenderer {
             bloom_enabled: true,
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
+            kawase_down_pipeline,
+            kawase_up_pipeline,
+            kawase_bind_group_layout: kawase_bgl,
         }
     }
 

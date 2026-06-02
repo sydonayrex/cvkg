@@ -3,6 +3,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use super::planner::ExecutionPlan;
+use super::registry::ResourceRegistry;
 use super::resource::ResourceId;
 use super::KvasirError;
 
