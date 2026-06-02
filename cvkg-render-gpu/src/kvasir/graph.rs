@@ -1,10 +1,8 @@
 //! KvasirGraph data structure, builder, and topological compilation.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
-use super::node::ExecutionContext;
 use super::planner::ExecutionPlan;
-use super::registry::ResourceRegistry;
 use super::resource::ResourceId;
 use super::KvasirError;
 
