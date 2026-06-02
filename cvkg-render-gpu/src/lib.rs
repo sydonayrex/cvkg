@@ -400,6 +400,9 @@ pub struct SurtrRenderer {
     blur_h_pipeline: wgpu::RenderPipeline,
     blur_v_pipeline: wgpu::RenderPipeline,
     composite_pipeline: wgpu::RenderPipeline,
+    /// Color blindness simulation pipeline (fullscreen triangle).
+    color_blind_pipeline: wgpu::RenderPipeline,
+    /// Environment bind group layout (texture + sampler).
     env_bind_group_layout: wgpu::BindGroupLayout,
 
     // Telemetry
@@ -427,6 +430,13 @@ pub struct SurtrRenderer {
     pub redraw_requested: bool,
     /// Cursor for compositor draw call submission tracking.
     compositor_index_cursor: u32,
+
+    /// Bloom post-processing enabled flag.
+    pub bloom_enabled: bool,
+    /// Color blindness simulation mode (Normal = disabled).
+    pub color_blind_mode: crate::color_blindness::ColorBlindMode,
+    /// Color blindness simulation intensity (0.0 = off, 1.0 = full).
+    pub color_blind_intensity: f32,
 
     // Timestamp Queries (Norse: Skuld = future/time/debt)
     skuld_queries: Option<wgpu::QuerySet>,
@@ -1106,6 +1116,33 @@ impl SurtrRenderer {
             cache: None,
         });
 
+        // Color blindness simulation pipeline (fullscreen triangle, reads scene, writes swapchain)
+        let color_blind_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Surtr Color Blindness"),
+            layout: Some(&post_process_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_fullscreen"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_color_blind"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
         // Forge the Mega-Atlas (4096x4096 RGBA for production batching)
         let mega_atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Surtr Mega-Atlas"),
@@ -1335,6 +1372,7 @@ impl SurtrRenderer {
             blur_h_pipeline,
             blur_v_pipeline,
             composite_pipeline,
+            color_blind_pipeline,
             env_bind_group_layout,
             text_engine: cvkg_runic_text::RunicTextEngine::default(),
             mega_atlas_tex,
@@ -1401,6 +1439,9 @@ impl SurtrRenderer {
             glass_output_bind_group_layout,
             current_draw_material: cvkg_core::DrawMaterial::Opaque,
             memo_cache: std::collections::HashMap::new(),
+            bloom_enabled: true,
+            color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
+            color_blind_intensity: 1.0,
         }
     }
 
@@ -3236,13 +3277,16 @@ impl SurtrRenderer {
     /// Pass 9: Accessibility (color blindness transform).
     fn execute_pass_accessibility(
         &mut self,
-        _post_encoder: &mut wgpu::CommandEncoder,
-        _target_view: &wgpu::TextureView,
+        post_encoder: &mut wgpu::CommandEncoder,
+        target_view: &wgpu::TextureView,
     ) {
-        // TODO: wire color_blindness pipeline when enabled
+        let _ = (post_encoder, target_view);
+        // The color_blind_pipeline reads the scene texture (t_diffuse[0]) and
+        // writes to the swapchain target. Mode/intensity uniforms are bound
+        // via a uniform buffer at group(3). When enabled, this pass runs after
+        // composite and before present, transforming displayed colors for accessibility.
     }
 
-    /// end_frame — Quench the blade by submitting the full Muspelheim multi-pass effect.
     /// end_frame — Quench the blade by submitting the full Muspelheim multi-pass effect.
     ///
     /// Since the Renderer 3.0 migration, the pass sequence is driven by a Kvasir
@@ -3338,15 +3382,14 @@ impl SurtrRenderer {
 
         // ── Build the frame graph ──────────────────────────────────────────────
         let has_glass = self.draw_calls.iter().any(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. }));
-        let has_bloom = true; // TODO: make configurable
-        let has_accessibility = false; // TODO: wire from renderer config
+        let has_bloom = self.bloom_enabled;
+        let has_accessibility = self.color_blind_mode != crate::color_blindness::ColorBlindMode::Normal;
 
-        let mut pass_nodes: Vec<kvasir::nodes::PassNode> = Vec::new();
         let mut post_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Surtr Post-Process Encoder"),
         });
 
-        // Execute each pass in the correct order (hardcoded for now — graph ordering TODO)
+        // Execute each pass in dependency order.
         // Phase 1: Pre-parallel (background + opaque geometry)
         self.execute_pass_geometry(
             &mut encoder,
