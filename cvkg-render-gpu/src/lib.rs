@@ -1855,13 +1855,16 @@ impl SurtrRenderer {
         self.compositor_index_cursor = self.indices.len() as u32;
         self.vnode_stack.clear();
         self.event_handlers.clear();
-        
+
         // Clear memoization cache at the start of each frame
         self.memo_cache.clear();
 
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;
         self.telemetry.vertices = 0;
+
+        // Recall staging belt buffers so they can be reused for vertex upload
+        self.staging_belt.recall();
 
         let ctx = self
             .headless_context
