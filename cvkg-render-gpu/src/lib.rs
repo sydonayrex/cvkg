@@ -220,6 +220,42 @@ const WGSL_SRC: &str = concat!(
     include_str!("shaders/color_blind.wgsl")
 );
 
+/// Specialized shader source for opaque/2D materials (modes 0-20 excluding 7,13-15,18,21).
+const WGSL_OPAQUE: &str = concat!(
+    include_str!("shaders/common.wgsl"),
+    include_str!("shaders/material_opaque.wgsl"),
+    include_str!("shaders/bifrost.wgsl"),
+    include_str!("shaders/bloom.wgsl"),
+    include_str!("shaders/color_blind.wgsl")
+);
+
+/// Specialized shader source for glass material (mode 7 only).
+const WGSL_GLASS: &str = concat!(
+    include_str!("shaders/common.wgsl"),
+    include_str!("shaders/material_glass.wgsl"),
+    include_str!("shaders/bifrost.wgsl"),
+    include_str!("shaders/bloom.wgsl"),
+    include_str!("shaders/color_blind.wgsl")
+);
+
+/// Specialized shader source for 3D PBR materials (modes 13, 14, 21).
+const WGSL_PBR: &str = concat!(
+    include_str!("shaders/common.wgsl"),
+    include_str!("shaders/material_pbr.wgsl"),
+    include_str!("shaders/bifrost.wgsl"),
+    include_str!("shaders/bloom.wgsl"),
+    include_str!("shaders/color_blind.wgsl")
+);
+
+/// Specialized shader source for gradient/shadow materials (modes 15, 18).
+const WGSL_GRADIENT: &str = concat!(
+    include_str!("shaders/common.wgsl"),
+    include_str!("shaders/material_gradient.wgsl"),
+    include_str!("shaders/bifrost.wgsl"),
+    include_str!("shaders/bloom.wgsl"),
+    include_str!("shaders/color_blind.wgsl")
+);
+
 /// Color blindness simulation module.
 pub mod color_blindness;
 
@@ -393,6 +429,14 @@ pub struct SurtrRenderer {
 
     // Muspelheim Pipelines (Shared)
     pipeline: wgpu::RenderPipeline,
+    /// Specialized opaque/2D material pipeline (modes 0-20 excluding 7,13-15,18,21).
+    opaque_pipeline: wgpu::RenderPipeline,
+    /// Specialized glass material pipeline (mode 7 only, ~150 lines of complex math).
+    glass_pipeline: wgpu::RenderPipeline,
+    /// Specialized 3D PBR pipeline (modes 13, 14, 21 — raymarching).
+    pbr_pipeline: wgpu::RenderPipeline,
+    /// Specialized gradient/shadow pipeline (modes 15, 18).
+    gradient_pipeline: wgpu::RenderPipeline,
     background_pipeline: wgpu::RenderPipeline,
     bloom_extract_pipeline: wgpu::RenderPipeline,
     /// Identity copy pipeline for Pass 2 backdrop blur (all pixels, no luminance gate).
@@ -982,6 +1026,49 @@ impl SurtrRenderer {
             cache: None,
         });
 
+        // ── Specialized Material Pipelines ─────────────────────────────────────
+        let opaque_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Muspelheim Opaque"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_OPAQUE)),
+        });
+        let glass_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Muspelheim Glass"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_GLASS)),
+        });
+        let pbr_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Muspelheim PBR"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_PBR)),
+        });
+        let gradient_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Muspelheim Gradient"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_GRADIENT)),
+        });
+        let make_pipeline = |shader: &wgpu::ShaderModule, label: &str| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: shader, entry_point: Some("vs_main"), buffers: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: shader, entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None, cache: None,
+            })
+        };
+        let opaque_pipeline = make_pipeline(&opaque_shader, "Muspelheim Opaque");
+        let glass_pipeline = make_pipeline(&glass_shader, "Muspelheim Glass");
+        let pbr_pipeline = make_pipeline(&pbr_shader, "Muspelheim PBR");
+        let gradient_pipeline = make_pipeline(&gradient_shader, "Muspelheim Gradient");
+
         // Muspelheim Bloom Extract Pipeline
         let bloom_extract_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -1458,6 +1545,10 @@ impl SurtrRenderer {
             current_window,
             headless_context,
             pipeline,
+            opaque_pipeline,
+            glass_pipeline,
+            pbr_pipeline,
+            gradient_pipeline,
             bloom_extract_pipeline,
             copy_pipeline,
             blur_h_pipeline,
@@ -3050,6 +3141,7 @@ impl SurtrRenderer {
             p.set_bind_group(2, &self.berserker_bind_group, &[]);
 
             for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Opaque)) {
+                p.set_pipeline(&self.opaque_pipeline);
                 let bg = if let Some(id) = call.texture_id {
                     if id == 0 { &self.mega_atlas_bind_group }
                     else {
@@ -3266,7 +3358,7 @@ impl SurtrRenderer {
             }),
             ..Default::default()
         });
-        p.set_pipeline(&self.pipeline);
+        p.set_pipeline(&self.glass_pipeline);
         p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
@@ -3320,7 +3412,7 @@ impl SurtrRenderer {
             }),
             ..Default::default()
         });
-        p.set_pipeline(&self.pipeline);
+        p.set_pipeline(&self.opaque_pipeline);
         p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
