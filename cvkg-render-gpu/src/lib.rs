@@ -291,6 +291,9 @@ pub struct SurtrRenderer {
     device: Arc<wgpu::Device>,
     queue: Arc<wgpu::Queue>,
 
+    // Kvasir resource registry — tracks GPU resource lifetimes
+    resource_registry: kvasir::ResourceRegistry,
+
     // Multi-Window Surface Management
     surfaces: std::collections::HashMap<winit::window::WindowId, SurfaceContext>,
     current_window: Option<winit::window::WindowId>,
@@ -1539,6 +1542,7 @@ impl SurtrRenderer {
             adapter,
             device: device.clone(),
             queue: queue.clone(),
+            resource_registry: kvasir::ResourceRegistry::new(),
             surfaces,
             current_window,
             headless_context,
