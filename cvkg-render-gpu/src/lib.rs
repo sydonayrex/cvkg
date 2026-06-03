@@ -995,10 +995,86 @@ impl SurtrRenderer {
                 multiview_mask: None, cache: None,
             })
         };
-        let opaque_pipeline = make_pipeline(&opaque_shader, "Muspelheim Opaque");
-        let glass_pipeline = make_pipeline(&glass_shader, "Muspelheim Glass");
-        let pbr_pipeline = make_pipeline(&pbr_shader, "Muspelheim PBR");
-        let gradient_pipeline = make_pipeline(&gradient_shader, "Muspelheim Gradient");
+        let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Muspelheim Opaque"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &opaque_shader, entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &opaque_shader, entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None, cache: None,
+        });
+        let glass_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Muspelheim Glass"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &glass_shader, entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &glass_shader, entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None, cache: None,
+        });
+        let pbr_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Muspelheim PBR"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &pbr_shader, entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &pbr_shader, entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None, cache: None,
+        });
+        let gradient_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Muspelheim Gradient"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &gradient_shader, entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &gradient_shader, entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None, cache: None,
+        });
 
         // Muspelheim Bloom Extract Pipeline
         let bloom_extract_pipeline =
