@@ -6,6 +6,8 @@
 //! - `ExecutionPlanner` derives correct order, barriers, and dead-node elimination.
 //! - `ResourceRegistry` tracks GPU resource lifetimes.
 
+#![allow(dead_code)]
+
 pub mod graph;
 pub mod node;
 pub mod nodes;
@@ -14,7 +16,6 @@ pub mod registry;
 pub mod resource;
 
 pub use node::{ExecutionContext, KvasirNode};
-pub use nodes::PassId;
 pub use registry::ResourceRegistry;
 
 use crate::kvasir::graph::NodeKey;
@@ -22,6 +23,7 @@ use crate::kvasir::resource::ResourceId;
 use std::fmt;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum KvasirError {
     CycleDetected(Vec<NodeKey>),
     MissingInput(ResourceId, NodeKey),

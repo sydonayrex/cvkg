@@ -348,7 +348,7 @@ impl MaterialCompiler {
                         dist_var, intensity / radius.max(0.001)
                     )
                 }
-                MaterialOp::GlassBlur { blur_radius } => {
+                MaterialOp::GlassBlur { blur_radius: _ } => {
                     // Simplified — full glass is complex, this is the core idea
                     format!(
                         "let _uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0)); let _blur_mip = theme.glass_blur_strength; let _env_base = textureSampleLevel(t_env, s_env, _uv, _blur_mip).rgb; vec4<f32>(_env_base, 0.02 + pow(length(in.logical / in.size - 0.5) * 1.8, 2.5) * 0.15)",

@@ -3205,7 +3205,7 @@ impl SurtrRenderer {
         encoder: &mut wgpu::CommandEncoder,
         ctx_scene_texture: &wgpu::TextureView,
         ctx_depth_texture_view: &wgpu::TextureView,
-        scale: f32,
+        _scale: f32,
     ) {
         let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr P1 Opaque Background"),
@@ -3315,7 +3315,7 @@ impl SurtrRenderer {
         // Create a uniform buffer for the Kawase params.
         // Each downsample iteration uses kernel_width = iteration_index (0,1,2,3)
         // Each upsample iteration uses the same pattern in reverse.
-        let uniform_data: [[f32; 4]; 2] = [
+        let _uniform_data: [[f32; 4]; 2] = [
             [blur_width as f32, blur_height as f32, 0.0, 0.0], // params.xy = size, params.z = mip, params.w = kernel_width
             [0.0, 0.0, 0.0, 0.0], // padding to 32 bytes (min_binding_size)
         ];
@@ -3557,7 +3557,7 @@ impl SurtrRenderer {
     fn execute_pass_bloom_extract(
         &mut self,
         post_encoder: &mut wgpu::CommandEncoder,
-        ctx_scene_texture: &wgpu::TextureView,
+        _ctx_scene_texture: &wgpu::TextureView,
         ctx_scene_texture_bind_group: &wgpu::BindGroup,
         bloom_texture_a: &wgpu::TextureView,
     ) {
@@ -3728,9 +3728,9 @@ impl SurtrRenderer {
         &mut self,
         post_encoder: &mut wgpu::CommandEncoder,
         target_view: &wgpu::TextureView,
-        scene_texture: &wgpu::TextureView,
+        _scene_texture: &wgpu::TextureView,
         scene_texture_bind_group: &wgpu::BindGroup,
-        bloom_texture_a: &wgpu::TextureView,
+        _bloom_texture_a: &wgpu::TextureView,
         bloom_env_bind_group_a: &wgpu::BindGroup,
     ) {
         let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -3770,7 +3770,7 @@ impl SurtrRenderer {
         post_encoder: &mut wgpu::CommandEncoder,
         target_view: &wgpu::TextureView,
         scene_texture: &wgpu::TextureView,
-        scene_texture_bind_group: &wgpu::BindGroup,
+        _scene_texture_bind_group: &wgpu::BindGroup,
     ) {
         // Skip if mode is Normal (identity transform)
         if self.color_blind_mode.is_identity() {
@@ -3848,18 +3848,18 @@ impl SurtrRenderer {
             ctx_blur_env_bind_group_a,
             ctx_scene_texture_bind_group,
             ctx_blur_tex_a,
-            ctx_blur_texture_a,
-            ctx_blur_tex_b,
-            ctx_blur_texture_b,
-            ctx_sampler,
-            ctx_blur_bind_group_a,
-            ctx_blur_bind_group_b,
+            _ctx_blur_texture_a,
+            _ctx_blur_tex_b,
+            _ctx_blur_texture_b,
+            _ctx_sampler,
+            _ctx_blur_bind_group_a,
+            _ctx_blur_bind_group_b,
             ctx_bloom_tex_a,
             ctx_bloom_texture_a,
-            ctx_bloom_tex_b,
-            ctx_bloom_texture_b,
-            ctx_bloom_bind_group_a,
-            ctx_bloom_bind_group_b,
+            _ctx_bloom_tex_b,
+            _ctx_bloom_texture_b,
+            _ctx_bloom_bind_group_a,
+            _ctx_bloom_bind_group_b,
             ctx_bloom_env_bind_group_a,
             scale,
         ) = if let Some(window_id) = self.current_window {
@@ -3974,7 +3974,7 @@ impl SurtrRenderer {
         self.staging_command_buffers.push(post_encoder.finish());
 
         // Skuld: Resolve timestamps (preserved from original)
-        if let (Some(q), Some(b), Some(rb)) = (
+        if let (Some(_q), Some(_b), Some(_rb)) = (
             &self.skuld_queries,
             &self.skuld_buffer,
             &self.skuld_read_buffer,
