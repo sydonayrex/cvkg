@@ -259,6 +259,9 @@ const WGSL_GRADIENT: &str = concat!(
 /// Color blindness simulation module.
 pub mod color_blindness;
 
+// Re-export ColorBlindMode for downstream users
+pub use color_blindness::ColorBlindMode;
+
 /// SvgModel — A collection of tessellated triangles representing a vector icon.
 #[derive(Clone, Debug)]
 pub struct SvgModel {
@@ -288,6 +291,11 @@ pub use accesskit_winit::Adapter as ShieldWallAdapter;
 
 // Re-export ColorTheme and SceneUniforms for cvkg-render-gpu users
 pub use cvkg_core::{ColorTheme, SceneUniforms};
+
+use bytemuck;
+
+// Color blindness types
+use crate::color_blindness::ColorBlindUniforms;
 
 use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, FillVertex, FillVertexConstructor, StrokeOptions,
@@ -503,10 +511,16 @@ pub struct SurtrRenderer {
 
     /// Bloom post-processing enabled flag.
     pub bloom_enabled: bool,
+    /// Color blindness bind group layout (texture + sampler + uniform).
+    color_blind_bind_group_layout: wgpu::BindGroupLayout,
+    /// Color blindness uniform buffer (updated each frame when mode changes).
+    color_blind_uniform_buffer: wgpu::Buffer,
     /// Color blindness simulation mode (Normal = disabled).
     pub color_blind_mode: crate::color_blindness::ColorBlindMode,
-    /// Color blindness simulation intensity (0.0 = off, 1.0 = full).
+    /// Color blindness effect intensity (0.0–1.0).
     pub color_blind_intensity: f32,
+    /// Sampler for the color blindness pass (reused from main pipeline).
+    sampler: wgpu::Sampler,
 
     // Timestamp Queries (Norse: Skuld = future/time/debt)
     skuld_queries: Option<wgpu::QuerySet>,
@@ -1314,33 +1328,6 @@ impl SurtrRenderer {
             cache: None,
         });
 
-        // Color blindness simulation pipeline (fullscreen triangle, reads scene, writes swapchain)
-        let color_blind_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Surtr Color Blindness"),
-            layout: Some(&post_process_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_color_blind"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
         // Forge the Mega-Atlas (4096x4096 RGBA for production batching)
         let mega_atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Surtr Mega-Atlas"),
@@ -1563,6 +1550,96 @@ impl SurtrRenderer {
 
         let glass_output_bind_group_layout = env_bind_group_layout.clone();
 
+        // Color blindness pipeline layout (1 bind group: texture + sampler + uniform)
+        let color_blind_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Color Blind Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<crate::color_blindness::ColorBlindUniforms>() as u64,
+                        ),
+                    },
+                    count: None,
+                },
+            ],
+        });
+        let color_blind_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Color Blind Pipeline Layout"),
+            bind_group_layouts: &[Some(&color_blind_bgl)],
+            immediate_size: 0,
+        });
+
+        // Color blindness shader module and pipeline (separate from main shader)
+        let color_blind_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Surtr Color Blind Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                crate::color_blindness::shader_source(),
+            )),
+        });
+        let color_blind_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Surtr Color Blindness"),
+            layout: Some(&color_blind_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &color_blind_shader,
+                entry_point: Some("fs_main_vs"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &color_blind_shader,
+                entry_point: Some("fs_color_blind"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        // Color blindness uniform buffer (updated each frame when mode is active)
+        let color_blind_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Color Blind Uniforms"),
+            size: std::mem::size_of::<crate::color_blindness::ColorBlindUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Sampler for the color blindness pass (and other post-process passes)
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+
         Self {
             instance,
             adapter,
@@ -1581,7 +1658,6 @@ impl SurtrRenderer {
             blur_h_pipeline,
             blur_v_pipeline,
             composite_pipeline,
-            color_blind_pipeline,
             env_bind_group_layout,
             text_engine: cvkg_runic_text::RunicTextEngine::default(),
             mega_atlas_tex,
@@ -1653,6 +1729,10 @@ impl SurtrRenderer {
             bloom_enabled: true,
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
+            color_blind_pipeline,
+            color_blind_bind_group_layout: color_blind_bgl,
+            color_blind_uniform_buffer,
+            sampler,
             kawase_down_pipeline,
             kawase_up_pipeline,
             kawase_bind_group_layout: kawase_bgl,
@@ -3680,16 +3760,73 @@ impl SurtrRenderer {
     }
 
     /// Pass 9: Accessibility (color blindness transform).
+    /// Applies Brettel/Viénot Daltonization matrix in linear RGB space.
+    /// Runs after composite and before present when color_blind_mode != Normal.
     fn execute_pass_accessibility(
         &mut self,
         post_encoder: &mut wgpu::CommandEncoder,
         target_view: &wgpu::TextureView,
+        scene_texture: &wgpu::TextureView,
+        scene_texture_bind_group: &wgpu::BindGroup,
     ) {
-        let _ = (post_encoder, target_view);
-        // The color_blind_pipeline reads the scene texture (t_diffuse[0]) and
-        // writes to the swapchain target. Mode/intensity uniforms are bound
-        // via a uniform buffer at group(3). When enabled, this pass runs after
-        // composite and before present, transforming displayed colors for accessibility.
+        // Skip if mode is Normal (identity transform)
+        if self.color_blind_mode.is_identity() {
+            return;
+        }
+
+        // Update uniform buffer with current mode/intensity
+        let uniforms = ColorBlindUniforms::new(self.color_blind_mode, self.color_blind_intensity);
+        self.queue.write_buffer(
+            &self.color_blind_uniform_buffer,
+            0,
+            bytemuck::bytes_of(&uniforms),
+        );
+
+        // Create bind group at draw time with the actual scene texture
+        let color_blind_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Color Blind Bind Group"),
+            layout: &self.color_blind_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(scene_texture),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &self.color_blind_uniform_buffer,
+                        offset: 0,
+                        size: wgpu::BufferSize::new(
+                            std::mem::size_of::<ColorBlindUniforms>() as u64,
+                        ),
+                    }),
+                },
+            ],
+        });
+
+        let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Surtr Accessibility"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        p.set_pipeline(&self.color_blind_pipeline);
+        p.set_bind_group(0, &color_blind_bind_group, &[]);
+        p.draw(0..3, 0..1);
     }
 
     /// end_frame — Quench the blade by submitting the full Muspelheim multi-pass effect.
@@ -3824,7 +3961,7 @@ impl SurtrRenderer {
                 kvasir::nodes::PassId::BloomExtract => self.execute_pass_bloom_extract(&mut post_encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a),
                 kvasir::nodes::PassId::BloomBlur => self.execute_pass_bloom_blur(&mut post_encoder, &ctx_bloom_tex_a, self.current_width() / 2, self.current_height() / 2),
                 kvasir::nodes::PassId::Composite => self.execute_pass_composite(&mut post_encoder, &target_view, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a, &ctx_bloom_env_bind_group_a),
-                kvasir::nodes::PassId::Accessibility => self.execute_pass_accessibility(&mut post_encoder, &target_view),
+                kvasir::nodes::PassId::Accessibility => self.execute_pass_accessibility(&mut post_encoder, &target_view, &ctx_scene_texture, &ctx_scene_texture_bind_group),
                 kvasir::nodes::PassId::Present => { /* swapchain present happens after submit */ }
             }
         }
