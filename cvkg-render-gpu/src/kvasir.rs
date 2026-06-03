@@ -13,16 +13,12 @@ pub mod planner;
 pub mod registry;
 pub mod resource;
 
-pub use graph::{GraphBuilder, KvasirGraph, NodeKey};
-pub use node::{ExecutionContext, ExecutionHint, KvasirNode};
-pub use planner::ExecutionPlan;
+pub use node::{ExecutionContext, KvasirNode};
+pub use nodes::PassId;
 pub use registry::ResourceRegistry;
-pub use resource::{
-    ResourceDescriptor, ResourceId, ResourceKind, ResourceLifetime,
-    RESOURCE_SCENE_COLOR, RESOURCE_SCENE_DEPTH, RESOURCE_BLUR_A, RESOURCE_BLUR_B,
-    RESOURCE_BLOOM_A, RESOURCE_BLOOM_B, RESOURCE_SWAPCHAIN,
-};
 
+use crate::kvasir::graph::NodeKey;
+use crate::kvasir::resource::ResourceId;
 use std::fmt;
 
 #[derive(Debug)]

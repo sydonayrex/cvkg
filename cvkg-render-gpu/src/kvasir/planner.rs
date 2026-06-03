@@ -4,9 +4,10 @@
 //! The renderer iterates over `ordered_nodes` and calls each node's
 //! `execute()` method in dependency order.
 
+use super::graph::NodeKey;
 use super::node::{ExecutionContext, KvasirNode};
 use super::registry::ResourceRegistry;
-use super::{KvasirError, NodeKey};
+use super::KvasirError;
 
 pub struct ExecutionPlan<'a> {
     pub ordered_nodes: Vec<NodeKey>,

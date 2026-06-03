@@ -484,7 +484,7 @@ pub mod builtins {
     use super::*;
 
     /// Build a rounded rectangle material (old mode 3).
-    pub fn rounded_rect(radius: f32) -> MaterialGraph {
+    pub fn rounded_rect(_radius: f32) -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let sdf = g.add_node(MaterialOp::SDFRoundRect);
@@ -621,7 +621,7 @@ pub mod builtins {
     }
 
     /// Build a stroke material (old mode 17).
-    pub fn stroke(thickness: f32) -> MaterialGraph {
+    pub fn stroke(_thickness: f32) -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let sdf = g.add_node(MaterialOp::SDFRoundRect);
@@ -641,7 +641,7 @@ pub mod builtins {
     }
 
     /// Build a dashed stroke material (old mode 19).
-    pub fn dashed_stroke(thickness: f32, dash_len: f32, gap_len: f32) -> MaterialGraph {
+    pub fn dashed_stroke(_thickness: f32, _dash_len: f32, _gap_len: f32) -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let sdf = g.add_node(MaterialOp::SDFRoundRect);

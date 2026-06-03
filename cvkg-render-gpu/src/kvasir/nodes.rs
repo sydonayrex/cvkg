@@ -8,6 +8,7 @@ use super::ExecutionContext;
 use super::KvasirError;
 use super::KvasirNode;
 use super::ResourceRegistry;
+use super::resource::ResourceId;
 
 /// Identifies which render pass a node represents.
 /// The SurtrRenderer dispatches `execute_node(node.id(), ...)` to the correct encoder.
@@ -67,11 +68,11 @@ impl KvasirNode for PassNode {
         }
     }
 
-    fn inputs(&self) -> &[super::ResourceId] {
+    fn inputs(&self) -> &[ResourceId] {
         &[]
     }
 
-    fn outputs(&self) -> &[super::ResourceId] {
+    fn outputs(&self) -> &[ResourceId] {
         &[]
     }
 
