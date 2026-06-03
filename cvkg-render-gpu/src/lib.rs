@@ -24,8 +24,11 @@
 #![allow(clippy::type_complexity, clippy::unwrap_or_default)]
 
 mod kvasir;
+mod material;
 
-// Kvasir render graph module — see kvasir/ for implementation.
+// Re-export material types for downstream users
+pub use material::{MaterialGraph, MaterialCompiler, CompiledMaterial, MaterialOp, MaterialError};
+pub use material::builtins;
 
 use cvkg_core::Rect;
 use lru::LruCache;
