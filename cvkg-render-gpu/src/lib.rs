@@ -117,7 +117,6 @@ const WGSL_SRC: &str = concat!(
 /// Specialized shader source for opaque/2D materials (modes 0-20 excluding 7,13-15,18,21).
 const WGSL_OPAQUE: &str = concat!(
     include_str!("shaders/common.wgsl"),
-    include_str!("shaders/shapes.wgsl"),
     include_str!("shaders/material_opaque.wgsl"),
     include_str!("shaders/bifrost.wgsl"),
     include_str!("shaders/bloom.wgsl"),
@@ -127,7 +126,6 @@ const WGSL_OPAQUE: &str = concat!(
 /// Specialized shader source for glass material (mode 7 only).
 const WGSL_GLASS: &str = concat!(
     include_str!("shaders/common.wgsl"),
-    include_str!("shaders/shapes.wgsl"),
     include_str!("shaders/material_glass.wgsl"),
     include_str!("shaders/bifrost.wgsl"),
     include_str!("shaders/bloom.wgsl"),
@@ -137,7 +135,6 @@ const WGSL_GLASS: &str = concat!(
 /// Specialized shader source for 3D PBR materials (modes 13, 14, 21).
 const WGSL_PBR: &str = concat!(
     include_str!("shaders/common.wgsl"),
-    include_str!("shaders/shapes.wgsl"),
     include_str!("shaders/material_pbr.wgsl"),
     include_str!("shaders/bifrost.wgsl"),
     include_str!("shaders/bloom.wgsl"),
@@ -147,7 +144,6 @@ const WGSL_PBR: &str = concat!(
 /// Specialized shader source for gradient/shadow materials (modes 15, 18).
 const WGSL_GRADIENT: &str = concat!(
     include_str!("shaders/common.wgsl"),
-    include_str!("shaders/shapes.wgsl"),
     include_str!("shaders/material_gradient.wgsl"),
     include_str!("shaders/bifrost.wgsl"),
     include_str!("shaders/bloom.wgsl"),

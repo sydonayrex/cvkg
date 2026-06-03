@@ -103,6 +103,52 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     return out;
 }
 
+/// Main vertex shader — transforms 2D quads with rotation/scale/translation.
+/// Used by all pipelines (main + specialized).
+@vertex
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    var pos = in.position.xy;
+
+    // ── Material 13 (3D Surface): Skip 2D transforms, use full MVP ──────────
+    if (in.material_id == 13u) {
+        out.clip_position = scene.proj * scene.view * vec4<f32>(in.position, 1.0);
+    } else {
+        // Apply 2D Transform: Rotate -> Scale -> Translate
+        let s2 = sin(in.rotation);
+        let c2 = cos(in.rotation);
+        let rot_matrix = mat2x2<f32>(c2, s2, -s2, c2);
+        pos = rot_matrix * pos;
+        pos = pos * in.scale;
+        pos = pos + in.translation;
+
+        // ── Hardware Shatter Effect (Berzerker Physics) ─────────────────────
+        let shatter_dt = scene.time - scene.shatter_time;
+        if (shatter_dt > 0.0 && shatter_dt < 2.0) {
+            let dist = distance(pos, scene.shatter_origin);
+            let dir = normalize(pos - scene.shatter_origin + vec2<f32>(1e-5, 1e-5));
+            let explosion = (1.0 / (dist * 0.01 + 0.1)) * scene.shatter_force;
+            let expansion = explosion * shatter_dt * 100.0;
+            pos += dir * expansion;
+        }
+
+        out.clip_position = scene.proj * scene.view * vec4<f32>(pos, in.position.z, 1.0);
+    }
+    out.uv = in.uv;
+    out.color = in.color;
+    out.material_id = in.material_id;
+    out.radius = in.radius;
+    out.slice = in.slice;
+    out.logical = in.logical;
+    out.size = in.size;
+    out.screen = in.screen;
+    out.normal = in.normal;
+    out.clip = in.clip;
+    out.tex_index = in.tex_index;
+
+    return out;
+}
+
 // --- SDF MATH ---
 fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
     let d = abs(p) - b;
