@@ -4014,7 +4014,8 @@ impl SurtrRenderer {
             );
 
             self.image_uv_registry.put(name.to_string(), uv_rect);
-            self.texture_registry.put(name.to_string(), 0); // Index 0 is the dummy white texture
+            // Index 0 = mega-atlas texture (stored in texture_views[0])
+            self.texture_registry.put(name.to_string(), 0);
             log::debug!(
                 "[Surtr] Packed '{}' into Mega-Atlas at ({}, {})",
                 name,
@@ -4452,6 +4453,11 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn draw_image(&mut self, image_name: &str, rect: Rect) {
+        // Guard: skip if image not loaded — avoids rendering garbage from uninitialized atlas regions
+        if !self.image_uv_registry.contains(image_name) {
+            log::warn!("[Surtr] draw_image: '{}' not loaded, skipping", image_name);
+            return;
+        }
         let tid = self
             .get_texture_id(image_name)
             .or_else(|| self.get_texture_id("__mega_atlas"));
