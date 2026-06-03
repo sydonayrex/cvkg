@@ -17,7 +17,11 @@ pub use graph::{GraphBuilder, KvasirGraph, NodeKey};
 pub use node::{ExecutionContext, ExecutionHint, KvasirNode};
 pub use planner::ExecutionPlan;
 pub use registry::ResourceRegistry;
-pub use resource::{ResourceDescriptor, ResourceId, ResourceKind, ResourceLifetime};
+pub use resource::{
+    ResourceDescriptor, ResourceId, ResourceKind, ResourceLifetime,
+    RESOURCE_SCENE_COLOR, RESOURCE_SCENE_DEPTH, RESOURCE_BLUR_A, RESOURCE_BLUR_B,
+    RESOURCE_BLOOM_A, RESOURCE_BLOOM_B, RESOURCE_SWAPCHAIN,
+};
 
 use std::fmt;
 

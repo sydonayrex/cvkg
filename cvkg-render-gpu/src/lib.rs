@@ -3797,7 +3797,7 @@ impl SurtrRenderer {
             )
         };
 
-        // ── Build the frame graph ──────────────────────────────────────────────
+        // ── Build and execute the Kvasir frame graph ─────────────────────────────
         let has_glass = self.draw_calls.iter().any(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. }));
         let has_bloom = self.bloom_enabled;
         let has_accessibility = self.color_blind_mode != crate::color_blindness::ColorBlindMode::Normal;
@@ -3806,33 +3806,27 @@ impl SurtrRenderer {
             label: Some("Surtr Post-Process Encoder"),
         });
 
-        // Execute each pass in dependency order.
-        // Phase 1: Pre-parallel (background + opaque geometry)
-        self.execute_pass_geometry(
-            &mut encoder,
-            &ctx_scene_texture,
-            &ctx_depth_texture_view,
-            scale,
-        );
+        // Build the frame graph using the Kvasir helper for correct pass ordering.
+        // Conditional passes (glass, bloom, accessibility) are included/excluded based on frame state.
+        // This replaces the hardcoded if/else pass dispatch with a data-driven approach:
+        // the graph declares which passes exist and their ordering, and we execute only enabled ones.
+        let pass_nodes = kvasir::nodes::build_frame_graph(has_glass, has_bloom, has_accessibility);
 
-        // Phase 2: Backdrop (if glass present)
-        if has_glass {
-            self.execute_pass_backdrop_copy(&mut encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group);
-            self.execute_pass_backdrop_blur(&mut encoder, &ctx_blur_tex_a, self.current_width(), self.current_height());
-            self.execute_pass_glass(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, &ctx_blur_env_bind_group_a, scale);
-        }
-
-        // Phase 3: UI
-        self.execute_pass_ui(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, scale);
-
-        // Phase 4: Post-processing (bloom extract → blur → composite)
-        self.execute_pass_bloom_extract(&mut post_encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a);
-        self.execute_pass_bloom_blur(&mut post_encoder, &ctx_bloom_tex_a, self.current_width() / 2, self.current_height() / 2);
-        self.execute_pass_composite(&mut post_encoder, &target_view, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a, &ctx_bloom_env_bind_group_a);
-
-        // Phase 5: Accessibility (if enabled)
-        if has_accessibility {
-            self.execute_pass_accessibility(&mut post_encoder, &target_view);
+        // Execute each enabled pass in dependency order
+        for node in &pass_nodes {
+            if !node.enabled { continue; }
+            match node.id {
+                kvasir::nodes::PassId::Geometry => self.execute_pass_geometry(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, scale),
+                kvasir::nodes::PassId::BackdropCopy => self.execute_pass_backdrop_copy(&mut encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group),
+                kvasir::nodes::PassId::BackdropBlur => self.execute_pass_backdrop_blur(&mut encoder, &ctx_blur_tex_a, self.current_width(), self.current_height()),
+                kvasir::nodes::PassId::Glass => self.execute_pass_glass(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, &ctx_blur_env_bind_group_a, scale),
+                kvasir::nodes::PassId::UI => self.execute_pass_ui(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, scale),
+                kvasir::nodes::PassId::BloomExtract => self.execute_pass_bloom_extract(&mut post_encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a),
+                kvasir::nodes::PassId::BloomBlur => self.execute_pass_bloom_blur(&mut post_encoder, &ctx_bloom_tex_a, self.current_width() / 2, self.current_height() / 2),
+                kvasir::nodes::PassId::Composite => self.execute_pass_composite(&mut post_encoder, &target_view, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a, &ctx_bloom_env_bind_group_a),
+                kvasir::nodes::PassId::Accessibility => self.execute_pass_accessibility(&mut post_encoder, &target_view),
+                kvasir::nodes::PassId::Present => { /* swapchain present happens after submit */ }
+            }
         }
 
         // ── Submit ─────────────────────────────────────────────────────────────

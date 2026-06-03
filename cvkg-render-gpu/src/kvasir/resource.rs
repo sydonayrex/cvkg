@@ -68,3 +68,13 @@ impl Default for ResourceIdGenerator {
         Self::new()
     }
 }
+
+// ── Well-known resource IDs for the frame graph ────────────────────────────
+
+pub const RESOURCE_SCENE_COLOR: ResourceId = ResourceId(100);
+pub const RESOURCE_SCENE_DEPTH: ResourceId = ResourceId(101);
+pub const RESOURCE_BLUR_A: ResourceId = ResourceId(200);
+pub const RESOURCE_BLUR_B: ResourceId = ResourceId(201);
+pub const RESOURCE_BLOOM_A: ResourceId = ResourceId(300);
+pub const RESOURCE_BLOOM_B: ResourceId = ResourceId(301);
+pub const RESOURCE_SWAPCHAIN: ResourceId = ResourceId(400);
