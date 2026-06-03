@@ -313,7 +313,7 @@ pub struct Vertex {
     pub normal: [f32; 3],
     pub uv: [f32; 2],
     pub color: [f32; 4],
-    pub mode: u32,
+    pub material_id: u32,
     pub radius: f32,
     pub slice: [f32; 4],
     pub logical: [f32; 2],
@@ -2793,7 +2793,7 @@ impl SurtrRenderer {
         pieces: u32,
         force: f32,
         color: [f32; 4],
-        mode: u32,
+        material_id: u32,
     ) {
         // High-Fidelity Variable Particle Density
         let count = (pieces as f32).sqrt().ceil() as u32;
@@ -2818,7 +2818,7 @@ impl SurtrRenderer {
                     height: 1.0 / count as f32,
                 };
 
-                self.fill_rect_with_full_params(shard_rect, c, mode, None, force, uv);
+                self.fill_rect_with_full_params(shard_rect, c, material_id, None, force, uv);
             }
         }
     }
@@ -2914,7 +2914,7 @@ impl SurtrRenderer {
         &mut self,
         points: [[f32; 2]; 4],
         color: [f32; 4],
-        mode: u32,
+        material_id: u32,
         uv_rect: Rect,
     ) {
         let scissor = self.clip_stack.last().copied();
@@ -2930,9 +2930,9 @@ impl SurtrRenderer {
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
                 index_count: 0,
-                material: if mode == 7 {
+                material: if material_id == 7 {
                     cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
-                } else if mode == 6 {
+                } else if material_id == 6 {
                     cvkg_core::DrawMaterial::TopUI
                 } else {
                     cvkg_core::DrawMaterial::Opaque
@@ -2964,9 +2964,7 @@ impl SurtrRenderer {
                 position: [px, py, 0.0],
                 normal: [0.0, 0.0, 1.0],
                 uv: uvs[i],
-                color,
-                mode,
-                radius: 0.0,
+                color, material_id, radius: 0.0,
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [px - rect.x, py - rect.y],
                 size: [rect.width, rect.height],
@@ -2992,14 +2990,12 @@ impl SurtrRenderer {
         &mut self,
         rect: Rect,
         color: [f32; 4],
-        mode: u32,
+        material_id: u32,
         texture_id: Option<u32>,
     ) {
         self.fill_rect_with_full_params(
             rect,
-            color,
-            mode,
-            texture_id,
+            color, material_id, texture_id,
             0.0,
             Rect {
                 x: 0.0,
@@ -3014,7 +3010,7 @@ impl SurtrRenderer {
         &mut self,
         rect: Rect,
         color: [f32; 4],
-        mode: u32,
+        material_id: u32,
         texture_id: Option<u32>,
         radius: f32,
         uv_rect: Rect,
@@ -3040,7 +3036,7 @@ impl SurtrRenderer {
             .map(|(a, o)| [a, o, 1.0, 1.0])
             .unwrap_or([0.0, 0.0, 0.0, 1.0]);
         self.fill_rect_with_full_params_and_slice(
-            rect, color, mode, texture_id, radius, uv_rect, slice,
+            rect, color, material_id, texture_id, radius, uv_rect, slice,
         );
     }
 
@@ -3049,7 +3045,7 @@ impl SurtrRenderer {
         &mut self,
         rect: Rect,
         color: [f32; 4],
-        mode: u32,
+        material_id: u32,
         texture_id: Option<u32>,
         radius: f32,
         uv_rect: Rect,
@@ -3057,11 +3053,11 @@ impl SurtrRenderer {
     ) {
         let scissor = self.clip_stack.last().copied();
 
-        let material = if mode == 7 {
+        let material = if material_id == 7 {
             cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
-        } else if mode == 6 {
+        } else if material_id == 6 {
             cvkg_core::DrawMaterial::TopUI
-        } else if mode == 0 {
+        } else if material_id == 0 {
             cvkg_core::DrawMaterial::Opaque
         } else {
             self.current_draw_material
@@ -3113,9 +3109,7 @@ impl SurtrRenderer {
             position: [x1, y1, z],
             normal,
             uv: [uv_rect.x, uv_rect.y],
-            color,
-            mode,
-            radius,
+            color, material_id, radius,
             slice,
             logical: [0.0, 0.0],
             size: [rect.width, rect.height],
@@ -3130,9 +3124,7 @@ impl SurtrRenderer {
             position: [x2, y1, z],
             normal,
             uv: [uv_rect.x + uv_rect.width, uv_rect.y],
-            color,
-            mode,
-            radius,
+            color, material_id, radius,
             slice,
             logical: [rect.width, 0.0],
             size: [rect.width, rect.height],
@@ -3147,9 +3139,7 @@ impl SurtrRenderer {
             position: [x2, y2, z],
             normal,
             uv: [uv_rect.x + uv_rect.width, uv_rect.y + uv_rect.height],
-            color,
-            mode,
-            radius,
+            color, material_id, radius,
             slice,
             logical: [rect.width, rect.height],
             size: [rect.width, rect.height],
@@ -3164,9 +3154,7 @@ impl SurtrRenderer {
             position: [x1, y2, z],
             normal,
             uv: [uv_rect.x, uv_rect.y + uv_rect.height],
-            color,
-            mode,
-            radius,
+            color, material_id, radius,
             slice,
             logical: [0.0, rect.height],
             size: [rect.width, rect.height],
@@ -5046,7 +5034,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 normal: norm.to_array(),
                 uv: [0.0, 0.0],
                 color,
-                mode: 13, // Mode 13: 3D Surface
+                material_id: 13, // Material 13: 3D Surface
                 radius: 0.0,
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [0.0, 0.0],
@@ -5092,7 +5080,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 normal: [norm.x, norm.y, norm.z],
                 uv: [0.0, 0.0],
                 color: material.base_color,
-                mode: 13, // Mode 13: 3D Surface
+                material_id: 13, // Material 13: 3D Surface
                 radius: 0.0,
                 slice: [material.metallic, material.roughness, material.opacity, 1.0],
                 logical: [0.0, 0.0],
@@ -5498,7 +5486,7 @@ impl StrokeVertexConstructor<Vertex> for CustomStrokeVertexConstructor {
             normal: [0.0, 0.0, 1.0],
             uv: [0.0, 0.0],
             color: self.color,
-            mode: 0,
+            material_id: 0,
             radius: 0.0,
             slice: [0.0, 0.0, 0.0, 1.0],
             logical: [pos.x, pos.y],
@@ -5520,7 +5508,7 @@ impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
             normal: [0.0, 0.0, 1.0],
             uv: [0.0, 0.0],
             color: self.color,
-            mode: 0,
+            material_id: 0,
             radius: 0.0,
             slice: [0.0, 0.0, 0.0, 1.0],
             logical: [vertex.position().x, vertex.position().y],
@@ -5945,7 +5933,7 @@ impl SurtrRenderer {
     }
 
     /// draw_svg — Renders a pre-loaded SVG icon at the specified logical rect.
-    pub fn draw_svg(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, mode: u32) {
+    pub fn draw_svg(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32) {
         let model = if let Some(m) = self.svg_cache.get(name) {
             m.clone()
         } else {
@@ -6022,7 +6010,7 @@ impl SurtrRenderer {
             v.logical = [v.position[0], v.position[1]];
             v.screen = screen;
             v.clip = clip;
-            v.mode = mode;
+            v.material_id = material_id;
 
             if let Some(override_color) = color {
                 let mut c = override_color;
@@ -6038,7 +6026,7 @@ impl SurtrRenderer {
             self.indices.push(base_idx + *idx);
         }
 
-        let material = match mode {
+        let material = match material_id {
             7 => cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 },
             0 => cvkg_core::DrawMaterial::Opaque,
             _ => cvkg_core::DrawMaterial::TopUI,
