@@ -315,6 +315,24 @@ pub struct Vertex {
     pub tex_index: u32,
 }
 
+/// Per-instance data for instanced rendering.
+/// Stores transform data previously duplicated across all 4 vertices of a quad.
+/// With instancing, 4 vertices + 1 instance draw a quad, reducing vertex bandwidth ~4x.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct InstanceData {
+    pub translation: [f32; 2],
+    pub scale: [f32; 2],
+    pub rotation: f32,
+    pub _pad: f32,
+}
+
+impl Default for InstanceData {
+    fn default() -> Self {
+        Self { translation: [0.0, 0.0], scale: [1.0, 1.0], rotation: 0.0, _pad: 0.0 }
+    }
+}
+
 /// Represents a single batched GPU draw call.
 /// Batches are broken whenever the active texture or primitive mode changes.
 #[derive(Debug, Clone)]
@@ -404,8 +422,10 @@ pub struct SurtrRenderer {
     // The Forge's Anvil (GPU Buffers)
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    instance_buffer: wgpu::Buffer,
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
+    instance_data: Vec<InstanceData>,
     staging_belt: wgpu::util::StagingBelt,
     staging_command_buffers: Vec<wgpu::CommandBuffer>,
     draw_calls: Vec<DrawCall>,
@@ -1462,6 +1482,13 @@ impl SurtrRenderer {
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Surtr Instance Anvil"),
+            size: (MAX_VERTICES / 4 * std::mem::size_of::<InstanceData>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
 
         // Forge the Heart (Berserker Uniforms)
         let current_theme = ColorTheme::default();
@@ -1581,8 +1608,10 @@ impl SurtrRenderer {
             shared_elements: LruCache::new(NonZeroUsize::new(1024).unwrap()),
             vertex_buffer,
             index_buffer,
+            instance_buffer,
             vertices: Vec::with_capacity(MAX_VERTICES),
             indices: Vec::with_capacity(MAX_INDICES),
+            instance_data: Vec::with_capacity(MAX_VERTICES / 4),
             draw_calls: Vec::new(),
             current_texture_id: None,
             opacity_stack: vec![1.0],
