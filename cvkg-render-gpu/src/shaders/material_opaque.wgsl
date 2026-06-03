@@ -21,45 +21,45 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (in.clip.z > 15000.0) { clip_alpha = 1.0; }
     color.a *= clip_alpha;
 
-    if in.mode == 1u {
+    if in.material_id == 1u {
         // Neon Line
         color = in.color * 1.5;
-    } else if in.mode == 3u {
+    } else if in.material_id == 3u {
         let half_size = in.size * 0.5;
         let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
         let aa = fwidth(d);
         color.a *= 1.0 - smoothstep(0.0, aa, d);
-    } else if in.mode == 4u {
+    } else if in.material_id == 4u {
         let half_size = in.size * 0.5;
         let safe_half = max(half_size, vec2<f32>(0.001));
         let d = length((in.logical - half_size) / safe_half) - 1.0;
         let aa = fwidth(d);
         color.a *= 1.0 - smoothstep(0.0, aa, d);
-    } else if in.mode == 8u {
+    } else if in.material_id == 8u {
         // Neon Glow (Gungnir)
         let center = in.size * 0.5;
         let dist = length(in.logical - center) / max(in.size.x, in.size.y);
         let glow = exp(-dist * 4.0) * 1.5;
         color = vec4<f32>(color.rgb * glow, color.a);
-    } else if in.mode == 9u {
+    } else if in.material_id == 9u {
         let d = length((in.uv - 0.5) * vec2<f32>(1.0, 4.0));
         color = theme.primary_neon * neon_glow(d, 0.01, 0.2);
-    } else if in.mode == 10u {
+    } else if in.material_id == 10u {
         let p = (in.uv - 0.5) * 2.0;
         let d = min(sd_segment(p, vec2(-0.5, -0.8), vec2(0.5, 0.8)), sd_segment(p, vec2(0.5, -0.8), vec2(-0.5, 0.8)));
         color = theme.rune_glow * neon_glow(d, 0.02, 0.15) * theme.rune_opacity;
-    } else if in.mode == 16u {
+    } else if in.material_id == 16u {
         // Radial Gradient Logic
         let dist = length(in.uv - 0.5) * 2.0;
         let t = clamp(dist, 0.0, 1.0);
         let end_color = vec4<f32>(in.slice.rgb, in.slice.a);
         color = mix(in.color, end_color, t);
-    } else if in.mode == 17u {
+    } else if in.material_id == 17u {
         let half_size = in.size * 0.5;
         let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
         let thickness = max(in.slice.x, 1.0);
         color.a *= (1.0 - smoothstep(-fw, fw, abs(d + thickness * 0.5) - thickness * 0.5));
-    } else if in.mode == 19u {
+    } else if in.material_id == 19u {
         let half_size = in.size * 0.5;
         let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
         let thickness = max(in.slice.x, 1.0);
@@ -67,17 +67,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         var alpha = 1.0 - smoothstep(-fw, fw, abs(d + thickness * 0.5) - thickness * 0.5);
         if (perimeter + scene.time * 20.0) % (max(in.slice.y, 1.0) + max(in.slice.z, 1.0)) > max(in.slice.y, 1.0) { alpha = 0.0; }
         color.a *= alpha;
-    } else if in.mode == 2u || in.mode == 6u {
+    } else if in.material_id == 2u || in.material_id == 6u {
         let tex_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
-        if in.mode == 6u {
+        if in.material_id == 6u {
             color = vec4<f32>(in.color.rgb, in.color.a * tex_color.a);
         } else {
             color *= tex_color;
         }
-    } else if in.mode == 12u {
+    } else if in.material_id == 12u {
         let val = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv).r;
         color = vec4<f32>(heatmap_palette(val), in.color.a);
-    } else if in.mode == 20u {
+    } else if in.material_id == 20u {
         let tex_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
         color *= tex_color;
     }

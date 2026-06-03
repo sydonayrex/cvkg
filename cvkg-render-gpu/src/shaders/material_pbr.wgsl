@@ -7,7 +7,7 @@
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
 
-    if in.mode == 13u {
+    if in.material_id == 13u {
         // ── Mode 13: 3D Surface — Basic PBR Lighting Model
         let metallic = in.slice.x;
         let roughness = in.slice.y;
@@ -39,7 +39,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
         color = vec4<f32>(lit_color, in.color.a * opacity);
 
-    } else if in.mode == 14u {
+    } else if in.material_id == 14u {
         // ── Mode 14: Ray Marched Reflections
         let ro = vec3<f32>(in.uv.x - 0.5, in.uv.y - 0.5, -2.0);
         let rd = normalize(vec3<f32>(in.uv.x - 0.5, in.uv.y - 0.5, 1.0));
@@ -56,7 +56,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             color = vec4<f32>(mix(in.color.rgb * diff, reflection_color, 0.3), 1.0);
         } else { discard; }
 
-    } else if in.mode == 21u {
+    } else if in.material_id == 21u {
         // ── Mode 21: High-Fidelity Raymarched Cube
         let uv_local = (in.uv - 0.5) * 2.0;
         let ro = vec3<f32>(0.0, 0.0, -2.5);

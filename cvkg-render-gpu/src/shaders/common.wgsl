@@ -55,7 +55,7 @@ struct VertexInput {
     @location(1) normal:   vec3<f32>,
     @location(2) uv:       vec2<f32>,
     @location(3) color:    vec4<f32>,
-    @location(4) mode:     u32,
+    @location(4) material_id: u32,
     @location(5) radius:   f32,
     @location(6) slice:    vec4<f32>,
     @location(7) logical:  vec2<f32>,
@@ -72,7 +72,7 @@ struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv:          vec2<f32>,
     @location(1) color:       vec4<f32>,
-    @location(2) @interpolate(flat) mode: u32,
+    @location(2) @interpolate(flat) material_id: u32,
     @location(3) radius:      f32,
     @location(4) slice:       vec4<f32>,
     @location(5) logical:     vec2<f32>,
@@ -91,7 +91,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.clip_position = vec4<f32>(x, y, 1.0, 1.0);
     out.uv = vec2<f32>((x + 1.0) * 0.5, (1.0 - y) * 0.5);
     out.color  = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-    out.mode   = 0u;
+    out.material_id = 0u;
     out.radius = 0.0;
     out.slice  = vec4<f32>(0.0, 0.0, 0.0, 1.0);
     out.logical = vec2<f32>(0.0, 0.0);
