@@ -1012,7 +1012,14 @@ impl SurtrRenderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
             multiview_mask: None, cache: None,
         });
         let glass_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -1032,7 +1039,14 @@ impl SurtrRenderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
             multiview_mask: None, cache: None,
         });
         let pbr_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -1052,7 +1066,14 @@ impl SurtrRenderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
             multiview_mask: None, cache: None,
         });
         let gradient_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -1072,7 +1093,14 @@ impl SurtrRenderer {
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
             multiview_mask: None, cache: None,
         });
 
@@ -2929,6 +2957,7 @@ impl SurtrRenderer {
             height: 1.0,
         };
 
+        let base_idx = self.vertices.len() as u32;
         for i in 0..4 {
             let px = points[i][0];
             let py = points[i][1];
@@ -2950,6 +2979,11 @@ impl SurtrRenderer {
                 tex_index: 0,
             });
         }
+        // Push indices for the quad (2 triangles)
+        self.indices.extend_from_slice(&[
+            base_idx, base_idx + 1, base_idx + 2,
+            base_idx, base_idx + 2, base_idx + 3,
+        ]);
 
         if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += 6;
@@ -5826,7 +5860,7 @@ impl SurtrRenderer {
                     };
 
                     let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-                    let base_index_idx = indices.len() as u32;
+                    let base_vertex_idx = vertices.len() as u32;
 
                     if let Err(e) = fill_tessellator.tessellate_path(
                         &lyon_path,
@@ -5847,7 +5881,7 @@ impl SurtrRenderer {
 
                     vertices.extend(buffers.vertices);
                     for idx in buffers.indices {
-                        indices.push(base_index_idx + idx);
+                        indices.push(base_vertex_idx + idx);
                     }
                 }
             }
