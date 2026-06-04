@@ -1351,7 +1351,7 @@ impl SurtrRenderer {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            &[0, 0, 0, 255],
+            &[255, 255, 255, 255],
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4),
@@ -3208,7 +3208,6 @@ impl SurtrRenderer {
         }
 
         if !self.draw_calls.is_empty() {
-            p.set_pipeline(&self.pipeline);
             p.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             p.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             p.set_bind_group(1, &self.dummy_env_bind_group, &[]);
@@ -3326,7 +3325,7 @@ impl SurtrRenderer {
                         },
                         wgpu::BindGroupEntry {
                             binding: 2,
-                            resource: wgpu::BindingResource::Sampler(&self.surfaces.iter().next().map(|(_,ctx)| ctx.sampler.clone()).unwrap_or_else(|| self.device.create_sampler(&wgpu::SamplerDescriptor::default()))),
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
                         },
                     ],
                 })
@@ -3350,7 +3349,7 @@ impl SurtrRenderer {
                 (mip - 1) as f32, kernel_width,
                 0.0, 0.0, 0.0, 0.0,
             ];
-            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..4]));
+            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..8]));
 
             let w = mip_scales[mip as usize].0.max(1.0) as u32;
             let h = mip_scales[mip as usize].1.max(1.0) as u32;
@@ -3382,7 +3381,7 @@ impl SurtrRenderer {
                 mip as f32, kernel_width,
                 0.0, 0.0, 0.0, 0.0,
             ];
-            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..4]));
+            self.queue.write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..8]));
 
             let w = mip_scales[(mip - 1) as usize].0.max(1.0) as u32;
             let h = mip_scales[(mip - 1) as usize].1.max(1.0) as u32;
@@ -3810,7 +3809,7 @@ impl SurtrRenderer {
             ctx_blur_env_bind_group_a,
             ctx_scene_texture_bind_group,
             ctx_blur_tex_a,
-            _ctx_blur_texture_a,
+            ctx_blur_texture_a,
             _ctx_blur_tex_b,
             _ctx_blur_texture_b,
             _ctx_sampler,
@@ -3919,8 +3918,8 @@ impl SurtrRenderer {
             if !node.enabled { continue; }
             match node.id {
                 kvasir::nodes::PassId::Geometry => self.execute_pass_geometry(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, scale),
-                kvasir::nodes::PassId::BackdropCopy => self.execute_pass_backdrop_copy(&mut encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group),
-                kvasir::nodes::PassId::BackdropBlur => self.execute_pass_backdrop_blur(&mut encoder, &ctx_blur_tex_a, self.current_width(), self.current_height()),
+                kvasir::nodes::PassId::BackdropCopy => self.execute_pass_backdrop_copy(&mut encoder, &ctx_blur_texture_a, &ctx_scene_texture_bind_group),
+                kvasir::nodes::PassId::BackdropBlur => self.execute_pass_backdrop_blur(&mut encoder, &ctx_blur_tex_a, self.current_width() / 2, self.current_height() / 2),
                 kvasir::nodes::PassId::Glass => self.execute_pass_glass(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, &ctx_blur_env_bind_group_a, scale),
                 kvasir::nodes::PassId::UI => self.execute_pass_ui(&mut encoder, &ctx_scene_texture, &ctx_depth_texture_view, scale),
                 kvasir::nodes::PassId::BloomExtract => self.execute_pass_bloom_extract(&mut post_encoder, &ctx_scene_texture, &ctx_scene_texture_bind_group, &ctx_bloom_texture_a),
@@ -4742,7 +4741,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             Ok(img) => img.to_rgba8(),
             Err(e) => {
                 log::error!("Failed to load image {}: {}", name, e);
-                image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 255]))
+                image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 255, 255, 255]))
             }
         };
         let (width, height) = img.dimensions();

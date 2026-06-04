@@ -154,10 +154,13 @@ fn fs_color_blind(in: VertexOutput) -> @location(0) vec4<f32> {
 pub struct ColorBlindUniforms {
     /// Row 0 of the 3x3 transformation matrix (column-major).
     pub matrix_0: [f32; 3],
+    _pad_m0: f32, // vec3<f32> is 16-byte aligned in WGSL
     /// Row 1.
     pub matrix_1: [f32; 3],
+    _pad_m1: f32,
     /// Row 2.
     pub matrix_2: [f32; 3],
+    _pad_m2: f32,
     /// Mode ID (for debugging).
     pub mode: u32,
     /// Effect intensity (0.0–1.0).
