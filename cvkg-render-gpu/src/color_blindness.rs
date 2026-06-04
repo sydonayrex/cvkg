@@ -175,8 +175,11 @@ impl ColorBlindUniforms {
         let m = mode.matrix();
         Self {
             matrix_0: [m[0], m[1], m[2]],
+            _pad_m0: 0.0,
             matrix_1: [m[3], m[4], m[5]],
+            _pad_m1: 0.0,
             matrix_2: [m[6], m[7], m[8]],
+            _pad_m2: 0.0,
             mode: mode as u32,
             intensity: intensity.clamp(0.0, 1.0),
             _pad0: 0.0,
