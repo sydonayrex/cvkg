@@ -2900,13 +2900,19 @@ impl SurtrRenderer {
     pub(crate) fn execute_pass_backdrop_copy(
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
-        target_view: &wgpu::TextureView,
+        target_texture: &wgpu::Texture,
         source_bind_group: &wgpu::BindGroup,
     ) {
+        let target_view = target_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("backdrop_copy_mip0"),
+            base_mip_level: 0,
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
         let mut p = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Backdrop Copy"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target_view,
+                view: &target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }),
@@ -3186,12 +3192,19 @@ impl SurtrRenderer {
         post_encoder: &mut wgpu::CommandEncoder,
         _ctx_scene_texture: &wgpu::TextureView,
         ctx_scene_texture_bind_group: &wgpu::BindGroup,
-        bloom_texture_a: &wgpu::TextureView,
+        bloom_texture: &wgpu::Texture,
     ) {
+        // Create a single-mip view for the render pass (mip 0 only)
+        let bloom_view = bloom_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("bloom_extract_mip0"),
+            base_mip_level: 0,
+            mip_level_count: Some(1),
+            ..Default::default()
+        });
         let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Bloom Extract"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: bloom_texture_a,
+                view: &bloom_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }),
@@ -3365,7 +3378,7 @@ impl SurtrRenderer {
         let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr P7 Composite"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target_view,
+                view: &target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }),
@@ -3443,7 +3456,7 @@ impl SurtrRenderer {
         let mut p = post_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Accessibility"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target_view,
+                view: &target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Load,
@@ -3563,11 +3576,11 @@ impl SurtrRenderer {
             if !node.enabled { continue; }
             match node.id {
                 kvasir::nodes::PassId::Geometry => self.execute_pass_geometry(&mut encoder, &res.scene_texture, &res.depth_texture_view, res.scale_factor),
-                kvasir::nodes::PassId::BackdropCopy => self.execute_pass_backdrop_copy(&mut encoder, &res.blur_texture_a, &res.scene_texture_bind_group),
+                kvasir::nodes::PassId::BackdropCopy => self.execute_pass_backdrop_copy(&mut encoder, &res.blur_tex_a, &res.scene_texture_bind_group),
                 kvasir::nodes::PassId::BackdropBlur => self.execute_pass_backdrop_blur(&mut encoder, &res.blur_tex_a, self.current_width() / 2, self.current_height() / 2),
                 kvasir::nodes::PassId::Glass => self.execute_pass_glass(&mut encoder, &res.scene_texture, &res.depth_texture_view, &res.blur_env_bind_group_a, res.scale_factor),
                 kvasir::nodes::PassId::UI => self.execute_pass_ui(&mut encoder, &res.scene_texture, &res.depth_texture_view, res.scale_factor),
-                kvasir::nodes::PassId::BloomExtract => self.execute_pass_bloom_extract(&mut post_encoder, &res.scene_texture, &res.scene_texture_bind_group, &res.bloom_texture_a),
+                kvasir::nodes::PassId::BloomExtract => self.execute_pass_bloom_extract(&mut post_encoder, &res.scene_texture, &res.scene_texture_bind_group, &res.bloom_tex_a),
                 kvasir::nodes::PassId::BloomBlur => self.execute_pass_bloom_blur(&mut post_encoder, &res.bloom_tex_a, self.current_width() / 2, self.current_height() / 2),
                 kvasir::nodes::PassId::Composite => self.execute_pass_composite(&mut post_encoder, &res.target_view, &res.scene_texture, &res.scene_texture_bind_group, &res.bloom_texture_a, &res.bloom_env_bind_group_a),
                 kvasir::nodes::PassId::Accessibility => self.execute_pass_accessibility(&mut post_encoder, &res.target_view, &res.scene_texture, &res.scene_texture_bind_group),

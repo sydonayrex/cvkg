@@ -38,6 +38,7 @@ path = "src/lib.rs"
 [[example]]
 name = "berserker_fire_demo"
 path = "examples/berserker_fire_demo.rs"
+required-features = ["gpu"]
 
 [[example]]
 name = "hit_test_demo"
