@@ -5,6 +5,7 @@
 
 
 
+@fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
     let fw = length(vec2(dpdx(in.logical.x), dpdy(in.logical.y)));
