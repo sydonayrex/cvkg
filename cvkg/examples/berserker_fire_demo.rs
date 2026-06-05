@@ -257,7 +257,6 @@ impl ApplicationHandler for App {
                 // Upload vertex data to GPU before render passes
                 renderer.render_frame();
                 renderer.end_frame(encoder);
-                eprintln!("[GPU] Frame {} rendered, presenting", self.state.frame_count);
 
                 window.request_redraw();
             }
@@ -268,7 +267,6 @@ impl ApplicationHandler for App {
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    log::info!("Berserker Fire Desktop GPU Demo starting...");
     println!("Forging Berserker Fire Desktop GPU Demo...");
     let event_loop = EventLoop::new().unwrap();
     let mut app = App::new();
