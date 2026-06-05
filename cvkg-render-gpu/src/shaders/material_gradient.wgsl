@@ -1,7 +1,7 @@
 //! Material shader — Gradient and shadow rendering path.
 //! Handles modes: 15 (animated linear gradient), 18 (drop shadow).
 
-#import common.wgsl
+
 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;

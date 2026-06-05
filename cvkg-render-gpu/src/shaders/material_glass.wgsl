@@ -3,7 +3,7 @@
 //! (glass shader is ~150 lines of complex math vs ~100 for opaque).
 //! Glass samples the backdrop blur mip chain via textureSampleLevel(t_env, s_env, uv, blur_mip).
 
-#import common.wgsl
+
 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
@@ -87,7 +87,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let spec = smoothstep(0.45, 0.55, l) * 0.12;
     final_rgb += spec;
 
-    color = vec4<f32>(final_rgb, 0.02 + fresnel * 0.15);
+    let final_alpha = (0.02 + fresnel * 0.15) * in.color.a * clip_alpha;
+    color = vec4<f32>(final_rgb, final_alpha);
     color.a *= (1.0 - smoothstep(-fw, fw, d_sdf));
 
     if color.a <= 0.0 { discard; }

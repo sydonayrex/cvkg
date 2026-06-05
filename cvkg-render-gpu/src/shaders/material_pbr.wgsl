@@ -2,7 +2,7 @@
 //! Handles modes: 13 (PBR surface), 14 (raymarched reflections), 21 (raymarched cube).
 //! Separated from opaque to reduce register pressure from raymarching loops.
 
-#import common.wgsl
+
 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;

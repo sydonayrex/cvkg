@@ -19,6 +19,7 @@
 
 /// Color blindness simulation modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
 pub enum ColorBlindMode {
     /// Normal vision (identity transform — no-op, useful for A/B comparison).
     Normal,
@@ -152,13 +153,13 @@ fn fs_color_blind(in: VertexOutput) -> @location(0) vec4<f32> {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ColorBlindUniforms {
-    /// Row 0 of the 3x3 transformation matrix (column-major).
+    /// Column 0 of the 3x3 transformation matrix.
     pub matrix_0: [f32; 3],
     _pad_m0: f32, // vec3<f32> is 16-byte aligned in WGSL
-    /// Row 1.
+    /// Column 1.
     pub matrix_1: [f32; 3],
     _pad_m1: f32,
-    /// Row 2.
+    /// Column 2.
     pub matrix_2: [f32; 3],
     _pad_m2: f32,
     /// Mode ID (for debugging).
@@ -174,11 +175,11 @@ impl ColorBlindUniforms {
     pub fn new(mode: ColorBlindMode, intensity: f32) -> Self {
         let m = mode.matrix();
         Self {
-            matrix_0: [m[0], m[1], m[2]],
+            matrix_0: [m[0], m[3], m[6]],
             _pad_m0: 0.0,
-            matrix_1: [m[3], m[4], m[5]],
+            matrix_1: [m[1], m[4], m[7]],
             _pad_m1: 0.0,
-            matrix_2: [m[6], m[7], m[8]],
+            matrix_2: [m[2], m[5], m[8]],
             _pad_m2: 0.0,
             mode: mode as u32,
             intensity: intensity.clamp(0.0, 1.0),
@@ -212,9 +213,9 @@ mod tests {
     }
 
     #[test]
-    fn test_protanopia_preserves_blue() {
+    fn test_protanopia_blue_input_isolated() {
         let m = ColorBlindMode::Protanopia.matrix();
-        // Blue channel output should have zero contribution from R and G
+        // Blue channel input should have zero contribution to R' and G' outputs
         assert_eq!(m[2], 0.0);
         assert_eq!(m[5], 0.0);
     }

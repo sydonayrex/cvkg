@@ -4,7 +4,7 @@
 //! 17 (stroke), 19 (dashed), 20 (9-slice).
 //! Excludes: 7 (glass), 13/14/21 (3D PBR/raymarch), 15/18 (gradient/shadow).
 
-#import common.wgsl
+
 
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;

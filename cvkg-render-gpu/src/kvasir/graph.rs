@@ -2,8 +2,7 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use super::planner::ExecutionPlan;
-use super::registry::ResourceRegistry;
+
 use super::resource::ResourceId;
 use super::KvasirError;
 
@@ -25,8 +24,6 @@ pub struct Edge {
 pub struct KvasirGraph {
     nodes: Vec<Box<dyn super::node::KvasirNode>>,
     edges: Vec<Edge>,
-    roots: Vec<NodeKey>,
-    sinks: Vec<NodeKey>,
     /// Adjacency: node -> [(resource, consumer)] for topological sort.
     adjacency: HashMap<NodeKey, Vec<(ResourceId, NodeKey)>>,
     /// Reverse adjacency: node -> [producer] for dependency tracking.
@@ -61,26 +58,12 @@ impl KvasirGraph {
         self.reverse_adj.entry(to).or_default().push(from);
     }
 
-    /// Mark a node as a sink (final output).
-    pub fn add_sink(&mut self, key: NodeKey) {
-        self.sinks.push(key);
-    }
 
-    /// Validate the graph (no cycles, all inputs satisfied) and compile to
-    /// an execution plan.
-    pub fn validate_and_compile<'a>(
-        &'a self,
-        registry: &'a ResourceRegistry,
-    ) -> Result<ExecutionPlan<'a>, KvasirError> {
-        let order = self.topological_sort()?;
-        Ok(ExecutionPlan {
-            ordered_nodes: order,
-            registry,
-        })
-    }
+
+
 
     /// Kahn's algorithm for topological sort.
-    fn topological_sort(&self) -> Result<Vec<NodeKey>, KvasirError> {
+    pub fn topological_sort(&self) -> Result<Vec<NodeKey>, KvasirError> {
         let n = self.nodes.len();
         let mut in_degree: HashMap<NodeKey, usize> = HashMap::new();
         for key in (0..n).map(NodeKey) {
@@ -101,7 +84,7 @@ impl KvasirGraph {
             order.push(node);
             if let Some(neighbors) = self.adjacency.get(&node) {
                 for (_, consumer) in neighbors {
-                    let deg = in_degree.get_mut(consumer).unwrap();
+                    let deg = in_degree.get_mut(consumer).expect("Graph integrity violation: dangling consumer edge");
                     *deg -= 1;
                     if *deg == 0 {
                         queue.push_back(*consumer);
@@ -112,10 +95,10 @@ impl KvasirGraph {
 
         if order.len() != n {
             // Cycle detected — find nodes still with in-degree > 0
-            let cycle_nodes: Vec<NodeKey> = in_degree
+            let cycle_nodes: Vec<String> = in_degree
                 .iter()
                 .filter(|(_, d)| **d > 0)
-                .map(|(k, _)| *k)
+                .filter_map(|(k, _)| self.node(*k).map(|n| n.label().to_string()))
                 .collect();
             return Err(KvasirError::CycleDetected(cycle_nodes));
         }
@@ -128,9 +111,7 @@ impl KvasirGraph {
         self.nodes.get(key.0).map(|b| b.as_ref())
     }
 
-    pub fn ordered_nodes(&self) -> &[NodeKey] {
-        &[]
-    }
+
 
     /// Build a human-readable DOT representation for debugging.
     pub fn to_dot(&self) -> String {
@@ -169,9 +150,7 @@ impl GraphBuilder {
         self.graph.connect(from, resource, to);
     }
 
-    pub fn add_sink(&mut self, key: NodeKey) {
-        self.graph.add_sink(key);
-    }
+
 
     pub fn build(self) -> KvasirGraph {
         self.graph

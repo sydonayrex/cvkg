@@ -4,12 +4,6 @@
 //! `SurtrRenderer::execute_node()` dispatches to the correct encoding method.
 //! This avoids importing renderer-internal types into the kvasir module.
 
-use super::ExecutionContext;
-use super::KvasirError;
-use super::KvasirNode;
-use super::ResourceRegistry;
-use super::resource::ResourceId;
-
 /// Identifies which render pass a node represents.
 /// The SurtrRenderer dispatches `execute_node(node.id(), ...)` to the correct encoder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -52,68 +46,12 @@ impl PassNode {
     }
 }
 
-impl KvasirNode for PassNode {
-    fn label(&self) -> &'static str {
-        match self.id {
-            PassId::Geometry => "geometry",
-            PassId::BackdropCopy => "backdrop_copy",
-            PassId::BackdropBlur => "backdrop_blur",
-            PassId::Glass => "glass",
-            PassId::UI => "ui",
-            PassId::BloomExtract => "bloom_extract",
-            PassId::BloomBlur => "bloom_blur",
-            PassId::Composite => "composite",
-            PassId::Accessibility => "accessibility",
-            PassId::Present => "present",
-        }
-    }
-
-    fn inputs(&self) -> &[ResourceId] {
-        &[]
-    }
-
-    fn outputs(&self) -> &[ResourceId] {
-        &[]
-    }
-
-    fn execute(
-        &self,
-        _ctx: &mut ExecutionContext<'_>,
-        _registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError> {
-        // The actual GPU encoding is performed by SurtrRenderer::execute_pass()
-        // which is called from the graph execution loop with full &mut self access.
-        // This placeholder exists to satisfy the trait; the real work happens
-        // in the renderer's dispatch method.
-        log::trace!("[Kvasir] {} (enabled={})", self.label(), self.enabled);
-        Ok(())
-    }
-}
-
-impl PassId {
-    /// Returns `true` if this pass writes to the scene texture.
-    pub const fn writes_scene(self) -> bool {
-        matches!(
-            self,
-            PassId::Geometry | PassId::Glass | PassId::UI | PassId::Composite
-        )
-    }
-
-    /// Returns `true` if this pass reads from the scene texture.
-    pub const fn reads_scene(self) -> bool {
-        matches!(
-            self,
-            PassId::BackdropCopy | PassId::BloomExtract | PassId::Composite | PassId::Present
-        )
-    }
-}
-
 // Re-export for use in graph construction
 pub use PassId::*;
 
-/// Helper: create the standard 10-pass frame graph.
+/// Helper: create the standard 10-pass execution sequence.
 /// Caller must supply the SurtrRenderer to execute it.
-pub fn build_frame_graph(
+pub fn build_pass_sequence(
     has_glass: bool,
     has_bloom: bool,
     accessibility_enabled: bool,

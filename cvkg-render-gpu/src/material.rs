@@ -50,7 +50,7 @@ pub enum MaterialOp {
 
     /// SDF ellipse mask.
     /// Output: Mask
-    SDFFllipse,
+    SDFEllipse,
 
     /// Linear gradient between two colors.
     /// Input: t (Float, typically UV-based)
@@ -70,7 +70,7 @@ pub enum MaterialOp {
     /// Glass fresnel refraction.
     /// Inputs: uv (Vec2), blur_mip (Float)
     /// Output: Color
-    GlassBlur { blur_radius: f32 },
+    GlassBlur,
 
     /// Layer two inputs with a blend mode.
     /// Inputs: bottom (Color), top (Color), opacity (Float)
@@ -215,6 +215,12 @@ impl MaterialGraph {
     }
 }
 
+impl Default for MaterialGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug)]
 pub enum MaterialError {
     NoOutput,
@@ -223,6 +229,8 @@ pub enum MaterialError {
     TypeMismatch { from: MaterialSocket, to: MaterialSocket },
     CompileError(String),
 }
+
+impl std::error::Error for MaterialError {}
 
 impl std::fmt::Display for MaterialError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -299,33 +307,39 @@ impl MaterialCompiler {
                 }
                 MaterialOp::PremultipliedBlend => {
                     let color_var = Self::find_input(&var_names, node_id, MaterialSocket::Color, graph)
-                        .unwrap_or("col".to_string());
+                        .unwrap_or_else(|| "col".to_string());
                     // Read alpha from a separate texture sample — for fonts this is the single channel
                     let alpha_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
-                        .unwrap_or("1.0".to_string());
+                        .unwrap_or_else(|| "1.0".to_string());
                     format!(
                         "vec4<f32>(({}).rgb, ({}).a * ({}))",
                         color_var, color_var, alpha_var
                     )
                 }
                 MaterialOp::SDFRoundRect => {
-                    // Reads vertex data directly
                     let half = "in.size * 0.5";
                     format!(
-                        "let _d = sd_round_rect(in.logical - {}, {} - in.radius, in.radius); let _aa = fwidth(_d); vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)))",
-                        half, half
-                    )
+                        r#"
+    let _d = sd_round_rect(in.logical - {0}, {0} - in.radius, in.radius);
+    let _aa = fwidth(_d);
+    vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)))"#,
+                        half
+                    ).trim().to_string()
                 }
-                MaterialOp::SDFFllipse => {
+                MaterialOp::SDFEllipse => {
                     let half = "in.size * 0.5";
                     format!(
-                        "let _sh = max({}, vec2<f32>(0.001)); let _d = length((in.logical - {}) / _sh) - 1.0; let _aa = fwidth(_d); vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)))",
-                        half, half
-                    )
+                        r#"
+    let _sh = max({0}, vec2<f32>(0.001));
+    let _d = length((in.logical - {0}) / _sh) - 1.0;
+    let _aa = fwidth(_d);
+    vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)))"#,
+                        half
+                    ).trim().to_string()
                 }
                 MaterialOp::LinearGradient { start, end } => {
                     let t_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
-                        .unwrap_or("in.uv.x".to_string());
+                        .unwrap_or_else(|| "in.uv.x".to_string());
                     format!(
                         "mix(vec4<f32>({:.6},{:.6},{:.6},{:.6}), vec4<f32>({:.6},{:.6},{:.6},{:.6}), clamp({}, 0.0, 1.0))",
                         start[0], start[1], start[2], start[3],
@@ -335,32 +349,35 @@ impl MaterialCompiler {
                 }
                 MaterialOp::RadialGradient { start, end } => {
                     format!(
-                        "let _dist = length(in.uv - 0.5) * 2.0; mix(vec4<f32>({:.6},{:.6},{:.6},{:.6}), vec4<f32>({:.6},{:.6},{:.6},{:.6}), clamp(_dist, 0.0, 1.0))",
+                        r#"
+    let _dist = length(in.uv - 0.5) * 2.0;
+    mix(vec4<f32>({:.6},{:.6},{:.6},{:.6}), vec4<f32>({:.6},{:.6},{:.6},{:.6}), clamp(_dist, 0.0, 1.0))"#,
                         start[0], start[1], start[2], start[3],
                         end[0], end[1], end[2], end[3],
-                    )
+                    ).trim().to_string()
                 }
                 MaterialOp::NeonGlow { radius, intensity } => {
                     let dist_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
-                        .unwrap_or("length(in.logical - in.size * 0.5) / max(in.size.x, in.size.y)".to_string());
+                        .unwrap_or_else(|| "length(in.logical - in.size * 0.5) / max(in.size.x, in.size.y)".to_string());
                     format!(
                         "vec4<f32>(col.rgb * exp(-{} * {:.6}), col.a)",
                         dist_var, intensity / radius.max(0.001)
                     )
                 }
-                MaterialOp::GlassBlur { blur_radius: _ } => {
-                    // Simplified — full glass is complex, this is the core idea
-                    format!(
-                        "let _uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0)); let _blur_mip = theme.glass_blur_strength; let _env_base = textureSampleLevel(t_env, s_env, _uv, _blur_mip).rgb; vec4<f32>(_env_base, 0.02 + pow(length(in.logical / in.size - 0.5) * 1.8, 2.5) * 0.15)",
-                    )
+                MaterialOp::GlassBlur => {
+                    r#"
+    let _uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0));
+    let _blur_mip = theme.glass_blur_strength;
+    let _env_base = textureSampleLevel(t_env, s_env, _uv, _blur_mip).rgb;
+    vec4<f32>(_env_base, 0.02 + pow(length(in.logical / in.size - 0.5) * 1.8, 2.5) * 0.15)"#.trim().to_string()
                 }
                 MaterialOp::LayerBlend { mode } => {
                     let bottom = Self::find_input(&var_names, node_id, MaterialSocket::Color, graph)
-                        .unwrap_or("col".to_string());
+                        .unwrap_or_else(|| "col".to_string());
                     let top = Self::find_input_map(&var_names, node_id, MaterialSocket::Color, graph, 1)
-                        .unwrap_or("col".to_string());
+                        .unwrap_or_else(|| "col".to_string());
                     let opacity = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
-                        .unwrap_or("1.0".to_string());
+                        .unwrap_or_else(|| "1.0".to_string());
                     match mode {
                         BlendMode::Add => {
                             format!("mix({}, {}, {})", bottom, top, opacity)
@@ -377,27 +394,106 @@ impl MaterialCompiler {
                     }
                 }
                 MaterialOp::PBRLighting => {
-                    // PBR reads normal/metallic/roughness from vertex
-                    "let _n = normalize(in.normal); let _metallic = in.slice.x; let _roughness = in.slice.y; let _opacity = in.slice.z; let _ld = normalize(vec3<f32>(0.5, 0.8, 0.6)); let _lc = vec3<f32>(1.0, 0.95, 0.9); let _ndl = max(dot(_n, _ld), 0.0); let _diffuse = _ndl * _lc; let _vd = vec3<f32>(0.0, 0.0, 1.0); let _hd = normalize(_ld + _vd); let _ndh = max(dot(_n, _hd), 0.0); let _shiny = mix(8.0, 256.0, 1.0 - _roughness); let _spec = pow(_ndh, _shiny) * _lc; let _f0 = mix(vec3<f32>(0.04), col.rgb, _metallic); let _fresnel = _f0 + (vec3<f32>(1.0) - _f0) * pow(1.0 - max(dot(_n, -_vd), 0.0), 5.0); let _amb = vec3<f32>(0.06, 0.07, 0.1); var _lit = col.rgb * (_amb + _diffuse); _lit += _spec * mix(vec3<f32>(1.0), col.rgb, _metallic) * _fresnel; let _depth = in.clip_position.z; let _fog = clamp(1.0 - _depth * 0.0005, 0.7, 1.0); _lit *= _fog; vec4<f32>(_lit, col.a * _opacity)".to_string()
+                    r#"
+    let _n = normalize(in.normal);
+    let _metallic = in.slice.x;
+    let _roughness = in.slice.y;
+    let _opacity = in.slice.z;
+    let _ld = normalize(vec3<f32>(0.5, 0.8, 0.6));
+    let _lc = vec3<f32>(1.0, 0.95, 0.9);
+    let _ndl = max(dot(_n, _ld), 0.0);
+    let _diffuse = _ndl * _lc;
+    let _vd = vec3<f32>(0.0, 0.0, 1.0);
+    let _hd = normalize(_ld + _vd);
+    let _ndh = max(dot(_n, _hd), 0.0);
+    let _shiny = mix(8.0, 256.0, 1.0 - _roughness);
+    let _spec = pow(_ndh, _shiny) * _lc;
+    let _f0 = mix(vec3<f32>(0.04), col.rgb, _metallic);
+    let _fresnel = _f0 + (vec3<f32>(1.0) - _f0) * pow(1.0 - max(dot(_n, -_vd), 0.0), 5.0);
+    let _amb = vec3<f32>(0.06, 0.07, 0.1);
+    var _lit = col.rgb * (_amb + _diffuse);
+    _lit += _spec * mix(vec3<f32>(1.0), col.rgb, _metallic) * _fresnel;
+    let _depth = in.clip_position.z;
+    let _fog = clamp(1.0 - _depth * 0.0005, 0.7, 1.0);
+    _lit *= _fog;
+    vec4<f32>(_lit, col.a * _opacity)"#.trim().to_string()
                 }
                 MaterialOp::DropShadow => {
-                    "col".to_string() // placeholder — reads UV for shadow params
+                    r#"
+    let _margin = in.uv.x;
+    let _blur = max(in.uv.y, 1.0);
+    let _original_size = in.size - 2.0 * _margin;
+    let _half_size = _original_size * 0.5;
+    let _p = in.logical - _margin - _half_size;
+    let _d = length(max(abs(_p) - (_half_size - in.radius), vec2(0.0))) + min(max(abs(_p).x - (_half_size - in.radius).x, abs(_p).y - (_half_size - in.radius).y), 0.0) - in.radius;
+    vec4<f32>(col.rgb, col.a * smoothstep(_blur, 0.0, _d))"#.trim().to_string()
                 }
                 MaterialOp::NineSlice => {
-                    "col".to_string() // placeholder — UV remapping is CPU-side
+                    "col".to_string() // Passthrough: 9-slice UV remapping is resolved on CPU
                 }
                 MaterialOp::Heatmap => {
                     let val_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
-                        .unwrap_or("textureSample(t_diffuse[0], s_diffuse, in.uv).r".to_string());
+                        .unwrap_or_else(|| "textureSample(t_diffuse[0], s_diffuse, in.uv).r".to_string());
                     format!("vec4<f32>(heatmap_palette({}), col.a)", val_var)
                 }
                 MaterialOp::Raymarch { shape } => {
                     match shape {
                         RaymarchShape::Box => {
-                            "let _uv = (in.uv - 0.5) * 2.0; let _ro = vec3<f32>(0.0, 0.0, -2.5); let _rd = normalize(vec3<f32>(_uv.x, _uv.y, 1.5)); let _m = rotX(in.slice.x) * rotY(in.slice.y) * rotZ(in.slice.z); var _t = 0.0; var _hit = false; var _d = 0.0; for (var _i = 0; _i < 40; _i++) { let _p = _m * (_ro + _rd * _t); _d = sd_box_3d(_p, vec3(0.5, 0.5, 0.5)); if _d < 0.001 { _hit = true; break; } _t += _d; if _t > 5.0 { break; } } if _hit { let _p2 = _m * (_ro + _rd * _t); let _eps = vec2(0.001, 0.0); let _n = normalize(vec3(sd_box_3d(_p2 + _eps.xyy, vec3(0.5)) - sd_box_3d(_p2 - _eps.xyy, vec3(0.5)), sd_box_3d(_p2 + _eps.yxy, vec3(0.5)) - sd_box_3d(_p2 - _eps.yxy, vec3(0.5)), sd_box_3d(_p2 + _eps.yyx, vec3(0.5)) - sd_box_3d(_p2 - _eps.yyx, vec3(0.5)))); let _ld2 = normalize(vec3(1.0, 1.0, -2.0)); let _diff2 = max(dot(_n, _ld2), 0.1); let _rim = pow(1.0 - max(dot(_n, -_rd), 0.0), 3.0) * 0.5; vec4<f32>(col.rgb * _diff2 + _rim, col.a) } else { discard; }".to_string()
+                            r#"
+    let _uv = (in.uv - 0.5) * 2.0;
+    let _ro = vec3<f32>(0.0, 0.0, -2.5);
+    let _rd = normalize(vec3<f32>(_uv.x, _uv.y, 1.5));
+    let _m = rotX(in.slice.x) * rotY(in.slice.y) * rotZ(in.slice.z);
+    var _t = 0.0;
+    var _hit = false;
+    var _d = 0.0;
+    for (var _i = 0; _i < 40; _i++) {
+        let _p = _m * (_ro + _rd * _t);
+        _d = sd_box_3d(_p, vec3(0.5, 0.5, 0.5));
+        if _d < 0.001 {
+            _hit = true;
+            break;
+        }
+        _t += _d;
+        if _t > 5.0 { break; }
+    }
+    if _hit {
+        let _p2 = _m * (_ro + _rd * _t);
+        let _eps = vec2(0.001, 0.0);
+        let _n = normalize(vec3(
+            sd_box_3d(_p2 + _eps.xyy, vec3(0.5)) - sd_box_3d(_p2 - _eps.xyy, vec3(0.5)),
+            sd_box_3d(_p2 + _eps.yxy, vec3(0.5)) - sd_box_3d(_p2 - _eps.yxy, vec3(0.5)),
+            sd_box_3d(_p2 + _eps.yyx, vec3(0.5)) - sd_box_3d(_p2 - _eps.yyx, vec3(0.5))
+        ));
+        let _ld2 = normalize(vec3(1.0, 1.0, -2.0));
+        let _diff2 = max(dot(_n, _ld2), 0.1);
+        let _rim = pow(1.0 - max(dot(_n, -_rd), 0.0), 3.0) * 0.5;
+        vec4<f32>(col.rgb * _diff2 + _rim, col.a)
+    } else {
+        discard;
+    }"#.trim().to_string()
                         }
                         RaymarchShape::Sphere => {
-                            "col".to_string() // placeholder
+                            r#"
+    let _ro = vec3<f32>(in.uv * 2.0 - 1.0, -2.0);
+    let _rd = normalize(vec3<f32>(0.0, 0.0, 1.0));
+    var _t = 0.0;
+    var _hit = false;
+    for (var i = 0; i < 32; i++) {
+        let _p = _ro + _rd * _t;
+        let _d = length(_p) - 1.0;
+        if _d < 0.01 { _hit = true; break; }
+        _t += _d;
+    }
+    if _hit {
+        let _p = _ro + _rd * _t;
+        let _n = normalize(_p);
+        let _ld = normalize(vec3<f32>(1.0, 1.0, -1.0));
+        let _diff = max(dot(_n, _ld), 0.0);
+        vec4<f32>(col.rgb * _diff, col.a)
+    } else {
+        discard;
+    }"#.trim().to_string()
                         }
                     }
                 }
@@ -408,11 +504,12 @@ impl MaterialCompiler {
         }
 
         let body = lines.join("\n");
-        let fn_name = format!("material_{}", graph.output.unwrap_or(0));
+        let out_id = graph.output.ok_or(MaterialError::NoOutput)?;
+        let fn_name = format!("material_{}", out_id);
 
         let wgsl_fn = format!(
-            "fn {}(in: VertexOutput, col: vec4<f32>) -> vec4<f32> {{\n{}\n    return v_0;\n}}",
-            fn_name, body
+            "fn {}(in: VertexOutput, col: vec4<f32>) -> vec4<f32> {{\n{}\n    return v_{};\n}}",
+            fn_name, body, out_id
         );
 
         Ok(CompiledMaterial { wgsl_fn, fn_name })
@@ -422,24 +519,26 @@ impl MaterialCompiler {
         names: &HashMap<(MatNodeId, MaterialSocket), String>,
         node: MatNodeId,
         socket: MaterialSocket,
-        _graph: &MaterialGraph,
+        graph: &MaterialGraph,
     ) -> Option<String> {
-        names.get(&(node, socket)).cloned()
+        for edge in &graph.edges {
+            if edge.to_node == node && edge.to_socket == socket {
+                return names.get(&(edge.from_node, edge.from_socket)).cloned();
+            }
+        }
+        None
     }
 
     fn find_input_map(
         names: &HashMap<(MatNodeId, MaterialSocket), String>,
         node: MatNodeId,
         socket: MaterialSocket,
-        _graph: &MaterialGraph,
+        graph: &MaterialGraph,
         offset: usize,
     ) -> Option<String> {
-        // Find the Nth input of this socket type
-        let matching: Vec<_> = names
-            .iter()
-            .filter(|((n, s), _)| *n == node && *s == socket)
-            .collect();
-        matching.get(offset).map(|(_, v)| v.to_string())
+        let mut matches = graph.edges.iter().filter(|e| e.to_node == node && e.to_socket == socket);
+        let edge = matches.nth(offset)?;
+        names.get(&(edge.from_node, edge.from_socket)).cloned()
     }
 
     fn topo_sort(graph: &MaterialGraph) -> Result<Vec<MatNodeId>, MaterialError> {
@@ -484,7 +583,7 @@ pub mod builtins {
     use super::*;
 
     /// Build a rounded rectangle material (old mode 3).
-    pub fn rounded_rect(_radius: f32) -> MaterialGraph {
+    pub fn rounded_rect() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let sdf = g.add_node(MaterialOp::SDFRoundRect);
@@ -495,9 +594,9 @@ pub mod builtins {
     }
 
     /// Build a glass material (old mode 7).
-    pub fn glass(blur_radius: f32) -> MaterialGraph {
+    pub fn glass() -> MaterialGraph {
         let mut g = MaterialGraph::new();
-        let glass = g.add_node(MaterialOp::GlassBlur { blur_radius });
+        let glass = g.add_node(MaterialOp::GlassBlur);
         g.set_output(glass);
         g
     }
@@ -574,7 +673,7 @@ pub mod builtins {
     pub fn ellipse() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
-        let sdf = g.add_node(MaterialOp::SDFFllipse);
+        let sdf = g.add_node(MaterialOp::SDFEllipse);
         g.connect(input, MaterialSocket::Color, sdf, MaterialSocket::Color);
         g.set_output(sdf);
         g
@@ -621,7 +720,7 @@ pub mod builtins {
     }
 
     /// Build a stroke material (old mode 17).
-    pub fn stroke(_thickness: f32) -> MaterialGraph {
+    pub fn stroke() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let sdf = g.add_node(MaterialOp::SDFRoundRect);
@@ -641,7 +740,7 @@ pub mod builtins {
     }
 
     /// Build a dashed stroke material (old mode 19).
-    pub fn dashed_stroke(_thickness: f32, _dash_len: f32, _gap_len: f32) -> MaterialGraph {
+    pub fn dashed_stroke() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let sdf = g.add_node(MaterialOp::SDFRoundRect);
@@ -665,7 +764,7 @@ mod tests {
 
     #[test]
     fn test_rounded_rect_compiles() {
-        let graph = builtins::rounded_rect(8.0);
+        let graph = builtins::rounded_rect();
         let compiled = MaterialCompiler::compile(&graph).unwrap();
         assert!(compiled.wgsl_fn.contains("sd_round_rect"));
     }
@@ -699,8 +798,8 @@ mod tests {
     fn test_all_builtins_compile() {
         let graphs: Vec<MaterialGraph> = vec![
             builtins::solid(),
-            builtins::rounded_rect(8.0),
-            builtins::glass(20.0),
+            builtins::rounded_rect(),
+            builtins::glass(),
             builtins::pbr(),
             builtins::text(0),
             builtins::textured(0),
@@ -712,9 +811,9 @@ mod tests {
             builtins::heatmap(0),
             builtins::nine_slice(0),
             builtins::raymarch_cube(),
-            builtins::stroke(2.0),
+            builtins::stroke(),
             builtins::drop_shadow(),
-            builtins::dashed_stroke(2.0, 10.0, 5.0),
+            builtins::dashed_stroke(),
         ];
 
         for (i, graph) in graphs.iter().enumerate() {

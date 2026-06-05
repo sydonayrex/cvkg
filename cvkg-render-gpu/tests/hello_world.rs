@@ -7,6 +7,8 @@ fn test_headless_minimal_render() {
     let width: u32 = 64;
     let height: u32 = 64;
 
+    let _ = env_logger::builder().is_test(true).try_init();
+
     let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
 
     let encoder = renderer.begin_frame_headless();
@@ -27,6 +29,7 @@ fn test_headless_minimal_render() {
     let pixels = pollster::block_on(renderer.capture_frame()).expect("Failed to capture frame");
 
     let mut max_r = 0u8;
+    println!("First pixel: {:?}", &pixels[0..4]);
     for y in 0..height as usize {
         for x in 0..width as usize {
             let idx = (y * width as usize + x) * 4;
@@ -52,7 +55,7 @@ fn test_headless_minimal_render() {
 /// Bypasses the multi-pass pipeline entirely.
 #[test]
 fn test_headless_direct_draw() {
-    use wgpu::util::DeviceExt;
+
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
@@ -186,7 +189,7 @@ fn test_headless_direct_draw() {
     device.poll(wgpu::PollType::Wait {
         submission_index: None,
         timeout: None,
-    });
+    }).unwrap();
 
     let result = pollster::block_on(receiver).unwrap();
     assert!(result.is_ok());
@@ -248,7 +251,7 @@ fn test_wgpu_buffer_roundtrip() {
     device.poll(wgpu::PollType::Wait {
         submission_index: None,
         timeout: None,
-    });
+    }).unwrap();
 
     let result = pollster::block_on(receiver).unwrap();
     assert!(result.is_ok());
