@@ -128,7 +128,7 @@ impl View for Combobox {
             let state = load_system_state();
             let sys_open: bool = state
                 .get_component_state::<bool>(COMBO_OPEN_HASH)
-                .map(|v| *v.read().unwrap())
+                .and_then(|v| v.read().ok().map(|g| *g))
                 .unwrap_or(false);
 
             if state.get_component_state::<bool>(COMBO_OPEN_HASH).is_none() {
@@ -154,11 +154,11 @@ impl View for Combobox {
             let state = load_system_state();
             let sel = state
                 .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                .map(|v| *v.read().unwrap())
+                .and_then(|v| v.read().ok().map(|g| *g))
                 .unwrap_or(self.selected.unwrap_or(usize::MAX));
             let txt = state
                 .get_component_state::<String>(COMBO_SEARCH_HASH)
-                .map(|v| v.read().unwrap().clone())
+                .and_then(|v| v.read().ok().map(|g| g.clone()))
                 .unwrap_or_default();
             (sel, txt)
         };
@@ -283,7 +283,7 @@ impl View for Combobox {
                                 let mut s = s.clone();
                                 let current: usize = s
                                     .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                                    .map(|v| *v.read().unwrap())
+                                    .and_then(|v| v.read().ok().map(|g| *g))
                                     .unwrap_or(usize::MAX);
                                 // Find current position in filtered list
                                 let pos = if current == usize::MAX {
@@ -309,7 +309,7 @@ impl View for Combobox {
                                 let mut s = s.clone();
                                 let current: usize = s
                                     .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                                    .map(|v| *v.read().unwrap())
+                                    .and_then(|v| v.read().ok().map(|g| *g))
                                     .unwrap_or(usize::MAX);
                                 let pos = if current == usize::MAX {
                                     None
@@ -345,12 +345,12 @@ impl View for Combobox {
                     let state = load_system_state();
                     let open = state
                         .get_component_state::<bool>(COMBO_OPEN_HASH)
-                        .map(|v| *v.read().unwrap())
+                        .and_then(|v| v.read().ok().map(|g| *g))
                         .unwrap_or(false);
                     if open {
                         let sel: usize = state
                             .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                            .map(|v| *v.read().unwrap())
+                            .and_then(|v| v.read().ok().map(|g| *g))
                             .unwrap_or(usize::MAX);
                         let sel_option = if sel < options_enter.len() {
                             Some(sel)
@@ -395,13 +395,13 @@ impl View for Combobox {
                 let state = load_system_state();
                 let currently_open = state
                     .get_component_state::<bool>(COMBO_OPEN_HASH)
-                    .map(|v| *v.read().unwrap())
+                    .and_then(|v| v.read().ok().map(|g| *g))
                     .unwrap_or(false);
                 if currently_open {
                     // Close and confirm current selection
                     let sel: usize = state
                         .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                        .map(|v| *v.read().unwrap())
+                        .and_then(|v| v.read().ok().map(|g| *g))
                         .unwrap_or(usize::MAX);
                     let sel_option = if sel < options_click.len() {
                         Some(sel)

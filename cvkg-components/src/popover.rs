@@ -97,7 +97,7 @@ impl<V: View, C: View> Popover<V, C> {
     fn is_open_state(&self) -> bool {
         let s = load_system_state();
         s.get_component_state::<bool>(self.id_hash)
-            .map(|v| *v.read().unwrap())
+            .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(false)
     }
 
@@ -274,7 +274,7 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
                     let current = {
                         let s = load_system_state();
                         s.get_component_state::<bool>(id)
-                            .map(|v| *v.read().unwrap())
+                            .and_then(|v| v.read().ok().map(|g| *g))
                             .unwrap_or(false)
                     };
                     update_system_state(move |s| {

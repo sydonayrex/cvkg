@@ -127,7 +127,7 @@ impl YggdrasilTree {
 fn get_tree_state(tree_id: u64) -> YggdrasilTreeState {
     let s = cvkg_core::load_system_state();
     if let Some(state_arc) = s.get_component_state::<YggdrasilTreeState>(tree_id) {
-        state_arc.read().unwrap().clone()
+        state_arc.read().ok().map(|g| g.clone()).unwrap_or_default()
     } else {
         YggdrasilTreeState::default()
     }
@@ -150,7 +150,7 @@ where
     }
     let s = cvkg_core::load_system_state();
     if let Some(state_arc) = s.get_component_state::<YggdrasilTreeState>(tree_id) {
-        let mut lock = state_arc.write().unwrap();
+        let mut lock = state_arc.write().expect("lock poisoned");
         f(&mut lock);
     }
 }

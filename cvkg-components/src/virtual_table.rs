@@ -130,10 +130,8 @@ where
     pub(crate) on_sort: Option<Arc<dyn Fn(String, SortOrder) + Send + Sync>>,
 }
 
-pub enum SortOrder {
-    Asc,
-    Desc,
-}
+#[deprecated(note = "Use data_grid::SortOrder instead")]
+pub use crate::data_grid::SortOrder;
 
 impl<D> DataTable<D>
 where

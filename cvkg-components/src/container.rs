@@ -865,7 +865,7 @@ impl<V: View> View for GeriDialog<V> {
                             let mut s = s.clone();
                             let current = s
                                 .get_component_state::<usize>(DIALOG_OPEN_HASH + 200)
-                                .map(|v| *v.read().unwrap())
+                                .and_then(|v| v.read().ok().map(|g| *g))
                                 .unwrap_or(0);
                             let next = (current + 1) % action_count;
                             s.set_component_state(DIALOG_OPEN_HASH + 200, next);
@@ -1849,24 +1849,23 @@ impl<V: View> View for Table<V> {
 }
 
 /// Settings style grouped form layout
-pub struct Form<V> {
+pub struct SettingsForm<V> {
     pub(crate) content: V,
 }
 
-impl<V: View> Form<V> {
+impl<V: View> SettingsForm<V> {
     pub fn new(content: V) -> Self {
         Self { content }
     }
 }
 
-impl<V: View> View for Form<V> {
+impl<V: View> View for SettingsForm<V> {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Grouped form layout logic
         self.content.render(renderer, rect);
     }
 }
@@ -2302,152 +2301,12 @@ impl View for FlexBox {
 }
 
 /// Tooltip component for displaying short messages on hover.
-pub struct Tooltip<V> {
-    pub(crate) content: V,
-    pub(crate) text: String,
-    pub(crate) position: TooltipPosition,
-}
-
-impl<V: View> Tooltip<V> {
-    pub fn new(content: V, text: impl Into<String>) -> Self {
-        Self {
-            content,
-            text: text.into(),
-            position: TooltipPosition::Top,
-        }
-    }
-
-    pub fn position(mut self, position: TooltipPosition) -> Self {
-        self.position = position;
-        self
-    }
-}
-
-pub enum TooltipPosition {
-    Top,
-    Right,
-    Bottom,
-    Left,
-}
-
-impl<V: View> View for Tooltip<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        self.content.render(renderer, rect);
-
-        let (tw, th) = renderer.measure_text(&self.text, 12.0);
-        let bubble_w = tw + 16.0;
-        let bubble_h = th + 8.0;
-
-        let bubble_rect = match self.position {
-            TooltipPosition::Top => Rect {
-                x: rect.x + (rect.width - bubble_w) / 2.0,
-                y: rect.y - bubble_h - 5.0,
-                width: bubble_w,
-                height: bubble_h,
-            },
-            TooltipPosition::Bottom => Rect {
-                x: rect.x + (rect.width - bubble_w) / 2.0,
-                y: rect.y + rect.height + 5.0,
-                width: bubble_w,
-                height: bubble_h,
-            },
-            TooltipPosition::Left => Rect {
-                x: rect.x - bubble_w - 5.0,
-                y: rect.y + (rect.height - bubble_h) / 2.0,
-                width: bubble_w,
-                height: bubble_h,
-            },
-            TooltipPosition::Right => Rect {
-                x: rect.x + rect.width + 5.0,
-                y: rect.y + (rect.height - bubble_h) / 2.0,
-                width: bubble_w,
-                height: bubble_h,
-            },
-        };
-
-        renderer.fill_rounded_rect(bubble_rect, 4.0, [0.05, 0.05, 0.1, 0.9]);
-        renderer.stroke_rounded_rect(bubble_rect, 4.0, [0.0, 0.8, 1.0, 0.5], 1.0);
-        renderer.draw_text(
-            &self.text,
-            bubble_rect.x + 8.0,
-            bubble_rect.y + 4.0,
-            12.0,
-            theme::text(),
-        );
-    }
-}
+#[deprecated(note = "Use tooltip::Tooltip instead")]
+pub use crate::tooltip::Tooltip;
 
 /// Popover component for displaying rich content in a floating bubble.
-pub struct Popover<T, C> {
-    pub(crate) trigger: T,
-    pub(crate) content: C,
-    pub(crate) is_open: bool,
-    pub(crate) position: PopoverPosition,
-}
-
-impl<T: View, C: View> Popover<T, C> {
-    pub fn new(trigger: T, content: C) -> Self {
-        Self {
-            trigger,
-            content,
-            is_open: false,
-            position: PopoverPosition::Bottom,
-        }
-    }
-
-    pub fn open(mut self, is_open: bool) -> Self {
-        self.is_open = is_open;
-        self
-    }
-}
-
-pub enum PopoverPosition {
-    Top,
-    Right,
-    Bottom,
-    Left,
-}
-
-impl<T: View, C: View> View for Popover<T, C> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        self.trigger.render(renderer, rect);
-
-        if self.is_open {
-            let popover_w = 200.0;
-            let popover_h = 150.0;
-
-            let popover_rect = match self.position {
-                PopoverPosition::Bottom => Rect {
-                    x: rect.x + (rect.width - popover_w) / 2.0,
-                    y: rect.y + rect.height + 8.0,
-                    width: popover_w,
-                    height: popover_h,
-                },
-                _ => Rect {
-                    x: rect.x,
-                    y: rect.y + rect.height + 8.0,
-                    width: popover_w,
-                    height: popover_h,
-                },
-            };
-
-            renderer.bifrost(popover_rect, 15.0, 1.2, 0.9);
-            renderer.fill_rounded_rect(popover_rect, 8.0, [0.05, 0.05, 0.1, 0.95]);
-            renderer.stroke_rounded_rect(popover_rect, 8.0, [0.0, 1.0, 1.0, 0.4], 1.5);
-            self.content.render(renderer, popover_rect);
-        }
-    }
-}
+#[deprecated(note = "Use popover::Popover instead")]
+pub use crate::popover::Popover;
 
 /// Accordion component for collapsible content sections.
 pub struct Accordion<V> {
@@ -2979,7 +2838,7 @@ impl<V: View> View for SagaAccordion<V> {
         let mut expanded_state: Vec<bool> = {
             let s = cvkg_core::load_system_state();
             s.get_component_state::<Vec<bool>>(state_hash)
-                .map(|v| v.read().unwrap().clone())
+                .and_then(|v| v.read().ok().map(|g| g.clone()))
                 .unwrap_or_else(|| self.items.iter().map(|item| item.is_expanded).collect())
         };
 
@@ -3052,7 +2911,7 @@ impl<V: View> View for SagaAccordion<V> {
                             let mut s = s.clone();
                             let mut state: Vec<bool> = s
                                 .get_component_state::<Vec<bool>>(state_hash)
-                                .map(|v| v.read().unwrap().clone())
+                                .and_then(|v| v.read().ok().map(|g| g.clone()))
                                 .unwrap_or_default();
                             while state.len() <= idx {
                                 state.push(false);

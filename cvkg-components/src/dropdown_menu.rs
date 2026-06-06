@@ -101,7 +101,7 @@ impl<T: View> View for DropdownMenu<T> {
                         let mut s = s.clone();
                         let current: bool = s
                             .get_component_state::<bool>(DROPDOWN_OPEN_HASH)
-                            .map(|v| *v.read().unwrap())
+                            .and_then(|v| v.read().ok().map(|g| *g))
                             .unwrap_or(false);
                         s.set_component_state(DROPDOWN_OPEN_HASH, !current);
                         s

@@ -13,12 +13,12 @@ use cvkg_core::{
 pub struct MotionKeyframe {
     pub time: f32,
     pub value: f32,
-    pub easing: Easing,
+    pub easing: MotionEasing,
 }
 
-/// Easing functions
+/// Easing functions for motion animations.
 #[derive(Debug, Clone, Copy)]
-pub enum Easing {
+pub enum MotionEasing {
     Linear,
     EaseIn,
     EaseOut,
@@ -56,11 +56,11 @@ pub struct EirMotion {
 #[derive(Debug, Clone)]
 pub struct StateMachine {
     pub current_state: String,
-    pub transitions: Vec<Transition>,
+    pub transitions: Vec<StateMachineTransition>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Transition {
+pub struct StateMachineTransition {
     pub from: String,
     pub to: String,
     pub condition: String,
@@ -94,7 +94,7 @@ impl EirMotion {
         self
     }
 
-    pub fn keyframe(mut self, anim_name: &str, time: f32, value: f32, easing: Easing) -> Self {
+    pub fn keyframe(mut self, anim_name: &str, time: f32, value: f32, easing: MotionEasing) -> Self {
         if let Some(anim) = self.animations.iter_mut().find(|a| a.name == anim_name) {
             anim.keyframes.push(MotionKeyframe {
                 time,

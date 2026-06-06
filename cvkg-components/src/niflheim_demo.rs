@@ -19,7 +19,7 @@ pub fn niflheim_demo() -> impl View + Clone {
     // Load popover state from system state to check if popover is open
     let show_popover = cvkg_core::load_system_state()
         .get_component_state::<bool>(popover_state_hash)
-        .map(|v| *v.read().unwrap())
+        .and_then(|v| v.read().ok().map(|g| *g))
         .unwrap_or(false);
 
     // Sidebar: Scrollable list of 15 buttons

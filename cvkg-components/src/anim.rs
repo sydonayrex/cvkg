@@ -14,7 +14,7 @@
 //! my_view.modifier(with_animation(0x1234).translate_x(100.0).scale(1.2))
 //!
 //! // Use predefined transitions
-//! my_view.transition(Transition::Spring(SleipnirParams::snappy()))
+//! my_view.transition(ViewTransition::Spring(SleipnirParams::snappy()))
 //! ```
 
 use cvkg_core::{
@@ -208,7 +208,7 @@ pub enum StaggerDirection {
 
 /// Transition types for view appearance/disappearance.
 #[derive(Clone, Debug)]
-pub enum Transition {
+pub enum ViewTransition {
     None,
     Fade { duration: f32 },
     Slide { duration: f32, direction: StaggerDirection },
@@ -216,12 +216,12 @@ pub enum Transition {
     Spring(SleipnirParams),
 }
 
-impl Transition {
+impl ViewTransition {
     /// Convert to an AnimatedModifier for a given state hash.
     pub fn to_modifier(&self, state_hash: u64, appearing: bool) -> Option<AnimatedModifier> {
         match self {
-            Transition::None => None,
-            Transition::Slide { direction, .. } => {
+            ViewTransition::None => None,
+            ViewTransition::Slide { direction, .. } => {
                 let (tx, ty) = match direction {
                     StaggerDirection::Left => (-100.0, 0.0),
                     StaggerDirection::Right => (100.0, 0.0),
@@ -234,14 +234,17 @@ impl Transition {
                     .translate_y(if appearing { 0.0 } else { -ty });
                 Some(m)
             }
-            Transition::Scale { .. } => {
+            ViewTransition::Scale { .. } => {
                 let m = AnimatedModifier::new(state_hash, SleipnirParams::fluid())
                     .scale(if appearing { 1.0 } else { 0.8 });
                 Some(m)
             }
-            Transition::Spring(params) => {
-                let m = AnimatedModifier::new(state_hash, *params)
-                    .scale(if appearing { 1.0 } else { 0.9 });
+            ViewTransition::Spring(params) => {
+                let m = AnimatedModifier::new(state_hash, *params).scale(if appearing {
+                    1.0
+                } else {
+                    0.9
+                });
                 Some(m)
             }
             _ => None,

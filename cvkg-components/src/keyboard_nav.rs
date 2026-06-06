@@ -116,7 +116,7 @@ impl<V: View> View for Focusable<V> {
                         let focused = state
                             .get_component_state::<String>(focus_id_hash(&focus_id))
                             .map(|v| {
-                                let guard = v.read().unwrap();
+                                let guard = v.read().expect("lock poisoned");
                                 *guard == focus_id
                             })
                             .unwrap_or(false);
@@ -285,7 +285,7 @@ fn cycle_focus(forward: bool) {
     let focus_order = state
         .get_component_state::<Vec<String>>(FOCUS_ORDER_HASH)
         .map(|v| {
-            let guard = v.read().unwrap();
+            let guard = v.read().expect("lock poisoned");
             guard.clone()
         })
         .unwrap_or_default();
@@ -297,7 +297,7 @@ fn cycle_focus(forward: bool) {
     let current = state
         .get_component_state::<String>(CURRENT_FOCUS_HASH)
         .map(|v| {
-            let guard = v.read().unwrap();
+            let guard = v.read().expect("lock poisoned");
             guard.clone()
         })
         .unwrap_or_default();
@@ -421,7 +421,7 @@ impl<V: View> View for ArrowNav<V> {
                             let state = cvkg_core::load_system_state();
                             let focused = state
                                 .get_component_state::<bool>(CURRENT_FOCUS_HASH)
-                                .map(|v| *v.read().unwrap())
+                                .and_then(|v| v.read().ok().map(|g| *g))
                                 .unwrap_or(false);
                             if !focused {
                                 return;

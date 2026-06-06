@@ -175,7 +175,7 @@ impl DatePicker {
     fn is_open_state(&self) -> bool {
         let s = load_system_state();
         s.get_component_state::<bool>(self.id_hash)
-            .map(|v| *v.read().unwrap())
+            .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(false)
     }
 
@@ -194,7 +194,7 @@ impl DatePicker {
     fn displayed_month_state(&self) -> (u32, u32) {
         let s = load_system_state();
         s.get_component_state::<(u32, u32)>(self.id_hash + 1)
-            .map(|v| *v.read().unwrap())
+            .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or_else(|| {
                 if let Some((_d, m, y)) = self.selected_date {
                     (m, y)
@@ -621,7 +621,7 @@ impl DatePicker {
                                                     s.get_component_state::<(u32, u32, u32)>(
                                                         id2 + 3,
                                                     )
-                                                    .map(|v| *v.read().unwrap())
+                                                    .and_then(|v| v.read().ok().map(|g| *g))
                                                     .unwrap_or((d, display_month, display_year))
                                                 };
                                                 let range = DateRange {
@@ -701,7 +701,7 @@ impl View for DatePicker {
                     let current = {
                         let s = load_system_state();
                         s.get_component_state::<bool>(id)
-                            .map(|v| *v.read().unwrap())
+                            .and_then(|v| v.read().ok().map(|g| *g))
                             .unwrap_or(false)
                     };
                     update_system_state(move |s| {

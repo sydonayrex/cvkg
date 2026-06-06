@@ -11,12 +11,12 @@ use cvkg_core::{
 
 /// Accessibility node for tree structure
 #[derive(Debug, Clone)]
-pub struct A11yNode {
+pub struct HlinNode {
     pub id: String,
     pub role: A11yRole,
     pub label: String,
     pub description: String,
-    pub children: Vec<A11yNode>,
+    pub children: Vec<HlinNode>,
 }
 
 /// Semantic accessibility roles
@@ -47,7 +47,7 @@ pub struct FocusState {
 
 /// Hlin Accessibility Infrastructure for inclusive design
 pub struct HlinAccessibility {
-    pub tree: Vec<A11yNode>,
+    pub tree: Vec<HlinNode>,
     pub focus_state: FocusState,
     pub high_contrast: bool,
     pub reduced_motion: bool,
@@ -115,7 +115,7 @@ impl HlinAccessibility {
 
     /// Add an accessibility node
     pub fn node(mut self, id: &str, role: A11yRole, label: &str) -> Self {
-        self.tree.push(A11yNode {
+        self.tree.push(HlinNode {
             id: id.to_string(),
             role,
             label: label.to_string(),
@@ -128,7 +128,7 @@ impl HlinAccessibility {
 
     /// Add a child node to a parent by ID
     pub fn child(mut self, parent_id: &str, id: &str, role: A11yRole, label: &str) -> Self {
-        let child = A11yNode {
+        let child = HlinNode {
             id: id.to_string(),
             role,
             label: label.to_string(),
@@ -169,7 +169,7 @@ impl HlinAccessibility {
     }
 
     /// Get the accessibility tree root nodes
-    pub fn tree(&self) -> &[A11yNode] {
+    pub fn tree(&self) -> &[HlinNode] {
         &self.tree
     }
 

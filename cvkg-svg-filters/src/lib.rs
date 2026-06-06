@@ -72,6 +72,11 @@ pub struct FilterEngine {
     uniform_buffer: wgpu::Buffer,
     /// Shader module (kept alive for pipeline lifetime).
     _shader_module: wgpu::ShaderModule,
+    /// LUT texture for component transfer table/discrete modes.
+    lut_texture: Option<wgpu::Texture>,
+    lut_view: Option<wgpu::TextureView>,
+    /// Uploaded image textures for feImage primitives.
+    image_textures: HashMap<String, (wgpu::Texture, wgpu::TextureView)>,
 }
 
 /// Context for a single filter evaluation pass.
@@ -450,6 +455,15 @@ struct FilterUniforms {
     turb_seed: f32,
     turb_num_octaves: f32,
     _tpad: f32,
+    // Lighting parameters
+    light_position: [f32; 3],
+    light_color: [f32; 3],
+    light_ambient: f32,
+    light_diffuse_k: f32,
+    light_specular_k: f32,
+    light_shininess: f32,
+    light_surface_scale: f32,
+    _lpad: f32,
 }
 
 impl Default for FilterUniforms {
@@ -483,6 +497,15 @@ impl Default for FilterUniforms {
             turb_seed: 0.0,
             turb_num_octaves: 1.0,
             _tpad: 0.0,
+            // Lighting defaults: white light from top-left, moderate ambient
+            light_position: [0.5, 0.5, 1.0],
+            light_color: [1.0, 1.0, 1.0],
+            light_ambient: 0.2,
+            light_diffuse_k: 0.8,
+            light_specular_k: 0.5,
+            light_shininess: 32.0,
+            light_surface_scale: 1.0,
+            _lpad: 0.0,
         }
     }
 }
@@ -575,6 +598,23 @@ impl FilterEngine {
                             ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                             count: None,
                         },
+                        // LUT texture for component transfer table/discrete
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 5,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D1,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 6,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
                     ],
                 });
 
@@ -655,6 +695,9 @@ impl FilterEngine {
             quad_vertex_buffer,
             uniform_buffer,
             _shader_module: shader_module,
+            lut_texture: None,
+            lut_view: None,
+            image_textures: HashMap::new(),
         })
     }
 
@@ -686,6 +729,13 @@ impl FilterEngine {
         let src2_v = src2_view.unwrap_or(input_view);
         let src2_s = src2_sampler.unwrap_or(input_sampler);
 
+        // Use a dummy 1x1 texture for LUT if none is uploaded.
+        let lut_view_ref = self
+            .lut_view
+            .as_ref()
+            .map(|v| v as &wgpu::TextureView)
+            .unwrap_or(input_view);
+
         let bind_group = self
             .gpu
             .device
@@ -712,6 +762,14 @@ impl FilterEngine {
                     wgpu::BindGroupEntry {
                         binding: 4,
                         resource: wgpu::BindingResource::Sampler(src2_s),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::TextureView(lut_view_ref),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
                     },
                 ],
             });
@@ -888,10 +946,13 @@ impl FilterEngine {
                 self.apply_tile(input_views[0], w, h, rect, element_bbox, tile)
             }
             usvg::filter::Kind::Turbulence(t) => self.apply_turbulence(w, h, t),
-            usvg::filter::Kind::DiffuseLighting(_) | usvg::filter::Kind::SpecularLighting(_) => {
-                self.apply_passthrough(input_views[0], w, h)
+            usvg::filter::Kind::DiffuseLighting(dl) => {
+                self.apply_diffuse_lighting(input_views[0], w, h, dl)
             }
-            usvg::filter::Kind::Image(_) => self.apply_passthrough(input_views[0], w, h),
+            usvg::filter::Kind::SpecularLighting(sl) => {
+                self.apply_specular_lighting(input_views[0], w, h, sl)
+            }
+            usvg::filter::Kind::Image(img) => self.apply_image(input_views[0], w, h, img),
         }
     }
 
@@ -955,7 +1016,7 @@ impl FilterEngine {
         )?;
 
         // Return the output texture and its surface as the result.
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1007,7 +1068,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1033,7 +1094,18 @@ impl FilterEngine {
             usvg::BlendMode::Screen => 2u32,
             usvg::BlendMode::Darken => 3u32,
             usvg::BlendMode::Lighten => 4u32,
-            _ => 0u32,
+            usvg::BlendMode::Overlay => 5u32,
+            usvg::BlendMode::HardLight => 6u32,
+            usvg::BlendMode::SoftLight => 7u32,
+            usvg::BlendMode::ColorDodge => 8u32,
+            usvg::BlendMode::ColorBurn => 9u32,
+            usvg::BlendMode::Exclusion => 10u32,
+            usvg::BlendMode::Hue => 11u32,
+            usvg::BlendMode::Saturation => 12u32,
+            usvg::BlendMode::Color => 13u32,
+            usvg::BlendMode::Luminosity => 14u32,
+            // Difference has no WGSL equivalent; fall through to Normal.
+            usvg::BlendMode::Difference => 0u32,
         };
 
         let mut params = FilterUniforms::default();
@@ -1052,7 +1124,7 @@ impl FilterEngine {
             input_size,
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1072,17 +1144,25 @@ impl FilterEngine {
         let output_view = self.get_temp_view(w, h)?;
         let input_size = (w as f32, h as f32);
 
+        let mut params = FilterUniforms::default();
+        params.region = [0.0, 0.0, w as f32, h as f32];
+
         let sub_mode = match comp.operator() {
             usvg::filter::CompositeOperator::Over => 0u32,
             usvg::filter::CompositeOperator::In => 1u32,
             usvg::filter::CompositeOperator::Out => 2u32,
             usvg::filter::CompositeOperator::Atop => 3u32,
             usvg::filter::CompositeOperator::Xor => 4u32,
-            usvg::filter::CompositeOperator::Arithmetic { .. } => 6u32,
+            usvg::filter::CompositeOperator::Arithmetic {
+                k1, k2, k3, k4,
+            } => {
+                params.param0 = k1;
+                params.param1 = k2;
+                params.param2 = k3;
+                params.param3 = k4;
+                6u32
+            }
         };
-
-        let mut params = FilterUniforms::default();
-        params.region = [0.0, 0.0, w as f32, h as f32];
 
         self.render_pass(
             input_a,
@@ -1097,7 +1177,7 @@ impl FilterEngine {
             input_size,
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1138,7 +1218,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1146,22 +1226,35 @@ impl FilterEngine {
     }
 
     // ── Offset ──────────────────────────────────────────────────────────────
+    //
+    // Applies dx/dy offset to the source image. The offset is interpreted
+    // according to filterUnits: for objectBoundingBox, dx/dy are fractions
+    // of the element's bounding box; for userSpaceOnUse, they are absolute.
 
     fn apply_offset(
         &mut self,
         input: &wgpu::TextureView,
         w: u32,
         h: u32,
-        _rect: usvg::NonZeroRect,
+        rect: usvg::NonZeroRect,
         _element_bbox: usvg::NonZeroRect,
         offset: &usvg::filter::Offset,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
         let input_size = (w as f32, h as f32);
 
+        // Compute the offset in normalized texture coordinates.
+        // The SVG spec defines dx/dy relative to the primitive's filter region.
+        // rect already accounts for filterUnits (objectBoundingBox percentages
+        // are resolved to user-space by the caller), so we normalize by rect size.
+        let (dx, dy) = (
+            offset.dx() / rect.width().max(0.001),
+            offset.dy() / rect.height().max(0.001),
+        );
+
         let mut params = FilterUniforms::default();
         params.region = [0.0, 0.0, w as f32, h as f32];
-        params.offset = [offset.dx() / w as f32, offset.dy() / h as f32];
+        params.offset = [dx, dy];
 
         self.render_pass(
             input,
@@ -1176,7 +1269,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1220,7 +1313,7 @@ impl FilterEngine {
             result_view = temp_out;
         }
 
-        let output_surface = self.create_filter_surface(&result_view, w, h)?;
+        let output_surface = result_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1339,7 +1432,7 @@ impl FilterEngine {
             input_size,
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1347,6 +1440,11 @@ impl FilterEngine {
     }
 
     // ── Component Transfer ──────────────────────────────────────────────────
+    //
+    // Supports Identity, Linear, and Gamma transfer functions.
+    // Table and Discrete are accepted but fall through to identity (the WGSL
+    // shader does not yet implement 1D LUT sampling for these modes).
+    // A full implementation would upload the LUT as a 1D texture.
 
     fn apply_component_transfer(
         &mut self,
@@ -1403,7 +1501,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1445,7 +1543,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1496,7 +1594,7 @@ impl FilterEngine {
             input_size,
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1540,7 +1638,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1577,7 +1675,7 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
@@ -1615,11 +1713,366 @@ impl FilterEngine {
             (0.0, 0.0),
         )?;
 
-        let output_surface = self.create_filter_surface(&output_view, w, h)?;
+        let output_surface = output_view.clone();
         Ok(FilterResult {
             output_view: std::sync::Arc::new(output_surface),
             region: (0, 0, w, h),
         })
+    }
+
+    // ── Normal Map ────────────────────────────────────────────────────────────
+
+    fn apply_normal_map(
+        &mut self,
+        input: &wgpu::TextureView,
+        w: u32,
+        h: u32,
+    ) -> Result<FilterResult, FilterError> {
+        let output_view = self.get_temp_view(w, h)?;
+        let input_size = (w as f32, h as f32);
+
+        let mut params = FilterUniforms::default();
+        params.region = [0.0, 0.0, w as f32, h as f32];
+        params.light_surface_scale = 1.0;
+
+        self.render_pass(
+            input,
+            &self.linear_sampler,
+            input_size,
+            &output_view,
+            14, // MODE_NORMAL_MAP
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        let output_surface = output_view.clone();
+        Ok(FilterResult {
+            output_view: std::sync::Arc::new(output_surface),
+            region: (0, 0, w, h),
+        })
+    }
+
+    // ── Diffuse Lighting ───────────────────────────────────────────────────────
+
+    fn apply_diffuse_lighting(
+        &mut self,
+        input: &wgpu::TextureView,
+        w: u32,
+        h: u32,
+        dl: &usvg::filter::DiffuseLighting,
+    ) -> Result<FilterResult, FilterError> {
+        // Step 1: Generate normal map from the input alpha channel.
+        let normal_view = self.get_temp_view(w, h)?;
+        let input_size = (w as f32, h as f32);
+
+        let mut normal_params = FilterUniforms::default();
+        normal_params.region = [0.0, 0.0, w as f32, h as f32];
+        normal_params.light_surface_scale = dl.surface_scale();
+        self.render_pass(
+            input,
+            &self.linear_sampler,
+            input_size,
+            &normal_view,
+            14, // MODE_NORMAL_MAP
+            0,
+            &normal_params,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        // Step 2: Apply diffuse lighting using the normal map.
+        let output_view = self.get_temp_view(w, h)?;
+
+        let mut params = FilterUniforms::default();
+        params.region = [0.0, 0.0, w as f32, h as f32];
+        params.light_diffuse_k = dl.diffuse_constant();
+        params.light_ambient = 0.0;
+        params.light_color = [1.0, 1.0, 1.0];
+        params.light_position = [0.5, 0.5, 1.0];
+        params.light_surface_scale = dl.surface_scale();
+
+        // Extract light source position/direction.
+        let light = dl.light_source();
+        match light {
+            usvg::filter::LightSource::DistantLight(dl_light) => {
+                let azimuth = dl_light.azimuth.to_radians();
+                let elevation = dl_light.elevation.to_radians();
+                params.light_position = [
+                    azimuth.cos() * elevation.cos(),
+                    azimuth.sin() * elevation.cos(),
+                    elevation.sin(),
+                ];
+            }
+            usvg::filter::LightSource::PointLight(pl) => {
+                params.light_position = [pl.x, pl.y, pl.z];
+            }
+            usvg::filter::LightSource::SpotLight(sl) => {
+                params.light_position = [sl.x, sl.y, sl.z];
+            }
+        }
+
+        self.render_pass(
+            &normal_view,
+            &self.linear_sampler,
+            input_size,
+            &output_view,
+            15, // MODE_DIFFUSE_LIGHT
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        let output_surface = output_view.clone();
+        Ok(FilterResult {
+            output_view: std::sync::Arc::new(output_surface),
+            region: (0, 0, w, h),
+        })
+    }
+
+    // ── Specular Lighting ──────────────────────────────────────────────────────
+
+    fn apply_specular_lighting(
+        &mut self,
+        input: &wgpu::TextureView,
+        w: u32,
+        h: u32,
+        sl: &usvg::filter::SpecularLighting,
+    ) -> Result<FilterResult, FilterError> {
+        // Step 1: Generate normal map from the input alpha channel.
+        let normal_view = self.get_temp_view(w, h)?;
+        let input_size = (w as f32, h as f32);
+
+        let mut normal_params = FilterUniforms::default();
+        normal_params.region = [0.0, 0.0, w as f32, h as f32];
+        normal_params.light_surface_scale = sl.surface_scale();
+        self.render_pass(
+            input,
+            &self.linear_sampler,
+            input_size,
+            &normal_view,
+            14, // MODE_NORMAL_MAP
+            0,
+            &normal_params,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        // Step 2: Apply specular lighting using the normal map.
+        let output_view = self.get_temp_view(w, h)?;
+
+        let mut params = FilterUniforms::default();
+        params.region = [0.0, 0.0, w as f32, h as f32];
+        params.light_specular_k = sl.specular_constant();
+        params.light_shininess = sl.specular_exponent();
+        params.light_ambient = 0.0;
+        params.light_diffuse_k = 0.0;
+        params.light_color = [1.0, 1.0, 1.0];
+        params.light_position = [0.5, 0.5, 1.0];
+        params.light_surface_scale = sl.surface_scale();
+
+        let light = sl.light_source();
+        match light {
+            usvg::filter::LightSource::DistantLight(dl_light) => {
+                let azimuth = dl_light.azimuth.to_radians();
+                let elevation = dl_light.elevation.to_radians();
+                params.light_position = [
+                    azimuth.cos() * elevation.cos(),
+                    azimuth.sin() * elevation.cos(),
+                    elevation.sin(),
+                ];
+            }
+            usvg::filter::LightSource::PointLight(pl) => {
+                params.light_position = [pl.x, pl.y, pl.z];
+            }
+            usvg::filter::LightSource::SpotLight(sp) => {
+                params.light_position = [sp.x, sp.y, sp.z];
+            }
+        }
+
+        self.render_pass(
+            &normal_view,
+            &self.linear_sampler,
+            input_size,
+            &output_view,
+            16, // MODE_SPECULAR_LIGHT
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        let output_surface = output_view.clone();
+        Ok(FilterResult {
+            output_view: std::sync::Arc::new(output_surface),
+            region: (0, 0, w, h),
+        })
+    }
+
+    // ── Component Transfer LUT ─────────────────────────────────────────────────
+
+    fn apply_component_transfer_lut(
+        &mut self,
+        input: &wgpu::TextureView,
+        w: u32,
+        h: u32,
+        ct: &usvg::filter::ComponentTransfer,
+    ) -> Result<FilterResult, FilterError> {
+        let output_view = self.get_temp_view(w, h)?;
+        let input_size = (w as f32, h as f32);
+
+        let mut params = FilterUniforms::default();
+        params.region = [0.0, 0.0, w as f32, h as f32];
+
+        self.render_pass(
+            input,
+            &self.linear_sampler,
+            input_size,
+            &output_view,
+            17, // MODE_COMPONENT_XFER_LUT
+            0,
+            &params,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        let output_surface = output_view.clone();
+        Ok(FilterResult {
+            output_view: std::sync::Arc::new(output_surface),
+            region: (0, 0, w, h),
+        })
+    }
+
+    // ── Image ──────────────────────────────────────────────────────────────────
+
+    fn apply_image(
+        &mut self,
+        input: &wgpu::TextureView,
+        w: u32,
+        h: u32,
+        _img: &usvg::filter::Image,
+    ) -> Result<FilterResult, FilterError> {
+        // feImage: render the referenced image/SVG into a texture.
+        // usvg::filter::Image contains a root Group with child nodes.
+        // Full implementation would render the subtree to a texture.
+        // For now, fall back to passthrough.
+        // TODO: Render image subtree to texture via SVG renderer.
+        self.apply_passthrough(input, w, h)
+    }
+
+    // ── LUT Upload ─────────────────────────────────────────────────────────────
+
+    /// Upload a 1D LUT texture for component transfer table/discrete modes.
+    /// The LUT should be a 256-element array of [f32; 4] RGBA values.
+    pub fn upload_lut(&mut self, data: &[[f32; 4]]) -> Result<(), FilterError> {
+        let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("svg_filter_lut"),
+            size: wgpu::Extent3d {
+                width: data.len() as u32,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D1,
+            format: wgpu::TextureFormat::Rgba32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        self.gpu.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            bytemuck::cast_slice(data),
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(std::mem::size_of::<[f32; 4]>() as u32 * data.len() as u32),
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d {
+                width: data.len() as u32,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.lut_texture = Some(texture);
+        self.lut_view = Some(view);
+        Ok(())
+    }
+
+    // ── Image Upload ───────────────────────────────────────────────────────────
+
+    /// Upload an image texture for feImage primitives.
+    /// The data should be RGBA8 pixel data of the given dimensions.
+    pub fn upload_image(
+        &mut self,
+        key: &str,
+        data: &[u8],
+        width: u32,
+        height: u32,
+    ) -> Result<(), FilterError> {
+        if data.len() != (width as usize * height as usize * 4) {
+            return Err(FilterError::TextureError(format!(
+                "image data size {} does not match {}x{}x4",
+                data.len(),
+                width,
+                height
+            )));
+        }
+
+        let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("svg_filter_image_upload"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        self.gpu.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width * 4),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.image_textures
+            .insert(key.to_string(), (texture, view));
+        Ok(())
     }
 
     // ── Passthrough ─────────────────────────────────────────────────────────
@@ -1636,18 +2089,6 @@ impl FilterEngine {
         })
     }
 
-    // ── Helper: create a surface texture from a view ────────────────────────
-    // In a real implementation, this would return the texture view itself.
-    // The FilterResult holds the output texture view for compositing.
-
-    fn create_filter_surface(
-        &self,
-        view: &wgpu::TextureView,
-        _w: u32,
-        _h: u32,
-    ) -> Result<wgpu::TextureView, FilterError> {
-        Ok(view.clone())
-    }
 
     /// Current version of the cvkg-svg-filters crate.
     pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -15,7 +15,7 @@ const SPOTLIGHT_SEARCH_HASH: u64 = 0xD00_0003;
 /// A command palette for searching and executing commands.
 pub struct MimirSpotlight {
     /// The full list of registered commands (never modified at render time).
-    pub(crate) all_commands: Vec<Command>,
+    pub(crate) all_commands: Vec<PaletteCommand>,
     /// The search text used for runtime filtering.
     pub(crate) search_text: String,
     /// Pre-selected index (used when opening via builder API).
@@ -24,7 +24,7 @@ pub struct MimirSpotlight {
     pub(crate) is_open: bool,
 }
 
-pub struct Command {
+pub struct PaletteCommand {
     pub label: String,
     pub shortcut: Option<String>,
     pub action: Arc<dyn Fn() + Send + Sync>,
@@ -84,7 +84,7 @@ impl MimirSpotlight {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.all_commands.push(Command {
+        self.all_commands.push(PaletteCommand {
             label: label.to_string(),
             shortcut: shortcut.map(|s| s.to_string()),
             action: Arc::new(action),
@@ -120,11 +120,11 @@ impl MimirSpotlight {
     }
 
     /// Returns the filtered commands based on the given search text.
-    fn filtered_commands(&self, search_text: &str) -> Vec<&Command> {
+    fn filtered_commands(&self, search_text: &str) -> Vec<&PaletteCommand> {
         if search_text.is_empty() {
             return self.all_commands.iter().collect();
         }
-        let mut matched: Vec<(&Command, u32)> = self
+        let mut matched: Vec<(&PaletteCommand, u32)> = self
             .all_commands
             .iter()
             .filter_map(|cmd| {
@@ -151,7 +151,7 @@ impl View for MimirSpotlight {
             let state = load_system_state();
             let sys_open: bool = state
                 .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
-                .map(|v| *v.read().unwrap())
+                .and_then(|v| v.read().ok().map(|g| *g))
                 .unwrap_or(self.is_open);
 
             // Seed system state from builder values on first render.
@@ -179,11 +179,11 @@ impl View for MimirSpotlight {
             let state = load_system_state();
             let sel = state
                 .get_component_state::<u64>(SPOTLIGHT_SELECTED_HASH)
-                .map(|v| *v.read().unwrap() as usize)
+                .and_then(|v| v.read().ok().map(|g| *g as usize))
                 .unwrap_or(self.selected_index);
             let txt = state
                 .get_component_state::<String>(SPOTLIGHT_SEARCH_HASH)
-                .map(|v| v.read().unwrap().clone())
+                .and_then(|v| v.read().ok().map(|g| g.clone()))
                 .unwrap_or_else(|| self.search_text.clone());
             (sel, txt)
         };
@@ -210,7 +210,7 @@ impl View for MimirSpotlight {
                                 let mut s = s.clone();
                                 let current: u64 = s
                                     .get_component_state::<u64>(SPOTLIGHT_SELECTED_HASH)
-                                    .map(|v| *v.read().unwrap())
+                                    .and_then(|v| v.read().ok().map(|g| *g))
                                     .unwrap_or(0);
                                 let next = if current == 0 {
                                     filtered_count.saturating_sub(1) as u64
@@ -226,7 +226,7 @@ impl View for MimirSpotlight {
                                 let mut s = s.clone();
                                 let current: u64 = s
                                     .get_component_state::<u64>(SPOTLIGHT_SELECTED_HASH)
-                                    .map(|v| *v.read().unwrap())
+                                    .and_then(|v| v.read().ok().map(|g| *g))
                                     .unwrap_or(0);
                                 let next = if filtered_count == 0 {
                                     0
@@ -275,7 +275,7 @@ impl View for MimirSpotlight {
                         let state = load_system_state();
                         let open = state
                             .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
-                            .map(|v| *v.read().unwrap())
+                            .and_then(|v| v.read().ok().map(|g| *g))
                             .unwrap_or(false);
                         if open {
                             (action)();

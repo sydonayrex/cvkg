@@ -47,7 +47,7 @@ fn test_container_snapshots() {
     let _menu = Menu::new(Text::new("Item"));
     let _list = VStack::new(0.0).child(Text::new("Row"));
     let _table = Table::new(Text::new("Cell"));
-    let _form = Form::new(Text::new("Field"));
+    let _form = SettingsForm::new(Text::new("Field"));
 
     insta::assert_snapshot!(
         "Container API",

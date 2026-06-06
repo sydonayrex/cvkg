@@ -11,6 +11,8 @@
 //   @group(0) @binding(2) var s_src: sampler;
 //   @group(0) @binding(3) var t_src2: texture_2d<f32>;  // second input (blend/composite/displacement)
 //   @group(0) @binding(4) var s_src2: sampler;
+//   @group(0) @binding(5) var t_lut: texture_1d<f32>;   // component transfer LUT
+//   @group(0) @binding(6) var s_lut: sampler;
 //
 // =============================================================================
 
@@ -58,7 +60,22 @@ struct FilterParams {
     turb_seed:      f32,
     turb_num_octaves: f32,
     _tpad:            f32,
+    // Lighting parameters
+    light_position:   vec3<f32>,
+    light_color:      vec3<f32>,
+    light_ambient:    f32,
+    light_diffuse_k:  f32,
+    light_specular_k: f32,
+    light_shininess:  f32,
+    light_surface_scale: f32,
+    _lpad:            f32,
+    // Component transfer LUT (sampled via a separate texture binding)
+    // The LUT is passed as a 1D texture, not inline in uniforms
 };
+
+// ── LUT Binding (for component transfer table/discrete) ──────────────────────
+@group(0) @binding(5) var t_lut: texture_1d<f32>;
+@group(0) @binding(6) var s_lut: sampler;
 
 // ── Mode Constants ───────────────────────────────────────────────────────────
 
@@ -76,13 +93,27 @@ const MODE_DISPLACEMENT:    u32 = 10u;
 const MODE_MORPHOLOGY:      u32 = 11u;
 const MODE_TILE:            u32 = 12u;
 const MODE_TURBULENCE:      u32 = 13u;
+const MODE_NORMAL_MAP:      u32 = 14u;
+const MODE_DIFFUSE_LIGHT:   u32 = 15u;
+const MODE_SPECULAR_LIGHT:  u32 = 16u;
+const MODE_COMPONENT_XFER_LUT: u32 = 17u;
 
-// Blend sub-modes
-const BLEND_NORMAL:   u32 = 0u;
-const BLEND_MULTIPLY: u32 = 1u;
-const BLEND_SCREEN:   u32 = 2u;
-const BLEND_DARKEN:   u32 = 3u;
-const BLEND_LIGHTEN:  u32 = 4u;
+// Blend sub-modes (extended)
+const BLEND_NORMAL:       u32 = 0u;
+const BLEND_MULTIPLY:     u32 = 1u;
+const BLEND_SCREEN:       u32 = 2u;
+const BLEND_DARKEN:       u32 = 3u;
+const BLEND_LIGHTEN:      u32 = 4u;
+const BLEND_OVERLAY:      u32 = 5u;
+const BLEND_HARD_LIGHT:   u32 = 6u;
+const BLEND_SOFT_LIGHT:   u32 = 7u;
+const BLEND_COLOR_DODGE:  u32 = 8u;
+const BLEND_COLOR_BURN:   u32 = 9u;
+const BLEND_EXCLUSION:    u32 = 10u;
+const BLEND_HUE:          u32 = 11u;
+const BLEND_SATURATION:   u32 = 12u;
+const BLEND_COLOR:        u32 = 13u;
+const BLEND_LUMINOSITY:   u32 = 14u;
 
 // Composite sub-modes
 const COMPOSITE_OVER:    u32 = 0u;
@@ -134,20 +165,24 @@ fn vs_filter(@builtin(vertex_index) idx: u32) -> VertexOutput {
 @fragment
 fn fs_filter(in: VertexOutput) -> @location(0) vec4<f32> {
     switch params.mode {
-        case MODE_GAUSSIAN_BLUR_H: { return gaussian_blur_h(in); }
-        case MODE_GAUSSIAN_BLUR_V: { return gaussian_blur_v(in); }
-        case MODE_COLOR_MATRIX:    { return color_matrix(in); }
-        case MODE_BLEND:           { return blend(in); }
-        case MODE_COMPOSITE:       { return composite(in); }
-        case MODE_FLOOD:           { return flood(in); }
-        case MODE_OFFSET:          { return offset(in); }
-        case MODE_MERGE:           { return merge(in); }
-        case MODE_COMPONENT_XFER:  { return component_transfer(in); }
-        case MODE_CONVOLVE:        { return convolve(in); }
-        case MODE_DISPLACEMENT:    { return displacement(in); }
-        case MODE_MORPHOLOGY:      { return morphology(in); }
-        case MODE_TILE:            { return tile(in); }
-        case MODE_TURBULENCE:      { return turbulence(in); }
+        case MODE_GAUSSIAN_BLUR_H:    { return gaussian_blur_h(in); }
+        case MODE_GAUSSIAN_BLUR_V:    { return gaussian_blur_v(in); }
+        case MODE_COLOR_MATRIX:       { return color_matrix(in); }
+        case MODE_BLEND:              { return blend(in); }
+        case MODE_COMPOSITE:          { return composite(in); }
+        case MODE_FLOOD:              { return flood(in); }
+        case MODE_OFFSET:             { return offset(in); }
+        case MODE_MERGE:              { return merge(in); }
+        case MODE_COMPONENT_XFER:     { return component_transfer(in); }
+        case MODE_CONVOLVE:           { return convolve(in); }
+        case MODE_DISPLACEMENT:       { return displacement(in); }
+        case MODE_MORPHOLOGY:         { return morphology(in); }
+        case MODE_TILE:               { return tile(in); }
+        case MODE_TURBULENCE:         { return turbulence(in); }
+        case MODE_NORMAL_MAP:         { return normal_map(in); }
+        case MODE_DIFFUSE_LIGHT:      { return diffuse_lighting(in); }
+        case MODE_SPECULAR_LIGHT:     { return specular_lighting(in); }
+        case MODE_COMPONENT_XFER_LUT: { return component_transfer_lut(in); }
         default: { return textureSample(t_src, s_src, in.texcoord); }
     }
 }
@@ -199,10 +234,13 @@ fn gaussian_blur_v(in: VertexOutput) -> vec4<f32> {
 
 fn color_matrix(in: VertexOutput) -> vec4<f32> {
     let src = textureSample(t_src, s_src, in.texcoord);
-    let r = dot(params.cm_row0, vec4<f32>(src.rgb, 1.0));
-    let g = dot(params.cm_row1, vec4<f32>(src.rgb, 1.0));
-    let b = dot(params.cm_row2, vec4<f32>(src.rgb, 1.0));
-    let a = dot(params.cm_row3, vec4<f32>(src.rgb, 1.0));
+    // Apply 4x5 color matrix: 4x4 color transform + 4x1 offset.
+    // cm_row0-3 store the 4 color coefficients per row.
+    // param0-3 store the offset (5th column) for r,g,b,a.
+    let r = dot(params.cm_row0, vec4<f32>(src.rgb, 1.0)) + params.param0;
+    let g = dot(params.cm_row1, vec4<f32>(src.rgb, 1.0)) + params.param1;
+    let b = dot(params.cm_row2, vec4<f32>(src.rgb, 1.0)) + params.param2;
+    let a = dot(params.cm_row3, vec4<f32>(src.rgb, 1.0)) + params.param3;
     return vec4<f32>(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), clamp(a, 0.0, 1.0));
 }
 
@@ -248,6 +286,15 @@ fn composite(in: VertexOutput) -> vec4<f32> {
         }
         case COMPOSITE_LIGHTER: {
             return a + b;
+        }
+        case 6u: { // Arithmetic: k1*a*b + k2*a + k3*b + k4
+            // param0=k1, param1=k2, param2=k3, param3=k4
+            let k1 = params.param0;
+            let k2 = params.param1;
+            let k3 = params.param2;
+            let k4 = params.param3;
+            let c = clamp(k1 * a * b + k2 * a + k3 * b + k4, vec4<f32>(0.0), vec4<f32>(1.0));
+            return c;
         }
         default { // OVER
             return a + b * (1.0 - fa);
@@ -458,4 +505,108 @@ fn turbulence(in: VertexOutput) -> vec4<f32> {
     // Return as RGBA (same value in all channels for turbulence)
     let v = clamp(value, 0.0, 1.0);
     return vec4<f32>(v, v, v, 1.0);
+}
+
+// ── Normal Map Generation ────────────────────────────────────────────────────
+// Computes surface normals from the alpha channel using Sobel operators.
+// Outputs a normal map in [0,1] range (mapped from [-1,1]).
+
+fn normal_map(in: VertexOutput) -> vec4<f32> {
+    let texel = 1.0 / params.src_size.xy;
+    let scale = params.light_surface_scale;
+
+    // Sample alpha in a 3x3 neighborhood
+    let a00 = textureSample(t_src, s_src, in.texcoord + vec2<f32>(-texel.x, -texel.y)).a;
+    let a10 = textureSample(t_src, s_src, in.texcoord + vec2<f32>( 0.0,    -texel.y)).a;
+    let a20 = textureSample(t_src, s_src, in.texcoord + vec2<f32>( texel.x, -texel.y)).a;
+    let a01 = textureSample(t_src, s_src, in.texcoord + vec2<f32>(-texel.x,  0.0)).a;
+    let a21 = textureSample(t_src, s_src, in.texcoord + vec2<f32>( texel.x,  0.0)).a;
+    let a02 = textureSample(t_src, s_src, in.texcoord + vec2<f32>(-texel.x,  texel.y)).a;
+    let a12 = textureSample(t_src, s_src, in.texcoord + vec2<f32>( 0.0,     texel.y)).a;
+    let a22 = textureSample(t_src, s_src, in.texcoord + vec2<f32>( texel.x,  texel.y)).a;
+
+    // Sobel operators
+    let dx = (a20 + 2.0 * a21 + a22) - (a00 + 2.0 * a01 + a02);
+    let dy = (a02 + 2.0 * a12 + a22) - (a00 + 2.0 * a10 + a20);
+
+    // Compute normal from gradient
+    let normal = normalize(vec3<f32>(-dx * scale, -dy * scale, 1.0));
+
+    // Map from [-1,1] to [0,1] for storage
+    return vec4<f32>(normal * 0.5 + 0.5, 1.0);
+}
+
+// ── Diffuse Lighting ─────────────────────────────────────────────────────────
+// Single-point light with ambient + diffuse (Lambertian) terms.
+// light_position: light direction (distant light) or position
+// light_color: RGB color of the light
+// light_ambient: ambient coefficient [0,1]
+// light_diffuse_k: diffuse coefficient [0,1]
+
+fn diffuse_lighting(in: VertexOutput) -> vec4<f32> {
+    // The input is a normal map (output of normal_map pass)
+    let normal_sample = textureSample(t_src, s_src, in.texcoord);
+    let normal = normalize(normal_sample.rgb * 2.0 - 1.0);
+
+    // Light direction (normalized)
+    let light_dir = normalize(params.light_position);
+
+    // Lambertian diffuse
+    let ndotl = max(dot(normal, light_dir), 0.0);
+
+    // Combine ambient + diffuse
+    let intensity = params.light_ambient + params.light_diffuse_k * ndotl;
+    let color = params.light_color * intensity;
+
+    return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), normal_sample.a);
+}
+
+// ── Specular Lighting ────────────────────────────────────────────────────────
+// Single-point light with ambient + diffuse + specular (Phong) terms.
+// light_specular_k: specular coefficient [0,1]
+// light_shininess: Phong exponent
+
+fn specular_lighting(in: VertexOutput) -> vec4<f32> {
+    // The input is a normal map (output of normal_map pass)
+    let normal_sample = textureSample(t_src, s_src, in.texcoord);
+    let normal = normalize(normal_sample.rgb * 2.0 - 1.0);
+
+    // Light direction (normalized)
+    let light_dir = normalize(params.light_position);
+
+    // View direction (assuming orthographic, looking down Z)
+    let view_dir = vec3<f32>(0.0, 0.0, 1.0);
+
+    // Lambertian diffuse
+    let ndotl = max(dot(normal, light_dir), 0.0);
+
+    // Phong specular: reflect(-light, normal) dot view
+    let reflect_dir = reflect(-light_dir, normal);
+    let spec = pow(max(dot(reflect_dir, view_dir), 0.0), params.light_shininess);
+
+    // Combine ambient + diffuse + specular
+    let intensity = params.light_ambient + params.light_diffuse_k * ndotl;
+    let specular = params.light_specular_k * spec;
+    let color = params.light_color * intensity + vec3<f32>(specular);
+
+    return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), normal_sample.a);
+}
+
+// ── Component Transfer with LUT ──────────────────────────────────────────────
+// Samples a 1D LUT texture for per-channel transfer functions.
+// The LUT is a 256x1 texture with 4 channels (R,G,B,A) packed sequentially.
+// Each channel's LUT is at offset channel_index * 256.
+
+fn component_transfer_lut(in: VertexOutput) -> vec4<f32> {
+    let src = textureSample(t_src, s_src, in.texcoord);
+    let lut_size = 256.0;
+
+    // Sample each channel's transfer function from the LUT
+    // LUT layout: R values [0,255], G values [256,511], B values [512,767], A values [768,1023]
+    let r = textureSample(t_lut, s_lut, vec2<f32>(src.r, 0.0)).r;
+    let g = textureSample(t_lut, s_lut, vec2<f32>(src.g, 0.333)).g;
+    let b = textureSample(t_lut, s_lut, vec2<f32>(src.b, 0.666)).b;
+    let a = textureSample(t_lut, s_lut, vec2<f32>(src.a, 1.0)).a;
+
+    return vec4<f32>(r, g, b, a);
 }

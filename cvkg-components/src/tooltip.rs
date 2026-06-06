@@ -246,7 +246,7 @@ impl<V: View> View for Tooltip<V> {
             let state = cvkg_core::load_system_state();
             state
                 .get_component_state::<HoverState>(self.id_hash)
-                .map(|lock| *lock.read().unwrap())
+                .and_then(|lock| lock.read().ok().map(|g| *g))
                 .unwrap_or(HoverState {
                     is_hovered: false,
                     hover_start_time: 0.0,
@@ -300,7 +300,7 @@ impl<V: View> View for Tooltip<V> {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
             {
-                let mut solver = solver_arc.write().unwrap();
+                let mut solver = solver_arc.write().expect("lock poisoned");
                 solver.set_target(target);
                 t_val = solver.tick(renderer.delta_time());
             }

@@ -241,11 +241,11 @@ pub use card::RunesCard;
 pub use clipped_corner::*;
 pub use collaboration::*;
 pub use command::*;
-pub use command_palette::{BifrostLauncher, MimirSpotlight};
+pub use command_palette::{BifrostLauncher, PaletteCommand, MimirSpotlight};
 pub use container::{
-    DialogAction, Form, GarmAlert, GeriDialog, GjallarSplitter, GraniSheet, HStack, LazyVStack,
-    Menu, NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, SheetModifier,
-    SheetPosition, TabView, Table, VStack,
+    DialogAction, SettingsForm, GarmAlert, GeriDialog, GjallarSplitter, GraniSheet, HStack,
+    LazyVStack, Menu, NavigationSplitView, NavigationStack, SagaAccordion, ScrollView,
+    SheetModifier, SheetPosition, TabView, Table, VStack,
 };
 pub use data_grid::RunesTable;
 pub use devtools::*;
@@ -322,25 +322,55 @@ pub mod toast;
 pub mod tooltip;
 pub mod transitions;
 pub mod tyr_security;
+pub mod trustmark;
+pub mod await_veil;
+pub mod computed_signal;
+pub mod token_stream;
+pub mod phasegate;
+pub mod flexiscope;
+pub mod a11y_beacon;
+pub mod morph_bridge;
+pub mod flux_layout;
+pub mod drop_vault;
+pub mod consent_gate;
+pub mod vtree;
+pub mod prompt_forge;
+pub mod lingua_tong;
+pub mod sync_weave;
 
 pub use a11y_inspector::{A11yInspector, A11yNode};
+pub use a11y_beacon::{A11yBeacon, A11yBeaconExt};
 pub use autocomplete::*;
+pub use await_veil::AwaitVeil;
 pub use bragi_creative::*;
 pub use combobox::*;
+pub use computed_signal::{ComputedSignal, InputRef};
+pub use consent_gate::{ConsentGate, DataTrail, TrailKind};
 pub use cvkg_layout as layout;
 pub use datepicker::*;
+pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
 pub use eir_motion::*;
+pub use flexiscope::{fluid_typography, ContainerLayout, FlexiScope, ScopeThreshold};
+pub use flux_layout::FluxState;
 pub use hlin_accessibility::*;
+pub use lingua_tong::{current_locale, is_rtl, load_translations, set_locale, t, t_with};
+pub use morph_bridge::{lerp_rect, MorphBridge};
 pub use notification_center::*;
 pub use outline_view::{OutlineNode, OutlineView};
 pub use perf_overlay::PerfOverlay;
+pub use phasegate::{GateTier, PhaseGate};
 pub use popover::*;
+pub use prompt_forge::{ForgeSegment, PromptForge};
 pub use radio_group::*;
+pub use sync_weave::{PeerCursor, SyncEditor, SyncWeave, WeaveOp};
 pub use text_editor::TextEditor;
+pub use token_stream::TokenStream;
 pub use toast::*;
 pub use tooltip::*;
 pub use transitions::*;
+pub use trustmark::*;
 pub use tyr_security::*;
+pub use vtree::{VTree, VTreeNode};
 
 // Internal Never type for primitive views
 #[doc(hidden)]

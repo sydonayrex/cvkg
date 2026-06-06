@@ -3,7 +3,7 @@
 //
 // Run with: cargo run --example norse_tools_example
 
-use cvkg_components::eir_motion::Easing;
+use cvkg_components::eir_motion::MotionEasing as Easing;
 use cvkg_components::{
     A11yRole, BragiCreative, EirMotion, HlinAccessibility, PermissionLevel, TyrSecurity,
 };

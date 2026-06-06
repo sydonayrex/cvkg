@@ -335,7 +335,7 @@ impl View for DatePicker {
         let is_expanded = {
             let s = cvkg_core::load_system_state();
             s.get_component_state::<bool>(id_hash)
-                .map(|v| *v.read().unwrap())
+                .and_then(|v| v.read().ok().map(|g| *g))
                 .unwrap_or(false)
         };
 

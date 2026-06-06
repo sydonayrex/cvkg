@@ -70,7 +70,7 @@ impl View for NotificationCenterPanel {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
             {
-                let mut solver = solver_arc.write().unwrap();
+                let mut solver = solver_arc.write().expect("lock poisoned");
                 solver.set_target(target);
                 t_val = solver.tick(renderer.delta_time());
             }

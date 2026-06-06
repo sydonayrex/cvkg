@@ -34,7 +34,7 @@ impl View for ScribingStone {
         renderer.fill_rect(rect, [0.02, 0.02, 0.03, 1.0]);
 
         // 2. Render existing strokes
-        let strokes = self.strokes.lock().unwrap();
+        let strokes = self.strokes.lock().expect("mutex poisoned");
         for stroke in strokes.iter() {
             for window in stroke.windows(2) {
                 let p1 = window[0];
@@ -49,7 +49,7 @@ impl View for ScribingStone {
             "pointerdown",
             Arc::new(move |ev| {
                 if let Event::PointerDown { x, y, .. } = ev {
-                    let mut s = strokes_clone.lock().unwrap();
+                    let mut s = strokes_clone.lock().expect("mutex poisoned");
                     s.push(vec![[x, y]]);
                 }
             }),
@@ -60,7 +60,7 @@ impl View for ScribingStone {
             "pointermove",
             Arc::new(move |ev| {
                 if let Event::PointerMove { x, y, .. } = ev {
-                    let mut s = strokes_clone2.lock().unwrap();
+                    let mut s = strokes_clone2.lock().expect("mutex poisoned");
                     if let Some(last_stroke) = s.last_mut() {
                         last_stroke.push([x, y]);
                     }

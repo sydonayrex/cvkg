@@ -243,7 +243,7 @@ impl View for Button {
             if let Some(solver_arc) =
                 s.get_component_state::<cvkg_anim::SleipnirSolver>(hover_anim_hash)
             {
-                let mut solver = solver_arc.write().unwrap();
+                let mut solver = solver_arc.write().expect("lock poisoned");
                 solver.set_target(hover_target);
                 hover_t = solver.tick(renderer.delta_time());
             }
@@ -275,7 +275,7 @@ impl View for Button {
             if let Some(solver_arc) =
                 s.get_component_state::<cvkg_anim::SleipnirSolver>(press_anim_hash)
             {
-                let mut solver = solver_arc.write().unwrap();
+                let mut solver = solver_arc.write().expect("lock poisoned");
                 solver.set_target(press_target);
                 press_t = solver.tick(renderer.delta_time());
             }
@@ -594,7 +594,7 @@ impl View for Toggle {
         {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(id_hash) {
-                let mut solver = solver_arc.write().unwrap();
+                let mut solver = solver_arc.write().expect("lock poisoned");
                 solver.set_target(target);
                 toggle_t = solver.tick(renderer.delta_time());
             }
@@ -1238,7 +1238,7 @@ impl Input {
     fn get_text_state(&self) -> cvkg_core::TextInputState {
         let sys = cvkg_core::load_system_state();
         if let Some(arc) = sys.get_component_state::<cvkg_core::TextInputState>(self.state_id) {
-            arc.read().unwrap().clone()
+            arc.read().ok().map(|g| g.clone()).unwrap_or_default()
         } else {
             let mut state = cvkg_core::TextInputState::new(self.text.clone());
             state.focused = self.is_focused;
@@ -1427,14 +1427,14 @@ impl View for Input {
                             let old_text_state = if let Some(arc) =
                                 sys.get_component_state::<cvkg_core::TextInputState>(state_id)
                             {
-                                arc.read().unwrap().clone()
+                                arc.read().ok().map(|g| g.clone()).unwrap_or_default()
                             } else {
                                 cvkg_core::TextInputState::new("")
                             };
                             let mut text_state = old_text_state.clone();
 
                             match key.as_str() {
-                                s if s.len() == 1 && !s.chars().next().unwrap().is_control() => {
+                                s if s.len() == 1 && !s.chars().next().expect("unexpected None").is_control() => {
                                     text_state.insert(s);
                                     changed = true;
                                 }
@@ -1532,7 +1532,7 @@ impl View for Input {
                                 if let Some(arc) =
                                     sys.get_component_state::<cvkg_core::TextInputState>(state_id)
                                 {
-                                    let text = arc.read().unwrap().text.clone();
+                                    let text = arc.read().ok().map(|g| g.text.clone()).unwrap_or_default();
                                     (on_commit)(text);
                                 }
                             }
@@ -1553,7 +1553,7 @@ impl View for Input {
                             let old_text_state = if let Some(arc) =
                                 sys.get_component_state::<cvkg_core::TextInputState>(state_id)
                             {
-                                arc.read().unwrap().clone()
+                                arc.read().ok().map(|g| g.clone()).unwrap_or_default()
                             } else {
                                 cvkg_core::TextInputState::new("")
                             };
@@ -1620,7 +1620,7 @@ impl View for Input {
                             let mut text_state = if let Some(arc) =
                                 sys.get_component_state::<cvkg_core::TextInputState>(state_id)
                             {
-                                arc.read().unwrap().clone()
+                                arc.read().ok().map(|g| g.clone()).unwrap_or_default()
                             } else {
                                 cvkg_core::TextInputState::new("")
                             };
@@ -1910,7 +1910,7 @@ impl<V: Clone + View> View for Select<V> {
         // Read open state from system state
         let is_open = cvkg_core::load_system_state()
             .get_component_state::<bool>(self.id_hash)
-            .map(|v| *v.read().unwrap())
+            .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(self.is_open);
 
         // Main select box
@@ -1972,7 +1972,7 @@ impl<V: Clone + View> View for Select<V> {
             // Read hover index from system state
             let hover_idx = cvkg_core::load_system_state()
                 .get_component_state::<usize>(self.id_hash.wrapping_add(1))
-                .map(|v| *v.read().unwrap())
+                .and_then(|v| v.read().ok().map(|g| *g))
                 .or(self.hover_index);
 
             for (i, (label, _)) in self.options.iter().enumerate() {
@@ -2023,7 +2023,7 @@ impl<V: Clone + View> View for Select<V> {
                             let mut s = s.clone();
                             let current = s
                                 .get_component_state::<bool>(id_hash)
-                                .map(|v| *v.read().unwrap())
+                                .and_then(|v| v.read().ok().map(|g| *g))
                                 .unwrap_or(false);
                             s.set_component_state(id_hash, !current);
                             s
@@ -2046,7 +2046,7 @@ impl<V: Clone + View> View for Select<V> {
                                 let mut s = s.clone();
                                 let current = s
                                     .get_component_state::<usize>(id_hash.wrapping_add(1))
-                                    .map(|v| *v.read().unwrap())
+                                    .and_then(|v| v.read().ok().map(|g| *g))
                                     .unwrap_or(0);
                                 let next = (current + 1).min(options_count.saturating_sub(1));
                                 s.set_component_state(id_hash.wrapping_add(1), next);
@@ -2058,7 +2058,7 @@ impl<V: Clone + View> View for Select<V> {
                                 let mut s = s.clone();
                                 let current = s
                                     .get_component_state::<usize>(id_hash.wrapping_add(1))
-                                    .map(|v| *v.read().unwrap())
+                                    .and_then(|v| v.read().ok().map(|g| *g))
                                     .unwrap_or(0);
                                 let next = current.saturating_sub(1);
                                 s.set_component_state(id_hash.wrapping_add(1), next);
@@ -2176,7 +2176,7 @@ impl View for Dropdown {
         let is_expanded = {
             let s = cvkg_core::load_system_state();
             s.get_component_state::<bool>(id_hash)
-                .map(|v| *v.read().unwrap())
+                .and_then(|v| v.read().ok().map(|g| *g))
                 .unwrap_or(false)
         };
 
@@ -2699,106 +2699,6 @@ impl View for Checkbox {
                 true
             }
             _ => false,
-        }
-    }
-}
-
-/// Radio Group for exclusive selection.#[derive(Clone)]
-pub struct RadioGroup<V> {
-    options: Vec<(String, V)>,
-    selected_index: usize,
-    on_change: std::sync::Arc<dyn Fn(usize) + Send + Sync>,
-}
-
-impl<V: View + Clone> RadioGroup<V> {
-    pub fn new(selected_index: usize, on_change: impl Fn(usize) + Send + Sync + 'static) -> Self {
-        Self {
-            options: Vec::new(),
-            selected_index,
-            on_change: std::sync::Arc::new(on_change),
-        }
-    }
-    pub fn option(mut self, label: impl Into<String>, view: V) -> Self {
-        self.options.push((label.into(), view));
-        self
-    }
-}
-
-impl<V: View + Clone> View for RadioGroup<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "RadioGroup");
-        for (idx, (label, _)) in self.options.iter().enumerate() {
-            let item_rect = Rect {
-                x: rect.x,
-                y: rect.y + idx as f32 * 24.0,
-                width: rect.width,
-                height: 24.0,
-            };
-            renderer.push_vnode(item_rect, "RadioItem");
-
-            let dot_radius = if idx == self.selected_index { 5.0 } else { 4.0 };
-            renderer.fill_rounded_rect(
-                Rect {
-                    x: rect.x + 9.0 - dot_radius,
-                    y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius,
-                    width: dot_radius * 2.0,
-                    height: dot_radius * 2.0,
-                },
-                dot_radius,
-                if idx == self.selected_index {
-                    theme::accent()
-                } else {
-                    theme::surface_elevated()
-                },
-            );
-            if idx != self.selected_index {
-                renderer.stroke_rect(
-                    Rect {
-                        x: rect.x + 9.0 - dot_radius,
-                        y: rect.y + idx as f32 * 24.0 + 12.0 - dot_radius,
-                        width: dot_radius * 2.0,
-                        height: dot_radius * 2.0,
-                    },
-                    theme::border_strong(),
-                    1.0,
-                );
-            }
-            renderer.draw_text(
-                label,
-                rect.x + 22.0,
-                rect.y + idx as f32 * 24.0 + 11.0,
-                14.0,
-                theme::text(),
-            );
-
-            let on_change = self.on_change.clone();
-            renderer.register_handler(
-                "pointerclick",
-                Arc::new(move |_| {
-                    on_change(idx);
-                }),
-            );
-            renderer.pop_vnode();
-        }
-        renderer.pop_vnode();
-    }
-    fn intrinsic_size(
-        &self,
-        renderer: &mut dyn Renderer,
-        proposal: cvkg_core::SizeProposal,
-    ) -> cvkg_core::Size {
-        let max_width = self
-            .options
-            .iter()
-            .map(|(l, _)| renderer.measure_text(l, 14.0).0)
-            .fold(0.0, f32::max);
-        cvkg_core::Size {
-            width: (proposal.width.unwrap_or(max_width + 30.0)).max(max_width + 30.0),
-            height: self.options.len() as f32 * 24.0,
         }
     }
 }

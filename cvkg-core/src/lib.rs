@@ -204,7 +204,14 @@ pub enum Realm {
     Asgard,
 }
 
-/// A node in the Temporal Graph representing a cognitive anchor
+/// Priority for screen reader announcements via `Renderer::announce`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnouncementPriority {
+    /// Wait for current speech to finish before announcing.
+    Polite,
+    /// Interrupt current speech to announce immediately.
+    Assertive,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemporalNode {
     /// Unique identifier for this node
@@ -3052,6 +3059,35 @@ pub trait Renderer: ElapsedTime + Send {
     }
     /// Sets the precise Vili SDF Shape boundary for hit-testing.
     fn set_sdf_shape(&mut self, _shape: crate::layout::SdfShape) {}
+
+    // -- Portal / PhaseGate rendering -----------------------------------------
+
+    /// Begin rendering into the portal root layer instead of the inline tree.
+    /// All draw calls between `enter_portal` and `exit_portal` are collected
+    /// into a separate buffer that is composited AFTER the main tree.
+    ///
+    /// WHY separate buffer: The main tree may have clipping, transforms, or
+    /// opacity that should NOT affect overlays. The portal layer renders on top
+    /// of everything, ignoring the local coordinate system.
+    fn enter_portal(&mut self, _z_index: i32) {}
+
+    /// Exit the portal layer and return to inline rendering.
+    /// The portal content collected since `enter_portal` is now sealed --
+    /// no more draw calls will be appended to it.
+    fn exit_portal(&mut self) {}
+
+    /// Get the current viewport size in logical pixels.
+    /// Used by portal content to size itself to the full screen.
+    fn viewport_size(&self) -> Rect {
+        Rect::new(0.0, 0.0, 1920.0, 1080.0)
+    }
+
+    // -- Accessibility announcements -----------------------------------------
+
+    /// Announce a message to screen readers via the platform accessibility API.
+    /// This call is non-blocking. The message is queued and the screen reader
+    /// will speak it at its own pace.
+    fn announce(&mut self, _message: &str, _priority: AnnouncementPriority) {}
 }
 
 /// Utility for accessibility compliance (WCAG 2.1).

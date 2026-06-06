@@ -323,7 +323,7 @@ impl ToastManager {
             let anim_hash = t.id.wrapping_add(88888);
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
             {
-                let solver = solver_arc.read().unwrap();
+                let solver = solver_arc.read().expect("lock poisoned");
                 if solver.is_settled() {
                     return false; // Settled at 0.0, purge it
                 } else {
@@ -460,7 +460,7 @@ impl ToastManager {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
             {
-                let mut solver = solver_arc.write().unwrap();
+                let mut solver = solver_arc.write().expect("lock poisoned");
                 solver.set_target(target);
                 t_val = solver.tick(renderer.delta_time());
             }
