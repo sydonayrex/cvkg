@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "adele-web-demo"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 
 [features]
@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 cvkg-core = { path = "../../cvkg-core", version = "0.2.8" }
-cvkg-render-web = { path = "../../cvkg-render-web", version = "0.2.6" }
+cvkg-render-web = { path = "../../cvkg-render-web", version = "0.2.9" }
 cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.8" }
 cvkg-components = { path = "../../cvkg-components", version = "0.2.8" }
 cvkg-themes = { path = "../../cvkg-themes", version = "0.2.8" }
