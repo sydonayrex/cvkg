@@ -5,16 +5,18 @@
 //! merge of concurrent edits.
 
 use crate::theme;
-use cvkg_core::{Event, Never, Rect, Renderer, View};
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// A single character in the CRDT buffer with a unique position identifier.
 #[derive(Debug, Clone)]
-struct WeaveChar {
+pub struct WeaveChar {
     position: Vec<u64>,
     value: char,
+    #[allow(dead_code)]
     site_id: u64,
+    #[allow(dead_code)]
     timestamp: u64,
     deleted: bool,
 }
@@ -151,6 +153,8 @@ pub struct SyncEditor {
     buffer: Arc<Mutex<SyncWeave>>,
     remote_cursors: Arc<Mutex<HashMap<u64, PeerCursor>>>,
     cursor_pos: Arc<Mutex<usize>>,
+    /// Unique site ID for this editor instance.
+    #[allow(dead_code)]
     site_id: u64,
 }
 

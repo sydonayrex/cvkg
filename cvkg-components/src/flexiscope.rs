@@ -9,7 +9,11 @@ use cvkg_core::{Never, Rect, Renderer, View};
 /// A wrapper that selects different layout modes based on container width.
 #[derive(Clone)]
 pub struct FlexiScope<V: View, B: ContainerLayout> {
+    /// The content view to render.
     content: V,
+    /// Breakpoints: width thresholds and corresponding layout modes.
+    /// Stored for future use by the layout engine.
+    #[allow(dead_code)]
     breakpoints: Vec<ScopeThreshold<B>>,
 }
 

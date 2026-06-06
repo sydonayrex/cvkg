@@ -4,7 +4,7 @@
 //! All user-visible strings in components should go through this system.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 
 static LOCALE: OnceLock<Mutex<String>> = OnceLock::new();
 static TRANSLATIONS: OnceLock<Mutex<HashMap<String, HashMap<String, String>>>> = OnceLock::new();

@@ -1720,8 +1720,11 @@ impl FilterEngine {
         })
     }
 
-    // ── Normal Map ────────────────────────────────────────────────────────────
-
+    // ── Normal Map ──────────────────────────────────────────────────────────────
+    /// Generate a normal map from the input alpha channel using Sobel operators.
+    /// This is used internally by the lighting filters, but also exposed for
+    /// direct use (e.g., for bump mapping effects).
+    #[allow(dead_code)]
     fn apply_normal_map(
         &mut self,
         input: &wgpu::TextureView,
@@ -1918,12 +1921,15 @@ impl FilterEngine {
 
     // ── Component Transfer LUT ─────────────────────────────────────────────────
 
+    /// Component transfer using a 1D LUT texture for table/discrete modes.
+    /// The LUT must be uploaded via `upload_lut` before calling this.
+    #[allow(dead_code)]
     fn apply_component_transfer_lut(
         &mut self,
         input: &wgpu::TextureView,
         w: u32,
         h: u32,
-        ct: &usvg::filter::ComponentTransfer,
+        _ct: &usvg::filter::ComponentTransfer,
     ) -> Result<FilterResult, FilterError> {
         let output_view = self.get_temp_view(w, h)?;
         let input_size = (w as f32, h as f32);
