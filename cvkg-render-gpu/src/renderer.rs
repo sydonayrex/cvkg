@@ -12,10 +12,10 @@ use lyon::tessellation::{
 };
 use crate::types::*;
 use crate::vertex::*;
-use crate::atlas::YggdrasilPacker;
+use crate::heim::SundrPacker;
 use cvkg_core::{ColorTheme, SceneUniforms};
 use crate::kvasir;
-use crate::{WGSL_SRC, WGSL_OPAQUE, WGSL_GLASS, WGSL_PBR, WGSL_GRADIENT};
+use crate::{WGSL_SRC, WGSL_OPAQUE, WGSL_GLASS};
 use crate::draw::{parse_svg_animations, usvg_to_lyon};
 
 
@@ -36,12 +36,12 @@ pub struct SurtrRenderer {
     pub(crate) current_window: Option<winit::window::WindowId>,
     pub headless_context: Option<HeadlessContext>,
 
-    // Mega-Atlas (Shared across all windows)
+    // Mega-Heim (Shared across all windows)
     pub(crate) text_engine: cvkg_runic_text::RunicTextEngine,
-    pub(crate) mega_atlas_tex: wgpu::Texture,
-    pub(crate) mega_atlas_bind_group: wgpu::BindGroup,
-    pub(crate) text_cache: LruCache<u64, (Rect, f32, f32)>,
-    pub(crate) atlas_packer: YggdrasilPacker,
+    pub(crate) mega_heim_tex: wgpu::Texture,
+    pub(crate) mega_heim_bind_group: wgpu::BindGroup,
+    pub(crate) text_cache: LruCache<u64, (Rect, f32, f32, f32, f32)>,
+    pub(crate) heim_packer: SundrPacker,
     pub(crate) image_uv_registry: LruCache<String, Rect>,
     pub(crate) texture_registry: LruCache<String, u32>,
     pub(crate) texture_views: Vec<wgpu::TextureView>,
@@ -95,10 +95,6 @@ pub struct SurtrRenderer {
     pub(crate) opaque_pipeline: wgpu::RenderPipeline,
     /// Specialized glass material pipeline (mode 7 only, ~150 lines of complex math).
     pub(crate) glass_pipeline: wgpu::RenderPipeline,
-    /// Specialized 3D PBR pipeline (modes 13, 14, 21 — raymarching).
-    pub(crate) pbr_pipeline: wgpu::RenderPipeline,
-    /// Specialized gradient/shadow pipeline (modes 15, 18).
-    pub(crate) gradient_pipeline: wgpu::RenderPipeline,
     pub(crate) background_pipeline: wgpu::RenderPipeline,
     pub(crate) bloom_extract_pipeline: wgpu::RenderPipeline,
     /// Identity copy pipeline for Pass 2 backdrop blur (all pixels, no luminance gate).
@@ -651,14 +647,6 @@ impl SurtrRenderer {
             label: Some("Muspelheim Glass"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_GLASS)),
         });
-        let pbr_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Muspelheim PBR"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_PBR)),
-        });
-        let gradient_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Muspelheim Gradient"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_GRADIENT)),
-        });
 
         let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim Opaque"),
@@ -679,7 +667,7 @@ impl SurtrRenderer {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: Some(true),
+                depth_write_enabled: Some(false),
                 depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
@@ -697,46 +685,6 @@ impl SurtrRenderer {
             },
             fragment: Some(wgpu::FragmentState {
                 module: &glass_shader, entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None, cache: None,
-        });
-        let pbr_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Muspelheim PBR"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &pbr_shader, entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &pbr_shader, entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None, multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None, cache: None,
-        });
-        let gradient_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Muspelheim Gradient"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &gradient_shader, entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &gradient_shader, entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format, blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
@@ -973,9 +921,9 @@ impl SurtrRenderer {
             cache: None,
         });
 
-        // Forge the Mega-Atlas (4096x4096 RGBA for production batching)
-        let mega_atlas_tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Surtr Mega-Atlas"),
+        // Forge the Mega-Heim (4096x4096 RGBA for production batching)
+        let mega_heim_tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Surtr Mega-Heim"),
             size: wgpu::Extent3d {
                 width: 4096,
                 height: 4096,
@@ -990,8 +938,8 @@ impl SurtrRenderer {
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
-        let mega_atlas_view_obj =
-            mega_atlas_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let mega_heim_view_obj =
+            mega_heim_tex.create_view(&wgpu::TextureViewDescriptor::default());
         let text_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -1045,10 +993,10 @@ impl SurtrRenderer {
 
         let mut texture_views_list: Vec<wgpu::TextureView> =
             (0..256).map(|_| dummy_view.clone()).collect();
-        texture_views_list[0] = mega_atlas_view_obj.clone();
+        texture_views_list[0] = mega_heim_view_obj.clone();
 
         let views_refs: Vec<&wgpu::TextureView> = texture_views_list.iter().collect();
-        let mega_atlas_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let mega_heim_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -1060,7 +1008,7 @@ impl SurtrRenderer {
                     resource: wgpu::BindingResource::Sampler(&text_sampler),
                 },
             ],
-            label: Some("Mega-Atlas Bind Group"),
+            label: Some("Mega-Heim Bind Group"),
         });
 
         let dummy_views_refs: Vec<&wgpu::TextureView> = (0..256).map(|_| &dummy_view).collect();
@@ -1097,8 +1045,8 @@ impl SurtrRenderer {
         let mut texture_registry = std::collections::HashMap::new();
         let mut texture_bind_groups = Vec::new();
 
-        texture_registry.insert("__mega_atlas".to_string(), 0);
-        texture_bind_groups.push(mega_atlas_bind_group.clone());
+        texture_registry.insert("__mega_heim".to_string(), 0);
+        texture_bind_groups.push(mega_heim_bind_group.clone());
 
         // Forge the Anvil (Buffers)
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -1297,8 +1245,6 @@ impl SurtrRenderer {
             pipeline,
             opaque_pipeline,
             glass_pipeline,
-            pbr_pipeline,
-            gradient_pipeline,
             bloom_extract_pipeline,
             copy_pipeline,
             blur_h_pipeline,
@@ -1306,10 +1252,10 @@ impl SurtrRenderer {
             composite_pipeline,
             env_bind_group_layout,
             text_engine: cvkg_runic_text::RunicTextEngine::default(),
-            mega_atlas_tex,
-            mega_atlas_bind_group,
+            mega_heim_tex,
+            mega_heim_bind_group,
             text_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
-            atlas_packer: YggdrasilPacker::new(4096, 4096),
+            heim_packer: SundrPacker::new(4096, 4096),
             image_uv_registry: LruCache::new(NonZeroUsize::new(256).unwrap()),
             texture_registry: LruCache::new(NonZeroUsize::new(255).unwrap()),
             texture_views: texture_views_list,
@@ -1387,7 +1333,7 @@ impl SurtrRenderer {
 
     pub(crate) fn rebuild_texture_array_bind_group(&mut self) {
         let views: Vec<&wgpu::TextureView> = self.texture_views.iter().collect();
-        self.mega_atlas_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+        self.mega_heim_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -1415,7 +1361,7 @@ impl SurtrRenderer {
 
         // Calculate Texture VRAM
         let mut texture_bytes = 0;
-        texture_bytes += 4096 * 4096 * 4; // Mega Atlas (RGBA8)
+        texture_bytes += 4096 * 4096 * 4; // Mega Heim (RGBA8)
         texture_bytes += 4; // Dummy (RGBA8)
 
         for ctx in self.surfaces.values() {
@@ -2279,13 +2225,13 @@ impl SurtrRenderer {
         self.start_time = std::time::Instant::now();
     }
 
-    /// reclaim_vram — Atomic recycling of the Mega-Atlas and all associated caches.
-    /// This prevents OOM and silent failures by quenching the atlas when full.
+    /// reclaim_vram — Atomic recycling of the Mega-Heim and all associated caches.
+    /// This prevents OOM and silent failures by quenching the heim when full.
     pub fn reclaim_vram(&mut self) {
-        log::warn!("[GPU] Yggdrasil Compaction: Compacting Mega-Atlas...");
+        log::warn!("[GPU] Sundr Compaction: Compacting Mega-Heim...");
 
-        let new_mega_atlas_tex = self.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Yggdrasil Mega-Atlas (Compacted)"),
+        let new_mega_heim_tex = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Sundr Mega-Heim (Compacted)"),
             size: wgpu::Extent3d {
                 width: 4096,
                 height: 4096,
@@ -2301,11 +2247,11 @@ impl SurtrRenderer {
             view_formats: &[],
         });
 
-        let mut new_packer = YggdrasilPacker::new(4096, 4096);
+        let mut new_packer = SundrPacker::new(4096, 4096);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Atlas Compaction Encoder"),
+                label: Some("Heim Compaction Encoder"),
             });
 
         let image_entries: Vec<(String, Rect)> = self
@@ -2325,7 +2271,7 @@ impl SurtrRenderer {
                 if let Some((new_x, new_y)) = new_packer.pack(w_px, h_px) {
                     encoder.copy_texture_to_texture(
                         wgpu::TexelCopyTextureInfo {
-                            texture: &self.mega_atlas_tex,
+                            texture: &self.mega_heim_tex,
                             mip_level: 0,
                             origin: wgpu::Origin3d {
                                 x: old_x_px,
@@ -2335,7 +2281,7 @@ impl SurtrRenderer {
                             aspect: wgpu::TextureAspect::All,
                         },
                         wgpu::TexelCopyTextureInfo {
-                            texture: &new_mega_atlas_tex,
+                            texture: &new_mega_heim_tex,
                             mip_level: 0,
                             origin: wgpu::Origin3d {
                                 x: new_x,
@@ -2362,9 +2308,9 @@ impl SurtrRenderer {
             }
         }
 
-        let text_entries: Vec<(u64, (Rect, f32, f32))> =
+        let text_entries: Vec<(u64, (Rect, f32, f32, f32, f32))> =
             self.text_cache.iter().map(|(k, v)| (*k, *v)).collect();
-        for (hash, (old_uv, w_f, h_f)) in text_entries {
+        for (hash, (old_uv, w_f, h_f, x_off, y_off)) in text_entries {
             let w_px = (old_uv.width * 4096.0).round() as u32;
             let h_px = (old_uv.height * 4096.0).round() as u32;
             let old_x_px = (old_uv.x * 4096.0).round() as u32;
@@ -2373,7 +2319,7 @@ impl SurtrRenderer {
             if let Some((new_x, new_y)) = new_packer.pack(w_px, h_px) {
                 encoder.copy_texture_to_texture(
                     wgpu::TexelCopyTextureInfo {
-                        texture: &self.mega_atlas_tex,
+                        texture: &self.mega_heim_tex,
                         mip_level: 0,
                         origin: wgpu::Origin3d {
                             x: old_x_px,
@@ -2383,7 +2329,7 @@ impl SurtrRenderer {
                         aspect: wgpu::TextureAspect::All,
                     },
                     wgpu::TexelCopyTextureInfo {
-                        texture: &new_mega_atlas_tex,
+                        texture: &new_mega_heim_tex,
                         mip_level: 0,
                         origin: wgpu::Origin3d {
                             x: new_x,
@@ -2405,25 +2351,25 @@ impl SurtrRenderer {
                     width: old_uv.width,
                     height: old_uv.height,
                 };
-                self.text_cache.put(hash, (new_uv, w_f, h_f));
+                self.text_cache.put(hash, (new_uv, w_f, h_f, x_off, y_off));
             }
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
 
-        self.mega_atlas_tex = new_mega_atlas_tex;
-        let mega_atlas_view_obj = self
-            .mega_atlas_tex
+        self.mega_heim_tex = new_mega_heim_tex;
+        let mega_heim_view_obj = self
+            .mega_heim_tex
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.texture_views[0] = mega_atlas_view_obj.clone();
+        self.texture_views[0] = mega_heim_view_obj.clone();
 
         self.rebuild_texture_array_bind_group();
 
         if !self.texture_bind_groups.is_empty() {
-            self.texture_bind_groups[0] = self.mega_atlas_bind_group.clone();
+            self.texture_bind_groups[0] = self.mega_heim_bind_group.clone();
         }
 
-        self.atlas_packer = new_packer;
+        self.heim_packer = new_packer;
         self.telemetry.vram_exhausted = false;
     }
 
@@ -2442,13 +2388,49 @@ impl SurtrRenderer {
 
         let c = self.apply_opacity(color);
 
+        let cx = rect.x + rect.width * 0.5;
+        let cy = rect.y + rect.height * 0.5;
+
         for y in 0..count {
             for x in 0..count {
+                let init_x = rect.x + x as f32 * dw;
+                let init_y = rect.y + y as f32 * dh;
+
+                // Center of the shard relative to the card center
+                let dx = (init_x + dw * 0.5) - cx;
+                let dy = (init_y + dh * 0.5) - cy;
+                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+
+                // Normal direction outwards
+                let nx = dx / dist;
+                let ny = dy / dist;
+
+                // Hash-based pseudo-random variations for dispersion
+                let hash = ((x as f32 * 12.9898 + y as f32 * 78.233).sin().fract() * 43758.5453).fract();
+                let hash2 = ((x as f32 * 37.11 + y as f32 * 149.87).sin().fract() * 23412.1897).fract();
+
+                let speed_var = 0.5 + hash * 1.5;
+                let angle = ny.atan2(nx) + (hash2 - 0.5) * 0.6;
+                let disp_x = angle.cos() * force * 50.0 * speed_var;
+                let disp_y = angle.sin() * force * 50.0 * speed_var;
+
+                // Downward gravity-like drift over time/force
+                let gravity = force * force * 20.0;
+
+                // Shrink shard size as it scatters away
+                // Assuming max force in demo is ~6.0
+                let scale_factor = (1.0 - (force / 6.0).min(1.0)).max(0.0);
+                let shard_w = dw * scale_factor;
+                let shard_h = dh * scale_factor;
+
+                let displaced_x = init_x + disp_x + (dw - shard_w) * 0.5;
+                let displaced_y = init_y + disp_y + gravity + (dh - shard_h) * 0.5;
+
                 let shard_rect = Rect {
-                    x: rect.x + x as f32 * dw,
-                    y: rect.y + y as f32 * dh,
-                    width: dw,
-                    height: dh,
+                    x: displaced_x,
+                    y: displaced_y,
+                    width: shard_w,
+                    height: shard_h,
                 };
 
                 let uv = Rect {
@@ -2841,7 +2823,7 @@ impl SurtrRenderer {
                 view: ctx_scene_texture,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 }),
+                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -2882,7 +2864,7 @@ impl SurtrRenderer {
             for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Opaque)) {
                 p.set_pipeline(&self.opaque_pipeline);
                 let bg = if let Some(id) = call.texture_id {
-                    if id == 0 { &self.mega_atlas_bind_group }
+                    if id == 0 { &self.mega_heim_bind_group }
                     else {
                         self.texture_bind_groups.get(id as usize)
                             .unwrap_or(&self.dummy_texture_bind_group)
@@ -3082,7 +3064,7 @@ impl SurtrRenderer {
         &mut self,
         encoder: &mut wgpu::CommandEncoder,
         ctx_scene_texture: &wgpu::TextureView,
-        ctx_depth_texture_view: &wgpu::TextureView,
+        _ctx_depth_texture_view: &wgpu::TextureView,
         ctx_blur_env_bind_group_a: &wgpu::BindGroup,
         scale: f32,
     ) {
@@ -3096,11 +3078,7 @@ impl SurtrRenderer {
                 ops: wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store },
                 depth_slice: None,
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: ctx_depth_texture_view,
-                depth_ops: Some(wgpu::Operations { load: wgpu::LoadOp::Load, store: wgpu::StoreOp::Store }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: None,
             ..Default::default()
         });
         p.set_pipeline(&self.glass_pipeline);
@@ -3110,7 +3088,7 @@ impl SurtrRenderer {
         p.set_bind_group(2, &self.berserker_bind_group, &[]);
         for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. })) {
             let bg = if let Some(id) = call.texture_id {
-                if id == 0 { &self.mega_atlas_bind_group }
+                if id == 0 { &self.mega_heim_bind_group }
                 else { self.texture_bind_groups.get(id as usize).unwrap_or(&self.dummy_texture_bind_group) }
             } else { &self.dummy_texture_bind_group };
             p.set_bind_group(0, bg, &[]);
@@ -3164,7 +3142,7 @@ impl SurtrRenderer {
         p.set_bind_group(2, &self.berserker_bind_group, &[]);
         for call in self.draw_calls.iter().filter(|c| matches!(c.material, cvkg_core::DrawMaterial::TopUI)) {
             let bg = if let Some(id) = call.texture_id {
-                if id == 0 { &self.mega_atlas_bind_group }
+                if id == 0 { &self.mega_heim_bind_group }
                 else { self.texture_bind_groups.get(id as usize).unwrap_or(&self.dummy_texture_bind_group) }
             } else { &self.dummy_texture_bind_group };
             p.set_bind_group(0, bg, &[]);
@@ -3381,7 +3359,7 @@ impl SurtrRenderer {
                 view: &target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 }),
+                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -3489,7 +3467,6 @@ impl SurtrRenderer {
             depth_texture_view: wgpu::TextureView,
             scene_texture_bind_group: wgpu::BindGroup,
             blur_tex_a: wgpu::Texture,
-            blur_texture_a: wgpu::TextureView,
             blur_env_bind_group_a: wgpu::BindGroup,
             bloom_tex_a: wgpu::Texture,
             bloom_texture_a: wgpu::TextureView,
@@ -3523,7 +3500,6 @@ impl SurtrRenderer {
                 depth_texture_view: ctx.depth_texture_view.clone(),
                 scene_texture_bind_group: ctx.scene_texture_bind_group.clone(),
                 blur_tex_a: ctx.blur_tex_a.clone(),
-                blur_texture_a: ctx.blur_texture_a.clone(),
                 blur_env_bind_group_a: ctx.blur_env_bind_group_a.clone(),
                 bloom_tex_a: ctx.bloom_tex_a.clone(),
                 bloom_texture_a: ctx.bloom_texture_a.clone(),
@@ -3542,7 +3518,6 @@ impl SurtrRenderer {
                 depth_texture_view: ctx.depth_texture_view.clone(),
                 scene_texture_bind_group: ctx.scene_texture_bind_group.clone(),
                 blur_tex_a: ctx.blur_tex_a.clone(),
-                blur_texture_a: ctx.blur_texture_a.clone(),
                 blur_env_bind_group_a: ctx.blur_env_bind_group_a.clone(),
                 bloom_tex_a: ctx.bloom_tex_a.clone(),
                 bloom_texture_a: ctx.bloom_texture_a.clone(),
@@ -3991,7 +3966,7 @@ impl SurtrRenderer {
             0 => cvkg_core::DrawMaterial::Opaque,
             _ => cvkg_core::DrawMaterial::TopUI,
         };
-        let tid = self.get_texture_id("__mega_atlas");
+        let tid = self.get_texture_id("__mega_heim");
 
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()

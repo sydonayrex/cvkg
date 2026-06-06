@@ -20,6 +20,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (in.clip.z > 15000.0) { clip_alpha = 1.0; }
     color.a *= clip_alpha;
 
+    // Geometric Slice (Mjolnir Slice)
+    if (in.slice.z > 0.5) {
+        let angle_rad = in.slice.x * 0.01745329251;
+        let normal_dir = vec2<f32>(cos(angle_rad), sin(angle_rad));
+        let dist = dot(in.world_pos, normal_dir) - in.slice.y;
+        if (dist > 0.0) { discard; }
+    }
+
     // ── Material Dispatch ────────────────────────────────────────────────
     // Calls the appropriate material function based on material_id.
     // Material functions are auto-generated from MaterialGraph definitions.

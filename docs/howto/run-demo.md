@@ -35,9 +35,19 @@ cargo run --example berserker_fire_demo -p cvkg --features gpu
 cargo run --example niflheim_demo -p cvkg-components --features web
 ```
 
+### 4. Running Headless Verification & Screenshots
+
+You can execute headless render tests to verify graphics pipelines or update the primary showcase screenshot (`docs/images/cvkg_hero.png`):
+
+```bash
+cargo test -p cvkg-test --test visual_regression -- --nocapture
+```
+
+This runs the Surtr renderer headlessly, maps the frame buffers, and writes the output directly.
+
 ## Expected Output
 
-A native window opens with the demo content. The shatter demo shows a button that fragments into pieces when clicked.
+A native window opens with the demo content. Running the headless regression test will regenerate `docs/images/cvkg_hero.png` from the latest `niflheim_demo()` layouts.
 
 ## Recovery
 

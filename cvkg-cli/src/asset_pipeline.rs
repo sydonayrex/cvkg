@@ -158,7 +158,7 @@ impl AssetPipeline {
 mod tests {
     use super::*;
     use std::path::PathBuf;
-    fn write_temp_file(name: &str, content: &str) -> (std::path::PathBuf, tempfile::TempDir) {
+    fn write_temp_file(name: &str, content: &str) -> (PathBuf, tempfile::TempDir) {
         let dir = tempfile::tempdir().expect("Failed to create test dir");
         let path = dir.path().join(name);
         std::fs::write(&path, content).expect("Failed to write test file");
@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn test_validate_shader_valid_wgsl() {
-        let (path, dir) = write_temp_file(
+        let (path, _dir) = write_temp_file(
             "test.wgsl",
             r#"
 @vertex
@@ -192,7 +192,7 @@ fn vs_main(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4<f32> {
 
     #[test]
     fn test_validate_shader_invalid() {
-        let (path, dir) = write_temp_file("invalid.wgsl", "this is not valid wgsl {{{");
+        let (path, _dir) = write_temp_file("invalid.wgsl", "this is not valid wgsl {{{");
 
         let result = AssetPipeline::validate_shader(&path);
         assert!(result.is_err(), "Invalid WGSL should fail validation");
@@ -200,7 +200,7 @@ fn vs_main(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4<f32> {
 
     #[test]
     fn test_validate_shader_empty() {
-        let (path, dir) = write_temp_file("empty.wgsl", "   \n  \n");
+        let (path, _dir) = write_temp_file("empty.wgsl", "   \n  \n");
 
         let result = AssetPipeline::validate_shader(&path);
         assert!(result.is_ok(), "Empty shader should pass (with warning)");
@@ -219,7 +219,7 @@ fn vs_main(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4<f32> {
 
     #[test]
     fn test_optimize_image_invalid() {
-        let (path, dir) = write_temp_file("fake.png", "this is not a real png file");
+        let (path, _dir) = write_temp_file("fake.png", "this is not a real png file");
 
         let result = AssetPipeline::optimize_image(&path);
         assert!(result.is_err(), "Invalid image should fail");

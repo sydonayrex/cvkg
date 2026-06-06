@@ -1153,6 +1153,11 @@ pub struct RunicTextEngine {
 
 impl RunicTextEngine {
     /// Create a new text engine with system fonts and user fonts.
+    ///
+    /// # Contract
+    /// Guaranteed to successfully instantiate a usable text engine. Loads all standard
+    /// system and user fonts first, and then embeds Jupiteroid.ttf as an absolute last-resort
+    /// fallback so text rendering cannot fail even on zero-font systems.
     pub fn new() -> Self {
         let mut db = Database::new();
         db.load_system_fonts();
@@ -1168,13 +1173,18 @@ impl RunicTextEngine {
             db.load_fonts_dir(dir);
         }
 
-        RunicTextEngine {
+        let mut engine = RunicTextEngine {
             db,
             font_data: HashMap::new(),
             cache: HashMap::new(),
             cache_order: Vec::new(),
             scale_context: ScaleContext::new(),
-        }
+        };
+
+        // Load Jupiteroid.ttf as a built-in last-resort fallback font
+        engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
+
+        engine
     }
 
     /// Create a light text engine for testing — no system/user font loading.

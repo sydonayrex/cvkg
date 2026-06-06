@@ -1,7 +1,11 @@
-// This example requires the GPU feature to be enabled
-
 #[cfg(feature = "gpu")]
 use cvkg::render::SurtrRenderer;
+
+#[cfg(feature = "gpu")]
+use cvkg_core::{View, Renderer, Rect};
+
+#[cfg(feature = "gpu")]
+use std::sync::Arc;
 
 #[cfg(feature = "gpu")]
 use winit::{

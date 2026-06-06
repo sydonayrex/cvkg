@@ -30,6 +30,7 @@ struct SceneUniforms {
     shatter_time:    f32,
     shatter_force:   f32,
     berzerker_rage:  f32,
+    berzerker_mode:  u32,
     scroll_offset:   f32,
     scale_factor:    f32,
     scene_type:      u32,
@@ -81,6 +82,7 @@ struct VertexOutput {
     @location(8) normal:      vec3<f32>,
     @location(9) clip:        vec4<f32>,
     @location(10) @interpolate(flat) tex_index: u32,
+    @location(11) world_pos: vec2<f32>,
 };
 
 @vertex
@@ -100,6 +102,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.size   = vec2<f32>(scene.resolution.x, scene.resolution.y);
     out.screen = scene.resolution * scene.scale_factor;
     out.normal = vec3<f32>(0.0, 0.0, 1.0);
+    out.world_pos = vec2<f32>(0.0, 0.0);
     return out;
 }
 
@@ -113,6 +116,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // ── Material 13 (3D Surface): Skip 2D transforms, use full MVP ──────────
     if (in.material_id == 13u) {
         out.clip_position = scene.proj * scene.view * vec4<f32>(in.position, 1.0);
+        out.world_pos = in.position.xy;
     } else {
         // Apply 2D Transform: Rotate -> Scale -> Translate
         let s2 = sin(in.rotation);
@@ -133,6 +137,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         }
 
         out.clip_position = scene.proj * scene.view * vec4<f32>(pos, in.position.z, 1.0);
+        out.world_pos = pos;
     }
     out.uv = in.uv;
     out.color = in.color;

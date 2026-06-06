@@ -19,6 +19,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (in.clip.z > 15000.0) { clip_alpha = 1.0; }
     color.a *= clip_alpha;
 
+    // Geometric Slice (Mjolnir Slice)
+    if (in.slice.z > 0.5) {
+        let angle_rad = in.slice.x * 0.01745329251;
+        let normal_dir = vec2<f32>(cos(angle_rad), sin(angle_rad));
+        let dist = dot(in.world_pos, normal_dir) - in.slice.y;
+        if (dist > 0.0) { discard; }
+    }
+
     // 1. Screen-Space UV & Clamped Sampling
     let uv = clamp(in.uv, vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 1.0));
 
@@ -71,24 +79,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let q_sdf = abs(p_sdf) - (half_size - in.radius);
     let d_sdf = length(max(q_sdf, vec2(0.0))) + min(max(q_sdf.x, q_sdf.y), 0.0) - in.radius;
 
-    let d_norm = clamp(-d_sdf / 20.0, 0.0, 1.0);
+    let border_dist = -d_sdf;
     let flicker = 0.9 + vnoise(uv * 20.0 + scene.time * 3.0) * 0.1;
-    let rim_light = smoothstep(1.0, 0.96, d_norm) * 0.25 * flicker;
-    let inner_absorption = smoothstep(0.96, 0.88, d_norm) * 0.15;
+    let hard_rim = smoothstep(0.0, 1.0, border_dist) * exp(-border_dist * 0.8);
+    let soft_glow = smoothstep(0.0, 3.0, border_dist) * exp(-border_dist * 0.1);
+    let rim_light = (hard_rim * 0.85 + soft_glow * 0.15) * flicker;
 
-    let tint = vec3<f32>(0.85, 0.9, 1.0);
-    var final_rgb = refracted * tint;
-    final_rgb += (brightness * 0.2) * flicker;
-    final_rgb += rim_light * vec3<f32>(0.7, 1.0, 1.3);
-    final_rgb -= inner_absorption;
+    let tint = vec3<f32>(0.9, 0.95, 1.0);
+    var final_rgb = mix(refracted * tint, vec3<f32>(1.0, 1.0, 1.0), 0.15);
+    final_rgb += (brightness * 0.15) * flicker;
+    final_rgb += rim_light * vec3<f32>(0.9, 1.1, 1.3);
 
     // Specular Highlight
     let light_dir_h = normalize(vec2<f32>(-0.4, -0.8));
     let l = dot(uv, light_dir_h);
-    let spec = smoothstep(0.45, 0.55, l) * 0.12;
+    let spec = smoothstep(0.45, 0.55, l) * 0.18;
     final_rgb += spec;
 
-    let final_alpha = (0.02 + fresnel * 0.15) * in.color.a * clip_alpha;
+    let final_alpha = (0.08 + fresnel * 0.2) * in.color.a * clip_alpha;
     color = vec4<f32>(final_rgb, final_alpha);
     color.a *= (1.0 - smoothstep(-fw, fw, d_sdf));
 

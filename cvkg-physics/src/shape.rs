@@ -271,7 +271,11 @@ impl Shape {
                 half_height,
             } => {
                 let i = self.moment_of_inertia(mass);
-                Vec3::new(i, i, i * 2.0)
+                let rect_mass = mass * (2.0 * half_height) / (2.0 * half_height + 2.0 * radius);
+                let circle_mass = mass - rect_mass;
+                let iy = rect_mass * (radius * radius) / 3.0 + circle_mass * 0.25 * radius * radius;
+                let ix = (i - iy).max(0.0);
+                Vec3::new(ix, iy, i)
             }
             ShapeKind::ConvexHull { .. } => {
                 // Fallback: use scalar inertia for all axes

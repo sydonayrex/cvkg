@@ -4,9 +4,9 @@ use cvkg_core::{Rect, Renderer};
 
 
 impl SurtrRenderer {
-    /// load_image_to_atlas — Packs a raw asset into the Mega-Atlas.
+    /// load_image_to_heim — Packs a raw asset into the Mega-Heim.
     /// This is used for common icons to enable aggressive batching (1 draw call).
-    pub fn load_image_to_atlas(&mut self, name: &str, data: &[u8]) {
+    pub fn load_image_to_heim(&mut self, name: &str, data: &[u8]) {
         if self.image_uv_registry.contains(name) {
             return;
         }
@@ -14,14 +14,14 @@ impl SurtrRenderer {
         let img = match img_result {
             Ok(img) => img.to_rgba8(),
             Err(e) => {
-                log::error!("Failed to load image {} to atlas: {}", name, e);
+                log::error!("Failed to load image {} to heim: {}", name, e);
                 return;
             }
         };
         let (width, height) = img.dimensions();
 
-        // Pack into atlas
-        if let Some((x, y)) = self.atlas_packer.pack(width, height) {
+        // Pack into heim
+        if let Some((x, y)) = self.heim_packer.pack(width, height) {
             let uv_rect = Rect {
                 x: x as f32 / 4096.0,
                 y: y as f32 / 4096.0,
@@ -32,7 +32,7 @@ impl SurtrRenderer {
             // Upload to GPU
             self.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
-                    texture: &self.mega_atlas_tex,
+                    texture: &self.mega_heim_tex,
                     mip_level: 0,
                     origin: wgpu::Origin3d { x, y, z: 0 },
                     aspect: wgpu::TextureAspect::All,
@@ -51,17 +51,17 @@ impl SurtrRenderer {
             );
 
             self.image_uv_registry.put(name.to_string(), uv_rect);
-            // Index 0 = mega-atlas texture (stored in texture_views[0])
+            // Index 0 = mega-heim texture (stored in texture_views[0])
             self.texture_registry.put(name.to_string(), 0);
             log::debug!(
-                "[Surtr] Packed '{}' into Mega-Atlas at ({}, {})",
+                "[Surtr] Packed '{}' into Mega-Heim at ({}, {})",
                 name,
                 x,
                 y
             );
         } else {
             log::warn!(
-                "ATLAS_FULL: Failed to pack '{}' into Mega-Atlas. Falling back to Texture Array.",
+                "HEIM_FULL: Failed to pack '{}' into Mega-Heim. Falling back to Texture Array.",
                 name
             );
             self.load_image(name, data);
@@ -75,16 +75,31 @@ impl SurtrRenderer {
     /// "Helvetica Neue", "Helvetica", "Arial", and defaults back to "sans-serif".
     /// This ensures visual typographic consistency across platforms where specific
     /// branding faces may or may not be installed.
+    /// Shapes a text string using a default font stack.
+    ///
+    /// # Contract
+    /// Resolves standard font families in order of system availability. Falls back from
+    /// common system sans-serif aliases, to platform-specific sans-serif faces, and finally
+    /// to the embedded "Jupiteroid" font as a last resort.
     pub(crate) fn shape_text_with_stack(&mut self, text: &str, size: f32) -> cvkg_runic_text::ShapedText {
-        let mut style = cvkg_runic_text::TextStyle::new("SF Pro Text", size);
+        let mut style = cvkg_runic_text::TextStyle::new("Jupiteroid", size);
         style.fallback_families = vec![
+            "sans-serif".to_string(),
+            // Linux-native (fontconfig standard aliases + common packages)
+            "DejaVu Sans".to_string(),
+            "Cantarell".to_string(),
+            "Liberation Sans".to_string(),
+            "Noto Sans".to_string(),
+            "Adwaita Sans".to_string(),
+            // macOS / Windows
             "SF Pro".to_string(),
+            "SF Pro Text".to_string(),
             "Inter".to_string(),
             "Helvetica Neue".to_string(),
             "Helvetica".to_string(),
             "Arial".to_string(),
-            "sans-serif".to_string(),
         ];
+        style.render_mode = cvkg_runic_text::RenderMode::Subpixel;
         let spans = vec![cvkg_runic_text::TextSpan::new(text, style)];
         self.text_engine
             .shape_layout(

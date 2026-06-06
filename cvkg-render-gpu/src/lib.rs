@@ -37,25 +37,25 @@ mod surtr_util;
 mod draw;
 mod api;
 
-pub mod atlas;
-pub use atlas::YggdrasilPacker;
+pub mod heim;
+pub use heim::SundrPacker;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use super::atlas::YggdrasilPacker;
+    use super::heim::SundrPacker;
 
     #[test]
     fn test_shelf_packer_basic() {
-        let mut packer = YggdrasilPacker::new(100, 100);
+        let mut packer = SundrPacker::new(100, 100);
         assert_eq!(packer.pack(10, 10), Some((0, 0)));
         assert_eq!(packer.pack(20, 15), Some((10, 0)));
     }
 
     #[test]
     fn test_shelf_packer_wrap() {
-        let mut packer = YggdrasilPacker::new(100, 100);
+        let mut packer = SundrPacker::new(100, 100);
         packer.pack(60, 10);
         assert_eq!(packer.pack(50, 20), Some((0, 10)));
     }
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn test_shelf_packer_full() {
-        let mut packer = YggdrasilPacker::new(10, 10);
+        let mut packer = SundrPacker::new(10, 10);
         assert_eq!(packer.pack(11, 5), None);
         assert_eq!(packer.pack(5, 11), None);
     }
@@ -135,25 +135,6 @@ pub(crate) const WGSL_GLASS: &str = concat!(
     include_str!(concat!(env!("OUT_DIR"), "/materials_generated.wgsl"))
 );
 
-/// Specialized shader source for 3D PBR materials (modes 13, 14, 21).
-pub(crate) const WGSL_PBR: &str = concat!(
-    include_str!("shaders/common.wgsl"),
-    include_str!("shaders/material_pbr.wgsl"),
-    include_str!("shaders/bifrost.wgsl"),
-    include_str!("shaders/bloom.wgsl"),
-    include_str!("shaders/color_blind.wgsl"),
-    include_str!(concat!(env!("OUT_DIR"), "/materials_generated.wgsl"))
-);
-
-/// Specialized shader source for gradient/shadow materials (modes 15, 18).
-pub(crate) const WGSL_GRADIENT: &str = concat!(
-    include_str!("shaders/common.wgsl"),
-    include_str!("shaders/material_gradient.wgsl"),
-    include_str!("shaders/bifrost.wgsl"),
-    include_str!("shaders/bloom.wgsl"),
-    include_str!("shaders/color_blind.wgsl"),
-    include_str!(concat!(env!("OUT_DIR"), "/materials_generated.wgsl"))
-);
 
 pub mod color_blindness;
 

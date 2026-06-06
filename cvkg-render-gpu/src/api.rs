@@ -32,11 +32,11 @@ impl cvkg_core::Renderer for SurtrRenderer {
     /// fill_rect — Standard rectangle drawing method.
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
         log::info!(
-            "[Surtr] Pre-warming Mega-Atlas with {} assets...",
+            "[Surtr] Pre-warming Mega-Heim with {} assets...",
             assets.len()
         );
         for (name, data) in assets {
-            self.load_image_to_atlas(&name, &data);
+            self.load_image_to_heim(&name, &data);
         }
     }
 
@@ -411,7 +411,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
         let tid = self
         .get_texture_id(image_name)
-        .or_else(|| self.get_texture_id("__mega_atlas"));
+        .or_else(|| self.get_texture_id("__mega_heim"));
         let uv_rect = self
         .image_uv_registry
         .get(image_name)
@@ -434,24 +434,26 @@ impl cvkg_core::Renderer for SurtrRenderer {
         for glyph in shaped.glyphs {
             let cache_key = glyph.cache_key;
 
-            let (uv_rect, w, h) = if let Some(info) = self.text_cache.get(&cache_key) {
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key) {
                 *info
             } else {
                 if let Some(image) = self.text_engine.rasterize(cache_key) {
                     let gw = image.width;
                     let gh = image.height;
+                    let x_offset = image.x_offset;
+                    let y_offset = image.y_offset;
 
-                    let pack_res = self.atlas_packer.pack(gw, gh);
+                    let pack_res = self.heim_packer.pack(gw, gh);
                     let (nx, ny) = if let Some(pos) = pack_res {
                         pos
                     } else {
-                        // RECLAIM & RETRY: Atlas is full, quench the forge and try again.
+                        // RECLAIM & RETRY: Heim is full, quench the forge and try again.
                         self.reclaim_vram();
-                        match self.atlas_packer.pack(gw, gh) {
+                        match self.heim_packer.pack(gw, gh) {
                             Some(pos) => pos,
                             None => {
                                 log::error!(
-                                    "Glyph atlas critically full after reclaim: cannot pack {}x{} glyph for '{}', skipping",
+                                    "Glyph heim critically full after reclaim: cannot pack {}x{} glyph for '{}', skipping",
                                     gw, gh, text
                                 );
                                 continue; // Skip this glyph rather than corrupting atlas origin
@@ -469,7 +471,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
-                            texture: &self.mega_atlas_tex,
+                            texture: &self.mega_heim_tex,
                             mip_level: 0,
                             origin: wgpu::Origin3d { x: nx, y: ny, z: 0 },
                             aspect: wgpu::TextureAspect::All,
@@ -478,7 +480,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(gw * 4),
-                                             rows_per_image: Some(gh),
+                            rows_per_image: Some(gh),
                         },
                         wgpu::Extent3d {
                             width: gw,
@@ -496,11 +498,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         },
                         gw as f32,
                         gh as f32,
+                        x_offset,
+                        y_offset,
                     );
                     self.text_cache.put(cache_key, info);
                     info
                 } else {
-                    (Rect::zero(), 0.0, 0.0)
+                    (Rect::zero(), 0.0, 0.0, 0.0, 0.0)
                 }
             };
 
@@ -510,12 +514,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 // shaped.ascent gives the baseline offset from the text origin (y).
                 let baseline_y = y + shaped.ascent / self.current_scale_factor();
                 let glyph_rect = Rect {
-                    x: x + glyph.x / self.current_scale_factor(),
-                    y: baseline_y + glyph.y / self.current_scale_factor(),
+                    x: x + (glyph.x + x_off) / self.current_scale_factor(),
+                    y: baseline_y + (glyph.y - y_off) / self.current_scale_factor(),
                     width: w / self.current_scale_factor(),
                     height: h / self.current_scale_factor(),
                 };
-                let tid = self.get_texture_id("__mega_atlas");
+                let tid = self.get_texture_id("__mega_heim");
                 self.fill_rect_with_full_params(glyph_rect, c, 6, tid, 0.0, uv_rect);
             }
         }
@@ -579,23 +583,25 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let c = self.apply_opacity(span_color);
 
             let cache_key = glyph.cache_key;
-            let (uv_rect, w, h) = if let Some(info) = self.text_cache.get(&cache_key) {
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key) {
                 *info
             } else {
                 if let Some(image) = self.text_engine.rasterize(cache_key) {
                     let gw = image.width;
                     let gh = image.height;
+                    let x_offset = image.x_offset;
+                    let y_offset = image.y_offset;
 
-                    let pack_res = self.atlas_packer.pack(gw, gh);
+                    let pack_res = self.heim_packer.pack(gw, gh);
                     let (nx, ny) = if let Some(pos) = pack_res {
                         pos
                     } else {
                         self.reclaim_vram();
-                        match self.atlas_packer.pack(gw, gh) {
+                        match self.heim_packer.pack(gw, gh) {
                             Some(pos) => pos,
                             None => {
                                 log::error!(
-                                    "Glyph atlas critically full after reclaim: cannot pack {}x{} glyph, skipping",
+                                    "Glyph heim critically full after reclaim: cannot pack {}x{} glyph, skipping",
                                     gw, gh
                                 );
                                 continue; // Skip this glyph rather than corrupting atlas origin
@@ -613,7 +619,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
-                            texture: &self.mega_atlas_tex,
+                            texture: &self.mega_heim_tex,
                             mip_level: 0,
                             origin: wgpu::Origin3d { x: nx, y: ny, z: 0 },
                             aspect: wgpu::TextureAspect::All,
@@ -622,7 +628,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         wgpu::TexelCopyBufferLayout {
                             offset: 0,
                             bytes_per_row: Some(gw * 4),
-                                             rows_per_image: Some(gh),
+                            rows_per_image: Some(gh),
                         },
                         wgpu::Extent3d {
                             width: gw,
@@ -640,11 +646,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         },
                         gw as f32,
                         gh as f32,
+                        x_offset,
+                        y_offset,
                     );
                     self.text_cache.put(cache_key, info);
                     info
                 } else {
-                    (Rect::zero(), 0.0, 0.0)
+                    (Rect::zero(), 0.0, 0.0, 0.0, 0.0)
                 }
             };
 
@@ -655,12 +663,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 // shaped.ascent gives the baseline offset from the text origin (y).
                 let baseline_y = y + shaped.ascent / sf;
                 let glyph_rect = Rect {
-                    x: x + glyph.x / sf,
-                    y: baseline_y + glyph.y / sf,
+                    x: x + (glyph.x + x_off) / sf,
+                    y: baseline_y + (glyph.y - y_off) / sf,
                     width: w / sf,
                     height: h / sf,
                 };
-                let tid = self.get_texture_id("__mega_atlas");
+                let tid = self.get_texture_id("__mega_heim");
                 self.fill_rect_with_full_params(glyph_rect, c, 6, tid, 0.0, uv_rect);
             }
         }
@@ -682,7 +690,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         );
     }
 
-    /// load_image — Proactively pushes a raw asset into the Mega-Atlas.
+    /// load_image — Proactively pushes a raw asset into the Mega-Heim.
     /// load_image — Proactively pushes a raw asset into the Texture Array.
     fn load_image(&mut self, name: &str, data: &[u8]) {
         if self.image_uv_registry.contains(name) {
@@ -1270,7 +1278,7 @@ impl SurtrRenderer {
         }
 
         let material = self.current_material();
-        let tid = self.get_texture_id("__mega_atlas");
+        let tid = self.get_texture_id("__mega_heim");
 
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()

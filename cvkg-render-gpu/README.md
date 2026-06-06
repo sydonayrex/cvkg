@@ -9,12 +9,12 @@
 This crate is the authoritative drawing backend for CVKG. It does NOT handle windowing or higher-level layout. Its responsibilities include:
 - Managing the Muspelheim multi-pass pipeline (Bloom, Blur, Composite).
 - Tessellating 2D primitives and SVG strokes into GPU-ready meshes using `lyon`.
-- Managing a Mega-Atlas for high-efficiency text and image batching.
+- Managing a Mega-Heim for high-efficiency text and image batching.
 - Executing real-time parsing and evaluation of Animated SVGs via `roxmltree` and `usvg`.
 - Propagating full 3x3 affine transformation matrices for complex nested scaling, skew, and rotation.
 - Implementing advanced shader effects: Bifrost (frost), Gungnir (glow), and Mjolnir (geometric clipping/shattering).
 - Color blindness simulation post-process (Protanopia, Deuteranopia, Tritanopia + anomalous variants) via Brettel/Viénot Daltonization matrices.
-- Optimizing VRAM usage via LRU-based cache eviction and atlas recycling.
+- Optimizing VRAM usage via LRU-based cache eviction and Sundr compaction.
 
 ## Public API Overview
 
@@ -25,7 +25,7 @@ This crate is the authoritative drawing backend for CVKG. It does NOT handle win
 
 ### Systems
 - **Muspelheim Passes**: Specialized pipelines for Gaussian blur and bloom extraction.
-- **ShelfPacker**: A high-speed atlas packing algorithm for real-time UI textures.
+- **SundrPacker**: A high-speed skyline-based bin packing algorithm for real-time UI textures.
 - **RunicTextEngine**: Integration with `cvkg-runic-text` for GPU-accelerated glyph rendering.
 
 ### Key Methods
@@ -34,5 +34,5 @@ This crate is the authoritative drawing backend for CVKG. It does NOT handle win
 
 ## Known Limitations
 - Requires a GPU supporting `SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING`.
-- Texture atlas size is currently fixed at 4096x4096px.
+- Mega-Heim texture size is currently fixed at 4096x4096px.
 - Culling is hierarchical but relies on the `cvkg-scene` crate for complex queries.
