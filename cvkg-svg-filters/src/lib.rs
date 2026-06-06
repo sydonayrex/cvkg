@@ -1976,19 +1976,34 @@ impl FilterEngine {
 
     // ── LUT Upload ─────────────────────────────────────────────────────────────
 
-    /// Upload a 1D LUT texture for component transfer table/discrete modes.
-    /// The LUT should be a 256-element array of [f32; 4] RGBA values.
+    /// Upload a 2D LUT texture for component transfer table/discrete modes.
+    /// The LUT should be a 256-element array of [f32; 4] RGBA values, where each entry
+    /// represents the output color for input value i/255.
+    /// The texture is laid out as 256x4 with each channel in its own row, so that
+    /// sampling at (value, row) returns the output for that channel.
     pub fn upload_lut(&mut self, data: &[[f32; 4]]) -> Result<(), FilterError> {
+        // Restructure data: transpose from [256 RGBA entries] to [256 texels x 4 rows]
+        // Input: data[i] = [r_out, g_out, b_out, a_out] for input value i/255
+        // Output texture: row 0 contains all r_out values, row 1 all g_out values, etc.
+        // Each texel in a row holds [channel_value, _, _, _] where R component holds the output.
+        let mut tex_data: [[[f32; 4]; 256]; 4] = [[[0.0; 4]; 256]; 4];
+        for (i, rgba) in data.iter().enumerate() {
+            tex_data[0][i] = [rgba[0], 0.0, 0.0, 0.0]; // R channel row
+            tex_data[1][i] = [0.0, rgba[1], 0.0, 0.0]; // G channel row
+            tex_data[2][i] = [0.0, 0.0, rgba[2], 0.0]; // B channel row
+            tex_data[3][i] = [0.0, 0.0, 0.0, rgba[3]]; // A channel row
+        }
+
         let texture = self.gpu.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("svg_filter_lut"),
             size: wgpu::Extent3d {
-                width: data.len() as u32,
-                height: 1,
+                width: 256,
+                height: 4,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
             sample_count: 1,
-            dimension: wgpu::TextureDimension::D1,
+            dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba32Float,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
@@ -2001,15 +2016,15 @@ impl FilterEngine {
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
             },
-            bytemuck::cast_slice(data),
+            bytemuck::cast_slice(&tex_data),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(std::mem::size_of::<[f32; 4]>() as u32 * data.len() as u32),
-                rows_per_image: Some(1),
+                bytes_per_row: Some(std::mem::size_of::<[f32; 4]>() as u32 * 256),
+                rows_per_image: Some(4),
             },
             wgpu::Extent3d {
-                width: data.len() as u32,
-                height: 1,
+                width: 256,
+                height: 4,
                 depth_or_array_layers: 1,
             },
         );

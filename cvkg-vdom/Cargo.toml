@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-vdom"
-version = "0.2.8"
+version = "0.2.9"
 build = false
 autolib = false
 autobins = false
@@ -37,10 +37,10 @@ path = "tests/vdom_integration_tests.rs"
 version = "0.22"
 
 [dependencies.cvkg-core]
-version = "0.2.8"
+version = "0.2.9"
 
 [dependencies.cvkg-scene]
-version = "0.2.8"
+version = "0.2.9"
 
 [dependencies.log]
 version = "0.4"

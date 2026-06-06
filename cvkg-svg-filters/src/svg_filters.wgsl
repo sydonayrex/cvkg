@@ -11,7 +11,7 @@
 //   @group(0) @binding(2) var s_src: sampler;
 //   @group(0) @binding(3) var t_src2: texture_2d<f32>;  // second input (blend/composite/displacement)
 //   @group(0) @binding(4) var s_src2: sampler;
-//   @group(0) @binding(5) var t_lut: texture_1d<f32>;   // component transfer LUT
+//   @group(0) @binding(5) var t_lut: texture_2d<f32>;   // component transfer LUT (256x4 layout)
 //   @group(0) @binding(6) var s_lut: sampler;
 //
 // =============================================================================
@@ -70,11 +70,11 @@ struct FilterParams {
     light_surface_scale: f32,
     _lpad:            f32,
     // Component transfer LUT (sampled via a separate texture binding)
-    // The LUT is passed as a 1D texture, not inline in uniforms
+    // The LUT is passed as a 2D texture (256x4) with each channel in a row
 };
 
 // ── LUT Binding (for component transfer table/discrete) ──────────────────────
-@group(0) @binding(5) var t_lut: texture_1d<f32>;
+@group(0) @binding(5) var t_lut: texture_2d<f32>;
 @group(0) @binding(6) var s_lut: sampler;
 
 // ── Mode Constants ───────────────────────────────────────────────────────────
@@ -593,9 +593,9 @@ fn specular_lighting(in: VertexOutput) -> vec4<f32> {
 }
 
 // ── Component Transfer with LUT ──────────────────────────────────────────────
-// Samples a 1D LUT texture for per-channel transfer functions.
-// The LUT is a 256x1 texture with 4 channels (R,G,B,A) packed sequentially.
-// Each channel's LUT is at offset channel_index * 256.
+// Samples a 2D LUT texture for per-channel transfer functions.
+// The LUT is a 256x4 texture with each channel's LUT stored in a separate row.
+// Row 0: R channel LUT, Row 1: G channel LUT, Row 2: B channel LUT, Row 3: A channel LUT
 
 fn component_transfer_lut(in: VertexOutput) -> vec4<f32> {
     let src = textureSample(t_src, s_src, in.texcoord);
