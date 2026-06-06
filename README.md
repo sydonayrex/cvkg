@@ -1,6 +1,6 @@
 # CVKG: Cyber Viking Kvasir Graph
 
-![Image](docs/images/cvkg_hero.mp4)
+https://github.com/user-attachments/assets/d03d7031-6ee2-4c6f-b38e-ea2db65f88d6
 
 CVKG is a high-fidelity graphic user interface framework for Rust, enabling developers to build visually intense, hardware-accelerated desktop and web applications.
 
