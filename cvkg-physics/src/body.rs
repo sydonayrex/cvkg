@@ -149,9 +149,21 @@ impl RigidBody {
         // Compute 3D inverse inertia from the shape
         let inertia_3d = shape.moment_of_inertia_3d(mass);
         body.inv_inertia_3d = Vec3::new(
-            if inertia_3d.x > 0.0 { 1.0 / inertia_3d.x } else { 0.0 },
-            if inertia_3d.y > 0.0 { 1.0 / inertia_3d.y } else { 0.0 },
-            if inertia_3d.z > 0.0 { 1.0 / inertia_3d.z } else { 0.0 },
+            if inertia_3d.x > 0.0 {
+                1.0 / inertia_3d.x
+            } else {
+                0.0
+            },
+            if inertia_3d.y > 0.0 {
+                1.0 / inertia_3d.y
+            } else {
+                0.0
+            },
+            if inertia_3d.z > 0.0 {
+                1.0 / inertia_3d.z
+            } else {
+                0.0
+            },
         );
         body
     }
@@ -269,7 +281,7 @@ impl RigidBody {
         let sin = self.angle.sin();
         Vec2::new(
             cos * delta.x + sin * delta.y,
-            -sin * delta.x + cos *delta.y,
+            -sin * delta.x + cos * delta.y,
         )
     }
 

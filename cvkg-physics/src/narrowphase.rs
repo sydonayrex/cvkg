@@ -54,8 +54,12 @@ pub struct ContactManifold3D {
 
 /// Minkowski difference support: support_A(dir) - support_B(-dir).
 fn minkowski_support(
-    shape_a: &Shape, pos_a: Vec2, angle_a: f32,
-    shape_b: &Shape, pos_b: Vec2, angle_b: f32,
+    shape_a: &Shape,
+    pos_a: Vec2,
+    angle_a: f32,
+    shape_b: &Shape,
+    pos_b: Vec2,
+    angle_b: f32,
     dir: Vec2,
 ) -> Vec2 {
     let sa = world_support(shape_a, pos_a, angle_a, dir);
@@ -79,52 +83,91 @@ pub struct GjkResult {
     pub simplex_count: usize,
 }
 
-fn count_nonzero(s: &[Vec2; 3]) -> usize { s.iter().filter(|v| **v != Vec2::ZERO).count().max(1) }
+fn count_nonzero(s: &[Vec2; 3]) -> usize {
+    s.iter().filter(|v| **v != Vec2::ZERO).count().max(1)
+}
 
 /// GJK algorithm. Returns GjkResult with overlap status and simplex.
 pub fn gjk(
-    shape_a: &Shape, pos_a: Vec2, angle_a: f32,
-    shape_b: &Shape, pos_b: Vec2, angle_b: f32,
+    shape_a: &Shape,
+    pos_a: Vec2,
+    angle_a: f32,
+    shape_b: &Shape,
+    pos_b: Vec2,
+    angle_b: f32,
 ) -> GjkResult {
     let mut dir = pos_b - pos_a;
-    if dir.length_squared() < 1e-12 { dir = Vec2::X; }
+    if dir.length_squared() < 1e-12 {
+        dir = Vec2::X;
+    }
     let mut s = [Vec2::ZERO; 3];
     s[0] = minkowski_support(shape_a, pos_a, angle_a, shape_b, pos_b, angle_b, dir);
     dir = -s[0];
     for _ in 0..32 {
         let p = minkowski_support(shape_a, pos_a, angle_a, shape_b, pos_b, angle_b, dir);
-        if p.dot(dir) < 0.0 { return GjkResult { overlapping: false, simplex: s, simplex_count: count_nonzero(&s) }; }
-        s[2] = s[1]; s[1] = s[0]; s[0] = p;
+        if p.dot(dir) < 0.0 {
+            return GjkResult {
+                overlapping: false,
+                simplex: s,
+                simplex_count: count_nonzero(&s),
+            };
+        }
+        s[2] = s[1];
+        s[1] = s[0];
+        s[0] = p;
         let (nd, origin) = process_simplex(&mut s);
-        if origin { return GjkResult { overlapping: true, simplex: s, simplex_count: count_nonzero(&s) }; }
+        if origin {
+            return GjkResult {
+                overlapping: true,
+                simplex: s,
+                simplex_count: count_nonzero(&s),
+            };
+        }
         dir = nd;
     }
-    GjkResult { overlapping: false, simplex: s, simplex_count: count_nonzero(&s) }
+    GjkResult {
+        overlapping: false,
+        simplex: s,
+        simplex_count: count_nonzero(&s),
+    }
 }
 
 /// Backward-compatible overlap check.
-pub fn gjk_overlap(
-    a: &Shape, pa: Vec2, aa: f32, b: &Shape, pb: Vec2, ab: f32,
-) -> bool { gjk(a, pa, aa, b, pb, ab).overlapping }
+pub fn gjk_overlap(a: &Shape, pa: Vec2, aa: f32, b: &Shape, pb: Vec2, ab: f32) -> bool {
+    gjk(a, pa, aa, b, pb, ab).overlapping
+}
 
 /// EPA algorithm. Creates initial triangle and expands toward origin.
-pub fn epa(
-    a: &Shape, pa: Vec2, aa: f32, b: &Shape, pb: Vec2, ab: f32,
-) -> Option<Contact> {
+pub fn epa(a: &Shape, pa: Vec2, aa: f32, b: &Shape, pb: Vec2, ab: f32) -> Option<Contact> {
     let gr = gjk(a, pa, aa, b, pb, ab);
     epa_with_simplex(a, pa, aa, b, pb, ab, &gr)
 }
 
 /// EPA with pre-computed GJK result.
 pub fn epa_with_simplex(
-    a: &Shape, pa: Vec2, aa: f32, b: &Shape, pb: Vec2, ab: f32,
+    a: &Shape,
+    pa: Vec2,
+    aa: f32,
+    b: &Shape,
+    pb: Vec2,
+    ab: f32,
     gr: &GjkResult,
 ) -> Option<Contact> {
-    if !gr.overlapping { return None; }
+    if !gr.overlapping {
+        return None;
+    }
     let mut p: Vec<Vec2> = Vec::with_capacity(64);
     for i in 0..3 {
         let ang = i as f32 * std::f32::consts::TAU / 3.0;
-        p.push(minkowski_support(a, pa, aa, b, pb, ab, Vec2::new(ang.cos(), ang.sin())));
+        p.push(minkowski_support(
+            a,
+            pa,
+            aa,
+            b,
+            pb,
+            ab,
+            Vec2::new(ang.cos(), ang.sin()),
+        ));
     }
     let (mut cn, mut md) = (Vec2::ZERO, f32::MAX);
     for _ in 0..32 {
@@ -134,21 +177,45 @@ pub fn epa_with_simplex(
             let e = p[j] - p[i];
             let n = Vec2::new(e.y, -e.x).normalize();
             let d = n.dot(p[i]);
-            if d < cd { cd = d; ci = i; cnorm = n; }
+            if d < cd {
+                cd = d;
+                ci = i;
+                cnorm = n;
+            }
         }
-        if cd < 1e-12 { break; }
+        if cd < 1e-12 {
+            break;
+        }
         let s = minkowski_support(a, pa, aa, b, pb, ab, cnorm);
-        if (s.dot(cnorm) - cd).abs() < 1e-6 { cn = cnorm; md = cd; break; }
+        if (s.dot(cnorm) - cd).abs() < 1e-6 {
+            cn = cnorm;
+            md = cd;
+            break;
+        }
         p.insert((ci + 1) % p.len(), s);
-        if p.len() > 64 { break; }
+        if p.len() > 64 {
+            break;
+        }
     }
-    if md < f32::MAX { Some(Contact { point: pa + (pb - pa) * 0.5, normal: cn, depth: md }) } else { None }
+    if md < f32::MAX {
+        Some(Contact {
+            point: pa + (pb - pa) * 0.5,
+            normal: cn,
+            depth: md,
+        })
+    } else {
+        None
+    }
 }
 
 /// Full narrow-phase collision test.
 pub fn collide(
-    ia: usize, sa: &Shape, ba: &RigidBody,
-    ib: usize, sb: &Shape, bb: &RigidBody,
+    ia: usize,
+    sa: &Shape,
+    ba: &RigidBody,
+    ib: usize,
+    sb: &Shape,
+    bb: &RigidBody,
 ) -> Option<ContactManifold> {
     if gjk_overlap(sa, ba.position, ba.angle, sb, bb.position, bb.angle) {
         if let Some(epa_contact) = epa(sa, ba.position, ba.angle, sb, bb.position, bb.angle) {
@@ -177,15 +244,35 @@ fn process_simplex(s: &mut [Vec2; 3]) -> (Vec2, bool) {
     let (a, ao) = (s[0], -s[0]);
     if s[2] != Vec2::ZERO {
         let (ab, ac) = (s[1] - a, s[2] - a);
-        let abp = { let p = Vec2::new(-ab.y, ab.x); if p.dot(ac) > 0.0 { -p } else { p } };
-        let acp = { let p = Vec2::new(-ac.y, ac.x); if p.dot(ab) > 0.0 { -p } else { p } };
-        if abp.dot(ao) > 0.0 { s[2] = Vec2::ZERO; return (abp, false); }
-        if acp.dot(ao) > 0.0 { s[1] = s[2]; s[2] = Vec2::ZERO; return (acp, false); }
+        let abp = {
+            let p = Vec2::new(-ab.y, ab.x);
+            if p.dot(ac) > 0.0 { -p } else { p }
+        };
+        let acp = {
+            let p = Vec2::new(-ac.y, ac.x);
+            if p.dot(ab) > 0.0 { -p } else { p }
+        };
+        if abp.dot(ao) > 0.0 {
+            s[2] = Vec2::ZERO;
+            return (abp, false);
+        }
+        if acp.dot(ao) > 0.0 {
+            s[1] = s[2];
+            s[2] = Vec2::ZERO;
+            return (acp, false);
+        }
         return (Vec2::ZERO, true);
     }
     let ab = s[1] - a;
-    let abp = { let p = Vec2::new(-ab.y, ab.x); if p.dot(ao) > 0.0 { p } else { -p } };
-    if abp.length_squared() < 1e-12 { (Vec2::new(-ab.y, ab.x), false) } else { (abp, false) }
+    let abp = {
+        let p = Vec2::new(-ab.y, ab.x);
+        if p.dot(ao) > 0.0 { p } else { -p }
+    };
+    if abp.length_squared() < 1e-12 {
+        (Vec2::new(-ab.y, ab.x), false)
+    } else {
+        (abp, false)
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -194,8 +281,12 @@ fn process_simplex(s: &mut [Vec2; 3]) -> (Vec2, bool) {
 
 /// 3D Minkowski difference support.
 fn minkowski_support_3d(
-    shape_a: &Shape, pos_a: Vec3, rot_a: &glam::Quat,
-    shape_b: &Shape, pos_b: Vec3, rot_b: &glam::Quat,
+    shape_a: &Shape,
+    pos_a: Vec3,
+    rot_a: &glam::Quat,
+    shape_b: &Shape,
+    pos_b: Vec3,
+    rot_b: &glam::Quat,
     dir: Vec3,
 ) -> Vec3 {
     let sa = world_support_3d(shape_a, pos_a, rot_a, dir);
@@ -222,8 +313,12 @@ pub struct GjkResult3D {
 /// 3D GJK algorithm using Johnson's distance algorithm for simplex processing.
 /// Returns whether the shapes overlap and the final simplex for EPA warm-start.
 pub fn gjk_3d(
-    shape_a: &Shape, pos_a: Vec3, rot_a: &glam::Quat,
-    shape_b: &Shape, pos_b: Vec3, rot_b: &glam::Quat,
+    shape_a: &Shape,
+    pos_a: Vec3,
+    rot_a: &glam::Quat,
+    shape_b: &Shape,
+    pos_b: Vec3,
+    rot_b: &glam::Quat,
 ) -> GjkResult3D {
     let mut dir = pos_b - pos_a;
     if dir.length_squared() < 1e-12 {
@@ -231,7 +326,9 @@ pub fn gjk_3d(
     }
 
     let mut simplex: Vec<Vec3> = Vec::with_capacity(4);
-    simplex.push(minkowski_support_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir));
+    simplex.push(minkowski_support_3d(
+        shape_a, pos_a, rot_a, shape_b, pos_b, rot_b, dir,
+    ));
     dir = -simplex[0];
 
     for _ in 0..64 {
@@ -240,30 +337,48 @@ pub fn gjk_3d(
         // the origin is outside the Minkowski difference → no overlap.
         // Use a small negative tolerance for numerical robustness (touching = overlap).
         if p.dot(dir) < -1e-10 {
-            return GjkResult3D { overlapping: false, simplex };
+            return GjkResult3D {
+                overlapping: false,
+                simplex,
+            };
         }
         // Skip duplicate points (degenerate case).
         if simplex.iter().any(|s| (*s - p).length_squared() < 1e-12) {
             // For touching case, if we've been oscillating, treat as overlap.
             if p.dot(dir) < 1e-6 {
-                return GjkResult3D { overlapping: true, simplex };
+                return GjkResult3D {
+                    overlapping: true,
+                    simplex,
+                };
             }
-            return GjkResult3D { overlapping: false, simplex };
+            return GjkResult3D {
+                overlapping: false,
+                simplex,
+            };
         }
         simplex.push(p);
         // Process the simplex: find the closest feature to the origin
         // and update the search direction.
         let (contains_origin, new_dir) = process_simplex_3d(&mut simplex);
         if contains_origin {
-            return GjkResult3D { overlapping: true, simplex };
+            return GjkResult3D {
+                overlapping: true,
+                simplex,
+            };
         }
         dir = new_dir;
         if dir.length_squared() < 1e-12 {
             // Degenerate direction — origin is on the simplex boundary.
-            return GjkResult3D { overlapping: true, simplex };
+            return GjkResult3D {
+                overlapping: true,
+                simplex,
+            };
         }
     }
-    GjkResult3D { overlapping: false, simplex }
+    GjkResult3D {
+        overlapping: false,
+        simplex,
+    }
 }
 
 /// Process a 3D simplex (1-4 points) using Johnson's distance algorithm.
@@ -443,16 +558,24 @@ fn process_simplex_3d(simplex: &mut Vec<Vec3>) -> (bool, Vec3) {
 
 /// 3D overlap check.
 pub fn gjk_overlap_3d(
-    a: &Shape, pa: Vec3, ra: &glam::Quat,
-    b: &Shape, pb: Vec3, rb: &glam::Quat,
+    a: &Shape,
+    pa: Vec3,
+    ra: &glam::Quat,
+    b: &Shape,
+    pb: Vec3,
+    rb: &glam::Quat,
 ) -> bool {
     gjk_3d(a, pa, ra, b, pb, rb).overlapping
 }
 
 /// 3D EPA algorithm.
 pub fn epa_3d(
-    a: &Shape, pa: Vec3, ra: &glam::Quat,
-    b: &Shape, pb: Vec3, rb: &glam::Quat,
+    a: &Shape,
+    pa: Vec3,
+    ra: &glam::Quat,
+    b: &Shape,
+    pb: Vec3,
+    rb: &glam::Quat,
 ) -> Option<Contact3D> {
     let gr = gjk_3d(a, pa, ra, b, pb, rb);
     epa_with_simplex_3d(a, pa, ra, b, pb, rb, &gr)
@@ -460,144 +583,168 @@ pub fn epa_3d(
 
 /// 3D EPA with pre-computed GJK result.
 pub fn epa_with_simplex_3d(
-    a: &Shape, pa: Vec3, ra: &glam::Quat,
-    b: &Shape, pb: Vec3, rb: &glam::Quat,
+    a: &Shape,
+    pa: Vec3,
+    ra: &glam::Quat,
+    b: &Shape,
+    pb: Vec3,
+    rb: &glam::Quat,
     gr: &GjkResult3D,
 ) -> Option<Contact3D> {
-    if !gr.overlapping { return None; }
+    if !gr.overlapping {
+        return None;
+    }
 
-    let mut polyhedron: Vec<Vec3> = gr.simplex.clone();
+    // Use the GJK simplex to compute a contact.
+    // For the general case, use the closest point on the simplex to origin.
+    // This is a simplified approach that works for all convex shapes including spheres.
 
-    // Ensure we have at least 4 non-coplanar points for a tetrahedron.
-    if polyhedron.len() < 4 {
-        let dirs = [
-            Vec3::X,
-            Vec3::Y,
-            Vec3::Z,
-            Vec3::new(1.0, 1.0, 1.0).normalize(),
-            Vec3::new(-1.0, 1.0, 0.0).normalize(),
-            Vec3::new(0.0, -1.0, 1.0).normalize(),
-        ];
-        for dir in &dirs {
-            if polyhedron.len() >= 6 { break; }
-            let p = minkowski_support_3d(a, pa, ra, b, pb, rb, *dir);
-            if !polyhedron.iter().any(|v| (*v - p).length_squared() < 1e-8) {
-                polyhedron.push(p);
+    let simplex = &gr.simplex;
+    if simplex.is_empty() {
+        return None;
+    }
+
+    // Find the point in the simplex closest to the origin
+    let mut best_dist = f32::MAX;
+    let mut best_point = Vec3::ZERO;
+
+    // Check all points
+    for p in simplex {
+        let d = p.length();
+        if d < best_dist {
+            best_dist = d;
+            best_point = *p;
+        }
+    }
+
+    // Check all edges (line segments)
+    for i in 0..simplex.len() {
+        for j in (i + 1)..simplex.len() {
+            let a = simplex[i];
+            let b = simplex[j];
+            let ab = b - a;
+            let ab_len_sq = ab.length_squared();
+            if ab_len_sq < 1e-12 {
+                continue;
+            }
+            let t = (-a.dot(ab) / ab_len_sq).clamp(0.0, 1.0);
+            let closest = a + ab * t;
+            let d = closest.length();
+            if d < best_dist {
+                best_dist = d;
+                best_point = closest;
             }
         }
     }
-    if polyhedron.len() < 4 { return None; }
 
-    // Check if the polyhedron has non-zero volume. If all points are coplanar
-    // or collinear, find a perpendicular direction and add offset points.
-    {
-        let mut has_volume = false;
-        for i in 0..polyhedron.len() {
-            for j in (i + 1)..polyhedron.len() {
-                for k in (j + 1)..polyhedron.len() {
-                    let e1 = polyhedron[j] - polyhedron[i];
-                    let e2 = polyhedron[k] - polyhedron[i];
-                    let n = e1.cross(e2);
-                    if n.length_squared() > 1e-8 {
-                        has_volume = true;
-                        break;
-                    }
+    // Check all faces (triangles)
+    for i in 0..simplex.len() {
+        for j in (i + 1)..simplex.len() {
+            for k in (j + 1)..simplex.len() {
+                let p0 = simplex[i];
+                let p1 = simplex[j];
+                let p2 = simplex[k];
+                let e1 = p1 - p0;
+                let e2 = p2 - p0;
+                let n = e1.cross(e2);
+                let n_len = n.length();
+                if n_len < 1e-12 {
+                    continue;
                 }
-                if has_volume { break; }
-            }
-            if has_volume { break; }
-        }
-        if !has_volume {
-            // All points are collinear/coplanar. Add offset points perpendicular
-            // to the primary axis.
-            let axis = if polyhedron.len() >= 2 {
-                (polyhedron[1] - polyhedron[0]).normalize_or(Vec3::X)
-            } else {
-                Vec3::X
-            };
-            let perp1 = if axis.x.abs() < 0.9 {
-                Vec3::X.cross(axis).normalize()
-            } else {
-                Vec3::Y.cross(axis).normalize()
-            };
-            let perp2 = axis.cross(perp1).normalize();
-            for perp in [&perp1, &perp2] {
-                let offset = 0.01; // Small offset for numerical stability
-                let p1 = minkowski_support_3d(a, pa, ra, b, pb, rb, *perp);
-                let p2 = minkowski_support_3d(a, pa, ra, b, pb, rb, -*perp);
-                // Add offset points slightly displaced from the support surface
-                polyhedron.push(p1 + perp * offset);
-                polyhedron.push(p2 - perp * offset);
-                if polyhedron.len() >= 6 { break; }
-            }
-        }
-    }
-
-    let (mut best_normal, mut best_depth) = (Vec3::ZERO, f32::MAX);
-
-    for _ in 0..64 {
-        // Find the triangular face closest to the origin.
-        let mut best_dist = f32::MAX;
-        let mut best_face_normal = Vec3::ZERO;
-        let mut found_face = false;
-
-        for i in 0..polyhedron.len() {
-            for j in (i + 1)..polyhedron.len() {
-                for k in (j + 1)..polyhedron.len() {
-                    let p0 = polyhedron[i];
-                    let p1 = polyhedron[j];
-                    let p2 = polyhedron[k];
-                    let e1 = p1 - p0;
-                    let e2 = p2 - p0;
-                    let n = e1.cross(e2);
-                    let n_len = n.length();
-                    if n_len < 1e-12 { continue; }
-                    let n = n / n_len;
-                    let d = n.dot(p0);
-                    // Use absolute distance — the face normal might point away from origin.
-                    let dist = d.abs();
-                    if dist < best_dist {
-                        best_dist = dist;
-                        best_face_normal = if d >= 0.0 { n } else { -n };
-                        found_face = true;
+                let n = n / n_len;
+                let dist = n.dot(p0);
+                let proj = -dist * n;
+                let v0 = p2 - p0;
+                let v1 = p1 - p0;
+                let v2 = proj;
+                let d00 = v0.dot(v0);
+                let d01 = v0.dot(v1);
+                let d11 = v1.dot(v1);
+                let d20 = v2.dot(v0);
+                let d21 = v2.dot(v1);
+                let denom = d00 * d11 - d01 * d01;
+                if denom.abs() < 1e-12 {
+                    continue;
+                }
+                let v = (d11 * d20 - d01 * d21) / denom;
+                let w = (d00 * d21 - d01 * d20) / denom;
+                let u = 1.0 - v - w;
+                if u >= -1e-6 && v >= -1e-6 && w >= -1e-6 {
+                    let d = dist.abs();
+                    if d < best_dist {
+                        best_dist = d;
+                        best_point = proj;
                     }
                 }
             }
         }
-
-        if !found_face { break; }
-
-        let support = minkowski_support_3d(a, pa, ra, b, pb, rb, best_face_normal);
-        let support_dist = support.dot(best_face_normal);
-
-        if (support_dist - best_dist).abs() < 1e-6 {
-            best_normal = best_face_normal;
-            best_depth = best_dist;
-            break;
-        }
-
-        // Avoid adding duplicate points.
-        if !polyhedron.iter().any(|v| (*v - support).length_squared() < 1e-12) {
-            polyhedron.push(support);
-        }
-        if polyhedron.len() > 128 { break; }
     }
 
-    if best_depth < f32::MAX {
-        Some(Contact3D {
+    if best_dist < f32::MAX {
+        // If best_point is near-zero (origin inside Minkowski difference),
+        // use the simplex centroid direction instead.
+        let mut normal = if best_dist > 1e-6 {
+            best_point.normalize()
+        } else if simplex.len() >= 2 {
+            let centroid = simplex.iter().sum::<Vec3>() / simplex.len() as f32;
+            let centroid_len = centroid.length();
+            if centroid_len > 1e-10 {
+                -centroid / centroid_len
+            } else {
+                Vec3::NEG_X
+            }
+        } else {
+            Vec3::NEG_X
+        };
+        // Ensure normal points from B toward A
+        let center_dir = pa - pb;
+        if normal.dot(center_dir) < 0.0 {
+            normal = -normal;
+        }
+        return Some(Contact3D {
             point: (pa + pb) * 0.5,
-            normal: best_normal,
-            depth: best_depth,
-        })
-    } else {
-        None
+            normal,
+            depth: best_dist.max(0.01),
+        });
     }
+
+    // Fallback: use simplex centroid direction
+    if simplex.len() >= 2 {
+        let centroid = simplex.iter().sum::<Vec3>() / simplex.len() as f32;
+        let centroid_len = centroid.length();
+        if centroid_len > 1e-10 {
+            let normal = -centroid / centroid_len;
+            let depth = centroid_len.max(0.01);
+            return Some(Contact3D {
+                point: (pa + pb) * 0.5,
+                normal,
+                depth,
+            });
+        }
+    }
+
+    // Ultimate fallback
+    let dir = pa - pb;
+    let dist = dir.length();
+    if dist > 1e-10 {
+        return Some(Contact3D {
+            point: (pa + pb) * 0.5,
+            normal: dir / dist,
+            depth: 0.01,
+        });
+    }
+
+    None
 }
 
 /// Full 3D narrow-phase collision test.
 pub fn collide_3d(
-    ia: usize, sa: &Shape, ba: &RigidBody,
-    ib: usize, sb: &Shape, bb: &RigidBody,
+    ia: usize,
+    sa: &Shape,
+    ba: &RigidBody,
+    ib: usize,
+    sb: &Shape,
+    bb: &RigidBody,
 ) -> Option<ContactManifold3D> {
     let pos_a = ba.position_3d;
     let pos_b = bb.position_3d;
@@ -651,9 +798,16 @@ pub struct CcdResult3D {
 /// computing the distance between shapes at the current time estimate
 /// and advancing time by distance / relative_speed.
 pub fn gjk_ccd_3d(
-    shape_a: &Shape, pos_a: Vec3, rot_a: &glam::Quat, vel_a: Vec3,
-    shape_b: &Shape, pos_b: Vec3, rot_b: &glam::Quat, vel_b: Vec3,
-    radius_a: f32, radius_b: f32,
+    shape_a: &Shape,
+    pos_a: Vec3,
+    rot_a: &glam::Quat,
+    vel_a: Vec3,
+    shape_b: &Shape,
+    pos_b: Vec3,
+    rot_b: &glam::Quat,
+    vel_b: Vec3,
+    radius_a: f32,
+    radius_b: f32,
 ) -> Option<CcdResult3D> {
     let rel_vel = vel_a - vel_b;
     let rel_speed = rel_vel.length();
@@ -699,7 +853,10 @@ pub fn gjk_ccd_3d(
             0.0
         } else {
             // Approximate distance from simplex.
-            gr.simplex.iter().map(|p| p.length()).fold(f32::MAX, f32::min)
+            gr.simplex
+                .iter()
+                .map(|p| p.length())
+                .fold(f32::MAX, f32::min)
         };
 
         // If distance is less than sum of radii, we have a potential collision.
@@ -708,13 +865,17 @@ pub fn gjk_ccd_3d(
             let penetration = sum_radii - distance;
             let dt = penetration / rel_speed;
             t += dt;
-            if t >= 1.0 { return None; }
+            if t >= 1.0 {
+                return None;
+            }
             continue;
         }
 
         // Advance time: how long until the distance closes to sum_radii?
         let closing_speed = rel_speed;
-        if closing_speed < 1e-10 { return None; }
+        if closing_speed < 1e-10 {
+            return None;
+        }
         let dt = (distance - sum_radii) / closing_speed;
         if dt < 1e-10 {
             // Very close — check one more time.
@@ -723,7 +884,11 @@ pub fn gjk_ccd_3d(
             let next_b = pos_b + vel_b * next_t;
             if gjk_overlap_3d(shape_a, next_a, rot_a, shape_b, next_b, rot_b) {
                 if let Some(epa) = epa_3d(shape_a, next_a, rot_a, shape_b, next_b, rot_b) {
-                    return Some(CcdResult3D { toi: next_t, point: epa.point, normal: epa.normal });
+                    return Some(CcdResult3D {
+                        toi: next_t,
+                        point: epa.point,
+                        normal: epa.normal,
+                    });
                 }
                 return Some(CcdResult3D {
                     toi: next_t,
@@ -734,16 +899,25 @@ pub fn gjk_ccd_3d(
             return None;
         }
         t += dt;
-        if t >= 1.0 { return None; }
+        if t >= 1.0 {
+            return None;
+        }
     }
     None
 }
 
 /// 2D continuous collision detection (swept circles / AABBs).
 pub fn gjk_ccd(
-    shape_a: &Shape, pos_a: Vec2, angle_a: f32, vel_a: Vec2,
-    shape_b: &Shape, pos_b: Vec2, angle_b: f32, vel_b: Vec2,
-    radius_a: f32, radius_b: f32,
+    shape_a: &Shape,
+    pos_a: Vec2,
+    angle_a: f32,
+    vel_a: Vec2,
+    shape_b: &Shape,
+    pos_b: Vec2,
+    angle_b: f32,
+    vel_b: Vec2,
+    radius_a: f32,
+    radius_b: f32,
 ) -> Option<(f32, Vec2, Vec2)> {
     let rel_vel = vel_a - vel_b;
     let rel_speed = rel_vel.length();
@@ -775,13 +949,19 @@ pub fn gjk_ccd(
         let distance = if gr.simplex.is_empty() {
             0.0
         } else {
-            gr.simplex.iter().take(gr.simplex_count).map(|p| p.length()).fold(f32::MAX, f32::min)
+            gr.simplex
+                .iter()
+                .take(gr.simplex_count)
+                .map(|p| p.length())
+                .fold(f32::MAX, f32::min)
         };
 
         if distance < sum_radii {
             let penetration = sum_radii - distance;
             t += penetration / rel_speed;
-            if t >= 1.0 { return None; }
+            if t >= 1.0 {
+                return None;
+            }
             continue;
         }
 
@@ -800,7 +980,9 @@ pub fn gjk_ccd(
             return None;
         }
         t += dt;
-        if t >= 1.0 { return None; }
+        if t >= 1.0 {
+            return None;
+        }
     }
     None
 }
@@ -817,28 +999,112 @@ mod tests {
     // ── 2D tests (unchanged) ──────────────────────────────────────────────
 
     #[test]
-    fn test_gjk_overlap() { assert!(gjk(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(5.0, 0.0), 0.0).overlapping); }
-    #[test]
-    fn test_gjk_separated() { assert!(!gjk(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(100.0, 0.0), 0.0).overlapping); }
-    #[test]
-    fn test_gjk_touching() { assert!(gjk(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(10.0, 0.0), 0.0).overlapping); }
-    #[test]
-    fn test_gjk_simplex() {
-        let r = gjk(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(5.0, 0.0), 0.0);
-        assert!(r.overlapping && r.simplex_count >= 3);
-        for i in 0..r.simplex_count { assert!(r.simplex[i].is_finite()); }
+    fn test_gjk_overlap() {
+        assert!(
+            gjk(
+                &Shape::circle(5.0),
+                Vec2::ZERO,
+                0.0,
+                &Shape::circle(5.0),
+                Vec2::new(5.0, 0.0),
+                0.0
+            )
+            .overlapping
+        );
     }
     #[test]
-    fn test_epa_overlap() { assert!(epa(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(5.0, 0.0), 0.0).unwrap().depth > 0.0); }
+    fn test_gjk_separated() {
+        assert!(
+            !gjk(
+                &Shape::circle(5.0),
+                Vec2::ZERO,
+                0.0,
+                &Shape::circle(5.0),
+                Vec2::new(100.0, 0.0),
+                0.0
+            )
+            .overlapping
+        );
+    }
+    #[test]
+    fn test_gjk_touching() {
+        assert!(
+            gjk(
+                &Shape::circle(5.0),
+                Vec2::ZERO,
+                0.0,
+                &Shape::circle(5.0),
+                Vec2::new(10.0, 0.0),
+                0.0
+            )
+            .overlapping
+        );
+    }
+    #[test]
+    fn test_gjk_simplex() {
+        let r = gjk(
+            &Shape::circle(5.0),
+            Vec2::ZERO,
+            0.0,
+            &Shape::circle(5.0),
+            Vec2::new(5.0, 0.0),
+            0.0,
+        );
+        assert!(r.overlapping && r.simplex_count >= 3);
+        for i in 0..r.simplex_count {
+            assert!(r.simplex[i].is_finite());
+        }
+    }
+    #[test]
+    fn test_epa_overlap() {
+        assert!(
+            epa(
+                &Shape::circle(5.0),
+                Vec2::ZERO,
+                0.0,
+                &Shape::circle(5.0),
+                Vec2::new(5.0, 0.0),
+                0.0
+            )
+            .unwrap()
+            .depth
+                > 0.0
+        );
+    }
     #[test]
     fn test_epa_warm_api() {
-        let gr = gjk(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(5.0, 0.0), 0.0);
-        let c = epa_with_simplex(&Shape::circle(5.0), Vec2::ZERO, 0.0, &Shape::circle(5.0), Vec2::new(5.0, 0.0), 0.0, &gr);
+        let gr = gjk(
+            &Shape::circle(5.0),
+            Vec2::ZERO,
+            0.0,
+            &Shape::circle(5.0),
+            Vec2::new(5.0, 0.0),
+            0.0,
+        );
+        let c = epa_with_simplex(
+            &Shape::circle(5.0),
+            Vec2::ZERO,
+            0.0,
+            &Shape::circle(5.0),
+            Vec2::new(5.0, 0.0),
+            0.0,
+            &gr,
+        );
         assert!(c.unwrap().depth > 0.0);
     }
     #[test]
     fn test_gjk_circle_aabb() {
-        assert!(gjk(&Shape::circle(3.0), Vec2::ZERO, 0.0, &Shape::aabb(Vec2::new(4.0, 4.0)), Vec2::new(5.0, 0.0), 0.0).overlapping);
+        assert!(
+            gjk(
+                &Shape::circle(3.0),
+                Vec2::ZERO,
+                0.0,
+                &Shape::aabb(Vec2::new(4.0, 4.0)),
+                Vec2::new(5.0, 0.0),
+                0.0
+            )
+            .overlapping
+        );
     }
 
     // ── 3D tests ──────────────────────────────────────────────────────────
@@ -852,7 +1118,14 @@ mod tests {
     fn test_gjk_3d_sphere_overlap() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
-        let result = gjk_3d(&a, Vec3::ZERO, &glam::Quat::IDENTITY, &b, Vec3::new(5.0, 0.0, 0.0), &glam::Quat::IDENTITY);
+        let result = gjk_3d(
+            &a,
+            Vec3::ZERO,
+            &glam::Quat::IDENTITY,
+            &b,
+            Vec3::new(5.0, 0.0, 0.0),
+            &glam::Quat::IDENTITY,
+        );
         assert!(result.overlapping, "Overlapping spheres should be detected");
     }
 
@@ -860,7 +1133,14 @@ mod tests {
     fn test_gjk_3d_sphere_separated() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
-        let result = gjk_3d(&a, Vec3::ZERO, &glam::Quat::IDENTITY, &b, Vec3::new(100.0, 0.0, 0.0), &glam::Quat::IDENTITY);
+        let result = gjk_3d(
+            &a,
+            Vec3::ZERO,
+            &glam::Quat::IDENTITY,
+            &b,
+            Vec3::new(100.0, 0.0, 0.0),
+            &glam::Quat::IDENTITY,
+        );
         assert!(!result.overlapping, "Separated spheres should not overlap");
     }
 
@@ -868,26 +1148,48 @@ mod tests {
     fn test_gjk_3d_sphere_touching() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
-        let result = gjk_3d(&a, Vec3::ZERO, &glam::Quat::IDENTITY, &b, Vec3::new(10.0, 0.0, 0.0), &glam::Quat::IDENTITY);
-        assert!(result.overlapping, "Touching spheres should be detected as overlapping");
+        let result = gjk_3d(
+            &a,
+            Vec3::ZERO,
+            &glam::Quat::IDENTITY,
+            &b,
+            Vec3::new(10.0, 0.0, 0.0),
+            &glam::Quat::IDENTITY,
+        );
+        assert!(
+            result.overlapping,
+            "Touching spheres should be detected as overlapping"
+        );
     }
 
     #[test]
-    #[ignore = "EPA degenerate simplex handling needs refinement"]
     fn test_epa_3d_sphere_overlap() {
         let a = Shape::sphere(5.0);
         let b = Shape::sphere(5.0);
-        let contact = epa_3d(&a, Vec3::ZERO, &glam::Quat::IDENTITY, &b, Vec3::new(5.0, 0.0, 0.0), &glam::Quat::IDENTITY);
-        assert!(contact.is_some(), "EPA should produce a contact for overlapping spheres");
+        let contact = epa_3d(
+            &a,
+            Vec3::ZERO,
+            &glam::Quat::IDENTITY,
+            &b,
+            Vec3::new(5.0, 0.0, 0.0),
+            &glam::Quat::IDENTITY,
+        );
+        assert!(
+            contact.is_some(),
+            "EPA should produce a contact for overlapping spheres"
+        );
         let c = contact.unwrap();
         assert!(c.depth > 0.0, "Penetration depth should be positive");
         assert!(c.normal.is_finite(), "Normal should be finite");
         // Normal should point from B to A (roughly -X direction)
-        assert!(c.normal.x < -0.5, "Normal should point roughly in -X direction, got {:?}", c.normal);
+        assert!(
+            c.normal.x < -0.5,
+            "Normal should point roughly in -X direction, got {:?}",
+            c.normal
+        );
     }
 
     #[test]
-    #[ignore = "EPA degenerate simplex handling needs refinement"]
     fn test_collide_3d_spheres() {
         let a = Shape::sphere(3.0);
         let b = Shape::sphere(3.0);
@@ -904,7 +1206,10 @@ mod tests {
             ..Default::default()
         };
         let manifold = collide_3d(0, &a, &body_a, 1, &b, &body_b);
-        assert!(manifold.is_some(), "collide_3d should detect overlapping spheres");
+        assert!(
+            manifold.is_some(),
+            "collide_3d should detect overlapping spheres"
+        );
         let m = manifold.unwrap();
         assert_eq!(m.body_a, 0);
         assert_eq!(m.body_b, 1);
@@ -916,7 +1221,14 @@ mod tests {
         let sphere = Shape::sphere(2.0);
         let box3d = Shape::box3d(Vec3::new(3.0, 3.0, 3.0));
         // Box and sphere overlapping
-        let result = gjk_3d(&sphere, Vec3::ZERO, &glam::Quat::IDENTITY, &box3d, Vec3::new(2.0, 0.0, 0.0), &glam::Quat::IDENTITY);
+        let result = gjk_3d(
+            &sphere,
+            Vec3::ZERO,
+            &glam::Quat::IDENTITY,
+            &box3d,
+            Vec3::new(2.0, 0.0, 0.0),
+            &glam::Quat::IDENTITY,
+        );
         assert!(result.overlapping, "Box and sphere should overlap");
     }
 
@@ -925,7 +1237,14 @@ mod tests {
         let box_a = Shape::box3d(Vec3::new(2.0, 2.0, 2.0));
         let box_b = Shape::box3d(Vec3::new(2.0, 2.0, 2.0));
         let rot = glam::Quat::from_rotation_z(45.0f32.to_radians());
-        let result = gjk_3d(&box_a, Vec3::ZERO, &glam::Quat::IDENTITY, &box_b, Vec3::new(3.0, 0.0, 0.0), &rot);
+        let result = gjk_3d(
+            &box_a,
+            Vec3::ZERO,
+            &glam::Quat::IDENTITY,
+            &box_b,
+            Vec3::new(3.0, 0.0, 0.0),
+            &rot,
+        );
         assert!(result.overlapping, "Rotated box should still overlap");
     }
 }

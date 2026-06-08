@@ -164,10 +164,7 @@ impl SpatialHash3D {
         for x in min_cell.0..=max_cell.0 {
             for y in min_cell.1..=max_cell.1 {
                 for z in min_cell.2..=max_cell.2 {
-                    self.cells
-                        .entry((x, y, z))
-                        .or_default()
-                        .push(body_id);
+                    self.cells.entry((x, y, z)).or_default().push(body_id);
                 }
             }
         }
@@ -268,9 +265,21 @@ mod tests {
     #[test]
     fn test_3d_insert_and_query() {
         let mut grid = SpatialHash3D::new();
-        grid.insert(BodyId(1), Vec3::new(0.0, 0.0, 0.0), Vec3::new(32.0, 32.0, 32.0));
-        grid.insert(BodyId(2), Vec3::new(10.0, 10.0, 10.0), Vec3::new(42.0, 42.0, 42.0));
-        grid.insert(BodyId(3), Vec3::new(200.0, 200.0, 200.0), Vec3::new(232.0, 232.0, 232.0));
+        grid.insert(
+            BodyId(1),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(32.0, 32.0, 32.0),
+        );
+        grid.insert(
+            BodyId(2),
+            Vec3::new(10.0, 10.0, 10.0),
+            Vec3::new(42.0, 42.0, 42.0),
+        );
+        grid.insert(
+            BodyId(3),
+            Vec3::new(200.0, 200.0, 200.0),
+            Vec3::new(232.0, 232.0, 232.0),
+        );
 
         let result = grid.query(Vec3::new(0.0, 0.0, 0.0), Vec3::new(64.0, 64.0, 64.0));
         assert!(result.contains(&BodyId(1)));
@@ -281,9 +290,21 @@ mod tests {
     #[test]
     fn test_3d_candidate_pairs() {
         let mut grid = SpatialHash3D::new();
-        grid.insert(BodyId(1), Vec3::new(0.0, 0.0, 0.0), Vec3::new(32.0, 32.0, 32.0));
-        grid.insert(BodyId(2), Vec3::new(10.0, 10.0, 10.0), Vec3::new(42.0, 42.0, 42.0));
-        grid.insert(BodyId(3), Vec3::new(200.0, 200.0, 200.0), Vec3::new(232.0, 232.0, 232.0));
+        grid.insert(
+            BodyId(1),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(32.0, 32.0, 32.0),
+        );
+        grid.insert(
+            BodyId(2),
+            Vec3::new(10.0, 10.0, 10.0),
+            Vec3::new(42.0, 42.0, 42.0),
+        );
+        grid.insert(
+            BodyId(3),
+            Vec3::new(200.0, 200.0, 200.0),
+            Vec3::new(232.0, 232.0, 232.0),
+        );
 
         let pairs = grid.candidate_pairs();
         assert!(pairs.iter().any(|(a, b)| {
@@ -295,8 +316,16 @@ mod tests {
     fn test_3d_z_separation() {
         let mut grid = SpatialHash3D::new();
         // Two bodies at same XY but far apart in Z
-        grid.insert(BodyId(1), Vec3::new(0.0, 0.0, 0.0), Vec3::new(32.0, 32.0, 32.0));
-        grid.insert(BodyId(2), Vec3::new(0.0, 0.0, 200.0), Vec3::new(32.0, 32.0, 232.0));
+        grid.insert(
+            BodyId(1),
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(32.0, 32.0, 32.0),
+        );
+        grid.insert(
+            BodyId(2),
+            Vec3::new(0.0, 0.0, 200.0),
+            Vec3::new(32.0, 32.0, 232.0),
+        );
 
         let pairs = grid.candidate_pairs();
         assert!(pairs.is_empty());

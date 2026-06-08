@@ -1,6 +1,6 @@
 //! Collider: binds a shape to a rigid body with offset and rotation.
 
-use glam::Vec2;
+use glam::{Quat, Vec2, Vec3};
 
 use crate::BodyId;
 use crate::shape::Shape;
@@ -23,6 +23,10 @@ pub struct Collider {
     pub collides_with: u32,
     /// Optional user data pointer (for application callbacks).
     pub user_data: u64,
+    /// If true, this collider is a trigger/sensor — it generates collision
+    /// events but does not produce contact forces (no physical response).
+    /// Use for: pickup zones, kill zones, proximity detection, area triggers.
+    pub is_sensor: bool,
 }
 
 impl Collider {
@@ -36,7 +40,16 @@ impl Collider {
             category: 0x0001,
             collides_with: 0xFFFF,
             user_data: 0,
+            is_sensor: false,
         }
+    }
+
+    /// Create a new trigger/sensor collider.
+    /// Triggers generate collision events but do not produce physical response.
+    pub fn new_sensor(body_id: BodyId, shape: Shape) -> Self {
+        let mut c = Self::new(body_id, shape);
+        c.is_sensor = true;
+        c
     }
 
     /// Set the local offset from the body center.
@@ -60,6 +73,12 @@ impl Collider {
     /// Set which categories this collider can collide with.
     pub fn with_collides_with(mut self, mask: u32) -> Self {
         self.collides_with = mask;
+        self
+    }
+
+    /// Set whether this collider is a sensor/trigger.
+    pub fn with_sensor(mut self, is_sensor: bool) -> Self {
+        self.is_sensor = is_sensor;
         self
     }
 
@@ -102,5 +121,15 @@ impl Collider {
             sin * local_support.x + cos * local_support.y,
         );
         body_position + self.offset + rotated
+    }
+
+    /// Get the world-space AABB for 3D broad-phase culling.
+    /// Requires the body's current 3D position and rotation.
+    pub fn world_aabb_3d(&self, body_position: Vec3, body_rotation: Quat) -> (Vec3, Vec3) {
+        let world_offset = body_rotation * self.offset.extend(0.0);
+        let center = body_position + world_offset;
+        let r = self.shape.bounding_radius();
+        let half = Vec3::new(r, r, r);
+        (center - half, center + half)
     }
 }

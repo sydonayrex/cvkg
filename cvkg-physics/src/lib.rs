@@ -50,25 +50,43 @@
 
 pub mod body;
 pub mod broadphase;
+pub mod character;
 pub mod collider;
 pub mod constraint;
+pub mod debug_draw;
+pub mod gpu_broadphase;
+pub mod heightmap;
 pub mod integration;
+pub mod lod;
+pub mod mjolnir_bridge;
 pub mod narrowphase;
+pub mod queries;
+pub mod ragdoll_bridge;
 pub mod scene_bridge;
 pub mod shape;
+pub mod snapshot;
 pub mod solver;
+pub mod sph;
 pub mod world;
+pub mod xpbd;
 
 pub use body::{BodyId, RigidBody};
 pub use broadphase::SpatialHash;
 pub use collider::Collider;
 pub use constraint::{Constraint, ConstraintKind};
 pub use integration::semi_implicit_euler;
-pub use narrowphase::{Contact, ContactManifold, GjkResult, epa, epa_with_simplex, gjk, gjk_overlap};
+pub use mjolnir_bridge::{shatter_at_constraint_break, shatter_at_position};
+pub use narrowphase::{
+    CcdResult3D, Contact, ContactManifold, GjkResult, epa, epa_with_simplex, gjk, gjk_ccd,
+    gjk_ccd_3d, gjk_overlap,
+};
+pub use queries::{
+    OverlapHit, QueryFilter, RaycastHit, RaycastHit3D, ShapeCastHit, ShapeCastHit3D,
+};
+pub use ragdoll_bridge::{BoneBodyMap, RagdollBridge, RagdollBridgeConfig};
 pub use shape::{Shape, ShapeKind};
 pub use solver::ImpulseSolver;
-pub use world::PhysicsWorld;
-pub use world::WorldConfig;
+pub use world::{CollisionEvent, CollisionEventType, PhysicsWorld, StepResult, WorldConfig};
 ///
 /// This is the handoff point to cvkg-anim: application code can use this
 /// to trigger a Sleipnir spring animation to snap to grid/guide positions.

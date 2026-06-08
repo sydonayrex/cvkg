@@ -90,11 +90,18 @@ impl SceneBridge {
             if let Some(xform) = body_transforms.get(body_id) {
                 if let Some(node) = scene.nodes.get_mut(node_id) {
                     let new_pos = [xform.position.x, xform.position.y, xform.position.z];
-                    let new_rot = [xform.rotation.x, xform.rotation.y, xform.rotation.z, xform.rotation.w];
+                    let new_rot = [
+                        xform.rotation.x,
+                        xform.rotation.y,
+                        xform.rotation.z,
+                        xform.rotation.w,
+                    ];
 
                     // Only mark dirty if actually changed
-                    let pos_changed = (0..3).any(|i| (new_pos[i] - node.position_3d[i]).abs() > 0.001);
-                    let rot_changed = (0..4).any(|i| (new_rot[i] - node.rotation_3d[i]).abs() > 0.001);
+                    let pos_changed =
+                        (0..3).any(|i| (new_pos[i] - node.position_3d[i]).abs() > 0.001);
+                    let rot_changed =
+                        (0..4).any(|i| (new_rot[i] - node.rotation_3d[i]).abs() > 0.001);
 
                     if pos_changed || rot_changed {
                         node.position_3d = new_pos;
@@ -151,20 +158,22 @@ mod tests {
 
         // Create a node with 3D transform
         let node_id = NodeId(42);
-        scene.nodes.insert(node_id, cvkg_scene::VNode::new(
+        scene.nodes.insert(
             node_id,
-            "Cube",
-            cvkg_core::Rect::new(-0.5, -0.5, 1.0, 1.0),
-        ));
+            cvkg_scene::VNode::new(node_id, "Cube", cvkg_core::Rect::new(-0.5, -0.5, 1.0, 1.0)),
+        );
         let body_id = BodyId(1);
         bridge.bind(body_id, node_id);
 
         // Sync a 3D transform
         let mut transforms = std::collections::HashMap::new();
-        transforms.insert(body_id, Body3DTransform {
-            position: Vec3::new(10.0, 20.0, 5.0),
-            rotation: glam::Quat::from_rotation_z(0.5),
-        });
+        transforms.insert(
+            body_id,
+            Body3DTransform {
+                position: Vec3::new(10.0, 20.0, 5.0),
+                rotation: glam::Quat::from_rotation_z(0.5),
+            },
+        );
         bridge.sync_3d_to_scene(&transforms, &mut scene);
 
         let node = scene.nodes.get(&node_id).unwrap();
