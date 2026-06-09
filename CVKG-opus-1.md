@@ -127,16 +127,41 @@ In `cvkg-core/src/lib.rs`, add `glass_tint_adapt` to each preset:
 - `midgard()` (line ~3196): add `glass_tint_adapt: 0.0,`
 - `vibrant_glass()` (line ~3216): add `glass_tint_adapt: 0.65,`
 
-**Step 4: Wire in SurtrRenderer::set_theme**
+**Step 4: Extend SurtrRenderer::set_theme to accept optional glass material**
 
-In `cvkg-render-gpu/src/api.rs`, find the `set_theme` method. After writing the ColorTheme uniform, add:
+In `cvkg-render-gpu/src/api.rs`, change the `set_theme` signature from:
 
 ```rust
-// If the theme has a glass material patch, apply it
-if let Some(ref glass_mat) = theme.glass_material_override {
-    let patch = cvkg_themes::glass_material_to_gpu_patch(glass_mat);
-    self.theme_buffer.patch_glass_base(patch);
-}
+    fn set_theme(&mut self, theme: ColorTheme) {
+        self.current_theme = theme;
+        self.queue
+            .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
+    }
+```
+
+to:
+
+```rust
+    fn set_theme(&mut self, theme: ColorTheme) {
+        self.current_theme = theme;
+        self.queue
+            .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
+    }
+
+    /// Apply a glass material override on top of the current theme.
+    /// This is called by the compositor when a GlassMaterial is active.
+    fn apply_glass_material(&mut self, mat: &cvkg_themes::GlassMaterial) {
+        let patch = cvkg_themes::glass_material_to_gpu_patch(mat);
+        // Patch only the glass_base field in the theme buffer
+        // Offset of glass_base in ColorTheme: 12 fields * 4 bytes = 48 bytes
+        // (primary_neon[4] + shatter_neon[4] + glass_base[4] = 12 floats before glass_base)
+        // Actually: primary_neon(16) + shatter_neon(16) = 32 bytes offset for glass_base
+        self.queue.write_buffer(
+            &self.theme_buffer,
+            32, // offset of glass_base in ColorTheme
+            bytemuck::bytes_of(&patch),
+        );
+    }
 ```
 
 **Verification:**
@@ -153,13 +178,15 @@ git commit -m "feat(themes): wire OKLCH GlassMaterial tint to GPU ColorTheme uni
 
 ---
 
-### Task 0.2 — Wire bcs_frosted into EffectRegistry
+### Task 0.2 — Wire bcs_frosted as a Separate Render Pass
 
-**Objective:** Make the existing `bcs_frosted` WGSL function callable through the effect system.
+**Objective:** Make the existing `bcs_frosted` WGSL function usable as a render pass.
+
+**IMPORTANT:** `bcs_frosted` in `effects.wgsl` is a `@fragment` shader function (a full fragment shader), not a stitchable function. It cannot be called from `EffectRegistry::compile_chain()`. Instead, it must be used as a separate render pass with its own pipeline.
 
 **Files:**
-- Modify: `cvkg-render-gpu/src/kvasir/effects.rs:3-11` (EffectId enum)
-- Modify: `cvkg-render-gpu/src/kvasir/effects.rs:56-96` (compile_chain)
+- Modify: `cvkg-render-gpu/src/kvasir/effects.rs` (add EffectId variant)
+- Modify: `cvkg-render-gpu/src/passes/effects.rs` (add frosted pass dispatch)
 - Modify: `cvkg-core/src/lib.rs` (Renderer trait — add default no-op method)
 
 **Step 1: Add EffectId variant**
@@ -167,14 +194,27 @@ git commit -m "feat(themes): wire OKLCH GlassMaterial tint to GPU ColorTheme uni
 In `cvkg-render-gpu/src/kvasir/effects.rs`, add to the enum after `ColorInvert`:
 
 ```rust
-    /// Frosted glass approximation: noise-displaced multi-sample scatter.
+    /// Frosted glass: standalone render pass using bcs_frosted fragment shader.
     /// Parameters: [frost_amount, grain_size, clear_radius, clear_softness]
     Frosted,
 ```
 
-**Step 2: Add dispatch branch in compile_chain**
+**Step 2: Add dispatch in compile_chain**
 
 In the same file, inside `EffectRegistry::compile_chain()`, add a match arm after the `ColorInvert` branch:
+
+```rust
+                EffectId::Frosted => {
+                    // bcs_frosted is a @fragment shader, not a stitchable function.
+                    // It runs as a separate fullscreen pass, not in compile_chain.
+                    // This is a no-op in the chain; the pass is handled by EffectCompositeNode.
+                    wgsl.push_str("    // Frosted: handled by separate pass\n");
+                }
+```
+
+**Step 3: Add the frosted pass to EffectCompositeNode**
+
+In `cvkg-render-gpu/src/passes/effects.rs`, in the `EffectCompositeNode::execute()` method, add a branch for the Frosted effect that runs a fullscreen pass using the `bcs_frosted` shader:
 
 ```rust
                 EffectId::Frosted => {
@@ -182,14 +222,34 @@ In the same file, inside `EffectRegistry::compile_chain()`, add a match arm afte
                     let grain = node.parameters.get(1).unwrap_or(&1.0);
                     let clear_r = node.parameters.get(2).unwrap_or(&0.3);
                     let clear_s = node.parameters.get(3).unwrap_or(&0.15);
-                    wgsl.push_str(&format!(
-                        "    // Frosted Glass Effect\n    c = bcs_frosted(uv, c, {:.3}, {:.3}, {:.3}, {:.3});\n",
-                        amount, grain, clear_r, clear_s
-                    ));
+
+                    // Run bcs_frosted as a fullscreen pass
+                    let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Frosted Glass Pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &dst_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                            depth_slice: None,
+                        })],
+                        ..Default::default()
+                    });
+                    pass.set_pipeline(&self.frosted_pipeline);
+                    pass.set_bind_group(0, &src_bind_group, &[]);
+                    // Set push constants for frosted parameters
+                    pass.set_push_constants(
+                        wgpu::ShaderStages::FRAGMENT,
+                        0,
+                        bytemuck::bytes_of(&[*amount, *grain, *clear_r, *clear_s]),
+                    );
+                    pass.draw(0..3, 0..1);
                 }
 ```
 
-**Step 3: Add Renderer trait method**
+**Step 4: Add Renderer trait method**
 
 In `cvkg-core/src/lib.rs`, in the `Renderer` trait (around line 2900), add a default no-op method:
 
@@ -219,8 +279,8 @@ Expected: All tests pass. `EffectId::Frosted` is reachable.
 
 **Step 5: Commit**
 ```bash
-git add cvkg-render-gpu/src/kvasir/effects.rs cvkg-core/src/lib.rs cvkg-render-gpu/src/renderer.rs
-git commit -m "feat(effects): wire bcs_frosted into EffectRegistry dispatch"
+git add cvkg-render-gpu/src/kvasir/effects.rs cvkg-render-gpu/src/passes/effects.rs cvkg-core/src/lib.rs
+git commit -m "feat(effects): wire bcs_frosted as separate render pass (not stitchable)"
 ```
 
 ---
@@ -629,6 +689,7 @@ pub struct BifrostModifier {
     pub backdrop_sample_radius: f32,
 }
 
+#[derive(Copy, Clone)]
 pub enum BifrostTintMode {
     /// Use the theme's glass_base color.
     Fixed,
@@ -665,13 +726,27 @@ These are the components every macOS-class desktop app requires. They are built 
 **Objective:** Render the existing `MenuBar` data model as a glass menu bar with cascading submenus.
 
 **Files:**
+- Create: `cvkg-components/src/chrome/mod.rs` (new directory)
 - Create: `cvkg-components/src/chrome/nornir_bar.rs`
-- Modify: `cvkg-components/src/chrome/mod.rs` (register module)
 - Modify: `cvkg-components/src/lib.rs` (export)
 
 **The MenuBar data model already exists at `cvkg-core/src/lib.rs:6993`.** This task creates the rendering component.
 
-**Create `cvkg-components/src/chrome/nornir_bar.rs`:**
+**Step 0: Create the chrome module directory**
+
+Create `cvkg-components/src/chrome/mod.rs`:
+
+```rust
+//! Chrome components — Application shell elements (menu bar, dock, toolbar).
+//! These components provide the structural UI that surrounds content.
+
+pub mod nornir_bar;
+pub use nornir_bar::NornirBar;
+```
+
+**Step 1: Create the NornirBar component**
+
+Create `cvkg-components/src/chrome/nornir_bar.rs`:
 
 ```rust
 //! NornirBar — The application menu bar.
@@ -1100,8 +1175,9 @@ git commit -m "feat(components): add ValkyrieToolbar floating glass toolbar"
 **Objective:** Create a glass-segmented control with spring-animated sliding pill indicator.
 
 **Files:**
+- Create: `cvkg-components/src/interactive/mod.rs` (new directory)
 - Create: `cvkg-components/src/interactive/hrungnir_segment.rs`
-- Modify: `cvkg-components/src/interactive/mod.rs`
+- Modify: `cvkg-components/src/lib.rs` (export)
 
 **Create `cvkg-components/src/interactive/hrungnir_segment.rs`:**
 
@@ -1136,7 +1212,7 @@ impl HrungnirSegmented {
             style: SegmentedStyle::Glass,
             pill_x: 0.0,
             pill_width: 0.0,
-            anim: SleipnirSolver::new(SleipnirParams::snappy()),
+            anim: SleipnirSolver::new(SleipnirParams::snappy(), 0.0, 0.0),
         }
     }
 
@@ -1417,11 +1493,10 @@ impl RuneInspector {
             size: (280.0, 400.0),
             is_expanded: true,
             drag_offset: [0.0; 2],
-            drag_solver: SleipnirSolver::new(SleipnirParams {
-                stiffness: 280.0,
-                damping: 28.0,
-                mass: 1.0,
-            }),
+            drag_solver: SleipnirSolver::new(
+                SleipnirParams { stiffness: 280.0, damping: 28.0, mass: 1.0 },
+                0.0, 0.0,
+            ),
         }
     }
 }
@@ -1477,7 +1552,8 @@ git commit -m "feat(components): add RuneInspector floating panel"
 
 **Files:**
 - Create: `cvkg-components/src/interactive/galdra_menu.rs`
-- Modify: `cvkg-components/src/interactive/mod.rs`
+- Modify: `cvkg-components/src/interactive/mod.rs` (add module)
+- Modify: `cvkg-components/src/lib.rs` (export)
 
 **Create `cvkg-components/src/interactive/galdra_menu.rs`:**
 
@@ -1602,7 +1678,8 @@ git commit -m "feat(components): add GaldraMenu context menu"
 
 **Files:**
 - Create: `cvkg-components/src/interactive/mimir_search.rs`
-- Modify: `cvkg-components/src/interactive/mod.rs`
+- Modify: `cvkg-components/src/interactive/mod.rs` (add module)
+- Modify: `cvkg-components/src/lib.rs` (export)
 
 **Create `cvkg-components/src/interactive/mimir_search.rs`:**
 
@@ -1761,9 +1838,9 @@ git commit -m "feat(themes): add ColorTheme::berserker() preset"
 **Objective:** Create an ornamental border system using SVG path templates.
 
 **Files:**
+- Create: `cvkg-components/src/ornamental/mod.rs` (new directory)
 - Create: `cvkg-components/src/ornamental/aetti_frame.rs`
-- Create: `cvkg-components/src/ornamental/mod.rs`
-- Modify: `cvkg-components/src/lib.rs`
+- Modify: `cvkg-components/src/lib.rs` (export)
 
 **Create `cvkg-components/src/ornamental/aetti_frame.rs`:**
 
@@ -1977,16 +2054,34 @@ impl Default for ParticleConfig {
 }
 ```
 
-**Step 2: Gate the particle pass on scene type**
+**Step 2: Extend build_render_graph with scene type and rage parameters**
 
-In the graph builder, the particle pass is already wired. Add a condition:
+In `cvkg-render-gpu/src/kvasir/nodes.rs`, extend the `build_render_graph` signature to accept Scene type parameters, then gate the particle pass:
 
 ```rust
-    // Particles: only when scene type is ambient-capable
-    let scene_type = self.scene_type;
-    if matches!(scene_type, SCENE_AURORA | SCENE_NEBULA | SCENE_YGGDRASIL)
-        || berzerker_rage > 0.1
-    {
+pub fn build_render_graph(
+    has_glass: bool,
+    has_bloom: bool,
+    has_accessibility: bool,
+    active_offscreens: &[crate::types::OffscreenEffectConfig],
+    width: u32,
+    height: u32,
+    scale: f32,
+    scene_type: u32,              // NEW: SCENE_AURORA, SCENE_NEBULA, etc.
+    berzerker_rage: f32,          // NEW: 0.0 = off, > 0.1 = enable particles
+) -> super::graph::KvasirGraph {
+```
+
+Then in the graph builder, the particle pass gate becomes:
+
+```rust
+    // Particles: only when scene type is ambient-capable or rage is active
+    let should_spawn_particles = matches!(
+        scene_type,
+        SCENE_AURORA | SCENE_NEBULA | SCENE_YGGDRASIL
+    ) || berzerker_rage > 0.1;
+
+    if should_spawn_particles {
         let particles = builder.add_node(Box::new(ParticleComputeNode::new(
             particle_config,
         )));
@@ -2071,7 +2166,7 @@ git commit -m "feat(effects): apply Seiðr holographic scanlines to sidebar glas
 
 **Files:**
 - Create: `cvkg-components/src/ornamental/mjolnir_frame_ext.rs`
-- Modify: `cvkg-components/src/ornamental/mod.rs`
+- Modify: `cvkg-components/src/ornamental/mod.rs` (add module)
 
 **Create `cvkg-components/src/ornamental/mjolnir_frame_ext.rs`:**
 
@@ -2215,7 +2310,7 @@ git commit -m "feat(components): add MjolnirFrame variants (RuneStone, HammeredM
 
 **Files:**
 - Create: `cvkg-core/src/parallax.rs`
-- Modify: `cvkg-core/src/lib.rs` (export)
+- Modify: `cvkg-core/src/lib.rs` (add `pub mod parallax;`)
 
 **Create `cvkg-core/src/parallax.rs`:**
 
@@ -2225,6 +2320,7 @@ git commit -m "feat(components): add MjolnirFrame variants (RuneStone, HammeredM
 use crate::{Rect, Renderer, View, ViewModifier, ModifiedView};
 
 /// Modifier that applies parallax depth offset during scroll or window drag.
+#[derive(Clone, Copy)]
 pub struct ParallaxModifier {
     /// Depth in the UI stack. 0.0 = background, 1.0 = foreground.
     pub depth: f32,
@@ -2352,6 +2448,7 @@ pub enum AnimationTarget {
 }
 
 /// Declarative animation modifier wrapping SleipnirSolver.
+#[derive(Clone)]
 pub struct AnimatedModifier {
     pub target: AnimationTarget,
     pub target_value: f32,
@@ -2452,7 +2549,7 @@ git commit -m "feat(a11y): wire accessibility preferences into all glass compone
 
 **Files:**
 - Create: `cvkg-core/src/performance.rs`
-- Modify: `cvkg-core/src/lib.rs` (export)
+- Modify: `cvkg-core/src/lib.rs` (add `pub mod performance;`)
 
 **Create `cvkg-core/src/performance.rs`:**
 
