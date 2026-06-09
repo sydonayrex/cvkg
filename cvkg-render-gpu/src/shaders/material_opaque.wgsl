@@ -231,9 +231,8 @@ fn worn_surface(
     let burn_mask = smoothstep(0.3, 0.0, burn_dist) * damage_level * vnoise(uv * 5.0) * 0.7;
 
     // Apply: scratches lighten (exposed metal), cracks and burns darken
-    color.rgb += scratch_mask * 0.25;
-    color.rgb -= crack_mask * 0.4;
-    color.rgb -= burn_mask * 0.5;
+    let new_rgb = color.rgb + vec3<f32>(scratch_mask * 0.25 - crack_mask * 0.4 - burn_mask * 0.5);
+    color = vec4<f32>(new_rgb, color.a);
 
     return color;
 }

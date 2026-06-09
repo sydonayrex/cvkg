@@ -15,6 +15,7 @@ struct ColorTheme {
     shatter_edge_width:   f32,
     neon_bloom_radius:    f32,
     rune_opacity:         f32,
+    glass_tint_adapt:     f32,
     _pad0: f32, _pad1: f32, _pad2: f32, _pad3: f32,
 };
 
@@ -67,6 +68,7 @@ struct VertexInput {
     @location(12) scale:       vec2<f32>,
     @location(13) rotation:    f32,
     @location(14) tex_index:   u32,
+    @location(15) glyph_time:  vec2<f32>,
 };
 
 struct VertexOutput {
@@ -83,6 +85,7 @@ struct VertexOutput {
     @location(9) clip:        vec4<f32>,
     @location(10) @interpolate(flat) tex_index: u32,
     @location(11) world_pos: vec2<f32>,
+    @location(12) glyph_time: vec2<f32>,
 };
 
 @vertex
@@ -103,6 +106,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.screen = scene.resolution * scene.scale_factor;
     out.normal = vec3<f32>(0.0, 0.0, 1.0);
     out.world_pos = vec2<f32>(0.0, 0.0);
+    out.glyph_time = vec2<f32>(0.0, 0.0);
     return out;
 }
 
@@ -150,6 +154,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.normal = in.normal;
     out.clip = in.clip;
     out.tex_index = in.tex_index;
+    out.glyph_time = in.glyph_time;
 
     return out;
 }
