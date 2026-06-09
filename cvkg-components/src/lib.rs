@@ -212,6 +212,7 @@ pub mod navigation;
 pub mod niflheim_demo;
 pub mod node_graph_editor;
 pub mod oracle_orb;
+pub mod ornamental;
 pub mod primitive;
 pub mod radial_menu;
 pub mod raven_messenger;
