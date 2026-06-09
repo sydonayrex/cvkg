@@ -159,6 +159,12 @@ pub enum ButtonVariant {
     Ghost,
     /// Link-styled button.
     Link,
+    /// Glass button: frosted background, no border, subtle backdrop.
+    Glass,
+    /// Tinted glass: glass base with accent color tint.
+    TintedGlass,
+    /// Capsule button: pill-shaped, solid fill, high contrast.
+    Capsule,
 }
 
 /// Button size variants.
@@ -241,11 +247,11 @@ pub use card::RunesCard;
 pub use clipped_corner::*;
 pub use collaboration::*;
 pub use command::*;
-pub use command_palette::{BifrostLauncher, PaletteCommand, MimirSpotlight};
+pub use command_palette::{BifrostLauncher, MimirSpotlight, PaletteCommand};
 pub use container::{
-    DialogAction, SettingsForm, GarmAlert, GeriDialog, GjallarSplitter, GraniSheet, HStack,
-    LazyVStack, Menu, NavigationSplitView, NavigationStack, SagaAccordion, ScrollView,
-    SheetModifier, SheetPosition, TabView, Table, VStack,
+    DialogAction, GarmAlert, GeriDialog, GjallarSplitter, GraniSheet, HStack, LazyVStack, Menu,
+    NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, SettingsForm, SheetModifier,
+    SheetPosition, TabView, Table, VStack,
 };
 pub use data_grid::RunesTable;
 pub use devtools::*;
@@ -310,36 +316,36 @@ pub mod eir_motion;
 pub mod font_axis_panel;
 pub mod form_validation;
 pub use font_axis_panel::FontAxisPanel;
+pub mod a11y_beacon;
+pub mod await_veil;
+pub mod computed_signal;
+pub mod consent_gate;
+pub mod drop_vault;
+pub mod flexiscope;
+pub mod flux_layout;
 pub mod hlin_accessibility;
 pub mod keyboard_nav;
+pub mod lingua_tong;
+pub mod morph_bridge;
 pub mod notification_center;
 pub mod outline_view;
 pub mod perf_overlay;
+pub mod phasegate;
 pub mod popover;
+pub mod prompt_forge;
 pub mod radio_group;
+pub mod sync_weave;
 pub mod text_editor;
 pub mod toast;
+pub mod token_stream;
 pub mod tooltip;
 pub mod transitions;
-pub mod tyr_security;
 pub mod trustmark;
-pub mod await_veil;
-pub mod computed_signal;
-pub mod token_stream;
-pub mod phasegate;
-pub mod flexiscope;
-pub mod a11y_beacon;
-pub mod morph_bridge;
-pub mod flux_layout;
-pub mod drop_vault;
-pub mod consent_gate;
+pub mod tyr_security;
 pub mod vtree;
-pub mod prompt_forge;
-pub mod lingua_tong;
-pub mod sync_weave;
 
-pub use a11y_inspector::{A11yInspector, A11yNode};
 pub use a11y_beacon::{A11yBeacon, A11yBeaconExt};
+pub use a11y_inspector::{A11yInspector, A11yNode};
 pub use autocomplete::*;
 pub use await_veil::AwaitVeil;
 pub use bragi_creative::*;
@@ -350,11 +356,11 @@ pub use cvkg_layout as layout;
 pub use datepicker::*;
 pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
 pub use eir_motion::*;
-pub use flexiscope::{fluid_typography, ContainerLayout, FlexiScope, ScopeThreshold};
+pub use flexiscope::{ContainerLayout, FlexiScope, ScopeThreshold, fluid_typography};
 pub use flux_layout::FluxState;
 pub use hlin_accessibility::*;
 pub use lingua_tong::{current_locale, is_rtl, load_translations, set_locale, t, t_with};
-pub use morph_bridge::{lerp_rect, MorphBridge};
+pub use morph_bridge::{MorphBridge, lerp_rect};
 pub use notification_center::*;
 pub use outline_view::{OutlineNode, OutlineView};
 pub use perf_overlay::PerfOverlay;
@@ -364,8 +370,8 @@ pub use prompt_forge::{ForgeSegment, PromptForge};
 pub use radio_group::*;
 pub use sync_weave::{PeerCursor, SyncEditor, SyncWeave, WeaveOp};
 pub use text_editor::TextEditor;
-pub use token_stream::TokenStream;
 pub use toast::*;
+pub use token_stream::TokenStream;
 pub use tooltip::*;
 pub use transitions::*;
 pub use trustmark::*;

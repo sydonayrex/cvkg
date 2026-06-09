@@ -82,6 +82,35 @@ impl Button {
                 }
             }
             ButtonVariant::Link => theme::button_ghost_bg(),
+            ButtonVariant::Glass => {
+                if is_pressed {
+                    [0.15, 0.15, 0.18, 0.9]
+                } else if is_hovered {
+                    [0.12, 0.12, 0.15, 0.85]
+                } else {
+                    [0.08, 0.08, 0.12, 0.7]
+                }
+            }
+            ButtonVariant::TintedGlass => {
+                let accent = theme::accent();
+                if is_pressed {
+                    [accent[0] * 0.3 + 0.1, accent[1] * 0.3 + 0.1, accent[2] * 0.3 + 0.1, 0.9]
+                } else if is_hovered {
+                    [accent[0] * 0.2 + 0.08, accent[1] * 0.2 + 0.08, accent[2] * 0.2 + 0.08, 0.85]
+                } else {
+                    [accent[0] * 0.15 + 0.05, accent[1] * 0.15 + 0.05, accent[2] * 0.15 + 0.05, 0.75]
+                }
+            }
+            ButtonVariant::Capsule => {
+                let accent = theme::accent();
+                if is_pressed {
+                    [accent[0] * 0.8, accent[1] * 0.8, accent[2] * 0.8, 1.0]
+                } else if is_hovered {
+                    [accent[0] * 0.9, accent[1] * 0.9, accent[2] * 0.9, 1.0]
+                } else {
+                    accent
+                }
+            }
         }
     }
 
@@ -126,6 +155,29 @@ impl Button {
                 }
             }
             ButtonVariant::Link => (theme::button_ghost_bg(), 0.0),
+            ButtonVariant::Glass => {
+                if is_hovered {
+                    ([1.0, 1.0, 1.0, 0.15], 1.0)
+                } else {
+                    ([1.0, 1.0, 1.0, 0.08], 1.0)
+                }
+            }
+            ButtonVariant::TintedGlass => {
+                let accent = theme::accent();
+                if is_hovered {
+                    ([accent[0], accent[1], accent[2], 0.25], 1.0)
+                } else {
+                    ([accent[0], accent[1], accent[2], 0.12], 1.0)
+                }
+            }
+            ButtonVariant::Capsule => {
+                let accent = theme::accent();
+                if is_pressed {
+                    ([accent[0] * 0.7, accent[1] * 0.7, accent[2] * 0.7, 0.3], 1.0)
+                } else {
+                    ([accent[0] * 0.5, accent[1] * 0.5, accent[2] * 0.5, 0.2], 1.0)
+                }
+            }
         }
     }
 
@@ -145,6 +197,9 @@ impl Button {
                 }
             }
             ButtonVariant::Link => theme::accent(),
+            ButtonVariant::Glass => theme::text(),
+            ButtonVariant::TintedGlass => theme::text(),
+            ButtonVariant::Capsule => theme::text(),
         }
     }
 
@@ -1434,7 +1489,9 @@ impl View for Input {
                             let mut text_state = old_text_state.clone();
 
                             match key.as_str() {
-                                s if s.len() == 1 && !s.chars().next().expect("unexpected None").is_control() => {
+                                s if s.len() == 1
+                                    && !s.chars().next().expect("unexpected None").is_control() =>
+                                {
                                     text_state.insert(s);
                                     changed = true;
                                 }
@@ -1532,7 +1589,8 @@ impl View for Input {
                                 if let Some(arc) =
                                     sys.get_component_state::<cvkg_core::TextInputState>(state_id)
                                 {
-                                    let text = arc.read().ok().map(|g| g.text.clone()).unwrap_or_default();
+                                    let text =
+                                        arc.read().ok().map(|g| g.text.clone()).unwrap_or_default();
                                     (on_commit)(text);
                                 }
                             }
