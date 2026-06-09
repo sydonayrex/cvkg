@@ -204,6 +204,13 @@ impl GlassMaterial {
     }
 }
 
+/// Convert a GlassMaterial's OKLCH tint into RGBA for GPU uniforms.
+/// Called by the renderer when a glass material override is applied.
+pub fn glass_material_to_gpu_patch(mat: &GlassMaterial) -> [f32; 4] {
+    let rgba = mat.tint_color.to_rgba();
+    [rgba.r, rgba.g, rgba.b, mat.tint_opacity]
+}
+
 // =============================================================================
 // SEMANTIC COLORS
 // =============================================================================

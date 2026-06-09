@@ -36,8 +36,10 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 pub mod error_types;
-
+pub mod future_views;
 pub mod security;
+
+pub use future_views::{HologramView, ParticleEmitter, StreamingText};
 
 /// Error state for fault isolation at the component level.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -2918,8 +2920,21 @@ pub trait Renderer: ElapsedTime + Send {
     /// Apply a Mjolnir Shatter effect (fragmentation) to the specified rect.
     fn mjolnir_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
     fn mjolnir_fluid_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
-    /// Draw a Mjolnir Bolt (lightning strike) between two points.
     fn draw_mjolnir_bolt(&mut self, _from: [f32; 2], _to: [f32; 2], _color: [f32; 4]) {}
+
+    // ── Futuristic UI Compute & Volumetric ───────────────────────────────
+    /// Dispatches a burst of GPU particles (e.g. fireworks, data streams).
+    fn dispatch_particles(
+        &mut self,
+        _origin: [f32; 2],
+        _count: u32,
+        _effect_type: &str,
+        _color: [f32; 4],
+    ) {
+    }
+
+    /// Draws a volumetric hologram into the specified bounding rectangle.
+    fn draw_hologram(&mut self, _rect: Rect, _hologram_id: &str, _time: f32) {}
 
     // ── Accessibility (ShieldWall) ───────────────────────────────────────
     fn set_aria_role(&mut self, _role: &str) {}
@@ -3144,6 +3159,9 @@ pub struct ColorTheme {
     pub shatter_edge_width: f32,
     pub neon_bloom_radius: f32,
     pub rune_opacity: f32,
+    /// Weight of adaptive tint from backdrop [0.0, 1.0].
+    /// 0.0 = static theme tint, 1.0 = fully adaptive.
+    pub glass_tint_adapt: f32,
 }
 impl ColorTheme {
     /// Asgard Mode: The high-fidelity "Cyberpunk Viking" aesthetic.
@@ -3161,6 +3179,7 @@ impl ColorTheme {
             shatter_edge_width: 1.8,
             neon_bloom_radius: 0.022,
             rune_opacity: 0.55,
+            glass_tint_adapt: 0.35,
         }
     }
 
@@ -3179,6 +3198,7 @@ impl ColorTheme {
             shatter_edge_width: 1.0,
             neon_bloom_radius: 0.0,
             rune_opacity: 0.0,
+            glass_tint_adapt: 0.0,
         }
     }
 
@@ -3199,6 +3219,26 @@ impl ColorTheme {
             shatter_edge_width: 1.8,
             neon_bloom_radius: 0.022,
             rune_opacity: 0.55,
+            glass_tint_adapt: 0.65,
+        }
+    }
+
+    /// Berserker Mode: Blood-iron neon, aggressive contrast, forge-heated glass.
+    pub fn berserker() -> Self {
+        Self {
+            primary_neon: [1.0, 0.08, 0.12, 1.8],
+            shatter_neon: [0.95, 0.92, 0.88, 1.6],
+            glass_base: [0.03, 0.02, 0.02, 0.88],
+            glass_edge: [0.8, 0.35, 0.08, 0.7],
+            rune_glow: [0.9, 0.72, 0.3, 1.0],
+            ember_core: [0.98, 0.25, 0.05, 1.0],
+            background_deep: [0.01, 0.005, 0.005, 1.0],
+            mani_glow: [0.8, 0.2, 0.05, 0.08],
+            glass_blur_strength: 0.85,
+            shatter_edge_width: 2.8,
+            neon_bloom_radius: 0.035,
+            rune_opacity: 0.85,
+            glass_tint_adapt: 0.15,
         }
     }
 }
@@ -4999,6 +5039,12 @@ pub mod layout {
         /// When a view tree changes, bumping the generation causes stale entries
         /// to be treated as invalid without eagerly clearing the entire cache.
         generation: u64,
+        /// Opaque pointer to the active layout engine (e.g. Taffy)
+        pub engine: Option<Box<dyn std::any::Any + Send + Sync>>,
+        /// Opaque pointer to the active animation orchestrator
+        pub animators: Option<Box<dyn std::any::Any + Send + Sync>>,
+        /// Cached previous rects for view transitions
+        pub previous_rects: HashMap<u64, Rect>,
     }
 
     impl Default for LayoutCache {
@@ -5013,6 +5059,9 @@ pub mod layout {
                 safe_area: SafeArea::default(),
                 size_cache: HashMap::new(),
                 generation: 0,
+                engine: None,
+                animators: None,
+                previous_rects: HashMap::new(),
             }
         }
 
@@ -5119,6 +5168,12 @@ pub mod layout {
         /// Returns the flex weight of this view (default is 0.0, which means fixed/intrinsic)
         fn flex_weight(&self) -> f32 {
             0.0
+        }
+
+        /// Returns a persistent unique identifier for this view to enable Layout View Transitions.
+        /// Return 0 (default) to disable layout animations for this node.
+        fn view_hash(&self) -> u64 {
+            0
         }
 
         /// Return a debug representation of this layout subtree.
@@ -5710,7 +5765,8 @@ mod vili_tests {
             (0.0, 0.0)
         }
         fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
-        fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {}
+        fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {
+        }
         fn set_camera_3d(&mut self, _camera: &Camera3D) {}
         fn push_transform_3d(&mut self, _transform: &Transform3D) {}
         fn pop_transform_3d(&mut self) {}

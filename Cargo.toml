@@ -8,7 +8,6 @@ members = [
     "cvkg-anim",
     "cvkg-render-native",
     "cvkg-render-gpu",
-    "cvkg-render-web",
     "cvkg-compositor",
     "cvkg-cli",
     "cvkg-svg-serialize",
@@ -19,8 +18,8 @@ members = [
     "cvkg-macros",
     "cvkg-runic-text", "cvkg-test",
     "cvkg-physics",
-    "demos/niflheim-web", "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
-    "demos/showcase", "demos/berserker",
+    "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
+    "demos/berserker",
     "cvkg-flow",
 ]
 
@@ -107,7 +106,6 @@ cvkg-layout = { path = "cvkg-layout" }
 cvkg-anim = { path = "cvkg-anim" }
 cvkg-render-native = { path = "cvkg-render-native" }
 cvkg-render-gpu = { path = "cvkg-render-gpu" }
-cvkg-render-web = { path = "cvkg-render-web" }
 cvkg-vdom = { path = "cvkg-vdom" }
 cvkg-components = { path = "cvkg-components" }
 cvkg-compositor = { path = "cvkg-compositor" }
