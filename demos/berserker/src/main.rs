@@ -200,41 +200,45 @@ impl View for BerserkerFireView {
         let w = rect.width;
         let h = rect.height;
 
-        // Set berserker theme
-        r.set_theme(ColorTheme::berserker());
-        log::debug!("Theme set to berserker preset");
+        // Physics step: lock, update, release immediately
+        let t = r.elapsed_time();
+        let current_rage = self.rage.get();
+        {
+            let mut s = self.state.lock().expect("Berserker state mutex poisoned");
+            if t > s.last_time {
+                let dt = (t - s.last_time).min(0.1);
+                s.last_time = t;
+                update_berserker_simulation(&mut s, w, h, t, dt, current_rage);
+            }
+        } // Mutex released here
 
         r.push_vnode(rect, "BerserkerFireView");
 
-        let mut s = self.state.lock().expect("Berserker state mutex poisoned");
-        let t = r.elapsed_time();
-        let current_rage = self.rage.get();
-
-        if t > s.last_time {
-            let dt = (t - s.last_time).min(0.1);
-            s.last_time = t;
-            update_berserker_simulation(&mut s, w, h, t, dt, current_rage);
-        }
+        // Drawing: re-lock only for reading state
+        let s = self.state.lock().expect("Berserker state mutex poisoned");
 
         // Draw background
         draw_3d_cubes_bg(r, &s, w, h, t);
 
-        // Glass cards with new glass shader
+        // Glass cards
         draw_glass_cards(r, &s, w, h, t);
 
         if t > 0.0 {
             draw_berserker_fire(r, &s, w, h, t);
+            // Ragdoll needs mutable access for animation blending
+            drop(s);
+            let mut s = self.state.lock().expect("Berserker state mutex poisoned");
             draw_ragdoll_dummy(r, &mut s, w, h, current_rage);
+        } else {
+            drop(s);
         }
 
-        // Draw new chrome components
+        // Draw chrome components (no state needed)
         draw_nornir_bar(r, &self.counters, &self.rage, w, h);
         draw_dock(r, &self.counters, &self.rage, w, h);
-
         draw_corner_buttons(r, &self.counters, &self.rage, w, h);
 
         r.pop_vnode();
-        log::trace!("Frame rendered at t={:.3}s, rage={:.1}", t, current_rage);
     }
 }
 
@@ -360,25 +364,34 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
 
     s.physics.world.step(dt);
 
-    for _ in 0..5 {
-        let angle = s.rng.next_f32() * 6.28;
-        let speed = 100.0 + s.rng.next_f32() * 200.0;
-        s.particles.push(Particle {
-            pos: [cx, cy],
-            vel: [angle.cos() * speed, angle.sin() * speed - 50.0],
-            color: [1.0, 0.3 + s.rng.next_f32() * 0.5, 0.0, 1.0],
-            life: 1.0 + s.rng.next_f32() * 1.5,
-            size: 4.0 + s.rng.next_f32() * 8.0,
-            is_ember: s.rng.next_f32() > 0.85,
-        });
+    // Cap particle count to prevent unbounded growth (max 80 particles)
+    if s.particles.len() < 80 {
+        for _ in 0..3 {
+            let angle = s.rng.next_f32() * 6.28;
+            let speed = 50.0 + s.rng.next_f32() * 100.0;
+            s.particles.push(Particle {
+                pos: [cx, cy],
+                vel: [angle.cos() * speed, angle.sin() * speed - 50.0],
+                color: [1.0, 0.3 + s.rng.next_f32() * 0.5, 0.0, 1.0],
+                life: 0.5 + s.rng.next_f32() * 1.0,
+                size: 2.0 + s.rng.next_f32() * 4.0,
+                is_ember: s.rng.next_f32() > 0.9,
+            });
+        }
     }
 
-    s.particles.retain_mut(|p| {
+    // Fast particle update: inline, no retain_mut (swap_remove is faster)
+    let mut i = s.particles.len();
+    while i > 0 {
+        i -= 1;
+        let p = &mut s.particles[i];
         p.life -= dt;
         p.pos[0] += p.vel[0] * dt;
         p.pos[1] += p.vel[1] * dt;
-        p.life > 0.0
-    });
+        if p.life <= 0.0 {
+            s.particles.swap_remove(i);
+        }
+    }
 }
 
 fn draw_berserker_fire(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32, h: f32, t: f32) {
