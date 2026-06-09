@@ -7478,3 +7478,10 @@ pub use audio_haptic::{
     haptic_impact, haptic_selection, haptic_success, play_sound, set_audio_engine,
     set_haptic_engine, sounds,
 };
+
+// =============================================================================
+// PARALLAX — Depth-based scroll offset system
+// =============================================================================
+
+pub mod parallax;
+pub use parallax::{ParallaxModifier, DisplayEnvironment, PerformanceContract, Tier3Fallback};
