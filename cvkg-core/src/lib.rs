@@ -742,6 +742,23 @@ pub trait View: Sized + Send {
             blur,
             saturation,
             opacity,
+            fresnel_strength: 1.0,
+        })
+    }
+
+    /// Apply a Bifrost (Frosted Glass) effect with full parameter control.
+    fn bifrost_full(
+        self,
+        blur: f32,
+        saturation: f32,
+        opacity: f32,
+        fresnel_strength: f32,
+    ) -> ModifiedView<Self, BifrostModifier> {
+        self.modifier(BifrostModifier {
+            blur,
+            saturation,
+            opacity,
+            fresnel_strength,
         })
     }
 
@@ -1562,6 +1579,8 @@ pub struct BifrostModifier {
     pub blur: f32,
     pub saturation: f32,
     pub opacity: f32,
+    /// Fresnel strength multiplier. 0.0 = no fresnel, 1.0 = full.
+    pub fresnel_strength: f32,
 }
 
 impl ViewModifier for BifrostModifier {

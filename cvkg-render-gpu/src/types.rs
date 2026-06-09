@@ -1,6 +1,6 @@
 //! Core data types, internal structs, and rendering contexts.
-use cvkg_core::Rect;
 use crate::vertex::Vertex;
+use cvkg_core::Rect;
 
 /// SvgModel — A collection of tessellated triangles representing a vector icon.
 #[derive(Clone, Debug)]
@@ -32,6 +32,15 @@ pub(crate) struct DrawCall {
     /// Material routing tag — determines which pass this draw call is routed to
     /// in the multi-pass Backdrop Capture pipeline.
     pub material: cvkg_core::DrawMaterial,
+    /// Which target to render this draw call to. None = main scene.
+    pub target_id: Option<u64>,
+}
+
+pub struct OffscreenEffectConfig {
+    pub target_id: u64,
+    pub effect: String,
+    pub blend_mode: u32,
+    pub effect_args: [f32; 16],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,23 +58,10 @@ pub(crate) struct SurfaceContext {
     pub(crate) scene_bind_group: wgpu::BindGroup,
     pub(crate) scene_texture_bind_group: wgpu::BindGroup,
     pub(crate) depth_texture_view: wgpu::TextureView,
-    // Dedicated backdrop blur textures - used only for glass backdrop blur
-    // Stores raw Texture (for mip view creation) and default view (for binding)
-    pub(crate) blur_tex_a: wgpu::Texture,
-    pub(crate) blur_texture_a: wgpu::TextureView,
-    pub(crate) blur_tex_b: wgpu::Texture,
-    pub(crate) blur_texture_b: wgpu::TextureView,
-    pub(crate) blur_bind_group_a: wgpu::BindGroup,
-    pub(crate) blur_bind_group_b: wgpu::BindGroup,
-    pub(crate) blur_env_bind_group_a: wgpu::BindGroup,
-    // Dedicated bloom textures - used only for bloom extraction and blur
-    pub(crate) bloom_tex_a: wgpu::Texture,
-    pub(crate) bloom_texture_a: wgpu::TextureView,
-    pub(crate) bloom_tex_b: wgpu::Texture,
-    pub(crate) bloom_texture_b: wgpu::TextureView,
-    pub(crate) bloom_bind_group_a: wgpu::BindGroup,
-    pub(crate) bloom_bind_group_b: wgpu::BindGroup,
-    pub(crate) bloom_env_bind_group_a: wgpu::BindGroup,
+    pub(crate) blur_tex_a: crate::kvasir::resource::ResourceId,
+    pub(crate) blur_tex_b: crate::kvasir::resource::ResourceId,
+    pub(crate) bloom_tex_a: crate::kvasir::resource::ResourceId,
+    pub(crate) bloom_tex_b: crate::kvasir::resource::ResourceId,
     pub(crate) scale_factor: f32,
     pub(crate) sampler: wgpu::Sampler,
 }
@@ -77,22 +73,10 @@ pub struct HeadlessContext {
     pub scene_bind_group: wgpu::BindGroup,
     pub scene_texture_bind_group: wgpu::BindGroup,
     pub depth_texture_view: wgpu::TextureView,
-    // Dedicated backdrop blur textures - used only for glass backdrop blur
-    pub blur_tex_a: wgpu::Texture,
-    pub blur_texture_a: wgpu::TextureView,
-    pub blur_tex_b: wgpu::Texture,
-    pub blur_texture_b: wgpu::TextureView,
-    pub blur_bind_group_a: wgpu::BindGroup,
-    pub blur_bind_group_b: wgpu::BindGroup,
-    pub blur_env_bind_group_a: wgpu::BindGroup,
-    // Dedicated bloom textures - used only for bloom extraction and blur
-    pub bloom_tex_a: wgpu::Texture,
-    pub bloom_texture_a: wgpu::TextureView,
-    pub bloom_tex_b: wgpu::Texture,
-    pub bloom_texture_b: wgpu::TextureView,
-    pub bloom_bind_group_a: wgpu::BindGroup,
-    pub bloom_bind_group_b: wgpu::BindGroup,
-    pub bloom_env_bind_group_a: wgpu::BindGroup,
+    pub blur_tex_a: crate::kvasir::resource::ResourceId,
+    pub blur_tex_b: crate::kvasir::resource::ResourceId,
+    pub bloom_tex_a: crate::kvasir::resource::ResourceId,
+    pub bloom_tex_b: crate::kvasir::resource::ResourceId,
     pub scale_factor: f32,
     pub sampler: wgpu::Sampler,
     pub width: u32,
@@ -103,3 +87,41 @@ pub struct HeadlessContext {
 
 pub(crate) const MAX_VERTICES: usize = 100_000;
 pub(crate) const MAX_INDICES: usize = 150_000;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct EffectUniforms {
+    pub time: f32,
+    pub pad0: f32,
+    pub size: [f32; 2],
+    pub args: [f32; 16],
+}
+
+/// Per-draw-call glass instance parameters.
+/// Passed as push constants (fast path, no buffer allocation).
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GlassInstanceUniforms {
+    /// Local tint override: [r, g, b, weight].
+    /// weight=0 = use theme tint only, weight=1 = use local tint only.
+    pub tint_override: [f32; 4],
+    /// Per-instance IOR override. 0.0 = use theme default.
+    pub ior_override: f32,
+    /// Blur strength multiplier. 1.0 = normal, 2.0 = double blur.
+    pub blur_multiplier: f32,
+    /// Frost intensity override. 0.0 = theme default.
+    pub frost_override: f32,
+    pub _pad: f32,
+}
+
+impl Default for GlassInstanceUniforms {
+    fn default() -> Self {
+        Self {
+            tint_override: [0.0; 4],
+            ior_override: 0.0,
+            blur_multiplier: 1.0,
+            frost_override: 0.0,
+            _pad: 0.0,
+        }
+    }
+}
