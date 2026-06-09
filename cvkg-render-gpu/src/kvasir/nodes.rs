@@ -1,79 +1,160 @@
-//! Kvasir render pass nodes for the Surtr renderer.
-//!
-//! Each node identifies a render pass by `PassId`. During execution,
-//! `SurtrRenderer::execute_node()` dispatches to the correct encoding method.
-//! This avoids importing renderer-internal types into the kvasir module.
+use crate::kvasir::node::{ExecutionContext, KvasirNode};
+use crate::kvasir::resource::ResourceId;
+use crate::passes::accessibility::AccessibilityNode;
+use crate::passes::bloom::{BloomBlurNode, BloomExtractNode};
+use crate::passes::composite::CompositeNode;
+use crate::passes::compute::ParticleComputeNode;
+use crate::passes::flow::FlowRenderNode;
+use crate::passes::geometry::GeometryNode;
+use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
+use crate::passes::ui::UINode;
+use crate::passes::volumetric::VolumetricNode;
 
-/// Identifies which render pass a node represents.
-/// The SurtrRenderer dispatches `execute_node(node.id(), ...)` to the correct encoder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PassId {
-    /// Clear scene+depth, draw atmosphere, draw opaque geometry
     Geometry,
-    /// Identity copy scene → blur texture
     BackdropCopy,
-    /// Gaussian blur on backdrop texture (4 H+V iterations)
     BackdropBlur,
-    /// Draw glass panels with backdrop blur sampling
+    Volumetric,
     Glass,
-    /// Draw UI overlay
     UI,
-    /// Luminance-gated extract → bloom texture
+    Flow,
+    ComputeParticle,
     BloomExtract,
-    /// Gaussian blur on bloom texture (2 H+V iterations)
     BloomBlur,
-    /// Additive composite scene+bloom → swapchain + ACES tonemap
     Composite,
-    /// Color blindness transform (final post-process)
     Accessibility,
-    /// Present swapchain
     Present,
+    PostProcess { pipeline_id: u64 },
+    /// Per-element isolated backdrop region blur.
+    BackdropRegion,
 }
 
-/// A render graph node.
-pub struct PassNode {
-    pub id: PassId,
-    pub enabled: bool,
+pub struct PresentNode {
+    pub inputs: Vec<ResourceId>,
+    pub outputs: Vec<ResourceId>,
 }
 
-impl PassNode {
-    pub const fn new(id: PassId) -> Self {
-        Self { id, enabled: true }
+impl KvasirNode for PresentNode {
+    fn label(&self) -> &'static str {
+        "Present"
     }
-
-    pub const fn disabled(id: PassId) -> Self {
-        Self { id, enabled: false }
+    fn inputs(&self) -> &[ResourceId] {
+        &self.inputs
+    }
+    fn outputs(&self) -> &[ResourceId] {
+        &self.outputs
+    }
+    fn pass_id(&self) -> PassId {
+        PassId::Present
+    }
+    fn execute(&self, _ctx: &mut ExecutionContext) {
+        // Presentation is handled implicitly when submitting the command buffer
     }
 }
 
-// Re-export for use in graph construction
-pub use PassId::*;
+// Built-in resource constants to wire the graph
+pub const RES_SCENE: ResourceId = ResourceId(1);
+pub const RES_BLUR_A: ResourceId = ResourceId(2);
+pub const RES_BLOOM_A: ResourceId = ResourceId(3);
+pub const RES_SWAPCHAIN: ResourceId = ResourceId(4);
 
-/// Helper: create the standard 10-pass execution sequence.
-/// Caller must supply the SurtrRenderer to execute it.
-pub fn build_pass_sequence(
+/// Build the dynamic RenderGraph (KvasirGraph)
+pub fn build_render_graph(
     has_glass: bool,
     has_bloom: bool,
-    accessibility_enabled: bool,
-) -> Vec<PassNode> {
-    let mut nodes = Vec::with_capacity(10);
-    nodes.push(PassNode::new(Geometry));
+    has_accessibility: bool,
+    active_offscreens: &[crate::types::OffscreenEffectConfig],
+    width: u32,
+    height: u32,
+    scale: f32,
+) -> super::graph::KvasirGraph {
+    let mut builder = super::graph::GraphBuilder::new();
+
+    let geometry = builder.add_node(Box::new(GeometryNode::new()));
+    let mut last_scene_node = geometry;
+
+    for offscreen in active_offscreens {
+        let tex_id = ResourceId(1000 + offscreen.target_id as u32);
+
+        let off_geom = builder.add_node(Box::new(
+            crate::passes::effects::OffscreenGeometryNode::new(offscreen.target_id, tex_id),
+        ));
+
+        let composite =
+            builder.add_node(Box::new(crate::passes::effects::EffectCompositeNode::new(
+                offscreen.target_id,
+                tex_id,
+                offscreen.effect.clone(),
+                offscreen.blend_mode,
+                offscreen.effect_args,
+            )));
+
+        builder.connect(off_geom, tex_id, composite);
+        builder.connect(last_scene_node, RES_SCENE, composite);
+        last_scene_node = composite;
+    }
+
     if has_glass {
-        nodes.push(PassNode::new(BackdropCopy));
-        nodes.push(PassNode::new(BackdropBlur));
-        nodes.push(PassNode::new(Glass));
+        let copy = builder.add_node(Box::new(BackdropCopyNode::new()));
+        builder.connect(last_scene_node, RES_SCENE, copy);
+
+        let blur = builder.add_node(Box::new(BackdropBlurNode::new(width / 2, height / 2)));
+        builder.connect(copy, RES_BLUR_A, blur);
+
+        let glass = builder.add_node(Box::new(GlassNode::new(scale)));
+        builder.connect(blur, RES_BLUR_A, glass);
+        builder.connect(last_scene_node, RES_SCENE, glass);
+        last_scene_node = glass;
     }
-    nodes.push(PassNode::new(UI));
+
+    let ui = builder.add_node(Box::new(UINode::new()));
+    builder.connect(last_scene_node, RES_SCENE, ui);
+    last_scene_node = ui;
+
+    // Volumetric pass renders into the scene
+    let volumetric = builder.add_node(Box::new(VolumetricNode::new()));
+    builder.connect(last_scene_node, RES_SCENE, volumetric);
+    last_scene_node = volumetric;
+
+    // TODO: Wire FlowRenderNode dynamically if cvkg-flow is active
+    let flow = builder.add_node(Box::new(FlowRenderNode::new()));
+    builder.connect(last_scene_node, RES_SCENE, flow);
+    last_scene_node = flow;
+
+    // Particles render on top of UI and flow
+    let particles = builder.add_node(Box::new(ParticleComputeNode::new()));
+    builder.connect(last_scene_node, RES_SCENE, particles);
+    last_scene_node = particles;
+
+    let mut last_bloom_node = None;
     if has_bloom {
-        nodes.push(PassNode::new(BloomExtract));
-        nodes.push(PassNode::new(BloomBlur));
+        let extract = builder.add_node(Box::new(BloomExtractNode::new()));
+        builder.connect(last_scene_node, RES_SCENE, extract);
+
+        let blur = builder.add_node(Box::new(BloomBlurNode::new(width / 2, height / 2)));
+        builder.connect(extract, RES_BLOOM_A, blur);
+        last_bloom_node = Some(blur);
     }
-    nodes.push(PassNode::new(Composite));
-    nodes.push(if accessibility_enabled {
-        PassNode::new(Accessibility)
-    } else {
-        PassNode::disabled(Accessibility)
-    });
-    nodes.push(PassNode::new(Present));
-    nodes
+
+    let composite = builder.add_node(Box::new(CompositeNode::new(has_bloom)));
+    builder.connect(last_scene_node, RES_SCENE, composite);
+    if let Some(bloom_node) = last_bloom_node {
+        builder.connect(bloom_node, RES_BLOOM_A, composite);
+    }
+    let mut last_target = composite;
+
+    if has_accessibility {
+        let a11y = builder.add_node(Box::new(AccessibilityNode::new()));
+        builder.connect(last_target, RES_SWAPCHAIN, a11y);
+        last_target = a11y;
+    }
+
+    let present = builder.add_node(Box::new(PresentNode {
+        inputs: vec![RES_SWAPCHAIN],
+        outputs: vec![],
+    }));
+    builder.connect(last_target, RES_SWAPCHAIN, present);
+
+    builder.build()
 }

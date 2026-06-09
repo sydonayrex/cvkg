@@ -1,8 +1,6 @@
 //! KvasirNode trait and ExecutionContext.
 
 use super::resource::ResourceId;
-use super::registry::ResourceRegistry;
-use super::KvasirError;
 
 /// Hint to the planner about preferred execution backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +15,11 @@ pub struct ExecutionContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,
+    pub registry: &'a crate::kvasir::registry::ResourceRegistry,
+    pub renderer: &'a crate::renderer::SurtrRenderer,
+    pub target_view: &'a wgpu::TextureView,
+    pub depth_view: &'a wgpu::TextureView,
+    pub scale_factor: f32,
 }
 
 impl<'a> ExecutionContext<'a> {
@@ -28,17 +31,10 @@ impl<'a> ExecutionContext<'a> {
     }
 }
 
-/// Every operation in the render graph implements this trait.
 pub trait KvasirNode: Send + Sync {
     fn label(&self) -> &'static str;
     fn inputs(&self) -> &[ResourceId];
     fn outputs(&self) -> &[ResourceId];
-    fn execute(
-        &self,
-        ctx: &mut ExecutionContext<'_>,
-        registry: &mut ResourceRegistry,
-    ) -> Result<(), KvasirError>;
-    fn execution_hint(&self) -> ExecutionHint {
-        ExecutionHint::Raster
-    }
+    fn pass_id(&self) -> super::nodes::PassId;
+    fn execute(&self, ctx: &mut ExecutionContext);
 }
