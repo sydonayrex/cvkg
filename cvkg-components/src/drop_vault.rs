@@ -154,11 +154,7 @@ impl View for DropVault {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let is_drag = self
-            .is_drag_over
-            .lock()
-            .map(|g| *g)
-            .unwrap_or(false);
+        let is_drag = self.is_drag_over.lock().map(|g| *g).unwrap_or(false);
 
         // Drop zone background
         let bg = if is_drag {
@@ -245,7 +241,13 @@ fn render_upload_entry(renderer: &mut dyn Renderer, entry: &VaultEntry, rect: Re
             format!("Error: {}", msg)
         }
     };
-    renderer.draw_text(&status_text, rect.x + 4.0, rect.y + 38.0, 10.0, theme::text_muted());
+    renderer.draw_text(
+        &status_text,
+        rect.x + 4.0,
+        rect.y + 38.0,
+        10.0,
+        theme::text_muted(),
+    );
 }
 
 fn format_file_size(bytes: u64) -> String {

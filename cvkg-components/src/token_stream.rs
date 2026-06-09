@@ -108,10 +108,7 @@ impl TokenStream {
 
     /// Get a snapshot of the current text (for debugging/logging only).
     pub fn snapshot(&self) -> String {
-        self.text
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default()
+        self.text.lock().map(|g| g.clone()).unwrap_or_default()
     }
 }
 
@@ -125,13 +122,7 @@ impl View for TokenStream {
         let text = match self.text.lock() {
             Ok(g) => g.clone(),
             Err(_) => {
-                renderer.draw_text(
-                    "[stream error]",
-                    rect.x,
-                    rect.y,
-                    14.0,
-                    [1.0, 0.0, 0.0, 1.0],
-                );
+                renderer.draw_text("[stream error]", rect.x, rect.y, 14.0, [1.0, 0.0, 0.0, 1.0]);
                 return;
             }
         };

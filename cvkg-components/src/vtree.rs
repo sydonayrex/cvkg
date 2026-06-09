@@ -112,11 +112,7 @@ impl View for VTree {
 
             // Expand/collapse indicator
             let indicator = if *has_children {
-                if self.is_expanded(id) {
-                    "v "
-                } else {
-                    "> "
-                }
+                if self.is_expanded(id) { "v " } else { "> " }
             } else {
                 "  "
             };

@@ -1388,7 +1388,8 @@ impl MultiAgentOrchestrator {
                         let s = s.clone();
                         if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
                         {
-                            let mut new_state = guard.read().ok().map(|g| g.clone()).unwrap_or_default();
+                            let mut new_state =
+                                guard.read().ok().map(|g| g.clone()).unwrap_or_default();
                             if new_state.is_executing {
                                 new_state.is_executing = false;
                             } else {
@@ -1415,7 +1416,8 @@ impl MultiAgentOrchestrator {
                         let s = s.clone();
                         if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
                         {
-                            let mut new_state = guard.read().ok().map(|g| g.clone()).unwrap_or_default();
+                            let mut new_state =
+                                guard.read().ok().map(|g| g.clone()).unwrap_or_default();
                             new_state.show_log_panel = !new_state.show_log_panel;
                             *guard.write().expect("unexpected None") = new_state;
                         }
@@ -1435,7 +1437,8 @@ impl MultiAgentOrchestrator {
                         let s = s.clone();
                         if let Some(guard) = s.get_component_state::<OrchestratorState>(instance_id)
                         {
-                            let mut new_state = guard.read().ok().map(|g| g.clone()).unwrap_or_default();
+                            let mut new_state =
+                                guard.read().ok().map(|g| g.clone()).unwrap_or_default();
                             new_state.show_metrics_panel = !new_state.show_metrics_panel;
                             *guard.write().expect("unexpected None") = new_state;
                         }

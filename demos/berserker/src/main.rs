@@ -1,16 +1,13 @@
 #![allow(dead_code, clippy::approx_constant)]
 
 use cvkg::prelude::*;
-use cvkg_components::chrome::{DockItem, DockPosition, HeimdallDock, NornirBar, ValkyrieToolbar, ToolbarItem};
-use cvkg_core::{ColorTheme, DisplayEnvironment, ParallaxModifier, PerformanceContract};
+use cvkg_core::{ColorTheme, DisplayEnvironment, PerformanceContract};
 use cvkg_anim::skeletal::RagdollBlender;
 use cvkg_physics::ragdoll_bridge::RagdollBridge;
-use cvkg_physics::{
-    BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig,
-};
+use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig};
+use cvkg_vdom::signals::Signal;
 use glam::Vec2;
 use std::sync::{Arc, Mutex};
-use cvkg_vdom::signals::Signal;
 
 // --- Particle System ---
 struct Particle {

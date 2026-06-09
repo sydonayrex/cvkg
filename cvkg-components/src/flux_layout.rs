@@ -35,14 +35,16 @@ impl FluxState {
     /// If the child moved since last frame, returns a rect interpolated
     /// between the old and new positions. If it hasn't moved, returns
     /// the new rect directly.
-    pub fn interpolated_rect(&self, child_idx: usize, new_rect: cvkg_core::Rect) -> cvkg_core::Rect {
+    pub fn interpolated_rect(
+        &self,
+        child_idx: usize,
+        new_rect: cvkg_core::Rect,
+    ) -> cvkg_core::Rect {
         let mut prev = self.previous_rects.borrow_mut();
         let mut prog = self.progress.borrow_mut();
 
         let result = if let Some(&old_rect) = prev.get(&child_idx) {
-            if (old_rect.x - new_rect.x).abs() > 0.5
-                || (old_rect.y - new_rect.y).abs() > 0.5
-            {
+            if (old_rect.x - new_rect.x).abs() > 0.5 || (old_rect.y - new_rect.y).abs() > 0.5 {
                 // Child moved - interpolate
                 *prog = 0.0;
                 lerp_rect(&old_rect, &new_rect, *prog)

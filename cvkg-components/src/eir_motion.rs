@@ -94,7 +94,13 @@ impl EirMotion {
         self
     }
 
-    pub fn keyframe(mut self, anim_name: &str, time: f32, value: f32, easing: MotionEasing) -> Self {
+    pub fn keyframe(
+        mut self,
+        anim_name: &str,
+        time: f32,
+        value: f32,
+        easing: MotionEasing,
+    ) -> Self {
         if let Some(anim) = self.animations.iter_mut().find(|a| a.name == anim_name) {
             anim.keyframes.push(MotionKeyframe {
                 time,

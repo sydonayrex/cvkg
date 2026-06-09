@@ -71,9 +71,7 @@ impl SyncWeave {
     pub fn apply_remote(&mut self, op: &WeaveOp) {
         match op {
             WeaveOp::Insert { ch } => {
-                let idx = self
-                    .chars
-                    .partition_point(|c| c.position < ch.position);
+                let idx = self.chars.partition_point(|c| c.position < ch.position);
                 self.chars.insert(idx, ch.clone());
             }
             WeaveOp::Delete { position } => {

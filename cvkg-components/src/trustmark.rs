@@ -8,8 +8,8 @@
 //! full borders are visually ambiguous with form validation errors. Colors
 //! are chosen to be deuteranopia-safe (no red/green confusion).
 
-use crate::theme;
 use crate::SPACE_XS;
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// Width of the left trust indicator border in logical pixels.

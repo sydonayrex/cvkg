@@ -148,8 +148,7 @@ impl<T: Clone + Send + Sync + 'static> ComputedSignal<T> {
     pub fn new(inputs: Vec<InputRef>, compute: Arc<dyn Fn() -> T + Send + Sync>) -> Self {
         let initial = (compute)();
         let cache = State::new(initial);
-        let last_generations: Vec<u64> =
-            inputs.iter().map(InputRef::current_generation).collect();
+        let last_generations: Vec<u64> = inputs.iter().map(InputRef::current_generation).collect();
         Self {
             cache,
             last_generations: RefCell::new(last_generations),
@@ -233,12 +232,13 @@ impl<T: Clone + Send + Sync + 'static> ComputedSignal<T> {
     /// snapshot.
     fn is_stale(&self) -> bool {
         let last = self.last_generations.borrow();
-        self.inputs.iter().enumerate().any(|(idx, input)| {
-            match last.get(idx) {
+        self.inputs
+            .iter()
+            .enumerate()
+            .any(|(idx, input)| match last.get(idx) {
                 Some(&stale_gen) => input.current_generation() != stale_gen,
                 None => true,
-            }
-        })
+            })
     }
 
     /// Snapshot the current generations of all inputs.

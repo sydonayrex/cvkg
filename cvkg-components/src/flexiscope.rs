@@ -28,7 +28,8 @@ pub struct ScopeThreshold<B> {
 pub trait ContainerLayout: Clone + PartialEq {
     fn select_mode(width: f32, breakpoints: &[ScopeThreshold<Self>]) -> Self
     where
-        Self: Sized {
+        Self: Sized,
+    {
         let mut selected = &breakpoints[0];
         for bp in breakpoints {
             if width >= bp.min_width {

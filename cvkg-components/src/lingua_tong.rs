@@ -89,24 +89,48 @@ pub fn init_english_translations() {
     en.insert("phasegate.toast".to_string(), "Toast".to_string());
 
     // TokenStream
-    en.insert("tokenstream.streaming".to_string(), "Streaming...".to_string());
+    en.insert(
+        "tokenstream.streaming".to_string(),
+        "Streaming...".to_string(),
+    );
     en.insert("tokenstream.complete".to_string(), "Complete".to_string());
 
     // TrustMark
     en.insert("trustmark.high".to_string(), "High confidence".to_string());
-    en.insert("trustmark.medium".to_string(), "Moderate confidence".to_string());
-    en.insert("trustmark.low".to_string(), "Low confidence - verify".to_string());
-    en.insert("trustmark.verylow".to_string(), "Speculative - unreliable".to_string());
-    en.insert("trustmark.unknown".to_string(), "Confidence unknown".to_string());
+    en.insert(
+        "trustmark.medium".to_string(),
+        "Moderate confidence".to_string(),
+    );
+    en.insert(
+        "trustmark.low".to_string(),
+        "Low confidence - verify".to_string(),
+    );
+    en.insert(
+        "trustmark.verylow".to_string(),
+        "Speculative - unreliable".to_string(),
+    );
+    en.insert(
+        "trustmark.unknown".to_string(),
+        "Confidence unknown".to_string(),
+    );
 
     // DropVault
-    en.insert("dropvault.drop_here".to_string(), "Drop files here".to_string());
-    en.insert("dropvault.browse".to_string(), "Drag files here or click to browse".to_string());
+    en.insert(
+        "dropvault.drop_here".to_string(),
+        "Drop files here".to_string(),
+    );
+    en.insert(
+        "dropvault.browse".to_string(),
+        "Drag files here or click to browse".to_string(),
+    );
     en.insert("dropvault.waiting".to_string(), "Waiting...".to_string());
     en.insert("dropvault.done".to_string(), "Done".to_string());
 
     // ConsentGate
-    en.insert("consentgate.title".to_string(), "Data Usage Consent".to_string());
+    en.insert(
+        "consentgate.title".to_string(),
+        "Data Usage Consent".to_string(),
+    );
     en.insert("consentgate.accept".to_string(), "Accept".to_string());
     en.insert("consentgate.reject".to_string(), "Reject".to_string());
 
