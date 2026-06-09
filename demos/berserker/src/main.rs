@@ -307,12 +307,10 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
             let rect_r = cvkg_core::Rect { x: br.position.x - 100.0, y: br.position.y - 125.0, width: 200.0, height: 250.0 };
 
             r.push_vnode(rect_l, "CardLeft");
-            r.bifrost(rect_l, 20.0, 1.1, 0.5);
             r.fill_rounded_rect(rect_l, 12.0, [0.05, 0.05, 0.1, 0.4]);
             r.pop_vnode();
 
             r.push_vnode(rect_r, "CardRight");
-            r.bifrost(rect_r, 20.0, 1.1, 0.5);
             r.fill_rounded_rect(rect_r, 12.0, [0.05, 0.05, 0.1, 0.4]);
 
             let cx = (bl.position.x + br.position.x) / 2.0;
