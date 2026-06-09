@@ -3,3 +3,6 @@
 
 pub mod heimdall_dock;
 pub use heimdall_dock::{HeimdallDock, DockItem, DockPosition, dock_item_magnification};
+
+pub mod niflheim_sidebar;
+pub use niflheim_sidebar::{NiflheimSidebar, SidebarItem, SidebarVibrancy};
