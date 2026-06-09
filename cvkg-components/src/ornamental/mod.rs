@@ -6,3 +6,6 @@
 
 pub mod aetti_frame;
 pub use aetti_frame::{ÆttiFrame, RunicStyle};
+
+pub mod mjolnir_frame_ext;
+pub use mjolnir_frame_ext::{MjolnirFrameStyle, RuneGlyph, render_mjolnir_frame};

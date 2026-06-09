@@ -16,7 +16,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ── High-Fidelity SDF Clipping ───────────────────────────────────────
     let p_clip_pos = in.clip.xy * scene.scale_factor;
     let p_clip_size = in.clip.zw * scene.scale_factor;
-    let pixel_pos = (in.clip_position.xy * 0.5 + 0.5) * scene.resolution * scene.scale_factor;
+    let pixel_pos = in.clip_position.xy;
 
     let clip_d = sd_box(pixel_pos - (p_clip_pos + p_clip_size * 0.5), p_clip_size * 0.5);
     var clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d);
@@ -201,5 +201,39 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     if color.a <= 0.0 { discard; }
+    return color;
+}
+
+/// Apply battle-worn surface damage: scratches, cracks, burn marks.
+/// damage_level: [0.0, 1.0] — 0 = pristine, 1 = heavily damaged.
+/// damage_seed: per-component random seed for variation.
+fn worn_surface(
+    uv: vec2<f32>,
+    base_color: vec4<f32>,
+    damage_level: f32,
+    damage_seed: f32,
+) -> vec4<f32> {
+    var color = base_color;
+
+    // Scratches: high-frequency noise along a directional gradient
+    let scratch_dir = normalize(vec2(0.7, 0.3) + vec2(damage_seed * 0.2, damage_seed * 0.15));
+    let scratch_uv = vec2(dot(uv, scratch_dir), dot(uv, vec2(-scratch_dir.y, scratch_dir.x)));
+    let scratch = fbm(scratch_uv * 80.0 + damage_seed * 10.0);
+    let scratch_mask = smoothstep(0.72, 0.78, scratch) * damage_level;
+
+    // Cracks: larger, branching fractures
+    let crack_n = fbm(uv * 12.0 + damage_seed * 7.0);
+    let crack_mask = smoothstep(0.68, 0.73, crack_n) * damage_level * 0.6;
+
+    // Burn marks: radial dark patches
+    let burn_center = vec2(fract(damage_seed * 3.7), fract(damage_seed * 5.3));
+    let burn_dist = distance(uv, burn_center);
+    let burn_mask = smoothstep(0.3, 0.0, burn_dist) * damage_level * vnoise(uv * 5.0) * 0.7;
+
+    // Apply: scratches lighten (exposed metal), cracks and burns darken
+    color.rgb += scratch_mask * 0.25;
+    color.rgb -= crack_mask * 0.4;
+    color.rgb -= burn_mask * 0.5;
+
     return color;
 }
