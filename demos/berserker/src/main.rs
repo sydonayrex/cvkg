@@ -1,10 +1,18 @@
 #![allow(dead_code, clippy::approx_constant)]
 
 use cvkg::prelude::*;
+use cvkg_components::chrome::{DockItem, DockPosition, HeimdallDock, NornirBar, ValkyrieToolbar, ToolbarItem};
+use cvkg_core::{ColorTheme, DisplayEnvironment, ParallaxModifier, PerformanceContract};
+use cvkg_anim::skeletal::RagdollBlender;
+use cvkg_physics::ragdoll_bridge::RagdollBridge;
+use cvkg_physics::{
+    BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig,
+};
+use glam::Vec2;
 use std::sync::{Arc, Mutex};
+use cvkg_vdom::signals::Signal;
 
 // --- Particle System ---
-
 struct Particle {
     pos: [f32; 2],
     vel: [f32; 2],
@@ -12,15 +20,6 @@ struct Particle {
     life: f32,
     size: f32,
     is_ember: bool,
-}
-
-struct Cube {
-    pos: [f32; 2],
-    vel: [f32; 2],
-    rot: [f32; 3],
-    rot_vel: [f32; 3],
-    size: f32,
-    color: [f32; 4],
 }
 
 struct Lcg {
@@ -38,298 +37,333 @@ impl Lcg {
 
 // --- Component State ---
 
+struct PhysicsState {
+    world: PhysicsWorld,
+    cube_ids: Vec<(BodyId, f32)>,
+    card_bodies: Vec<(BodyId, BodyId)>,
+    dummy_head: BodyId,
+    dummy_torso: BodyId,
+}
+
+struct AnimState {
+    blender: RagdollBlender,
+    bridge: RagdollBridge,
+}
+
 struct BerserkerState {
-    counters: [u32; 4],
     particles: Vec<Particle>,
-    cubes: Vec<Cube>,
     rng: Lcg,
     last_time: f32,
-    bg_rotation: f32,
-    bg_pos: [f32; 2],
+    physics: PhysicsState,
+    anim: AnimState,
 }
 
 impl BerserkerState {
-    fn new() -> Self {
+    fn new(w: f32, h: f32) -> Self {
+        let mut rng = Lcg::new(1337);
+        let mut world = PhysicsWorld::new(WorldConfig {
+            gravity: Vec2::new(0.0, 150.0),
+            ..Default::default()
+        });
+
+        world.on_constraint_broken = Some(Box::new(|_c, pos| {
+            log::info!("CONSTRAINT BROKEN AT {:?}", pos);
+        }));
+
+        let mut cube_ids = Vec::new();
+        for _ in 0..15 {
+            let size = 50.0 + rng.next_f32() * 100.0;
+            let shape = Shape::aabb(Vec2::new(size / 2.0, size / 2.0));
+            let mut body = RigidBody::new(size * size * 0.01, &shape);
+            body.position = Vec2::new(rng.next_f32() * w, rng.next_f32() * h);
+            body.velocity = Vec2::new(
+                (rng.next_f32() - 0.5) * 100.0,
+                (rng.next_f32() - 0.5) * 100.0,
+            );
+            body.angular_velocity = (rng.next_f32() - 0.5) * 2.0;
+            let id = world.add_body(body);
+            world.add_collider(Collider::new(id, shape));
+            cube_ids.push((id, size));
+        }
+
+        // Static bounds
+        let mut ground = RigidBody::static_body();
+        ground.position = Vec2::new(w / 2.0, h + 50.0);
+        let ground_id = world.add_body(ground);
+        world.add_collider(Collider::new(ground_id, Shape::aabb(Vec2::new(w, 50.0))));
+
+        let mut left_wall = RigidBody::static_body();
+        left_wall.position = Vec2::new(-50.0, h / 2.0);
+        let lw_id = world.add_body(left_wall);
+        world.add_collider(Collider::new(lw_id, Shape::aabb(Vec2::new(50.0, h))));
+
+        let mut right_wall = RigidBody::static_body();
+        right_wall.position = Vec2::new(w + 50.0, h / 2.0);
+        let rw_id = world.add_body(right_wall);
+        world.add_collider(Collider::new(rw_id, Shape::aabb(Vec2::new(50.0, h))));
+
+        let mut top_wall = RigidBody::static_body();
+        top_wall.position = Vec2::new(w / 2.0, -50.0);
+        let tw_id = world.add_body(top_wall);
+        world.add_collider(Collider::new(tw_id, Shape::aabb(Vec2::new(w, 50.0))));
+
+        // Glass cards (breakable)
+        let mut card_bodies = Vec::new();
+        let card_positions = [[w * 0.2, h * 0.3], [w * 0.7, h * 0.2], [w * 0.5, h * 0.7]];
+        for pos in card_positions {
+            let shape = Shape::aabb(Vec2::new(100.0, 125.0));
+            let mut left_half = RigidBody::new(10.0, &shape);
+            left_half.position = Vec2::new(pos[0] - 100.0, pos[1]);
+            let id_l = world.add_body(left_half);
+            world.add_collider(Collider::new(id_l, shape.clone()));
+
+            let mut right_half = RigidBody::new(10.0, &shape);
+            right_half.position = Vec2::new(pos[0] + 100.0, pos[1]);
+            let id_r = world.add_body(right_half);
+            world.add_collider(Collider::new(id_r, shape));
+
+            let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
+            constraint.break_threshold = Some(15000.0);
+            world.add_constraint(constraint);
+            world.add_constraint(Constraint::distance(
+                ground_id, id_l,
+                Vec2::new(pos[0] - w / 2.0 - 100.0, pos[1] - h),
+                Vec2::new(0.0, 0.0), 0.0,
+            ));
+            card_bodies.push((id_l, id_r));
+        }
+
+        // Ragdoll Dummy
+        let head_shape = Shape::aabb(Vec2::new(20.0, 20.0));
+        let mut dummy_head_body = RigidBody::new(5.0, &head_shape);
+        dummy_head_body.position = Vec2::new(w * 0.8, h * 0.4);
+        let dummy_head = world.add_body(dummy_head_body);
+        world.add_collider(Collider::new(dummy_head, head_shape));
+
+        let torso_shape = Shape::aabb(Vec2::new(30.0, 50.0));
+        let mut dummy_torso_body = RigidBody::new(15.0, &torso_shape);
+        dummy_torso_body.position = Vec2::new(w * 0.8, h * 0.5);
+        let dummy_torso = world.add_body(dummy_torso_body);
+        world.add_collider(Collider::new(dummy_torso, torso_shape));
+
+        world.add_constraint(Constraint::pin(
+            dummy_head, dummy_torso,
+            Vec2::new(w * 0.8, h * 0.45),
+        ));
+        world.add_constraint(Constraint::pin(
+            ground_id, dummy_head,
+            Vec2::new(w * 0.8, h * 0.4),
+        ));
+
+        let mut bridge_config = cvkg_physics::RagdollBridgeConfig::default();
+        bridge_config.bone_mappings.push(cvkg_physics::BoneBodyMap {
+            bone_index: 0, body_id: dummy_head,
+            local_offset: glam::Vec3::ZERO, local_rotation: glam::Quat::IDENTITY,
+        });
+        bridge_config.bone_mappings.push(cvkg_physics::BoneBodyMap {
+            bone_index: 1, body_id: dummy_torso,
+            local_offset: glam::Vec3::ZERO, local_rotation: glam::Quat::IDENTITY,
+        });
+        let bridge = cvkg_physics::RagdollBridge::new(bridge_config);
+        let blender = RagdollBlender::new(2);
+
+        log::info!("BerserkerState initialized: {} cubes, {} cards", cube_ids.len(), card_bodies.len());
+
         Self {
-            counters: [0; 4],
-            particles: Vec::new(),
-            cubes: Vec::new(),
-            rng: Lcg::new(1337),
-            last_time: 0.0,
-            bg_rotation: 0.0,
-            bg_pos: [0.0, 0.0],
+            particles: Vec::new(), rng, last_time: 0.0,
+            physics: PhysicsState { world, cube_ids, card_bodies, dummy_head, dummy_torso },
+            anim: AnimState { blender, bridge },
         }
     }
 }
 
 #[derive(Clone)]
 struct BerserkerFireView {
+    counters: [Signal<u32>; 4],
+    rage: Signal<f32>,
     state: Arc<Mutex<BerserkerState>>,
 }
 
 impl BerserkerFireView {
-    fn new() -> Self {
+    fn new(w: f32, h: f32) -> Self {
+        log::info!("Creating BerserkerFireView ({}x{})", w, h);
         Self {
-            state: Arc::new(Mutex::new(BerserkerState::new())),
+            counters: [Signal::new(0), Signal::new(0), Signal::new(0), Signal::new(0)],
+            rage: Signal::new(0.0),
+            state: Arc::new(Mutex::new(BerserkerState::new(w, h))),
         }
     }
 }
 
 impl View for BerserkerFireView {
     type Body = Never;
-
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
+    fn body(self) -> Self::Body { unreachable!() }
 
     fn render(&self, r: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
-        log::info!(
-            "[Berserker] Render pass start: {}x{}",
-            rect.width,
-            rect.height
-        );
+        let w = rect.width;
+        let h = rect.height;
 
-        // Essential: Root vnode for VDOM tree construction.
-        // This ensures all subsequent drawing calls are correctly parented for hit-testing.
+        // Set berserker theme
+        r.set_theme(ColorTheme::berserker());
+        log::debug!("Theme set to berserker preset");
+
         r.push_vnode(rect, "BerserkerFireView");
 
         let mut s = self.state.lock().expect("Berserker state mutex poisoned");
         let t = r.elapsed_time();
+        let current_rage = self.rage.get();
 
-        let width = rect.width;
-        let height = rect.height;
-
-        let rage = r.get_telemetry().berserker_rage;
-
-        // Simulation Step: Only update state if time has advanced.
-        // This prevents double-simulation during VDOM capture passes (where t=0).
         if t > s.last_time {
             let dt = (t - s.last_time).min(0.1);
             s.last_time = t;
-
-            // Update Fireball, Particles & Cubes (passing window shake rage)
-            update_berserker_simulation(&mut s, width, height, t, dt, rage);
+            update_berserker_simulation(&mut s, w, h, t, dt, current_rage);
         }
 
-        // 1. Background: Floating RK4-physics cubes
-        // PERFORMANCE FIX: Skip background in VDOM pass to prevent node-count bloat
-        // and hit-test collisions with interactive elements.
+        // Draw background
+        draw_3d_cubes_bg(r, &s, w, h, t);
+
+        // Glass cards with new glass shader
+        draw_glass_cards(r, &s, w, h, t);
+
         if t > 0.0 {
-            draw_3d_cubes_bg(r, &s, width, height, t);
+            draw_berserker_fire(r, &s, w, h, t);
+            draw_ragdoll_dummy(r, &mut s, w, h, current_rage);
         }
 
-        // 2. Glassmorphic Cards with Norse Text
-        draw_glass_cards(r, width, height, t);
+        // Draw new chrome components
+        draw_nornir_bar(r, &self.counters, &self.rage, w, h);
+        draw_dock(r, &self.counters, &self.rage, w, h);
 
-        // 3. The Flaming Fireball of Glory
-        // PERFORMANCE FIX: Only render particles during the GPU pass (t > 0).
-        // This prevents the VDOM from becoming bloated with thousands of transient nodes,
-        // which was causing the stack overflow and hit-testing lag.
-        if t > 0.0 {
-            draw_berserker_fire(r, &s, width, height, t);
-        }
-
-        // 4. Interaction Buttons
-        draw_corner_buttons(r, &s, self.state.clone(), width, height);
+        draw_corner_buttons(r, &self.counters, &self.rage, w, h);
 
         r.pop_vnode();
-        // Request redraw handled by native heartbeat
-        // r.request_redraw();
+        log::trace!("Frame rendered at t={:.3}s, rage={:.1}", t, current_rage);
     }
+}
+
+fn draw_nornir_bar(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4], _rage: &Signal<f32>, w: f32, _h: f32) {
+    let bar_rect = cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: 28.0 };
+    r.push_vnode(bar_rect, "NornirBar");
+    r.bifrost(bar_rect, 25.0, 1.2, 0.65);
+
+    let menu_x = 8.0;
+    let items = [("File", 60.0), ("Edit", 60.0), ("View", 70.0), ("Window", 80.0), ("Help", 60.0)];
+    let mut x = menu_x;
+    for (label, width) in items {
+        r.draw_text(label, x, 8.0, 13.0, [0.9, 0.9, 0.92, 1.0]);
+        x += width;
+    }
+
+    r.draw_text("BERSERKER v2.0", w * 0.5 - 60.0, 8.0, 14.0, [1.0, 0.3, 0.1, 1.0]);
+    r.draw_text(&format!("Rage: {:.0}%", _rage.get()), w - 120.0, 8.0, 12.0, [0.0, 1.0, 0.5, 1.0]);
+
+    r.pop_vnode();
+}
+
+fn draw_dock(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4], _rage: &Signal<f32>, w: f32, h: f32) {
+    let dock_rect = cvkg_core::Rect { x: w * 0.3, y: h - 68.0, width: w * 0.4, height: 56.0 };
+    r.push_vnode(dock_rect, "HeimdallDock");
+    r.bifrost(dock_rect, 25.0, 1.2, 0.7);
+    r.fill_rounded_rect(dock_rect, 16.0, [0.15, 0.15, 0.18, 0.85]);
+
+    let icons = ["⚔️", "🔥", "🛡️", "💀", "🌋"];
+    let icon_size = 48.0;
+    let start_x = dock_rect.x + 12.0;
+    let center_y = dock_rect.y + dock_rect.height / 2.0;
+
+    for (i, icon) in icons.iter().enumerate() {
+        let ix = start_x + i as f32 * (icon_size + 8.0);
+        r.draw_text(icon, ix + 8.0, center_y - 8.0, 24.0, [0.9, 0.9, 0.92, 0.9]);
+
+        if i < 3 {
+            let dot_rect = cvkg_core::Rect { x: ix + icon_size / 2.0 - 2.0, y: center_y + icon_size / 2.0 + 4.0, width: 4.0, height: 4.0 };
+            let accent = [0.0, 1.0, 0.95, 1.0];
+            r.fill_ellipse(dot_rect, accent);
+        }
+    }
+
+    r.pop_vnode();
 }
 
 fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32, h: f32, _t: f32) {
-    // Fill background with deep void
-    r.fill_rect(
-        cvkg_core::Rect {
-            x: 0.0,
-            y: 0.0,
-            width: w,
-            height: h,
-        },
-        [0.01, 0.01, 0.03, 1.0],
-    );
+    r.fill_rect(cvkg_core::Rect { x: 0.0, y: 28.0, width: w, height: h - 96.0 }, [0.01, 0.01, 0.03, 1.0]);
 
-    log::info!("[Berserker] Drawing {} cubes in background", s.cubes.len());
-    for c in &s.cubes {
-        let rect = cvkg_core::Rect {
-            x: c.pos[0] - c.size * 0.5,
-            y: c.pos[1] - c.size * 0.5,
-            width: c.size,
-            height: c.size,
-        };
-
-        // High-Fidelity Raymarched 3D Cube (Mode 21u)
-        r.draw_3d_cube(rect, c.color, c.rot);
+    for &(id, size) in &s.physics.cube_ids {
+        if let Some(body) = s.physics.world.body(id) {
+            let rect = cvkg_core::Rect {
+                x: body.position.x - size * 0.5,
+                y: body.position.y - size * 0.5,
+                width: size, height: size,
+            };
+            let rot = [body.angle, body.angle * 0.5, body.angle * 0.2];
+            r.draw_3d_cube(rect, [0.1, 0.6, 0.9, 0.6], rot);
+        }
     }
 }
 
-fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, w: f32, h: f32, t: f32) {
-    let card_w = 400.0;
-    let card_h = 250.0;
+fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32, _h: f32, _t: f32) {
+    let runes = ["CVK!!!", "CVK!!!", "CVK!!!"];
 
-    let card_positions = [[w * 0.2, h * 0.3], [w * 0.7, h * 0.2], [w * 0.5, h * 0.7]];
+    for (i, &(id_l, id_r)) in s.physics.card_bodies.iter().enumerate() {
+        if let (Some(bl), Some(br)) = (s.physics.world.body(id_l), s.physics.world.body(id_r)) {
+            let rect_l = cvkg_core::Rect { x: bl.position.x - 100.0, y: bl.position.y - 125.0, width: 200.0, height: 250.0 };
+            let rect_r = cvkg_core::Rect { x: br.position.x - 100.0, y: br.position.y - 125.0, width: 200.0, height: 250.0 };
 
-    let runes = [
-        "\u{16A2}\u{16CF}\u{16B1}\u{16CF}\u{16BF} \u{16A6}\u{16A2}\u{16BF}\u{16D1}\u{16DE}\u{16B1}",
-        "\u{16D2}\u{16D2}\u{16B1}\u{16D2}\u{16CC}\u{16D2}\u{16B1}\u{16D2}\u{16B1} \u{16A0}\u{16CF}\u{16B1}\u{16D2}",
-        "\u{16B4}\u{16B4}\u{16B5} \u{16D1}\u{16CF}\u{16CC}\u{16CF}\u{16D1}\u{16BF}\u{16D1}\u{16B1}",
-    ];
+            r.push_vnode(rect_l, "CardLeft");
+            r.bifrost(rect_l, 20.0, 1.1, 0.5);
+            r.fill_rounded_rect(rect_l, 12.0, [0.05, 0.05, 0.1, 0.4]);
+            r.pop_vnode();
 
-    for (i, pos) in card_positions.iter().enumerate() {
-        let x = pos[0] + (t * 0.5 + i as f32).sin() * 20.0;
-        let y = pos[1] + (t * 0.3 + i as f32).cos() * 20.0;
-        let rect = cvkg_core::Rect {
-            x,
-            y,
-            width: card_w,
-            height: card_h,
-        };
+            r.push_vnode(rect_r, "CardRight");
+            r.bifrost(rect_r, 20.0, 1.1, 0.5);
+            r.fill_rounded_rect(rect_r, 12.0, [0.05, 0.05, 0.1, 0.4]);
 
-        r.bifrost(rect, 40.0, 1.2, 0.6);
-        r.fill_rounded_rect(rect, 24.0, [0.05, 0.05, 0.1, 0.2]);
-
-        r.draw_text(runes[i], x + 40.0, y + 100.0, 32.0, [0.8, 0.9, 1.0, 1.0]);
-        r.draw_text(
-            "PROTOCOL_ACTIVE",
-            x + 40.0,
-            y + 140.0,
-            14.0,
-            [0.0, 0.8, 0.8, 0.8],
-        );
+            let cx = (bl.position.x + br.position.x) / 2.0;
+            let cy = (bl.position.y + br.position.y) / 2.0;
+            r.draw_text(runes[i % runes.len()], cx - 50.0, cy, 32.0, [0.8, 0.9, 1.0, 1.0]);
+            r.pop_vnode();
+        }
     }
+}
+
+fn draw_ragdoll_dummy(r: &mut dyn cvkg_core::Renderer, s: &mut BerserkerState, _w: f32, _h: f32, rage: f32) {
+    s.anim.bridge.update(&s.physics.world);
+    let transforms = s.anim.bridge.physics_transforms().to_vec();
+    s.anim.blender.set_physics(&transforms);
+    let blend_weight = (rage / 5.0).clamp(0.0, 1.0);
+    s.anim.blender.blend(blend_weight);
+    let poses = s.anim.blender.update(0.016);
+
+    let head_pos = poses[0].0;
+    r.fill_rounded_rect(cvkg_core::Rect { x: head_pos.x - 20.0, y: head_pos.y - 20.0, width: 40.0, height: 40.0 }, 8.0, [0.9, 0.2, 0.2, 1.0]);
+
+    let torso_pos = poses[1].0;
+    r.fill_rounded_rect(cvkg_core::Rect { x: torso_pos.x - 30.0, y: torso_pos.y - 50.0, width: 60.0, height: 100.0 }, 12.0, [0.8, 0.4, 0.1, 1.0]);
 }
 
 fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, dt: f32, rage: f32) {
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
-    // 1. Initialize Cubes if needed
-    if s.cubes.is_empty() {
-        for _ in 0..15 {
-            s.cubes.push(Cube {
-                pos: [s.rng.next_f32() * w, s.rng.next_f32() * h],
-                vel: [
-                    (s.rng.next_f32() - 0.5) * 100.0,
-                    (s.rng.next_f32() - 0.5) * 100.0,
-                ],
-                rot: [
-                    s.rng.next_f32() * 6.28,
-                    s.rng.next_f32() * 6.28,
-                    s.rng.next_f32() * 6.28,
-                ],
-                rot_vel: [
-                    (s.rng.next_f32() - 0.5) * 2.0,
-                    (s.rng.next_f32() - 0.5) * 2.0,
-                    (s.rng.next_f32() - 0.5) * 2.0,
-                ],
-                size: 50.0 + s.rng.next_f32() * 100.0,
-                color: [
-                    0.1,
-                    0.5 + s.rng.next_f32() * 0.3,
-                    0.8 + s.rng.next_f32() * 0.2,
-                    0.6,
-                ],
-            });
+    if rage > 0.0 {
+        let force_mag = rage * 50000.0;
+        for &(id, _) in &s.physics.cube_ids {
+            let fx = (s.rng.next_f32() - 0.5) * force_mag;
+            let fy = (s.rng.next_f32() - 0.5) * force_mag;
+            if let Some(body) = s.physics.world.body_mut(id) {
+                body.apply_force(Vec2::new(fx, fy));
+            }
+        }
+        for &(id_l, id_r) in &s.physics.card_bodies {
+            let fx = (s.rng.next_f32() - 0.5) * force_mag * 0.5;
+            let fy = (s.rng.next_f32() - 0.5) * force_mag * 0.5;
+            if let Some(body) = s.physics.world.body_mut(id_l) { body.apply_force(Vec2::new(fx, fy)); }
+            if let Some(body) = s.physics.world.body_mut(id_r) { body.apply_force(Vec2::new(-fx, -fy)); }
         }
     }
 
-    // 2. RK4 Physics for Cubes
-    let gravity = [150.0, 150.0]; // Force toward bottom-right
-    let shake_force = rage * 3000.0;
-    let drag = 0.15;
+    s.physics.world.step(dt);
 
-    for c in &mut s.cubes {
-        // Apply shake force in random direction based on rage
-        let sx = (s.rng.next_f32() - 0.5) * shake_force;
-        let sy = (s.rng.next_f32() - 0.5) * shake_force;
-
-        // RK4 Integration Step
-        // State is [x, y, vx, vy, rot[3], rv[3]]
-        let f = |v: [f32; 2], rv: [f32; 3]| -> ([f32; 2], [f32; 3]) {
-            (
-                [gravity[0] + sx - drag * v[0], gravity[1] + sy - drag * v[1]],
-                [-drag * rv[0], -drag * rv[1], -drag * rv[2]],
-            )
-        };
-
-        // k1
-        let k1_v = c.vel;
-        let (k1_a, k1_ra) = f(c.vel, c.rot_vel);
-
-        // k2
-        let k2_v = [c.vel[0] + k1_a[0] * dt * 0.5, c.vel[1] + k1_a[1] * dt * 0.5];
-        let (k2_a, k2_ra) = f(
-            k2_v,
-            [
-                c.rot_vel[0] + k1_ra[0] * dt * 0.5,
-                c.rot_vel[1] + k1_ra[1] * dt * 0.5,
-                c.rot_vel[2] + k1_ra[2] * dt * 0.5,
-            ],
-        );
-
-        // k3
-        let k3_v = [c.vel[0] + k2_a[0] * dt * 0.5, c.vel[1] + k2_a[1] * dt * 0.5];
-        let (k3_a, k3_ra) = f(
-            k3_v,
-            [
-                c.rot_vel[0] + k2_ra[0] * dt * 0.5,
-                c.rot_vel[1] + k2_ra[1] * dt * 0.5,
-                c.rot_vel[2] + k2_ra[2] * dt * 0.5,
-            ],
-        );
-
-        // k4
-        let k4_v = [c.vel[0] + k3_a[0] * dt, c.vel[1] + k3_a[1] * dt];
-        let (k4_a, k4_ra) = f(
-            k4_v,
-            [
-                c.rot_vel[0] + k3_ra[0] * dt,
-                c.rot_vel[1] + k3_ra[1] * dt,
-                c.rot_vel[2] + k3_ra[2] * dt,
-            ],
-        );
-
-        // Update Position
-        c.pos[0] += (dt / 6.0) * (k1_v[0] + 2.0 * k2_v[0] + 2.0 * k3_v[0] + k4_v[0]);
-        c.pos[1] += (dt / 6.0) * (k1_v[1] + 2.0 * k2_v[1] + 2.0 * k3_v[1] + k4_v[1]);
-        c.vel[0] += (dt / 6.0) * (k1_a[0] + 2.0 * k2_a[0] + 2.0 * k3_a[0] + k4_a[0]);
-        c.vel[1] += (dt / 6.0) * (k1_a[1] + 2.0 * k2_a[1] + 2.0 * k3_a[1] + k4_a[1]);
-
-        // Update 3-axis Rotation
-        for i in 0..3 {
-            let k1_rv = c.rot_vel[i];
-            let k2_rv = c.rot_vel[i] + k1_ra[i] * dt * 0.5;
-            let k3_rv = c.rot_vel[i] + k2_ra[i] * dt * 0.5;
-            let k4_rv = c.rot_vel[i] + k3_ra[i] * dt;
-            c.rot[i] += (dt / 6.0) * (k1_rv + 2.0 * k2_rv + 2.0 * k3_rv + k4_rv);
-            c.rot_vel[i] += (dt / 6.0) * (k1_ra[i] + 2.0 * k2_ra[i] + 2.0 * k3_ra[i] + k4_ra[i]);
-
-            // Add some "shake" torque
-            c.rot_vel[i] += (s.rng.next_f32() - 0.5) * rage * 5.0 * dt;
-        }
-
-        // 3. Wall Bouncing
-        let margin = c.size * 0.5;
-        if c.pos[0] < margin {
-            c.pos[0] = margin;
-            c.vel[0] *= -0.8;
-        }
-        if c.pos[0] > w - margin {
-            c.pos[0] = w - margin;
-            c.vel[0] *= -0.8;
-        }
-        if c.pos[1] < margin {
-            c.pos[1] = margin;
-            c.vel[1] *= -0.8;
-        }
-        if c.pos[1] > h - margin {
-            c.pos[1] = h - margin;
-            c.vel[1] *= -0.8;
-        }
-    }
-
-    // 4. Spawn new particles
     for _ in 0..5 {
         let angle = s.rng.next_f32() * 6.28;
         let speed = 100.0 + s.rng.next_f32() * 200.0;
@@ -339,12 +373,10 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
             color: [1.0, 0.3 + s.rng.next_f32() * 0.5, 0.0, 1.0],
             life: 1.0 + s.rng.next_f32() * 1.5,
             size: 4.0 + s.rng.next_f32() * 8.0,
-            // Vary shapes: 0=Round, 1=Runic Fragment
             is_ember: s.rng.next_f32() > 0.85,
         });
     }
 
-    // 5. Update existing particles
     s.particles.retain_mut(|p| {
         p.life -= dt;
         p.pos[0] += p.vel[0] * dt;
@@ -353,144 +385,72 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     });
 }
 
-fn draw_berserker_fire(
-    r: &mut dyn cvkg_core::Renderer,
-    s: &BerserkerState,
-    w: f32,
-    h: f32,
-    t: f32,
-) {
+fn draw_berserker_fire(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32, h: f32, t: f32) {
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
-    // Draw Fireball Core with Layered Radial Gradients
-    // Mode 16 now correctly handles outer alpha, so this will be circular.
-    r.draw_radial_gradient(
-        cvkg_core::Rect {
-            x: cx - 100.0,
-            y: cy - 100.0,
-            width: 200.0,
-            height: 200.0,
-        },
-        [1.0, 0.4, 0.0, 0.6],
-        [0.2, 0.0, 0.0, 0.0],
-    );
-    r.draw_radial_gradient(
-        cvkg_core::Rect {
-            x: cx - 60.0,
-            y: cy - 60.0,
-            width: 120.0,
-            height: 120.0,
-        },
-        [1.0, 0.8, 0.2, 0.8],
-        [1.0, 0.2, 0.0, 0.0],
-    );
-    r.draw_radial_gradient(
-        cvkg_core::Rect {
-            x: cx - 30.0,
-            y: cy - 30.0,
-            width: 60.0,
-            height: 60.0,
-        },
-        [1.0, 1.0, 0.8, 1.0],
-        [1.0, 0.5, 0.0, 0.0],
-    );
+    r.draw_radial_gradient(cvkg_core::Rect { x: cx - 100.0, y: cy - 100.0, width: 200.0, height: 200.0 }, [1.0, 0.4, 0.0, 0.6], [0.2, 0.0, 0.0, 0.0]);
+    r.draw_radial_gradient(cvkg_core::Rect { x: cx - 60.0, y: cy - 60.0, width: 120.0, height: 120.0 }, [1.0, 0.8, 0.2, 0.8], [1.0, 0.2, 0.0, 0.0]);
+    r.draw_radial_gradient(cvkg_core::Rect { x: cx - 30.0, y: cy - 30.0, width: 60.0, height: 60.0 }, [1.0, 1.0, 0.8, 1.0], [1.0, 0.5, 0.0, 0.0]);
 
-    // Draw Particles
     for p in &s.particles {
         let p_color = [p.color[0], p.color[1], p.color[2], p.life.min(1.0)];
-        let rect = cvkg_core::Rect {
-            x: p.pos[0],
-            y: p.pos[1],
-            width: p.size,
-            height: p.size,
-        };
-
-        if p.is_ember {
-            // Runic Fragments (Procedural Shapes)
-            r.draw_text("\u{16A2}", p.pos[0], p.pos[1], p.size * 2.0, p_color);
-        } else {
-            // Round Fire/Smoke
-            r.fill_ellipse(rect, p_color);
-        }
+        let rect = cvkg_core::Rect { x: p.pos[0], y: p.pos[1], width: p.size, height: p.size };
+        if p.is_ember { r.draw_text("*", p.pos[0], p.pos[1], (p.size * 2.0).round(), p_color); }
+        else { r.fill_ellipse(rect, p_color); }
     }
 
-    // Occasional lightning bolts from the core
-    let mut rng = Lcg::new((t * 1000.0) as u32);
-    if rng.next_f32() > 0.95 {
-        let angle = rng.next_f32() * 6.28;
-        let dist = 100.0 + rng.next_f32() * 300.0;
-        let tx = cx + angle.cos() * dist;
-        let ty = cy + angle.sin() * dist;
-        r.draw_mjolnir_bolt([cx, cy], [tx, ty], [0.6, 0.9, 1.0, 1.0]);
+    if (t * 1000.0) as u32 % 20 == 0 {
+        let angle = (t * 5.0) % 6.28;
+        let dist = 100.0 + 200.0;
+        r.draw_mjolnir_bolt([cx, cy], [cx + angle.cos() * dist, cy + angle.sin() * dist], [0.6, 0.9, 1.0, 1.0]);
     }
 }
 
-fn draw_corner_buttons(
-    r: &mut dyn cvkg_core::Renderer,
-    s: &BerserkerState,
-    state_handle: Arc<Mutex<BerserkerState>>,
-    w: f32,
-    h: f32,
-) {
+fn draw_corner_buttons(r: &mut dyn cvkg_core::Renderer, counters: &[Signal<u32>; 4], rage: &Signal<f32>, w: f32, h: f32) {
     let btn_size = 100.0;
     let padding = 20.0;
     let corners = [
-        (padding, padding, "I"),
-        (w - btn_size - padding, padding, "II"),
-        (padding, h - btn_size - padding, "III"),
-        (w - btn_size - padding, h - btn_size - padding, "IV"),
+        (padding, padding + 30.0, "I"),
+        (w - btn_size - padding, padding + 30.0, "II"),
+        (padding, h - btn_size - padding - 70.0, "III"),
+        (w - btn_size - padding, h - btn_size - padding - 70.0, "IV"),
     ];
 
     for (i, corner) in corners.iter().enumerate() {
-        let x = corner.0;
-        let y = corner.1;
-        let rect = cvkg_core::Rect {
-            x,
-            y,
-            width: btn_size,
-            height: btn_size,
-        };
-
-        // CRITICAL: Wrap each button in its own VNode.
-        // Without this, handlers are registered on the parent 'BerserkerRoot',
-        // causing all clicks to default to the last registered button.
+        let rect = cvkg_core::Rect { x: corner.0, y: corner.1, width: btn_size, height: btn_size };
         r.push_vnode(rect, "CornerButton");
-
         r.fill_rounded_rect(rect, 12.0, [0.2, 0.2, 0.3, 0.8]);
-        r.draw_text(corner.2, x + 35.0, y + 60.0, 32.0, [1.0, 1.0, 1.0, 1.0]);
+        r.draw_text(corner.2, corner.0 + 35.0, corner.1 + 60.0, 32.0, [1.0, 1.0, 1.0, 1.0]);
 
-        let count_str = format!("{}", s.counters[i]);
-        r.draw_text(
-            &count_str,
-            x + btn_size + 10.0,
-            y + 60.0,
-            24.0,
-            [0.0, 1.0, 0.5, 1.0],
-        );
+        let val = counters[i].get();
+        r.draw_text(&format!("{}", val), corner.0 + btn_size + 10.0, corner.1 + 60.0, 24.0, [0.0, 1.0, 0.5, 1.0]);
 
-        let counter_ref = state_handle.clone();
-        let h = Arc::new(move |_| {
-            let mut s = counter_ref.lock().unwrap();
-            s.counters[i] += 1;
-            log::info!("Button {} clicked! Total: {}", i, s.counters[i]);
+        let c_signal = counters[i].clone();
+        let r_signal = rage.clone();
+        let h_closure = Arc::new(move |_| {
+            c_signal.set(c_signal.get() + 1);
+            r_signal.set(r_signal.get() + 1.0);
+            log::info!("Button {} clicked! Total: {}", i, c_signal.get());
         });
-        r.register_handler("pointerdown", h.clone());
-        r.register_handler("pointerclick", h);
-
+        r.register_handler("pointerdown", h_closure.clone());
+        r.register_handler("pointerclick", h_closure);
         r.pop_vnode();
     }
 }
 
 fn main() {
-    // Initialize env_logger to see what's happening
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
+    log::info!("═══════════════════════════════════════════════════");
+    log::info!("  BERSERKER FIRE v2.0 — Cyberpunk Viking UI Demo");
+    log::info!("  Display: {:?}", DisplayEnvironment::default());
+    log::info!("  Performance Contract: {:?}", PerformanceContract::chrome_standard());
+    log::info!("═══════════════════════════════════════════════════");
 
-    // Set a panic hook to capture aborts/panics
     std::panic::set_hook(Box::new(|info| {
         log::error!("CRITICAL_FAILURE: Application panicked: {}", info);
     }));
 
-    log::info!("Launching Berserker Fire Native...");
-    cvkg::native::NativeRenderer::run(BerserkerFireView::new());
+    log::info!("Launching with full debug logging enabled...");
+    cvkg::native::NativeRenderer::run(BerserkerFireView::new(1280.0, 720.0));
 }

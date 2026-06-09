@@ -41,8 +41,26 @@ version = "0.2.9"
 [dependencies.cvkg-core]
 version = "0.2.9"
 
+[dependencies.cvkg-vdom]
+version = "0.2.9"
+
+[dependencies.cvkg-physics]
+version = "0.2.9"
+
+[dependencies.cvkg-anim]
+version = "0.2.9"
+
+[dependencies.cvkg-components]
+version = "0.2.9"
+
+[dependencies.cvkg-themes]
+version = "0.2.9"
+
 [dependencies.env_logger]
 version = "0.10"
 
 [dependencies.log]
 version = "0.4"
+
+[dependencies.glam]
+version = "0.30"
