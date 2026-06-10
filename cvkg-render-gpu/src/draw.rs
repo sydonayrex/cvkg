@@ -1,7 +1,6 @@
 //! SVG parsing helpers and free functions.
 use crate::types::SvgAnimation;
 
-
 pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
     let mut parsed_animations = Vec::new();
     if let Ok(xml_doc) = roxmltree::Document::parse(std::str::from_utf8(data).unwrap_or("")) {
@@ -114,4 +113,3 @@ pub(crate) fn usvg_to_lyon(path: &usvg::Path) -> lyon::path::Path {
     }
     builder.build()
 }
-

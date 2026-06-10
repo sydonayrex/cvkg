@@ -29,6 +29,8 @@ pub trait RendererShapes {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
     fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]);
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]);
+    /// Fill a rounded rect with glass material for frosted backdrop effect.
+    fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32);
     fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
     fn stroke_rounded_rect(
         &mut self,
@@ -276,6 +278,33 @@ pub trait RendererCyberpunk {
         _color: [f32; 4],
     ) {
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Compute & Particles — fluid simulations, generative physics
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Generic compute and particle dispatch operations for futuristic UIs.
+pub trait RendererCompute {
+    /// Dispatches a burst of GPU particles (e.g. fireworks, data streams).
+    fn dispatch_particles(
+        &mut self,
+        _origin: [f32; 2],
+        _count: u32,
+        _effect_type: &str,
+        _color: [f32; 4],
+    ) {
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Volumetric — holograms, raymarching
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Volumetric and raymarching projections.
+pub trait RendererVolumetric {
+    /// Draws a volumetric hologram into the specified bounding rectangle.
+    fn draw_hologram(&mut self, _rect: Rect, _hologram_id: &str, _time: f32) {}
 }
 
 // ════════════════════════════════════════════════════════════════════════════──

@@ -418,12 +418,12 @@ pub struct RagdollBlender {
     pub blend_speed: f32,
     /// Per-bone weights.
     bone_weights: Vec<BoneWeight>,
-    /// Animated bone positions (from keyframes).
-    animated_positions: Vec<Vec3>,
-    /// Physics bone positions (from ragdoll sim).
-    physics_positions: Vec<Vec3>,
-    /// Output blended positions.
-    output_positions: Vec<Vec3>,
+    /// Animated bone positions and rotations (from keyframes).
+    animated_transforms: Vec<(Vec3, Quat)>,
+    /// Physics bone positions and rotations (from ragdoll sim).
+    physics_transforms: Vec<(Vec3, Quat)>,
+    /// Output blended positions and rotations.
+    output_transforms: Vec<(Vec3, Quat)>,
 }
 
 impl RagdollBlender {
@@ -438,9 +438,9 @@ impl RagdollBlender {
                     weight: 0.0,
                 })
                 .collect(),
-            animated_positions: vec![Vec3::ZERO; bone_count],
-            physics_positions: vec![Vec3::ZERO; bone_count],
-            output_positions: vec![Vec3::ZERO; bone_count],
+            animated_transforms: vec![(Vec3::ZERO, Quat::IDENTITY); bone_count],
+            physics_transforms: vec![(Vec3::ZERO, Quat::IDENTITY); bone_count],
+            output_transforms: vec![(Vec3::ZERO, Quat::IDENTITY); bone_count],
         }
     }
 
@@ -459,20 +459,20 @@ impl RagdollBlender {
         }
     }
 
-    /// Set animated bone positions from keyframe data.
-    pub fn set_animated(&mut self, positions: &[Vec3]) {
-        let n = positions.len().min(self.animated_positions.len());
-        self.animated_positions[..n].copy_from_slice(&positions[..n]);
+    /// Set animated bone transforms from keyframe data.
+    pub fn set_animated(&mut self, transforms: &[(Vec3, Quat)]) {
+        let n = transforms.len().min(self.animated_transforms.len());
+        self.animated_transforms[..n].copy_from_slice(&transforms[..n]);
     }
 
-    /// Set physics bone positions from ragdoll simulation.
-    pub fn set_physics(&mut self, positions: &[Vec3]) {
-        let n = positions.len().min(self.physics_positions.len());
-        self.physics_positions[..n].copy_from_slice(&positions[..n]);
+    /// Set physics bone transforms from ragdoll simulation.
+    pub fn set_physics(&mut self, transforms: &[(Vec3, Quat)]) {
+        let n = transforms.len().min(self.physics_transforms.len());
+        self.physics_transforms[..n].copy_from_slice(&transforms[..n]);
     }
 
-    /// Update blend and compute output positions. Call each frame.
-    pub fn update(&mut self, dt: f32) -> &[Vec3] {
+    /// Update blend and compute output transforms. Call each frame.
+    pub fn update(&mut self, dt: f32) -> &[(Vec3, Quat)] {
         // Smoothly approach target
         let diff = self.target_weight - self.blend_weight;
         if diff.abs() > 0.001 {
@@ -484,15 +484,20 @@ impl RagdollBlender {
         // Blend per-bone
         for (i, bw) in self.bone_weights.iter().enumerate() {
             let w = self.blend_weight * bw.weight;
-            self.output_positions[i] =
-                self.animated_positions[i].lerp(self.physics_positions[i], w);
+            let pos = self.animated_transforms[i]
+                .0
+                .lerp(self.physics_transforms[i].0, w);
+            let rot = self.animated_transforms[i]
+                .1
+                .slerp(self.physics_transforms[i].1, w);
+            self.output_transforms[i] = (pos, rot);
         }
 
-        &self.output_positions
+        &self.output_transforms
     }
 
-    pub fn output(&self) -> &[Vec3] {
-        &self.output_positions
+    pub fn output(&self) -> &[(Vec3, Quat)] {
+        &self.output_transforms
     }
 }
 
@@ -552,8 +557,19 @@ mod tests {
     #[test]
     fn test_ragdoll_blend() {
         let mut blender = RagdollBlender::new(3);
-        blender.set_animated(&[Vec3::ZERO, Vec3::Y, Vec3::Y * 2.0]);
-        blender.set_physics(&[Vec3::X, Vec3::X + Vec3::Y, Vec3::X + Vec3::Y * 2.0]);
+        let q_anim = Quat::IDENTITY;
+        let q_phys = Quat::from_rotation_y(PI / 2.0);
+
+        blender.set_animated(&[
+            (Vec3::ZERO, q_anim),
+            (Vec3::Y, q_anim),
+            (Vec3::Y * 2.0, q_anim),
+        ]);
+        blender.set_physics(&[
+            (Vec3::X, q_phys),
+            (Vec3::X + Vec3::Y, q_phys),
+            (Vec3::X + Vec3::Y * 2.0, q_phys),
+        ]);
         blender.blend(1.0);
 
         // Step many frames to converge (blend_speed=2.0, dt=0.016)
@@ -562,14 +578,21 @@ mod tests {
         }
 
         let out = blender.output();
-        // Should be close to physics positions
+        // Should be close to physics transforms
         for i in 0..3 {
-            let dist = (out[i] - blender.physics_positions[i]).length();
+            let dist = (out[i].0 - blender.physics_transforms[i].0).length();
             assert!(
                 dist < 0.05,
-                "Bone {} not blended to physics: dist={}",
+                "Bone {} not blended to physics position: dist={}",
                 i,
                 dist
+            );
+            let dot = out[i].1.dot(blender.physics_transforms[i].1).abs();
+            assert!(
+                dot > 0.99,
+                "Bone {} not blended to physics rotation: dot={}",
+                i,
+                dot
             );
         }
     }

@@ -12,7 +12,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ── High-Fidelity SDF Clipping ───────────────────────────────────────
     let p_clip_pos = in.clip.xy * scene.scale_factor;
     let p_clip_size = in.clip.zw * scene.scale_factor;
-    let pixel_pos = (in.clip_position.xy * 0.5 + 0.5) * scene.resolution * scene.scale_factor;
+    let pixel_pos = in.clip_position.xy;
 
     let clip_d = sd_box(pixel_pos - (p_clip_pos + p_clip_size * 0.5), p_clip_size * 0.5);
     var clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d);

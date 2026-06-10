@@ -2,7 +2,6 @@
 use crate::renderer::SurtrRenderer;
 use cvkg_core::{Rect, Renderer};
 
-
 impl SurtrRenderer {
     /// load_image_to_heim — Packs a raw asset into the Mega-Heim.
     /// This is used for common icons to enable aggressive batching (1 draw call).
@@ -53,12 +52,7 @@ impl SurtrRenderer {
             self.image_uv_registry.put(name.to_string(), uv_rect);
             // Index 0 = mega-heim texture (stored in texture_views[0])
             self.texture_registry.put(name.to_string(), 0);
-            log::debug!(
-                "[Surtr] Packed '{}' into Mega-Heim at ({}, {})",
-                name,
-                x,
-                y
-            );
+            log::debug!("[Surtr] Packed '{}' into Mega-Heim at ({}, {})", name, x, y);
         } else {
             log::warn!(
                 "HEIM_FULL: Failed to pack '{}' into Mega-Heim. Falling back to Texture Array.",
@@ -81,7 +75,11 @@ impl SurtrRenderer {
     /// Resolves standard font families in order of system availability. Falls back from
     /// common system sans-serif aliases, to platform-specific sans-serif faces, and finally
     /// to the embedded "Jupiteroid" font as a last resort.
-    pub(crate) fn shape_text_with_stack(&mut self, text: &str, size: f32) -> cvkg_runic_text::ShapedText {
+    pub(crate) fn shape_text_with_stack(
+        &mut self,
+        text: &str,
+        size: f32,
+    ) -> cvkg_runic_text::ShapedText {
         let mut style = cvkg_runic_text::TextStyle::new("Jupiteroid", size);
         style.fallback_families = vec![
             "sans-serif".to_string(),
@@ -123,4 +121,3 @@ impl SurtrRenderer {
             })
     }
 }
-

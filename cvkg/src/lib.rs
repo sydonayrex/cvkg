@@ -38,7 +38,7 @@ pub use cvkg_render_gpu as render;
 pub use cvkg_render_native as native;
 
 #[cfg(feature = "web")]
-pub use cvkg_render_web as web;
+pub use cvkg_render_gpu as web;
 
 pub mod prelude {
     pub use cvkg_components::Color;

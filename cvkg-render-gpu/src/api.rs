@@ -1,17 +1,12 @@
 //! Bridging the internal renderer to `cvkg-core` traits.
-use cvkg_core::{Mesh, Rect, Renderer, ColorTheme};
 use crate::renderer::SurtrRenderer;
 use crate::types::*;
 use crate::vertex::*;
-use bytemuck;
-use std::sync::atomic::Ordering;
 use cvkg_core::LAYOUT_DIRTY;
-use lyon::tessellation::{
-    BuffersBuilder, StrokeOptions,
-    StrokeTessellator, VertexBuffers,
-};
+use cvkg_core::{ColorTheme, Mesh, Rect, Renderer};
 use lyon::math::point;
-
+use lyon::tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers};
+use std::sync::atomic::Ordering;
 
 impl cvkg_core::ElapsedTime for SurtrRenderer {
     fn delta_time(&self) -> f32 {
@@ -26,7 +21,7 @@ impl cvkg_core::ElapsedTime for SurtrRenderer {
 impl cvkg_core::Renderer for SurtrRenderer {
     fn is_over_budget(&self) -> bool {
         self.frame_budget.allow_degradation
-        && self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
+            && self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
     }
 
     /// fill_rect — Standard rectangle drawing method.
@@ -48,15 +43,47 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-                                        3,
-                                        None,
-                                        radius,
-                                        Rect {
-                                            x: 0.0,
-                                            y: 0.0,
-                                            width: 1.0,
-                                            height: 1.0,
-                                        },
+            3,
+            None,
+            radius,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+        );
+    }
+
+    /// Fill a rounded rect with glass material for frosted backdrop effect.
+    /// This is the proper way to render glass cards that need macOS Tahoe-style blur.
+    /// The blur_radius controls the intensity of the backdrop blur.
+    /// For Tahoe parity, this registers the rect as a portal region for
+    /// per-element isolated backdrop blur when z_index != 0.
+    fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32) {
+        // Store blur radius for use during glass pass - the renderer will apply
+        // this to the Kawase blur uniform during the backdrop blur phase
+        let blur_strength = (blur_radius / 100.0).clamp(0.0, 4.0);
+        self.current_theme.glass_blur_strength = blur_strength;
+
+        // Register for portal-aware per-element backdrop blur (Tahoe feature)
+        // When current_z != 0, this element is in a portal layer
+        if self.current_z != 0.0 {
+            self.portal_regions.push_back(rect);
+        }
+
+        self.fill_rect_with_full_params(
+            rect,
+            [1.0, 1.0, 1.0, 0.4], // Glass tint: white at 40% opacity
+            7, // Mode 7 = Glass material
+            None,
+            radius,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
         );
     }
 
@@ -64,15 +91,15 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-                                        4,
-                                        None,
-                                        0.0,
-                                        Rect {
-                                            x: 0.0,
-                                            y: 0.0,
-                                            width: 1.0,
-                                            height: 1.0,
-                                        },
+            4,
+            None,
+            0.0,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
         );
     }
 
@@ -80,26 +107,29 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params_and_slice(
             rect,
             self.apply_opacity(color),
-                                                  21,
-                                                  None,
-                                                  0.0,
-                                                  Rect {
-                                                      x: 0.0,
-                                                      y: 0.0,
-                                                      width: 1.0,
-                                                      height: 1.0,
-                                                  },
-                                                  [rotation[0], rotation[1], rotation[2], 0.0],
+            21,
+            None,
+            0.0,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            [rotation[0], rotation[1], rotation[2], 0.0],
+            [0.0, 0.0],
         );
     }
 
     fn bifrost(&mut self, rect: Rect, blur: f32, _saturation: f32, opacity: f32) {
         // Calculate screen-space UVs for high-fidelity global refraction
+        let logical_w = self.current_width() as f32 / self.current_scale_factor();
+        let logical_h = self.current_height() as f32 / self.current_scale_factor();
         let screen_uv = Rect {
-            x: rect.x / self.current_width() as f32,
-            y: rect.y / self.current_height() as f32,
-            width: rect.width / self.current_width() as f32,
-            height: rect.height / self.current_height() as f32,
+            x: rect.x / logical_w,
+            y: rect.y / logical_h,
+            width: rect.width / logical_w,
+            height: rect.height / logical_h,
         };
         // Use mode 7 for high-fidelity background blur sampling
         // Use the blur parameter as corner radius for the glass panel
@@ -154,10 +184,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             glow_rect,
             self.apply_opacity(color),
-                                        18,
-                                        None,
-                                        8.0,
-                                        uv_rect,
+            18,
+            None,
+            8.0,
+            uv_rect,
         );
     }
 
@@ -215,15 +245,15 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-                                        17,
-                                        None,
-                                        radius,
-                                        Rect {
-                                            x: stroke_width,
-                                            y: 0.0,
-                                            width: 0.0,
-                                            height: 0.0,
-                                        },
+            17,
+            None,
+            radius,
+            Rect {
+                x: stroke_width,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            },
         );
     }
 
@@ -265,16 +295,17 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params_and_slice(
             rect,
             self.apply_opacity(start_color),
-                                                  15,
-                                                  None,
-                                                  0.0,
-                                                  Rect {
-                                                      x: angle,
-                                                      y: 0.0,
-                                                      width: 1.0,
-                                                      height: 1.0,
-                                                  },
-                                                  end_color,
+            15,
+            None,
+            0.0,
+            Rect {
+                x: angle,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            end_color,
+            [0.0, 0.0],
         );
     }
 
@@ -282,16 +313,17 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params_and_slice(
             rect,
             self.apply_opacity(inner_color),
-                                                  16,
-                                                  None,
-                                                  0.0,
-                                                  Rect {
-                                                      x: 0.0,
-                                                      y: 0.0,
-                                                      width: 1.0,
-                                                      height: 1.0,
-                                                  },
-                                                  outer_color,
+            16,
+            None,
+            0.0,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            outer_color,
+            [0.0, 0.0],
         );
     }
 
@@ -314,15 +346,15 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             inflated,
             self.apply_opacity(color),
-                                        18,
-                                        None,
-                                        radius,
-                                        Rect {
-                                            x: margin,
-                                            y: blur,
-                                            width: 0.0,
-                                            height: 0.0,
-                                        },
+            18,
+            None,
+            radius,
+            Rect {
+                x: margin,
+                y: blur,
+                width: 0.0,
+                height: 0.0,
+            },
         );
     }
 
@@ -338,15 +370,15 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-                                        19,
-                                        None,
-                                        radius,
-                                        Rect {
-                                            x: width,
-                                            y: dash,
-                                            width: gap,
-                                            height: 0.0,
-                                        },
+            19,
+            None,
+            radius,
+            Rect {
+                x: width,
+                y: dash,
+                width: gap,
+                height: 0.0,
+            },
         );
     }
 
@@ -410,18 +442,18 @@ impl cvkg_core::Renderer for SurtrRenderer {
             return;
         }
         let tid = self
-        .get_texture_id(image_name)
-        .or_else(|| self.get_texture_id("__mega_heim"));
+            .get_texture_id(image_name)
+            .or_else(|| self.get_texture_id("__mega_heim"));
         let uv_rect = self
-        .image_uv_registry
-        .get(image_name)
-        .copied()
-        .unwrap_or(Rect {
-            x: 0.0,
-            y: 0.0,
-            width: 1.0,
-            height: 1.0,
-        });
+            .image_uv_registry
+            .get(image_name)
+            .copied()
+            .unwrap_or(Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            });
         self.fill_rect_with_full_params(rect, [1.0, 1.0, 1.0, 1.0], 2, tid, 0.0, uv_rect);
     }
 
@@ -434,7 +466,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
         for glyph in shaped.glyphs {
             let cache_key = glyph.cache_key;
 
-            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key) {
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key)
+            {
                 *info
             } else {
                 if let Some(image) = self.text_engine.rasterize(cache_key) {
@@ -454,7 +487,9 @@ impl cvkg_core::Renderer for SurtrRenderer {
                             None => {
                                 log::error!(
                                     "Glyph heim critically full after reclaim: cannot pack {}x{} glyph for '{}', skipping",
-                                    gw, gh, text
+                                    gw,
+                                    gh,
+                                    text
                                 );
                                 continue; // Skip this glyph rather than corrupting atlas origin
                             }
@@ -557,17 +592,17 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
         let scaled_max_width = max_width.map(|w| w * sf);
         self.text_engine
-        .shape_layout(&scaled_spans, scaled_max_width, align, overflow)
-        .ok()
+            .shape_layout(&scaled_spans, scaled_max_width, align, overflow)
+            .ok()
     }
 
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
         for glyph in &shaped.glyphs {
             let byte_idx = shaped
-            .grapheme_boundaries
-            .get(glyph.cluster as usize)
-            .copied()
-            .unwrap_or(0);
+                .grapheme_boundaries
+                .get(glyph.cluster as usize)
+                .copied()
+                .unwrap_or(0);
             let mut span_color = [1.0, 1.0, 1.0, 1.0];
             for span in &shaped.spans {
                 if byte_idx >= span.byte_offset && byte_idx < span.byte_offset + span.text.len() {
@@ -583,7 +618,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let c = self.apply_opacity(span_color);
 
             let cache_key = glyph.cache_key;
-            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key) {
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key)
+            {
                 *info
             } else {
                 if let Some(image) = self.text_engine.rasterize(cache_key) {
@@ -602,7 +638,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
                             None => {
                                 log::error!(
                                     "Glyph heim critically full after reclaim: cannot pack {}x{} glyph, skipping",
-                                    gw, gh
+                                    gw,
+                                    gh
                                 );
                                 continue; // Skip this glyph rather than corrupting atlas origin
                             }
@@ -669,24 +706,41 @@ impl cvkg_core::Renderer for SurtrRenderer {
                     height: h / sf,
                 };
                 let tid = self.get_texture_id("__mega_heim");
-                self.fill_rect_with_full_params(glyph_rect, c, 6, tid, 0.0, uv_rect);
+                let slice = self
+                    .slice_stack
+                    .last()
+                    .copied()
+                    .map(|(a, o)| [a, o, 1.0, 1.0])
+                    .unwrap_or([0.0, 0.0, 0.0, 1.0]);
+                self.fill_rect_with_full_params_and_slice(
+                    glyph_rect,
+                    c,
+                    6,
+                    tid,
+                    0.0,
+                    uv_rect,
+                    slice,
+                    [glyph.glyph_index as f32, glyph.time_offset],
+                );
             }
         }
     }
 
     fn draw_texture(&mut self, texture_id: u32, rect: Rect) {
-        self.fill_rect_with_full_params(
+        self.fill_rect_with_full_params_and_slice(
             rect,
             [1.0, 1.0, 1.0, 1.0],
             2,
             Some(texture_id),
-                                        0.0,
-                                        Rect {
-                                            x: 0.0,
-                                            y: 0.0,
-                                            width: 1.0,
-                                            height: 1.0,
-                                        },
+            0.0,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0],
         );
     }
 
@@ -713,13 +767,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
         };
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&format!("Texture Array Layer: {}", name)),
-                                                 size,
-                                                 mip_level_count: 1,
-                                                 sample_count: 1,
-                                                 dimension: wgpu::TextureDimension::D2,
-                                                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
-                                                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                                                     view_formats: &[],
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
         });
 
         self.queue.write_texture(
@@ -733,7 +787,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(4 * width),
-                                 rows_per_image: Some(height),
+                rows_per_image: Some(height),
             },
             size,
         );
@@ -756,12 +810,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.texture_views[index as usize] = view;
         self.image_uv_registry.put(
             name.to_string(),
-                                   Rect {
-                                       x: 0.0,
-                                       y: 0.0,
-                                       width: 1.0,
-                                       height: 1.0,
-                                   },
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
         );
         self.texture_registry.put(name.to_string(), index);
         self.rebuild_texture_array_bind_group();
@@ -780,7 +834,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             0.0,
             0.0,
             self.current_width() as f32,
-                                                            self.current_height() as f32,
+            self.current_height() as f32,
         ))
     }
 
@@ -823,29 +877,29 @@ impl cvkg_core::Renderer for SurtrRenderer {
         let sn = rotation.sin();
         let affine = glam::Mat3::from_cols(
             glam::Vec3::new(c * scale[0], sn * scale[0], 0.0),
-                                           glam::Vec3::new(-sn * scale[1], c * scale[1], 0.0),
-                                           glam::Vec3::new(translation[0], translation[1], 1.0),
+            glam::Vec3::new(-sn * scale[1], c * scale[1], 0.0),
+            glam::Vec3::new(translation[0], translation[1], 1.0),
         );
 
         let parent = self
-        .transform_stack
-        .last()
-        .copied()
-        .unwrap_or(glam::Mat3::IDENTITY);
+            .transform_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Mat3::IDENTITY);
         self.transform_stack.push(parent * affine);
     }
 
     fn push_affine(&mut self, transform: [f32; 6]) {
         let affine = glam::Mat3::from_cols(
             glam::Vec3::new(transform[0], transform[1], 0.0),
-                                           glam::Vec3::new(transform[2], transform[3], 0.0),
-                                           glam::Vec3::new(transform[4], transform[5], 1.0),
+            glam::Vec3::new(transform[2], transform[3], 0.0),
+            glam::Vec3::new(transform[4], transform[5], 1.0),
         );
         let parent = self
-        .transform_stack
-        .last()
-        .copied()
-        .unwrap_or(glam::Mat3::IDENTITY);
+            .transform_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Mat3::IDENTITY);
         self.transform_stack.push(parent * affine);
     }
 
@@ -856,7 +910,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
     fn set_theme(&mut self, theme: ColorTheme) {
         self.current_theme = theme;
         self.queue
-        .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
+            .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
     }
 
     fn set_rage(&mut self, rage: f32) {
@@ -897,6 +951,34 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.recursive_bolt(from, to, 4, color);
     }
 
+    fn dispatch_particles(
+        &mut self,
+        origin: [f32; 2],
+        count: u32,
+        effect_type: &str,
+        _color: [f32; 4],
+    ) {
+        log::info!(
+            "[Surtr] Dispatching {} {} particles at {:?}",
+            count,
+            effect_type,
+            origin
+        );
+        // Stub: A full implementation would push to a compute pass command queue
+    }
+
+    fn draw_hologram(&mut self, rect: Rect, hologram_id: &str, time: f32) {
+        log::info!(
+            "[Surtr] Drawing hologram {} at {:?} (t={})",
+            hologram_id,
+            rect,
+            time
+        );
+        // Stub: In the future, this will push a DrawCall into the volumetric pass queue.
+        // For now, render a glowing wireframe box
+        self.stroke_rect(rect, [0.0, 1.0, 1.0, 0.5], 2.0);
+    }
+
     fn upload_data_texture(&mut self, id: &str, data: &[f32], width: u32, height: u32) {
         let size = wgpu::Extent3d {
             width,
@@ -905,13 +987,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
         };
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(id),
-                                                 size,
-                                                 mip_level_count: 1,
-                                                 sample_count: 1,
-                                                 dimension: wgpu::TextureDimension::D2,
-                                                 format: wgpu::TextureFormat::R32Float,
-                                                     usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-                                                     view_formats: &[],
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R32Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
         });
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -921,12 +1003,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 aspect: wgpu::TextureAspect::All,
             },
             bytemuck::cast_slice(data),
-                                 wgpu::TexelCopyBufferLayout {
-                                     offset: 0,
-                                     bytes_per_row: Some(4 * width),
-                                 rows_per_image: Some(height),
-                                 },
-                                 size,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
+            },
+            size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
@@ -970,20 +1052,21 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let (translation, scale_transform, rotation, _, _) = self.current_transform();
             self.vertices.push(Vertex {
                 position: pos.to_array(),
-                               normal: norm.to_array(),
-                               uv: [0.0, 0.0],
-                               color,
-                               material_id: 13, // Material 13: 3D Surface
-                               radius: 0.0,
-                               slice: [0.0, 0.0, 0.0, 1.0],
-                               logical: [0.0, 0.0],
-                               size: [0.0, 0.0],
-                               screen,
-                               clip: [-10000.0, -10000.0, 20000.0, 20000.0],
-                               translation,
-                               scale: scale_transform,
-                               rotation,
-                               tex_index: 0,
+                normal: norm.to_array(),
+                uv: [0.0, 0.0],
+                color,
+                material_id: 13, // Material 13: 3D Surface
+                radius: 0.0,
+                slice: [0.0, 0.0, 0.0, 1.0],
+                logical: [0.0, 0.0],
+                size: [0.0, 0.0],
+                screen,
+                clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                translation,
+                scale: scale_transform,
+                rotation,
+                tex_index: 0,
+                glyph_time: [0.0, 0.0],
             });
         }
 
@@ -994,18 +1077,24 @@ impl cvkg_core::Renderer for SurtrRenderer {
         if self.draw_calls.is_empty() || self.current_texture_id.is_some() {
             self.current_texture_id = None;
             self.draw_calls.push(DrawCall {
+                target_id: None,
                 texture_id: None,
                 scissor_rect: self.clip_stack.last().copied(),
-                                 index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
-                                 index_count: mesh.indices.len() as u32,
-                                 material: cvkg_core::DrawMaterial::Opaque,
+                index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
+                index_count: mesh.indices.len() as u32,
+                material: cvkg_core::DrawMaterial::Opaque,
             });
         } else {
             self.draw_calls.last_mut().unwrap().index_count += mesh.indices.len() as u32;
         }
     }
 
-    fn draw_mesh_3d(&mut self, mesh: &Mesh, material: &cvkg_core::Material3D, transform: &cvkg_core::Transform3D) {
+    fn draw_mesh_3d(
+        &mut self,
+        mesh: &Mesh,
+        material: &cvkg_core::Material3D,
+        transform: &cvkg_core::Transform3D,
+    ) {
         let base_idx = self.vertices.len() as u32;
         let screen = [self.current_width() as f32, self.current_height() as f32];
         let model_matrix = transform.to_matrix();
@@ -1030,6 +1119,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 scale: [1.0, 1.0],
                 rotation: 0.0,
                 tex_index: 0,
+                glyph_time: [0.0, 0.0],
             });
         }
 
@@ -1038,11 +1128,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
 
         self.draw_calls.push(DrawCall {
+            target_id: None,
             texture_id: None,
             scissor_rect: self.clip_stack.last().copied(),
-                             index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
-                             index_count: mesh.indices.len() as u32,
-                             material: cvkg_core::DrawMaterial::Opaque,
+            index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
+            index_count: mesh.indices.len() as u32,
+            material: cvkg_core::DrawMaterial::Opaque,
         });
     }
 
@@ -1054,7 +1145,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
     fn push_transform_3d(&mut self, transform: &cvkg_core::Transform3D) {
         // Push a 2D-compatible transform for the existing pipeline
         // Use proper matrix decomposition to extract scale correctly (handles rotated matrices)
-        let (translation, rotation_quat, scale_glam) = transform.to_matrix().to_scale_rotation_translation();
+        let (translation, rotation_quat, scale_glam) =
+            transform.to_matrix().to_scale_rotation_translation();
         let translation = [translation.x, translation.y];
         let scale = [scale_glam.x, scale_glam.y];
         let rotation = if rotation_quat.length_squared() > 0.0 {
@@ -1090,24 +1182,48 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let h = 0.5f32;
             let cube = Mesh {
                 vertices: vec![
-                    [-h, -h, -h], [h, -h, -h], [h, h, -h], [-h, h, -h],
-                    [-h, -h, h], [h, -h, h], [h, h, h], [-h, h, h],
+                    [-h, -h, -h],
+                    [h, -h, -h],
+                    [h, h, -h],
+                    [-h, h, -h],
+                    [-h, -h, h],
+                    [h, -h, h],
+                    [h, h, h],
+                    [-h, h, h],
                 ],
                 normals: vec![
-                    [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0], [0.0, 0.0, -1.0],
-                    [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0],
-                    [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0], [0.0, -1.0, 0.0],
-                    [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0],
-                    [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0], [0.0, 1.0, 0.0],
-                    [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0], [-1.0, 0.0, 0.0],
+                    [0.0, 0.0, -1.0],
+                    [0.0, 0.0, -1.0],
+                    [0.0, 0.0, -1.0],
+                    [0.0, 0.0, -1.0],
+                    [0.0, 0.0, 1.0],
+                    [0.0, 0.0, 1.0],
+                    [0.0, 0.0, 1.0],
+                    [0.0, 0.0, 1.0],
+                    [0.0, -1.0, 0.0],
+                    [0.0, -1.0, 0.0],
+                    [0.0, -1.0, 0.0],
+                    [0.0, -1.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
                 ],
                 indices: vec![
-                    0, 1, 2, 0, 2, 3,       // front
-                    5, 4, 7, 5, 7, 6,       // back
-                    4, 0, 3, 4, 3, 7,       // left
-                    1, 5, 6, 1, 6, 2,       // right
-                    3, 2, 6, 3, 6, 7,       // top
-                    4, 5, 1, 4, 1, 0,       // bottom
+                    0, 1, 2, 0, 2, 3, // front
+                    5, 4, 7, 5, 7, 6, // back
+                    4, 0, 3, 4, 3, 7, // left
+                    1, 5, 6, 1, 6, 2, // right
+                    3, 2, 6, 3, 6, 7, // top
+                    4, 5, 1, 4, 1, 0, // bottom
                 ],
             };
             let material = cvkg_core::Material3D::unlit(color);
@@ -1142,6 +1258,31 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.redraw_requested = true;
     }
 
+    // -- Portal / PhaseGate rendering -----------------------------------------
+
+    /// Begin rendering into the portal root layer instead of the inline tree.
+    /// All draw calls between `enter_portal` and `exit_portal` are collected
+    /// into a separate buffer that is composited AFTER the main tree.
+    ///
+    /// WHY separate buffer: The main tree may have clipping, transforms, or
+    /// opacity that should NOT affect overlays. The portal layer renders on top
+    /// of everything, ignoring the local coordinate system.
+    ///
+    /// `z_index` controls the layer ordering for portal content.
+    fn enter_portal(&mut self, z_index: i32) {
+        // Portal rendering enables per-element backdrop blur for Tahoe glass
+        // When z_index is 0, we're rendering normal glass cards
+        // When z_index > 0, we're in a portal layer that will get special treatment
+        self.current_z = z_index as f32;
+    }
+
+    /// Exit the portal layer and return to inline rendering.
+    /// The portal content collected since `enter_portal` is now sealed --
+    /// no more draw calls will be appended to it.
+    fn exit_portal(&mut self) {
+        self.current_z = 0.0;
+    }
+
     fn push_vnode(&mut self, rect: Rect, name: &'static str) {
         self.vnode_stack.push((rect, name));
     }
@@ -1156,21 +1297,21 @@ impl cvkg_core::Renderer for SurtrRenderer {
         handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
     ) {
         self.event_handlers
-        .entry(event_type.to_string())
-        .or_insert_with(Vec::new)
-        .push(handler);
+            .entry(event_type.to_string())
+            .or_insert_with(Vec::new)
+            .push(handler);
     }
 
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
         let tree = self
-        .svg_trees
-        .get(name)
-        .ok_or_else(|| format!("SVG '{}' not found", name))?;
+            .svg_trees
+            .get(name)
+            .ok_or_else(|| format!("SVG '{}' not found", name))?;
         let config = cvkg_svg_serialize::SerializerConfig::default();
         let mut serializer = cvkg_svg_serialize::SvgSerializer::with_config(config);
         serializer
-        .serialize(tree)
-        .map_err(|e| format!("SVG serialization failed: {}", e))
+            .serialize(tree)
+            .map_err(|e| format!("SVG serialization failed: {}", e))
     }
 
     fn apply_svg_filter(
@@ -1180,16 +1321,16 @@ impl cvkg_core::Renderer for SurtrRenderer {
         _region: Rect,
     ) -> Result<String, String> {
         let tree = self
-        .svg_trees
-        .get(name)
-        .ok_or_else(|| format!("SVG '{}' not found", name))?;
+            .svg_trees
+            .get(name)
+            .ok_or_else(|| format!("SVG '{}' not found", name))?;
         let _filter = Self::find_filter(tree, filter_id)
-        .ok_or_else(|| format!("Filter '{}' not found in SVG '{}'", filter_id, name))?;
+            .ok_or_else(|| format!("Filter '{}' not found in SVG '{}'", filter_id, name))?;
         let config = cvkg_svg_serialize::SerializerConfig::default();
         let mut serializer = cvkg_svg_serialize::SvgSerializer::with_config(config);
         serializer
-        .serialize(tree)
-        .map_err(|e| format!("SVG filter serialization failed: {}", e))
+            .serialize(tree)
+            .map_err(|e| format!("SVG filter serialization failed: {}", e))
     }
 }
 
@@ -1216,10 +1357,10 @@ impl SurtrRenderer {
     pub(crate) fn current_transform(&self) -> ([f32; 2], [f32; 2], f32, f32, f32) {
         // Returns (translation, scale, rotation, skew_x, skew_y)
         let m = self
-        .transform_stack
-        .last()
-        .copied()
-        .unwrap_or(glam::Mat3::IDENTITY);
+            .transform_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Mat3::IDENTITY);
         let t = [m.z_axis.x, m.z_axis.y];
         // Extract scale and rotation from the 2x2 submatrix
         let a = m.x_axis.x;
@@ -1251,21 +1392,20 @@ impl SurtrRenderer {
         });
         let clip = [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height];
 
-        let result = tessellator
-        .tessellate_path(
+        let result = tessellator.tessellate_path(
             path,
             &StrokeOptions::default().with_line_width(stroke_width),
-                         &mut BuffersBuilder::new(
-                             &mut buffers,
-                             CustomStrokeVertexConstructor {
-                                 color: c,
-                                 translation,
-                                 scale,
-                                 rotation,
-                                 screen,
-                                 clip,
-                             },
-                         ),
+            &mut BuffersBuilder::new(
+                &mut buffers,
+                CustomStrokeVertexConstructor {
+                    color: c,
+                    translation,
+                    scale,
+                    rotation,
+                    screen,
+                    clip,
+                },
+            ),
         );
         if let Err(e) = result {
             log::warn!("Failed to tessellate stroke path: {:?}", e);
@@ -1282,18 +1422,19 @@ impl SurtrRenderer {
 
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
-        || self.current_texture_id != tid
-        || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
-        || last_call.unwrap().material != material;
+            || self.current_texture_id != tid
+            || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
+            || last_call.unwrap().material != material;
 
         if needs_new_call {
             self.current_texture_id = tid;
             self.draw_calls.push(DrawCall {
+                target_id: None,
                 texture_id: tid,
                 scissor_rect: self.clip_stack.last().copied(),
-                                 index_start: base_index_idx,
-                                 index_count: buffers.indices.len() as u32,
-                                 material,
+                index_start: base_index_idx,
+                index_count: buffers.indices.len() as u32,
+                material,
             });
         } else if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += buffers.indices.len() as u32;
@@ -1305,8 +1446,8 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
     fn begin_frame(&mut self) -> wgpu::CommandEncoder {
         cvkg_core::begin_render_phase();
         let id = self
-        .current_window
-        .expect("No target window set for frame. Call set_target_window first.");
+            .current_window
+            .expect("No target window set for frame. Call set_target_window first.");
         self.begin_frame(id)
     }
 
@@ -1316,78 +1457,78 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
             && let Some(window_id) = self.current_window
             && let Some(surface_ctx) = self.surfaces.get(&window_id)
-            {
-                let w = surface_ctx.config.width as f32;
-                let h = surface_ctx.config.height as f32;
-                let border_rect = cvkg_core::Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: w,
-                    height: h,
-                };
-                // Draw a thick red border to signal layout-thrashing
-                self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+        {
+            let w = surface_ctx.config.width as f32;
+            let h = surface_ctx.config.height as f32;
+            let border_rect = cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: h,
+            };
+            // Draw a thick red border to signal layout-thrashing
+            self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+        }
+
+        // Dynamic Buffer Growth (Up to 4x capacity)
+        let req_v_size = (self.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
+        let mut cur_v_size = self.vertex_buffer.size();
+        let max_v_size = (MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64 * 4;
+
+        if req_v_size > cur_v_size {
+            while cur_v_size < req_v_size && cur_v_size < max_v_size {
+                cur_v_size *= 2;
             }
-
-            // Dynamic Buffer Growth (Up to 4x capacity)
-            let req_v_size = (self.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
-            let mut cur_v_size = self.vertex_buffer.size();
-            let max_v_size = (MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64 * 4;
-
-            if req_v_size > cur_v_size {
-                while cur_v_size < req_v_size && cur_v_size < max_v_size {
-                    cur_v_size *= 2;
-                }
-                if req_v_size > max_v_size {
-                    log::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
-                    self.vertices
+            if req_v_size > max_v_size {
+                log::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
+                self.vertices
                     .truncate((max_v_size / std::mem::size_of::<Vertex>() as u64) as usize);
-                    cur_v_size = max_v_size;
-                }
-                log::info!("Growing vertex buffer to {} bytes", cur_v_size);
-                self.vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("Vertex Buffer (Grown)"),
-                                                               size: cur_v_size,
-                                                               usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                                                               mapped_at_creation: false,
-                });
+                cur_v_size = max_v_size;
             }
-
-            let req_i_size = (self.indices.len() * std::mem::size_of::<u32>()) as u64;
-            let mut cur_i_size = self.index_buffer.size();
-            let max_i_size = (MAX_INDICES * std::mem::size_of::<u32>()) as u64 * 4;
-
-            if req_i_size > cur_i_size {
-                while cur_i_size < req_i_size && cur_i_size < max_i_size {
-                    cur_i_size *= 2;
-                }
-                if req_i_size > max_i_size {
-                    log::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
-                    self.indices
-                    .truncate((max_i_size / std::mem::size_of::<u32>() as u64) as usize);
-                    cur_i_size = max_i_size;
-                }
-                log::info!("Growing index buffer to {} bytes", cur_i_size);
-                self.index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                    label: Some("Index Buffer (Grown)"),
-                                                              size: cur_i_size,
-                                                              usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                                                              mapped_at_creation: false,
-                });
-            }
-
-            // Forge Submission: Sync all geometry to GPU using StagingBelt with a dedicated encoder
-            let mut staging_encoder =
-            self.device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Surtr Staging Encoder"),
+            log::info!("Growing vertex buffer to {} bytes", cur_v_size);
+            self.vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Vertex Buffer (Grown)"),
+                size: cur_v_size,
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
             });
+        }
 
-            let mut has_writes = false;
+        let req_i_size = (self.indices.len() * std::mem::size_of::<u32>()) as u64;
+        let mut cur_i_size = self.index_buffer.size();
+        let max_i_size = (MAX_INDICES * std::mem::size_of::<u32>()) as u64 * 4;
 
-            if !self.vertices.is_empty() {
-                let v_bytes = bytemuck::cast_slice(&self.vertices);
-                self.staging_belt
+        if req_i_size > cur_i_size {
+            while cur_i_size < req_i_size && cur_i_size < max_i_size {
+                cur_i_size *= 2;
+            }
+            if req_i_size > max_i_size {
+                log::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
+                self.indices
+                    .truncate((max_i_size / std::mem::size_of::<u32>() as u64) as usize);
+                cur_i_size = max_i_size;
+            }
+            log::info!("Growing index buffer to {} bytes", cur_i_size);
+            self.index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Index Buffer (Grown)"),
+                size: cur_i_size,
+                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+        }
+
+        // Forge Submission: Sync all geometry to GPU using StagingBelt with a dedicated encoder
+        let mut staging_encoder =
+            self.device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Surtr Staging Encoder"),
+                });
+
+        let mut has_writes = false;
+
+        if !self.vertices.is_empty() {
+            let v_bytes = bytemuck::cast_slice(&self.vertices);
+            self.staging_belt
                 .write_buffer(
                     &mut staging_encoder,
                     &self.vertex_buffer,
@@ -1395,12 +1536,12 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
                     wgpu::BufferSize::new(v_bytes.len() as u64).unwrap(),
                 )
                 .copy_from_slice(v_bytes);
-                has_writes = true;
-            }
+            has_writes = true;
+        }
 
-            if !self.indices.is_empty() {
-                let i_bytes = bytemuck::cast_slice(&self.indices);
-                self.staging_belt
+        if !self.indices.is_empty() {
+            let i_bytes = bytemuck::cast_slice(&self.indices);
+            self.staging_belt
                 .write_buffer(
                     &mut staging_encoder,
                     &self.index_buffer,
@@ -1408,30 +1549,35 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
                     wgpu::BufferSize::new(i_bytes.len() as u64).unwrap(),
                 )
                 .copy_from_slice(i_bytes);
-                has_writes = true;
-            }
+            has_writes = true;
+        }
 
-            if has_writes {
-                self.staging_belt.finish();
-                self.staging_command_buffers.push(staging_encoder.finish());
-            }
+        if has_writes {
+            self.staging_belt.finish();
+            self.staging_command_buffers.push(staging_encoder.finish());
+        }
 
-            // Update Time & Uniforms (Direct write is fine for small uniforms)
-            self.current_scene.time = self.start_time.elapsed().as_secs_f32();
-            self.queue.write_buffer(
-                &self.scene_buffer,
-                0,
-                bytemuck::bytes_of(&self.current_scene),
-            );
-            self.queue.write_buffer(
-                &self.theme_buffer,
-                0,
-                bytemuck::bytes_of(&self.current_theme),
-            );
+        // Update Time & Uniforms (Direct write is fine for small uniforms)
+        self.current_scene.time = self.start_time.elapsed().as_secs_f32();
+        self.queue.write_buffer(
+            &self.scene_buffer,
+            0,
+            bytemuck::bytes_of(&self.current_scene),
+        );
+        self.queue.write_buffer(
+            &self.theme_buffer,
+            0,
+            bytemuck::bytes_of(&self.current_theme),
+        );
+
+        // Populate telemetry for this frame
+        self.telemetry.draw_calls = self.draw_calls.len() as u32;
+        self.telemetry.vertices = self.vertices.len() as u32;
     }
 
     fn end_frame(&mut self, encoder: wgpu::CommandEncoder) {
-        Self::end_frame(self, encoder);
+        // Delegate to the inherent end_frame which runs the render graph
+        SurtrRenderer::end_frame(self, encoder);
         cvkg_core::end_render_phase();
     }
 }

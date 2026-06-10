@@ -19,7 +19,6 @@ pub struct BackdropRegionNode {
 }
 
 impl BackdropRegionNode {
-    #[allow(dead_code)]
     pub fn new(region: cvkg_core::Rect, output_id: ResourceId) -> Self {
         Self {
             inputs: vec![crate::kvasir::nodes::RES_SCENE],

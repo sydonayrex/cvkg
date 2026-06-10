@@ -8,7 +8,13 @@
 
 #![allow(dead_code)]
 
+pub mod effects;
+pub mod graph;
+pub mod node;
 pub mod nodes;
+pub mod planner;
+pub mod registry;
+pub mod resource;
 
 use std::fmt;
 

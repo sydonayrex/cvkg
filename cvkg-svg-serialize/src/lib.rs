@@ -64,29 +64,6 @@ impl Default for SerializerConfig {
     }
 }
 
-impl SerializerConfig {
-    /// Convert to usvg `WriteOptions` for the built-in serializer.
-    pub(crate) fn to_write_options(&self) -> usvg::WriteOptions {
-        let indent = if self.indent == 0 {
-            usvg::Indent::None
-        } else {
-            usvg::Indent::Spaces(self.indent as u8)
-        };
-
-        let coords_precision = self.decimal_places.min(15) as u8;
-
-        usvg::WriteOptions {
-            id_prefix: self.id_prefix.clone(),
-            preserve_text: false,
-            coordinates_precision: coords_precision,
-            transforms_precision: coords_precision,
-            use_single_quote: self.use_single_quote,
-            indent,
-            attributes_indent: usvg::Indent::None,
-        }
-    }
-}
-
 // ── Serialization Stats ──────────────────────────────────────────────────────
 
 /// Statistics about a completed serialization pass.
@@ -121,22 +98,40 @@ impl std::fmt::Display for SerializationStats {
 
 // ── SVG Serializer ───────────────────────────────────────────────────────────
 
-/// Serializes a `usvg::Tree` to valid SVG XML.
-///
-/// This is the primary type for SVG serialization. It walks the usvg DOM tree
-/// and emits XML via usvg's built-in writer with CVKG's configuration mapped
-/// to usvg's `WriteOptions`.
-pub struct SvgSerializer {
-    config: SerializerConfig,
-    stats: SerializationStats,
+pub trait SvgInterceptor {
+    /// Provide global styles to be injected into a `<style>` block at the top of the SVG.
+    fn global_styles(&self) -> Option<String> {
+        None
+    }
+
+    /// Inject custom attributes (e.g., `data-*`) into the element with the given `id`.
+    fn inject_attributes(&self, _id: &str) -> Vec<(&'static str, String)> {
+        Vec::new()
+    }
+
+    /// Inject raw child XML payloads (e.g., HTML inside `<foreignObject>`) into the element with the given `id`.
+    fn inject_children(&self, _id: &str) -> Option<String> {
+        None
+    }
 }
 
-impl SvgSerializer {
+/// Serializes a `usvg::Tree` to valid SVG XML.
+///
+/// This uses usvg's built-in writer but performs a post-processing pass using `quick-xml`
+/// to inject UI metadata, animations, and custom payloads.
+pub struct SvgSerializer<'a> {
+    config: SerializerConfig,
+    stats: SerializationStats,
+    interceptor: Option<Box<dyn SvgInterceptor + 'a>>,
+}
+
+impl<'a> SvgSerializer<'a> {
     /// Create a new serializer with default configuration.
     pub fn new() -> Self {
         Self {
             config: SerializerConfig::default(),
             stats: SerializationStats::new(),
+            interceptor: None,
         }
     }
 
@@ -145,13 +140,80 @@ impl SvgSerializer {
         Self {
             config,
             stats: SerializationStats::new(),
+            interceptor: None,
         }
+    }
+
+    /// Set the interceptor for injecting UI metadata.
+    pub fn with_interceptor(mut self, interceptor: Box<dyn SvgInterceptor + 'a>) -> Self {
+        self.interceptor = Some(interceptor);
+        self
     }
 
     /// Serialize a `usvg::Tree` to an SVG XML string.
     pub fn serialize(&mut self, tree: &usvg::Tree) -> Result<String, SvgSerializeError> {
-        let opt = self.config.to_write_options();
-        let svg_string = tree.to_string(&opt);
+        use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
+        let mut writer =
+            quick_xml::Writer::new_with_indent(Vec::new(), b' ', self.config.indent as usize);
+
+        // 1. Write SVG declaration
+        if self.config.write_svg_declaration {
+            writer
+                .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+                    "1.0",
+                    Some("UTF-8"),
+                    None,
+                )))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+        }
+
+        // 2. Write <svg> root element
+        let mut root_elem = BytesStart::new("svg");
+        root_elem.push_attribute(("xmlns", "http://www.w3.org/2000/svg"));
+        for (prefix, uri) in &self.config.custom_namespaces {
+            root_elem.push_attribute((format!("xmlns:{}", prefix).as_str(), uri.as_str()));
+        }
+
+        let width_str = format_svg_float(tree.size().width(), self.config.decimal_places);
+        let height_str = format_svg_float(tree.size().height(), self.config.decimal_places);
+        root_elem.push_attribute(("width", width_str.as_str()));
+        root_elem.push_attribute(("height", height_str.as_str()));
+        root_elem.push_attribute((
+            "viewBox",
+            format!("0 0 {} {}", width_str, height_str).as_str(),
+        ));
+
+        writer
+            .write_event(Event::Start(root_elem))
+            .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+
+        // 3. Global Styles
+        if let Some(interceptor) = &self.interceptor {
+            if let Some(styles) = interceptor.global_styles() {
+                writer
+                    .write_event(Event::Start(BytesStart::new("style")))
+                    .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+                writer
+                    .write_event(Event::Text(BytesText::new(&styles)))
+                    .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+                writer
+                    .write_event(Event::End(BytesEnd::new("style")))
+                    .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+            }
+        }
+
+        // 4. Recursive Traversal
+        self.serialize_node(
+            usvg::Node::Group(Box::new(tree.root().clone())),
+            &mut writer,
+        )?;
+
+        // 5. Close <svg>
+        writer
+            .write_event(Event::End(BytesEnd::new("svg")))
+            .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+
+        let svg_string = String::from_utf8(writer.into_inner()).unwrap();
 
         // Enforce output size limit if configured.
         if self.config.max_output_size > 0 && svg_string.len() > self.config.max_output_size {
@@ -166,6 +228,94 @@ impl SvgSerializer {
         self.stats.element_count = count_xml_elements(&svg_string);
 
         Ok(svg_string)
+    }
+
+    fn serialize_node<W: std::io::Write>(
+        &self,
+        node: usvg::Node,
+        writer: &mut quick_xml::Writer<W>,
+    ) -> Result<(), SvgSerializeError> {
+        use quick_xml::events::{BytesEnd, BytesStart, Event};
+
+        let tag_name = match &node {
+            usvg::Node::Group(_) => "g",
+            usvg::Node::Path(_) => "path",
+            usvg::Node::Image(_) => "image",
+            usvg::Node::Text(_) => "text",
+        };
+
+        let mut elem = BytesStart::new(tag_name);
+
+        let mut node_id = String::new();
+        for (k, v) in node.to_svg_attrs() {
+            if k == "id" {
+                node_id = v.clone();
+                // apply id prefix
+                if let Some(prefix) = &self.config.id_prefix {
+                    node_id = format!("{}{}", prefix, node_id);
+                    elem.push_attribute((k, node_id.as_str()));
+                    continue;
+                }
+            }
+            elem.push_attribute((k, v.as_str()));
+        }
+
+        let injected_attrs = if let Some(interceptor) = &self.interceptor {
+            if !node_id.is_empty() {
+                interceptor.inject_attributes(&node_id)
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        };
+
+        for (k, v) in injected_attrs {
+            elem.push_attribute((k, v.as_str()));
+        }
+
+        let child_payload = if let Some(interceptor) = &self.interceptor {
+            if !node_id.is_empty() {
+                interceptor.inject_children(&node_id)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let children = node.children();
+        let has_children = children.map_or(false, |c| !c.is_empty());
+        let has_payload = child_payload.is_some();
+
+        if !has_children && !has_payload {
+            writer
+                .write_event(Event::Empty(elem))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+        } else {
+            writer
+                .write_event(Event::Start(elem))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+
+            if let Some(payload) = child_payload {
+                writer
+                    .get_mut()
+                    .write_all(payload.as_bytes())
+                    .map_err(SvgSerializeError::Io)?;
+            }
+
+            if let Some(children_nodes) = children {
+                for child in children_nodes {
+                    self.serialize_node(child.clone(), writer)?;
+                }
+            }
+
+            writer
+                .write_event(Event::End(BytesEnd::new(tag_name)))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+        }
+
+        Ok(())
     }
 
     /// Serialize a `usvg::Tree` to SVG XML and write it to the given writer.
@@ -201,7 +351,7 @@ impl SvgSerializer {
     }
 }
 
-impl Default for SvgSerializer {
+impl<'a> Default for SvgSerializer<'a> {
     fn default() -> Self {
         Self::new()
     }
@@ -694,5 +844,57 @@ mod tests {
         assert!(result.starts_with("matrix("), "Got: {result}");
         assert!(result.contains("10"), "Expected 10 in: {result}");
         assert!(result.contains("20"), "Expected 20 in: {result}");
+    }
+
+    struct TestInterceptor;
+    impl SvgInterceptor for TestInterceptor {
+        fn global_styles(&self) -> Option<String> {
+            Some(".my-anim { animation: pulse 1s; }".to_string())
+        }
+
+        fn inject_attributes(&self, id: &str) -> Vec<(&'static str, String)> {
+            if id == "test_node" {
+                vec![("data-state", "hover".to_string())]
+            } else {
+                Vec::new()
+            }
+        }
+
+        fn inject_children(&self, id: &str) -> Option<String> {
+            if id == "test_node" {
+                Some("<foreignObject><div>Hello</div></foreignObject>".to_string())
+            } else {
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn test_svg_interceptor_hydration() {
+        let svg_input = r#"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><g id="test_node"><rect width="50" height="50"/></g><rect id="empty_node" width="10" height="10"/></svg>"#;
+        let tree =
+            usvg::Tree::from_str(svg_input, &usvg::Options::default()).expect("parse failed");
+
+        let mut serializer = SvgSerializer::new().with_interceptor(Box::new(TestInterceptor));
+        let xml = serializer.serialize(&tree).expect("serialize failed");
+
+        assert!(
+            xml.contains("<style>.my-anim { animation: pulse 1s; }</style>"),
+            "Missing global styles: {}",
+            xml
+        );
+        assert!(
+            xml.contains("data-state=\"hover\""),
+            "Missing injected attribute: {}",
+            xml
+        );
+        assert!(
+            xml.contains("<foreignObject><div>Hello</div></foreignObject>"),
+            "Missing injected children: {}",
+            xml
+        );
+
+        // Also verify empty_node converted properly if it matched
+        assert!(xml.contains(r#"id="empty_node""#));
     }
 }

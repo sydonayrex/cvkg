@@ -22,7 +22,7 @@ fn draw_triangle_fuse(
     speed: f32,
 ) {
     let pts = [p1, p2, p3, p1];
-    
+
     // Draw the dim background triangle
     renderer.draw_line(p1[0], p1[1], p2[0], p2[1], [0.0, 0.4, 0.3, 0.35], 2.5);
     renderer.draw_line(p2[0], p2[1], p3[0], p3[1], [0.0, 0.4, 0.3, 0.35], 2.5);
@@ -33,23 +33,23 @@ fn draw_triangle_fuse(
     let head = (time * speed) % total_len;
     let tail_len = 0.9f32;
     let start = head - tail_len;
-    
+
     // Draw the path from start to head
     let num_steps = 24;
     for i in 0..num_steps {
         let t1 = start + (i as f32 / num_steps as f32) * tail_len;
         let t2 = start + ((i + 1) as f32 / num_steps as f32) * tail_len;
-        
+
         let p_start = get_triangle_point(&pts, t1);
         let p_end = get_triangle_point(&pts, t2);
-        
+
         // Make it brighter towards the head (fuse tip)
         let alpha = (i as f32 / num_steps as f32).powi(2);
         let color = [0.0, 1.0, 0.8, alpha];
         let thickness = 2.0 + alpha * 2.5;
         renderer.draw_line(p_start[0], p_start[1], p_end[0], p_end[1], color, thickness);
     }
-    
+
     // Draw a bright spark at the fuse head
     let spark_pos = get_triangle_point(&pts, head);
     renderer.draw_radial_gradient(
@@ -66,15 +66,17 @@ fn draw_triangle_fuse(
 
 fn get_triangle_point(pts: &[[f32; 2]; 4], mut t: f32) -> [f32; 2] {
     let total_len = 3.0f32;
-    while t < 0.0 { t += total_len; }
+    while t < 0.0 {
+        t += total_len;
+    }
     t = t % total_len;
-    
+
     let segment_idx = t.floor() as usize;
     let local_t = t.fract();
-    
+
     let p_start = pts[segment_idx];
     let p_end = pts[segment_idx + 1];
-    
+
     [
         p_start[0] + (p_end[0] - p_start[0]) * local_t,
         p_start[1] + (p_end[1] - p_start[1]) * local_t,
@@ -133,7 +135,10 @@ impl DemoState {
             frame_count: 0,
             start: Instant::now(),
             mouse_pos: [0.0, 0.0],
-            card_effects: [CardEffect { effect_type: 0, progress: 0.0 }; 3],
+            card_effects: [CardEffect {
+                effect_type: 0,
+                progress: 0.0,
+            }; 3],
         }
     }
 
@@ -233,7 +238,11 @@ impl ApplicationHandler for App {
 
                 for i in 0..3 {
                     let card_x = spacing + i as f32 * (card_width + spacing);
-                    if mx >= card_x && mx <= card_x + card_width && my >= card_y && my <= card_y + card_height {
+                    if mx >= card_x
+                        && mx <= card_x + card_width
+                        && my >= card_y
+                        && my <= card_y + card_height
+                    {
                         if button == MouseButton::Left {
                             self.state.card_effects[i].effect_type = 1; // slice
                             self.state.card_effects[i].progress = 0.0;
@@ -360,7 +369,7 @@ impl ApplicationHandler for App {
                     p.life -= dt;
                     let alpha = p.life.min(1.0).max(0.0);
                     let c = [p.color[0], p.color[1], p.color[2], p.color[3] * alpha];
-                    
+
                     // Render particles as soft glowing points using radial gradients instead of hard quads
                     let size_multiplier = if p.is_ember { 2.5 } else { 2.0 };
                     let radius = p.size * size_multiplier;
@@ -451,22 +460,22 @@ impl ApplicationHandler for App {
                         let cx = card_x + card_width * 0.5;
                         let cy = card_y - 70.0;
                         let s = 55.0;
-                        
+
                         // Triangle 1 (top, points pointing up)
                         let t1_p1 = [cx, cy - s * 0.9];
                         let t1_p2 = [cx + s * 0.5, cy + s * 0.1];
                         let t1_p3 = [cx - s * 0.5, cy + s * 0.1];
-                        
+
                         // Triangle 2 (bottom-right, points pointing up, shifted right and down)
                         let t2_p1 = [cx + s * 0.3, cy - s * 0.3];
                         let t2_p2 = [cx + s * 0.8, cy + s * 0.6];
                         let t2_p3 = [cx - s * 0.2, cy + s * 0.6];
-                        
+
                         // Triangle 3 (bottom-left, points pointing up, shifted left and down)
                         let t3_p1 = [cx - s * 0.3, cy - s * 0.3];
                         let t3_p2 = [cx + s * 0.2, cy + s * 0.6];
                         let t3_p3 = [cx - s * 0.8, cy + s * 0.6];
-                        
+
                         // Draw all three interlocking triangles with offset animation times so they trace continuously!
                         draw_triangle_fuse(renderer, t1_p1, t1_p2, t1_p3, t, 1.2);
                         draw_triangle_fuse(renderer, t2_p1, t2_p2, t2_p3, t + 1.0, 1.2);
@@ -484,7 +493,12 @@ impl ApplicationHandler for App {
                         // Shatter effect: render shards of the glass card using mjolnir_shatter
                         // As progress goes from 0.0 to 1.0, the force increases from 0.0 to 6.0
                         let force = effect.progress * 6.0;
-                        renderer.mjolnir_shatter(card_rect, 256, force, [0.0, 1.0, 0.8, 1.0 - effect.progress]);
+                        renderer.mjolnir_shatter(
+                            card_rect,
+                            256,
+                            force,
+                            [0.0, 1.0, 0.8, 1.0 - effect.progress],
+                        );
                     } else {
                         // Draw normal card (or sliced card)
                         if effect.effect_type == 1 {

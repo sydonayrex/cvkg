@@ -741,7 +741,7 @@ impl SurtrRenderer {
             label: Some("Muspelheim Glass"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &glass_shader,
+                module: &opaque_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Vertex::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),

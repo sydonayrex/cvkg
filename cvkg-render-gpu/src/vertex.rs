@@ -1,5 +1,7 @@
 //! Vertex layouts, instance data, and tessellation vertex constructors.
-use lyon::tessellation::{FillVertex, FillVertexConstructor, StrokeVertex, StrokeVertexConstructor};
+use lyon::tessellation::{
+    FillVertex, FillVertexConstructor, StrokeVertex, StrokeVertexConstructor,
+};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -19,6 +21,7 @@ pub struct Vertex {
     pub scale: [f32; 2],
     pub rotation: f32,
     pub tex_index: u32,
+    pub glyph_time: [f32; 2],
 }
 
 /// Per-instance data for instanced rendering.
@@ -35,12 +38,17 @@ pub struct InstanceData {
 
 impl Default for InstanceData {
     fn default() -> Self {
-        Self { translation: [0.0, 0.0], scale: [1.0, 1.0], rotation: 0.0, _pad: 0.0 }
+        Self {
+            translation: [0.0, 0.0],
+            scale: [1.0, 1.0],
+            rotation: 0.0,
+            _pad: 0.0,
+        }
     }
 }
 
 impl Vertex {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 15] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 16] = wgpu::vertex_attr_array![
         0 => Float32x3, // position
         1 => Float32x3, // normal
         2 => Float32x2, // uv
@@ -55,7 +63,8 @@ impl Vertex {
         11 => Float32x2, // translation
         12 => Float32x2, // scale
         13 => Float32,   // rotation
-        14 => Uint32     // tex_index
+        14 => Uint32,    // tex_index
+        15 => Float32x2  // glyph_time
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -103,6 +112,7 @@ impl StrokeVertexConstructor<Vertex> for CustomStrokeVertexConstructor {
             scale: self.scale,
             rotation: self.rotation,
             tex_index: 0,
+            glyph_time: [0.0, 0.0],
         }
     }
 }
@@ -125,7 +135,7 @@ impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
             scale: self.scale,
             rotation: self.rotation,
             tex_index: 0,
+            glyph_time: [0.0, 0.0],
         }
     }
 }
-

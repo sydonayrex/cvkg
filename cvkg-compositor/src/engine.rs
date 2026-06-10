@@ -12,6 +12,7 @@
 //! 3. `overlay_commands` — Foreground UI (Top-Level pass)
 
 use crate::layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
+use cvkg_core::Rect;
 use log::warn;
 
 /// Draw command tagged with its source layer material.
@@ -28,16 +29,31 @@ pub struct RoutedDrawCommand {
     pub z_index: u32,
 }
 
+/// A command emitted by the compositor to control the GPU rendering pipeline.
+#[derive(Debug, Clone)]
+pub enum RenderCommand {
+    /// Standard geometry draw call.
+    Draw(RoutedDrawCommand),
+    /// Instructs the GPU to bind an offscreen texture for the subsequent commands.
+    PushOffscreen {
+        source_layer: LayerId,
+        material: Material,
+        bounds: Rect,
+    },
+    /// Instructs the GPU to unbind the offscreen texture, and draw it.
+    PopOffscreen,
+}
+
 /// Segmented command buckets produced by flatten_and_route().
 /// Each bucket corresponds to a GPU pass in the Backdrop Capture Architecture.
 #[derive(Debug, Default)]
 pub struct CommandBuckets {
     /// Commands for the Scene Capture pass (opaque background + standard UI).
-    pub scene_commands: Vec<RoutedDrawCommand>,
+    pub scene_commands: Vec<RenderCommand>,
     /// Commands for the Material Composite pass (glass elements sampling blur pyramid).
-    pub glass_commands: Vec<RoutedDrawCommand>,
+    pub glass_commands: Vec<RenderCommand>,
     /// Commands for the Top-Level / Foreground pass (crisp text, icons, edge lighting).
-    pub overlay_commands: Vec<RoutedDrawCommand>,
+    pub overlay_commands: Vec<RenderCommand>,
 }
 
 impl CommandBuckets {
@@ -77,13 +93,15 @@ pub struct CompositorEngine {
     /// The retained layer tree.
     layer_tree: LayerTree,
     /// Reusable buffer for flattening (avoids per-frame allocation).
-    flatten_buffer: Vec<RoutedDrawCommand>,
+    flatten_buffer: Vec<RenderCommand>,
     /// The last frame generation that was flattened.
     last_flatten_generation: u64,
     /// Damage information for the current frame.
     current_damage: DamageInfo,
     /// Z-order counter during flattening.
     z_counter: u32,
+    /// True if the current tree contains an active ShaderEffect
+    has_active_shaders: bool,
 }
 
 impl Default for CompositorEngine {
@@ -101,6 +119,7 @@ impl CompositorEngine {
             last_flatten_generation: 0,
             current_damage: DamageInfo::default(),
             z_counter: 0,
+            has_active_shaders: false,
         }
     }
 
@@ -164,6 +183,7 @@ impl CompositorEngine {
         // Use the reusable buffer to avoid per-frame allocation.
         self.flatten_buffer.clear();
         self.z_counter = 0;
+        self.has_active_shaders = false;
 
         // Flatten the tree depth-first, back-to-front.
         let roots = self.layer_tree.roots().to_vec();
@@ -172,41 +192,44 @@ impl CompositorEngine {
             &roots,
             &mut self.flatten_buffer,
             &mut self.z_counter,
+            &mut self.has_active_shaders,
         );
 
         // Route into buckets by material.
         for cmd in &self.flatten_buffer {
-            match cmd.material {
-                Material::Opaque
-                | Material::Multiply
-                | Material::Screen
-                | Material::BlendOverlay
-                | Material::Darken
-                | Material::Lighten
-                | Material::ColorDodge
-                | Material::ColorBurn
-                | Material::HardLight
-                | Material::SoftLight
-                | Material::Difference
-                | Material::Exclusion
-                | Material::Hue
-                | Material::Saturation
-                | Material::Color
-                | Material::Luminosity => {
+            match cmd {
+                RenderCommand::Draw(routed) => match routed.material {
+                    Material::Opaque
+                    | Material::Multiply
+                    | Material::Screen
+                    | Material::BlendOverlay
+                    | Material::Darken
+                    | Material::Lighten
+                    | Material::ColorDodge
+                    | Material::ColorBurn
+                    | Material::HardLight
+                    | Material::SoftLight
+                    | Material::Difference
+                    | Material::Exclusion
+                    | Material::Hue
+                    | Material::Saturation
+                    | Material::Color
+                    | Material::Luminosity => {
+                        buckets.scene_commands.push(cmd.clone());
+                    }
+                    Material::Isolated | Material::ShaderEffect { .. } => {
+                        buckets.scene_commands.push(cmd.clone());
+                    }
+                    Material::Glass { .. } => {
+                        buckets.glass_commands.push(cmd.clone());
+                    }
+                    Material::Overlay => {
+                        buckets.overlay_commands.push(cmd.clone());
+                    }
+                },
+                RenderCommand::PushOffscreen { .. } | RenderCommand::PopOffscreen => {
+                    // Push and Pop currently always map to the scene pass where offscreen textures are processed
                     buckets.scene_commands.push(cmd.clone());
-                }
-                Material::Isolated => {
-                    // Isolated layers are rendered to an off-screen buffer first,
-                    // then composited back. For now, route to scene pass with
-                    // the Isolated material tag so the renderer knows to use
-                    // an off-screen target.
-                    buckets.scene_commands.push(cmd.clone());
-                }
-                Material::Glass { .. } => {
-                    buckets.glass_commands.push(cmd.clone());
-                }
-                Material::Overlay => {
-                    buckets.overlay_commands.push(cmd.clone());
                 }
             }
         }
@@ -227,19 +250,21 @@ impl CompositorEngine {
     fn flatten_tree(
         layer_tree: &mut LayerTree,
         layer_ids: &[LayerId],
-        buffer: &mut Vec<RoutedDrawCommand>,
+        buffer: &mut Vec<RenderCommand>,
         z_counter: &mut u32,
+        has_active_shaders: &mut bool,
     ) {
         for layer_id in layer_ids {
-            Self::flatten_layer(layer_tree, *layer_id, buffer, z_counter);
+            Self::flatten_layer(layer_tree, *layer_id, buffer, z_counter, has_active_shaders);
         }
     }
 
     fn flatten_layer(
         layer_tree: &mut LayerTree,
         layer_id: LayerId,
-        buffer: &mut Vec<RoutedDrawCommand>,
+        buffer: &mut Vec<RenderCommand>,
         z_counter: &mut u32,
+        has_active_shaders: &mut bool,
     ) {
         let layer = match layer_tree.get_layer(layer_id) {
             Some(l) => l,
@@ -256,27 +281,49 @@ impl CompositorEngine {
             return;
         }
 
-        let material = layer.material;
+        let material = layer.material.clone();
         let draw_list: Vec<_> = layer.draw_list.to_vec();
         let children: Vec<_> = layer.children.iter().rev().cloned().collect();
+        let bounds = layer.bounds;
+
+        let is_offscreen = matches!(material, Material::Isolated | Material::ShaderEffect { .. });
+
+        if is_offscreen {
+            buffer.push(RenderCommand::PushOffscreen {
+                source_layer: layer_id,
+                material: material.clone(),
+                bounds,
+            });
+
+            if matches!(material, Material::ShaderEffect { .. }) {
+                *has_active_shaders = true;
+            }
+        }
 
         for cmd in &draw_list {
-            buffer.push(RoutedDrawCommand {
+            buffer.push(RenderCommand::Draw(RoutedDrawCommand {
                 command: cmd.clone(),
-                material,
+                material: material.clone(),
                 source_layer: layer_id,
                 z_index: *z_counter,
-            });
+            }));
             *z_counter += 1;
         }
 
         for child_id in &children {
-            Self::flatten_layer(layer_tree, *child_id, buffer, z_counter);
+            Self::flatten_layer(layer_tree, *child_id, buffer, z_counter, has_active_shaders);
+        }
+
+        if is_offscreen {
+            buffer.push(RenderCommand::PopOffscreen);
         }
     }
 
     /// Returns true if the layer tree has been modified since the last flatten.
     pub fn needs_reflatten(&self) -> bool {
+        if self.has_active_shaders {
+            return true;
+        }
         if self.current_damage.full_rebuild_needed {
             return true;
         }
@@ -298,5 +345,6 @@ impl CompositorEngine {
         self.last_flatten_generation = 0;
         self.current_damage = DamageInfo::default();
         self.z_counter = 0;
+        self.has_active_shaders = false;
     }
 }

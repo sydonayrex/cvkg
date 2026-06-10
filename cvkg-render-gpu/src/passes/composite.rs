@@ -115,16 +115,12 @@ impl KvasirNode for CompositeNode {
                 ],
             })
         } else {
-            // We can't return a reference easily from the `if let`, so we just bind dummy directly later.
-            panic!("unreachable") // handled below
+            // No bloom texture needed — use dummy bind group for pass compatibility
+            dummy_bg.clone()
         };
 
         p.set_bind_group(0, &scene_texture_bind_group, &[]);
-        if self.has_bloom {
-            p.set_bind_group(1, &bloom_bg, &[]);
-        } else {
-            p.set_bind_group(1, dummy_bg, &[]);
-        }
+        p.set_bind_group(1, &bloom_bg, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
         p.draw(0..3, 0..1);
     }

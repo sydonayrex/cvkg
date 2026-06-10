@@ -36,6 +36,12 @@ path = "src/lib.rs"
 [dependencies.cvkg-core]
 version = "0.2.9"
 
+[dependencies.cvkg-anim]
+version = "0.2.9"
+
+[dependencies.glam]
+version = "0.30"
+
 [dependencies.rayon]
 version = "1.12"
 optional = true

@@ -77,6 +77,8 @@ pub struct FilterEngine {
     lut_view: Option<wgpu::TextureView>,
     /// Uploaded image textures for feImage primitives.
     image_textures: HashMap<String, (wgpu::Texture, wgpu::TextureView)>,
+    /// Current time for animated uniforms
+    current_time: f32,
 }
 
 /// Context for a single filter evaluation pass.
@@ -89,6 +91,12 @@ pub struct FilterContext<'a> {
     pub element_bbox: usvg::NonZeroRect,
     /// Color interpolation mode.
     pub color_interpolation: usvg::filter::ColorInterpolation,
+    /// Backdrop texture for glassmorphism
+    pub backdrop_view: Option<&'a wgpu::TextureView>,
+    /// Time parameter for animated filters
+    pub time: f32,
+    /// The full screen size (width, height)
+    pub screen_size: (u32, u32),
 }
 
 /// Result of evaluating a single filter primitive.
@@ -123,6 +131,10 @@ pub enum FilterInput {
     SourceGraphic,
     /// The source graphic's alpha channel.
     SourceAlpha,
+    /// The backdrop image (rendered behind the element).
+    BackdropImage,
+    /// The backdrop image's alpha channel.
+    BackdropAlpha,
     /// Output of another filter primitive by result name.
     Reference(String),
 }
@@ -186,6 +198,8 @@ impl FilterGraph {
         match input {
             FilterInput::SourceGraphic => Ok(ResolvedInput::SourceGraphic),
             FilterInput::SourceAlpha => Ok(ResolvedInput::SourceAlpha),
+            FilterInput::BackdropImage => Ok(ResolvedInput::BackdropImage),
+            FilterInput::BackdropAlpha => Ok(ResolvedInput::BackdropAlpha),
             FilterInput::Reference(name) => {
                 if let Some(&idx) = self.name_to_index.get(name) {
                     Ok(ResolvedInput::NodeIndex(idx))
@@ -194,6 +208,8 @@ impl FilterGraph {
                     match name.as_str() {
                         "SourceGraphic" => Ok(ResolvedInput::SourceGraphic),
                         "SourceAlpha" => Ok(ResolvedInput::SourceAlpha),
+                        "BackgroundImage" => Ok(ResolvedInput::BackdropImage),
+                        "BackgroundAlpha" => Ok(ResolvedInput::BackdropAlpha),
                         _ => Err(FilterError::UnresolvedInput(name.clone())),
                     }
                 }
@@ -267,7 +283,11 @@ impl FilterGraph {
         match input {
             usvg::filter::Input::SourceGraphic => FilterInput::SourceGraphic,
             usvg::filter::Input::SourceAlpha => FilterInput::SourceAlpha,
-            usvg::filter::Input::Reference(name) => FilterInput::Reference(name.clone()),
+            usvg::filter::Input::Reference(name) => match name.as_str() {
+                "BackgroundImage" => FilterInput::BackdropImage,
+                "BackgroundAlpha" => FilterInput::BackdropAlpha,
+                _ => FilterInput::Reference(name.clone()),
+            },
         }
     }
 
@@ -335,6 +355,8 @@ impl FilterGraph {
 pub enum ResolvedInput {
     SourceGraphic,
     SourceAlpha,
+    BackdropImage,
+    BackdropAlpha,
     NodeIndex(usize),
 }
 
@@ -463,7 +485,7 @@ struct FilterUniforms {
     light_specular_k: f32,
     light_shininess: f32,
     light_surface_scale: f32,
-    _lpad: f32,
+    time: f32,
 }
 
 impl Default for FilterUniforms {
@@ -505,7 +527,7 @@ impl Default for FilterUniforms {
             light_specular_k: 0.5,
             light_shininess: 32.0,
             light_surface_scale: 1.0,
-            _lpad: 0.0,
+            time: 0.0,
         }
     }
 }
@@ -604,7 +626,7 @@ impl FilterEngine {
                             visibility: wgpu::ShaderStages::FRAGMENT,
                             ty: wgpu::BindingType::Texture {
                                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D1,
+                                view_dimension: wgpu::TextureViewDimension::D2,
                                 multisampled: false,
                             },
                             count: None,
@@ -698,6 +720,7 @@ impl FilterEngine {
             lut_texture: None,
             lut_view: None,
             image_textures: HashMap::new(),
+            current_time: 0.0,
         })
     }
 
@@ -719,6 +742,7 @@ impl FilterEngine {
         uniforms.mode = mode;
         uniforms.sub_mode = sub_mode;
         uniforms.src_size = [input_size.0, input_size.1, 0.0, 0.0];
+        uniforms.time = self.current_time;
         if src2_size.0 > 0.0 {
             uniforms.src2_size = [src2_size.0, src2_size.1, 0.0, 0.0];
         }
@@ -806,6 +830,41 @@ impl FilterEngine {
         Ok(())
     }
 
+    fn crop_backdrop(
+        &mut self,
+        backdrop_view: &wgpu::TextureView,
+        screen_size: (u32, u32),
+        region: (u32, u32, u32, u32),
+    ) -> Result<FilterResult, FilterError> {
+        let out_view = self.get_temp_view(region.2, region.3)?;
+        let mut uniforms = FilterUniforms::default();
+        uniforms.region = [
+            region.0 as f32,
+            region.1 as f32,
+            region.2 as f32,
+            region.3 as f32,
+        ];
+
+        // Use MODE_BACKDROP_CROP (18) to extract from full screen to filter region
+        self.render_pass(
+            backdrop_view,
+            &self.linear_sampler,
+            (screen_size.0 as f32, screen_size.1 as f32),
+            &out_view,
+            18,
+            0,
+            &uniforms,
+            None,
+            None,
+            (0.0, 0.0),
+        )?;
+
+        Ok(FilterResult {
+            output_view: std::sync::Arc::new(out_view),
+            region,
+        })
+    }
+
     fn get_temp_view(&mut self, width: u32, height: u32) -> Result<wgpu::TextureView, FilterError> {
         for (i, tex) in self.temp_textures.iter().enumerate() {
             if tex.width() == width && tex.height() == height {
@@ -840,11 +899,12 @@ impl FilterEngine {
     }
 
     /// Evaluate a complete filter graph, returning the final output view.
-    pub fn evaluate_graph(
+    pub fn evaluate<'a>(
         &mut self,
         graph: &FilterGraph,
-        ctx: &FilterContext,
+        ctx: &FilterContext<'a>,
     ) -> Result<FilterResult, FilterError> {
+        self.current_time = ctx.time;
         if graph.nodes().is_empty() {
             return Ok(FilterResult {
                 output_view: std::sync::Arc::new(ctx.source_view.clone()),
@@ -853,6 +913,7 @@ impl FilterEngine {
         }
 
         let mut results: HashMap<usize, std::sync::Arc<wgpu::TextureView>> = HashMap::new();
+        let mut cached_backdrop: Option<std::sync::Arc<wgpu::TextureView>> = None;
 
         for node in graph.nodes() {
             let padding = filter_padding(&node.kind);
@@ -868,12 +929,40 @@ impl FilterEngine {
                 .iter()
                 .map(|input| match graph.resolve_input(input)? {
                     ResolvedInput::SourceGraphic => Ok(ctx.source_view),
-                    ResolvedInput::SourceAlpha => Ok(ctx.source_view),
-                    ResolvedInput::NodeIndex(idx) => {
-                        results.get(&idx).map(|v| v.as_ref()).ok_or_else(|| {
-                            FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))
+                    ResolvedInput::SourceAlpha => Ok(ctx.source_view), // Alpha extraction handled implicitly by primitives or a separate pass
+                    ResolvedInput::BackdropImage | ResolvedInput::BackdropAlpha => {
+                        if cached_backdrop.is_none() {
+                            let bv = ctx.backdrop_view.ok_or_else(|| {
+                                FilterError::UnresolvedInput(
+                                    "Backdrop view requested but not provided".to_string(),
+                                )
+                            })?;
+                            let cropped = self.crop_backdrop(bv, ctx.screen_size, ctx.region)?;
+                            cached_backdrop = Some(cropped.output_view);
+                        }
+                        // Note: BackdropAlpha could be extracted similarly to SourceAlpha
+                        // but most primitives just use the alpha channel of the image.
+                        // We will borrow the arc's content for the lifetime of this iteration.
+                        // Since `input_views` borrows from `ctx` or `results`, we have to be careful about lifetimes.
+                        // We can't return a reference to `cached_backdrop.as_ref().unwrap() ` easily if it escapes the closure
+                        // wait, `map` closure returns `Result<&wgpu::TextureView, ...>`.
+                        // Let's refactor this.
+                        Ok(unsafe {
+                            std::mem::transmute::<&wgpu::TextureView, &'a wgpu::TextureView>(
+                                cached_backdrop.as_ref().unwrap().as_ref(),
+                            )
                         })
                     }
+                    ResolvedInput::NodeIndex(idx) => results
+                        .get(&idx)
+                        .map(|v| unsafe {
+                            std::mem::transmute::<&wgpu::TextureView, &'a wgpu::TextureView>(
+                                v.as_ref(),
+                            )
+                        })
+                        .ok_or_else(|| {
+                            FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))
+                        }),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -1153,9 +1242,7 @@ impl FilterEngine {
             usvg::filter::CompositeOperator::Out => 2u32,
             usvg::filter::CompositeOperator::Atop => 3u32,
             usvg::filter::CompositeOperator::Xor => 4u32,
-            usvg::filter::CompositeOperator::Arithmetic {
-                k1, k2, k3, k4,
-            } => {
+            usvg::filter::CompositeOperator::Arithmetic { k1, k2, k3, k4 } => {
                 params.param0 = k1;
                 params.param1 = k2;
                 params.param2 = k3;
@@ -2091,8 +2178,7 @@ impl FilterEngine {
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.image_textures
-            .insert(key.to_string(), (texture, view));
+        self.image_textures.insert(key.to_string(), (texture, view));
         Ok(())
     }
 
@@ -2109,7 +2195,6 @@ impl FilterEngine {
             region: (0, 0, w, h),
         })
     }
-
 
     /// Current version of the cvkg-svg-filters crate.
     pub const VERSION: &str = env!("CARGO_PKG_VERSION");

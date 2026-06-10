@@ -333,7 +333,7 @@ impl KvasirNode for GlassNode {
 
         let ctx_blur_env_bind_group_a = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("glass_blur_bg"),
-            layout: &ctx.renderer.texture_bind_group_layout,
+            layout: &ctx.renderer.env_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,

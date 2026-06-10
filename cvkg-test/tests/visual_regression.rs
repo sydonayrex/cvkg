@@ -1,4 +1,4 @@
-use cvkg_core::{Rect, Renderer, View, FrameRenderer};
+use cvkg_core::{FrameRenderer, Rect, Renderer, View};
 use cvkg_render_gpu::SurtrRenderer;
 use cvkg_test::VisualComparator;
 
@@ -97,7 +97,7 @@ async fn test_generate_niflheim_screenshot() {
     let mut renderer = SurtrRenderer::forge_headless(width, height).await;
 
     let encoder = renderer.begin_frame_headless();
-    
+
     // Clear/Background
     renderer.fill_rect(
         Rect {
@@ -110,12 +110,15 @@ async fn test_generate_niflheim_screenshot() {
     );
 
     let view = cvkg_components::niflheim_demo();
-    view.render(&mut renderer, Rect {
-        x: 0.0,
-        y: 0.0,
-        width: width as f32,
-        height: height as f32,
-    });
+    view.render(
+        &mut renderer,
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
+    );
 
     renderer.render_frame();
     renderer.end_frame(encoder);
@@ -123,9 +126,10 @@ async fn test_generate_niflheim_screenshot() {
     let pixels = renderer.capture_frame().await.expect("Capture failed");
 
     // Save as PNG
-    let img_buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width, height, pixels)
-        .expect("Failed to create image buffer");
-    
+    let img_buffer =
+        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width, height, pixels)
+            .expect("Failed to create image buffer");
+
     let out_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .unwrap()

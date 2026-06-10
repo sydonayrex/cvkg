@@ -68,7 +68,7 @@ struct FilterParams {
     light_specular_k: f32,
     light_shininess:  f32,
     light_surface_scale: f32,
-    _lpad:            f32,
+    time:            f32,
     // Component transfer LUT (sampled via a separate texture binding)
     // The LUT is passed as a 2D texture (256x4) with each channel in a row
 };
@@ -97,6 +97,7 @@ const MODE_NORMAL_MAP:      u32 = 14u;
 const MODE_DIFFUSE_LIGHT:   u32 = 15u;
 const MODE_SPECULAR_LIGHT:  u32 = 16u;
 const MODE_COMPONENT_XFER_LUT: u32 = 17u;
+const MODE_BACKDROP_CROP:   u32 = 18u;
 
 // Blend sub-modes (extended)
 const BLEND_NORMAL:       u32 = 0u;
@@ -183,8 +184,15 @@ fn fs_filter(in: VertexOutput) -> @location(0) vec4<f32> {
         case MODE_DIFFUSE_LIGHT:      { return diffuse_lighting(in); }
         case MODE_SPECULAR_LIGHT:     { return specular_lighting(in); }
         case MODE_COMPONENT_XFER_LUT: { return component_transfer_lut(in); }
+        case MODE_BACKDROP_CROP:      { return backdrop_crop(in); }
         default: { return textureSample(t_src, s_src, in.texcoord); }
     }
+}
+
+// ── Backdrop Crop ───────────────────────────────────────────────────────────
+fn backdrop_crop(in: VertexOutput) -> vec4<f32> {
+    let uv = (in.texcoord * params.region.zw + params.region.xy) / params.src_size.xy;
+    return textureSample(t_src, s_src, uv);
 }
 
 // ── Gaussian Blur (Separable) ───────────────────────────────────────────────
@@ -234,12 +242,12 @@ fn gaussian_blur_v(in: VertexOutput) -> vec4<f32> {
 
 fn color_matrix(in: VertexOutput) -> vec4<f32> {
     let src = textureSample(t_src, s_src, in.texcoord);
-    // Apply 4x5 color matrix: 4x4 color transform + 4x1 offset.
-    // cm_row0-3 store the 4 color coefficients per row.
-    // param0-3 store the offset (5th column) for r,g,b,a.
-    let r = dot(params.cm_row0, vec4<f32>(src.rgb, 1.0)) + params.param0;
-    let g = dot(params.cm_row1, vec4<f32>(src.rgb, 1.0)) + params.param1;
-    let b = dot(params.cm_row2, vec4<f32>(src.rgb, 1.0)) + params.param2;
+    // Add a subtle color pulse based on time if time > 0
+    let pulse = select(0.0, sin(params.time * 2.0) * 0.05, params.time > 0.0);
+    
+    let r = dot(params.cm_row0, vec4<f32>(src.rgb, 1.0)) + params.param0 + pulse;
+    let g = dot(params.cm_row1, vec4<f32>(src.rgb, 1.0)) + params.param1 + pulse;
+    let b = dot(params.cm_row2, vec4<f32>(src.rgb, 1.0)) + params.param2 + pulse;
     let a = dot(params.cm_row3, vec4<f32>(src.rgb, 1.0)) + params.param3;
     return vec4<f32>(clamp(r, 0.0, 1.0), clamp(g, 0.0, 1.0), clamp(b, 0.0, 1.0), clamp(a, 0.0, 1.0));
 }
@@ -410,7 +418,11 @@ fn displacement(in: VertexOutput) -> vec4<f32> {
     let scale = params.disp_scale;
     let x_sel = params.sub_mode & 3u;
     let y_sel = (params.sub_mode >> 2u) & 3u;
-    let disp = textureSample(t_src2, s_src2, in.texcoord);
+    
+    // Animate the displacement lookup over time
+    let time_offset = vec2<f32>(sin(params.time), cos(params.time)) * 0.05 * select(0.0, 1.0, params.time > 0.0);
+    let disp = textureSample(t_src2, s_src2, in.texcoord + time_offset);
+    
     let dx = (channel_from_select(disp, x_sel) - 0.5) * scale;
     let dy = (channel_from_select(disp, y_sel) - 0.5) * scale;
     let uv = in.texcoord + vec2<f32>(dx, dy);
@@ -472,7 +484,7 @@ fn tile(in: VertexOutput) -> vec4<f32> {
 
 fn hash(p: vec2<f32>) -> f32 {
     let h = dot(p, vec2<f32>(127.1, 311.7));
-    return fract(sin(h + params.turb_seed) * 43758.5453);
+    return fract(sin(h + params.turb_seed + params.time) * 43758.5453);
 }
 
 fn noise(p: vec2<f32>) -> f32 {

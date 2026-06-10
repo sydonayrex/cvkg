@@ -22,8 +22,214 @@
 //   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //   CVKG Extended: Section 2 of the CVKG Design Specification
 
-use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
 pub use cvkg_core::layout::EdgeInsets;
+use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
+use std::collections::HashMap;
+
+/// The central Taffy engine that computes flexbox and grid layouts.
+/// Stored opaquely inside `cvkg_core::LayoutCache::engine`.
+pub struct TaffyLayoutEngine {
+    pub tree: taffy::TaffyTree,
+    pub node_map: HashMap<u64, taffy::NodeId>,
+}
+
+impl TaffyLayoutEngine {
+    pub fn new() -> Self {
+        Self {
+            tree: taffy::TaffyTree::new(),
+            node_map: HashMap::new(),
+        }
+    }
+
+    pub fn get_or_insert_engine(cache: &mut LayoutCache) -> &mut Self {
+        if cache.engine.is_none() {
+            cache.engine = Some(Box::new(TaffyLayoutEngine::new()));
+        }
+        cache
+            .engine
+            .as_mut()
+            .unwrap()
+            .downcast_mut::<TaffyLayoutEngine>()
+            .unwrap()
+    }
+}
+
+/// Manages active physics transitions for layout bounding boxes.
+pub struct AnimationEngine {
+    pub active_transitions: HashMap<u64, cvkg_anim::physics::ViscousSpring>,
+}
+
+impl AnimationEngine {
+    pub fn new() -> Self {
+        Self {
+            active_transitions: HashMap::new(),
+        }
+    }
+
+    pub fn get_or_insert_engine(cache: &mut LayoutCache) -> &mut Self {
+        if cache.animators.is_none() {
+            cache.animators = Some(Box::new(AnimationEngine::new()));
+        }
+        cache
+            .animators
+            .as_mut()
+            .unwrap()
+            .downcast_mut::<AnimationEngine>()
+            .unwrap()
+    }
+}
+
+use taffy::prelude::*;
+
+fn taffy_alignment(alignment: cvkg_core::Alignment) -> Option<taffy::AlignItems> {
+    match alignment {
+        cvkg_core::Alignment::Leading => Some(taffy::AlignItems::Start),
+        cvkg_core::Alignment::Center => Some(taffy::AlignItems::Center),
+        cvkg_core::Alignment::Trailing => Some(taffy::AlignItems::End),
+        cvkg_core::Alignment::Top => Some(taffy::AlignItems::Start),
+        cvkg_core::Alignment::Bottom => Some(taffy::AlignItems::End),
+    }
+}
+
+fn taffy_distribution(dist: cvkg_core::Distribution) -> Option<taffy::JustifyContent> {
+    match dist {
+        cvkg_core::Distribution::Leading => Some(taffy::JustifyContent::Start),
+        cvkg_core::Distribution::Center => Some(taffy::JustifyContent::Center),
+        cvkg_core::Distribution::Trailing => Some(taffy::JustifyContent::End),
+        cvkg_core::Distribution::SpaceBetween => Some(taffy::JustifyContent::SpaceBetween),
+        cvkg_core::Distribution::Fill => Some(taffy::JustifyContent::Stretch),
+        _ => None,
+    }
+}
+
+fn compute_taffy_flex(
+    dir: taffy::FlexDirection,
+    spacing: f32,
+    alignment: cvkg_core::Alignment,
+    distribution: cvkg_core::Distribution,
+    bounds: Rect,
+    subviews: &[&dyn LayoutView],
+    cache: &mut LayoutCache,
+) -> Vec<Rect> {
+    let mut tree: taffy::TaffyTree<()> = taffy::TaffyTree::new();
+    let mut child_nodes = Vec::with_capacity(subviews.len());
+
+    for child in subviews {
+        let flex_weight = child.flex_weight();
+        let mut style = taffy::Style::default();
+        if flex_weight > 0.0 {
+            style.flex_grow = flex_weight;
+            style.flex_basis = taffy::Dimension::Percent(0.0);
+        } else {
+            let size = child.size_that_fits(
+                SizeProposal::new(Some(bounds.width), Some(bounds.height)),
+                &[],
+                cache,
+            );
+            style.size = taffy::Size {
+                width: taffy::Dimension::Length(size.width),
+                height: taffy::Dimension::Length(size.height),
+            };
+        }
+        child_nodes.push(tree.new_leaf(style).unwrap());
+    }
+
+    let mut container_style = taffy::Style::default();
+    container_style.display = taffy::Display::Flex;
+    container_style.flex_direction = dir;
+    let gap_val = taffy::LengthPercentage::Length(spacing);
+    container_style.gap = taffy::Size {
+        width: if dir == taffy::FlexDirection::Row {
+            gap_val
+        } else {
+            taffy::LengthPercentage::Length(0.0)
+        },
+        height: if dir == taffy::FlexDirection::Column {
+            gap_val
+        } else {
+            taffy::LengthPercentage::Length(0.0)
+        },
+    };
+    container_style.align_items = taffy_alignment(alignment);
+    container_style.justify_content = taffy_distribution(distribution);
+    container_style.size = taffy::Size {
+        width: taffy::Dimension::Length(bounds.width),
+        height: taffy::Dimension::Length(bounds.height),
+    };
+
+    let root = tree
+        .new_with_children(container_style, &child_nodes)
+        .unwrap();
+    tree.compute_layout(root, taffy::Size::MAX_CONTENT).unwrap();
+
+    let mut rects = Vec::with_capacity(subviews.len());
+    for &node in &child_nodes {
+        let layout = tree.layout(node).unwrap();
+        rects.push(Rect {
+            x: bounds.x + layout.location.x,
+            y: bounds.y + layout.location.y,
+            width: layout.size.width,
+            height: layout.size.height,
+        });
+    }
+    rects
+}
+
+/// Applies view transitions to calculated layout rects.
+fn apply_layout_animations(
+    rects: Vec<Rect>,
+    subviews: &mut [&mut dyn LayoutView],
+    cache: &mut LayoutCache,
+) {
+    let mut transitions_to_update = Vec::new();
+
+    for (child, target_rect) in subviews.iter().zip(&rects) {
+        let hash = child.view_hash();
+        if hash != 0 {
+            if let Some(prev) = cache.previous_rects.get(&hash) {
+                if prev.x != target_rect.x
+                    || prev.y != target_rect.y
+                    || prev.width != target_rect.width
+                    || prev.height != target_rect.height
+                {
+                    transitions_to_update.push((hash, *prev, *target_rect));
+                }
+            }
+            cache.previous_rects.insert(hash, *target_rect);
+        }
+    }
+
+    let mut interpolated_rects = HashMap::new();
+    let anim_engine = AnimationEngine::get_or_insert_engine(cache);
+
+    for (hash, prev, target_rect) in transitions_to_update {
+        let mut spring = cvkg_anim::physics::ViscousSpring::new(
+            cvkg_anim::physics::Vec3::new(prev.x, prev.y, prev.width),
+            cvkg_anim::physics::Vec3::new(target_rect.x, target_rect.y, target_rect.width),
+            0.9,
+            1000.0,
+        );
+        spring.step(0.016);
+        interpolated_rects.insert(
+            hash,
+            Rect {
+                x: spring.position_a.x,
+                y: spring.position_a.y,
+                width: spring.position_a.z,
+                height: target_rect.height,
+            },
+        );
+        anim_engine.active_transitions.insert(hash, spring);
+    }
+
+    for (child, mut target_rect) in subviews.iter_mut().zip(rects) {
+        let hash = child.view_hash();
+        if let Some(interp) = interpolated_rects.get(&hash) {
+            target_rect = *interp;
+        }
+        child.place_subviews(target_rect, &mut [], cache);
+    }
+}
 
 /// HStack - lays out children horizontally
 pub struct HStack {
@@ -51,95 +257,15 @@ impl HStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        let n = subviews.len();
-        if n == 0 {
-            return Vec::new();
-        }
-
-        let mut rects = vec![Rect::zero(); n];
-        let mut child_sizes = Vec::with_capacity(n);
-        let mut total_fixed_width = 0.0;
-        let mut total_flex_weight = 0.0;
-        let mut flex_indices = Vec::new();
-
-        // Pass 1: Categorize children and measure fixed ones
-        for (i, child) in subviews.iter().enumerate() {
-            let weight = child.flex_weight();
-            if weight > 0.0 {
-                total_flex_weight += weight;
-                flex_indices.push(i);
-                child_sizes.push(Size::ZERO); // Placeholder
-            } else {
-                let desired = child.size_that_fits(
-                    SizeProposal::new(Some(bounds.width), Some(bounds.height)),
-                    &[],
-                    cache,
-                );
-                child_sizes.push(desired);
-                total_fixed_width += desired.width;
-            }
-        }
-
-        let total_spacing = spacing * (n - 1) as f32;
-        let available_for_flex = (bounds.width - total_fixed_width - total_spacing).max(0.0);
-
-        // Pass 2: Measure and size flexible children
-        for &idx in &flex_indices {
-            let weight = subviews[idx].flex_weight();
-            let flex_width = (weight / total_flex_weight) * available_for_flex;
-            let desired = subviews[idx].size_that_fits(
-                SizeProposal::new(Some(flex_width), Some(bounds.height)),
-                &[],
-                cache,
-            );
-            // Flexible children take the width assigned by flex, but height can still be intrinsic or frame-constrained
-            child_sizes[idx] = Size {
-                width: flex_width,
-                height: desired.height,
-            };
-        }
-
-        let content_width = if total_flex_weight > 0.0 {
-            bounds.width - total_spacing
-        } else {
-            total_fixed_width
-        } + total_spacing;
-
-        let (mut x, actual_spacing) = match distribution {
-            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => {
-                (bounds.x, spacing)
-            }
-            Distribution::Leading | Distribution::Fill => (bounds.x, spacing),
-            Distribution::Trailing => (bounds.x + bounds.width - content_width, spacing),
-            Distribution::Center => (bounds.x + (bounds.width - content_width) / 2.0, spacing),
-            Distribution::SpaceBetween => {
-                let s = if n > 1 {
-                    (bounds.width - (total_fixed_width + available_for_flex)) / (n - 1) as f32
-                } else {
-                    0.0
-                };
-                (bounds.x, s)
-            }
-            _ => (bounds.x, spacing), // Simplification for mixed flex/distribution
-        };
-
-        for i in 0..n {
-            let size = child_sizes[i];
-            let y = match alignment {
-                Alignment::Top => bounds.y,
-                Alignment::Bottom => bounds.y + bounds.height - size.height,
-                _ => bounds.y + (bounds.height - size.height) / 2.0,
-            };
-
-            rects[i] = Rect {
-                x,
-                y,
-                width: size.width,
-                height: size.height,
-            };
-            x += size.width + actual_spacing;
-        }
-        rects
+        compute_taffy_flex(
+            taffy::FlexDirection::Row,
+            spacing,
+            alignment,
+            distribution,
+            bounds,
+            subviews,
+            cache,
+        )
     }
 }
 
@@ -150,22 +276,30 @@ impl LayoutView for HStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Size {
-        let mut width = 0.0f32;
-        let mut height = 0.0f32;
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: proposal.width.unwrap_or(10000.0),
+            height: proposal.height.unwrap_or(10000.0),
+        };
+        let rects = Self::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            bounds,
+            subviews,
+            cache,
+        );
 
-        for (i, child) in subviews.iter().enumerate() {
-            let child_size = child.size_that_fits(proposal, &[], cache);
-            width += child_size.width;
-            height = height.max(child_size.height);
-
-            if i < subviews.len() - 1 {
-                width += self.spacing;
-            }
+        let mut max_w = 0.0f32;
+        let mut max_h = 0.0f32;
+        for r in rects {
+            max_w = max_w.max(r.x + r.width);
+            max_h = max_h.max(r.y + r.height);
         }
-
         Size {
-            width: proposal.width.unwrap_or(width),
-            height: proposal.height.unwrap_or(height),
+            width: max_w,
+            height: max_h,
         }
     }
 
@@ -185,10 +319,7 @@ impl LayoutView for HStack {
             &views,
             cache,
         );
-
-        for (child, rect) in subviews.iter_mut().zip(rects) {
-            child.place_subviews(rect, &mut [], cache);
-        }
+        apply_layout_animations(rects, subviews, cache);
     }
 }
 
@@ -218,94 +349,15 @@ impl VStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        let n = subviews.len();
-        if n == 0 {
-            return Vec::new();
-        }
-
-        let mut rects = vec![Rect::zero(); n];
-        let mut child_sizes = Vec::with_capacity(n);
-        let mut total_fixed_height = 0.0;
-        let mut total_flex_weight = 0.0;
-        let mut flex_indices = Vec::new();
-
-        // Pass 1: Categorize children and measure fixed ones
-        for (i, child) in subviews.iter().enumerate() {
-            let weight = child.flex_weight();
-            if weight > 0.0 {
-                total_flex_weight += weight;
-                flex_indices.push(i);
-                child_sizes.push(Size::ZERO); // Placeholder
-            } else {
-                let desired = child.size_that_fits(
-                    SizeProposal::new(Some(bounds.width), Some(bounds.height)),
-                    &[],
-                    cache,
-                );
-                child_sizes.push(desired);
-                total_fixed_height += desired.height;
-            }
-        }
-
-        let total_spacing = spacing * (n - 1) as f32;
-        let available_for_flex = (bounds.height - total_fixed_height - total_spacing).max(0.0);
-
-        // Pass 2: Measure and size flexible children
-        for &idx in &flex_indices {
-            let weight = subviews[idx].flex_weight();
-            let flex_height = (weight / total_flex_weight) * available_for_flex;
-            let desired = subviews[idx].size_that_fits(
-                SizeProposal::new(Some(bounds.width), Some(flex_height)),
-                &[],
-                cache,
-            );
-            child_sizes[idx] = Size {
-                width: desired.width,
-                height: flex_height,
-            };
-        }
-
-        let content_height = if total_flex_weight > 0.0 {
-            bounds.height - total_spacing
-        } else {
-            total_fixed_height
-        } + total_spacing;
-
-        let (mut y, actual_spacing) = match distribution {
-            Distribution::Leading | Distribution::Fill if total_flex_weight > 0.0 => {
-                (bounds.y, spacing)
-            }
-            Distribution::Leading | Distribution::Fill => (bounds.y, spacing),
-            Distribution::Trailing => (bounds.y + bounds.height - content_height, spacing),
-            Distribution::Center => (bounds.y + (bounds.height - content_height) / 2.0, spacing),
-            Distribution::SpaceBetween => {
-                let s = if n > 1 {
-                    (bounds.height - (total_fixed_height + available_for_flex)) / (n - 1) as f32
-                } else {
-                    0.0
-                };
-                (bounds.y, s)
-            }
-            _ => (bounds.y, spacing),
-        };
-
-        for i in 0..n {
-            let size = child_sizes[i];
-            let x = match alignment {
-                Alignment::Leading => bounds.x,
-                Alignment::Trailing => bounds.x + bounds.width - size.width,
-                _ => bounds.x + (bounds.width - size.width) / 2.0,
-            };
-
-            rects[i] = Rect {
-                x,
-                y,
-                width: size.width,
-                height: size.height,
-            };
-            y += size.height + actual_spacing;
-        }
-        rects
+        compute_taffy_flex(
+            taffy::FlexDirection::Column,
+            spacing,
+            alignment,
+            distribution,
+            bounds,
+            subviews,
+            cache,
+        )
     }
 }
 
@@ -316,22 +368,30 @@ impl LayoutView for VStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Size {
-        let mut width = 0.0f32;
-        let mut height = 0.0f32;
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: proposal.width.unwrap_or(10000.0),
+            height: proposal.height.unwrap_or(10000.0),
+        };
+        let rects = Self::compute_layout(
+            self.spacing,
+            self.alignment,
+            self.distribution,
+            bounds,
+            subviews,
+            cache,
+        );
 
-        for (i, child) in subviews.iter().enumerate() {
-            let child_size = child.size_that_fits(proposal, &[], cache);
-            width = width.max(child_size.width);
-            height += child_size.height;
-
-            if i < subviews.len() - 1 {
-                height += self.spacing;
-            }
+        let mut max_w = 0.0f32;
+        let mut max_h = 0.0f32;
+        for r in rects {
+            max_w = max_w.max(r.x + r.width);
+            max_h = max_h.max(r.y + r.height);
         }
-
         Size {
-            width: proposal.width.unwrap_or(width),
-            height: proposal.height.unwrap_or(height),
+            width: max_w,
+            height: max_h,
         }
     }
 
@@ -351,10 +411,7 @@ impl LayoutView for VStack {
             &views,
             cache,
         );
-
-        for (child, rect) in subviews.iter_mut().zip(rects) {
-            child.place_subviews(rect, &mut [], cache);
-        }
+        apply_layout_animations(rects, subviews, cache);
     }
 }
 
@@ -515,6 +572,17 @@ pub enum GridTrack {
     MinMax(f32, f32),
 }
 
+fn taffy_track(track: GridTrack) -> taffy::TrackSizingFunction {
+    match track {
+        GridTrack::Fixed(v) => taffy::prelude::length(v),
+        GridTrack::Flex(v) => taffy::prelude::fr(v),
+        GridTrack::Auto => taffy::prelude::auto(),
+        GridTrack::MinMax(min, max) => {
+            taffy::prelude::minmax(taffy::prelude::length(min), taffy::prelude::length(max))
+        }
+    }
+}
+
 /// A layout engine that computes coordinates for children positioned in a 2D grid.
 pub struct Grid {
     /// Column track sizing rules.
@@ -551,227 +619,65 @@ impl Grid {
         placements: &[Option<cvkg_core::GridPlacement>],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        let col_count = self.columns.len();
-        let row_count = self.rows.len();
-        if col_count == 0 || row_count == 0 || subviews.is_empty() {
-            return vec![Rect::zero(); subviews.len()];
-        }
+        let mut tree: taffy::TaffyTree<()> = taffy::TaffyTree::new();
+        let mut child_nodes = Vec::with_capacity(subviews.len());
 
-        let mut rects = vec![Rect::zero(); subviews.len()];
-
-        // 1. Resolve placements for all children.
-        // If a child has no placement, auto-position it in the next available cell in row-major order.
-        let mut resolved_placements = Vec::with_capacity(subviews.len());
-        let mut occupied = vec![vec![false; col_count]; row_count];
-
-        for &opt_placement in placements.iter() {
-            let placement = if let Some(p) = opt_placement {
-                let resolved_col = if p.column < 0 {
-                    (col_count as i32 + p.column).max(0) as usize
-                } else {
-                    p.column as usize
-                };
-                let resolved_row = if p.row < 0 {
-                    (row_count as i32 + p.row).max(0) as usize
-                } else {
-                    p.row as usize
-                };
-                cvkg_core::GridPlacement {
-                    column: resolved_col as i32,
-                    column_span: p.column_span.max(1),
-                    row: resolved_row as i32,
-                    row_span: p.row_span.max(1),
-                }
-            } else {
-                // Find next unoccupied cell
-                let mut found_col = 0;
-                let mut found_row = 0;
-                let mut found = false;
-                for (r, row) in occupied.iter().enumerate() {
-                    for (c, cell) in row.iter().enumerate() {
-                        if !*cell {
-                            found_col = c;
-                            found_row = r;
-                            found = true;
-                            break;
-                        }
-                    }
-                    if found {
-                        break;
-                    }
-                }
-                cvkg_core::GridPlacement {
-                    column: found_col as i32,
-                    column_span: 1,
-                    row: found_row as i32,
-                    row_span: 1,
-                }
-            };
-
-            // Mark occupied cells
-            let start_r = (placement.row as usize).min(row_count - 1);
-            let end_r = (start_r + placement.row_span as usize).min(row_count);
-            let start_c = (placement.column as usize).min(col_count - 1);
-            let end_c = (start_c + placement.column_span as usize).min(col_count);
-            for row in occupied.iter_mut().take(end_r).skip(start_r) {
-                for cell in row.iter_mut().take(end_c).skip(start_c) {
-                    *cell = true;
-                }
-            }
-
-            resolved_placements.push(placement);
-        }
-
-        // 2. Measure content sizes of children (for Auto and MinMax sizing).
-        // For simplicity, we calculate the sizes of Auto and MinMax tracks based on children that span a single track.
-        let mut col_content_widths = vec![0.0f32; col_count];
-        let mut row_content_heights = vec![0.0f32; row_count];
-
-        for (i, &placement) in resolved_placements.iter().enumerate() {
-            let child = subviews[i];
+        for (i, child) in subviews.iter().enumerate() {
+            let mut style = taffy::Style::default();
             let size = child.size_that_fits(
                 SizeProposal::new(Some(bounds.width), Some(bounds.height)),
                 &[],
                 cache,
             );
-
-            if placement.column_span == 1 {
-                let c = placement.column as usize;
-                if c < col_count {
-                    col_content_widths[c] = col_content_widths[c].max(size.width);
-                }
-            }
-            if placement.row_span == 1 {
-                let r = placement.row as usize;
-                if r < row_count {
-                    row_content_heights[r] = row_content_heights[r].max(size.height);
-                }
-            }
-        }
-
-        // 3. Resolve Column widths
-        let total_col_gaps = self.column_gap * (col_count - 1) as f32;
-        let mut remaining_width = (bounds.width - total_col_gaps).max(0.0);
-        let mut total_flex_weight_col = 0.0f32;
-        let mut col_widths = vec![0.0f32; col_count];
-
-        for (c, track) in self.columns.iter().enumerate() {
-            match track {
-                GridTrack::Fixed(w) => {
-                    col_widths[c] = *w;
-                    remaining_width = (remaining_width - *w).max(0.0);
-                }
-                GridTrack::Auto => {
-                    let w = col_content_widths[c];
-                    col_widths[c] = w;
-                    remaining_width = (remaining_width - w).max(0.0);
-                }
-                GridTrack::MinMax(min, max) => {
-                    let w = col_content_widths[c].clamp(*min, *max);
-                    col_widths[c] = w;
-                    remaining_width = (remaining_width - w).max(0.0);
-                }
-                GridTrack::Flex(weight) => {
-                    total_flex_weight_col += *weight;
-                }
-            }
-        }
-
-        if total_flex_weight_col > 0.0 {
-            for (c, track) in self.columns.iter().enumerate() {
-                if let GridTrack::Flex(weight) = track {
-                    col_widths[c] = (*weight / total_flex_weight_col) * remaining_width;
-                }
-            }
-        }
-
-        // 4. Resolve Row heights
-        let total_row_gaps = self.row_gap * (row_count - 1) as f32;
-        let mut remaining_height = (bounds.height - total_row_gaps).max(0.0);
-        let mut total_flex_weight_row = 0.0f32;
-        let mut row_heights = vec![0.0f32; row_count];
-
-        for (r, track) in self.rows.iter().enumerate() {
-            match track {
-                GridTrack::Fixed(h) => {
-                    row_heights[r] = *h;
-                    remaining_height = (remaining_height - *h).max(0.0);
-                }
-                GridTrack::Auto => {
-                    let h = row_content_heights[r];
-                    row_heights[r] = h;
-                    remaining_height = (remaining_height - h).max(0.0);
-                }
-                GridTrack::MinMax(min, max) => {
-                    let h = row_content_heights[r].clamp(*min, *max);
-                    row_heights[r] = h;
-                    remaining_height = (remaining_height - h).max(0.0);
-                }
-                GridTrack::Flex(weight) => {
-                    total_flex_weight_row += *weight;
-                }
-            }
-        }
-
-        if total_flex_weight_row > 0.0 {
-            for (r, track) in self.rows.iter().enumerate() {
-                if let GridTrack::Flex(weight) = track {
-                    row_heights[r] = (*weight / total_flex_weight_row) * remaining_height;
-                }
-            }
-        }
-
-        // 5. Compute grid line coordinates
-        let mut col_positions = vec![0.0f32; col_count + 1];
-        let mut x_acc = bounds.x;
-        for c in 0..col_count {
-            col_positions[c] = x_acc;
-            x_acc += col_widths[c] + self.column_gap;
-        }
-        col_positions[col_count] = x_acc - self.column_gap;
-
-        let mut row_positions = vec![0.0f32; row_count + 1];
-        let mut y_acc = bounds.y;
-        for r in 0..row_count {
-            row_positions[r] = y_acc;
-            y_acc += row_heights[r] + self.row_gap;
-        }
-        row_positions[row_count] = y_acc - self.row_gap;
-
-        // 6. Compute child rects based on placement and spans
-        for i in 0..subviews.len() {
-            let placement = resolved_placements[i];
-            let c_start = (placement.column as usize).min(col_count - 1);
-            let c_end = (c_start + placement.column_span as usize).min(col_count);
-            let r_start = (placement.row as usize).min(row_count - 1);
-            let r_end = (r_start + placement.row_span as usize).min(row_count);
-
-            let child_x = col_positions[c_start];
-            let child_y = row_positions[r_start];
-
-            // Width spans tracks and gaps:
-            let child_w = if c_end > c_start {
-                col_widths[c_start..c_end].iter().sum::<f32>()
-                    + self.column_gap * (c_end - c_start - 1) as f32
-            } else {
-                0.0
+            style.size = taffy::Size {
+                width: taffy::Dimension::Length(size.width),
+                height: taffy::Dimension::Length(size.height),
             };
 
-            let child_h = if r_end > r_start {
-                row_heights[r_start..r_end].iter().sum::<f32>()
-                    + self.row_gap * (r_end - r_start - 1) as f32
-            } else {
-                0.0
-            };
-
-            rects[i] = Rect {
-                x: child_x,
-                y: child_y,
-                width: child_w,
-                height: child_h,
-            };
+            if let Some(p) = placements.get(i).copied().flatten() {
+                style.grid_column = taffy::Line {
+                    start: taffy::prelude::line((p.column + 1) as i16),
+                    end: taffy::prelude::span(p.column_span as u16),
+                };
+                style.grid_row = taffy::Line {
+                    start: taffy::prelude::line((p.row + 1) as i16),
+                    end: taffy::prelude::span(p.row_span as u16),
+                };
+            }
+            child_nodes.push(tree.new_leaf(style).unwrap());
         }
 
+        let mut container_style = taffy::Style::default();
+        container_style.display = taffy::Display::Grid;
+
+        container_style.grid_template_columns =
+            self.columns.iter().copied().map(taffy_track).collect();
+        container_style.grid_template_rows = self.rows.iter().copied().map(taffy_track).collect();
+
+        container_style.gap = taffy::Size {
+            width: taffy::LengthPercentage::Length(self.column_gap),
+            height: taffy::LengthPercentage::Length(self.row_gap),
+        };
+        container_style.size = taffy::Size {
+            width: taffy::Dimension::Length(bounds.width),
+            height: taffy::Dimension::Length(bounds.height),
+        };
+
+        let root = tree
+            .new_with_children(container_style, &child_nodes)
+            .unwrap();
+        tree.compute_layout(root, taffy::Size::MAX_CONTENT).unwrap();
+
+        let mut rects = Vec::with_capacity(subviews.len());
+        for &node in &child_nodes {
+            let layout = tree.layout(node).unwrap();
+            rects.push(Rect {
+                x: bounds.x + layout.location.x,
+                y: bounds.y + layout.location.y,
+                width: layout.size.width,
+                height: layout.size.height,
+            });
+        }
         rects
     }
 }
@@ -799,10 +705,7 @@ impl LayoutView for Grid {
             subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
         let placements = vec![None; subviews.len()];
         let rects = self.compute_layout_rects(bounds, &views, &placements, cache);
-
-        for (child, rect) in subviews.iter_mut().zip(rects) {
-            child.place_subviews(rect, &mut [], cache);
-        }
+        apply_layout_animations(rects, subviews, cache);
     }
 }
 
@@ -992,7 +895,10 @@ impl AspectRatio {
         let w = max_w;
         let h = w / self.ratio;
         if h <= max_h {
-            return Size { width: w, height: h };
+            return Size {
+                width: w,
+                height: h,
+            };
         }
         Size {
             width: max_h * self.ratio,
@@ -1026,7 +932,10 @@ impl LayoutView for AspectRatio {
         let child_h = child_w / intrinsic_ratio;
         let final_h = child_h.min(fit.height);
         let final_w = final_h * intrinsic_ratio;
-        Size { width: final_w, height: final_h }
+        Size {
+            width: final_w,
+            height: final_h,
+        }
     }
 
     fn place_subviews(

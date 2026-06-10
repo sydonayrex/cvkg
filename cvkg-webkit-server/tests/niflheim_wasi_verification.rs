@@ -11,15 +11,26 @@ async fn test_niflheim_wasi_activation() -> anyhow::Result<()> {
     if !wasm_path.exists() {
         println!("[Verification] WASM demo not found. Automatically compiling...");
         let status = std::process::Command::new("cargo")
-            .args(&["build", "-p", "niflheim-wasi-demo", "--target", "wasm32-wasip1"])
+            .args(&[
+                "build",
+                "-p",
+                "niflheim-wasi-demo",
+                "--target",
+                "wasm32-wasip1",
+            ])
             .status()?;
         if !status.success() {
-            return Err(anyhow::anyhow!("Failed to build niflheim-wasi-demo WASM target"));
+            return Err(anyhow::anyhow!(
+                "Failed to build niflheim-wasi-demo WASM target"
+            ));
         }
     }
 
     if !wasm_path.exists() {
-        return Err(anyhow::anyhow!("WASM demo still not found at {:?}", wasm_path));
+        return Err(anyhow::anyhow!(
+            "WASM demo still not found at {:?}",
+            wasm_path
+        ));
     }
 
     println!("[Verification] Initializing NativeWasmServer...");

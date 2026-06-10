@@ -15,11 +15,11 @@ use std::collections::HashMap;
 /// A socket type on a material node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MaterialSocket {
-    Color,    // vec4<f32>
-    Float,    // f32
-    Vec2,     // vec2<f32>
-    Vec3,     // vec3<f32>
-    Mask,     // f32 (0..1 coverage)
+    Color, // vec4<f32>
+    Float, // f32
+    Vec2,  // vec2<f32>
+    Vec3,  // vec3<f32>
+    Mask,  // f32 (0..1 coverage)
 }
 
 /// An operation node in the material graph.
@@ -32,11 +32,18 @@ pub enum MaterialOp {
     /// Output: constant color from uniform.
     /// Parameters: rgba
     /// Output: Color
-    ConstantColor { r: f32, g: f32, b: f32, a: f32 },
+    ConstantColor {
+        r: f32,
+        g: f32,
+        b: f32,
+        a: f32,
+    },
 
     /// Input: UV from vertex.
     /// Output: sample result Color
-    SampleTexture { tex_index: u32 },
+    SampleTexture {
+        tex_index: u32,
+    },
 
     /// Premultiplied alpha blend (for font atlas).
     /// Inputs: color (Color), alpha (Float from texture)
@@ -55,17 +62,26 @@ pub enum MaterialOp {
     /// Linear gradient between two colors.
     /// Input: t (Float, typically UV-based)
     /// Output: Color
-    LinearGradient { start: [f32; 4], end: [f32; 4] },
+    LinearGradient {
+        start: [f32; 4],
+        end: [f32; 4],
+    },
 
     /// Radial gradient.
     /// Input: dist (Float)
     /// Output: Color
-    RadialGradient { start: [f32; 4], end: [f32; 4] },
+    RadialGradient {
+        start: [f32; 4],
+        end: [f32; 4],
+    },
 
     /// Neon glow effect.
     /// Input: dist (Float), color (Color)
     /// Output: Color
-    NeonGlow { radius: f32, intensity: f32 },
+    NeonGlow {
+        radius: f32,
+        intensity: f32,
+    },
 
     /// Glass fresnel refraction.
     /// Inputs: uv (Vec2), blur_mip (Float)
@@ -75,7 +91,9 @@ pub enum MaterialOp {
     /// Layer two inputs with a blend mode.
     /// Inputs: bottom (Color), top (Color), opacity (Float)
     /// Output: Color
-    LayerBlend { mode: BlendMode },
+    LayerBlend {
+        mode: BlendMode,
+    },
 
     /// PBR lighting.
     /// Input: normal (Vec3), metallic (Float), roughness (Float), opacity (Float)
@@ -99,7 +117,15 @@ pub enum MaterialOp {
 
     /// Raymarched SDF shape.
     /// Output: Color
-    Raymarch { shape: RaymarchShape },
+    Raymarch {
+        shape: RaymarchShape,
+    },
+
+    Lightning,
+    RuneGlow,
+    RaymarchReflections,
+    Stroke,
+    DashedStroke,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -170,10 +196,24 @@ impl MaterialGraph {
         self.output = Some(node);
     }
 
-    /// Validate the graph: no cycles, output connected, all inputs satisfied.
+    /// Validate the graph using default (unrestricted) config.
     pub fn validate(&self) -> Result<(), MaterialError> {
+        self.validate_with_config(&MaterialValidationConfig::default())
+    }
+
+    /// Validate the graph with strict limitations (e.g. for AI-generated graphs).
+    pub fn validate_with_config(
+        &self,
+        config: &MaterialValidationConfig,
+    ) -> Result<(), MaterialError> {
         if self.output.is_none() {
             return Err(MaterialError::NoOutput);
+        }
+        if self.nodes.len() > config.max_nodes {
+            return Err(MaterialError::TooManyNodes(
+                self.nodes.len(),
+                config.max_nodes,
+            ));
         }
         // Cycle detection via DFS
         let mut visited = vec![false; self.nodes.len()];
@@ -225,9 +265,27 @@ impl Default for MaterialGraph {
 pub enum MaterialError {
     NoOutput,
     Cycle,
-    DisconnectedInput { node: MatNodeId, socket: MaterialSocket },
-    TypeMismatch { from: MaterialSocket, to: MaterialSocket },
+    DisconnectedInput {
+        node: MatNodeId,
+        socket: MaterialSocket,
+    },
+    TypeMismatch {
+        from: MaterialSocket,
+        to: MaterialSocket,
+    },
     CompileError(String),
+    TooManyNodes(usize, usize),
+    UnsupportedNodeType(String),
+}
+
+pub struct MaterialValidationConfig {
+    pub max_nodes: usize,
+}
+
+impl Default for MaterialValidationConfig {
+    fn default() -> Self {
+        Self { max_nodes: 1024 } // arbitrary large number for internal graphs
+    }
 }
 
 impl std::error::Error for MaterialError {}
@@ -243,7 +301,9 @@ impl std::fmt::Display for MaterialError {
             Self::TypeMismatch { from, to } => {
                 write!(f, "type mismatch: {:?} -> {:?}", from, to)
             }
-            Self::CompileError(msg) => write!(f, "compile error: {}", msg),
+            Self::CompileError(msg) => write!(f, "WGSL compilation error: {}", msg),
+            Self::TooManyNodes(count, max) => write!(f, "too many nodes: {} (max {})", count, max),
+            Self::UnsupportedNodeType(kind) => write!(f, "unsupported node type: {}", kind),
         }
     }
 }
@@ -255,6 +315,15 @@ pub struct CompiledMaterial {
     pub wgsl_fn: String,
     /// The function name (unique per material).
     pub fn_name: String,
+}
+
+impl CompiledMaterial {
+    pub fn hash_code(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        self.wgsl_fn.hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 /// Compiles MaterialGraph → WGSL fragment function.
@@ -322,7 +391,7 @@ impl MaterialCompiler {
                         r#"
     let _d = sd_round_rect(in.logical - {0}, {0} - in.radius, in.radius);
     let _aa = fwidth(_d);
-    vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)))"#,
+    __RESULT__ = vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)));"#,
                         half
                     ).trim().to_string()
                 }
@@ -333,7 +402,7 @@ impl MaterialCompiler {
     let _sh = max({0}, vec2<f32>(0.001));
     let _d = length((in.logical - {0}) / _sh) - 1.0;
     let _aa = fwidth(_d);
-    vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)))"#,
+    __RESULT__ = vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(0.0, _aa, _d)));"#,
                         half
                     ).trim().to_string()
                 }
@@ -351,7 +420,7 @@ impl MaterialCompiler {
                     format!(
                         r#"
     let _dist = length(in.uv - 0.5) * 2.0;
-    mix(vec4<f32>({:.6},{:.6},{:.6},{:.6}), vec4<f32>({:.6},{:.6},{:.6},{:.6}), clamp(_dist, 0.0, 1.0))"#,
+    __RESULT__ = mix(vec4<f32>({:.6},{:.6},{:.6},{:.6}), vec4<f32>({:.6},{:.6},{:.6},{:.6}), clamp(_dist, 0.0, 1.0));"#,
                         start[0], start[1], start[2], start[3],
                         end[0], end[1], end[2], end[3],
                     ).trim().to_string()
@@ -366,10 +435,39 @@ impl MaterialCompiler {
                 }
                 MaterialOp::GlassBlur => {
                     r#"
-    let _uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0));
-    let _blur_mip = theme.glass_blur_strength;
-    let _env_base = textureSampleLevel(t_env, s_env, _uv, _blur_mip).rgb;
-    vec4<f32>(_env_base, 0.02 + pow(length(in.logical / in.size - 0.5) * 1.8, 2.5) * 0.15)"#.trim().to_string()
+    let uv = clamp(in.uv, vec2<f32>(0.0), vec2<f32>(1.0));
+    let local = in.logical / in.size;
+    let centered = local - vec2<f32>(0.5, 0.5);
+    let lens_dir = normalize(centered + vec2<f32>(1e-5, 1e-5));
+    let lens_dist = length(centered);
+    let fresnel = pow(lens_dist * 1.8, 2.5);
+    let lens = lens_dir * lens_dist * 0.08;
+    let blur_mip = theme.glass_blur_strength;
+    let env_base = textureSampleLevel(t_env, s_env, uv, blur_mip).rgb;
+    let brightness = dot(env_base, vec3<f32>(0.299, 0.587, 0.114));
+    var distortion = lens * 1.2;
+    distortion *= (1.0 + brightness * 0.7);
+    distortion *= 2.0;
+    let ab_offset = distortion * 0.04;
+    let r_sample = textureSampleLevel(t_env, s_env, uv + distortion + ab_offset * 1.2, blur_mip).r;
+    let g_sample = textureSampleLevel(t_env, s_env, uv + distortion, blur_mip).g;
+    let b_sample = textureSampleLevel(t_env, s_env, uv + distortion - ab_offset * 1.2, blur_mip).b;
+    let refracted = vec3<f32>(r_sample, g_sample, b_sample);
+    let tint = vec3<f32>(0.85, 0.9, 1.0);
+    var final_rgb = refracted * tint;
+    final_rgb += (brightness * 0.2) * (0.9 + vnoise(uv * 20.0 + scene.time * 3.0) * 0.1);
+    let half_size = in.size * 0.5;
+    let p_sdf = in.logical - half_size;
+    let q_sdf = abs(p_sdf) - (half_size - in.radius);
+    let d_sdf = length(max(q_sdf, vec2(0.0))) + min(max(q_sdf.x, q_sdf.y), 0.0) - in.radius;
+    let d_norm = clamp(-d_sdf / 20.0, 0.0, 1.0);
+    let flicker = 0.9 + vnoise(uv * 20.0 + scene.time * 3.0) * 0.1;
+    final_rgb += smoothstep(1.0, 0.96, d_norm) * 0.25 * flicker * vec3<f32>(0.7, 1.0, 1.3);
+    final_rgb -= smoothstep(0.96, 0.88, d_norm) * 0.15;
+    let light_dir_h = normalize(vec2<f32>(-0.4, -0.8));
+    let l = dot(uv, light_dir_h);
+    final_rgb += smoothstep(0.45, 0.55, l) * 0.12;
+    __RESULT__ = vec4<f32>(final_rgb, 0.02 + fresnel * 0.15) * (1.0 - smoothstep(-length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), d_sdf));"#.trim().to_string()
                 }
                 MaterialOp::LayerBlend { mode } => {
                     let bottom = Self::find_input(&var_names, node_id, MaterialSocket::Color, graph)
@@ -416,17 +514,17 @@ impl MaterialCompiler {
     let _depth = in.clip_position.z;
     let _fog = clamp(1.0 - _depth * 0.0005, 0.7, 1.0);
     _lit *= _fog;
-    vec4<f32>(_lit, col.a * _opacity)"#.trim().to_string()
+    __RESULT__ = vec4<f32>(_lit, col.a * _opacity);"#.trim().to_string()
                 }
                 MaterialOp::DropShadow => {
                     r#"
-    let _margin = in.uv.x;
-    let _blur = max(in.uv.y, 1.0);
-    let _original_size = in.size - 2.0 * _margin;
-    let _half_size = _original_size * 0.5;
-    let _p = in.logical - _margin - _half_size;
-    let _d = length(max(abs(_p) - (_half_size - in.radius), vec2(0.0))) + min(max(abs(_p).x - (_half_size - in.radius).x, abs(_p).y - (_half_size - in.radius).y), 0.0) - in.radius;
-    vec4<f32>(col.rgb, col.a * smoothstep(_blur, 0.0, _d))"#.trim().to_string()
+    let margin = in.uv.x;
+    let blur = max(in.uv.y, 1.0);
+    let original_size = in.size - 2.0 * margin;
+    let half_size = original_size * 0.5;
+    let p = in.logical - margin - half_size;
+    let d = sd_round_rect(p, half_size - in.radius, in.radius);
+    __RESULT__ = vec4<f32>(col.rgb, col.a * smoothstep(blur, 0.0, d));"#.trim().to_string()
                 }
                 MaterialOp::NineSlice => {
                     "col".to_string() // Passthrough: 9-slice UV remapping is resolved on CPU
@@ -440,72 +538,125 @@ impl MaterialCompiler {
                     match shape {
                         RaymarchShape::Box => {
                             r#"
-    let _uv = (in.uv - 0.5) * 2.0;
-    let _ro = vec3<f32>(0.0, 0.0, -2.5);
-    let _rd = normalize(vec3<f32>(_uv.x, _uv.y, 1.5));
-    let _m = rotX(in.slice.x) * rotY(in.slice.y) * rotZ(in.slice.z);
-    var _t = 0.0;
-    var _hit = false;
-    var _d = 0.0;
-    for (var _i = 0; _i < 40; _i++) {
-        let _p = _m * (_ro + _rd * _t);
-        _d = sd_box_3d(_p, vec3(0.5, 0.5, 0.5));
-        if _d < 0.001 {
-            _hit = true;
+    let uv = (in.uv - 0.5) * 2.0;
+    let ro = vec3<f32>(0.0, 0.0, -2.5);
+    let rd = normalize(vec3<f32>(uv.x, uv.y, 1.5));
+    let m = rotX(in.slice.x) * rotY(in.slice.y) * rotZ(in.slice.z);
+    var t = 0.0;
+    var hit = false;
+    var d = 0.0;
+    for (var i = 0; i < 40; i++) {
+        let p = m * (ro + rd * t);
+        d = sd_box_3d(p, vec3(0.5, 0.5, 0.5));
+        if d < 0.001 {
+            hit = true;
             break;
         }
-        _t += _d;
-        if _t > 5.0 { break; }
+        t += d;
+        if t > 5.0 { break; }
     }
-    if _hit {
-        let _p2 = _m * (_ro + _rd * _t);
-        let _eps = vec2(0.001, 0.0);
-        let _n = normalize(vec3(
-            sd_box_3d(_p2 + _eps.xyy, vec3(0.5)) - sd_box_3d(_p2 - _eps.xyy, vec3(0.5)),
-            sd_box_3d(_p2 + _eps.yxy, vec3(0.5)) - sd_box_3d(_p2 - _eps.yxy, vec3(0.5)),
-            sd_box_3d(_p2 + _eps.yyx, vec3(0.5)) - sd_box_3d(_p2 - _eps.yyx, vec3(0.5))
+    if hit {
+        let p = m * (ro + rd * t);
+        let eps = vec2(0.001, 0.0);
+        let n = normalize(vec3(
+            sd_box_3d(p + eps.xyy, vec3(0.5)) - sd_box_3d(p - eps.xyy, vec3(0.5)),
+            sd_box_3d(p + eps.yxy, vec3(0.5)) - sd_box_3d(p - eps.yxy, vec3(0.5)),
+            sd_box_3d(p + eps.yyx, vec3(0.5)) - sd_box_3d(p - eps.yyx, vec3(0.5))
         ));
-        let _ld2 = normalize(vec3(1.0, 1.0, -2.0));
-        let _diff2 = max(dot(_n, _ld2), 0.1);
-        let _rim = pow(1.0 - max(dot(_n, -_rd), 0.0), 3.0) * 0.5;
-        vec4<f32>(col.rgb * _diff2 + _rim, col.a)
+        let light_dir = normalize(vec3(1.0, 1.0, -2.0));
+        let diff = max(dot(n, light_dir), 0.1);
+        let rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0) * 0.5;
+        __RESULT__ = vec4<f32>(col.rgb * diff + rim, col.a);
     } else {
         discard;
     }"#.trim().to_string()
                         }
                         RaymarchShape::Sphere => {
                             r#"
-    let _ro = vec3<f32>(in.uv * 2.0 - 1.0, -2.0);
-    let _rd = normalize(vec3<f32>(0.0, 0.0, 1.0));
-    var _t = 0.0;
-    var _hit = false;
+    let ro = vec3<f32>(in.uv * 2.0 - 1.0, -2.0);
+    let rd = normalize(vec3<f32>(0.0, 0.0, 1.0));
+    var t = 0.0;
+    var hit = false;
     for (var i = 0; i < 32; i++) {
-        let _p = _ro + _rd * _t;
-        let _d = length(_p) - 1.0;
-        if _d < 0.01 { _hit = true; break; }
-        _t += _d;
+        let p = ro + rd * t;
+        let d = length(p) - 1.0;
+        if d < 0.01 { hit = true; break; }
+        t += d;
     }
-    if _hit {
-        let _p = _ro + _rd * _t;
-        let _n = normalize(_p);
-        let _ld = normalize(vec3<f32>(1.0, 1.0, -1.0));
-        let _diff = max(dot(_n, _ld), 0.0);
-        vec4<f32>(col.rgb * _diff, col.a)
+    if hit {
+        let p = ro + rd * t;
+        let n = normalize(p);
+        let ld = normalize(vec3<f32>(1.0, 1.0, -1.0));
+        let diff = max(dot(n, ld), 0.0);
+        __RESULT__ = vec4<f32>(col.rgb * diff, col.a);
     } else {
         discard;
     }"#.trim().to_string()
                         }
                     }
                 }
+                MaterialOp::Lightning => {
+                    r#"
+    let d = length((in.uv - 0.5) * vec2<f32>(1.0, 4.0));
+    __RESULT__ = theme.primary_neon * neon_glow(d, 0.01, 0.2);"#.trim().to_string()
+                }
+                MaterialOp::RuneGlow => {
+                    r#"
+    let p = (in.uv - 0.5) * 2.0;
+    let d = min(sd_segment(p, vec2(-0.5, -0.8), vec2(0.5, 0.8)), sd_segment(p, vec2(0.5, -0.8), vec2(-0.5, 0.8)));
+    __RESULT__ = theme.rune_glow * neon_glow(d, 0.02, 0.15) * theme.rune_opacity;"#.trim().to_string()
+                }
+                MaterialOp::RaymarchReflections => {
+                    r#"
+    let ro = vec3<f32>(in.uv.x - 0.5, in.uv.y - 0.5, -2.0);
+    let rd = normalize(vec3<f32>(in.uv.x - 0.5, in.uv.y - 0.5, 1.0));
+    let t = ray_march(ro, rd);
+    if t > 0.0 {
+        let p = ro + rd * t;
+        let n = calc_normal(p);
+        let light_dir = normalize(vec3<f32>(1.0, 1.0, -1.0));
+        let diff = max(dot(n, light_dir), 0.2);
+        let ref_rd = reflect(rd, n);
+        let ref_t = ray_march(p + n * 0.01, ref_rd);
+        var reflection_color = vec3<f32>(0.05, 0.05, 0.1);
+        if ref_t > 0.0 { reflection_color = mix(theme.primary_neon.rgb, theme.shatter_neon.rgb, 0.5); }
+        __RESULT__ = vec4<f32>(mix(col.rgb * diff, reflection_color, 0.3), 1.0);
+    } else { discard; }"#.trim().to_string()
+                }
+                MaterialOp::Stroke => {
+                    r#"
+    let half_size = in.size * 0.5;
+    let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
+    let thickness = max(in.slice.x, 1.0);
+    let fw = length(vec2(dpdx(in.logical.x), dpdy(in.logical.y)));
+    __RESULT__ = vec4<f32>(col.rgb, col.a * (1.0 - smoothstep(-fw, fw, abs(d + thickness * 0.5) - thickness * 0.5)));"#.trim().to_string()
+                }
+                MaterialOp::DashedStroke => {
+                    r#"
+    let half_size = in.size * 0.5;
+    let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
+    let thickness = max(in.slice.x, 1.0);
+    let perimeter = (in.uv.x + in.uv.y) * max(in.size.x, in.size.y);
+    var alpha = 1.0 - smoothstep(-length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), length(vec2(dpdx(in.logical.x), dpdy(in.logical.y))), abs(d + thickness * 0.5) - thickness * 0.5);
+    if (perimeter + scene.time * 20.0) % (max(in.slice.y, 1.0) + max(in.slice.z, 1.0)) > max(in.slice.y, 1.0) { alpha = 0.0; }
+    __RESULT__ = vec4<f32>(col.rgb, col.a * alpha);"#.trim().to_string()
+                }
             };
 
-            lines.push(format!("    var {} = {};", result_var, expr));
+            if expr.contains("__RESULT__") {
+                lines.push(format!("    var {}: vec4<f32>;", result_var));
+                lines.push("    {".to_string());
+                lines.push(expr.replace("__RESULT__", &result_var));
+                lines.push("    }".to_string());
+            } else {
+                lines.push(format!("    var {} = {};", result_var, expr));
+            }
             var_names.insert((node_id, MaterialSocket::Color), result_var);
         }
 
         let body = lines.join("\n");
         let out_id = graph.output.ok_or(MaterialError::NoOutput)?;
-        let fn_name = format!("material_{}", out_id);
+        let fn_name = "material_entry".to_string();
 
         let wgsl_fn = format!(
             "fn {}(in: VertexOutput, col: vec4<f32>) -> vec4<f32> {{\n{}\n    return v_{};\n}}",
@@ -536,7 +687,10 @@ impl MaterialCompiler {
         graph: &MaterialGraph,
         offset: usize,
     ) -> Option<String> {
-        let mut matches = graph.edges.iter().filter(|e| e.to_node == node && e.to_socket == socket);
+        let mut matches = graph
+            .edges
+            .iter()
+            .filter(|e| e.to_node == node && e.to_socket == socket);
         let edge = matches.nth(offset)?;
         names.get(&(edge.from_node, edge.from_socket)).cloned()
     }
@@ -636,7 +790,9 @@ pub mod builtins {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let tex = g.add_node(MaterialOp::SampleTexture { tex_index });
-        let blend = g.add_node(MaterialOp::LayerBlend { mode: BlendMode::Multiply });
+        let blend = g.add_node(MaterialOp::LayerBlend {
+            mode: BlendMode::Multiply,
+        });
         g.connect(input, MaterialSocket::Color, blend, MaterialSocket::Color);
         g.connect(tex, MaterialSocket::Color, blend, MaterialSocket::Color);
         g.set_output(blend);
@@ -682,7 +838,12 @@ pub mod builtins {
     /// Build a neon line material (old mode 1).
     pub fn neon_line() -> MaterialGraph {
         let mut g = MaterialGraph::new();
-        let color = g.add_node(MaterialOp::ConstantColor { r: 1.5, g: 1.5, b: 1.5, a: 1.0 });
+        let color = g.add_node(MaterialOp::ConstantColor {
+            r: 1.5,
+            g: 1.5,
+            b: 1.5,
+            a: 1.0,
+        });
         g.set_output(color);
         g
     }
@@ -702,7 +863,9 @@ pub mod builtins {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
         let tex = g.add_node(MaterialOp::SampleTexture { tex_index });
-        let blend = g.add_node(MaterialOp::LayerBlend { mode: BlendMode::Multiply });
+        let blend = g.add_node(MaterialOp::LayerBlend {
+            mode: BlendMode::Multiply,
+        });
         g.connect(input, MaterialSocket::Color, blend, MaterialSocket::Color);
         g.connect(tex, MaterialSocket::Color, blend, MaterialSocket::Color);
         g.set_output(blend);
@@ -713,7 +876,9 @@ pub mod builtins {
     pub fn raymarch_cube() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
-        let rm = g.add_node(MaterialOp::Raymarch { shape: RaymarchShape::Box });
+        let rm = g.add_node(MaterialOp::Raymarch {
+            shape: RaymarchShape::Box,
+        });
         g.connect(input, MaterialSocket::Color, rm, MaterialSocket::Color);
         g.set_output(rm);
         g
@@ -723,7 +888,7 @@ pub mod builtins {
     pub fn stroke() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
-        let sdf = g.add_node(MaterialOp::SDFRoundRect);
+        let sdf = g.add_node(MaterialOp::Stroke);
         g.connect(input, MaterialSocket::Color, sdf, MaterialSocket::Color);
         g.set_output(sdf);
         g
@@ -743,11 +908,95 @@ pub mod builtins {
     pub fn dashed_stroke() -> MaterialGraph {
         let mut g = MaterialGraph::new();
         let input = g.add_node(MaterialOp::InputColor);
-        let sdf = g.add_node(MaterialOp::SDFRoundRect);
+        let sdf = g.add_node(MaterialOp::DashedStroke);
         g.connect(input, MaterialSocket::Color, sdf, MaterialSocket::Color);
         g.set_output(sdf);
         g
     }
+
+    pub fn lightning() -> MaterialGraph {
+        let mut g = MaterialGraph::new();
+        let l = g.add_node(MaterialOp::Lightning);
+        g.set_output(l);
+        g
+    }
+
+    pub fn rune_glow() -> MaterialGraph {
+        let mut g = MaterialGraph::new();
+        let r = g.add_node(MaterialOp::RuneGlow);
+        g.set_output(r);
+        g
+    }
+
+    pub fn raymarch() -> MaterialGraph {
+        let mut g = MaterialGraph::new();
+        let input = g.add_node(MaterialOp::InputColor);
+        let rm = g.add_node(MaterialOp::RaymarchReflections);
+        g.connect(input, MaterialSocket::Color, rm, MaterialSocket::Color);
+        g.set_output(rm);
+        g
+    }
+}
+
+pub fn generate_builtins_wgsl() -> String {
+    let mut out = String::new();
+    out.push_str("// ── Auto-generated material functions (Runtime) ──\n\n");
+
+    let builtins = vec![
+        (0, "solid", builtins::solid()),
+        (1, "neon_line", builtins::neon_line()),
+        (2, "textured", builtins::textured(0)),
+        (3, "rounded_rect", builtins::rounded_rect()),
+        (4, "ellipse", builtins::ellipse()),
+        (6, "text", builtins::text(0)),
+        (7, "glass", builtins::glass()),
+        (8, "neon_glow", builtins::neon_glow(1.0, 1.0)),
+        (9, "lightning", builtins::lightning()),
+        (10, "rune_glow", builtins::rune_glow()),
+        (12, "heatmap", builtins::heatmap(0)),
+        (13, "pbr", builtins::pbr()),
+        (14, "raymarch", builtins::raymarch()),
+        (
+            15,
+            "linear_grad",
+            builtins::linear_gradient([0.0; 4], [0.0; 4]),
+        ),
+        (
+            16,
+            "radial_grad",
+            builtins::radial_gradient([0.0; 4], [0.0; 4]),
+        ),
+        (17, "stroke", builtins::stroke()),
+        (18, "drop_shadow", builtins::drop_shadow()),
+        (19, "dashed", builtins::dashed_stroke()),
+        (20, "nine_slice", builtins::nine_slice(0)),
+        (21, "raymarch_cube", builtins::raymarch_cube()),
+    ];
+
+    let mut dispatch = String::new();
+    dispatch.push_str(
+        "fn dispatch_material(material_id: u32, in: VertexOutput, col: vec4<f32>) -> vec4<f32> {\n",
+    );
+    dispatch.push_str("    switch material_id {\n");
+
+    for (id, name, graph) in builtins {
+        let compiled = MaterialCompiler::compile(&graph).unwrap();
+        let fn_name = format!("material_{}_{}", id, name);
+        let fn_code = compiled.wgsl_fn.replace("material_entry", &fn_name);
+        out.push_str(&fn_code);
+        out.push_str("\n\n");
+
+        dispatch.push_str(&format!(
+            "        case {}u: {{ return {}(in, col); }}\n",
+            id, fn_name
+        ));
+    }
+
+    dispatch.push_str("        default: { return col; }\n");
+    dispatch.push_str("    }\n}\n");
+
+    out.push_str(&dispatch);
+    out
 }
 
 #[cfg(test)]
@@ -787,7 +1036,10 @@ mod tests {
     fn test_graph_validation_cycle() {
         let mut g = MaterialGraph::new();
         let a = g.add_node(MaterialOp::InputColor);
-        let b = g.add_node(MaterialOp::NeonGlow { radius: 1.0, intensity: 1.0 });
+        let b = g.add_node(MaterialOp::NeonGlow {
+            radius: 1.0,
+            intensity: 1.0,
+        });
         g.connect(a, MaterialSocket::Color, b, MaterialSocket::Color);
         g.connect(b, MaterialSocket::Color, a, MaterialSocket::Color); // cycle!
         g.set_output(b);
@@ -819,8 +1071,16 @@ mod tests {
         for (i, graph) in graphs.iter().enumerate() {
             match MaterialCompiler::compile(graph) {
                 Ok(compiled) => {
-                    assert!(!compiled.wgsl_fn.is_empty(), "graph {} produced empty WGSL", i);
-                    assert!(!compiled.fn_name.is_empty(), "graph {} produced empty fn name", i);
+                    assert!(
+                        !compiled.wgsl_fn.is_empty(),
+                        "graph {} produced empty WGSL",
+                        i
+                    );
+                    assert!(
+                        !compiled.fn_name.is_empty(),
+                        "graph {} produced empty fn name",
+                        i
+                    );
                 }
                 Err(e) => {
                     panic!("graph {} failed to compile: {}", i, e);

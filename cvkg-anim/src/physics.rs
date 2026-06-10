@@ -245,6 +245,50 @@ impl Quat {
             Self::IDENTITY
         }
     }
+
+    /// Spherical linear interpolation between two quaternions
+    pub fn slerp(self, other: Self, t: f32) -> Self {
+        let mut cos_half_theta =
+            self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w;
+        let mut other_mod = other;
+
+        if cos_half_theta < 0.0 {
+            other_mod = Self {
+                x: -other.x,
+                y: -other.y,
+                z: -other.z,
+                w: -other.w,
+            };
+            cos_half_theta = -cos_half_theta;
+        }
+
+        if cos_half_theta >= 1.0 {
+            return self;
+        }
+
+        let half_theta = cos_half_theta.acos();
+        let sin_half_theta = (1.0 - cos_half_theta * cos_half_theta).sqrt();
+
+        if sin_half_theta.abs() < 0.001 {
+            return Self {
+                x: self.x * 0.5 + other_mod.x * 0.5,
+                y: self.y * 0.5 + other_mod.y * 0.5,
+                z: self.z * 0.5 + other_mod.z * 0.5,
+                w: self.w * 0.5 + other_mod.w * 0.5,
+            }
+            .normalized();
+        }
+
+        let ratio_a = ((1.0 - t) * half_theta).sin() / sin_half_theta;
+        let ratio_b = (t * half_theta).sin() / sin_half_theta;
+
+        Self {
+            x: self.x * ratio_a + other_mod.x * ratio_b,
+            y: self.y * ratio_a + other_mod.y * ratio_b,
+            z: self.z * ratio_a + other_mod.z * ratio_b,
+            w: self.w * ratio_a + other_mod.w * ratio_b,
+        }
+    }
 }
 
 impl std::ops::Mul for Quat {
@@ -1256,6 +1300,69 @@ impl OceanWaves {
 // ─────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────
+// Viscous / Gooey Interactions (2D UI Springs)
+// ─────────────────────────────────────────────────────────────────────
+
+/// Simulates a highly damped, viscous surface tension between two points.
+/// Used for "gooey" UI effects (e.g., pulling a notification bubble away).
+pub struct ViscousSpring {
+    pub position_a: Vec3,
+    pub position_b: Vec3,
+    pub velocity_a: Vec3,
+    pub velocity_b: Vec3,
+    pub viscosity: f32,
+    pub rest_length: f32,
+    pub break_distance: f32,
+    pub is_broken: bool,
+}
+
+impl ViscousSpring {
+    pub fn new(pos_a: Vec3, pos_b: Vec3, viscosity: f32, break_distance: f32) -> Self {
+        Self {
+            position_a: pos_a,
+            position_b: pos_b,
+            velocity_a: Vec3::ZERO,
+            velocity_b: Vec3::ZERO,
+            viscosity,
+            rest_length: (pos_b - pos_a).length(),
+            break_distance,
+            is_broken: false,
+        }
+    }
+
+    /// Step the viscous spring physics. If the tension exceeds break_distance, it snaps.
+    pub fn step(&mut self, dt: f32) {
+        if self.is_broken {
+            // Recoil quickly to their anchors or rest positions
+            return;
+        }
+
+        let delta = self.position_b - self.position_a;
+        let dist = delta.length();
+
+        if dist > self.break_distance {
+            self.is_broken = true;
+            return;
+        }
+
+        if dist > 1e-5 {
+            let dir = delta / dist;
+            let force = (dist - self.rest_length) * self.viscosity;
+
+            // Apply heavy damped force
+            self.velocity_a += dir * force * dt;
+            self.velocity_b -= dir * force * dt;
+
+            self.velocity_a *= 0.8; // High friction for gooey feel
+            self.velocity_b *= 0.8;
+
+            self.position_a += self.velocity_a * dt;
+            self.position_b += self.velocity_b * dt;
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

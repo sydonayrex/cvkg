@@ -31,7 +31,17 @@ impl<'a> ExecutionContext<'a> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub trait KvasirNode: Send + Sync {
+    fn label(&self) -> &'static str;
+    fn inputs(&self) -> &[ResourceId];
+    fn outputs(&self) -> &[ResourceId];
+    fn pass_id(&self) -> super::nodes::PassId;
+    fn execute(&self, ctx: &mut ExecutionContext);
+}
+
+#[cfg(target_arch = "wasm32")]
+pub trait KvasirNode {
     fn label(&self) -> &'static str;
     fn inputs(&self) -> &[ResourceId];
     fn outputs(&self) -> &[ResourceId];

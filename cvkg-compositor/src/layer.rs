@@ -23,7 +23,7 @@ pub struct LayerId(pub u64);
 /// `Isolated` triggers off-screen buffer rendering: the layer and all its
 /// children are rendered to a separate texture, then composited back into the
 /// main scene. This matches the SVG `isolation` property.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Material {
     /// Opaque or standard UI. Rendered in the initial Scene Capture pass
     /// with standard alpha compositing (src-over).
@@ -92,6 +92,15 @@ pub enum Material {
     /// SVG `isolation` property and is required for correct blend mode
     /// behavior when child elements should not blend with the background.
     Isolated,
+
+    /// Renders the layer and its children into an offscreen buffer, then applies
+    /// a custom post-processing WGSL shader when blending back into the scene.
+    ShaderEffect {
+        /// Name of the registered shader effect (e.g. "HeatShimmer")
+        effect_name: String,
+        /// Dynamic parameters for the shader, serialized as a JSON string
+        params_json: String,
+    },
 }
 
 /// A draw command within a layer.

@@ -2,9 +2,8 @@
 
 use std::collections::{HashMap, VecDeque};
 
-
-use super::resource::ResourceId;
 use super::KvasirError;
+use super::resource::ResourceId;
 
 /// Opaque key for a node in the graph.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -51,16 +50,9 @@ impl KvasirGraph {
             resource,
             consumer: to,
         });
-        self.adjacency
-            .entry(from)
-            .or_default()
-            .push((resource, to));
+        self.adjacency.entry(from).or_default().push((resource, to));
         self.reverse_adj.entry(to).or_default().push(from);
     }
-
-
-
-
 
     /// Kahn's algorithm for topological sort.
     pub fn topological_sort(&self) -> Result<Vec<NodeKey>, KvasirError> {
@@ -84,7 +76,9 @@ impl KvasirGraph {
             order.push(node);
             if let Some(neighbors) = self.adjacency.get(&node) {
                 for (_, consumer) in neighbors {
-                    let deg = in_degree.get_mut(consumer).expect("Graph integrity violation: dangling consumer edge");
+                    let deg = in_degree
+                        .get_mut(consumer)
+                        .expect("Graph integrity violation: dangling consumer edge");
                     *deg -= 1;
                     if *deg == 0 {
                         queue.push_back(*consumer);
@@ -110,8 +104,6 @@ impl KvasirGraph {
     pub fn node(&self, key: NodeKey) -> Option<&dyn super::node::KvasirNode> {
         self.nodes.get(key.0).map(|b| b.as_ref())
     }
-
-
 
     /// Build a human-readable DOT representation for debugging.
     pub fn to_dot(&self) -> String {
@@ -149,8 +141,6 @@ impl GraphBuilder {
     pub fn connect(&mut self, from: NodeKey, resource: ResourceId, to: NodeKey) {
         self.graph.connect(from, resource, to);
     }
-
-
 
     pub fn build(self) -> KvasirGraph {
         self.graph

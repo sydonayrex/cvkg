@@ -131,6 +131,10 @@ pub struct FlowEdge {
     pub animation_progress: f32,
     /// Whether the edge is currently visible.
     pub visible: bool,
+    /// Speed of the data pulse flowing across the edge (0.0 = no pulse).
+    pub flow_speed: f32,
+    /// Color of the glowing data pulse.
+    pub pulse_color: [f32; 4],
 }
 
 impl FlowEdge {
@@ -157,6 +161,8 @@ impl FlowEdge {
             color_easing: SplineEasing::ease_in_out(),
             animation_progress: 1.0,
             visible: true,
+            flow_speed: 0.0,
+            pulse_color: [1.0, 1.0, 1.0, 1.0],
         }
     }
 
@@ -193,6 +199,18 @@ impl FlowEdge {
     /// Sets the color transition easing.
     pub fn with_color_easing(mut self, easing: SplineEasing) -> Self {
         self.color_easing = easing;
+        self
+    }
+
+    /// Sets the continuous flow speed for pulses.
+    pub fn with_flow_speed(mut self, speed: f32) -> Self {
+        self.flow_speed = speed;
+        self
+    }
+
+    /// Sets the color of the data pulse.
+    pub fn with_pulse_color(mut self, color: [f32; 4]) -> Self {
+        self.pulse_color = color;
         self
     }
 

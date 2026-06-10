@@ -2,7 +2,7 @@
 use cvkg::render::SurtrRenderer;
 
 #[cfg(feature = "gpu")]
-use cvkg_core::{View, Renderer, Rect};
+use cvkg_core::{Rect, Renderer, View};
 
 #[cfg(feature = "gpu")]
 use std::sync::Arc;

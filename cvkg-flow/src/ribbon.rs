@@ -19,6 +19,10 @@ pub struct RibbonVertex {
     pub color: [f32; 4],
     /// Ribbon width at this vertex in pixels.
     pub width: f32,
+    /// Speed of the data pulse.
+    pub flow_speed: f32,
+    /// Color of the data pulse.
+    pub pulse_color: [f32; 4],
 }
 
 /// A batch of ribbon geometry for GPU-instanced edge rendering.
@@ -276,6 +280,8 @@ pub fn build_ribbon_batch(edges: &[FlowEdge], nodes: &HashMap<NodeId, FlowNode>)
         // Get effective color and width from edge (includes hover/selection state)
         let color = edge.effective_color();
         let width = edge.effective_width();
+        let flow_speed = edge.flow_speed;
+        let pulse_color = edge.pulse_color;
 
         // Generate quad strip
         let base_index = batch.vertices.len() as u32;
@@ -306,6 +312,8 @@ pub fn build_ribbon_batch(edges: &[FlowEdge], nodes: &HashMap<NodeId, FlowNode>)
                 uv: [t, 0.0],
                 color,
                 width: w,
+                flow_speed,
+                pulse_color,
             });
 
             // Right vertex
@@ -314,6 +322,8 @@ pub fn build_ribbon_batch(edges: &[FlowEdge], nodes: &HashMap<NodeId, FlowNode>)
                 uv: [t, 1.0],
                 color,
                 width: w,
+                flow_speed,
+                pulse_color,
             });
 
             // Generate indices for quad strip
@@ -377,6 +387,8 @@ mod tests {
             uv: [0.0, 0.0],
             color: [1.0, 1.0, 1.0, 1.0],
             width: 2.0,
+            flow_speed: 0.0,
+            pulse_color: [1.0, 1.0, 1.0, 1.0],
         });
         batch.indices.push(0);
         assert!(!batch.is_empty());

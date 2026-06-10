@@ -38,6 +38,8 @@ pub mod shader_anim;
 pub mod skeletal;
 pub use particles::*;
 
+pub mod momentum;
+pub mod morph;
 pub mod physics;
 
 pub mod spring_snap;
@@ -157,6 +159,27 @@ pub enum Animation {
         pieces: u32,
         force: f32,
     },
+    /// Inertial Momentum (Friction/Decay solver)
+    Momentum {
+        initial_velocity: f32,
+        friction: f32,
+    },
+}
+
+/// Abstract driver for animation progress (Time-based or Scroll/Scalar-based)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ProgressDriver {
+    Time(Duration),
+    Scalar(f32),
+}
+
+impl ProgressDriver {
+    pub fn delta_time_secs(&self) -> f32 {
+        match self {
+            ProgressDriver::Time(dt) => dt.as_secs_f32(),
+            ProgressDriver::Scalar(ds) => *ds, // Use scalar diff as "dt" for generic progression
+        }
+    }
 }
 
 /// Tactile "Rubber Banding" utility for scroll/drag physics.
@@ -316,12 +339,36 @@ impl ActiveAnimation {
         }
     }
 
-    pub fn update(&mut self, dt: Duration, start_val: f32, end_val: f32) -> f32 {
+    pub fn update(&mut self, dt: ProgressDriver, start_val: f32, end_val: f32) -> f32 {
         if self.is_finished {
             return end_val;
         }
 
-        self.elapsed += dt;
+        match dt {
+            ProgressDriver::Time(duration) => {
+                self.elapsed += duration;
+            }
+            ProgressDriver::Scalar(t) => {
+                // Scalar directly controls absolute progress timeline instead of elapsed time.
+                // We'll map elapsed time strictly to the scalar seconds.
+
+                // RESTRICTION: Scroll Timelines (Scalar) only apply to Keyframe/Linear animations.
+                // If this is a physics animation (Sleipnir, Momentum, etc.), we ignore the scalar scrub.
+                match &self.animation {
+                    Animation::Linear { .. }
+                    | Animation::Hybrid { .. }
+                    | Animation::BifrostFade { .. }
+                    | Animation::MjolnirSlice { .. } => {
+                        self.elapsed = Duration::from_secs_f32(t);
+                    }
+                    _ => {
+                        return self.current_value; // Ignore scroll scrubbing on physics!
+                    }
+                }
+            }
+        }
+
+        let dt_secs = dt.delta_time_secs();
         let t = self.elapsed.as_secs_f32();
 
         match &self.animation {
@@ -342,7 +389,7 @@ impl ActiveAnimation {
                 let solver = self
                     .solver
                     .get_or_insert_with(|| SleipnirSolver::new(*params, end_val, start_val));
-                self.current_value = solver.tick(dt.as_secs_f32());
+                self.current_value = solver.tick(dt_secs);
                 if solver.is_settled() {
                     self.is_finished = true;
                 }
@@ -429,7 +476,7 @@ impl ActiveAnimation {
                     let solver = self.solver.get_or_insert_with(|| {
                         SleipnirSolver::new(*settle, end_val, self.current_value)
                     });
-                    self.current_value = solver.tick(dt.as_secs_f32());
+                    self.current_value = solver.tick(dt_secs);
                     if solver.is_settled() {
                         self.is_finished = true;
                     }
@@ -535,7 +582,7 @@ impl ActiveAnimation {
                     let mut all_finished = true;
                     for child in &mut self.child_states {
                         let solver = child.solver.as_mut().unwrap();
-                        child.current_value = solver.tick(dt.as_secs_f32());
+                        child.current_value = solver.tick(dt_secs);
                         if !solver.is_settled() {
                             all_finished = false;
                         }
@@ -549,6 +596,22 @@ impl ActiveAnimation {
                     if all_finished {
                         self.is_finished = true;
                     }
+                }
+            }
+            Animation::Momentum {
+                initial_velocity,
+                friction,
+            } => {
+                // Placeholder - We'll add the true solver logic via momentum.rs
+                // For now, this is just bridging the enum variant.
+                let mut solver = crate::momentum::DecaySolver::new(
+                    *initial_velocity,
+                    *friction,
+                    self.current_value,
+                );
+                self.current_value = solver.tick(dt_secs);
+                if solver.velocity.abs() < 0.1 {
+                    self.is_finished = true;
                 }
             }
         }
@@ -622,17 +685,17 @@ mod tests {
         let mut active = ActiveAnimation::new(Animation::Sequence(anims));
 
         // Update first animation halfway
-        active.update(Duration::from_millis(50), 0.0, 100.0);
+        active.update(ProgressDriver::Time(Duration::from_millis(50)), 0.0, 100.0);
         assert!(!active.is_finished);
         assert_eq!(active.current_index, 0);
 
         // Complete first animation
-        active.update(Duration::from_millis(60), 0.0, 100.0);
+        active.update(ProgressDriver::Time(Duration::from_millis(60)), 0.0, 100.0);
         assert!(!active.is_finished);
         assert_eq!(active.current_index, 1);
 
         // Complete second animation
-        active.update(Duration::from_millis(100), 0.0, 100.0);
+        active.update(ProgressDriver::Time(Duration::from_millis(100)), 0.0, 100.0);
         assert!(active.is_finished);
     }
 }

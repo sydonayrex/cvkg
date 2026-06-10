@@ -5,19 +5,19 @@ version = "0.2.9"
 edition = "2021"
 
 [features]
-webgpu = ["cvkg-render-web/webgpu"]
+webgpu = []
 default = ["webgpu"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core", version = "0.2.8" }
-cvkg-render-web = { path = "../../cvkg-render-web", version = "0.2.9" }
-cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.8" }
-cvkg-components = { path = "../../cvkg-components", version = "0.2.8" }
-cvkg-themes = { path = "../../cvkg-themes", version = "0.2.8" }
-cvkg-layout = { path = "../../cvkg-layout", version = "0.2.8" }
+cvkg-core = { path = "../../cvkg-core", version = "0.2.9" }
+cvkg-render-gpu = { path = "../../cvkg-render-gpu", version = "0.2.9" }
+cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.9" }
+cvkg-components = { path = "../../cvkg-components", version = "0.2.9" }
+cvkg-themes = { path = "../../cvkg-themes", version = "0.2.9" }
+cvkg-layout = { path = "../../cvkg-layout", version = "0.2.9" }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1"

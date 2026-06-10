@@ -784,6 +784,10 @@ pub struct GlyphInstance {
     pub is_rtl: bool,
     /// Unique composite cache key for rasterization lookup, incorporating font identity, size, styling, and glyph ID.
     pub cache_key: u64,
+    /// Linear index of this glyph in the paragraph (used for animation cascades).
+    pub glyph_index: usize,
+    /// Time offset applied to this glyph for kinetic typography.
+    pub time_offset: f32,
 }
 
 /// A segment in a glyph vector outline path.
@@ -1417,6 +1421,8 @@ impl RunicTextEngine {
                 cluster: info.cluster,
                 is_rtl: direction == Direction::RightToLeft,
                 cache_key: glyph_cache_key,
+                glyph_index: 0,
+                time_offset: 0.0,
             });
 
             x_offset += advance + style.letter_spacing + letter_space;
@@ -1569,6 +1575,7 @@ impl RunicTextEngine {
         let mut has_rtl = false;
         let mut primary_metrics = (0.0f32, 0.0f32, 0.0f32);
         let mut primary_line_height_px = DEFAULT_LINE_HEIGHT * DEFAULT_FONT_SIZE;
+        let mut global_glyph_index = 0;
 
         // Shape each span
         for span in spans {
@@ -1589,7 +1596,7 @@ impl RunicTextEngine {
                 Direction::LeftToRight
             };
 
-            let mut glyphs = match &span.kind {
+            let mut run_glyphs = match &span.kind {
                 TextSpanKind::Text => self.shape_run(&span.text, &span.style, direction)?,
                 TextSpanKind::Portal { width, height, .. } => {
                     vec![GlyphInstance {
@@ -1602,6 +1609,8 @@ impl RunicTextEngine {
                         cluster: span.byte_offset as u32,
                         is_rtl: false,
                         cache_key: 0,
+                        glyph_index: 0,
+                        time_offset: 0.0,
                     }]
                 }
             };
@@ -1611,7 +1620,7 @@ impl RunicTextEngine {
                 .last()
                 .map(|g| g.x + g.advance_width)
                 .unwrap_or(0.0);
-            for glyph in &mut glyphs {
+            for glyph in &mut run_glyphs {
                 glyph.x += span_offset_x;
             }
 
@@ -1628,7 +1637,12 @@ impl RunicTextEngine {
                 primary_line_height_px = span.style.line_height.to_pixels(span.style.font_size);
             }
 
-            all_glyphs.extend(glyphs);
+            for mut glyph in run_glyphs {
+                glyph.glyph_index = global_glyph_index;
+                glyph.time_offset = global_glyph_index as f32 * 0.05; // Base 50ms stagger
+                global_glyph_index += 1;
+                all_glyphs.push(glyph);
+            }
         }
 
         // Perform line breaking and layout

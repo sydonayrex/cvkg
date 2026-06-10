@@ -27,15 +27,19 @@ mod kvasir;
 mod material;
 
 // Re-export material types for downstream users
-pub use material::{MaterialGraph, MaterialCompiler, CompiledMaterial, MaterialOp, MaterialError};
 pub use material::builtins;
+pub use material::{CompiledMaterial, MaterialCompiler, MaterialError, MaterialGraph, MaterialOp};
 
-pub mod types;
-pub mod vertex;
+pub mod accessibility;
+pub mod ai;
+mod api;
+mod draw;
+pub(crate) mod passes;
+pub mod pyramid;
 pub mod renderer;
 mod surtr_util;
-mod draw;
-mod api;
+pub mod types;
+pub mod vertex;
 
 pub mod heim;
 pub use heim::SundrPacker;
@@ -106,35 +110,13 @@ mod tests {
     }
 }
 
-pub(crate) const WGSL_SRC: &str = concat!(
-    include_str!("shaders/common.wgsl"),
-    include_str!("shaders/shapes.wgsl"),
-    include_str!("shaders/bifrost.wgsl"),
-    include_str!("shaders/bloom.wgsl"),
-    include_str!("shaders/color_blind.wgsl"),
-    include_str!(concat!(env!("OUT_DIR"), "/materials_generated.wgsl"))
-);
-
-/// Specialized shader source for opaque/2D materials (modes 0-20 excluding 7,13-15,18,21).
-pub(crate) const WGSL_OPAQUE: &str = concat!(
-    include_str!("shaders/common.wgsl"),
-    include_str!("shaders/material_opaque.wgsl"),
-    include_str!("shaders/bifrost.wgsl"),
-    include_str!("shaders/bloom.wgsl"),
-    include_str!("shaders/color_blind.wgsl"),
-    include_str!(concat!(env!("OUT_DIR"), "/materials_generated.wgsl"))
-);
-
-/// Specialized shader source for glass material (mode 7 only).
-pub(crate) const WGSL_GLASS: &str = concat!(
-    include_str!("shaders/common.wgsl"),
-    include_str!("shaders/material_glass.wgsl"),
-    include_str!("shaders/bifrost.wgsl"),
-    include_str!("shaders/bloom.wgsl"),
-    include_str!("shaders/color_blind.wgsl"),
-    include_str!(concat!(env!("OUT_DIR"), "/materials_generated.wgsl"))
-);
-
+pub(crate) const WGSL_COMMON: &str = include_str!("shaders/common.wgsl");
+pub(crate) const WGSL_SHAPES: &str = include_str!("shaders/shapes.wgsl");
+pub(crate) const WGSL_MATERIAL_OPAQUE: &str = include_str!("shaders/material_opaque.wgsl");
+pub(crate) const WGSL_MATERIAL_GLASS: &str = include_str!("shaders/material_glass.wgsl");
+pub(crate) const WGSL_BIFROST: &str = include_str!("shaders/bifrost.wgsl");
+pub(crate) const WGSL_BLOOM: &str = include_str!("shaders/bloom.wgsl");
+pub(crate) const WGSL_COLOR_BLIND: &str = include_str!("shaders/color_blind.wgsl");
 
 pub mod color_blindness;
 
@@ -153,5 +135,5 @@ pub use accesskit_winit::Adapter as ShieldWallAdapter;
 pub use cvkg_core::{ColorTheme, SceneUniforms};
 
 pub use renderer::SurtrRenderer;
-pub use types::{SvgModel, SvgAnimation};
-pub use vertex::{Vertex, InstanceData};
+pub use types::{SvgAnimation, SvgModel};
+pub use vertex::{InstanceData, Vertex};

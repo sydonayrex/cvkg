@@ -7,7 +7,7 @@
 
 use cvkg::prelude::*;
 use cvkg_core::{Rect, Renderer};
-use cvkg_scene::{SceneGraph, NodeId, VNode};
+use cvkg_scene::{NodeId, SceneGraph, VNode};
 use std::cell::RefCell;
 use std::time::Instant;
 
@@ -50,9 +50,14 @@ impl PhysicsCube {
             let dq = [dq_x, dq_y, dq_z, dq_w][i];
             self.rotation[i] += dq * half_dt;
         }
-        let len = (0..4).map(|i| self.rotation[i] * self.rotation[i]).sum::<f32>().sqrt();
+        let len = (0..4)
+            .map(|i| self.rotation[i] * self.rotation[i])
+            .sum::<f32>()
+            .sqrt();
         if len > 1e-6 {
-            for i in 0..4 { self.rotation[i] /= len; }
+            for i in 0..4 {
+                self.rotation[i] /= len;
+            }
         }
     }
 
@@ -93,7 +98,9 @@ impl Physics3DDemo {
 impl View for Physics3DDemo {
     type Body = Self;
 
-    fn body(self) -> Self::Body { self }
+    fn body(self) -> Self::Body {
+        self
+    }
 
     fn render(&self, r: &mut dyn Renderer, _rect: Rect) {
         let now = Instant::now();
@@ -118,15 +125,23 @@ impl View for Physics3DDemo {
                 let z = (angle * 2.0).cos() * 100.0;
                 let y = 200.0 + idx as f32 * 50.0;
                 let colors: [[f32; 4]; 6] = [
-                    [0.9, 0.2, 0.2, 1.0], [0.2, 0.9, 0.2, 1.0], [0.2, 0.2, 0.9, 1.0],
-                    [0.9, 0.9, 0.2, 1.0], [0.9, 0.2, 0.9, 1.0], [0.2, 0.9, 0.9, 1.0],
+                    [0.9, 0.2, 0.2, 1.0],
+                    [0.2, 0.9, 0.2, 1.0],
+                    [0.2, 0.2, 0.9, 1.0],
+                    [0.9, 0.9, 0.2, 1.0],
+                    [0.9, 0.2, 0.9, 1.0],
+                    [0.2, 0.9, 0.9, 1.0],
                 ];
                 let color = colors[idx % 6];
                 let size = 30.0 + (idx as f32 * 7.0) % 40.0;
                 cubes.push(PhysicsCube::new(x, y, z, size, color));
 
                 let node_id = NodeId((idx + 1) as u64);
-                let mut node = VNode::new(node_id, "Cube3D", Rect::new(-size * 0.5, -size * 0.5, size, size));
+                let mut node = VNode::new(
+                    node_id,
+                    "Cube3D",
+                    Rect::new(-size * 0.5, -size * 0.5, size, size),
+                );
                 node.is_3d = true;
                 node.position_3d = [x, y, z];
                 node.rotation_3d = [0.0, 0.0, 0.0, 1.0];
@@ -163,7 +178,10 @@ impl View for Physics3DDemo {
         }
 
         // Draw background
-        r.fill_rect(Rect::new(-1000.0, -1000.0, 2000.0, 2000.0), [0.05, 0.05, 0.1, 1.0]);
+        r.fill_rect(
+            Rect::new(-1000.0, -1000.0, 2000.0, 2000.0),
+            [0.05, 0.05, 0.1, 1.0],
+        );
 
         // Draw floor grid
         for i in -10..=10i32 {
@@ -192,12 +210,22 @@ impl View for Physics3DDemo {
 
         // UI overlay
         r.draw_text(
-            &format!("3D Physics Demo | {} cubes | dt={:.3}s", self.cube_node_ids.borrow().len(), dt),
-            -480.0, -350.0, 18.0, [1.0, 1.0, 1.0, 0.8],
+            &format!(
+                "3D Physics Demo | {} cubes | dt={:.3}s",
+                self.cube_node_ids.borrow().len(),
+                dt
+            ),
+            -480.0,
+            -350.0,
+            18.0,
+            [1.0, 1.0, 1.0, 0.8],
         );
         r.draw_text(
             "Physics → SceneGraph → render_scene_node_3d → draw_mesh_3d → GPU",
-            -480.0, -320.0, 14.0, [0.7, 0.8, 1.0, 0.6],
+            -480.0,
+            -320.0,
+            14.0,
+            [0.7, 0.8, 1.0, 0.6],
         );
 
         r.request_redraw();
@@ -218,8 +246,14 @@ fn main() {
         cube.integrate(0.016, [0.0, -9.81 * 50.0, 0.0]);
         cube.collide_floor(0.0, 0.5);
     }
-    let qlen = (0..4).map(|i| cube.rotation[i] * cube.rotation[i]).sum::<f32>().sqrt();
-    assert!((qlen - 1.0).abs() < 0.001, "Quaternion must stay normalized");
+    let qlen = (0..4)
+        .map(|i| cube.rotation[i] * cube.rotation[i])
+        .sum::<f32>()
+        .sqrt();
+    assert!(
+        (qlen - 1.0).abs() < 0.001,
+        "Quaternion must stay normalized"
+    );
     assert!(cube.position[1] < 100.0, "Cube must fall");
     println!("  [PASS] Physics simulation (gravity, floor collision, quaternion integration)");
 
