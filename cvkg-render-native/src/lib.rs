@@ -561,6 +561,7 @@ impl WindowManager {
             frame_history: std::collections::VecDeque::with_capacity(60),
             frame_count: 0,
             last_pos: None,
+            needs_cursor_update: false,
             is_dragging: false,
             drag_start_pos: [0.0, 0.0],
             drag_button: 0,
@@ -630,6 +631,9 @@ pub struct WindowData {
     frame_count: u64,
     /// Last window position for shake detection.
     last_pos: Option<[i32; 2]>,
+    /// Set when mouse moves; cleared when redraw processes. Prevents redundant
+    /// VDOM rebuilds when cursor moves faster than the display refresh rate.
+    needs_cursor_update: bool,
     // ── Drag tracking ──────────────────────────────────────────────────────
     /// Whether a drag is currently in progress.
     is_dragging: bool,
@@ -736,14 +740,6 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
             // Immediately set self.gpu to prevent re-entry
             let gpu = pollster::block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
             self.gpu = Some(Arc::new(std::sync::Mutex::new(gpu)));
-
-            // Register the window surface with the newly forged GPU renderer
-            if let Some(gpu_mutex) = &self.gpu {
-                gpu_mutex
-                    .lock()
-                    .expect("Failed to lock GPU mutex")
-                    .register_window(window.clone());
-            }
 
             log::info!("[Native] Initialization complete.");
             window.request_redraw();
@@ -883,6 +879,22 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // Build new vdom and diff (layout pass)
                     let layout_start = std::time::Instant::now();
                     let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
+
+                    // Dispatch cursor events if the mouse moved since last frame
+                    if state.needs_cursor_update {
+                        if let Some(vdom) = &state.vdom {
+                            vdom.dispatch_event(cvkg_core::Event::PointerMove {
+                                x: state.cursor_pos[0],
+                                y: state.cursor_pos[1],
+                                proximity_field: 0.0,
+                                tilt: None,
+                                azimuth: None,
+                                pressure: Some(1.0),
+                                barrel_rotation: None,
+                            });
+                        }
+                        state.needs_cursor_update = false;
+                    }
                     let layout_end = std::time::Instant::now();
 
                     // Apply patches to the accessibility tree and the previous VDOM
@@ -1026,25 +1038,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 WindowEvent::CursorMoved { position, .. } => {
                     let scale = state.window.scale_factor();
                     let logical = position.to_logical::<f32>(scale);
-                    log::info!(
-                        "[Native] Cursor Moved: Physical={:?} Logical={:?} Scale={}",
-                        position,
-                        logical,
-                        scale
-                    );
                     state.cursor_pos = [logical.x, logical.y];
-                    if let Some(vdom) = &state.vdom {
-                        vdom.dispatch_event(cvkg_core::Event::PointerMove {
-                            x: state.cursor_pos[0],
-                            y: state.cursor_pos[1],
-                            proximity_field: 0.0,
-                            tilt: None,
-                            azimuth: None,
-                            pressure: Some(1.0),
-                            barrel_rotation: None,
-                        });
+                    state.needs_cursor_update = true;
+                    // Don't request_redraw here — the redraw will process the cursor update.
+                    // Only request a redraw if we're not already in a redraw cycle.
+                    if state.frame_count == 0 {
+                        state.window.request_redraw();
                     }
-                    state.window.request_redraw();
                 }
                 WindowEvent::MouseInput {
                     state: mouse_state,
@@ -1690,6 +1690,77 @@ impl cvkg_core::Renderer for NativeRenderer {
             .lock()
             .expect("GPU mutex poisoned: register_shared_element")
             .register_shared_element(id, rect);
+    }
+    fn set_material(&mut self, material: cvkg_core::DrawMaterial) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: set_material")
+            .set_material(material);
+    }
+    fn current_material(&self) -> cvkg_core::DrawMaterial {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: current_material")
+            .current_material()
+    }
+    fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: serialize_svg")
+            .serialize_svg(name)
+    }
+    fn apply_svg_filter(
+        &mut self,
+        name: &str,
+        filter_id: &str,
+        region: cvkg_core::Rect,
+    ) -> Result<String, String> {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: apply_svg_filter")
+            .apply_svg_filter(name, filter_id, region)
+    }
+    fn push_shadow(&mut self, radius: f32, color: [f32; 4], offset: [f32; 2]) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_shadow")
+            .push_shadow(radius, color, offset);
+    }
+    fn pop_shadow(&mut self) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: pop_shadow")
+            .pop_shadow();
+    }
+    fn push_affine(&mut self, transform: [f32; 6]) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: push_affine")
+            .push_affine(transform);
+    }
+    fn enter_portal(&mut self, z_index: i32) {
+        // Portal layer rendering not yet supported in SurtrRenderer.
+        // Content within portals renders inline as fallback.
+        log::warn!(
+            "Portal rendering (enter_portal) not yet implemented in GPU backend; z_index={}",
+            z_index
+        );
+    }
+    fn exit_portal(&mut self) {
+        // Portal layer rendering not yet supported in SurtrRenderer.
+        log::warn!("Portal rendering (exit_portal) not yet implemented in GPU backend");
+    }
+    fn viewport_size(&self) -> cvkg_core::Rect {
+        let size = self.window.inner_size();
+        let scale = self.window.scale_factor();
+        let logical = size.to_logical::<f32>(scale);
+        cvkg_core::Rect::new(0.0, 0.0, logical.width, logical.height)
+    }
+    fn announce(&mut self, message: &str, priority: cvkg_core::AnnouncementPriority) {
+        // Delegate to AccessKit via the ShieldWall adapter if active.
+        // For now, log the announcement. Full implementation requires
+        // integration with the AccessKit tree update cycle.
+        log::info!("Accessibility announcement [{:?}]: {}", priority, message);
     }
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
         self.gpu
