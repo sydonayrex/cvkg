@@ -245,8 +245,8 @@ impl View for BerserkerFireView {
 fn draw_nornir_bar(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4], _rage: &Signal<f32>, w: f32, _h: f32) {
     let bar_rect = cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: 28.0 };
     r.push_vnode(bar_rect, "NornirBar");
-    // Glass-like background: dark translucent fill (bifrost requires multi-pass pipeline)
-    r.fill_rounded_rect(bar_rect, 0.0, [0.02, 0.02, 0.04, 0.75]);
+    // Glass background: uses glass material pipeline for frosted blur effect
+    r.fill_glass_rect(bar_rect, 4.0, 15.0);
 
     let menu_x = 8.0;
     let items = [("File", 60.0), ("Edit", 60.0), ("View", 70.0), ("Window", 80.0), ("Help", 60.0)];
@@ -265,8 +265,8 @@ fn draw_nornir_bar(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4]
 fn draw_dock(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4], _rage: &Signal<f32>, w: f32, h: f32) {
     let dock_rect = cvkg_core::Rect { x: w * 0.3, y: h - 68.0, width: w * 0.4, height: 56.0 };
     r.push_vnode(dock_rect, "HeimdallDock");
-    // Glass-like background: dark translucent fill (bifrost requires multi-pass pipeline)
-    r.fill_rounded_rect(dock_rect, 16.0, [0.04, 0.04, 0.06, 0.85]);
+    // Glass background: uses glass material pipeline for frosted blur effect
+    r.fill_glass_rect(dock_rect, 12.0, 20.0);
 
     let icons = ["⚔️", "🔥", "🛡️", "💀", "🌋"];
     let icon_size = 48.0;

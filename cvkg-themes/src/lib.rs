@@ -211,6 +211,71 @@ pub fn glass_material_to_gpu_patch(mat: &GlassMaterial) -> [f32; 4] {
     [rgba.r, rgba.g, rgba.b, mat.tint_opacity]
 }
 
+/// Generate a complete `ColorTheme` GPU uniform from a single OKLCH seed color.
+///
+/// This is the fast path for dynamic theme generation: given any OKLCH color,
+/// produces a full 160-byte GPU-ready `ColorTheme` without allocating a `Theme`.
+///
+/// The palette is procedurally derived from the seed by rotating hue, adjusting
+/// lightness, and modulating chroma in perceptually uniform OKLCH space.
+///
+/// # Example
+/// ```
+/// use cvkg_themes::{OklchColor, oklch_to_color_theme};
+/// let seed = OklchColor::new(0.55, 0.12, 260.0, 1.0);
+/// let theme = oklch_to_color_theme(seed);
+/// // Upload theme to GPU via renderer.set_theme(theme)
+/// ```
+pub fn oklch_to_color_theme(seed: OklchColor) -> cvkg_core::ColorTheme {
+    let is_dark = seed.l < 0.5;
+
+    // Derive palette from seed using OKLCH color science
+    let primary = seed.to_rgba();
+    let secondary = seed.rotate_hue(120.0).to_rgba();
+    let accent = seed.rotate_hue(60.0).saturate(0.1).to_rgba();
+
+    let bg = if is_dark { 0.02 } else { 0.98 };
+    let surf = if is_dark { 0.08 } else { 0.95 };
+    let txt = if is_dark { 0.95 } else { 0.05 };
+
+    let background = OklchColor::new(bg, seed.c * 0.1, seed.h, 1.0).to_rgba();
+    let surface = OklchColor::new(surf, seed.c * 0.15, seed.h, 1.0).to_rgba();
+    let text = OklchColor::new(txt, seed.c * 0.05, seed.h, 1.0).to_rgba();
+
+    // Glass tints derived from seed
+    let glass_base_l = if is_dark { 0.04 } else { 0.92 };
+    let glass_base_c = seed.c * 0.08;
+    let glass_base = OklchColor::new(glass_base_l, glass_base_c, seed.h, if is_dark { 0.82 } else { 0.15 }).to_rgba();
+    let glass_edge = OklchColor::new(0.5, seed.c * 0.2, seed.h + 180.0, 0.6).to_rgba();
+
+    // Neon colors: primary = seed, shatter = complementary
+    let shatter = seed.rotate_hue(180.0).saturate(0.15).to_rgba();
+    let rune = seed.rotate_hue(30.0).lighten(0.2).to_rgba();
+    let ember = OklchColor::new(0.7, 0.2, 30.0, 1.0).to_rgba();
+
+    // Mani glow: cool blue-white
+    let mani_glow = OklchColor::new(0.8, 0.05, 240.0, 0.8).to_rgba();
+
+    cvkg_core::ColorTheme {
+        primary_neon: [primary.r, primary.g, primary.b, 1.2],
+        shatter_neon: [shatter.r, shatter.g, shatter.b, 1.5],
+        glass_base: [glass_base.r, glass_base.g, glass_base.b, glass_base.a],
+        glass_edge: [glass_edge.r, glass_edge.g, glass_edge.b, glass_edge.a],
+        rune_glow: [rune.r, rune.g, rune.b, 0.9],
+        ember_core: [ember.r, ember.g, ember.b, 1.0],
+        background_deep: [background.r, background.g, background.b, 1.0],
+        mani_glow: [mani_glow.r, mani_glow.g, mani_glow.b, 0.8],
+        glass_blur_strength: 1.0,
+        shatter_edge_width: 2.0,
+        neon_bloom_radius: 20.0,
+        rune_opacity: 0.7,
+        glass_tint_adapt: 0.35,
+        glass_ior: 1.45,
+        _pad0: 0.0,
+        _pad1: 0.0,
+    }
+}
+
 // =============================================================================
 // SEMANTIC COLORS
 // =============================================================================

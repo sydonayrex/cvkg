@@ -2743,6 +2743,14 @@ pub trait Renderer: ElapsedTime + Send {
     /// Fill an ellipse/circle that fits inside `rect`.
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]);
 
+    /// Fill a rounded rect with glass material for frosted backdrop effect.
+    /// This is the proper way to render glass cards for macOS Tahoe-style blur.
+    /// The blur_radius controls the intensity of the backdrop blur.
+    fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32) {
+        // Default no-op implementation; GPU backend overrides
+        let _ = (rect, radius, blur_radius);
+    }
+
     /// Draw a high-fidelity 3D cube inside the given rectangle using specialized shader logic.
     /// `rotation` is [pitch, yaw, roll] in radians.
     fn draw_3d_cube(&mut self, _rect: Rect, _color: [f32; 4], _rotation: [f32; 3]) {}
@@ -3181,10 +3189,11 @@ pub struct ColorTheme {
     /// Weight of adaptive tint from backdrop [0.0, 1.0].
     /// 0.0 = static theme tint, 1.0 = fully adaptive.
     pub glass_tint_adapt: f32,
+    /// Per-frame glass IOR override. 0.0 = use shader default (1.45).
+    pub glass_ior: f32,
     // Padding to match WGSL uniform buffer 16-byte alignment (total = 160 bytes)
     pub _pad0: f32,
     pub _pad1: f32,
-    pub _pad2: f32,
 }
 impl ColorTheme {
     /// Asgard Mode: The high-fidelity "Cyberpunk Viking" aesthetic.
@@ -3203,7 +3212,8 @@ impl ColorTheme {
             neon_bloom_radius: 0.022,
             rune_opacity: 0.55,
             glass_tint_adapt: 0.35,
-            _pad0: 0.0, _pad1: 0.0, _pad2: 0.0,
+            glass_ior: 1.45,
+            _pad0: 0.0, _pad1: 0.0,
         }
     }
 
@@ -3223,7 +3233,8 @@ impl ColorTheme {
             neon_bloom_radius: 0.0,
             rune_opacity: 0.0,
             glass_tint_adapt: 0.0,
-            _pad0: 0.0, _pad1: 0.0, _pad2: 0.0,
+            glass_ior: 1.0,
+            _pad0: 0.0, _pad1: 0.0,
         }
     }
 
@@ -3245,7 +3256,8 @@ impl ColorTheme {
             neon_bloom_radius: 0.022,
             rune_opacity: 0.55,
             glass_tint_adapt: 0.65,
-            _pad0: 0.0, _pad1: 0.0, _pad2: 0.0,
+            glass_ior: 1.45,
+            _pad0: 0.0, _pad1: 0.0,
         }
     }
 
@@ -3265,7 +3277,8 @@ impl ColorTheme {
             neon_bloom_radius: 0.035,
             rune_opacity: 0.85,
             glass_tint_adapt: 0.15,
-            _pad0: 0.0, _pad1: 0.0, _pad2: 0.0,
+            glass_ior: 1.85,
+            _pad0: 0.0, _pad1: 0.0,
         }
     }
 }

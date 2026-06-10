@@ -76,8 +76,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // View direction (simplified: from center toward edge)
     let view_dir = normalize(centered + vec2<f32>(1e-5, 1e-5));
 
-    // Use per-instance IOR if set, otherwise default to 1.45 (borosilicate glass)
-    let ior = 1.45;
+    // Use per-frame IOR from theme if set, otherwise default to 1.45 (borosilicate glass)
+    let ior = select(1.45, theme.glass_ior, theme.glass_ior > 0.0);
 
     // Compute refracted direction using Snell's law
     let refracted_dir = snell_refraction(lens_normal, view_dir, ior);

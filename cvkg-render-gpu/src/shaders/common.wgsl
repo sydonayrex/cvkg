@@ -16,7 +16,8 @@ struct ColorTheme {
     neon_bloom_radius:    f32,
     rune_opacity:         f32,
     glass_tint_adapt:     f32,
-    _pad0: f32, _pad1: f32, _pad2: f32, _pad3: f32,
+    glass_ior:            f32,
+    _pad0: f32, _pad1: f32,
 };
 
 struct SceneUniforms {
