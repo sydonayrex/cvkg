@@ -93,8 +93,6 @@ pub struct BloomBlurNode {
     pub outputs: Vec<ResourceId>,
     pub width: u32,
     pub height: u32,
-    /// Persistent uniform buffer for blur passes (avoids per-frame allocation)
-    pub kawase_uniform: Option<wgpu::Buffer>,
 }
 
 impl BloomBlurNode {
@@ -104,7 +102,6 @@ impl BloomBlurNode {
             outputs: vec![RES_BLOOM_A],
             width,
             height,
-            kawase_uniform: None,
         }
     }
 }
@@ -136,25 +133,7 @@ impl KvasirNode for BloomBlurNode {
         }
 
         // Reuse persistent uniform buffer (avoids per-frame GPU allocation)
-        let needs_buffer = self.kawase_uniform.is_none();
-        if needs_buffer {
-            let kawase_uniform = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Kawase Bloom Uniform"),
-                size: 32,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
-            // Note: kawase_uniform is immutable (&self), so on first execution
-            // the buffer won't be created until the node is reconstructed.
-            // For now, create per-frame but this is marked for optimization.
-            let _ = kawase_uniform;
-        }
-        let kawase_uniform = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Kawase Bloom Uniform"),
-            size: 32,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let kawase_uniform = &ctx.renderer.kawase_uniform;
 
         // Create per-mip views based on actual mip count
         let effective_mips = (num_mips as usize).min(5);
@@ -197,7 +176,7 @@ impl KvasirNode for BloomBlurNode {
                 0.0,
             ];
             ctx.queue
-                .write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
+                .write_buffer(kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
 
             let w = mip_scales[mip as usize].0.max(1.0) as u32;
             let h = mip_scales[mip as usize].1.max(1.0) as u32;
@@ -209,7 +188,7 @@ impl KvasirNode for BloomBlurNode {
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &kawase_uniform,
+                            buffer: kawase_uniform,
                             offset: 0,
                             size: wgpu::BufferSize::new(32),
                         }),
@@ -265,7 +244,7 @@ impl KvasirNode for BloomBlurNode {
                 0.0,
             ];
             ctx.queue
-                .write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
+                .write_buffer(kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
 
             let w = mip_scales[(mip - 1) as usize].0.max(1.0) as u32;
             let h = mip_scales[(mip - 1) as usize].1.max(1.0) as u32;
@@ -277,7 +256,7 @@ impl KvasirNode for BloomBlurNode {
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                            buffer: &kawase_uniform,
+                            buffer: kawase_uniform,
                             offset: 0,
                             size: wgpu::BufferSize::new(32),
                         }),

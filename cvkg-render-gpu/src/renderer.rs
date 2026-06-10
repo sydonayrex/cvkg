@@ -111,8 +111,6 @@ pub struct SurtrRenderer {
     pub(crate) bloom_extract_pipeline: wgpu::RenderPipeline,
     /// Identity copy pipeline for Pass 2 backdrop blur (all pixels, no luminance gate).
     pub(crate) copy_pipeline: wgpu::RenderPipeline,
-    pub(crate) blur_h_pipeline: wgpu::RenderPipeline,
-    pub(crate) blur_v_pipeline: wgpu::RenderPipeline,
     pub(crate) composite_pipeline: wgpu::RenderPipeline,
     /// Color blindness simulation pipeline (fullscreen triangle).
     pub(crate) color_blind_pipeline: wgpu::RenderPipeline,
@@ -820,60 +818,6 @@ impl SurtrRenderer {
             cache: None,
         });
 
-        // Muspelheim Blur Pipelines (H and V)
-        // NOTE: No blending - blur is a full-screen filter that replaces the destination
-        let blur_h_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Muspelheim Horizontal Blur"),
-            layout: Some(&post_process_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_blur_h"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None, // Full-screen filter - replace, not blend
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
-        let blur_v_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Muspelheim Vertical Blur"),
-            layout: Some(&post_process_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_blur_v"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: None, // Full-screen filter - replace, not blend
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
-        });
-
         // Kawase blur pyramid pipelines (separate shader module — conflicting bindings)
         // NOTE: Compiled separately because blur_pyramid.wgsl defines its own
         // @group(0) bindings (BlurUniforms + texture + sampler) that conflict
@@ -1418,8 +1362,6 @@ impl SurtrRenderer {
             glass_pipeline,
             bloom_extract_pipeline,
             copy_pipeline,
-            blur_h_pipeline,
-            blur_v_pipeline,
             composite_pipeline,
             env_bind_group_layout,
             text_engine: cvkg_runic_text::RunicTextEngine::default(),

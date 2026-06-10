@@ -124,12 +124,8 @@ impl KvasirNode for BackdropBlurNode {
     fn execute(&self, ctx: &mut ExecutionContext) {
         let blur_tex = ctx.registry.get_texture(RES_BLUR_A).unwrap();
 
-        let kawase_uniform = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Kawase Uniform"),
-            size: 32,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // Reuse persistent uniform buffer (avoids per-frame GPU allocation)
+        let kawase_uniform = &ctx.renderer.kawase_uniform;
 
         // Derive mip count from the actual texture, not hardcoded
         let num_mips = blur_tex.mip_level_count();
@@ -145,33 +141,6 @@ impl KvasirNode for BackdropBlurNode {
                     base_mip_level: mip as u32,
                     mip_level_count: Some(1),
                     ..Default::default()
-                })
-            })
-            .collect();
-
-        let kawase_bind_groups: Vec<wgpu::BindGroup> = (0..effective_mips)
-            .map(|mip| {
-                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(&format!("kawase_bg_{}", mip)),
-                    layout: &ctx.renderer.kawase_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: &kawase_uniform,
-                                offset: 0,
-                                size: wgpu::BufferSize::new(32),
-                            }),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(&mip_views[mip as usize]),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
-                        },
-                    ],
                 })
             })
             .collect();
@@ -200,10 +169,34 @@ impl KvasirNode for BackdropBlurNode {
                 0.0,
             ];
             ctx.queue
-                .write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..8]));
+                .write_buffer(kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..8]));
 
             let w = mip_scales[mip as usize].0.max(1.0) as u32;
             let h = mip_scales[mip as usize].1.max(1.0) as u32;
+
+            // Create bind group for this mip level (bind groups are cheap; we still create them per-frame)
+            let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("kawase_bg_{}", mip)),
+                layout: &ctx.renderer.kawase_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: kawase_uniform,
+                            offset: 0,
+                            size: wgpu::BufferSize::new(32),
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&mip_views[(mip - 1) as usize]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                    },
+                ],
+            });
 
             let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&format!("Kawase Down {}", mip)),
@@ -225,7 +218,7 @@ impl KvasirNode for BackdropBlurNode {
             });
             p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
             p.set_pipeline(&ctx.renderer.kawase_down_pipeline);
-            p.set_bind_group(0, &kawase_bind_groups[(mip - 1) as usize], &[]);
+            p.set_bind_group(0, &bg, &[]);
             p.draw(0..3, 0..1);
         }
 
@@ -242,10 +235,34 @@ impl KvasirNode for BackdropBlurNode {
                 0.0,
             ];
             ctx.queue
-                .write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..8]));
+                .write_buffer(kawase_uniform, 0, bytemuck::cast_slice(&uniform_data[..8]));
 
             let w = mip_scales[(mip - 1) as usize].0.max(1.0) as u32;
             let h = mip_scales[(mip - 1) as usize].1.max(1.0) as u32;
+
+            // Create bind group for this mip level
+            let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some(&format!("kawase_up_bg_{}", mip)),
+                layout: &ctx.renderer.kawase_bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: kawase_uniform,
+                            offset: 0,
+                            size: wgpu::BufferSize::new(32),
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&mip_views[mip as usize]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                    },
+                ],
+            });
 
             let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&format!("Kawase Up {}", mip)),
@@ -262,7 +279,7 @@ impl KvasirNode for BackdropBlurNode {
             });
             p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
             p.set_pipeline(&ctx.renderer.kawase_up_pipeline);
-            p.set_bind_group(0, &kawase_bind_groups[mip as usize], &[]);
+            p.set_bind_group(0, &bg, &[]);
             p.draw(0..3, 0..1);
         }
 
