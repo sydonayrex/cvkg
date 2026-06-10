@@ -11,6 +11,7 @@ struct ColorTheme {
     rune_glow:       vec4<f32>,
     ember_core:      vec4<f32>,
     background_deep: vec4<f32>,
+    mani_glow:       vec4<f32>,
     glass_blur_strength:  f32,
     shatter_edge_width:   f32,
     neon_bloom_radius:    f32,
