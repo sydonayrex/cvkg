@@ -308,20 +308,52 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
 
     for (i, &(id_l, id_r)) in s.physics.card_bodies.iter().enumerate() {
         if let (Some(bl), Some(br)) = (s.physics.world.body(id_l), s.physics.world.body(id_r)) {
-            let rect_l = cvkg_core::Rect { x: bl.position.x - 100.0, y: bl.position.y - 125.0, width: 200.0, height: 250.0 };
-            let rect_r = cvkg_core::Rect { x: br.position.x - 100.0, y: br.position.y - 125.0, width: 200.0, height: 250.0 };
+            let dx = bl.position.x - br.position.x;
+            let dy = bl.position.y - br.position.y;
+            let dist = (dx * dx + dy * dy).sqrt();
 
-            r.push_vnode(rect_l, "CardLeft");
-            r.fill_rounded_rect(rect_l, 12.0, [0.05, 0.05, 0.1, 0.4]);
-            r.pop_vnode();
+            // Card halves are 200 units wide each, centered at body positions.
+            // When intact, bodies are ~200 units apart. When broken, they separate.
+            let card_width = 200.0;
+            let card_height = 250.0;
+            let half_w = card_width * 0.5;
+            let half_h = card_height * 0.5;
 
-            r.push_vnode(rect_r, "CardRight");
-            r.fill_rounded_rect(rect_r, 12.0, [0.05, 0.05, 0.1, 0.4]);
-
-            let cx = (bl.position.x + br.position.x) / 2.0;
-            let cy = (bl.position.y + br.position.y) / 2.0;
-            r.draw_text(runes[i % runes.len()], cx - 50.0, cy, 32.0, [0.8, 0.9, 1.0, 1.0]);
-            r.pop_vnode();
+            if dist < card_width * 1.5 {
+                // Card is intact or nearly so: render as single centered quad
+                let cx = (bl.position.x + br.position.x) * 0.5;
+                let cy = (bl.position.y + br.position.y) * 0.5;
+                let rect = cvkg_core::Rect {
+                    x: cx - half_w,
+                    y: cy - half_h,
+                    width: card_width,
+                    height: card_height,
+                };
+                r.push_vnode(rect, "Card");
+                r.fill_rounded_rect(rect, 12.0, [0.05, 0.05, 0.1, 0.4]);
+                r.draw_text(runes[i % runes.len()], cx - 50.0, cy, 32.0, [0.8, 0.9, 1.0, 1.0]);
+                r.pop_vnode();
+            } else {
+                // Card has broken apart: render two separate halves
+                let rect_l = cvkg_core::Rect {
+                    x: bl.position.x - half_w,
+                    y: bl.position.y - half_h,
+                    width: card_width,
+                    height: card_height,
+                };
+                let rect_r = cvkg_core::Rect {
+                    x: br.position.x - half_w,
+                    y: br.position.y - half_h,
+                    width: card_width,
+                    height: card_height,
+                };
+                r.push_vnode(rect_l, "CardLeft");
+                r.fill_rounded_rect(rect_l, 12.0, [0.05, 0.05, 0.1, 0.4]);
+                r.pop_vnode();
+                r.push_vnode(rect_r, "CardRight");
+                r.fill_rounded_rect(rect_r, 12.0, [0.05, 0.05, 0.1, 0.4]);
+                r.pop_vnode();
+            }
         }
     }
 }

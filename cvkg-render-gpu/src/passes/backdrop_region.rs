@@ -1,22 +1,18 @@
 //! Per-element isolated backdrop blur pass.
 //! Copies a scissored region from the scene texture into a
-//! blur target the glass pass can sample.
-//!
-//! NOTE: Currently performs a scissored copy only. The Kawase downsample
-//! chain will be added when the glass shader is updated to sample from
-//! per-element blur textures.
+//! blur target the glass pass can sample, then runs a Kawase
+//! downsample chain on the copied region.
 
 use crate::kvasir::node::{ExecutionContext, KvasirNode};
 use crate::kvasir::nodes::PassId;
 use crate::kvasir::resource::ResourceId;
 
 /// Copies a rectangular region from the scene texture into a
-/// blur target resource. This gives each glass element its own
-/// isolated backdrop region that can be independently blurred.
+/// blur target resource, then runs a Kawase downsample chain.
 pub struct BackdropRegionNode {
     pub inputs: Vec<ResourceId>,
     pub outputs: Vec<ResourceId>,
-    /// Region in logical pixels (from top-left).
+    /// Region in logical pixels.
     pub region: cvkg_core::Rect,
     /// Output resource ID (allocated by the graph builder).
     pub output_id: ResourceId,
@@ -47,7 +43,6 @@ impl KvasirNode for BackdropRegionNode {
         PassId::BackdropRegion
     }
     fn execute(&self, ctx: &mut ExecutionContext) {
-        // Get the source scene texture
         let scene_tex = ctx
             .registry
             .get_texture(crate::kvasir::nodes::RES_SCENE)
@@ -63,54 +58,112 @@ impl KvasirNode for BackdropRegionNode {
         let rw = (self.region.width * scale) as u32;
         let rh = (self.region.height * scale) as u32;
 
-        // Scissored copy: only copy the region this glass element occupies
-        let src_view = scene_tex.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("backdrop_region_src"),
-            base_mip_level: 0,
-            mip_level_count: Some(1),
-            ..Default::default()
-        });
-        let dst_view = blur_tex.create_view(&wgpu::TextureViewDescriptor {
-            label: Some("backdrop_region_dst"),
-            base_mip_level: 0,
-            mip_level_count: Some(1),
-            ..Default::default()
-        });
+        // Phase 1: GPU copy of the scissored region from scene to blur target.
+        // Uses copy_texture_to_texture for an actual pixel-exact copy (no shader needed).
+        let src_extent = wgpu::Extent3d {
+            width: scene_tex.width(),
+            height: scene_tex.height(),
+            depth_or_array_layers: 1,
+        };
+        let dst_extent = wgpu::Extent3d {
+            width: rw,
+            height: rh,
+            depth_or_array_layers: 1,
+        };
+        ctx.encoder.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &scene_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: rx, y: ry, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: &blur_tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            dst_extent,
+        );
 
-        let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Backdrop Region Copy"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &dst_view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-            })],
-            ..Default::default()
-        });
+        // Phase 2: Generate mips for the blurred backdrop region.
+        // This lets the glass shader sample at different blur levels.
+        // We do a simple blur via a Kawase-style approach on the copied region.
+        let mip_count = blur_tex.mip_level_count().min(4);
+        if mip_count >= 2 {
+            let kawase_uniform = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("BackdropRegion Kawase Uniform"),
+                size: 32,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
 
-        pass.set_scissor_rect(rx, ry, rw, rh);
-        pass.set_pipeline(&ctx.renderer.copy_pipeline);
+            for mip in 1..mip_count {
+                let src_view = blur_tex.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some(&format!("blur_region_src_mip_{}", mip - 1)),
+                    base_mip_level: mip - 1,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                });
+                let dst_view = blur_tex.create_view(&wgpu::TextureViewDescriptor {
+                    label: Some(&format!("blur_region_dst_mip_{}", mip)),
+                    base_mip_level: mip,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                });
 
-        let src_bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("backdrop_region_src_bg"),
-            layout: &ctx.renderer.texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&src_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.dummy_sampler),
-                },
-            ],
-        });
-        pass.set_bind_group(0, &src_bind_group, &[]);
-        pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
-        pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
-        pass.draw(0..3, 0..1);
+                let w = (rw >> mip).max(1);
+                let h = (rh >> mip).max(1);
+                let kernel = mip as f32;
+
+                let uniform_data: [f32; 8] = [
+                    w as f32, h as f32, (mip - 1) as f32, kernel,
+                    0.0, 0.0, 0.0, 0.0,
+                ];
+                ctx.queue
+                    .write_buffer(&kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
+
+                let src_bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some(&format!("blur_region_kawase_bg_{}", mip)),
+                    layout: &ctx.renderer.kawase_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &kawase_uniform,
+                                offset: 0,
+                                size: wgpu::BufferSize::new(32),
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(&src_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                        },
+                    ],
+                });
+
+                let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(&format!("Backdrop Region Blur {}", mip)),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &dst_view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                            store: wgpu::StoreOp::Store,
+                        },
+                        depth_slice: None,
+                    })],
+                    ..Default::default()
+                });
+                pass.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
+                pass.set_pipeline(&ctx.renderer.kawase_down_pipeline);
+                pass.set_bind_group(0, &src_bg, &[]);
+                pass.draw(0..3, 0..1);
+            }
+        }
     }
 }
