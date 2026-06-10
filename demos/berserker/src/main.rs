@@ -320,7 +320,7 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
             let half_h = card_height * 0.5;
 
             if dist < card_width * 1.5 {
-                // Card is intact or nearly so: render as single centered quad
+                // Card is intact or nearly so: render as single centered quad with glass material
                 let cx = (bl.position.x + br.position.x) * 0.5;
                 let cy = (bl.position.y + br.position.y) * 0.5;
                 let rect = cvkg_core::Rect {
@@ -330,8 +330,8 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
                     height: card_height,
                 };
                 r.push_vnode(rect, "Card");
-                r.fill_rounded_rect(rect, 12.0, [0.05, 0.05, 0.1, 0.4]);
-                r.draw_text(runes[i % runes.len()], cx - 50.0, cy, 32.0, [0.8, 0.9, 1.0, 1.0]);
+                r.fill_glass_rect(rect, 12.0, 20.0); // Use glass material for proper frosted effect
+                r.draw_text(runes[i % runes.len()], cx - 50.0, cy + 20.0, 32.0, [0.8, 0.9, 1.0, 1.0]);
                 r.pop_vnode();
             } else {
                 // Card has broken apart: render two separate halves
@@ -341,17 +341,17 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
                     width: card_width,
                     height: card_height,
                 };
+                r.push_vnode(rect_l, "CardLeft");
+                r.fill_glass_rect(rect_l, 12.0, 15.0);
+                r.pop_vnode();
                 let rect_r = cvkg_core::Rect {
                     x: br.position.x - half_w,
                     y: br.position.y - half_h,
                     width: card_width,
                     height: card_height,
                 };
-                r.push_vnode(rect_l, "CardLeft");
-                r.fill_rounded_rect(rect_l, 12.0, [0.05, 0.05, 0.1, 0.4]);
-                r.pop_vnode();
                 r.push_vnode(rect_r, "CardRight");
-                r.fill_rounded_rect(rect_r, 12.0, [0.05, 0.05, 0.1, 0.4]);
+                r.fill_glass_rect(rect_r, 12.0, 15.0);
                 r.pop_vnode();
             }
         }

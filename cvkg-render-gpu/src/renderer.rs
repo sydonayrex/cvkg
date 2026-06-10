@@ -1,5 +1,4 @@
 //! The main SurtrRenderer struct and core frame lifecycle.
-use crate::color_blindness::ColorBlindUniforms;
 use crate::draw::{parse_svg_animations, usvg_to_lyon};
 use crate::heim::SundrPacker;
 use crate::kvasir;
@@ -17,6 +16,7 @@ use lru::LruCache;
 use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, StrokeOptions, StrokeTessellator, VertexBuffers,
 };
+use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -116,12 +116,16 @@ pub struct SurtrRenderer {
     pub(crate) composite_pipeline: wgpu::RenderPipeline,
     /// Color blindness simulation pipeline (fullscreen triangle).
     pub(crate) color_blind_pipeline: wgpu::RenderPipeline,
+    /// Volumetric raymarching pipeline (fullscreen triangle with SDF raymarch).
+    pub(crate) volumetric_pipeline: wgpu::RenderPipeline,
     /// Kawase blur pyramid downsample pipeline (separate shader module).
     pub(crate) kawase_down_pipeline: wgpu::RenderPipeline,
     /// Kawase blur pyramid upsample pipeline (separate shader module).
     pub(crate) kawase_up_pipeline: wgpu::RenderPipeline,
     /// Kawase blur bind group layout (uniform + texture + sampler).
     pub(crate) kawase_bind_group_layout: wgpu::BindGroupLayout,
+    /// Persistent uniform buffer for Kawase blur operations (avoids per-frame allocation).
+    pub(crate) kawase_uniform: wgpu::Buffer,
     /// Environment bind group layout (texture + sampler).
     pub(crate) env_bind_group_layout: wgpu::BindGroupLayout,
 
@@ -185,6 +189,10 @@ pub struct SurtrRenderer {
     pub(crate) glass_output_bind_group_layout: wgpu::BindGroupLayout,
     /// Current material state — draw calls are tagged with this material.
     pub(crate) current_draw_material: cvkg_core::DrawMaterial,
+
+    /// Portal backdrop blur regions — collected during portal enter/exit
+    /// Used for per-element isolated backdrop blur (Tahoe feature)
+    pub(crate) portal_regions: std::collections::VecDeque<cvkg_core::Rect>,
 
     /// Memoization cache for frame-level render skipping.
     /// Tracks (id, data_hash) -> skip_render for deduplication.
@@ -1299,6 +1307,58 @@ impl SurtrRenderer {
             cache: None,
         });
 
+        // Volumetric raymarching pipeline (fullscreen triangle with SDF raymarch).
+        // Uses the dedicated volumetric.wgsl shader for fog/light shaft effects.
+        let volumetric_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Surtr Volumetric Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                include_str!("shaders/volumetric.wgsl"),
+            )),
+        });
+        // Volumetric pipeline layout — no bind groups needed for fullscreen SDF pass
+        let volumetric_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Surtr Volumetric Layout"),
+            bind_group_layouts: &[],
+            immediate_size: 0,
+        });
+
+        let volumetric_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Surtr Volumetric Raymarching"),
+            layout: Some(&volumetric_layout),
+            vertex: wgpu::VertexState {
+                module: &volumetric_shader,
+                entry_point: Some("vs_fullscreen"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &volumetric_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                        alpha: wgpu::BlendComponent {
+                            src_factor: wgpu::BlendFactor::One,
+                            dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                            operation: wgpu::BlendOperation::Add,
+                        },
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
         // Color blindness uniform buffer (updated each frame when mode is active)
         let color_blind_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Color Blind Uniforms"),
@@ -1429,17 +1489,25 @@ impl SurtrRenderer {
             staging_command_buffers: Vec::new(),
             glass_output_bind_group_layout,
             current_draw_material: cvkg_core::DrawMaterial::Opaque,
+            portal_regions: VecDeque::new(),
             memo_cache: std::collections::HashMap::new(),
             bloom_enabled: true,
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
             color_blind_pipeline,
+            volumetric_pipeline,
             color_blind_bind_group_layout: color_blind_bgl,
             color_blind_uniform_buffer,
             sampler,
             kawase_down_pipeline,
             kawase_up_pipeline,
             kawase_bind_group_layout: kawase_bgl,
+            kawase_uniform: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Kawase Persistent Uniform"),
+                size: 32,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
         }
     }
 
@@ -1673,6 +1741,7 @@ impl SurtrRenderer {
         self.clip_stack.clear();
         self.slice_stack.clear();
         self.transform_stack.clear();
+        self.portal_regions.clear(); // Clear portal regions for fresh frame
         self.current_z = 0.0;
         self.compositor_index_cursor = self.indices.len() as u32;
         self.vnode_stack.clear();
@@ -1769,6 +1838,7 @@ impl SurtrRenderer {
         self.clip_stack.clear();
         self.slice_stack.clear();
         self.transform_stack.clear();
+        self.portal_regions.clear(); // Clear portal regions for fresh frame
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
@@ -2849,6 +2919,7 @@ impl SurtrRenderer {
     /// input satisfiability), then executed. Conditional passes (glass, bloom,
     /// accessibility) are automatically eliminated when not needed.
     pub fn end_frame(&mut self, mut encoder: wgpu::CommandEncoder) {
+        #[allow(dead_code)]
         struct ActiveFrameResources {
             surface_texture: Option<wgpu::SurfaceTexture>,
             target_view: wgpu::TextureView,
@@ -3025,6 +3096,7 @@ impl SurtrRenderer {
             has_bloom,
             has_accessibility,
             &self.active_offscreens,
+            &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
             self.current_width(),
             self.current_height(),
             self.current_scale_factor(),
@@ -3126,7 +3198,7 @@ impl SurtrRenderer {
 
                     if let cvkg_compositor::Material::ShaderEffect {
                         effect_name,
-                        params_json,
+                        params_json: _,
                         ..
                     } = material
                     {

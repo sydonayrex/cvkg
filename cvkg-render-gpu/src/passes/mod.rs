@@ -10,4 +10,5 @@ pub mod pyramid;
 pub mod ui;
 pub mod volumetric;
 pub mod backdrop_region;
-pub use backdrop_region::BackdropRegionNode;
+// BackdropRegionNode is defined but not yet wired into the render graph.
+// TODO: Wire into build_render_graph when per-element blur is needed.

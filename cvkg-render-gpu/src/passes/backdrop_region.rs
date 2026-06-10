@@ -19,6 +19,7 @@ pub struct BackdropRegionNode {
 }
 
 impl BackdropRegionNode {
+    #[allow(dead_code)]
     pub fn new(region: cvkg_core::Rect, output_id: ResourceId) -> Self {
         Self {
             inputs: vec![crate::kvasir::nodes::RES_SCENE],
@@ -60,7 +61,7 @@ impl KvasirNode for BackdropRegionNode {
 
         // Phase 1: GPU copy of the scissored region from scene to blur target.
         // Uses copy_texture_to_texture for an actual pixel-exact copy (no shader needed).
-        let src_extent = wgpu::Extent3d {
+        let _src_extent = wgpu::Extent3d {
             width: scene_tex.width(),
             height: scene_tex.height(),
             depth_or_array_layers: 1,
@@ -91,12 +92,8 @@ impl KvasirNode for BackdropRegionNode {
         // We do a simple blur via a Kawase-style approach on the copied region.
         let mip_count = blur_tex.mip_level_count().min(4);
         if mip_count >= 2 {
-            let kawase_uniform = ctx.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("BackdropRegion Kawase Uniform"),
-                size: 32,
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+            // Reuse persistent uniform buffer (avoids per-frame GPU allocation)
+            let kawase_uniform = &ctx.renderer.kawase_uniform;
 
             for mip in 1..mip_count {
                 let src_view = blur_tex.create_view(&wgpu::TextureViewDescriptor {

@@ -11,11 +11,10 @@ pub struct AccessibilityNode {
 impl AccessibilityNode {
     pub fn new() -> Self {
         Self {
-            // Note: inputs declares RES_SCENE (not RES_SWAPCHAIN) because the
-            // execute() method samples from the scene texture, not the swapchain.
-            // The swapchain is only used as the render target (target_view).
+            // Reads from RES_SCENE (scene texture sampled in the shader).
+            // Writes to the swapchain render target (not a graph resource).
             inputs: vec![RES_SCENE],
-            outputs: vec![RES_SCENE],
+            outputs: vec![], // render target write is implicit, not a graph edge
         }
     }
 }
@@ -52,9 +51,8 @@ impl KvasirNode for AccessibilityNode {
             bytemuck::bytes_of(&uniforms),
         );
 
-        // For simplicity during refactor, we sample from scene texture.
-        // In a true graph, this would sample from the previous composite target and ping-pong.
-        let scene_texture = ctx
+        // Sample from the scene texture, render to the swapchain target.
+        let scene_view = ctx
             .registry
             .get_texture_view(crate::kvasir::nodes::RES_SCENE)
             .unwrap();
@@ -66,7 +64,7 @@ impl KvasirNode for AccessibilityNode {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&scene_texture),
+                    resource: wgpu::BindingResource::TextureView(&scene_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -91,7 +89,7 @@ impl KvasirNode for AccessibilityNode {
                 view: &target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,

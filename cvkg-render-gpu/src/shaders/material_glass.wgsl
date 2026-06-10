@@ -156,7 +156,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Crystalline edge highlight: bright specular at the boundary
     let edge_mask = smoothstep(0.5, 0.0, abs(d_sdf));
-    let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8))))) * 0.18;
+    let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8)))) * 0.18;
 
     // ─── Section 9: Final Composition ────────────────────────────────────────
 

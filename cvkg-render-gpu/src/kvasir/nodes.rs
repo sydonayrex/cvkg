@@ -3,12 +3,17 @@ use crate::kvasir::resource::ResourceId;
 use crate::passes::accessibility::AccessibilityNode;
 use crate::passes::bloom::{BloomBlurNode, BloomExtractNode};
 use crate::passes::composite::CompositeNode;
+#[allow(unused_imports)]
 use crate::passes::compute::ParticleComputeNode;
+#[allow(unused_imports)]
 use crate::passes::flow::FlowRenderNode;
 use crate::passes::geometry::GeometryNode;
 use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
 use crate::passes::ui::UINode;
+#[allow(unused_imports)]
 use crate::passes::volumetric::VolumetricNode;
+#[allow(unused_imports)]
+use crate::passes::backdrop_region::BackdropRegionNode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PassId {
@@ -65,6 +70,7 @@ pub fn build_render_graph(
     has_bloom: bool,
     has_accessibility: bool,
     active_offscreens: &[crate::types::OffscreenEffectConfig],
+    portal_regions: &[cvkg_core::Rect],
     width: u32,
     height: u32,
     scale: f32,
@@ -102,6 +108,13 @@ pub fn build_render_graph(
         let blur = builder.add_node(Box::new(BackdropBlurNode::new(width / 2, height / 2)));
         builder.connect(copy, RES_BLUR_A, blur);
 
+        // Per-element backdrop blur for portal-aware glass elements
+        for (i, region) in portal_regions.iter().enumerate() {
+            let region_id = ResourceId(2000 + i as u32);
+            let region_node = builder.add_node(Box::new(BackdropRegionNode::new(*region, region_id)));
+            builder.connect(last_scene_node, RES_SCENE, region_node);
+        }
+
         let glass = builder.add_node(Box::new(GlassNode::new(scale)));
         builder.connect(blur, RES_BLUR_A, glass);
         builder.connect(last_scene_node, RES_SCENE, glass);
@@ -112,21 +125,7 @@ pub fn build_render_graph(
     builder.connect(last_scene_node, RES_SCENE, ui);
     last_scene_node = ui;
 
-    // Volumetric pass renders into the scene
-    let volumetric = builder.add_node(Box::new(VolumetricNode::new()));
-    builder.connect(last_scene_node, RES_SCENE, volumetric);
-    last_scene_node = volumetric;
-
-    // TODO: Wire FlowRenderNode dynamically if cvkg-flow is active
-    let flow = builder.add_node(Box::new(FlowRenderNode::new()));
-    builder.connect(last_scene_node, RES_SCENE, flow);
-    last_scene_node = flow;
-
-    // Particles render on top of UI and flow
-    let particles = builder.add_node(Box::new(ParticleComputeNode::new()));
-    builder.connect(last_scene_node, RES_SCENE, particles);
-    last_scene_node = particles;
-
+    // Bloom extraction and blur (conditional)
     let mut last_bloom_node = None;
     if has_bloom {
         let extract = builder.add_node(Box::new(BloomExtractNode::new()));
@@ -137,24 +136,32 @@ pub fn build_render_graph(
         last_bloom_node = Some(blur);
     }
 
-    let composite = builder.add_node(Box::new(CompositeNode::new(has_bloom)));
+    // Accessibility transform (conditional, runs before final composite)
+    if has_accessibility {
+        let a11y = builder.add_node(Box::new(AccessibilityNode::new()));
+        builder.connect(last_scene_node, RES_SCENE, a11y);
+        // Accessibility writes back to RES_SCENE for the composite to consume
+        last_scene_node = a11y;
+    }
+
+    // Final composite: blends scene + bloom onto the swapchain target.
+    // If accessibility ran, it already cleared the swapchain, so we load.
+    // If accessibility did NOT run, we need to clear first.
+    let composite = builder.add_node(Box::new(CompositeNode::new(
+        has_bloom,
+        !has_accessibility,
+    )));
     builder.connect(last_scene_node, RES_SCENE, composite);
     if let Some(bloom_node) = last_bloom_node {
         builder.connect(bloom_node, RES_BLOOM_A, composite);
     }
-    let mut last_target = composite;
 
-    if has_accessibility {
-        let a11y = builder.add_node(Box::new(AccessibilityNode::new()));
-        builder.connect(last_target, RES_SWAPCHAIN, a11y);
-        last_target = a11y;
-    }
-
+    // Present node marks the graph endpoint (presentation is handled by Surface::present)
     let present = builder.add_node(Box::new(PresentNode {
-        inputs: vec![RES_SWAPCHAIN],
+        inputs: vec![RES_SCENE],
         outputs: vec![],
     }));
-    builder.connect(last_target, RES_SWAPCHAIN, present);
+    builder.connect(last_scene_node, RES_SCENE, present);
 
     builder.build()
 }

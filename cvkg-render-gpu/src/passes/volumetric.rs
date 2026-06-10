@@ -8,6 +8,7 @@ pub struct VolumetricNode {
 }
 
 impl VolumetricNode {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             inputs: vec![RES_SCENE],
@@ -20,33 +21,22 @@ impl KvasirNode for VolumetricNode {
     fn label(&self) -> &'static str {
         "Volumetric"
     }
-
     fn inputs(&self) -> &[ResourceId] {
         &self.inputs
     }
-
     fn outputs(&self) -> &[ResourceId] {
         &self.outputs
     }
-
     fn pass_id(&self) -> PassId {
         PassId::Volumetric
     }
-
     fn execute(&self, ctx: &mut ExecutionContext) {
         let scene_view = ctx.registry.get_texture_view(RES_SCENE).unwrap();
-        let depth_view = ctx.depth_view;
 
-        // Query device capabilities to scale down volumetric fidelity.
-        // TODO: Use actual tier detection (adapter info / feature flags) instead of placeholder.
-        // For now, default to full fidelity on native backends.
-        let is_low_power = false; // Placeholder — always false until tier detection is implemented
-        let _raymarch_scale = if is_low_power { 0.5 } else { 1.0 };
-        let _raymarch_steps = if is_low_power { 32 } else { 128 };
-
-        // We will pass `raymarch_scale` and `raymarch_steps` via Push Constants or Uniform Buffer
-
-        let _p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        // Bind the volumetric pipeline and draw a fullscreen triangle.
+        // The fragment shader performs SDF raymarching for volumetric fog/light effects.
+        // Uses additive blending so the volumetric glow accumulates on top of the scene.
+        let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Volumetric Raymarching"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &scene_view,
@@ -57,19 +47,14 @@ impl KvasirNode for VolumetricNode {
                 },
                 depth_slice: None,
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
         });
 
-        // Normally, we'd render the volumetric quads here using the volumetric pipeline
+        pass.set_pipeline(&ctx.renderer.volumetric_pipeline);
+        // No vertex buffer needed — the fullscreen triangle is generated from vertex_index
+        pass.draw(0..3, 0..1);
     }
 }

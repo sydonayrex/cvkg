@@ -1511,6 +1511,19 @@ impl cvkg_core::Renderer for NativeRenderer {
             .expect("GPU mutex poisoned: draw_line")
             .draw_line(x1, y1, x2, y2, color, stroke_width);
     }
+
+    fn fill_glass_rect(
+        &mut self,
+        rect: cvkg_core::Rect,
+        radius: f32,
+        blur_radius: f32,
+    ) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_glass_rect")
+            .fill_glass_rect(rect, radius, blur_radius);
+    }
+
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         self.gpu
             .lock()
