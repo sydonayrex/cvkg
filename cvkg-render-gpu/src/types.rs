@@ -98,19 +98,26 @@ pub struct EffectUniforms {
 }
 
 /// Per-draw-call glass instance parameters.
-/// Passed as push constants (fast path, no buffer allocation).
+/// Passed as push constants (fast path, no buffer allocation) or via
+/// a dedicated bind group for per-element blur sampling.
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GlassInstanceUniforms {
     /// Local tint override: [r, g, b, weight].
     /// weight=0 = use theme tint only, weight=1 = use local tint only.
     pub tint_override: [f32; 4],
-    /// Per-instance IOR override. 0.0 = use theme default.
+    /// Per-instance IOR override. 0.0 = use theme default (1.45).
     pub ior_override: f32,
     /// Blur strength multiplier. 1.0 = normal, 2.0 = double blur.
     pub blur_multiplier: f32,
     /// Frost intensity override. 0.0 = theme default.
     pub frost_override: f32,
+    /// Scissor rect in physical pixels: [x, y, width, height].
+    /// Used for per-element backdrop blur sampling.
+    pub scissor_px: [f32; 4],
+    /// Portal index: which per-element blur texture to sample.
+    /// 0 = main scene blur (default), 1+ = portal region blur.
+    pub portal_index: f32,
     pub _pad: f32,
 }
 
@@ -121,6 +128,8 @@ impl Default for GlassInstanceUniforms {
             ior_override: 0.0,
             blur_multiplier: 1.0,
             frost_override: 0.0,
+            scissor_px: [0.0; 4],
+            portal_index: 0.0,
             _pad: 0.0,
         }
     }

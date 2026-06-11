@@ -8,20 +8,13 @@ Production audit: **82/100**, previously blocked for Tahoe parity. The rendering
 
 ## Critical Issues Found (Tahoe Blocking)
 
-### 1. 🚨 Shader Syntax Error — Extra Parenthesis (FIXED)
+### 1. 🚨 Runtime Panic in CompositeNode (FIXED)
 
-**Location:** `cvkg-render-gpu/src/shaders/material_glass.wgsl:159`
+**Location:** `cvkg-render-gpu/src/passes/composite.rs:119`
 
-**Problem:** Unbalanced parentheses in crystal edge calculation caused WGSL parse errors:
-```wgsl
-// BEFORE (broken)
-let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8))))) * 0.18;
+**Problem:** The `CompositeNode::execute()` method contained a `panic!("unreachable")` that would trigger when bloom is disabled but the else branch is taken.
 
-// AFTER (fixed)
-let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8)))) * 0.18;
-```
-
-**Status:** ✅ Fixed in this audit session. The extra `)` after the smoothstep call was removed.
+**Status:** ✅ Fixed - Replaced panic with proper dummy bind group handling.
 
 ---
 
@@ -133,15 +126,27 @@ This should reuse `ctx.renderer.kawase_uniform` like `BackdropBlurNode` and `Blo
 
 ## macOS Tahoe Feature Parity Gaps
 
-| Tahoe Feature | Status | Evidence | Gap |
-|--------------|--------|----------|-----|
-| Liquid Glass (frosted) | ✅ Working | `fill_glass_rect()` exists, glass shader implemented, blur_radius now wired | blur_radius integrated, portal regions tracked |
-| Refraction/Parallax | ⚠️ Partial | Snell's law in shader, hardcoded IOR | IOR uniform not wired (line 80: `let ior = 1.45;`) |
-| Edge smear | ✅ Present | `smear_sample` in shader (lines 149-155) | Smear exists, crystal edge syntax now fixed |
-| OKLCH GPU wiring | ❌ Missing | OKLCH color space exists in `cvkg-themes` only | Theme colors are sRGB, OKLCH not connected to shaders |
-| Adaptive glass tint | ✅ Working | `glass_tint_adapt` uniform exists | Works correctly, feeds into shader |
-| Per-element backdrop | ✅ Wired | `BackdropRegionNode` now wired in build_render_graph | Portal regions passed to render graph |
-| Portal rendering | ✅ Implemented | `enter_portal/exit_portal` now track portal_regions | Integration point ready for texture targets |
+| Tahoe Feature | Status | Gap |
+|--------------|--------|-----|
+| Liquid Glass (frosted) | ✅ Working | Full-scene backdrop blur functional |
+| Refraction/Parallax | ✅ Working | IOR read from `theme.glass_ior` uniform |
+| Edge smear | ✅ Present | `smear_sample` implemented in shader |
+| OKLCH GPU wiring | ❌ Missing | Theme colors are sRGB, OKLCH not connected to GPU shaders |
+| Adaptive glass tint | ✅ Working | `glass_tint_adapt` uniform feeds into shader |
+| Per-element backdrop | ⚠️ Stubbed | `BackdropRegionNode` creates textures but **GlassNode doesn't sample them** |
+| Portal rendering | ✅ Implemented | `enter_portal/exit_portal` tracks portal_regions |
+
+### 🔥 Critical Blocker: Per-Element Backdrop Blur Not Wired to Glass Shader
+
+**Location:** `cvkg-render-gpu/src/passes/glass.rs:327-416`
+
+The `BackdropRegionNode` (lines 112-116 in nodes.rs) creates per-portal blur textures, but `GlassNode` only samples from `RES_BLUR_A` (full-screen blur). This is the **primary Tahoe parity gap** preventing isolated glass element effects.
+
+**Missing Implementation:**
+1. GlassInstanceUniforms.scissor_px and portal_index fields added but not used
+2. Glass shader needs texture array binding for portal blur textures
+3. Draw calls need to encode portal index for glass elements
+4. GlassNode needs to bind the correct portal blur texture based on draw call
 
 ---
 
@@ -268,10 +273,13 @@ cargo run --release -p berserker
 
 ✅ **PORTAL RENDERING INTEGRATED** - `enter_portal/exit_portal` now register portal regions that feed into `build_render_graph`. The `fill_glass_rect` function properly tracks portal-aware glass elements.
 
-✅ **PER-ELEMENT BACKDROP BLUR WIRED** - `BackdropRegionNode` is now integrated into the render graph when glass is enabled.
+⚠️ **PER-ELEMENT BACKDROP BLUR PARTIALLY WIRED** - `BackdropRegionNode` is wired in the render graph, but **GlassNode doesn't sample the portal blur textures**. This is the critical gap preventing Tahoe parity.
+
+✅ **RUNTIME PANIC FIXED** - Removed panic in `CompositeNode` that could crash when bloom is disabled.
 
 **Remaining Tahoe Parity Blockers:**
 
-1. **IOR Uniform Wiring** - Glass shader has hardcoded `let ior = 1.45;` - needs to read from `InstanceData`
-2. **OKLCH GPU Integration** - Theme colors are sRGB, OKLCH color space exists in `cvkg-themes` but not wired to shaders
-3. **Gaussian Bloom Normalization** - Weights sum to ~1.018 causing slight brightening (could normalize for precision)
+1. **Per-Element Backdrop Blur Integration** - `BackdropRegionNode` creates textures but `GlassNode` samples only `RES_BLUR_A`. The glass shader needs texture array binding for portal regions.
+2. **IOR Uniform Wiring** - Glass shader uses `theme.glass_ior` which is wired correctly, but per-instance IOR via `GlassInstanceUniforms.ior_override` is not implemented.
+3. **OKLCH GPU Integration** - Theme colors are sRGB, OKLCH color space exists in `cvkg-themes` but not connected to shaders.
+4. **Test Failures** - `test_glass_pipeline_renders` and `test_full_pipeline_integration` fail with all-black output - investigating headless rendering sync issue.
