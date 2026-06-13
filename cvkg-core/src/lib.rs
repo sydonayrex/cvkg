@@ -3213,7 +3213,8 @@ impl ColorTheme {
             rune_opacity: 0.55,
             glass_tint_adapt: 0.35,
             glass_ior: 1.45,
-            _pad0: 0.0, _pad1: 0.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
         }
     }
 
@@ -3234,7 +3235,8 @@ impl ColorTheme {
             rune_opacity: 0.0,
             glass_tint_adapt: 0.0,
             glass_ior: 1.0,
-            _pad0: 0.0, _pad1: 0.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
         }
     }
 
@@ -3257,7 +3259,8 @@ impl ColorTheme {
             rune_opacity: 0.55,
             glass_tint_adapt: 0.65,
             glass_ior: 1.45,
-            _pad0: 0.0, _pad1: 0.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
         }
     }
 
@@ -3278,7 +3281,8 @@ impl ColorTheme {
             rune_opacity: 0.85,
             glass_tint_adapt: 0.15,
             glass_ior: 1.85,
-            _pad0: 0.0, _pad1: 0.0,
+            _pad0: 0.0,
+            _pad1: 0.0,
         }
     }
 }
@@ -4548,13 +4552,15 @@ impl<K: EnvKey> Environment<K> {
                     );
                 }
             } else {
-                log::debug!(
+                // Lowered to trace to avoid terminal logging overhead under standard debug runs
+                log::trace!(
                     "Environment: Key not found: {:?}. Returning default.",
                     std::any::type_name::<K>()
                 );
             }
         } else {
-            log::debug!(
+            // Lowered to trace to avoid terminal logging overhead under standard debug runs
+            log::trace!(
                 "Environment: Store not initialized. Key: {:?}. Returning default.",
                 std::any::type_name::<K>()
             );
@@ -5074,6 +5080,7 @@ pub mod layout {
     // Layout pass scratch space
     pub struct LayoutCache {
         pub safe_area: SafeArea,
+        pub delta_time: f32,
         size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
         /// Monotonically increasing generation counter for cache invalidation.
         /// When a view tree changes, bumping the generation causes stale entries
@@ -5097,6 +5104,7 @@ pub mod layout {
         pub fn new() -> Self {
             Self {
                 safe_area: SafeArea::default(),
+                delta_time: 0.016,
                 size_cache: HashMap::new(),
                 generation: 0,
                 engine: None,
@@ -5407,6 +5415,7 @@ pub enum Event {
         azimuth: Option<f32>,
         pressure: Option<f32>,
         barrel_rotation: Option<f32>,
+        pointer_precision: f32,
     },
     PointerUp {
         x: f32,
@@ -5416,6 +5425,7 @@ pub enum Event {
         azimuth: Option<f32>,
         pressure: Option<f32>,
         barrel_rotation: Option<f32>,
+        pointer_precision: f32,
     },
     PointerMove {
         x: f32,
@@ -5425,6 +5435,7 @@ pub enum Event {
         azimuth: Option<f32>,
         pressure: Option<f32>,
         barrel_rotation: Option<f32>,
+        pointer_precision: f32,
     },
     PointerClick {
         x: f32,
@@ -5434,6 +5445,7 @@ pub enum Event {
         azimuth: Option<f32>,
         pressure: Option<f32>,
         barrel_rotation: Option<f32>,
+        pointer_precision: f32,
     },
     PointerEnter,
     PointerLeave,
@@ -5444,28 +5456,33 @@ pub enum Event {
         y: f32,
         delta_x: f32,
         delta_y: f32,
+        pointer_precision: f32,
     },
     /// Double-click event (rapid successive clicks).
     PointerDoubleClick {
         x: f32,
         y: f32,
         button: u32,
+        pointer_precision: f32,
     },
     /// Drag-and-drop: drag started (pointer moved while button held past threshold).
     DragStart {
         x: f32,
         y: f32,
         button: u32,
+        pointer_precision: f32,
     },
     /// Drag-and-drop: drag in progress.
     DragMove {
         x: f32,
         y: f32,
+        pointer_precision: f32,
     },
     /// Drag-and-drop: drag ended (pointer released).
     DragEnd {
         x: f32,
         y: f32,
+        pointer_precision: f32,
     },
     KeyDown {
         key: String,
@@ -5529,11 +5546,51 @@ pub enum Event {
     },
     /// Drag-and-drop: external file dropped onto window.
     FileDrop {
+        x: f32,
+        y: f32,
         path: String,
     },
 }
 
 impl Event {
+    /// Returns the input pointer precision value in physical pixels if applicable.
+    ///
+    /// WHY: Used to scale hit-testing bounding boxes for proximity matching.
+    /// CONTRACT: Mouse pointer inputs return low precision values (close to 0.0px),
+    /// whereas touch inputs return larger values (e.g., 150.0px) for finger emulation.
+    pub fn pointer_precision(&self) -> f32 {
+        match self {
+            Self::PointerDown {
+                pointer_precision, ..
+            }
+            | Self::PointerUp {
+                pointer_precision, ..
+            }
+            | Self::PointerMove {
+                pointer_precision, ..
+            }
+            | Self::PointerClick {
+                pointer_precision, ..
+            }
+            | Self::PointerWheel {
+                pointer_precision, ..
+            }
+            | Self::PointerDoubleClick {
+                pointer_precision, ..
+            }
+            | Self::DragStart {
+                pointer_precision, ..
+            }
+            | Self::DragMove {
+                pointer_precision, ..
+            }
+            | Self::DragEnd {
+                pointer_precision, ..
+            } => *pointer_precision,
+            _ => 0.0,
+        }
+    }
+
     /// Returns the canonical string name of the event for lookup in handler maps.
     pub fn name(&self) -> &'static str {
         match self {
@@ -7505,4 +7562,4 @@ pub use audio_haptic::{
 // =============================================================================
 
 pub mod parallax;
-pub use parallax::{ParallaxModifier, DisplayEnvironment, PerformanceContract, Tier3Fallback};
+pub use parallax::{DisplayEnvironment, ParallaxModifier, PerformanceContract, Tier3Fallback};

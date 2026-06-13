@@ -352,6 +352,27 @@ pub enum AppEvent {
     SetVisible(winit::window::WindowId, bool),
     /// Request to bring a window to the front and focus it.
     BringToFront(winit::window::WindowId),
+    /// Initial accessibility tree requested by screen reader.
+    AccessibilityInitialTreeRequested(winit::window::WindowId),
+}
+
+impl From<accesskit_winit::Event> for AppEvent {
+    fn from(event: accesskit_winit::Event) -> Self {
+        match event.window_event {
+            accesskit_winit::WindowEvent::ActionRequested(req) => {
+                AppEvent::AccessibilityAction(req)
+            }
+            accesskit_winit::WindowEvent::InitialTreeRequested => {
+                AppEvent::AccessibilityInitialTreeRequested(event.window_id)
+            }
+            _ => AppEvent::AccessibilityAction(accesskit::ActionRequest {
+                action: accesskit::Action::Focus,
+                target_node: accesskit::NodeId(0),
+                target_tree: accesskit::TreeId::ROOT,
+                data: None,
+            }),
+        }
+    }
 }
 
 impl NativeRenderer {
@@ -525,6 +546,16 @@ impl WindowManager {
         };
         window_attrs = window_attrs.with_window_level(winit_level);
 
+        #[cfg(target_os = "macos")]
+        {
+            use winit::platform::macos::WindowAttributesExtMacOS;
+            window_attrs = window_attrs
+                .with_titlebar_transparent(true)
+                .with_title_hidden(true)
+                .with_fullsize_content_view(true)
+                .with_has_shadow(true);
+        }
+
         let window = Arc::new(
             event_loop
                 .create_window(window_attrs)
@@ -552,11 +583,18 @@ impl WindowManager {
             cvkg_core::Rect::new(0.0, 0.0, config.size.0, config.size.1),
         );
 
+        let accesskit_adapter = Some(accesskit_winit::Adapter::with_event_loop_proxy(
+            event_loop,
+            &window,
+            proxy.clone(),
+        ));
+
         let data = WindowData {
             window: window.clone(),
-            accesskit_adapter: None,
+            accesskit_adapter,
             vdom: Some(vdom),
             cursor_pos: [0.0, 0.0],
+            cursor_velocity: [0.0, 0.0],
             last_redraw_start: std::time::Instant::now(),
             frame_history: std::collections::VecDeque::with_capacity(60),
             frame_count: 0,
@@ -623,6 +661,7 @@ pub struct WindowData {
     accesskit_adapter: Option<accesskit_winit::Adapter>,
     vdom: Option<cvkg_vdom::VDom>,
     cursor_pos: [f32; 2],
+    cursor_velocity: [f32; 2],
     /// The instant the last redraw finished, used for measuring inter-frame gap timing.
     last_redraw_start: std::time::Instant,
     /// Sliding window of frame times for tail latency (P99) calculation.
@@ -709,7 +748,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 min_size: None,
                 max_size: None,
                 resizable: true,
-                transparent: false,
+                transparent: true,
                 decorations: true,
                 level: cvkg_core::WindowLevel::Normal,
             };
@@ -750,7 +789,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
         if matches!(cause, winit::event::StartCause::Poll) {
             // Too noisy
         } else {
-            log::debug!("[Native] Event Loop Wake: {:?}", cause);
+            // Lowered to trace to prevent logs flooding under standard debug levels
+            log::trace!("[Native] Event Loop Wake: {:?}", cause);
         }
     }
 
@@ -763,7 +803,9 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
         if matches!(event, winit::event::DeviceEvent::MouseMotion { .. }) {
             // log::trace!("[Native] Raw Mouse Motion");
         } else {
-            log::info!("[Native] DEVICE EVENT: {:?}", event);
+            // Log device raw events at trace level to prevent I/O blocking performance issues
+            // under high mouse-polling rates on systems with direct input mapping.
+            log::trace!("[Native] DEVICE EVENT: {:?}", event);
         }
     }
 
@@ -816,6 +858,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 WindowEvent::DroppedFile(path) => {
                     if let Some(vdom) = &state.vdom {
                         vdom.dispatch_event(cvkg_core::Event::FileDrop {
+                            x: state.cursor_pos[0],
+                            y: state.cursor_pos[1],
                             path: path.to_string_lossy().into_owned(),
                         });
                     }
@@ -891,6 +935,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 azimuth: None,
                                 pressure: Some(1.0),
                                 barrel_rotation: None,
+                                pointer_precision: 0.0,
                             });
                         }
                         state.needs_cursor_update = false;
@@ -921,6 +966,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     nodes,
                                     tree: None,
                                     focus: accesskit::NodeId(1),
+                                    tree_id: accesskit::TreeId::ROOT,
                                 });
                             }
                         }
@@ -937,6 +983,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let mut gpu = gpu_arc
                         .lock()
                         .expect("GPU mutex poisoned during frame begin");
+                    gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
                     let encoder = gpu.begin_frame(id);
                     let mut renderer = NativeRenderer::new(
                         state.window.clone(),
@@ -986,6 +1033,16 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let frame_time_ms =
                         gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
                     telemetry.frame_time_ms = frame_time_ms;
+
+                    // Log detailed frame time breakdown for performance diagnostics
+                    log::info!(
+                        "[Native] Frame timings: layout={:.2}ms state={:.2}ms draw={:.2}ms submit={:.2}ms total={:.2}ms",
+                        telemetry.layout_time_ms,
+                        telemetry.state_flush_time_ms,
+                        telemetry.draw_time_ms,
+                        telemetry.gpu_submit_time_ms,
+                        telemetry.frame_time_ms
+                    );
 
                     // Tail Latency Tracking (P99 and Jitter) over a 100-frame sliding window.
                     state.frame_history.push_back(frame_time_ms);
@@ -1038,6 +1095,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 WindowEvent::CursorMoved { position, .. } => {
                     let scale = state.window.scale_factor();
                     let logical = position.to_logical::<f32>(scale);
+                    let elapsed = state.last_redraw_start.elapsed().as_secs_f32().max(0.001);
+                    let dx = logical.x - state.cursor_pos[0];
+                    let dy = logical.y - state.cursor_pos[1];
+                    state.cursor_velocity = [dx / elapsed, dy / elapsed];
                     state.cursor_pos = [logical.x, logical.y];
                     state.needs_cursor_update = true;
                     // Don't request_redraw here — the redraw will process the cursor update.
@@ -1079,6 +1140,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     azimuth: None,
                                     pressure: Some(1.0),
                                     barrel_rotation: None,
+                                    pointer_precision: 0.0,
                                 });
                             }
                             winit::event::ElementState::Released => {
@@ -1091,6 +1153,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     azimuth: None,
                                     pressure: Some(0.0),
                                     barrel_rotation: None,
+                                    pointer_precision: 0.0,
                                 });
                             }
                         }
@@ -1112,7 +1175,88 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             y: state.cursor_pos[1],
                             delta_x: dx,
                             delta_y: dy,
+                            pointer_precision: 0.0,
                         });
+                        state.window.request_redraw();
+                    }
+                }
+                // ── Touch screen inputs ──────────────────────────────────────────
+                // Map native winit touchscreen events to VDOM Pointer events using
+                // low-precision fat-finger bounding expansion (150px proximity field).
+                WindowEvent::Touch(touch) => {
+                    if let Some(vdom) = &state.vdom {
+                        let scale = state.window.scale_factor();
+                        let logical = touch.location.to_logical::<f32>(scale);
+                        let x = logical.x;
+                        let y = logical.y;
+                        let touch_btn = 0; // Touch maps to primary/left button
+                        match touch.phase {
+                            winit::event::TouchPhase::Started => {
+                                log::info!("[Native] Dispatching PointerDown (Touch) to VDOM");
+                                vdom.dispatch_event(cvkg_core::Event::PointerDown {
+                                    x,
+                                    y,
+                                    button: touch_btn,
+                                    proximity_field: 0.0,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(
+                                        touch.force.map(|f| f.normalized() as f32).unwrap_or(1.0),
+                                    ),
+                                    barrel_rotation: None,
+                                    pointer_precision: 150.0,
+                                });
+                            }
+                            winit::event::TouchPhase::Moved => {
+                                vdom.dispatch_event(cvkg_core::Event::PointerMove {
+                                    x,
+                                    y,
+                                    proximity_field: 0.0,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(
+                                        touch.force.map(|f| f.normalized() as f32).unwrap_or(1.0),
+                                    ),
+                                    barrel_rotation: None,
+                                    pointer_precision: 150.0,
+                                });
+                            }
+                            winit::event::TouchPhase::Ended => {
+                                vdom.dispatch_event(cvkg_core::Event::PointerUp {
+                                    x,
+                                    y,
+                                    button: touch_btn,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(0.0),
+                                    barrel_rotation: None,
+                                    pointer_precision: 150.0,
+                                });
+                                // Dispatch PointerClick immediately following TouchEnd on the same location
+                                vdom.dispatch_event(cvkg_core::Event::PointerClick {
+                                    x,
+                                    y,
+                                    button: touch_btn,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(0.0),
+                                    barrel_rotation: None,
+                                    pointer_precision: 150.0,
+                                });
+                            }
+                            winit::event::TouchPhase::Cancelled => {
+                                vdom.dispatch_event(cvkg_core::Event::PointerUp {
+                                    x,
+                                    y,
+                                    button: touch_btn,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(0.0),
+                                    barrel_rotation: None,
+                                    pointer_precision: 150.0,
+                                });
+                            }
+                        }
                         state.window.request_redraw();
                     }
                 }
@@ -1363,7 +1507,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::AccessibilityAction(request) => {
-                let node_id = cvkg_vdom::NodeId(request.target.0);
+                let node_id = cvkg_vdom::NodeId(request.target_node.0);
                 let target_state = self.window_manager.windows.values_mut().find(|s| {
                     s.vdom
                         .as_ref()
@@ -1383,8 +1527,29 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         azimuth: None,
                         pressure: Some(1.0),
                         barrel_rotation: None,
+                        pointer_precision: 0.0,
                     };
                     vdom.dispatch_event(event);
+                }
+            }
+            AppEvent::AccessibilityInitialTreeRequested(winit_id) => {
+                if let Some(state) = self.window_manager.windows.get_mut(&winit_id) {
+                    if let Some(vdom) = &state.vdom {
+                        let root_id = vdom.root.map(|id| id.0).unwrap_or(1);
+                        let mut nodes = Vec::new();
+                        for (id, node) in &vdom.nodes {
+                            nodes.push((accesskit::NodeId(id.0), node.to_accesskit_node()));
+                        }
+                        let tree = accesskit::Tree::new(accesskit::NodeId(root_id));
+                        if let Some(adapter) = &mut state.accesskit_adapter {
+                            adapter.update_if_active(|| accesskit::TreeUpdate {
+                                nodes,
+                                tree: Some(tree),
+                                focus: accesskit::NodeId(root_id),
+                                tree_id: accesskit::TreeId::ROOT,
+                            });
+                        }
+                    }
                 }
             }
             AppEvent::CloseWindow(winit_id) => {
@@ -1512,12 +1677,7 @@ impl cvkg_core::Renderer for NativeRenderer {
             .draw_line(x1, y1, x2, y2, color, stroke_width);
     }
 
-    fn fill_glass_rect(
-        &mut self,
-        rect: cvkg_core::Rect,
-        radius: f32,
-        blur_radius: f32,
-    ) {
+    fn fill_glass_rect(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32) {
         self.gpu
             .lock()
             .expect("GPU mutex poisoned: fill_glass_rect")
@@ -1926,6 +2086,7 @@ fn convert_mouse_event(
             azimuth: None,
             pressure: Some(1.0),
             barrel_rotation: None,
+            pointer_precision: 0.0,
         },
         winit::event::ElementState::Released => cvkg_core::Event::PointerUp {
             x: position[0],
@@ -1935,6 +2096,7 @@ fn convert_mouse_event(
             azimuth: None,
             pressure: Some(0.0),
             barrel_rotation: None,
+            pointer_precision: 0.0,
         },
     }
 }
@@ -1963,6 +2125,7 @@ impl accesskit::ActivationHandler for ShieldWall {
             nodes: vec![(root_id, root)],
             tree: Some(accesskit::Tree::new(root_id)),
             focus: root_id,
+            tree_id: accesskit::TreeId::ROOT,
         })
     }
 }

@@ -583,12 +583,12 @@ pub fn epa_3d(
 
 /// 3D EPA with pre-computed GJK result.
 pub fn epa_with_simplex_3d(
-    a: &Shape,
+    _a: &Shape,
     pa: Vec3,
-    ra: &glam::Quat,
-    b: &Shape,
+    _ra: &glam::Quat,
+    _b: &Shape,
     pb: Vec3,
-    rb: &glam::Quat,
+    _rb: &glam::Quat,
     gr: &GjkResult3D,
 ) -> Option<Contact3D> {
     if !gr.overlapping {
@@ -789,37 +789,52 @@ pub struct CcdResult3D {
     pub normal: Vec3,
 }
 
-/// Swept GJK for continuous collision detection.
-/// Casts shape_a from `pos_a` to `pos_a + vel_a * t` against
-/// shape_b from `pos_b` to `pos_b + vel_b * t`.
-/// Returns the earliest time of impact in [0, 1], or None if no collision.
-///
-/// Uses conservative advancement: iteratively refines the TOI by
-/// computing the distance between shapes at the current time estimate
-/// and advancing time by distance / relative_speed.
-pub fn gjk_ccd_3d(
-    shape_a: &Shape,
-    pos_a: Vec3,
-    rot_a: &glam::Quat,
-    vel_a: Vec3,
-    shape_b: &Shape,
-    pos_b: Vec3,
-    rot_b: &glam::Quat,
-    vel_b: Vec3,
-    radius_a: f32,
-    radius_b: f32,
-) -> Option<CcdResult3D> {
-    let rel_vel = vel_a - vel_b;
-    let rel_speed = rel_vel.length();
-    let sum_radii = radius_a + radius_b;
+/// Parameters for one shape in a CCD sweep test.
+pub struct CcdShape<'a> {
+    pub shape: &'a Shape,
+    pub position: Vec3,
+    pub rotation: &'a glam::Quat,
+    pub velocity: Vec3,
+    pub bounding_radius: f32,
+}
 
-    // If relative speed is zero, fall back to static GJK.
+/// 2D CCD shape parameters.
+pub struct CcdShape2D<'a> {
+    pub shape: &'a Shape,
+    pub position: Vec2,
+    pub angle: f32,
+    pub velocity: Vec2,
+    pub bounding_radius: f32,
+}
+
+/// 3D CCD shape parameters.
+pub struct CcdShape3D<'a> {
+    pub shape: &'a Shape,
+    pub position: Vec3,
+    pub rotation: &'a glam::Quat,
+    pub velocity: Vec3,
+    pub bounding_radius: f32,
+}
+
+/// 3D continuous collision detection (swept spheres / AABBs).
+pub fn gjk_ccd_3d(shape_a: &CcdShape3D<'_>, shape_b: &CcdShape3D<'_>) -> Option<CcdResult3D> {
+    let rel_vel = shape_a.velocity - shape_b.velocity;
+    let rel_speed = rel_vel.length();
+    let sum_radii = shape_a.bounding_radius + shape_b.bounding_radius;
+
     if rel_speed < 1e-10 {
-        if gjk_overlap_3d(shape_a, pos_a, rot_a, shape_b, pos_b, rot_b) {
+        if gjk_overlap_3d(
+            shape_a.shape,
+            shape_a.position,
+            shape_a.rotation,
+            shape_b.shape,
+            shape_b.position,
+            shape_b.rotation,
+        ) {
             return Some(CcdResult3D {
                 toi: 0.0,
-                point: (pos_a + pos_b) * 0.5,
-                normal: (pos_b - pos_a).normalize_or(Vec3::X),
+                point: (shape_a.position + shape_b.position) * 0.5,
+                normal: (shape_b.position - shape_a.position).normalize_or(Vec3::X),
             });
         }
         return None;
@@ -827,13 +842,25 @@ pub fn gjk_ccd_3d(
 
     let mut t = 0.0;
     for _ in 0..32 {
-        let cur_a = pos_a + vel_a * t;
-        let cur_b = pos_b + vel_b * t;
+        let cur_a = shape_a.position + shape_a.velocity * t;
+        let cur_b = shape_b.position + shape_b.velocity * t;
 
-        // Check overlap at current time.
-        if gjk_overlap_3d(shape_a, cur_a, rot_a, shape_b, cur_b, rot_b) {
-            // Compute contact info via EPA.
-            if let Some(epa) = epa_3d(shape_a, cur_a, rot_a, shape_b, cur_b, rot_b) {
+        if gjk_overlap_3d(
+            shape_a.shape,
+            cur_a,
+            shape_a.rotation,
+            shape_b.shape,
+            cur_b,
+            shape_b.rotation,
+        ) {
+            if let Some(epa) = epa_3d(
+                shape_a.shape,
+                cur_a,
+                shape_a.rotation,
+                shape_b.shape,
+                cur_b,
+                shape_b.rotation,
+            ) {
                 return Some(CcdResult3D {
                     toi: t,
                     point: epa.point,
@@ -847,43 +874,56 @@ pub fn gjk_ccd_3d(
             });
         }
 
-        // Compute distance between shapes using GJK simplex.
-        let gr = gjk_3d(shape_a, cur_a, rot_a, shape_b, cur_b, rot_b);
+        let gr = gjk_3d(
+            shape_a.shape,
+            cur_a,
+            shape_a.rotation,
+            shape_b.shape,
+            cur_b,
+            shape_b.rotation,
+        );
         let distance = if gr.simplex.is_empty() {
             0.0
         } else {
-            // Approximate distance from simplex.
             gr.simplex
                 .iter()
                 .map(|p| p.length())
                 .fold(f32::MAX, f32::min)
         };
 
-        // If distance is less than sum of radii, we have a potential collision.
         if distance < sum_radii {
-            // Narrow the time step.
             let penetration = sum_radii - distance;
-            let dt = penetration / rel_speed;
-            t += dt;
+            t += penetration / rel_speed;
             if t >= 1.0 {
                 return None;
             }
             continue;
         }
 
-        // Advance time: how long until the distance closes to sum_radii?
-        let closing_speed = rel_speed;
-        if closing_speed < 1e-10 {
+        if rel_speed < 1e-10 {
             return None;
         }
-        let dt = (distance - sum_radii) / closing_speed;
+        let dt = (distance - sum_radii) / rel_speed;
         if dt < 1e-10 {
-            // Very close — check one more time.
             let next_t = (t + 1e-4).min(1.0);
-            let next_a = pos_a + vel_a * next_t;
-            let next_b = pos_b + vel_b * next_t;
-            if gjk_overlap_3d(shape_a, next_a, rot_a, shape_b, next_b, rot_b) {
-                if let Some(epa) = epa_3d(shape_a, next_a, rot_a, shape_b, next_b, rot_b) {
+            let next_a = shape_a.position + shape_a.velocity * next_t;
+            let next_b = shape_b.position + shape_b.velocity * next_t;
+            if gjk_overlap_3d(
+                shape_a.shape,
+                next_a,
+                shape_a.rotation,
+                shape_b.shape,
+                next_b,
+                shape_b.rotation,
+            ) {
+                if let Some(epa) = epa_3d(
+                    shape_a.shape,
+                    next_a,
+                    shape_a.rotation,
+                    shape_b.shape,
+                    next_b,
+                    shape_b.rotation,
+                ) {
                     return Some(CcdResult3D {
                         toi: next_t,
                         point: epa.point,
@@ -907,45 +947,61 @@ pub fn gjk_ccd_3d(
 }
 
 /// 2D continuous collision detection (swept circles / AABBs).
-pub fn gjk_ccd(
-    shape_a: &Shape,
-    pos_a: Vec2,
-    angle_a: f32,
-    vel_a: Vec2,
-    shape_b: &Shape,
-    pos_b: Vec2,
-    angle_b: f32,
-    vel_b: Vec2,
-    radius_a: f32,
-    radius_b: f32,
-) -> Option<(f32, Vec2, Vec2)> {
-    let rel_vel = vel_a - vel_b;
+pub fn gjk_ccd(shape_a: &CcdShape2D<'_>, shape_b: &CcdShape2D<'_>) -> Option<(f32, Vec2, Vec2)> {
+    let rel_vel = shape_a.velocity - shape_b.velocity;
     let rel_speed = rel_vel.length();
-    let sum_radii = radius_a + radius_b;
+    let sum_radii = shape_a.bounding_radius + shape_b.bounding_radius;
 
     if rel_speed < 1e-10 {
-        if gjk_overlap(shape_a, pos_a, angle_a, shape_b, pos_b, angle_b) {
-            let normal = (pos_b - pos_a).normalize_or(Vec2::X);
-            return Some((0.0, (pos_a + pos_b) * 0.5, normal));
+        if gjk_overlap(
+            shape_a.shape,
+            shape_a.position,
+            shape_a.angle,
+            shape_b.shape,
+            shape_b.position,
+            shape_b.angle,
+        ) {
+            let normal = (shape_b.position - shape_a.position).normalize_or(Vec2::X);
+            return Some((0.0, (shape_a.position + shape_b.position) * 0.5, normal));
         }
         return None;
     }
 
     let mut t = 0.0;
     for _ in 0..32 {
-        let cur_a = pos_a + vel_a * t;
-        let cur_b = pos_b + vel_b * t;
+        let cur_a = shape_a.position + shape_a.velocity * t;
+        let cur_b = shape_b.position + shape_b.velocity * t;
 
-        if gjk_overlap(shape_a, cur_a, angle_a, shape_b, cur_b, angle_b) {
-            if let Some(epa) = epa(shape_a, cur_a, angle_a, shape_b, cur_b, angle_b) {
+        if gjk_overlap(
+            shape_a.shape,
+            cur_a,
+            shape_a.angle,
+            shape_b.shape,
+            cur_b,
+            shape_b.angle,
+        ) {
+            if let Some(epa) = epa(
+                shape_a.shape,
+                cur_a,
+                shape_a.angle,
+                shape_b.shape,
+                cur_b,
+                shape_b.angle,
+            ) {
                 return Some((t, epa.point, epa.normal));
             }
             let normal = (cur_b - cur_a).normalize_or(Vec2::X);
             return Some((t, (cur_a + cur_b) * 0.5, normal));
         }
 
-        // Distance check.
-        let gr = gjk(shape_a, cur_a, angle_a, shape_b, cur_b, angle_b);
+        let gr = gjk(
+            shape_a.shape,
+            cur_a,
+            shape_a.angle,
+            shape_b.shape,
+            cur_b,
+            shape_b.angle,
+        );
         let distance = if gr.simplex.is_empty() {
             0.0
         } else {
@@ -957,21 +1013,37 @@ pub fn gjk_ccd(
         };
 
         if distance < sum_radii {
-            let penetration = sum_radii - distance;
-            t += penetration / rel_speed;
+            t += (sum_radii - distance) / rel_speed;
             if t >= 1.0 {
                 return None;
             }
             continue;
         }
 
+        if rel_speed < 1e-10 {
+            return None;
+        }
         let dt = (distance - sum_radii) / rel_speed;
         if dt < 1e-10 {
             let next_t = (t + 1e-4).min(1.0);
-            let next_a = pos_a + vel_a * next_t;
-            let next_b = pos_b + vel_b * next_t;
-            if gjk_overlap(shape_a, next_a, angle_a, shape_b, next_b, angle_b) {
-                if let Some(epa) = epa(shape_a, next_a, angle_a, shape_b, next_b, angle_b) {
+            let next_a = shape_a.position + shape_a.velocity * next_t;
+            let next_b = shape_b.position + shape_b.velocity * next_t;
+            if gjk_overlap(
+                shape_a.shape,
+                next_a,
+                shape_a.angle,
+                shape_b.shape,
+                next_b,
+                shape_b.angle,
+            ) {
+                if let Some(epa) = epa(
+                    shape_a.shape,
+                    next_a,
+                    shape_a.angle,
+                    shape_b.shape,
+                    next_b,
+                    shape_b.angle,
+                ) {
                     return Some((next_t, epa.point, epa.normal));
                 }
                 let normal = (next_b - next_a).normalize_or(Vec2::X);

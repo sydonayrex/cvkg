@@ -3,9 +3,9 @@
 //
 // Run with: cargo run --example norse_tools_example
 
-use cvkg_components::eir_motion::MotionEasing as Easing;
 use cvkg_components::{
-    A11yRole, BragiCreative, EirMotion, HlinAccessibility, PermissionLevel, TyrSecurity,
+    A11yRole, Animated, BragiCreative, Easing, HlinAccessibility, PermissionLevel, Text,
+    Transition, TyrSecurity,
 };
 
 fn main() {
@@ -31,16 +31,13 @@ fn main() {
 
     println!("Hlin Accessibility: {} nodes", hlin.tree.len());
 
-    // Eir Motion - Animation system
-    let eir = EirMotion::new()
-        .animation("fade_in", 0.5)
-        .animation("slide_up", 0.3)
-        .keyframe("fade_in", 0.0, 0.0, Easing::EaseOut)
-        .keyframe("fade_in", 1.0, 1.0, Easing::EaseOut)
-        .physics(100.0, 10.0)
-        .state("running");
+    // Animated - Consolidated animation component
+    let anim = Animated::new(Text::new("Animated Text"))
+        .transition(Transition::Fade)
+        .easing(Easing::EaseOut)
+        .duration(0.5);
 
-    println!("Eir Motion: {} animations", eir.animations.len());
+    println!("Animated: duration = {}s", anim.duration);
 
     // Tyr Security - Security system
     let tyr = TyrSecurity::new()

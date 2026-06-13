@@ -58,10 +58,10 @@ impl KvasirNode for AccessibilityNode {
             .unwrap();
         let target_view = ctx.target_view;
 
-        let color_blind_bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Color Blind Bind Group"),
-            layout: &ctx.renderer.color_blind_bind_group_layout,
-            entries: &[
+        let color_blind_bind_group = ctx.get_or_create_bind_group(
+            (crate::kvasir::nodes::RES_SCENE, 99998, false),
+            &ctx.renderer.color_blind_bind_group_layout,
+            &[
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureView(&scene_view),
@@ -81,12 +81,13 @@ impl KvasirNode for AccessibilityNode {
                     }),
                 },
             ],
-        });
+            Some("Color Blind Bind Group"),
+        );
 
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Accessibility"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &target_view,
+                view: target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),

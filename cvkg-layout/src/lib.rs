@@ -33,6 +33,12 @@ pub struct TaffyLayoutEngine {
     pub node_map: HashMap<u64, taffy::NodeId>,
 }
 
+impl Default for TaffyLayoutEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TaffyLayoutEngine {
     pub fn new() -> Self {
         Self {
@@ -57,6 +63,12 @@ impl TaffyLayoutEngine {
 /// Manages active physics transitions for layout bounding boxes.
 pub struct AnimationEngine {
     pub active_transitions: HashMap<u64, cvkg_anim::physics::ViscousSpring>,
+}
+
+impl Default for AnimationEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AnimationEngine {
@@ -102,76 +114,162 @@ fn taffy_distribution(dist: cvkg_core::Distribution) -> Option<taffy::JustifyCon
     }
 }
 
-fn compute_taffy_flex(
+/// Taffy flex layout parameters.
+struct FlexParams {
     dir: taffy::FlexDirection,
     spacing: f32,
     alignment: cvkg_core::Alignment,
     distribution: cvkg_core::Distribution,
     bounds: Rect,
+    container_hash: u64,
+}
+
+fn compute_taffy_flex(
+    params: &FlexParams,
     subviews: &[&dyn LayoutView],
     cache: &mut LayoutCache,
 ) -> Vec<Rect> {
-    let mut tree: taffy::TaffyTree<()> = taffy::TaffyTree::new();
-    let mut child_nodes = Vec::with_capacity(subviews.len());
+    let mut sizes = Vec::with_capacity(subviews.len());
+    let mut hashes = Vec::with_capacity(subviews.len());
+    let mut flex_weights = Vec::with_capacity(subviews.len());
 
     for child in subviews {
-        let flex_weight = child.flex_weight();
-        let mut style = taffy::Style::default();
-        if flex_weight > 0.0 {
-            style.flex_grow = flex_weight;
-            style.flex_basis = taffy::Dimension::Percent(0.0);
+        let hash = child.view_hash();
+        hashes.push(hash);
+        flex_weights.push(child.flex_weight());
+
+        let proposal = SizeProposal::new(Some(params.bounds.width), Some(params.bounds.height));
+        let cached_size = if hash != 0 {
+            cache.get_size(hash, proposal)
         } else {
-            let size = child.size_that_fits(
-                SizeProposal::new(Some(bounds.width), Some(bounds.height)),
-                &[],
-                cache,
-            );
-            style.size = taffy::Size {
-                width: taffy::Dimension::Length(size.width),
-                height: taffy::Dimension::Length(size.height),
-            };
-        }
-        child_nodes.push(tree.new_leaf(style).unwrap());
+            None
+        };
+
+        let size = match cached_size {
+            Some(sz) => sz,
+            None => {
+                let sz = child.size_that_fits(proposal, &[], cache);
+                if hash != 0 {
+                    cache.set_size(hash, proposal, sz);
+                }
+                sz
+            }
+        };
+        sizes.push(size);
     }
 
-    let mut container_style = taffy::Style::default();
-    container_style.display = taffy::Display::Flex;
-    container_style.flex_direction = dir;
-    let gap_val = taffy::LengthPercentage::Length(spacing);
-    container_style.gap = taffy::Size {
-        width: if dir == taffy::FlexDirection::Row {
-            gap_val
+    let engine = TaffyLayoutEngine::get_or_insert_engine(cache);
+    let mut child_nodes = Vec::with_capacity(subviews.len());
+
+    for ((&hash, &flex_weight), &size) in hashes.iter().zip(&flex_weights).zip(&sizes) {
+        let style = if flex_weight > 0.0 {
+            taffy::Style {
+                size: taffy::Size {
+                    width: if params.dir == taffy::FlexDirection::Row {
+                        taffy::Dimension::Auto
+                    } else {
+                        taffy::Dimension::Length(size.width)
+                    },
+                    height: if params.dir == taffy::FlexDirection::Column {
+                        taffy::Dimension::Auto
+                    } else {
+                        taffy::Dimension::Length(size.height)
+                    },
+                },
+                flex_grow: flex_weight,
+                flex_basis: taffy::Dimension::Percent(0.0),
+                ..Default::default()
+            }
         } else {
-            taffy::LengthPercentage::Length(0.0)
-        },
-        height: if dir == taffy::FlexDirection::Column {
-            gap_val
+            taffy::Style {
+                size: taffy::Size {
+                    width: taffy::Dimension::Length(size.width),
+                    height: taffy::Dimension::Length(size.height),
+                },
+                ..Default::default()
+            }
+        };
+
+        let node = if hash != 0 {
+            if let Some(&existing) = engine.node_map.get(&hash) {
+                let _ = engine.tree.set_style(existing, style);
+                existing
+            } else {
+                let new_node = engine.tree.new_leaf(style).unwrap();
+                engine.node_map.insert(hash, new_node);
+                new_node
+            }
         } else {
-            taffy::LengthPercentage::Length(0.0)
+            engine.tree.new_leaf(style).unwrap()
+        };
+        child_nodes.push(node);
+    }
+
+    let gap_val = taffy::LengthPercentage::Length(params.spacing);
+    let container_style = taffy::Style {
+        display: taffy::Display::Flex,
+        flex_direction: params.dir,
+        gap: taffy::Size {
+            width: if params.dir == taffy::FlexDirection::Row {
+                gap_val
+            } else {
+                taffy::LengthPercentage::Length(0.0)
+            },
+            height: if params.dir == taffy::FlexDirection::Column {
+                gap_val
+            } else {
+                taffy::LengthPercentage::Length(0.0)
+            },
         },
-    };
-    container_style.align_items = taffy_alignment(alignment);
-    container_style.justify_content = taffy_distribution(distribution);
-    container_style.size = taffy::Size {
-        width: taffy::Dimension::Length(bounds.width),
-        height: taffy::Dimension::Length(bounds.height),
+        align_items: taffy_alignment(params.alignment),
+        justify_content: taffy_distribution(params.distribution),
+        size: taffy::Size {
+            width: taffy::Dimension::Length(params.bounds.width),
+            height: taffy::Dimension::Length(params.bounds.height),
+        },
+        ..Default::default()
     };
 
-    let root = tree
-        .new_with_children(container_style, &child_nodes)
+    let root_node = if params.container_hash != 0 {
+        if let Some(&existing) = engine.node_map.get(&params.container_hash) {
+            let _ = engine.tree.set_style(existing, container_style);
+            let _ = engine.tree.set_children(existing, &child_nodes);
+            existing
+        } else {
+            let new_node = engine
+                .tree
+                .new_with_children(container_style, &child_nodes)
+                .unwrap();
+            engine.node_map.insert(params.container_hash, new_node);
+            new_node
+        }
+    } else {
+        engine
+            .tree
+            .new_with_children(container_style, &child_nodes)
+            .unwrap()
+    };
+
+    engine
+        .tree
+        .compute_layout(root_node, taffy::Size::MAX_CONTENT)
         .unwrap();
-    tree.compute_layout(root, taffy::Size::MAX_CONTENT).unwrap();
 
     let mut rects = Vec::with_capacity(subviews.len());
     for &node in &child_nodes {
-        let layout = tree.layout(node).unwrap();
+        let layout = engine.tree.layout(node).unwrap();
         rects.push(Rect {
-            x: bounds.x + layout.location.x,
-            y: bounds.y + layout.location.y,
+            x: params.bounds.x + layout.location.x,
+            y: params.bounds.y + layout.location.y,
             width: layout.size.width,
             height: layout.size.height,
         });
     }
+
+    if params.container_hash == 0 {
+        let _ = engine.tree.remove(root_node);
+    }
+
     rects
 }
 
@@ -186,30 +284,36 @@ fn apply_layout_animations(
     for (child, target_rect) in subviews.iter().zip(&rects) {
         let hash = child.view_hash();
         if hash != 0 {
-            if let Some(prev) = cache.previous_rects.get(&hash) {
-                if prev.x != target_rect.x
+            if let Some(prev) = cache.previous_rects.get(&hash)
+                && (prev.x != target_rect.x
                     || prev.y != target_rect.y
                     || prev.width != target_rect.width
-                    || prev.height != target_rect.height
-                {
-                    transitions_to_update.push((hash, *prev, *target_rect));
-                }
+                    || prev.height != target_rect.height)
+            {
+                transitions_to_update.push((hash, *prev, *target_rect));
             }
             cache.previous_rects.insert(hash, *target_rect);
         }
     }
 
     let mut interpolated_rects = HashMap::new();
+    let delta = cache.delta_time;
     let anim_engine = AnimationEngine::get_or_insert_engine(cache);
 
     for (hash, prev, target_rect) in transitions_to_update {
-        let mut spring = cvkg_anim::physics::ViscousSpring::new(
-            cvkg_anim::physics::Vec3::new(prev.x, prev.y, prev.width),
-            cvkg_anim::physics::Vec3::new(target_rect.x, target_rect.y, target_rect.width),
-            0.9,
-            1000.0,
-        );
-        spring.step(0.016);
+        let mut spring = if let Some(mut existing) = anim_engine.active_transitions.remove(&hash) {
+            existing.position_b =
+                cvkg_anim::physics::Vec3::new(target_rect.x, target_rect.y, target_rect.width);
+            existing
+        } else {
+            cvkg_anim::physics::ViscousSpring::new(
+                cvkg_anim::physics::Vec3::new(prev.x, prev.y, prev.width),
+                cvkg_anim::physics::Vec3::new(target_rect.x, target_rect.y, target_rect.width),
+                0.9,
+                1000.0,
+            )
+        };
+        spring.step(delta);
         interpolated_rects.insert(
             hash,
             Rect {
@@ -257,12 +361,35 @@ impl HStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        compute_taffy_flex(
-            taffy::FlexDirection::Row,
+        Self::compute_layout_incremental(
             spacing,
             alignment,
             distribution,
             bounds,
+            0,
+            subviews,
+            cache,
+        )
+    }
+
+    pub fn compute_layout_incremental(
+        spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
+        bounds: Rect,
+        container_hash: u64,
+        subviews: &[&dyn LayoutView],
+        cache: &mut LayoutCache,
+    ) -> Vec<Rect> {
+        compute_taffy_flex(
+            &FlexParams {
+                dir: taffy::FlexDirection::Row,
+                spacing,
+                alignment,
+                distribution,
+                bounds,
+                container_hash,
+            },
             subviews,
             cache,
         )
@@ -282,11 +409,12 @@ impl LayoutView for HStack {
             width: proposal.width.unwrap_or(10000.0),
             height: proposal.height.unwrap_or(10000.0),
         };
-        let rects = Self::compute_layout(
+        let rects = Self::compute_layout_incremental(
             self.spacing,
             self.alignment,
             self.distribution,
             bounds,
+            self.view_hash(),
             subviews,
             cache,
         );
@@ -311,11 +439,12 @@ impl LayoutView for HStack {
     ) {
         let views: Vec<&dyn LayoutView> =
             subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
-        let rects = Self::compute_layout(
+        let rects = Self::compute_layout_incremental(
             self.spacing,
             self.alignment,
             self.distribution,
             bounds,
+            self.view_hash(),
             &views,
             cache,
         );
@@ -349,12 +478,35 @@ impl VStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        compute_taffy_flex(
-            taffy::FlexDirection::Column,
+        Self::compute_layout_incremental(
             spacing,
             alignment,
             distribution,
             bounds,
+            0,
+            subviews,
+            cache,
+        )
+    }
+
+    pub fn compute_layout_incremental(
+        spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
+        bounds: Rect,
+        container_hash: u64,
+        subviews: &[&dyn LayoutView],
+        cache: &mut LayoutCache,
+    ) -> Vec<Rect> {
+        compute_taffy_flex(
+            &FlexParams {
+                dir: taffy::FlexDirection::Column,
+                spacing,
+                alignment,
+                distribution,
+                bounds,
+                container_hash,
+            },
             subviews,
             cache,
         )
@@ -374,11 +526,12 @@ impl LayoutView for VStack {
             width: proposal.width.unwrap_or(10000.0),
             height: proposal.height.unwrap_or(10000.0),
         };
-        let rects = Self::compute_layout(
+        let rects = Self::compute_layout_incremental(
             self.spacing,
             self.alignment,
             self.distribution,
             bounds,
+            self.view_hash(),
             subviews,
             cache,
         );
@@ -403,11 +556,12 @@ impl LayoutView for VStack {
     ) {
         let views: Vec<&dyn LayoutView> =
             subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
-        let rects = Self::compute_layout(
+        let rects = Self::compute_layout_incremental(
             self.spacing,
             self.alignment,
             self.distribution,
             bounds,
+            self.view_hash(),
             &views,
             cache,
         );
@@ -619,64 +773,120 @@ impl Grid {
         placements: &[Option<cvkg_core::GridPlacement>],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        let mut tree: taffy::TaffyTree<()> = taffy::TaffyTree::new();
-        let mut child_nodes = Vec::with_capacity(subviews.len());
+        self.compute_layout_rects_incremental(bounds, 0, subviews, placements, cache)
+    }
 
-        for (i, child) in subviews.iter().enumerate() {
-            let mut style = taffy::Style::default();
-            let size = child.size_that_fits(
-                SizeProposal::new(Some(bounds.width), Some(bounds.height)),
-                &[],
-                cache,
-            );
-            style.size = taffy::Size {
-                width: taffy::Dimension::Length(size.width),
-                height: taffy::Dimension::Length(size.height),
-            };
-
-            if let Some(p) = placements.get(i).copied().flatten() {
-                style.grid_column = taffy::Line {
-                    start: taffy::prelude::line((p.column + 1) as i16),
-                    end: taffy::prelude::span(p.column_span as u16),
-                };
-                style.grid_row = taffy::Line {
-                    start: taffy::prelude::line((p.row + 1) as i16),
-                    end: taffy::prelude::span(p.row_span as u16),
-                };
-            }
-            child_nodes.push(tree.new_leaf(style).unwrap());
+    pub fn compute_layout_rects_incremental(
+        &self,
+        bounds: Rect,
+        container_hash: u64,
+        subviews: &[&dyn LayoutView],
+        placements: &[Option<cvkg_core::GridPlacement>],
+        cache: &mut LayoutCache,
+    ) -> Vec<Rect> {
+        let mut hashes = Vec::with_capacity(subviews.len());
+        for child in subviews {
+            hashes.push(child.view_hash());
         }
 
-        let mut container_style = taffy::Style::default();
-        container_style.display = taffy::Display::Grid;
+        let engine = TaffyLayoutEngine::get_or_insert_engine(cache);
+        let mut child_nodes = Vec::with_capacity(subviews.len());
 
-        container_style.grid_template_columns =
-            self.columns.iter().copied().map(taffy_track).collect();
-        container_style.grid_template_rows = self.rows.iter().copied().map(taffy_track).collect();
+        for (hash, placement) in hashes.iter().zip(placements.iter()) {
+            let style = if let Some(p) = placement.as_ref() {
+                taffy::Style {
+                    size: taffy::Size {
+                        width: taffy::Dimension::Auto,
+                        height: taffy::Dimension::Auto,
+                    },
+                    grid_column: taffy::Line {
+                        start: taffy::prelude::line((p.column + 1) as i16),
+                        end: taffy::prelude::span(p.column_span as u16),
+                    },
+                    grid_row: taffy::Line {
+                        start: taffy::prelude::line((p.row + 1) as i16),
+                        end: taffy::prelude::span(p.row_span as u16),
+                    },
+                    ..Default::default()
+                }
+            } else {
+                taffy::Style {
+                    size: taffy::Size {
+                        width: taffy::Dimension::Auto,
+                        height: taffy::Dimension::Auto,
+                    },
+                    ..Default::default()
+                }
+            };
 
-        container_style.gap = taffy::Size {
-            width: taffy::LengthPercentage::Length(self.column_gap),
-            height: taffy::LengthPercentage::Length(self.row_gap),
+            let node = if *hash != 0 {
+                if let Some(&existing) = engine.node_map.get(hash) {
+                    let _ = engine.tree.set_style(existing, style);
+                    existing
+                } else {
+                    let new_node = engine.tree.new_leaf(style).unwrap();
+                    engine.node_map.insert(*hash, new_node);
+                    new_node
+                }
+            } else {
+                engine.tree.new_leaf(style).unwrap()
+            };
+            child_nodes.push(node);
+        }
+
+        let container_style = taffy::Style {
+            display: taffy::Display::Grid,
+            grid_template_columns: self.columns.iter().copied().map(taffy_track).collect(),
+            grid_template_rows: self.rows.iter().copied().map(taffy_track).collect(),
+            gap: taffy::Size {
+                width: taffy::LengthPercentage::Length(self.column_gap),
+                height: taffy::LengthPercentage::Length(self.row_gap),
+            },
+            size: taffy::Size {
+                width: taffy::Dimension::Length(bounds.width),
+                height: taffy::Dimension::Length(bounds.height),
+            },
+            ..Default::default()
         };
-        container_style.size = taffy::Size {
-            width: taffy::Dimension::Length(bounds.width),
-            height: taffy::Dimension::Length(bounds.height),
+
+        let root_node = if container_hash != 0 {
+            if let Some(&existing) = engine.node_map.get(&container_hash) {
+                let _ = engine.tree.set_style(existing, container_style);
+                let _ = engine.tree.set_children(existing, &child_nodes);
+                existing
+            } else {
+                let new_node = engine
+                    .tree
+                    .new_with_children(container_style, &child_nodes)
+                    .unwrap();
+                engine.node_map.insert(container_hash, new_node);
+                new_node
+            }
+        } else {
+            engine
+                .tree
+                .new_with_children(container_style, &child_nodes)
+                .unwrap()
         };
 
-        let root = tree
-            .new_with_children(container_style, &child_nodes)
+        engine
+            .tree
+            .compute_layout(root_node, taffy::Size::MAX_CONTENT)
             .unwrap();
-        tree.compute_layout(root, taffy::Size::MAX_CONTENT).unwrap();
 
         let mut rects = Vec::with_capacity(subviews.len());
         for &node in &child_nodes {
-            let layout = tree.layout(node).unwrap();
+            let layout = engine.tree.layout(node).unwrap();
             rects.push(Rect {
                 x: bounds.x + layout.location.x,
                 y: bounds.y + layout.location.y,
                 width: layout.size.width,
                 height: layout.size.height,
             });
+        }
+
+        if container_hash == 0 {
+            let _ = engine.tree.remove(root_node);
         }
         rects
     }
@@ -704,7 +914,13 @@ impl LayoutView for Grid {
         let views: Vec<&dyn LayoutView> =
             subviews.iter().map(|v| &**v as &dyn LayoutView).collect();
         let placements = vec![None; subviews.len()];
-        let rects = self.compute_layout_rects(bounds, &views, &placements, cache);
+        let rects = self.compute_layout_rects_incremental(
+            bounds,
+            self.view_hash(),
+            &views,
+            &placements,
+            cache,
+        );
         apply_layout_animations(rects, subviews, cache);
     }
 }
@@ -835,8 +1051,8 @@ impl SafeArea {
         EdgeInsets {
             top: if self.edges.top { 44.0 } else { 0.0 },
             bottom: if self.edges.bottom { 34.0 } else { 0.0 },
-            leading: if self.edges.leading { 0.0 } else { 0.0 },
-            trailing: if self.edges.trailing { 0.0 } else { 0.0 },
+            leading: 0.0,
+            trailing: 0.0,
         }
     }
 }

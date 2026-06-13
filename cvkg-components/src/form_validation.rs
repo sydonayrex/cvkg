@@ -162,19 +162,19 @@ impl<V: View> View for FormField<V> {
         self.content.render(renderer, content_rect);
 
         // --- Error message ---
-        if let Some(ref msg) = self.error_message
-            && self.is_dirty
-        {
-            renderer.draw_text(
-                msg,
-                rect.x,
-                content_top + content_height + 2.0,
-                11.0,
-                theme::error_color(),
-            );
-        }
+        if let Some(ref msg) = self.error_message {
+            if self.is_dirty {
+                renderer.draw_text(
+                    msg,
+                    rect.x,
+                    content_top + content_height + 2.0,
+                    11.0,
+                    theme::error_color(),
+                );
+            }
 
-        renderer.pop_vnode();
+            renderer.pop_vnode();
+        }
     }
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {

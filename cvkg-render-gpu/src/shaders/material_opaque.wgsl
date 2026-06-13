@@ -37,7 +37,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         color = in.color * 1.5;
     } else if in.material_id == 3u {
         let half_size = in.size * 0.5;
-        let d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
+        let squircle_n = select(0.0, in.slice.y, in.slice.y > 1.5);
+        var d: f32;
+        if (squircle_n > 1.5) {
+            d = sd_squircle(in.logical - half_size, half_size, squircle_n);
+        } else {
+            d = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
+        }
         let aa = fwidth(d);
         color.a *= 1.0 - smoothstep(0.0, aa, d);
     } else if in.material_id == 4u {
@@ -81,7 +87,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     } else if in.material_id == 2u || in.material_id == 6u {
         let tex_color = textureSample(t_diffuse[in.tex_index], s_diffuse, in.uv);
         if in.material_id == 6u {
-            color = vec4<f32>(in.color.rgb, in.color.a * tex_color.a);
+            // Apply subpixel typography (LCD horizontal masking) by blending each subpixel component independently.
+            // CONTRACT: If the texture contains a subpixel coverage mask (RenderMode::Subpixel), we blend color
+            // channels using the mask's RGB components. For grayscale, tex_color.rgb is vec3(1.0) and tex_color.a is alpha.
+            color = vec4<f32>(in.color.rgb * tex_color.rgb, in.color.a * tex_color.a);
         } else {
             color *= tex_color;
         }

@@ -188,18 +188,18 @@ impl<'a> SvgSerializer<'a> {
             .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
 
         // 3. Global Styles
-        if let Some(interceptor) = &self.interceptor {
-            if let Some(styles) = interceptor.global_styles() {
-                writer
-                    .write_event(Event::Start(BytesStart::new("style")))
-                    .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
-                writer
-                    .write_event(Event::Text(BytesText::new(&styles)))
-                    .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
-                writer
-                    .write_event(Event::End(BytesEnd::new("style")))
-                    .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
-            }
+        if let Some(interceptor) = &self.interceptor
+            && let Some(styles) = interceptor.global_styles()
+        {
+            writer
+                .write_event(Event::Start(BytesStart::new("style")))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+            writer
+                .write_event(Event::Text(BytesText::new(&styles)))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
+            writer
+                .write_event(Event::End(BytesEnd::new("style")))
+                .map_err(|e| SvgSerializeError::WriteError(e.to_string()))?;
         }
 
         // 4. Recursive Traversal
@@ -285,7 +285,7 @@ impl<'a> SvgSerializer<'a> {
         };
 
         let children = node.children();
-        let has_children = children.map_or(false, |c| !c.is_empty());
+        let has_children = children.is_some_and(|c| !c.is_empty());
         let has_payload = child_payload.is_some();
 
         if !has_children && !has_payload {

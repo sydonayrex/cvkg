@@ -104,7 +104,6 @@ pub struct OutlineView {
 
 /// Internal state for the outline view.
 #[derive(Clone, Copy, Debug, Default)]
-#[allow(dead_code)]
 struct OutlineState {
     scroll_offset: f32,
 }

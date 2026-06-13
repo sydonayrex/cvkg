@@ -232,51 +232,51 @@ impl ErrorOverlay {
             }
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(trimmed) {
                 // Cargo JSON messages have a "reason" field
-                if json.get("reason").and_then(|r| r.as_str()) == Some("compiler-message") {
-                    if let Some(message) = json.get("message") {
-                        let msg_text = message
-                            .get("message")
-                            .and_then(|m| m.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                if json.get("reason").and_then(|r| r.as_str()) == Some("compiler-message")
+                    && let Some(message) = json.get("message")
+                {
+                    let msg_text = message
+                        .get("message")
+                        .and_then(|m| m.as_str())
+                        .unwrap_or("")
+                        .to_string();
 
-                        // Only actual errors, not warnings
-                        let is_error = message
-                            .get("level")
-                            .and_then(|l| l.as_str())
-                            .map(|l| l == "error")
-                            .unwrap_or(false);
-                        if !is_error {
-                            continue;
-                        }
-
-                        // Extract file/line/column from spans
-                        let (file, line, column) = message
-                            .get("spans")
-                            .and_then(|s| s.as_array())
-                            .and_then(|spans| spans.first())
-                            .map(|span| {
-                                (
-                                    span.get("file_name")
-                                        .and_then(|f| f.as_str())
-                                        .map(String::from),
-                                    span.get("line_start")
-                                        .and_then(|l| l.as_u64())
-                                        .map(|l| l as u32),
-                                    span.get("column_start")
-                                        .and_then(|c| c.as_u64())
-                                        .map(|c| c as u32),
-                                )
-                            })
-                            .unwrap_or((None, None, None));
-
-                        return Some(Self {
-                            message: msg_text,
-                            file,
-                            line,
-                            column,
-                        });
+                    // Only actual errors, not warnings
+                    let is_error = message
+                        .get("level")
+                        .and_then(|l| l.as_str())
+                        .map(|l| l == "error")
+                        .unwrap_or(false);
+                    if !is_error {
+                        continue;
                     }
+
+                    // Extract file/line/column from spans
+                    let (file, line, column) = message
+                        .get("spans")
+                        .and_then(|s| s.as_array())
+                        .and_then(|spans| spans.first())
+                        .map(|span| {
+                            (
+                                span.get("file_name")
+                                    .and_then(|f| f.as_str())
+                                    .map(String::from),
+                                span.get("line_start")
+                                    .and_then(|l| l.as_u64())
+                                    .map(|l| l as u32),
+                                span.get("column_start")
+                                    .and_then(|c| c.as_u64())
+                                    .map(|c| c as u32),
+                            )
+                        })
+                        .unwrap_or((None, None, None));
+
+                    return Some(Self {
+                        message: msg_text,
+                        file,
+                        line,
+                        column,
+                    });
                 }
             }
         }

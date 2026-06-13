@@ -115,6 +115,8 @@ pub struct DrawCommand {
     /// Range in the shared index buffer.
     pub index_start: u32,
     pub index_count: u32,
+    /// Instance ID for instanced rendering transform data.
+    pub instance_id: u32,
 }
 
 /// A node in the retained-mode layer tree.

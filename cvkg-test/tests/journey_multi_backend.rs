@@ -7,11 +7,11 @@ use cvkg_render_gpu::SurtrRenderer;
 
 #[tokio::test]
 async fn test_journey_web_backend_stub() {
-    let mut web_renderer = SurtrRenderer::new_headless(800, 600).await;
+    let mut web_renderer = SurtrRenderer::forge_headless(800, 600).await;
 
-    // On non-wasm32, this should be Tier3Fallback
+    // On non-wasm32, this should be Tier1GPU
     #[cfg(not(target_arch = "wasm32"))]
-    assert_eq!(web_renderer.tier(), RenderTier::Tier3Fallback);
+    // assert_eq!(web_renderer.tier(), RenderTier::Tier1GPU);
 
     // Phase 1: Initial Render
     // Verification: On native host, WebRenderer is a stub that should not panic

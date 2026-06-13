@@ -583,8 +583,8 @@ impl<V: View> View for VedrHero<V> {
 }
 
 #[derive(Clone, Default)]
-#[allow(dead_code)]
 pub struct GullinStat<V> {
+    #[allow(dead_code)]
     content: Option<V>,
 }
 impl<V: View> View for GullinStat<V> {
@@ -602,8 +602,8 @@ impl<V: View> View for GullinStat<V> {
 }
 
 #[derive(Clone, Default)]
-#[allow(dead_code)]
 pub struct RatatoKey<V> {
+    #[allow(dead_code)]
     content: Option<V>,
 }
 impl<V: View> View for RatatoKey<V> {
@@ -844,8 +844,8 @@ impl<V: View> View for GarmSpeedDial<V> {
 }
 
 #[derive(Clone, Default)]
-#[allow(dead_code)]
 pub struct HuginContextMenu<V> {
+    #[allow(dead_code)]
     items: Vec<V>,
 }
 impl<V: View> View for HuginContextMenu<V> {
@@ -1067,8 +1067,8 @@ impl<V: View> View for MuninSpy<V> {
 
 // Advanced Data & Input
 #[derive(Clone, Default)]
-#[allow(dead_code)]
 pub struct SkollTime<V> {
+    #[allow(dead_code)]
     content: Option<V>,
 }
 impl<V: View> View for SkollTime<V> {
@@ -1086,8 +1086,8 @@ impl<V: View> View for SkollTime<V> {
 }
 
 #[derive(Clone, Default)]
-#[allow(dead_code)]
 pub struct HatiSwipe<V> {
+    #[allow(dead_code)]
     content: Option<V>,
 }
 impl<V: View> View for HatiSwipe<V> {

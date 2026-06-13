@@ -59,6 +59,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ─── Section 1: Geometry and Clipping ────────────────────────────────────
 
     let uv = clamp(in.uv, vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 1.0));
+    let screen_uv = in.clip_position.xy / (scene.resolution * scene.scale_factor);
 
     let panel_id = floor(in.uv.x * 3.0);
     let seed = fract(sin(panel_id * 91.7) * 47453.5453);
@@ -76,8 +77,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // View direction (simplified: from center toward edge)
     let view_dir = normalize(centered + vec2<f32>(1e-5, 1e-5));
 
-    // Use per-frame IOR from theme if set, otherwise default to 1.45 (borosilicate glass)
-    let ior = select(1.45, theme.glass_ior, theme.glass_ior > 0.0);
+    // Resolve IOR: prioritize per-instance ior_override, fall back to theme, then standard borosilicate (1.45)
+    let base_ior = select(1.45, theme.glass_ior, theme.glass_ior > 0.0);
+    let ior = select(base_ior, in.ior_override, in.ior_override > 0.0);
 
     // Compute refracted direction using Snell's law
     let refracted_dir = snell_refraction(lens_normal, view_dir, ior);
@@ -95,31 +97,55 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let noise1 = fbm(uv * 6.0 + scene.time * 0.2);
     let stress_offset = normalize(vec2<f32>(0.5, 0.8)) * noise1 * 0.02;
 
+    // ─── Section 5: SDF Edge and Thickness ───────────────────────────────────
+
+    let half_size = in.size * 0.5;
+    let squircle_n = select(0.0, in.slice.y, in.slice.y > 1.5);
+    var d_sdf: f32;
+    if (squircle_n > 1.5) {
+        d_sdf = sd_squircle(in.logical - half_size, half_size, squircle_n);
+    } else {
+        d_sdf = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
+    }
+
     // ─── Section 4: Backdrop Sampling with Chromatic Aberration ──────────────
 
-    let blur_mip = theme.glass_blur_strength;
-    let env_base = textureSampleLevel(t_env, s_env, uv, blur_mip).rgb;
+    // Use per-element blur radius, falling back to theme default if 0
+    let blur_mip = select(theme.glass_blur_strength, in.blur_radius, in.blur_radius > 0.0);
+    let env_base = textureSampleLevel(t_env, s_env, screen_uv, blur_mip).rgb;
     let brightness = dot(env_base, vec3<f32>(0.299, 0.587, 0.114));
 
     // Combine distortion sources
     var distortion = refraction_offset;
     distortion += stress_offset * 0.6;
     distortion += hash_noise * 0.3;
+
+    // Tactical pointer proximity hover pressure/refraction distortion
+    let frag_logical_pos = in.clip_position.xy / scene.scale_factor;
+    let dist_to_mouse = distance(frag_logical_pos, scene.mouse);
+    let hover_radius = 120.0;
+    if (dist_to_mouse < hover_radius) {
+        let hover_factor = 1.0 - (dist_to_mouse / hover_radius);
+        let hover_pulse = smoothstep(0.0, 1.0, hover_factor);
+        let hover_dir = normalize(frag_logical_pos - scene.mouse + vec2<f32>(1e-5, 1e-5));
+        let mouse_speed = length(scene.mouse_velocity);
+        let hover_displacement = hover_dir * hover_pulse * (0.015 + mouse_speed * 0.003);
+        distortion += hover_displacement;
+    }
+
     distortion *= (1.0 + brightness * 0.7);
 
+    // Dynamic shape masking: Scale down distortion near the glass edges to prevent sampling pixels outside the glass geometry.
+    // If d_sdf is positive (outside/near edge), we clamp the distortion.
+    let dist_fade = smoothstep(10.0, 0.0, d_sdf);
+    let safe_distortion = distortion * dist_fade;
+
     // Chromatic aberration: sample R/G/B at slightly different offsets
-    let ab_offset = distortion * 0.04;
-    let r_sample = textureSampleLevel(t_env, s_env, uv + distortion + ab_offset * 1.2, blur_mip).r;
-    let g_sample = textureSampleLevel(t_env, s_env, uv + distortion, blur_mip).g;
-    let b_sample = textureSampleLevel(t_env, s_env, uv + distortion - ab_offset * 1.2, blur_mip).b;
+    let ab_offset = safe_distortion * 0.04;
+    let r_sample = textureSampleLevel(t_env, s_env, screen_uv + safe_distortion + ab_offset * 1.2, blur_mip).r;
+    let g_sample = textureSampleLevel(t_env, s_env, screen_uv + safe_distortion, blur_mip).g;
+    let b_sample = textureSampleLevel(t_env, s_env, screen_uv + safe_distortion - ab_offset * 1.2, blur_mip).b;
     var refracted = vec3<f32>(r_sample, g_sample, b_sample);
-
-    // ─── Section 5: SDF Edge and Thickness ───────────────────────────────────
-
-    let half_size = in.size * 0.5;
-    let p_sdf = in.logical - half_size;
-    let q_sdf = abs(p_sdf) - (half_size - in.radius);
-    let d_sdf = length(max(q_sdf, vec2(0.0))) + min(max(q_sdf.x, q_sdf.y), 0.0) - in.radius;
 
     let border_dist = -d_sdf;
     let flicker = 0.9 + vnoise(uv * 20.0 + scene.time * 3.0) * 0.1;
@@ -130,7 +156,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ─── Section 6: Adaptive Tint from Backdrop ──────────────────────────────
 
     // Sample backdrop dominant color at coarse mip for adaptive tinting
-    let backdrop_dominant = sample_backdrop_dominant(uv);
+    let backdrop_dominant = sample_backdrop_dominant(screen_uv);
 
     // Adaptive tint: mix static theme tint with backdrop-derived tint
     // glass_tint_adapt controls the weight (0 = static, 1 = fully adaptive)
@@ -149,14 +175,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let smear_dist = clamp(-d_sdf, 0.0, 3.0) / 3.0;
     let smear_sample = textureSampleLevel(
         t_env, s_env,
-        uv + lens_normal * smear_dist * 0.01,
+        screen_uv + lens_normal * smear_dist * 0.01,
         blur_mip
     ).rgb;
     let smear_contribution = smear_sample * 0.15;
 
     // Crystalline edge highlight: bright specular at the boundary
     let edge_mask = smoothstep(0.5, 0.0, abs(d_sdf));
-    let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8)))) * 0.18;
+    let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8))))) * 0.18;
 
     // ─── Section 9: Final Composition ────────────────────────────────────────
 
@@ -172,18 +198,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Add edge smear and crystalline highlight
     final_rgb += smear_contribution + crystal_edge;
 
-    // Specular highlight
-    let light_dir_h = normalize(vec2<f32>(-0.4, -0.8));
-    let l = dot(uv, light_dir_h);
-    let spec = smoothstep(0.45, 0.55, l) * 0.18;
-    final_rgb += spec;
-
-    // Alpha model: thicker at edges (more opaque), thinner at center
-    let sss_alpha = mix(0.06, 0.22, thickness);
-    let final_alpha = (sss_alpha + fresnel * 0.18) * in.color.a * clip_alpha;
-
+    // Apply SDF anti-aliasing to glass alpha
+    let final_alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
     color = vec4<f32>(final_rgb, final_alpha);
-    color.a *= (1.0 - smoothstep(-fw, fw, d_sdf));
 
     if color.a <= 0.0 { discard; }
     return color;

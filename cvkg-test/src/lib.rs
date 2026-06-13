@@ -76,3 +76,64 @@ mod tests {
         assert!(diff < 2.0); // Only 1% diff
     }
 }
+
+use std::fs;
+use std::path::PathBuf;
+
+/// A utility for snapshot testing using golden images.
+pub struct GoldenImage {
+    pub name: String,
+}
+
+impl GoldenImage {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
+
+    /// Compares the provided pixel buffer to the golden image on disk.
+    /// If `UPDATE_GOLDEN` is set to "1", or the golden image doesn't exist, it writes the new image.
+    /// Otherwise, it asserts that the new image matches the golden image within tolerance.
+    pub fn assert_match(&self, width: u32, height: u32, pixels: &[u8]) {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let snapshots_dir = PathBuf::from(manifest_dir).join("tests").join("snapshots");
+        fs::create_dir_all(&snapshots_dir).unwrap();
+
+        let snapshot_path = snapshots_dir.join(format!("{}.png", self.name));
+
+        let update_golden =
+            std::env::var("UPDATE_GOLDEN").unwrap_or_else(|_| "0".to_string()) == "1";
+
+        if !snapshot_path.exists() || update_golden {
+            println!("Writing new golden image to {:?}", snapshot_path);
+            let img_buffer = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
+                width,
+                height,
+                pixels.to_vec(),
+            )
+            .expect("Failed to create image buffer");
+            img_buffer
+                .save(&snapshot_path)
+                .expect("Failed to save golden image");
+            if update_golden {
+                return;
+            }
+        }
+
+        let golden_img = image::open(&snapshot_path)
+            .expect("Failed to open golden image")
+            .to_rgba8();
+        let golden_pixels = golden_img.into_raw();
+
+        let comparator = VisualComparator::default();
+        let diff = comparator.compare(&golden_pixels, pixels);
+
+        assert!(
+            diff < 0.01,
+            "Visual regression detected in {}: {}% difference",
+            self.name,
+            diff
+        );
+    }
+}

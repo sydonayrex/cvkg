@@ -14,6 +14,42 @@ pub struct SpringConfig {
     pub damping: f32,
 }
 
+/// Body pair context for constraint solver methods.
+struct SolverCtx<'a> {
+    a: &'a mut RigidBody,
+    b: &'a mut RigidBody,
+    break_threshold: Option<f32>,
+    dt: f32,
+}
+
+/// Anchor pair for constraints that use local anchors on both bodies.
+struct AnchorPair<'a> {
+    local_a: &'a Vec2,
+    local_b: &'a Vec2,
+}
+
+/// Prismatic joint parameters.
+struct PrismaticParams<'a> {
+    local_a: &'a Vec2,
+    local_b: &'a Vec2,
+    axis: &'a Vec2,
+    min_limit: f32,
+    max_limit: f32,
+    enable_motor: bool,
+    motor_speed: f32,
+    motor_max_force: f32,
+}
+
+/// 6-DOF joint parameters.
+struct SixDofParams<'a> {
+    anchor: &'a glam::Vec3,
+    primary_axis: &'a glam::Vec3,
+    linear_limits: [f32; 6],
+    angular_limits: [f32; 6],
+    linear_locked: [bool; 3],
+    angular_locked: [bool; 3],
+}
+
 /// Impulse-based constraint solver using Gauss-Seidel iteration.
 ///
 /// Solves velocity-level constraints by computing corrective impulses
@@ -22,7 +58,7 @@ pub struct SpringConfig {
 pub struct ImpulseSolver {
     /// Number of solver iterations per step. More = stiffer, more expensive.
     pub iterations: usize,
-    /// Baumgarte factor for position drift correction (0.0–1.0).
+    /// Baumgarte factor for position drift correction (0.0-1.0).
     pub baumgarte: f32,
 }
 
@@ -83,169 +119,175 @@ impl ImpulseSolver {
                     (&mut right[0], &mut left[idx_b])
                 };
 
-                let broke = self.solve_constraint(constraint, body_a, body_b, dt);
-                if broke {
-                    constraint.enabled = false;
-                    broken_pairs.push((constraint.body_a, constraint.body_b));
+                let mut ctx = SolverCtx {
+                    a: body_a,
+                    b: body_b,
+                    break_threshold: constraint.break_threshold,
+                    dt,
+                };
+
+                match &constraint.kind {
+                    ConstraintKind::Distance {
+                        local_anchor_a,
+                        local_anchor_b,
+                        distance,
+                        ..
+                    } => {
+                        let anchors = AnchorPair {
+                            local_a: local_anchor_a,
+                            local_b: local_anchor_b,
+                        };
+                        if self.solve_distance(&mut ctx, &anchors, *distance) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Pin { anchor } => {
+                        if self.solve_pin(&mut ctx, anchor) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Spring {
+                        local_anchor_a,
+                        local_anchor_b,
+                        rest_length,
+                        stiffness,
+                        damping,
+                    } => {
+                        let config = SpringConfig {
+                            rest_length: *rest_length,
+                            stiffness: *stiffness,
+                            damping: *damping,
+                        };
+                        let anchors = AnchorPair {
+                            local_a: local_anchor_a,
+                            local_b: local_anchor_b,
+                        };
+                        if self.solve_spring(&mut ctx, &anchors, &config) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Hinge {
+                        local_anchor_a,
+                        local_anchor_b,
+                        ..
+                    } => {
+                        let anchors = AnchorPair {
+                            local_a: local_anchor_a,
+                            local_b: local_anchor_b,
+                        };
+                        if self.solve_hinge(&mut ctx, &anchors) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::AngularLimit {
+                        min_angle,
+                        max_angle,
+                    } => {
+                        if self.solve_angular_limit(&mut ctx, *min_angle, *max_angle) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::BallSocket3D { anchor } => {
+                        if self.solve_ball_socket_3d(&mut ctx, anchor) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Hinge3D { anchor, axis } => {
+                        if self.solve_hinge_3d(&mut ctx, anchor, axis) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Prismatic {
+                        local_anchor_a,
+                        local_anchor_b,
+                        axis,
+                        min_limit,
+                        max_limit,
+                        enable_motor,
+                        motor_speed,
+                        motor_max_force,
+                    } => {
+                        let params = PrismaticParams {
+                            local_a: local_anchor_a,
+                            local_b: local_anchor_b,
+                            axis,
+                            min_limit: *min_limit,
+                            max_limit: *max_limit,
+                            enable_motor: *enable_motor,
+                            motor_speed: *motor_speed,
+                            motor_max_force: *motor_max_force,
+                        };
+                        if self.solve_prismatic(&mut ctx, &params) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Motor {
+                        body: _,
+                        target_velocity,
+                        max_force,
+                        damping,
+                    } => {
+                        if self.solve_motor(&mut ctx, *target_velocity, *max_force, *damping) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::Weld {
+                        local_anchor_a,
+                        local_anchor_b,
+                    } => {
+                        let anchors = AnchorPair {
+                            local_a: local_anchor_a,
+                            local_b: local_anchor_b,
+                        };
+                        if self.solve_weld(&mut ctx, &anchors) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
+                    ConstraintKind::SixDof {
+                        anchor,
+                        primary_axis,
+                        linear_limits,
+                        angular_limits,
+                        linear_locked,
+                        angular_locked,
+                    } => {
+                        let params = SixDofParams {
+                            anchor,
+                            primary_axis,
+                            linear_limits: *linear_limits,
+                            angular_limits: *angular_limits,
+                            linear_locked: *linear_locked,
+                            angular_locked: *angular_locked,
+                        };
+                        if self.solve_six_dof(&mut ctx, &params) {
+                            constraint.enabled = false;
+                            broken_pairs.push((constraint.body_a, constraint.body_b));
+                        }
+                    }
                 }
             }
         }
         broken_pairs
     }
 
-    fn solve_constraint(
-        &self,
-        constraint: &Constraint,
-        body_a: &mut RigidBody,
-        body_b: &mut RigidBody,
-        dt: f32,
-    ) -> bool {
-        match &constraint.kind {
-            ConstraintKind::Distance {
-                local_anchor_a,
-                local_anchor_b,
-                distance,
-                ..
-            } => self.solve_distance(
-                body_a,
-                body_b,
-                local_anchor_a,
-                local_anchor_b,
-                *distance,
-                constraint.break_threshold,
-                dt,
-            ),
-            ConstraintKind::Pin { anchor } => {
-                self.solve_pin(body_a, body_b, anchor, constraint.break_threshold, dt)
-            }
-            ConstraintKind::Spring {
-                local_anchor_a,
-                local_anchor_b,
-                rest_length,
-                stiffness,
-                damping,
-            } => {
-                let config = SpringConfig {
-                    rest_length: *rest_length,
-                    stiffness: *stiffness,
-                    damping: *damping,
-                };
-                self.solve_spring(
-                    body_a,
-                    body_b,
-                    local_anchor_a,
-                    local_anchor_b,
-                    &config,
-                    constraint.break_threshold,
-                    dt,
-                )
-            }
-            ConstraintKind::Hinge {
-                local_anchor_a,
-                local_anchor_b,
-                ..
-            } => self.solve_hinge(
-                body_a,
-                body_b,
-                local_anchor_a,
-                local_anchor_b,
-                constraint.break_threshold,
-                dt,
-            ),
-            ConstraintKind::AngularLimit {
-                min_angle,
-                max_angle,
-            } => self.solve_angular_limit(
-                body_a,
-                body_b,
-                *min_angle,
-                *max_angle,
-                constraint.break_threshold,
-                dt,
-            ),
-            ConstraintKind::BallSocket3D { anchor } => {
-                self.solve_ball_socket_3d(body_a, body_b, anchor, constraint.break_threshold, dt)
-            }
-            ConstraintKind::Hinge3D { anchor, axis } => {
-                self.solve_hinge_3d(body_a, body_b, anchor, axis, constraint.break_threshold, dt)
-            }
-            ConstraintKind::Prismatic {
-                local_anchor_a,
-                local_anchor_b,
-                axis,
-                min_limit,
-                max_limit,
-                enable_motor,
-                motor_speed,
-                motor_max_force,
-            } => self.solve_prismatic(
-                body_a,
-                body_b,
-                local_anchor_a,
-                local_anchor_b,
-                axis,
-                *min_limit,
-                *max_limit,
-                *enable_motor,
-                *motor_speed,
-                *motor_max_force,
-                constraint.break_threshold,
-                dt,
-            ),
-            ConstraintKind::Motor {
-                body: _,
-                target_velocity,
-                max_force,
-                damping,
-            } => {
-                // Motor applies force to drive a body toward target velocity
-                self.solve_motor(body_a, body_b, *target_velocity, *max_force, *damping, dt)
-            }
-            ConstraintKind::Weld {
-                local_anchor_a,
-                local_anchor_b,
-            } => self.solve_weld(
-                body_a,
-                body_b,
-                local_anchor_a,
-                local_anchor_b,
-                constraint.break_threshold,
-                dt,
-            ),
-            ConstraintKind::SixDof {
-                anchor,
-                primary_axis,
-                linear_limits,
-                angular_limits,
-                linear_locked,
-                angular_locked,
-            } => self.solve_six_dof(
-                body_a,
-                body_b,
-                anchor,
-                primary_axis,
-                *linear_limits,
-                *angular_limits,
-                *linear_locked,
-                *angular_locked,
-                constraint.break_threshold,
-                dt,
-            ),
-        }
-    }
-
     fn solve_distance(
         &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        local_a: &Vec2,
-        local_b: &Vec2,
+        ctx: &mut SolverCtx<'_>,
+        anchors: &AnchorPair<'_>,
         distance: f32,
-        break_threshold: Option<f32>,
-        _dt: f32,
     ) -> bool {
-        let world_a = a.local_to_world(*local_a);
-        let world_b = b.local_to_world(*local_b);
+        let world_a = ctx.a.local_to_world(*anchors.local_a);
+        let world_b = ctx.b.local_to_world(*anchors.local_b);
         let delta = world_b - world_a;
         let current_dist = delta.length();
         if current_dist < 1e-10 {
@@ -253,74 +295,62 @@ impl ImpulseSolver {
         }
 
         let strain = (current_dist - distance).abs();
-        if let Some(thresh) = break_threshold {
-            if strain > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && strain > thresh
+        {
+            return true;
         }
 
         let correction = delta * ((current_dist - distance) / current_dist);
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
 
         let imp = correction / total_inv_mass;
-        if !a.is_static {
-            a.position += imp * a.inv_mass;
+        if !ctx.a.is_static {
+            ctx.a.position += imp * ctx.a.inv_mass;
         }
-        if !b.is_static {
-            b.position -= imp * b.inv_mass;
+        if !ctx.b.is_static {
+            ctx.b.position -= imp * ctx.b.inv_mass;
         }
         false
     }
 
-    fn solve_pin(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        anchor: &Vec2,
-        break_threshold: Option<f32>,
-        _dt: f32,
-    ) -> bool {
-        // Pin: both body anchor points must coincide at `anchor`
-        let world_a = a.position; // For pin, we use body center
-        let world_b = b.position;
+    fn solve_pin(&self, ctx: &mut SolverCtx<'_>, anchor: &Vec2) -> bool {
+        let world_a = ctx.a.position;
+        let world_b = ctx.b.position;
         let delta = *anchor - world_a;
         let delta_b = *anchor - world_b;
         let strain = delta.length().max(delta_b.length());
-        if let Some(thresh) = break_threshold {
-            if strain > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && strain > thresh
+        {
+            return true;
         }
 
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
 
-        if !a.is_static {
-            a.position += delta * a.inv_mass / total_inv_mass * 0.8;
+        if !ctx.a.is_static {
+            ctx.a.position += delta * ctx.a.inv_mass / total_inv_mass * 0.8;
         }
-        if !b.is_static {
-            b.position += delta_b * b.inv_mass / total_inv_mass * 0.8;
+        if !ctx.b.is_static {
+            ctx.b.position += delta_b * ctx.b.inv_mass / total_inv_mass * 0.8;
         }
         false
     }
 
     fn solve_spring(
         &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        local_a: &Vec2,
-        local_b: &Vec2,
+        ctx: &mut SolverCtx<'_>,
+        anchors: &AnchorPair<'_>,
         config: &SpringConfig,
-        break_threshold: Option<f32>,
-        dt: f32,
     ) -> bool {
-        let world_a = a.local_to_world(*local_a);
-        let world_b = b.local_to_world(*local_b);
+        let world_a = ctx.a.local_to_world(*anchors.local_a);
+        let world_b = ctx.b.local_to_world(*anchors.local_b);
         let delta = world_b - world_a;
         let dist = delta.length();
         if dist < 1e-10 {
@@ -328,76 +358,56 @@ impl ImpulseSolver {
         }
 
         let displacement = dist - config.rest_length;
-        if let Some(thresh) = break_threshold {
-            if displacement.abs() > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && displacement.abs() > thresh
+        {
+            return true;
         }
 
         let dir = delta / dist;
 
-        // Spring force (Hooke's law)
         let spring_force = dir * (config.stiffness * displacement);
-
-        // Damping force
-        let rel_vel = b.velocity - a.velocity;
+        let rel_vel = ctx.b.velocity - ctx.a.velocity;
         let damping_force = dir * (rel_vel.dot(dir) * config.damping);
+        let total_force = (spring_force + damping_force) * ctx.dt;
 
-        let total_force = (spring_force + damping_force) * dt;
-
-        if !a.is_static {
-            a.velocity += total_force * a.inv_mass;
+        if !ctx.a.is_static {
+            ctx.a.velocity += total_force * ctx.a.inv_mass;
         }
-        if !b.is_static {
-            b.velocity -= total_force * b.inv_mass;
+        if !ctx.b.is_static {
+            ctx.b.velocity -= total_force * ctx.b.inv_mass;
         }
         false
     }
 
-    fn solve_hinge(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        local_a: &Vec2,
-        local_b: &Vec2,
-        break_threshold: Option<f32>,
-        _dt: f32,
-    ) -> bool {
-        let world_a = a.local_to_world(*local_a);
-        let world_b = b.local_to_world(*local_b);
+    fn solve_hinge(&self, ctx: &mut SolverCtx<'_>, anchors: &AnchorPair<'_>) -> bool {
+        let world_a = ctx.a.local_to_world(*anchors.local_a);
+        let world_b = ctx.b.local_to_world(*anchors.local_b);
         let delta = world_b - world_a;
 
-        if let Some(thresh) = break_threshold {
-            if delta.length() > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && delta.length() > thresh
+        {
+            return true;
         }
 
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
 
         let correction = delta / total_inv_mass * 0.8;
-        if !a.is_static {
-            a.position += correction * a.inv_mass;
+        if !ctx.a.is_static {
+            ctx.a.position += correction * ctx.a.inv_mass;
         }
-        if !b.is_static {
-            b.position -= correction * b.inv_mass;
+        if !ctx.b.is_static {
+            ctx.b.position -= correction * ctx.b.inv_mass;
         }
         false
     }
 
-    fn solve_angular_limit(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        min: f32,
-        max: f32,
-        break_threshold: Option<f32>,
-        _dt: f32,
-    ) -> bool {
-        let relative_angle = b.angle - a.angle;
+    fn solve_angular_limit(&self, ctx: &mut SolverCtx<'_>, min: f32, max: f32) -> bool {
+        let relative_angle = ctx.b.angle - ctx.a.angle;
         let correction = if relative_angle < min {
             min - relative_angle
         } else if relative_angle > max {
@@ -406,63 +416,55 @@ impl ImpulseSolver {
             0.0
         };
 
-        if let Some(thresh) = break_threshold {
-            if correction.abs() > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && correction.abs() > thresh
+        {
+            return true;
         }
 
         if correction.abs() < 1e-8 {
             return false;
         }
 
-        let total_inv_inertia = a.inv_inertia + b.inv_inertia;
+        let total_inv_inertia = ctx.a.inv_inertia + ctx.b.inv_inertia;
         if total_inv_inertia < 1e-10 {
             return false;
         }
 
         let correction_angle = correction / total_inv_inertia * 0.5;
-        if !a.is_static {
-            a.angle -= correction_angle * a.inv_inertia;
-            a.angular_velocity -= correction_angle * a.inv_inertia * 0.5;
+        if !ctx.a.is_static {
+            ctx.a.angle -= correction_angle * ctx.a.inv_inertia;
+            ctx.a.angular_velocity -= correction_angle * ctx.a.inv_inertia * 0.5;
         }
-        if !b.is_static {
-            b.angle += correction_angle * b.inv_inertia;
-            b.angular_velocity += correction_angle * b.inv_inertia * 0.5;
+        if !ctx.b.is_static {
+            ctx.b.angle += correction_angle * ctx.b.inv_inertia;
+            ctx.b.angular_velocity += correction_angle * ctx.b.inv_inertia * 0.5;
         }
         false
     }
 
     /// Solve a 3D ball-and-socket constraint: keep both bodies at the anchor point.
-    fn solve_ball_socket_3d(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        anchor: &glam::Vec3,
-        break_threshold: Option<f32>,
-        _dt: f32,
-    ) -> bool {
-        let delta = *anchor - a.position_3d;
-        let delta_b = *anchor - b.position_3d;
+    fn solve_ball_socket_3d(&self, ctx: &mut SolverCtx<'_>, anchor: &glam::Vec3) -> bool {
+        let delta = *anchor - ctx.a.position_3d;
+        let delta_b = *anchor - ctx.b.position_3d;
 
         let strain = delta.length().max(delta_b.length());
-        if let Some(thresh) = break_threshold {
-            if strain > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && strain > thresh
+        {
+            return true;
         }
 
-        // Simple position correction: move both bodies toward the anchor
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
         let correction = (delta - delta_b) * 0.5;
-        if !a.is_static {
-            a.position_3d += correction * a.inv_mass / total_inv_mass;
+        if !ctx.a.is_static {
+            ctx.a.position_3d += correction * ctx.a.inv_mass / total_inv_mass;
         }
-        if !b.is_static {
-            b.position_3d -= correction * b.inv_mass / total_inv_mass;
+        if !ctx.b.is_static {
+            ctx.b.position_3d -= correction * ctx.b.inv_mass / total_inv_mass;
         }
         false
     }
@@ -470,149 +472,121 @@ impl ImpulseSolver {
     /// Solve a 3D hinge constraint: bodies rotate around a shared axis.
     fn solve_hinge_3d(
         &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
+        ctx: &mut SolverCtx<'_>,
         anchor: &glam::Vec3,
         axis: &glam::Vec3,
-        break_threshold: Option<f32>,
-        _dt: f32,
     ) -> bool {
-        // Position correction: keep anchor points aligned
-        let delta = *anchor - a.position_3d;
-        let delta_b = *anchor - b.position_3d;
+        let delta = *anchor - ctx.a.position_3d;
+        let delta_b = *anchor - ctx.b.position_3d;
 
         let strain = delta.length().max(delta_b.length());
-        if let Some(thresh) = break_threshold {
-            if strain > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && strain > thresh
+        {
+            return true;
         }
 
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
         let correction = (delta - delta_b) * 0.5;
-        if !a.is_static {
-            a.position_3d += correction * a.inv_mass / total_inv_mass;
+        if !ctx.a.is_static {
+            ctx.a.position_3d += correction * ctx.a.inv_mass / total_inv_mass;
         }
-        if !b.is_static {
-            b.position_3d -= correction * b.inv_mass / total_inv_mass;
+        if !ctx.b.is_static {
+            ctx.b.position_3d -= correction * ctx.b.inv_mass / total_inv_mass;
         }
 
-        // Rotation correction: align the axis
-        // Simplified: just damp angular velocity around the hinge axis
-        let rel_ang_vel = a.angular_velocity_3d - b.angular_velocity_3d;
+        let rel_ang_vel = ctx.a.angular_velocity_3d - ctx.b.angular_velocity_3d;
         let axis_component = axis * rel_ang_vel.dot(*axis);
         let perp_component = rel_ang_vel - axis_component;
-        // Remove perpendicular angular velocity (keep rotation around axis only)
-        let total_inv_inertia = 1.0 / (a.inv_inertia_3d.x + b.inv_inertia_3d.x + 1e-10);
+        let total_inv_inertia = 1.0 / (ctx.a.inv_inertia_3d.x + ctx.b.inv_inertia_3d.x + 1e-10);
         let angular_impulse = perp_component * total_inv_inertia * 0.5;
-        if !a.is_static {
-            a.angular_velocity_3d -= angular_impulse;
+        if !ctx.a.is_static {
+            ctx.a.angular_velocity_3d -= angular_impulse;
         }
-        if !b.is_static {
-            b.angular_velocity_3d += angular_impulse;
+        if !ctx.b.is_static {
+            ctx.b.angular_velocity_3d += angular_impulse;
         }
         false
     }
 
     /// Solve a prismatic (slider) joint: bodies translate along a shared axis.
-    fn solve_prismatic(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        local_a: &Vec2,
-        local_b: &Vec2,
-        axis: &Vec2,
-        min_limit: f32,
-        max_limit: f32,
-        enable_motor: bool,
-        motor_speed: f32,
-        motor_max_force: f32,
-        break_threshold: Option<f32>,
-        dt: f32,
-    ) -> bool {
-        let world_a = a.local_to_world(*local_a);
-        let world_b = b.local_to_world(*local_b);
+    fn solve_prismatic(&self, ctx: &mut SolverCtx<'_>, params: &PrismaticParams<'_>) -> bool {
+        let world_a = ctx.a.local_to_world(*params.local_a);
+        let world_b = ctx.b.local_to_world(*params.local_b);
         let delta = world_b - world_a;
 
-        // Project delta onto the constrained axis and perpendicular plane
-        let axis_n = *axis; // should be normalized by caller
+        let axis_n = *params.axis;
         let along_axis = axis_n * delta.dot(axis_n);
         let perp = delta - along_axis;
 
-        // Perpendicular correction: remove any deviation from the axis line
         let perp_dist = perp.length();
 
-        // Check break threshold based on perpendicular strain
-        if let Some(thresh) = break_threshold {
-            if perp_dist > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && perp_dist > thresh
+        {
+            return true;
         }
 
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
 
-        // Position correction for perpendicular deviation
         if perp_dist > 1e-4 {
             let perp_dir = perp / perp_dist;
             let correction = perp_dir * (perp_dist * 0.5 / total_inv_mass);
-            if !a.is_static {
-                a.position += correction * a.inv_mass;
+            if !ctx.a.is_static {
+                ctx.a.position += correction * ctx.a.inv_mass;
             }
-            if !b.is_static {
-                b.position -= correction * b.inv_mass;
+            if !ctx.b.is_static {
+                ctx.b.position -= correction * ctx.b.inv_mass;
             }
         }
 
-        // Axis limit enforcement
         let along_dist = delta.dot(axis_n);
-        if along_dist < min_limit - 1e-4 {
-            let correction = axis_n * ((min_limit - along_dist) * 0.5 / total_inv_mass);
-            if !a.is_static {
-                a.position += correction * a.inv_mass;
+        if along_dist < params.min_limit - 1e-4 {
+            let correction = axis_n * ((params.min_limit - along_dist) * 0.5 / total_inv_mass);
+            if !ctx.a.is_static {
+                ctx.a.position += correction * ctx.a.inv_mass;
             }
-            if !b.is_static {
-                b.position -= correction * b.inv_mass;
+            if !ctx.b.is_static {
+                ctx.b.position -= correction * ctx.b.inv_mass;
             }
-        } else if along_dist > max_limit + 1e-4 {
-            let correction = axis_n * ((max_limit - along_dist) * 0.5 / total_inv_mass);
-            if !a.is_static {
-                a.position += correction * a.inv_mass;
+        } else if along_dist > params.max_limit + 1e-4 {
+            let correction = axis_n * ((params.max_limit - along_dist) * 0.5 / total_inv_mass);
+            if !ctx.a.is_static {
+                ctx.a.position += correction * ctx.a.inv_mass;
             }
-            if !b.is_static {
-                b.position -= correction * b.inv_mass;
+            if !ctx.b.is_static {
+                ctx.b.position -= correction * ctx.b.inv_mass;
             }
         }
 
-        // Motor: apply force along the axis to drive toward target speed
-        if enable_motor && motor_max_force > 0.0 {
-            let rel_vel = b.velocity - a.velocity;
+        if params.enable_motor && params.motor_max_force > 0.0 {
+            let rel_vel = ctx.b.velocity - ctx.a.velocity;
             let along_vel = rel_vel.dot(axis_n);
-            let vel_error = motor_speed - along_vel;
-            let motor_force =
-                (vel_error * total_inv_mass / dt).clamp(-motor_max_force, motor_max_force);
-            let impulse = axis_n * motor_force * dt;
+            let vel_error = params.motor_speed - along_vel;
+            let motor_force = (vel_error * total_inv_mass / ctx.dt)
+                .clamp(-params.motor_max_force, params.motor_max_force);
+            let impulse = axis_n * motor_force * ctx.dt;
 
-            if !a.is_static {
-                a.velocity -= impulse * a.inv_mass;
+            if !ctx.a.is_static {
+                ctx.a.velocity -= impulse * ctx.a.inv_mass;
             }
-            if !b.is_static {
-                b.velocity += impulse * b.inv_mass;
+            if !ctx.b.is_static {
+                ctx.b.velocity += impulse * ctx.b.inv_mass;
             }
         }
 
-        // Lock relative rotation (simplified: both bodies get same angular velocity)
-        let avg_ang = (a.angular_velocity + b.angular_velocity) * 0.5;
-        if !a.is_static {
-            a.angular_velocity = avg_ang;
+        let avg_ang = (ctx.a.angular_velocity + ctx.b.angular_velocity) * 0.5;
+        if !ctx.a.is_static {
+            ctx.a.angular_velocity = avg_ang;
         }
-        if !b.is_static {
-            b.angular_velocity = avg_ang;
+        if !ctx.b.is_static {
+            ctx.b.angular_velocity = avg_ang;
         }
 
         false
@@ -621,110 +595,83 @@ impl ImpulseSolver {
     /// Solve a motor constraint: drives a body toward a target velocity.
     fn solve_motor(
         &self,
-        a: &mut RigidBody,
-        _b: &mut RigidBody,
+        ctx: &mut SolverCtx<'_>,
         target_velocity: Vec2,
         max_force: f32,
         damping: f32,
-        dt: f32,
     ) -> bool {
-        if a.is_static || a.inv_mass < 1e-10 {
+        if ctx.a.is_static || ctx.a.inv_mass < 1e-10 {
             return false;
         }
 
-        let vel_error = target_velocity - a.velocity;
-        let force_magnitude = vel_error.length() * a.mass / dt;
+        let vel_error = target_velocity - ctx.a.velocity;
+        let force_magnitude = vel_error.length() * ctx.a.mass / ctx.dt;
 
         if force_magnitude > max_force {
             let dir = vel_error.normalize();
-            a.velocity += dir * (max_force * dt * a.inv_mass);
+            ctx.a.velocity += dir * (max_force * ctx.dt * ctx.a.inv_mass);
         } else {
-            // Apply with damping
-            a.velocity += vel_error * (1.0 - damping);
+            ctx.a.velocity += vel_error * (1.0 - damping);
         }
 
         false
     }
 
     /// Solve a weld joint: locks all relative translation and rotation.
-    fn solve_weld(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        local_a: &Vec2,
-        local_b: &Vec2,
-        break_threshold: Option<f32>,
-        _dt: f32,
-    ) -> bool {
-        let world_a = a.local_to_world(*local_a);
-        let world_b = b.local_to_world(*local_b);
+    fn solve_weld(&self, ctx: &mut SolverCtx<'_>, anchors: &AnchorPair<'_>) -> bool {
+        let world_a = ctx.a.local_to_world(*anchors.local_a);
+        let world_b = ctx.b.local_to_world(*anchors.local_b);
         let delta = world_b - world_a;
 
         let strain = delta.length();
-        if let Some(thresh) = break_threshold {
-            if strain > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && strain > thresh
+        {
+            return true;
         }
 
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
 
-        // Position correction: force anchor points to coincide
         let correction = delta * (0.5 / total_inv_mass);
-        if !a.is_static {
-            a.position += correction * a.inv_mass;
+        if !ctx.a.is_static {
+            ctx.a.position += correction * ctx.a.inv_mass;
         }
-        if !b.is_static {
-            b.position -= correction * b.inv_mass;
+        if !ctx.b.is_static {
+            ctx.b.position -= correction * ctx.b.inv_mass;
         }
 
-        // Angular correction: lock relative rotation
-        let avg_ang = (a.angular_velocity + b.angular_velocity) * 0.5;
-        if !a.is_static {
-            a.angular_velocity = avg_ang;
+        let avg_ang = (ctx.a.angular_velocity + ctx.b.angular_velocity) * 0.5;
+        if !ctx.a.is_static {
+            ctx.a.angular_velocity = avg_ang;
         }
-        if !b.is_static {
-            b.angular_velocity = avg_ang;
+        if !ctx.b.is_static {
+            ctx.b.angular_velocity = avg_ang;
         }
 
         false
     }
 
     /// Solve a 6-DOF joint: per-axis linear and angular limits in 3D.
-    fn solve_six_dof(
-        &self,
-        a: &mut RigidBody,
-        b: &mut RigidBody,
-        anchor: &glam::Vec3,
-        _primary_axis: &glam::Vec3,
-        linear_limits: [f32; 6],
-        angular_limits: [f32; 6],
-        linear_locked: [bool; 3],
-        angular_locked: [bool; 3],
-        break_threshold: Option<f32>,
-        _dt: f32,
-    ) -> bool {
-        // Position correction: anchor points must coincide
-        let delta = *anchor - a.position_3d;
-        let delta_b = *anchor - b.position_3d;
+    fn solve_six_dof(&self, ctx: &mut SolverCtx<'_>, params: &SixDofParams<'_>) -> bool {
+        let delta = *params.anchor - ctx.a.position_3d;
+        let delta_b = *params.anchor - ctx.b.position_3d;
         let strain = delta.length().max(delta_b.length());
 
-        if let Some(thresh) = break_threshold {
-            if strain > thresh {
-                return true;
-            }
+        if let Some(thresh) = ctx.break_threshold
+            && strain > thresh
+        {
+            return true;
         }
 
-        let total_inv_mass = a.inv_mass + b.inv_mass;
+        let total_inv_mass = ctx.a.inv_mass + ctx.b.inv_mass;
         if total_inv_mass < 1e-10 {
             return false;
         }
 
-        // Linear correction: enforce per-axis limits
-        let rel_pos = b.position_3d - a.position_3d;
+        let rel_pos = ctx.b.position_3d - ctx.a.position_3d;
         let mut correction = glam::Vec3::ZERO;
 
         for i in 0..3 {
@@ -733,69 +680,48 @@ impl ImpulseSolver {
                 1 => glam::Vec3::Y,
                 _ => glam::Vec3::Z,
             };
-            let along = rel_pos.dot(axis);
+            let proj = rel_pos.dot(axis);
+            let lo = params.linear_limits[i * 2];
+            let hi = params.linear_limits[i * 2 + 1];
+            if params.linear_locked[i] && proj < lo {
+                correction += axis * (lo - proj);
+            } else if params.linear_locked[i] && proj > hi {
+                correction += axis * (hi - proj);
+            }
+        }
 
-            if linear_locked[i] {
-                // Fully locked: remove all displacement along this axis
-                correction += axis * along;
-            } else {
-                // Limited: clamp to min/max
-                let min = linear_limits[i * 2];
-                let max = linear_limits[i * 2 + 1];
-                if along < min {
-                    correction += axis * (min - along);
-                } else if along > max {
-                    correction += axis * (max - along);
+        let pos_correction = correction * (0.5 / total_inv_mass);
+        if !ctx.a.is_static {
+            ctx.a.position_3d += pos_correction * ctx.a.inv_mass;
+        }
+        if !ctx.b.is_static {
+            ctx.b.position_3d -= pos_correction * ctx.b.inv_mass;
+        }
+
+        // Angular limits around the primary axis
+        if params.angular_locked[0] || params.angular_locked[1] || params.angular_locked[2] {
+            let rel_ang = ctx.b.angular_velocity_3d - ctx.a.angular_velocity_3d;
+            let mut ang_correction = glam::Vec3::ZERO;
+            let axes = [glam::Vec3::X, glam::Vec3::Y, *params.primary_axis];
+            for (i, axis) in axes.iter().enumerate() {
+                let ang_proj = rel_ang.dot(*axis);
+                let ang_lo = params.angular_limits[i * 2];
+                let ang_hi = params.angular_limits[i * 2 + 1];
+                if params.angular_locked[i] && ang_proj < ang_lo {
+                    ang_correction += axis * (ang_lo - ang_proj);
+                } else if params.angular_locked[i] && ang_proj > ang_hi {
+                    ang_correction += axis * (ang_hi - ang_proj);
                 }
             }
-        }
-
-        if correction.length_squared() > 1e-10 {
-            let total_inv = total_inv_mass;
-            if !a.is_static {
-                a.position_3d += correction * (a.inv_mass / total_inv) * 0.5;
-            }
-            if !b.is_static {
-                b.position_3d -= correction * (b.inv_mass / total_inv) * 0.5;
-            }
-        }
-
-        // Angular correction: enforce per-axis rotation limits
-        // Simplified: decompose relative angular velocity and damp constrained axes
-        let rel_ang = b.angular_velocity_3d - a.angular_velocity_3d;
-        let mut ang_correction = glam::Vec3::ZERO;
-
-        for i in 0..3 {
-            let axis = match i {
-                0 => glam::Vec3::X,
-                1 => glam::Vec3::Y,
-                _ => glam::Vec3::Z,
-            };
-            let along = rel_ang.dot(axis);
-
-            if angular_locked[i] {
-                // Fully locked: remove all angular velocity along this axis
-                ang_correction += axis * along;
-            } else {
-                // Limited: damp angular velocity outside limits
-                let min = angular_limits[i * 2];
-                let max = angular_limits[i * 2 + 1];
-                if along < min {
-                    ang_correction += axis * (min - along);
-                } else if along > max {
-                    ang_correction += axis * (max - along);
+            let total_inv_inertia = ctx.a.inv_inertia_3d + ctx.b.inv_inertia_3d;
+            if total_inv_inertia.length_squared() > 1e-10 {
+                let ang_impulse = ang_correction * 0.5;
+                if !ctx.a.is_static {
+                    ctx.a.angular_velocity_3d += ang_impulse * ctx.a.inv_inertia_3d;
                 }
-            }
-        }
-
-        if ang_correction.length_squared() > 1e-10 {
-            let total_inv_inertia = 1.0 / (a.inv_inertia_3d.x + b.inv_inertia_3d.x + 1e-10);
-            let angular_impulse = ang_correction * total_inv_inertia * 0.5;
-            if !a.is_static {
-                a.angular_velocity_3d -= angular_impulse;
-            }
-            if !b.is_static {
-                b.angular_velocity_3d += angular_impulse;
+                if !ctx.b.is_static {
+                    ctx.b.angular_velocity_3d -= ang_impulse * ctx.b.inv_inertia_3d;
+                }
             }
         }
 

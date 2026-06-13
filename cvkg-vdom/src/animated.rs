@@ -1,6 +1,5 @@
 use crate::signals::Signal;
 use cvkg_core::{Rect, Renderer, Size, SizeProposal, View};
-use std::sync::Arc;
 
 /// A View that explicitly delegates its transform/bounds to a Reactive Signal.
 /// This acts as a boundary: the content inside will NOT be re-laid out by Taffy

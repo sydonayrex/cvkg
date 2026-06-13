@@ -73,19 +73,27 @@ fn fs_kawase_down(in: BlurVertexOutput) -> @location(0) vec4<f32> {
 }
 
 // --- Kawase Upsample Fragment ---
-// Reads 4 diagonal taps from higher mip (N+1), accumulates into current mip (N).
+// Reads 8 taps (4 diagonal + 4 axis-aligned) from higher mip (N+1),
+// accumulates into current mip (N). This is the canonical Dual Kawase
+// upsample kernel that prevents box artifacts at low mip levels.
 @fragment
 fn fs_kawase_up(in: BlurVertexOutput) -> @location(0) vec4<f32> {
     let texel = 1.0 / blur.params.xy;
     let offset = blur.params.w;
-
-    // Same diagonal pattern but we may use a wider offset for upsample
     let o = offset * texel;
-    var c = vec4<f32>(0.0);
-    c += textureSample(t_src, s_src, in.texcoord + vec2<f32>( o.x,  o.y));
-    c += textureSample(t_src, s_src, in.texcoord + vec2<f32>(-o.x,  o.y));
-    c += textureSample(t_src, s_src, in.texcoord + vec2<f32>(-o.x, -o.y));
-    c += textureSample(t_src, s_src, in.texcoord + vec2<f32>( o.x, -o.y));
 
-    return c * 0.25;
+    // 8-tap Kawase upsample: 4 diagonal + 4 axis-aligned
+    var c = vec4<f32>(0.0);
+    // Diagonal taps (weight: 1/12 each)
+    c += textureSample(t_src, s_src, in.texcoord + vec2( o.x,  o.y)) * (1.0/12.0);
+    c += textureSample(t_src, s_src, in.texcoord + vec2(-o.x,  o.y)) * (1.0/12.0);
+    c += textureSample(t_src, s_src, in.texcoord + vec2(-o.x, -o.y)) * (1.0/12.0);
+    c += textureSample(t_src, s_src, in.texcoord + vec2( o.x, -o.y)) * (1.0/12.0);
+    // Axis-aligned taps (weight: 2/12 each)
+    c += textureSample(t_src, s_src, in.texcoord + vec2( o.x, 0.0)) * (2.0/12.0);
+    c += textureSample(t_src, s_src, in.texcoord + vec2(-o.x, 0.0)) * (2.0/12.0);
+    c += textureSample(t_src, s_src, in.texcoord + vec2(0.0,  o.y)) * (2.0/12.0);
+    c += textureSample(t_src, s_src, in.texcoord + vec2(0.0, -o.y)) * (2.0/12.0);
+
+    return c;
 }

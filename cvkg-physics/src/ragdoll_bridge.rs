@@ -110,20 +110,20 @@ impl RagdollBridge {
         }
 
         for (i, mapping) in self.config.bone_mappings.iter().enumerate() {
-            if let Some(animated) = animated_transforms.get(i) {
-                if let Some(body) = world.body_mut(mapping.body_id) {
-                    // Convert bone transform back to body transform
-                    let inv_rot = mapping.local_rotation.inverse();
-                    let body_rot = animated.1 * inv_rot;
-                    let body_pos = animated.0 - body_rot * mapping.local_offset;
+            if let Some(animated) = animated_transforms.get(i)
+                && let Some(body) = world.body_mut(mapping.body_id)
+            {
+                // Convert bone transform back to body transform
+                let inv_rot = mapping.local_rotation.inverse();
+                let body_rot = animated.1 * inv_rot;
+                let body_pos = animated.0 - body_rot * mapping.local_offset;
 
-                    if body.is_3d {
-                        body.position_3d = body_pos;
-                        body.rotation = body_rot;
-                    } else {
-                        body.position = body_pos.truncate();
-                        body.angle = body_rot.to_euler(glam::EulerRot::XYZ).2; // Z rotation
-                    }
+                if body.is_3d {
+                    body.position_3d = body_pos;
+                    body.rotation = body_rot;
+                } else {
+                    body.position = body_pos.truncate();
+                    body.angle = body_rot.to_euler(glam::EulerRot::XYZ).2; // Z rotation
                 }
             }
         }

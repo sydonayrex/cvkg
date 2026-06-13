@@ -193,9 +193,9 @@ pub enum TextAlign {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RenderMode {
     /// Standard grayscale anti-aliased rendering.
-    #[default]
     Grayscale,
     /// LCD subpixel anti-aliased rendering (3-channel horizontal mask).
+    #[default]
     Subpixel,
     /// Color emoji / layered vector font rendering (COLR/CPAL, SVG, sbix).
     Color,

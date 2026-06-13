@@ -64,7 +64,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
         // Store blur radius for use during glass pass - the renderer will apply
         // this to the Kawase blur uniform during the backdrop blur phase
         let blur_strength = (blur_radius / 100.0).clamp(0.0, 4.0);
-        self.current_theme.glass_blur_strength = blur_strength;
 
         // Register for portal-aware per-element backdrop blur (Tahoe feature)
         // When current_z != 0, this element is in a portal layer
@@ -75,7 +74,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             [1.0, 1.0, 1.0, 0.4], // Glass tint: white at 40% opacity
-            7, // Mode 7 = Glass material
+            7,                    // Mode 7 = Glass material
             None,
             radius,
             Rect {
@@ -496,13 +495,21 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         }
                     };
 
-                    let mut rgba_data = Vec::with_capacity((gw * gh * 4) as usize);
-                    for alpha in &image.data {
-                        rgba_data.push(255);
-                        rgba_data.push(255);
-                        rgba_data.push(255);
-                        rgba_data.push(*alpha);
-                    }
+                    // Uploads rasterized glyph image data to the GPU atlas texture.
+                    // CONTRACT: If the image already contains 32-bit RGBA data (as in subpixel/color mode),
+                    // we write it directly. Otherwise (grayscale 8-bit), we map to [255, 255, 255, alpha].
+                    let rgba_data = if image.data.len() == (gw * gh * 4) as usize {
+                        image.data
+                    } else {
+                        let mut data = Vec::with_capacity((gw * gh * 4) as usize);
+                        for alpha in &image.data {
+                            data.push(255);
+                            data.push(255);
+                            data.push(255);
+                            data.push(*alpha);
+                        }
+                        data
+                    };
 
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
@@ -646,13 +653,21 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         }
                     };
 
-                    let mut rgba_data = Vec::with_capacity((gw * gh * 4) as usize);
-                    for alpha in &image.data {
-                        rgba_data.push(255);
-                        rgba_data.push(255);
-                        rgba_data.push(255);
-                        rgba_data.push(*alpha);
-                    }
+                    // Uploads rasterized glyph image data to the GPU atlas texture.
+                    // CONTRACT: If the image already contains 32-bit RGBA data (as in subpixel/color mode),
+                    // we write it directly. Otherwise (grayscale 8-bit), we map to [255, 255, 255, alpha].
+                    let rgba_data = if image.data.len() == (gw * gh * 4) as usize {
+                        image.data
+                    } else {
+                        let mut data = Vec::with_capacity((gw * gh * 4) as usize);
+                        for alpha in &image.data {
+                            data.push(255);
+                            data.push(255);
+                            data.push(255);
+                            data.push(*alpha);
+                        }
+                        data
+                    };
 
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
@@ -1049,7 +1064,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let pos = transform.transform_point3(glam::Vec3::from(mesh.vertices[i]));
             let norm = transform.transform_vector3(glam::Vec3::from(mesh.normals[i]));
 
-            let (translation, scale_transform, rotation, _, _) = self.current_transform();
             self.vertices.push(Vertex {
                 position: pos.to_array(),
                 normal: norm.to_array(),
@@ -1060,13 +1074,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                screen,
                 clip: [-10000.0, -10000.0, 20000.0, 20000.0],
-                translation,
-                scale: scale_transform,
-                rotation,
                 tex_index: 0,
-                glyph_time: [0.0, 0.0],
             });
         }
 
@@ -1074,8 +1083,18 @@ impl cvkg_core::Renderer for SurtrRenderer {
             self.indices.push(base_idx + idx);
         }
 
+        let (translation, scale_transform, rotation, _, _) = self.current_transform();
+
         if self.draw_calls.is_empty() || self.current_texture_id.is_some() {
             self.current_texture_id = None;
+
+            self.instance_data.push(InstanceData {
+                translation,
+                scale: scale_transform,
+                rotation,
+                blur_radius: 0.0,
+                ior_override: 0.0,
+            });
             self.draw_calls.push(DrawCall {
                 target_id: None,
                 texture_id: None,
@@ -1083,6 +1102,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
                 index_count: mesh.indices.len() as u32,
                 material: cvkg_core::DrawMaterial::Opaque,
+                instance_start: (self.instance_data.len() - 1) as u32,
             });
         } else {
             self.draw_calls.last_mut().unwrap().index_count += mesh.indices.len() as u32;
@@ -1113,19 +1133,22 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 slice: [material.metallic, material.roughness, material.opacity, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                screen,
                 clip: [-10000.0, -10000.0, 20000.0, 20000.0],
-                translation: [0.0, 0.0],
-                scale: [1.0, 1.0],
-                rotation: 0.0,
                 tex_index: 0,
-                glyph_time: [0.0, 0.0],
             });
         }
 
         for idx in &mesh.indices {
             self.indices.push(base_idx + idx);
         }
+
+        self.instance_data.push(InstanceData {
+            translation: [0.0, 0.0],
+            scale: [1.0, 1.0],
+            rotation: 0.0,
+            blur_radius: 0.0,
+            ior_override: 0.0,
+        });
 
         self.draw_calls.push(DrawCall {
             target_id: None,
@@ -1134,6 +1157,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
             index_count: mesh.indices.len() as u32,
             material: cvkg_core::DrawMaterial::Opaque,
+            instance_start: (self.instance_data.len() - 1) as u32,
         });
     }
 
@@ -1355,7 +1379,8 @@ impl SurtrRenderer {
     /// Extracts translation, scale, rotation, and skew from the affine matrix
     /// so the existing vertex shader fields still work correctly.
     pub(crate) fn current_transform(&self) -> ([f32; 2], [f32; 2], f32, f32, f32) {
-        // Returns (translation, scale, rotation, skew_x, skew_y)
+        // Returns (translation, scale, rotation,
+        // skew_x, skew_y)
         let m = self
             .transform_stack
             .last()
@@ -1383,7 +1408,6 @@ impl SurtrRenderer {
         let base_index_idx = self.indices.len() as u32;
 
         let (translation, scale, rotation, _, _) = self.current_transform();
-        let screen = [self.current_width() as f32, self.current_height() as f32];
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
             y: -10000.0,
@@ -1397,14 +1421,7 @@ impl SurtrRenderer {
             &StrokeOptions::default().with_line_width(stroke_width),
             &mut BuffersBuilder::new(
                 &mut buffers,
-                CustomStrokeVertexConstructor {
-                    color: c,
-                    translation,
-                    scale,
-                    rotation,
-                    screen,
-                    clip,
-                },
+                CustomStrokeVertexConstructor { color: c, clip },
             ),
         );
         if let Err(e) = result {
@@ -1428,6 +1445,14 @@ impl SurtrRenderer {
 
         if needs_new_call {
             self.current_texture_id = tid;
+
+            self.instance_data.push(InstanceData {
+                translation,
+                scale,
+                rotation,
+                blur_radius: 0.0,
+                ior_override: 0.0,
+            });
             self.draw_calls.push(DrawCall {
                 target_id: None,
                 texture_id: tid,
@@ -1435,6 +1460,7 @@ impl SurtrRenderer {
                 index_start: base_index_idx,
                 index_count: buffers.indices.len() as u32,
                 material,
+                instance_start: (self.instance_data.len() - 1) as u32,
             });
         } else if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += buffers.indices.len() as u32;
@@ -1549,6 +1575,19 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
                     wgpu::BufferSize::new(i_bytes.len() as u64).unwrap(),
                 )
                 .copy_from_slice(i_bytes);
+            has_writes = true;
+        }
+
+        if !self.instance_data.is_empty() {
+            let inst_bytes = bytemuck::cast_slice(&self.instance_data);
+            self.staging_belt
+                .write_buffer(
+                    &mut staging_encoder,
+                    &self.instance_buffer,
+                    0,
+                    wgpu::BufferSize::new(inst_bytes.len() as u64).unwrap(),
+                )
+                .copy_from_slice(inst_bytes);
             has_writes = true;
         }
 

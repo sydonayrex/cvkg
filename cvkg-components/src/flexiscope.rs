@@ -9,11 +9,9 @@ use cvkg_core::{Never, Rect, Renderer, View};
 /// A wrapper that selects different layout modes based on container width.
 #[derive(Clone)]
 pub struct FlexiScope<V: View, B: ContainerLayout> {
-    /// The content view to render.
-    content: V,
+    /// A builder function that creates the content view given the layout mode.
+    builder: std::sync::Arc<dyn Fn(B) -> V + Send + Sync>,
     /// Breakpoints: width thresholds and corresponding layout modes.
-    /// Stored for future use by the layout engine.
-    #[allow(dead_code)]
     breakpoints: Vec<ScopeThreshold<B>>,
 }
 
@@ -41,9 +39,12 @@ pub trait ContainerLayout: Clone + PartialEq {
 }
 
 impl<V: View, B: ContainerLayout + 'static> FlexiScope<V, B> {
-    pub fn new(content: V, breakpoints: Vec<ScopeThreshold<B>>) -> Self {
+    pub fn new(
+        builder: impl Fn(B) -> V + Send + Sync + 'static,
+        breakpoints: Vec<ScopeThreshold<B>>,
+    ) -> Self {
         Self {
-            content,
+            builder: std::sync::Arc::new(builder),
             breakpoints,
         }
     }
@@ -56,7 +57,12 @@ impl<V: View, B: ContainerLayout + Send + Sync + 'static> View for FlexiScope<V,
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        self.content.render(renderer, rect);
+        if self.breakpoints.is_empty() {
+            return;
+        }
+        let mode = B::select_mode(rect.width, &self.breakpoints);
+        let view = (self.builder)(mode);
+        view.render(renderer, rect);
     }
 }
 

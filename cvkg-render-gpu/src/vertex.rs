@@ -15,25 +15,21 @@ pub struct Vertex {
     pub slice: [f32; 4],
     pub logical: [f32; 2],
     pub size: [f32; 2],
-    pub screen: [f32; 2],
     pub clip: [f32; 4], // [x, y, width, height]
-    pub translation: [f32; 2],
-    pub scale: [f32; 2],
-    pub rotation: f32,
     pub tex_index: u32,
-    pub glyph_time: [f32; 2],
 }
 
 /// Per-instance data for instanced rendering.
-/// Stores transform data previously duplicated across all 4 vertices of a quad.
-/// With instancing, 4 vertices + 1 instance draw a quad, reducing vertex bandwidth ~4x.
+/// Stores transform data previously duplicated across all vertices of a path/quad.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceData {
     pub translation: [f32; 2],
     pub scale: [f32; 2],
     pub rotation: f32,
-    pub _pad: f32,
+    pub blur_radius: f32,
+    /// Per-instance Index of Refraction (IOR) override for custom glass thickness refraction.
+    pub ior_override: f32,
 }
 
 impl Default for InstanceData {
@@ -42,13 +38,32 @@ impl Default for InstanceData {
             translation: [0.0, 0.0],
             scale: [1.0, 1.0],
             rotation: 0.0,
-            _pad: 0.0,
+            blur_radius: 0.0,
+            ior_override: 0.0,
+        }
+    }
+}
+
+impl InstanceData {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+        11 => Float32x2, // translation
+        12 => Float32x2, // scale
+        13 => Float32,   // rotation
+        14 => Float32,   // blur_radius
+        15 => Float32,   // ior_override
+    ];
+
+    pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<InstanceData>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &Self::ATTRIBUTES,
         }
     }
 }
 
 impl Vertex {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 16] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 11] = wgpu::vertex_attr_array![
         0 => Float32x3, // position
         1 => Float32x3, // normal
         2 => Float32x2, // uv
@@ -58,13 +73,8 @@ impl Vertex {
         6 => Float32x4, // slice
         7 => Float32x2, // logical
         8 => Float32x2, // size
-        9 => Float32x2, // screen
-        10 => Float32x4, // clip
-        11 => Float32x2, // translation
-        12 => Float32x2, // scale
-        13 => Float32,   // rotation
-        14 => Uint32,    // tex_index
-        15 => Float32x2  // glyph_time
+        9 => Float32x4, // clip
+        10 => Uint32,   // tex_index
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -78,18 +88,11 @@ impl Vertex {
 
 pub(crate) struct SceneVertexConstructor {
     pub(crate) color: [f32; 4],
-    pub(crate) translation: [f32; 2],
-    pub(crate) scale: [f32; 2],
-    pub(crate) rotation: f32,
 }
 
-/// Vertex constructor for stroke tessellation -- includes screen and clip for transform.
+/// Vertex constructor for stroke tessellation -- includes clip for transform.
 pub(crate) struct CustomStrokeVertexConstructor {
     pub(crate) color: [f32; 4],
-    pub(crate) translation: [f32; 2],
-    pub(crate) scale: [f32; 2],
-    pub(crate) rotation: f32,
-    pub(crate) screen: [f32; 2],
     pub(crate) clip: [f32; 4],
 }
 
@@ -106,13 +109,8 @@ impl StrokeVertexConstructor<Vertex> for CustomStrokeVertexConstructor {
             slice: [0.0, 0.0, 0.0, 1.0],
             logical: [pos.x, pos.y],
             size: [1.0, 1.0],
-            screen: self.screen,
             clip: self.clip,
-            translation: self.translation,
-            scale: self.scale,
-            rotation: self.rotation,
             tex_index: 0,
-            glyph_time: [0.0, 0.0],
         }
     }
 }
@@ -129,13 +127,8 @@ impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
             slice: [0.0, 0.0, 0.0, 1.0],
             logical: [vertex.position().x, vertex.position().y],
             size: [1.0, 1.0],
-            screen: [0.0, 0.0],
             clip: [-10000.0, -10000.0, 20000.0, 20000.0],
-            translation: self.translation,
-            scale: self.scale,
-            rotation: self.rotation,
             tex_index: 0,
-            glyph_time: [0.0, 0.0],
         }
     }
 }

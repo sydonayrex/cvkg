@@ -117,32 +117,32 @@ impl DropVault {
 
     /// Update upload progress for a file by index.
     pub fn set_progress(&self, idx: usize, progress: f32) {
-        if let Ok(mut uploads) = self.uploads.lock() {
-            if let Some(entry) = uploads.get_mut(idx) {
-                entry.progress = progress.clamp(0.0, 1.0);
-                if entry.status == VaultStatus::Pending {
-                    entry.status = VaultStatus::Uploading;
-                }
+        if let Ok(mut uploads) = self.uploads.lock()
+            && let Some(entry) = uploads.get_mut(idx)
+        {
+            entry.progress = progress.clamp(0.0, 1.0);
+            if entry.status == VaultStatus::Pending {
+                entry.status = VaultStatus::Uploading;
             }
         }
     }
 
     /// Mark a file upload as complete.
     pub fn set_complete(&self, idx: usize) {
-        if let Ok(mut uploads) = self.uploads.lock() {
-            if let Some(entry) = uploads.get_mut(idx) {
-                entry.progress = 1.0;
-                entry.status = VaultStatus::Complete;
-            }
+        if let Ok(mut uploads) = self.uploads.lock()
+            && let Some(entry) = uploads.get_mut(idx)
+        {
+            entry.progress = 1.0;
+            entry.status = VaultStatus::Complete;
         }
     }
 
     /// Mark a file upload as failed.
     pub fn set_failed(&self, idx: usize, error: impl Into<String>) {
-        if let Ok(mut uploads) = self.uploads.lock() {
-            if let Some(entry) = uploads.get_mut(idx) {
-                entry.status = VaultStatus::Failed(error.into());
-            }
+        if let Ok(mut uploads) = self.uploads.lock()
+            && let Some(entry) = uploads.get_mut(idx)
+        {
+            entry.status = VaultStatus::Failed(error.into());
         }
     }
 }
@@ -173,17 +173,76 @@ impl View for DropVault {
 
         // Prompt text
         let prompt = if is_drag {
-            "Drop files here"
+            crate::lingua_tong::t("dropvault.drop_here")
         } else {
-            "Drag files here or click to browse"
+            crate::lingua_tong::t("dropvault.browse")
         };
-        let (tw, _th) = renderer.measure_text(prompt, 14.0);
+        let (tw, _th) = renderer.measure_text(&prompt, 14.0);
         renderer.draw_text(
-            prompt,
+            &prompt,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + 20.0,
             14.0,
             theme::text(),
+        );
+
+        // ── Interaction Handlers ──
+        let prompt_rect = rect;
+        let on_select = self.on_files_selected.clone();
+
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = event
+                    && prompt_rect.contains(x, y)
+                    && let Some(ref cb) = on_select
+                {
+                    let cb = cb.clone();
+                    std::thread::spawn(move || {
+                        if let Some(files) = rfd::FileDialog::new().pick_files() {
+                            let vault_files: Vec<VaultFile> = files
+                                .into_iter()
+                                .map(|path| {
+                                    let meta = std::fs::metadata(&path).ok();
+                                    VaultFile {
+                                        name: path
+                                            .file_name()
+                                            .unwrap_or_default()
+                                            .to_string_lossy()
+                                            .to_string(),
+                                        size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+                                        mime_type: "application/octet-stream".to_string(),
+                                    }
+                                })
+                                .collect();
+                            cb(vault_files);
+                        }
+                    });
+                }
+            }),
+        );
+
+        let on_select_drop = self.on_files_selected.clone();
+        renderer.register_handler(
+            "filedrop",
+            Arc::new(move |event| {
+                if let cvkg_core::Event::FileDrop { path, .. } = event
+                    && let Some(ref cb) = on_select_drop
+                {
+                    let path_buf = std::path::PathBuf::from(path);
+                    let meta = std::fs::metadata(&path_buf).ok();
+                    let vf = VaultFile {
+                        name: path_buf
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string(),
+                        size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+                        mime_type: "application/octet-stream".to_string(),
+                    };
+                    cb(vec![vf]);
+                }
+            }),
         );
 
         // Render upload entries
@@ -229,9 +288,9 @@ fn render_upload_entry(renderer: &mut dyn Renderer, entry: &VaultEntry, rect: Re
 
     // Status text
     let status_text = match &entry.status {
-        VaultStatus::Pending => "Waiting...".to_string(),
+        VaultStatus::Pending => crate::lingua_tong::t("dropvault.waiting"),
         VaultStatus::Uploading => format!("{}%", (entry.progress * 100.0) as u32),
-        VaultStatus::Complete => "Done".to_string(),
+        VaultStatus::Complete => crate::lingua_tong::t("dropvault.done"),
         VaultStatus::Failed(msg) => {
             let mut msg = msg.clone();
             if msg.len() > 30 {

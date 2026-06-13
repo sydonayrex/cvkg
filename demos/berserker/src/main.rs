@@ -1,8 +1,9 @@
 #![allow(dead_code, clippy::approx_constant)]
 
 use cvkg::prelude::*;
-use cvkg_core::{ColorTheme, DisplayEnvironment, PerformanceContract};
 use cvkg_anim::skeletal::RagdollBlender;
+use cvkg_components::context_menu::{ContextMenu, ContextMenuItem};
+use cvkg_core::{DisplayEnvironment, PerformanceContract};
 use cvkg_physics::ragdoll_bridge::RagdollBridge;
 use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig};
 use cvkg_vdom::signals::Signal;
@@ -123,9 +124,11 @@ impl BerserkerState {
             constraint.break_threshold = Some(15000.0);
             world.add_constraint(constraint);
             world.add_constraint(Constraint::distance(
-                ground_id, id_l,
+                ground_id,
+                id_l,
                 Vec2::new(pos[0] - w / 2.0 - 100.0, pos[1] - h),
-                Vec2::new(0.0, 0.0), 0.0,
+                Vec2::new(0.0, 0.0),
+                0.0,
             ));
             card_bodies.push((id_l, id_r));
         }
@@ -144,31 +147,49 @@ impl BerserkerState {
         world.add_collider(Collider::new(dummy_torso, torso_shape));
 
         world.add_constraint(Constraint::pin(
-            dummy_head, dummy_torso,
+            dummy_head,
+            dummy_torso,
             Vec2::new(w * 0.8, h * 0.45),
         ));
         world.add_constraint(Constraint::pin(
-            ground_id, dummy_head,
+            ground_id,
+            dummy_head,
             Vec2::new(w * 0.8, h * 0.4),
         ));
 
         let mut bridge_config = cvkg_physics::RagdollBridgeConfig::default();
         bridge_config.bone_mappings.push(cvkg_physics::BoneBodyMap {
-            bone_index: 0, body_id: dummy_head,
-            local_offset: glam::Vec3::ZERO, local_rotation: glam::Quat::IDENTITY,
+            bone_index: 0,
+            body_id: dummy_head,
+            local_offset: glam::Vec3::ZERO,
+            local_rotation: glam::Quat::IDENTITY,
         });
         bridge_config.bone_mappings.push(cvkg_physics::BoneBodyMap {
-            bone_index: 1, body_id: dummy_torso,
-            local_offset: glam::Vec3::ZERO, local_rotation: glam::Quat::IDENTITY,
+            bone_index: 1,
+            body_id: dummy_torso,
+            local_offset: glam::Vec3::ZERO,
+            local_rotation: glam::Quat::IDENTITY,
         });
         let bridge = cvkg_physics::RagdollBridge::new(bridge_config);
         let blender = RagdollBlender::new(2);
 
-        log::info!("BerserkerState initialized: {} cubes, {} cards", cube_ids.len(), card_bodies.len());
+        log::info!(
+            "BerserkerState initialized: {} cubes, {} cards",
+            cube_ids.len(),
+            card_bodies.len()
+        );
 
         Self {
-            particles: Vec::new(), rng, last_time: 0.0,
-            physics: PhysicsState { world, cube_ids, card_bodies, dummy_head, dummy_torso },
+            particles: Vec::new(),
+            rng,
+            last_time: 0.0,
+            physics: PhysicsState {
+                world,
+                cube_ids,
+                card_bodies,
+                dummy_head,
+                dummy_torso,
+            },
             anim: AnimState { blender, bridge },
         }
     }
@@ -178,124 +199,475 @@ impl BerserkerState {
 struct BerserkerFireView {
     counters: [Signal<u32>; 4],
     rage: Signal<f32>,
+    active_menu: Signal<Option<usize>>,
     state: Arc<Mutex<BerserkerState>>,
+    perf: Arc<Mutex<cvkg_components::perf_overlay::PerfOverlay>>,
 }
 
 impl BerserkerFireView {
+    /// Create a new BerserkerFireView instance with counters, rage trackers, and performance profiling overlay.
     fn new(w: f32, h: f32) -> Self {
         log::info!("Creating BerserkerFireView ({}x{})", w, h);
         Self {
-            counters: [Signal::new(0), Signal::new(0), Signal::new(0), Signal::new(0)],
+            counters: [
+                Signal::new(0),
+                Signal::new(0),
+                Signal::new(0),
+                Signal::new(0),
+            ],
             rage: Signal::new(0.0),
+            active_menu: Signal::new(None),
             state: Arc::new(Mutex::new(BerserkerState::new(w, h))),
+            perf: Arc::new(Mutex::new(
+                cvkg_components::perf_overlay::PerfOverlay::new().show(),
+            )),
         }
     }
 }
 
 impl View for BerserkerFireView {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
+    /// Render is the main entry point to draw the Berserker view frame.
+    /// CONTRACT: This function is called once per frame. It simulates physics,
+    /// decays the Berserker rage over time, updates the GPU uniforms, and renders elements.
     fn render(&self, r: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
         let w = rect.width;
         let h = rect.height;
 
-        // Physics step: lock, update, release immediately
-        let t = r.elapsed_time();
-        let current_rage = self.rage.get();
+        // Record telemetry data to the PerfOverlay
+        let tel = r.get_telemetry();
         {
-            let mut s = self.state.lock().expect("Berserker state mutex poisoned");
-            if t > s.last_time {
-                let dt = (t - s.last_time).min(0.1);
-                s.last_time = t;
-                update_berserker_simulation(&mut s, w, h, t, dt, current_rage);
-            }
-        } // Mutex released here
+            let mut perf = self.perf.lock().expect("Failed to lock PerfOverlay");
+            let tris = tel.vertices / 3;
+            perf.record_frame(tel.frame_time_ms, tel.draw_calls, tris, tel.vertices);
+        }
+
+        let t = r.elapsed_time();
+        let mut s = self.state.lock().expect("Berserker state mutex poisoned");
+
+        // Calculate delta time
+        let dt = if t > s.last_time {
+            let elapsed = (t - s.last_time).min(0.1);
+            s.last_time = t;
+            elapsed
+        } else {
+            0.0
+        };
+
+        // Naturally decay rage over time (e.g. 15% per second)
+        let current_rage = self.rage.get();
+        let new_rage = (current_rage - dt * 15.0).max(0.0);
+        self.rage.set(new_rage);
+
+        // Propagate rage values to the GPU renderer (normalized to 0.0 - 1.0)
+        r.set_rage(new_rage / 100.0);
+
+        // Run the physics and particle simulation step only on active frame ticks (dt > 0)
+        // to prevent layout VDOM builds from spawning static ghost particles.
+        if dt > 0.0 {
+            update_berserker_simulation(&mut s, w, h, t, dt, new_rage);
+        }
 
         r.push_vnode(rect, "BerserkerFireView");
 
-        // Drawing: re-lock only for reading state
-        let s = self.state.lock().expect("Berserker state mutex poisoned");
-
-        // Draw background
+        // Draw the 3D rotating cubes in the background
+        let t_cubes_start = std::time::Instant::now();
         draw_3d_cubes_bg(r, &s, w, h, t);
+        let t_cubes = t_cubes_start.elapsed().as_secs_f32() * 1000.0;
 
-        // Glass cards
+        // Draw the glass cards
+        let t_cards_start = std::time::Instant::now();
         draw_glass_cards(r, &s, w, h, t);
+        let t_cards = t_cards_start.elapsed().as_secs_f32() * 1000.0;
 
+        let t_fire_start = std::time::Instant::now();
         if t > 0.0 {
+            // Draw particles and Mjolnir lightning bolts
             draw_berserker_fire(r, &s, w, h, t);
-            // Ragdoll needs mutable access for animation blending
-            drop(s);
-            let mut s = self.state.lock().expect("Berserker state mutex poisoned");
-            draw_ragdoll_dummy(r, &mut s, w, h, current_rage);
-        } else {
-            drop(s);
+            // Draw skeletal/ragdoll elements
+            draw_ragdoll_dummy(r, &mut s, w, h, new_rage);
         }
+        let t_fire = t_fire_start.elapsed().as_secs_f32() * 1000.0;
 
         // Draw chrome components (no state needed)
-        draw_nornir_bar(r, &self.counters, &self.rage, w, h);
+        let t_chrome_start = std::time::Instant::now();
+        draw_nornir_bar(
+            r,
+            &self.counters,
+            &self.rage,
+            &self.active_menu,
+            &self.perf,
+            w,
+            h,
+        );
         draw_dock(r, &self.counters, &self.rage, w, h);
         draw_corner_buttons(r, &self.counters, &self.rage, w, h);
+        let t_chrome = t_chrome_start.elapsed().as_secs_f32() * 1000.0;
+
+        if (s.last_time as u32).is_multiple_of(5) {
+            log::info!(
+                "[Berserker] Draw timings: cubes={:.2}ms cards={:.2}ms fire={:.2}ms chrome={:.2}ms",
+                t_cubes,
+                t_cards,
+                t_fire,
+                t_chrome
+            );
+        }
+
+        // Draw the performance overlay
+        {
+            let perf = self.perf.lock().expect("Failed to lock PerfOverlay");
+            perf.render(r, rect);
+        }
 
         r.pop_vnode();
     }
 }
 
-fn draw_nornir_bar(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4], _rage: &Signal<f32>, w: f32, _h: f32) {
-    let bar_rect = cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: 28.0 };
+fn draw_nornir_bar(
+    r: &mut dyn cvkg_core::Renderer,
+    _counters: &[Signal<u32>; 4],
+    _rage: &Signal<f32>,
+    active_menu: &Signal<Option<usize>>,
+    perf: &Arc<std::sync::Mutex<cvkg_components::perf_overlay::PerfOverlay>>,
+    w: f32,
+    h: f32,
+) {
+    let bar_rect = cvkg_core::Rect {
+        x: 0.0,
+        y: 0.0,
+        width: w,
+        height: 28.0,
+    };
     r.push_vnode(bar_rect, "NornirBar");
     // Glass background: uses glass material pipeline for frosted blur effect
     r.fill_glass_rect(bar_rect, 4.0, 15.0);
 
     let menu_x = 8.0;
-    let items = [("File", 60.0), ("Edit", 60.0), ("View", 70.0), ("Window", 80.0), ("Help", 60.0)];
+    let items = [
+        ("File", 60.0),
+        ("Edit", 60.0),
+        ("View", 70.0),
+        ("Window", 80.0),
+        ("Help", 60.0),
+    ];
     let mut x = menu_x;
-    for (label, width) in items {
-        r.draw_text(label, x, 8.0, 13.0, [0.9, 0.9, 0.92, 1.0]);
+    for (i, (label, width)) in items.iter().enumerate() {
+        let item_rect = cvkg_core::Rect {
+            x,
+            y: 0.0,
+            width: *width,
+            height: 28.0,
+        };
+        r.push_vnode(item_rect, "NornirBarItem");
+        // Center text horizontally and vertically within each menu item cell
+        let (lw, lh) = r.measure_text(label, 13.0);
+        let tx = x + (*width - lw) / 2.0;
+        let ty = (28.0 - lh) / 2.0;
+        r.draw_text(label, tx, ty, 13.0, [0.9, 0.9, 0.92, 1.0]);
+        let active_menu_clone = active_menu.clone();
+        let h_closure = Arc::new(move |_| {
+            let current = active_menu_clone.get();
+            log::info!("NornirBarItem {} clicked! current={:?}", i, current);
+            if current == Some(i) {
+                active_menu_clone.set(None);
+            } else {
+                active_menu_clone.set(Some(i));
+            }
+        });
+        r.register_handler("pointerdown", h_closure.clone());
+        r.register_handler("pointerclick", h_closure);
+        r.pop_vnode();
         x += width;
     }
 
-    r.draw_text("BERSERKER v2.0", w * 0.5 - 60.0, 8.0, 14.0, [1.0, 0.3, 0.1, 1.0]);
-    r.draw_text(&format!("Rage: {:.0}%", _rage.get()), w - 120.0, 8.0, 12.0, [0.0, 1.0, 0.5, 1.0]);
+    // Centered window title
+    let title_str = format!("BERSERKER v{}", env!("CARGO_PKG_VERSION"));
+    let (tw, th) = r.measure_text(&title_str, 14.0);
+    let title_x = (w - tw) / 2.0;
+    let title_y = (28.0 - th) / 2.0;
+    r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.3, 0.1, 1.0]);
+
+    // Right-aligned, vertically centered rage meter
+    let rage_str = format!("Rage: {:.0}%", _rage.get());
+    let (rw, rh) = r.measure_text(&rage_str, 12.0);
+    let rage_x = w - rw - 16.0;
+    let rage_y = (28.0 - rh) / 2.0;
+    r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.5, 1.0]);
 
     r.pop_vnode();
+
+    // Render the active dropdown menu if open
+    if let Some(open_idx) = active_menu.get() {
+        // 1. Fullscreen invisible overlay to capture click-outside and dismiss the dropdown
+        let overlay_rect = cvkg_core::Rect {
+            x: 0.0,
+            y: 0.0,
+            width: w,
+            height: h,
+        };
+        r.push_vnode(overlay_rect, "DropdownOverlay");
+        let active_menu_clone = active_menu.clone();
+        r.register_handler(
+            "pointerdown",
+            Arc::new(move |_| {
+                active_menu_clone.set(None);
+            }),
+        );
+        r.pop_vnode();
+
+        let mut menu_pos_x = menu_x;
+        for item in items.iter().take(open_idx) {
+            menu_pos_x += item.1;
+        }
+
+        let menu_items = match open_idx {
+            0 => vec![
+                ContextMenuItem::new("New Canvas")
+                    .shortcut("Ctrl+N")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("New Canvas clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("Open Runes")
+                    .shortcut("Ctrl+O")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("Open Runes clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("Save Preset")
+                    .shortcut("Ctrl+S")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("Save Preset clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("Exit Demo")
+                    .shortcut("Ctrl+Q")
+                    .on_click(|| {
+                        std::process::exit(0);
+                    }),
+            ],
+            1 => vec![
+                ContextMenuItem::new("Undo").shortcut("Ctrl+Z").on_click({
+                    let active_menu = active_menu.clone();
+                    move || {
+                        log::info!("Undo clicked");
+                        active_menu.set(None);
+                    }
+                }),
+                ContextMenuItem::new("Redo").shortcut("Ctrl+Y").on_click({
+                    let active_menu = active_menu.clone();
+                    move || {
+                        log::info!("Redo clicked");
+                        active_menu.set(None);
+                    }
+                }),
+                ContextMenuItem::new("Cut")
+                    .shortcut("Ctrl+X")
+                    .disabled(true),
+                ContextMenuItem::new("Copy").shortcut("Ctrl+C").on_click({
+                    let active_menu = active_menu.clone();
+                    move || {
+                        log::info!("Copy clicked");
+                        active_menu.set(None);
+                    }
+                }),
+                ContextMenuItem::new("Paste").shortcut("Ctrl+V").on_click({
+                    let active_menu = active_menu.clone();
+                    move || {
+                        log::info!("Paste clicked");
+                        active_menu.set(None);
+                    }
+                }),
+            ],
+            2 => vec![
+                ContextMenuItem::new("Toggle Performance Overlay")
+                    .shortcut("Ctrl+Shift+P")
+                    .on_click({
+                        let perf = perf.clone();
+                        let active_menu = active_menu.clone();
+                        move || {
+                            let mut p = perf.lock().unwrap();
+                            p.visible = !p.visible;
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("Zoom In")
+                    .shortcut("Ctrl+=")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("Zoom In clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("Zoom Out")
+                    .shortcut("Ctrl+-")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("Zoom Out clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+            ],
+            3 => vec![
+                ContextMenuItem::new("Minimize")
+                    .shortcut("Ctrl+M")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("Minimize clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("Close Window")
+                    .shortcut("Ctrl+W")
+                    .on_click(|| {
+                        std::process::exit(0);
+                    }),
+            ],
+            _ => vec![
+                ContextMenuItem::new("Viking Codex")
+                    .shortcut("F1")
+                    .on_click({
+                        let active_menu = active_menu.clone();
+                        move || {
+                            log::info!("Viking Codex clicked");
+                            active_menu.set(None);
+                        }
+                    }),
+                ContextMenuItem::new("About Berserker").on_click({
+                    let active_menu = active_menu.clone();
+                    move || {
+                        log::info!("About Berserker clicked");
+                        active_menu.set(None);
+                    }
+                }),
+            ],
+        };
+
+        let dropdown = ContextMenu::new(menu_items)
+            .position(menu_pos_x, 28.0)
+            .open(true);
+        dropdown.render(
+            r,
+            cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: h,
+            },
+        );
+    }
 }
 
-fn draw_dock(r: &mut dyn cvkg_core::Renderer, _counters: &[Signal<u32>; 4], _rage: &Signal<f32>, w: f32, h: f32) {
-    let dock_rect = cvkg_core::Rect { x: w * 0.3, y: h - 68.0, width: w * 0.4, height: 56.0 };
+fn draw_dock(
+    r: &mut dyn cvkg_core::Renderer,
+    _counters: &[Signal<u32>; 4],
+    _rage: &Signal<f32>,
+    w: f32,
+    h: f32,
+) {
+    let dock_rect = cvkg_core::Rect {
+        x: w * 0.3,
+        y: h - 68.0,
+        width: w * 0.4,
+        height: 56.0,
+    };
     r.push_vnode(dock_rect, "HeimdallDock");
     // Glass background: uses glass material pipeline for frosted blur effect
     r.fill_glass_rect(dock_rect, 12.0, 20.0);
 
-    let icons = ["⚔️", "🔥", "🛡️", "💀", "🌋"];
+    let icons = ["ATK", "RGE", "DEF", "CRT", "ULT"];
     let icon_size = 48.0;
-    let start_x = dock_rect.x + 12.0;
-    let center_y = dock_rect.y + dock_rect.height / 2.0;
+    let spacing = 16.0;
+    let total_width = icons.len() as f32 * icon_size + (icons.len() - 1) as f32 * spacing;
+    let start_x = dock_rect.x + (dock_rect.width - total_width) / 2.0;
 
     for (i, icon) in icons.iter().enumerate() {
-        let ix = start_x + i as f32 * (icon_size + 8.0);
-        r.draw_text(icon, ix + 8.0, center_y - 8.0, 24.0, [0.9, 0.9, 0.92, 0.9]);
+        let ix = start_x + i as f32 * (icon_size + spacing);
+        let slot_rect = cvkg_core::Rect {
+            x: ix,
+            y: dock_rect.y,
+            width: icon_size,
+            height: dock_rect.height,
+        };
+        r.push_vnode(slot_rect, "HeimdallDockItem");
+
+        // Center text horizontally and vertically inside the 56px high dock using measured bounds
+        let text_size = 18.0;
+        let (tw, th) = r.measure_text(icon, text_size);
+        let tx = ix + (icon_size - tw) / 2.0;
+        let ty = dock_rect.y + (dock_rect.height - th) / 2.0;
+        r.draw_text(icon, tx, ty, text_size, [0.95, 0.95, 0.98, 1.0]);
 
         if i < 3 {
-            let dot_rect = cvkg_core::Rect { x: ix + icon_size / 2.0 - 2.0, y: center_y + icon_size / 2.0 + 4.0, width: 4.0, height: 4.0 };
+            // Center the dot horizontally below the icon cell
+            let dot_size = 4.0;
+            let dot_rect = cvkg_core::Rect {
+                x: ix + icon_size / 2.0 - dot_size / 2.0,
+                y: dock_rect.y + dock_rect.height - 8.0,
+                width: dot_size,
+                height: dot_size,
+            };
             let accent = [0.0, 1.0, 0.95, 1.0];
             r.fill_ellipse(dot_rect, accent);
         }
+
+        // Register handlers for interactive click feedback
+        let c_signal = _counters[i.min(3)].clone();
+        let r_signal = _rage.clone();
+        let icon_name = icon.to_string();
+        let h_closure = Arc::new(move |_| {
+            c_signal.set(c_signal.get() + 1);
+            r_signal.set((r_signal.get() + 20.0).min(100.0));
+            log::info!(
+                "Dock item '{}' clicked! Total count: {}",
+                icon_name,
+                c_signal.get()
+            );
+        });
+        r.register_handler("pointerdown", h_closure.clone());
+        r.register_handler("pointerclick", h_closure);
+
+        r.pop_vnode();
     }
 
     r.pop_vnode();
 }
 
 fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32, h: f32, _t: f32) {
-    r.fill_rect(cvkg_core::Rect { x: 0.0, y: 28.0, width: w, height: h - 96.0 }, [0.01, 0.01, 0.03, 1.0]);
+    r.fill_rect(
+        cvkg_core::Rect {
+            x: 0.0,
+            y: 28.0,
+            width: w,
+            height: h - 96.0,
+        },
+        [0.01, 0.01, 0.03, 1.0],
+    );
 
     for &(id, size) in &s.physics.cube_ids {
         if let Some(body) = s.physics.world.body(id) {
             let rect = cvkg_core::Rect {
                 x: body.position.x - size * 0.5,
                 y: body.position.y - size * 0.5,
-                width: size, height: size,
+                width: size,
+                height: size,
             };
             let rot = [body.angle, body.angle * 0.5, body.angle * 0.2];
             r.draw_3d_cube(rect, [0.1, 0.6, 0.9, 0.6], rot);
@@ -303,8 +675,14 @@ fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32,
     }
 }
 
-fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32, _h: f32, _t: f32) {
-    let runes = ["CVK!!!", "CVK!!!", "CVK!!!"];
+fn draw_glass_cards(
+    r: &mut dyn cvkg_core::Renderer,
+    s: &BerserkerState,
+    _w: f32,
+    _h: f32,
+    _t: f32,
+) {
+    let runes = ["CVKG!", "CVKG!", "CVKG!"];
 
     for (i, &(id_l, id_r)) in s.physics.card_bodies.iter().enumerate() {
         if let (Some(bl), Some(br)) = (s.physics.world.body(id_l), s.physics.world.body(id_r)) {
@@ -331,7 +709,13 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
                 };
                 r.push_vnode(rect, "Card");
                 r.fill_glass_rect(rect, 12.0, 20.0); // Use glass material for proper frosted effect
-                r.draw_text(runes[i % runes.len()], cx - 50.0, cy + 20.0, 32.0, [0.8, 0.9, 1.0, 1.0]);
+                r.draw_text(
+                    runes[i % runes.len()],
+                    cx - 50.0,
+                    cy + 20.0,
+                    32.0,
+                    [0.8, 0.9, 1.0, 1.0],
+                );
                 r.pop_vnode();
             } else {
                 // Card has broken apart: render two separate halves
@@ -358,7 +742,13 @@ fn draw_glass_cards(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
     }
 }
 
-fn draw_ragdoll_dummy(r: &mut dyn cvkg_core::Renderer, s: &mut BerserkerState, _w: f32, _h: f32, rage: f32) {
+fn draw_ragdoll_dummy(
+    r: &mut dyn cvkg_core::Renderer,
+    s: &mut BerserkerState,
+    _w: f32,
+    _h: f32,
+    rage: f32,
+) {
     s.anim.bridge.update(&s.physics.world);
     let transforms = s.anim.bridge.physics_transforms().to_vec();
     s.anim.blender.set_physics(&transforms);
@@ -367,10 +757,28 @@ fn draw_ragdoll_dummy(r: &mut dyn cvkg_core::Renderer, s: &mut BerserkerState, _
     let poses = s.anim.blender.update(0.016);
 
     let head_pos = poses[0].0;
-    r.fill_rounded_rect(cvkg_core::Rect { x: head_pos.x - 20.0, y: head_pos.y - 20.0, width: 40.0, height: 40.0 }, 8.0, [0.9, 0.2, 0.2, 1.0]);
+    r.fill_rounded_rect(
+        cvkg_core::Rect {
+            x: head_pos.x - 20.0,
+            y: head_pos.y - 20.0,
+            width: 40.0,
+            height: 40.0,
+        },
+        8.0,
+        [0.9, 0.2, 0.2, 1.0],
+    );
 
     let torso_pos = poses[1].0;
-    r.fill_rounded_rect(cvkg_core::Rect { x: torso_pos.x - 30.0, y: torso_pos.y - 50.0, width: 60.0, height: 100.0 }, 12.0, [0.8, 0.4, 0.1, 1.0]);
+    r.fill_rounded_rect(
+        cvkg_core::Rect {
+            x: torso_pos.x - 30.0,
+            y: torso_pos.y - 50.0,
+            width: 60.0,
+            height: 100.0,
+        },
+        12.0,
+        [0.8, 0.4, 0.1, 1.0],
+    );
 }
 
 fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, dt: f32, rage: f32) {
@@ -389,8 +797,12 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
         for &(id_l, id_r) in &s.physics.card_bodies {
             let fx = (s.rng.next_f32() - 0.5) * force_mag * 0.5;
             let fy = (s.rng.next_f32() - 0.5) * force_mag * 0.5;
-            if let Some(body) = s.physics.world.body_mut(id_l) { body.apply_force(Vec2::new(fx, fy)); }
-            if let Some(body) = s.physics.world.body_mut(id_r) { body.apply_force(Vec2::new(-fx, -fy)); }
+            if let Some(body) = s.physics.world.body_mut(id_l) {
+                body.apply_force(Vec2::new(fx, fy));
+            }
+            if let Some(body) = s.physics.world.body_mut(id_r) {
+                body.apply_force(Vec2::new(-fx, -fy));
+            }
         }
     }
 
@@ -426,29 +838,80 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     }
 }
 
-fn draw_berserker_fire(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32, h: f32, t: f32) {
+fn draw_berserker_fire(
+    r: &mut dyn cvkg_core::Renderer,
+    s: &BerserkerState,
+    w: f32,
+    h: f32,
+    t: f32,
+) {
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
-    r.draw_radial_gradient(cvkg_core::Rect { x: cx - 100.0, y: cy - 100.0, width: 200.0, height: 200.0 }, [1.0, 0.4, 0.0, 0.6], [0.2, 0.0, 0.0, 0.0]);
-    r.draw_radial_gradient(cvkg_core::Rect { x: cx - 60.0, y: cy - 60.0, width: 120.0, height: 120.0 }, [1.0, 0.8, 0.2, 0.8], [1.0, 0.2, 0.0, 0.0]);
-    r.draw_radial_gradient(cvkg_core::Rect { x: cx - 30.0, y: cy - 30.0, width: 60.0, height: 60.0 }, [1.0, 1.0, 0.8, 1.0], [1.0, 0.5, 0.0, 0.0]);
+    r.draw_radial_gradient(
+        cvkg_core::Rect {
+            x: cx - 100.0,
+            y: cy - 100.0,
+            width: 200.0,
+            height: 200.0,
+        },
+        [1.0, 0.4, 0.0, 0.6],
+        [0.2, 0.0, 0.0, 0.0],
+    );
+    r.draw_radial_gradient(
+        cvkg_core::Rect {
+            x: cx - 60.0,
+            y: cy - 60.0,
+            width: 120.0,
+            height: 120.0,
+        },
+        [1.0, 0.8, 0.2, 0.8],
+        [1.0, 0.2, 0.0, 0.0],
+    );
+    r.draw_radial_gradient(
+        cvkg_core::Rect {
+            x: cx - 30.0,
+            y: cy - 30.0,
+            width: 60.0,
+            height: 60.0,
+        },
+        [1.0, 1.0, 0.8, 1.0],
+        [1.0, 0.5, 0.0, 0.0],
+    );
 
     for p in &s.particles {
         let p_color = [p.color[0], p.color[1], p.color[2], p.life.min(1.0)];
-        let rect = cvkg_core::Rect { x: p.pos[0], y: p.pos[1], width: p.size, height: p.size };
-        if p.is_ember { r.draw_text("*", p.pos[0], p.pos[1], (p.size * 2.0).round(), p_color); }
-        else { r.fill_ellipse(rect, p_color); }
+        let rect = cvkg_core::Rect {
+            x: p.pos[0],
+            y: p.pos[1],
+            width: p.size,
+            height: p.size,
+        };
+        if p.is_ember {
+            r.draw_text("*", p.pos[0], p.pos[1], (p.size * 2.0).round(), p_color);
+        } else {
+            r.fill_ellipse(rect, p_color);
+        }
     }
 
-    if (t * 1000.0) as u32 % 20 == 0 {
+    if ((t * 1000.0) as u32).is_multiple_of(20) {
         let angle = (t * 5.0) % 6.28;
         let dist = 100.0 + 200.0;
-        r.draw_mjolnir_bolt([cx, cy], [cx + angle.cos() * dist, cy + angle.sin() * dist], [0.6, 0.9, 1.0, 1.0]);
+        r.draw_mjolnir_bolt(
+            [cx, cy],
+            [cx + angle.cos() * dist, cy + angle.sin() * dist],
+            [0.6, 0.9, 1.0, 1.0],
+        );
     }
 }
 
-fn draw_corner_buttons(r: &mut dyn cvkg_core::Renderer, counters: &[Signal<u32>; 4], rage: &Signal<f32>, w: f32, h: f32) {
+fn draw_corner_buttons(
+    r: &mut dyn cvkg_core::Renderer,
+    counters: &[Signal<u32>; 4],
+    rage: &Signal<f32>,
+    w: f32,
+    h: f32,
+) {
     let btn_size = 100.0;
     let padding = 20.0;
     let corners = [
@@ -459,19 +922,36 @@ fn draw_corner_buttons(r: &mut dyn cvkg_core::Renderer, counters: &[Signal<u32>;
     ];
 
     for (i, corner) in corners.iter().enumerate() {
-        let rect = cvkg_core::Rect { x: corner.0, y: corner.1, width: btn_size, height: btn_size };
+        let rect = cvkg_core::Rect {
+            x: corner.0,
+            y: corner.1,
+            width: btn_size,
+            height: btn_size,
+        };
         r.push_vnode(rect, "CornerButton");
         r.fill_rounded_rect(rect, 12.0, [0.2, 0.2, 0.3, 0.8]);
-        r.draw_text(corner.2, corner.0 + 35.0, corner.1 + 60.0, 32.0, [1.0, 1.0, 1.0, 1.0]);
+        r.draw_text(
+            corner.2,
+            corner.0 + 35.0,
+            corner.1 + 60.0,
+            32.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
 
         let val = counters[i].get();
-        r.draw_text(&format!("{}", val), corner.0 + btn_size + 10.0, corner.1 + 60.0, 24.0, [0.0, 1.0, 0.5, 1.0]);
+        r.draw_text(
+            &format!("{}", val),
+            corner.0 + btn_size + 10.0,
+            corner.1 + 60.0,
+            24.0,
+            [0.0, 1.0, 0.5, 1.0],
+        );
 
         let c_signal = counters[i].clone();
         let r_signal = rage.clone();
         let h_closure = Arc::new(move |_| {
             c_signal.set(c_signal.get() + 1);
-            r_signal.set(r_signal.get() + 1.0);
+            r_signal.set((r_signal.get() + 25.0).min(100.0));
             log::info!("Button {} clicked! Total: {}", i, c_signal.get());
         });
         r.register_handler("pointerdown", h_closure.clone());
@@ -483,9 +963,15 @@ fn draw_corner_buttons(r: &mut dyn cvkg_core::Renderer, counters: &[Signal<u32>;
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
     log::info!("═══════════════════════════════════════════════════");
-    log::info!("  BERSERKER FIRE v2.0 — Cyberpunk Viking UI Demo");
+    log::info!(
+        "  BERSERKER FIRE v{} — Cyberpunk Viking UI Demo",
+        env!("CARGO_PKG_VERSION")
+    );
     log::info!("  Display: {:?}", DisplayEnvironment::default());
-    log::info!("  Performance Contract: {:?}", PerformanceContract::chrome_standard());
+    log::info!(
+        "  Performance Contract: {:?}",
+        PerformanceContract::chrome_standard()
+    );
     log::info!("═══════════════════════════════════════════════════");
 
     std::panic::set_hook(Box::new(|info| {

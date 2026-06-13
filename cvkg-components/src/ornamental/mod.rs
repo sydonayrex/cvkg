@@ -5,7 +5,7 @@
 //! hammered metal, dragon scales, and ice crystals.
 
 pub mod aetti_frame;
-pub use aetti_frame::{ÆttiFrame, RunicStyle};
+pub use aetti_frame::{RunicStyle, ÆttiFrame};
 
 pub mod mjolnir_frame_ext;
 pub use mjolnir_frame_ext::{MjolnirFrameStyle, RuneGlyph, render_mjolnir_frame};

@@ -19,6 +19,10 @@ pub struct ExecutionContext<'a> {
     pub renderer: &'a crate::renderer::SurtrRenderer,
     pub target_view: &'a wgpu::TextureView,
     pub depth_view: &'a wgpu::TextureView,
+    pub blur_env_bind_group_a: &'a wgpu::BindGroup,
+    pub blur_env_bind_group_b: &'a wgpu::BindGroup,
+    pub bloom_env_bind_group_a: &'a wgpu::BindGroup,
+    pub bloom_env_bind_group_b: &'a wgpu::BindGroup,
     pub scale_factor: f32,
 }
 
@@ -28,6 +32,31 @@ impl<'a> ExecutionContext<'a> {
         desc: &wgpu::RenderPassDescriptor<'_>,
     ) -> wgpu::RenderPass<'_> {
         self.encoder.begin_render_pass(desc)
+    }
+
+    /// Get or create a cached bind group for a given resource and mip level.
+    /// Avoids per-frame GPU allocation when the same bind group is reused across frames.
+    pub fn get_or_create_bind_group(
+        &self,
+        key: (crate::kvasir::resource::ResourceId, u32, bool),
+        layout: &wgpu::BindGroupLayout,
+        entries: &[wgpu::BindGroupEntry<'_>],
+        label: Option<&str>,
+    ) -> wgpu::BindGroup {
+        let mut cache = self.renderer.bind_group_cache.lock().unwrap();
+        // Use entry API: if key exists, return a clone of the cached bind group.
+        // If not, create it, insert it, and return a clone.
+        if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(key) {
+            let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label,
+                layout,
+                entries,
+            });
+            e.insert(bg.clone());
+            bg
+        } else {
+            cache.get(&key).unwrap().clone()
+        }
     }
 }
 

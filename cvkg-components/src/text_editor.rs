@@ -34,7 +34,7 @@ pub struct TextEditor {
 
 /// Internal text editor state stored in system state map.
 #[derive(Clone, Copy, Debug)]
-struct EditorState {
+pub struct EditorState {
     /// Cursor position as byte offset into text.
     cursor_pos: usize,
     /// Selection anchor (start of selection). None = no selection.
@@ -189,8 +189,7 @@ impl TextEditor {
     }
 
     /// Insert text at cursor position, replacing selection.
-    #[allow(dead_code)]
-    fn insert_text(&mut self, state: &mut EditorState, insert: &str) {
+    pub fn insert_text(&mut self, state: &mut EditorState, insert: &str) {
         if let Some(anchor) = state.selection_anchor {
             let start = state.cursor_pos.min(anchor);
             let end = state.cursor_pos.max(anchor);
@@ -204,8 +203,7 @@ impl TextEditor {
     }
 
     /// Delete the selection or the character before the cursor.
-    #[allow(dead_code)]
-    fn delete_backward(&mut self, state: &mut EditorState) {
+    pub fn delete_backward(&mut self, state: &mut EditorState) {
         if let Some(anchor) = state.selection_anchor {
             let start = state.cursor_pos.min(anchor);
             let end = state.cursor_pos.max(anchor);
@@ -219,8 +217,7 @@ impl TextEditor {
     }
 
     /// Delete the character after the cursor.
-    #[allow(dead_code)]
-    fn delete_forward(&mut self, state: &mut EditorState) {
+    pub fn delete_forward(&mut self, state: &mut EditorState) {
         if let Some(_anchor) = state.selection_anchor {
             self.delete_backward(state);
         } else if state.cursor_pos < self.text.len() {
@@ -229,8 +226,7 @@ impl TextEditor {
     }
 
     /// Move cursor up one line.
-    #[allow(dead_code)]
-    fn move_up(&self, state: &mut EditorState) {
+    pub fn move_up(&self, state: &mut EditorState) {
         let (line, col) = self.pos_to_line_col(state.cursor_pos);
         if line > 0 {
             state.cursor_pos = self.line_col_to_pos(line - 1, col);
@@ -238,8 +234,7 @@ impl TextEditor {
     }
 
     /// Move cursor down one line.
-    #[allow(dead_code)]
-    fn move_down(&self, state: &mut EditorState) {
+    pub fn move_down(&self, state: &mut EditorState) {
         let (line, col) = self.pos_to_line_col(state.cursor_pos);
         let lines = self.lines();
         if line + 1 < lines.len() {
@@ -248,8 +243,7 @@ impl TextEditor {
     }
 
     /// Move cursor left one character.
-    #[allow(dead_code)]
-    fn move_left(&self, state: &mut EditorState, extend: bool) {
+    pub fn move_left(&self, state: &mut EditorState, extend: bool) {
         if state.cursor_pos > 0 {
             state.cursor_pos -= 1;
         }
@@ -261,8 +255,7 @@ impl TextEditor {
     }
 
     /// Move cursor right one character.
-    #[allow(dead_code)]
-    fn move_right(&self, state: &mut EditorState, extend: bool) {
+    pub fn move_right(&self, state: &mut EditorState, extend: bool) {
         if state.cursor_pos < self.text.len() {
             state.cursor_pos += 1;
         }
@@ -274,14 +267,13 @@ impl TextEditor {
     }
 
     /// Select all text.
-    #[allow(dead_code)]
-    fn select_all(&self, state: &mut EditorState) {
+    pub fn select_all(&self, state: &mut EditorState) {
         state.selection_anchor = Some(0);
         state.cursor_pos = self.text.len();
     }
 
     /// Get selected text range.
-    fn selection_range(&self, state: &EditorState) -> Option<(usize, usize)> {
+    pub fn selection_range(&self, state: &EditorState) -> Option<(usize, usize)> {
         state.selection_anchor.map(|anchor| {
             let start = state.cursor_pos.min(anchor);
             let end = state.cursor_pos.max(anchor);

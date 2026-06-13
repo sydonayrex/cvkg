@@ -1,152 +1,227 @@
-//! Animation Combinators — Item 16: Animation System Integration
-//!
-//! Provides high-level animation combinators that connect SleipnirSolver (RK4 springs)
-//! to component state changes. Enables declarative animations without manual state management.
-//!
-//! # OS-agnostic
-//! Pure math (RK4 integration). Works on all platforms.
-//!
-//! # Usage
-//! ```ignore
-//! use cvkg_components::anim::{with_animation, Transition, StaggerConfig};
-//!
-//! // Animate a view with spring physics
-//! my_view.modifier(with_animation(0x1234).translate_x(100.0).scale(1.2))
-//!
-//! // Use predefined transitions
-//! my_view.transition(ViewTransition::Spring(SleipnirParams::snappy()))
-//! ```
-
-use cvkg_core::{
-    load_system_state, update_system_state, ModifiedView, Never, Rect, Renderer, View,
-    ViewModifier,
-};
 use cvkg_anim::{SleipnirParams, SleipnirSolver};
+use cvkg_core::{Never, Rect, Renderer, View, load_system_state, update_system_state};
 
-/// Wraps a view with spring-animated transitions for position and scale.
-///
-/// When the target values change, all animated properties smoothly interpolate
-/// using spring physics rather than linear easing.
-pub struct AnimatedModifier {
-    /// Unique hash for this animation's state in the system state map.
-    pub state_hash: u64,
-    /// Spring parameters controlling the animation feel.
-    pub params: SleipnirParams,
-    /// Target translation X. None = don't animate x.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SlideDirection {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Easing {
+    Linear,
+    EaseIn,
+    EaseOut,
+    EaseInOut,
+}
+
+pub fn eval_easing(easing: Easing, t: f32) -> f32 {
+    match easing {
+        Easing::Linear => t,
+        Easing::EaseIn => t * t,
+        Easing::EaseOut => t * (2.0 - t),
+        Easing::EaseInOut => {
+            if t < 0.5 {
+                2.0 * t * t
+            } else {
+                -1.0 + (4.0 - 2.0 * t) * t
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Transition {
+    Fade,
+    Slide(SlideDirection),
+    Scale,
+    SlideFade(SlideDirection),
+}
+
+/// A unified animation component that supports both looping time-based transitions
+/// and state-based spring physics interpolations.
+#[derive(Clone)]
+pub struct Animated<V: View> {
+    pub content: V,
+
+    // Time-based transition
+    pub transition: Option<Transition>,
+    pub easing: Easing,
+    pub duration: f32,
+
+    // Spring physics target
+    pub state_hash: Option<u64>,
+    pub spring_params: SleipnirParams,
     pub target_translate_x: Option<f32>,
-    /// Target translation Y. None = don't animate y.
     pub target_translate_y: Option<f32>,
-    /// Target scale. None = don't animate scale.
     pub target_scale: Option<f32>,
 }
 
-impl AnimatedModifier {
-    /// Create a new animated modifier with the given state hash and spring params.
-    pub fn new(state_hash: u64, params: SleipnirParams) -> Self {
+impl<V: View> Animated<V> {
+    pub fn new(content: V) -> Self {
         Self {
-            state_hash,
-            params,
+            content,
+            transition: None,
+            easing: Easing::EaseInOut,
+            duration: 0.3,
+            state_hash: None,
+            spring_params: SleipnirParams::snappy(),
             target_translate_x: None,
             target_translate_y: None,
             target_scale: None,
         }
     }
 
-    /// Animate horizontal translation.
-    pub fn translate_x(mut self, value: f32) -> Self {
-        self.target_translate_x = Some(value);
+    pub fn transition(mut self, t: Transition) -> Self {
+        self.transition = Some(t);
         self
     }
 
-    /// Animate vertical translation.
-    pub fn translate_y(mut self, value: f32) -> Self {
-        self.target_translate_y = Some(value);
+    pub fn easing(mut self, e: Easing) -> Self {
+        self.easing = e;
         self
     }
 
-    /// Animate uniform scale.
-    pub fn scale(mut self, value: f32) -> Self {
-        self.target_scale = Some(value.max(0.0));
+    pub fn duration(mut self, d: f32) -> Self {
+        self.duration = d.max(0.01);
         self
     }
 
-    /// Animate all properties at once (convenience).
-    pub fn all(mut self, tx: f32, ty: f32, scale: f32) -> Self {
+    pub fn spring(mut self, hash: u64, params: SleipnirParams) -> Self {
+        self.state_hash = Some(hash);
+        self.spring_params = params;
+        self
+    }
+
+    pub fn translate_x(mut self, tx: f32) -> Self {
         self.target_translate_x = Some(tx);
+        self
+    }
+
+    pub fn translate_y(mut self, ty: f32) -> Self {
         self.target_translate_y = Some(ty);
-        self.target_scale = Some(scale.max(0.0));
+        self
+    }
+
+    pub fn scale(mut self, s: f32) -> Self {
+        self.target_scale = Some(s.max(0.0));
         self
     }
 }
 
-impl ViewModifier for AnimatedModifier {
-    fn modify<V: View>(self, content: V) -> impl View {
-        ModifiedView::new(content, self)
+impl<V: View> View for Animated<V> {
+    type Body = Never;
+    fn body(self) -> Self::Body {
+        unreachable!()
     }
 
-    fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
-        let dt = renderer.delta_time();
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let mut final_tx = 0.0;
+        let mut final_ty = 0.0;
+        let mut final_scale = 1.0;
+        let mut final_opacity = 1.0;
 
-        // Initialize solvers if needed
-        let needs_init = {
-            let state = load_system_state();
-            state.get_component_state::<SleipnirSolver>(self.state_hash).is_none()
-        };
+        // Apply time-based looping transition
+        if let Some(trans) = &self.transition {
+            let elapsed = renderer.elapsed_time();
+            let duration = self.duration.max(0.01);
+            let raw = (elapsed % duration) / duration;
+            let t = eval_easing(self.easing, raw);
 
-        if needs_init {
-            update_system_state(|s| {
-                let mut ns = s.clone();
-                if let Some(target) = self.target_translate_x {
-                    ns.set_component_state(
-                        self.state_hash,
-                        SleipnirSolver::new(self.params, target, 0.0),
-                    );
+            match trans {
+                Transition::Fade => {
+                    final_opacity *= t;
                 }
-                if let Some(target) = self.target_translate_y {
-                    ns.set_component_state(
-                        self.state_hash + 1,
-                        SleipnirSolver::new(self.params, target, 0.0),
-                    );
+                Transition::Slide(direction) => {
+                    let (tx, ty) = match direction {
+                        SlideDirection::Up => (0.0, -rect.height * (1.0 - t)),
+                        SlideDirection::Down => (0.0, rect.height * (1.0 - t)),
+                        SlideDirection::Left => (-rect.width * (1.0 - t), 0.0),
+                        SlideDirection::Right => (rect.width * (1.0 - t), 0.0),
+                    };
+                    final_tx += tx;
+                    final_ty += ty;
                 }
-                if let Some(target) = self.target_scale {
-                    ns.set_component_state(
-                        self.state_hash + 2,
-                        SleipnirSolver::new(self.params, target, 1.0),
-                    );
+                Transition::Scale => {
+                    final_scale *= t;
                 }
-                ns
-            });
+                Transition::SlideFade(direction) => {
+                    let (tx, ty) = match direction {
+                        SlideDirection::Up => (0.0, -rect.height * (1.0 - t)),
+                        SlideDirection::Down => (0.0, rect.height * (1.0 - t)),
+                        SlideDirection::Left => (-rect.width * (1.0 - t), 0.0),
+                        SlideDirection::Right => (rect.width * (1.0 - t), 0.0),
+                    };
+                    final_tx += tx;
+                    final_ty += ty;
+                    final_opacity *= t;
+                }
+            }
         }
 
-        // Tick solvers and collect values
-        let (tx, ty, scale, is_moving) = update_system_state(|s| {
-            let mut ns = s.clone();
+        // Apply state-based spring physics
+        if let Some(hash) = self.state_hash {
+            let dt = renderer.delta_time();
+
+            let needs_init = {
+                let state = load_system_state();
+                state.get_component_state::<SleipnirSolver>(hash).is_none()
+            };
+
+            if needs_init {
+                update_system_state(|s| {
+                    let mut ns = s.clone();
+                    if let Some(target) = self.target_translate_x {
+                        ns.set_component_state(
+                            hash,
+                            SleipnirSolver::new(self.spring_params, target, 0.0),
+                        );
+                    }
+                    if let Some(target) = self.target_translate_y {
+                        ns.set_component_state(
+                            hash + 1,
+                            SleipnirSolver::new(self.spring_params, target, 0.0),
+                        );
+                    }
+                    if let Some(target) = self.target_scale {
+                        ns.set_component_state(
+                            hash + 2,
+                            SleipnirSolver::new(self.spring_params, target, 1.0),
+                        );
+                    }
+                    ns
+                });
+            }
+
             let mut tx = 0.0f32;
             let mut ty = 0.0f32;
             let mut scale = 1.0f32;
-            let mut moving = false;
+            let mut is_moving = false;
 
-            for (i, target) in [
-                self.target_translate_x,
-                self.target_translate_y,
-                self.target_scale,
-            ]
-            .iter()
-            .enumerate()
-            {
-                if target.is_none() {
-                    continue;
-                }
-                let hash = self.state_hash + i as u64;
-                if let Some(solver) = ns.get_component_state::<SleipnirSolver>(hash) {
-                    if let Ok(guard) = solver.read() {
+            update_system_state(|s| {
+                let mut ns = s.clone();
+
+                for (i, target) in [
+                    self.target_translate_x,
+                    self.target_translate_y,
+                    self.target_scale,
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if target.is_none() {
+                        continue;
+                    }
+                    let h = hash + i as u64;
+                    if let Some(solver) = ns.get_component_state::<SleipnirSolver>(h)
+                        && let Ok(guard) = solver.read()
+                    {
                         let mut solver = *guard;
                         let val = solver.tick(dt);
                         if !solver.is_settled() {
-                            moving = true;
-                        }
-                        if !solver.is_settled() {
-                            moving = true;
+                            is_moving = true;
                         }
                         match i {
                             0 => tx = val,
@@ -154,115 +229,50 @@ impl ViewModifier for AnimatedModifier {
                             2 => scale = val,
                             _ => {}
                         }
-                        ns.set_component_state(hash, solver);
+                        ns.set_component_state(h, solver);
                     }
                 }
-            }
-            (tx, ty, scale, moving, ns)
-        });
+                ns
+            });
 
-        // Apply transform and render
+            if self.target_translate_x.is_some() {
+                final_tx += tx;
+            }
+            if self.target_translate_y.is_some() {
+                final_ty += ty;
+            }
+            if self.target_scale.is_some() {
+                final_scale *= scale;
+            }
+
+            if is_moving {
+                renderer.request_redraw();
+            }
+        }
+
         renderer.push_vnode(rect, "Animated");
-        renderer.push_transform([tx, ty], [scale, scale], 0.0);
-        view.render(renderer, rect);
-        renderer.pop_transform();
+        if final_opacity < 1.0 {
+            renderer.push_opacity(final_opacity);
+        }
+        if final_tx != 0.0 || final_ty != 0.0 || final_scale != 1.0 {
+            renderer.push_transform([final_tx, final_ty], [final_scale, final_scale], 0.0);
+        }
+
+        self.content.render(renderer, rect);
+
+        if final_tx != 0.0 || final_ty != 0.0 || final_scale != 1.0 {
+            renderer.pop_transform();
+        }
+        if final_opacity < 1.0 {
+            renderer.pop_opacity();
+        }
         renderer.pop_vnode();
-
-        // Request redraw if still animating
-        if is_moving {
-            renderer.request_redraw();
-        }
     }
 }
 
-/// Staggered animation config for list items.
-#[derive(Clone, Debug)]
-pub struct StaggerConfig {
-    /// Delay in seconds between each item's animation start.
-    pub delay_per_item: f32,
-    /// Direction items animate from.
-    pub direction: StaggerDirection,
-    /// Spring parameters.
-    pub params: SleipnirParams,
-}
-
-impl Default for StaggerConfig {
-    fn default() -> Self {
-        Self {
-            delay_per_item: 0.05,
-            direction: StaggerDirection::Bottom,
-            params: SleipnirParams::snappy(),
-        }
+pub trait ViewAnimExt: View + Sized {
+    fn animated(self) -> Animated<Self> {
+        Animated::new(self)
     }
 }
-
-/// Direction for staggered animations.
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-pub enum StaggerDirection {
-    Top,
-    Bottom,
-    Left,
-    Right,
-    Center,
-}
-
-/// Transition types for view appearance/disappearance.
-#[derive(Clone, Debug)]
-pub enum ViewTransition {
-    None,
-    Fade { duration: f32 },
-    Slide { duration: f32, direction: StaggerDirection },
-    Scale { duration: f32 },
-    Spring(SleipnirParams),
-}
-
-impl ViewTransition {
-    /// Convert to an AnimatedModifier for a given state hash.
-    pub fn to_modifier(&self, state_hash: u64, appearing: bool) -> Option<AnimatedModifier> {
-        match self {
-            ViewTransition::None => None,
-            ViewTransition::Slide { direction, .. } => {
-                let (tx, ty) = match direction {
-                    StaggerDirection::Left => (-100.0, 0.0),
-                    StaggerDirection::Right => (100.0, 0.0),
-                    StaggerDirection::Top => (0.0, -100.0),
-                    StaggerDirection::Bottom => (0.0, 100.0),
-                    StaggerDirection::Center => (0.0, 0.0),
-                };
-                let m = AnimatedModifier::new(state_hash, SleipnirParams::fluid())
-                    .translate_x(if appearing { 0.0 } else { -tx })
-                    .translate_y(if appearing { 0.0 } else { -ty });
-                Some(m)
-            }
-            ViewTransition::Scale { .. } => {
-                let m = AnimatedModifier::new(state_hash, SleipnirParams::fluid())
-                    .scale(if appearing { 1.0 } else { 0.8 });
-                Some(m)
-            }
-            ViewTransition::Spring(params) => {
-                let m = AnimatedModifier::new(state_hash, *params).scale(if appearing {
-                    1.0
-                } else {
-                    0.9
-                });
-                Some(m)
-            }
-            _ => None,
-        }
-    }
-}
-
-/// Convenience: create a snappy spring animation modifier.
-pub fn with_animation(state_hash: u64) -> AnimatedModifier {
-    AnimatedModifier::new(state_hash, SleipnirParams::snappy())
-}
-
-/// Convenience: create a bouncy spring animation modifier.
-pub fn with_bouncy(state_hash: u64) -> AnimatedModifier {
-    AnimatedModifier::new(state_hash, SleipnirParams::bouncy())
-}
-
-/// Convenience: create a fluid spring animation modifier.
-pub fn with_fluid(state_hash: u64) -> AnimatedModifier {
-    AnimatedModifier::new(state_hash, SleipnirParams::fluid())
-}
+impl<V: View> ViewAnimExt for V {}

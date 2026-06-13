@@ -553,16 +553,16 @@ impl PhysicsWorld {
     ) -> std::collections::HashMap<BodyId, crate::scene_bridge::Body3DTransform> {
         let mut transforms = std::collections::HashMap::new();
         for (body_id, &idx) in &self.body_id_map {
-            if let Some(body) = self.bodies.get(idx) {
-                if body.is_3d {
-                    transforms.insert(
-                        *body_id,
-                        crate::scene_bridge::Body3DTransform {
-                            position: body.position_3d,
-                            rotation: body.rotation,
-                        },
-                    );
-                }
+            if let Some(body) = self.bodies.get(idx)
+                && body.is_3d
+            {
+                transforms.insert(
+                    *body_id,
+                    crate::scene_bridge::Body3DTransform {
+                        position: body.position_3d,
+                        rotation: body.rotation,
+                    },
+                );
             }
         }
         transforms
@@ -605,16 +605,16 @@ impl PhysicsWorld {
 
         // Detect Exit events (in prev but not in current)
         for key in self.prev_contacts.keys() {
-            if !current_contacts.contains_key(key) {
-                if let Some(ref callback) = self.on_collision {
-                    let event = CollisionEvent {
-                        event_type: CollisionEventType::Exit,
-                        body_a: key.0,
-                        body_b: key.1,
-                        manifold: None,
-                    };
-                    callback(&event);
-                }
+            if !current_contacts.contains_key(key)
+                && let Some(ref callback) = self.on_collision
+            {
+                let event = CollisionEvent {
+                    event_type: CollisionEventType::Exit,
+                    body_a: key.0,
+                    body_b: key.1,
+                    manifold: None,
+                };
+                callback(&event);
             }
         }
 
@@ -738,32 +738,37 @@ impl PhysicsWorld {
                 let radius_b = collider_b.shape.bounding_radius();
 
                 if let Some(ccd_result) = if body_a.is_3d || body_b.is_3d {
-                    gjk_ccd_3d(
-                        &collider_a.shape,
-                        pos_a,
-                        &rot_a,
-                        vel_a,
-                        &collider_b.shape,
-                        pos_b,
-                        &rot_b,
-                        vel_b,
-                        radius_a,
-                        radius_b,
-                    )
+                    let shape_a = crate::narrowphase::CcdShape3D {
+                        shape: &collider_a.shape,
+                        position: pos_a,
+                        rotation: &rot_a,
+                        velocity: vel_a,
+                        bounding_radius: radius_a,
+                    };
+                    let shape_b = crate::narrowphase::CcdShape3D {
+                        shape: &collider_b.shape,
+                        position: pos_b,
+                        rotation: &rot_b,
+                        velocity: vel_b,
+                        bounding_radius: radius_b,
+                    };
+                    gjk_ccd_3d(&shape_a, &shape_b)
                 } else {
-                    gjk_ccd(
-                        &collider_a.shape,
-                        pos_a.truncate(),
-                        body_a.angle,
-                        vel_a.truncate(),
-                        &collider_b.shape,
-                        pos_b.truncate(),
-                        body_b.angle,
-                        vel_b.truncate(),
-                        radius_a,
-                        radius_b,
-                    )
-                    .map(|(toi, point, normal)| CcdResult3D {
+                    let shape_a = crate::narrowphase::CcdShape2D {
+                        shape: &collider_a.shape,
+                        position: pos_a.truncate(),
+                        angle: body_a.angle,
+                        velocity: vel_a.truncate(),
+                        bounding_radius: radius_a,
+                    };
+                    let shape_b = crate::narrowphase::CcdShape2D {
+                        shape: &collider_b.shape,
+                        position: pos_b.truncate(),
+                        angle: body_b.angle,
+                        velocity: vel_b.truncate(),
+                        bounding_radius: radius_b,
+                    };
+                    gjk_ccd(&shape_a, &shape_b).map(|(toi, point, normal)| CcdResult3D {
                         toi,
                         point: point.extend(0.0),
                         normal: normal.extend(0.0),

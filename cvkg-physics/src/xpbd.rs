@@ -563,6 +563,21 @@ impl XpbdSolver {
     }
 }
 
+/// Cloth grid layout parameters.
+pub struct ClothGrid {
+    pub origin: Vec2,
+    pub width: usize,
+    pub height: usize,
+    pub spacing: f32,
+}
+
+/// Cloth material parameters.
+pub struct ClothMaterial {
+    pub mass: f32,
+    pub structural_stiffness: f32,
+    pub bending_stiffness: f32,
+}
+
 /// Soft body world: owns particles and constraints, runs simulation.
 #[derive(Debug, Default)]
 pub struct SoftBodyWorld {
@@ -622,52 +637,42 @@ impl SoftBodyWorld {
     }
 
     /// Create a cloth grid with distance and bending constraints.
-    pub fn create_cloth(
-        &mut self,
-        origin: Vec2,
-        width: usize,
-        height: usize,
-        spacing: f32,
-        mass: f32,
-        structural_stiffness: f32,
-        bending_stiffness: f32,
-    ) -> Vec<usize> {
-        let mut indices = Vec::with_capacity(width * height);
+    pub fn create_cloth(&mut self, grid: &ClothGrid, material: &ClothMaterial) -> Vec<usize> {
+        let mut indices = Vec::with_capacity(grid.width * grid.height);
 
         // Create particles
-        for y in 0..height {
-            for x in 0..width {
-                let pos = origin + Vec2::new(x as f32 * spacing, y as f32 * spacing);
+        for y in 0..grid.height {
+            for x in 0..grid.width {
+                let pos = grid.origin + Vec2::new(x as f32 * grid.spacing, y as f32 * grid.spacing);
                 let p = if y == 0 {
-                    // Top row pinned
                     Particle::fixed(pos)
                 } else {
-                    Particle::new(pos, mass)
+                    Particle::new(pos, material.mass)
                 };
                 indices.push(self.add_particle(p));
             }
         }
 
-        let idx = |x: usize, y: usize| -> usize { indices[y * width + x] };
+        let idx = |x: usize, y: usize| -> usize { indices[y * grid.width + x] };
 
         // Structural constraints (horizontal + vertical)
-        let compliance = 1.0 / structural_stiffness;
-        for y in 0..height {
-            for x in 0..width {
-                if x + 1 < width {
+        let compliance = 1.0 / material.structural_stiffness;
+        for y in 0..grid.height {
+            for x in 0..grid.width {
+                if x + 1 < grid.width {
                     self.add_constraint(SoftConstraint::Distance {
                         particle_a: idx(x, y),
                         particle_b: idx(x + 1, y),
-                        rest_length: spacing,
+                        rest_length: grid.spacing,
                         compliance,
                         damping: 0.01,
                     });
                 }
-                if y + 1 < height {
+                if y + 1 < grid.height {
                     self.add_constraint(SoftConstraint::Distance {
                         particle_a: idx(x, y),
                         particle_b: idx(x, y + 1),
-                        rest_length: spacing,
+                        rest_length: grid.spacing,
                         compliance,
                         damping: 0.01,
                     });
@@ -676,21 +681,20 @@ impl SoftBodyWorld {
         }
 
         // Bending constraints (diagonals for shear resistance)
-        let bend_compliance = 1.0 / bending_stiffness;
-        for y in 0..height - 1 {
-            for x in 0..width - 1 {
-                // Diagonal cross constraints
+        let bend_compliance = 1.0 / material.bending_stiffness;
+        for y in 0..grid.height - 1 {
+            for x in 0..grid.width - 1 {
                 self.add_constraint(SoftConstraint::Distance {
                     particle_a: idx(x, y),
                     particle_b: idx(x + 1, y + 1),
-                    rest_length: spacing * 2.0_f32.sqrt(),
+                    rest_length: grid.spacing * 2.0_f32.sqrt(),
                     compliance: bend_compliance,
                     damping: 0.005,
                 });
                 self.add_constraint(SoftConstraint::Distance {
                     particle_a: idx(x + 1, y),
                     particle_b: idx(x, y + 1),
-                    rest_length: spacing * 2.0_f32.sqrt(),
+                    rest_length: grid.spacing * 2.0_f32.sqrt(),
                     compliance: bend_compliance,
                     damping: 0.005,
                 });
@@ -698,20 +702,20 @@ impl SoftBodyWorld {
         }
 
         // Bending constraints (angle constraints for out-of-plane bending)
-        for y in 1..height - 1 {
-            for x in 0..width {
+        for y in 1..grid.height - 1 {
+            for x in 0..grid.width {
                 self.add_constraint(SoftConstraint::Bending {
                     particle_a: idx(x, y - 1),
                     particle_b: idx(x, y),
                     particle_c: idx(x, y + 1),
-                    rest_angle: std::f32::consts::PI, // straight line
+                    rest_angle: std::f32::consts::PI,
                     compliance: bend_compliance,
                     damping: 0.005,
                 });
             }
         }
-        for y in 0..height {
-            for x in 1..width - 1 {
+        for y in 0..grid.height {
+            for x in 1..grid.width - 1 {
                 self.add_constraint(SoftConstraint::Bending {
                     particle_a: idx(x - 1, y),
                     particle_b: idx(x, y),
@@ -774,7 +778,18 @@ mod tests {
     #[test]
     fn test_cloth_creation() {
         let mut world = SoftBodyWorld::new(XpbdSolverConfig::default());
-        let indices = world.create_cloth(Vec2::ZERO, 5, 5, 10.0, 1.0, 1000.0, 100.0);
+        let grid = ClothGrid {
+            origin: Vec2::ZERO,
+            width: 5,
+            height: 5,
+            spacing: 10.0,
+        };
+        let material = ClothMaterial {
+            mass: 1.0,
+            structural_stiffness: 1000.0,
+            bending_stiffness: 100.0,
+        };
+        let indices = world.create_cloth(&grid, &material);
 
         assert_eq!(indices.len(), 25);
         assert!(!world.constraints().is_empty());

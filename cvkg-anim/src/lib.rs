@@ -246,6 +246,7 @@ impl Motion {
 
 /// SleipnirSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
 /// This provides superior stability for high-fidelity interactive motion.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SleipnirSolver {
     params: SleipnirParams,
     target: f32,

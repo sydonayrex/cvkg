@@ -1,7 +1,7 @@
 //! ValkyrieToolbar — Floating glass toolbar with flexible layout.
 //! Named after the Valkyries, choosers of the slain.
 
-use cvkg_core::{Rect, Renderer, View, Never};
+use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A segmented control item for the toolbar.
 /// Simplified inline version of HrungnirSegmented for toolbar embedding.
@@ -43,10 +43,7 @@ impl ToolbarSearchField {
 #[derive(Clone)]
 pub enum ToolbarItem {
     /// A button with a label and optional icon.
-    Button {
-        label: String,
-        icon: Option<String>,
-    },
+    Button { label: String, icon: Option<String> },
     /// A segmented control with mutually exclusive options.
     Segmented(ToolbarSegmented),
     /// A search field with placeholder text.
@@ -216,12 +213,7 @@ impl View for ValkyrieToolbar {
         renderer.fill_rounded_rect(rect, self.radius, [0.12, 0.12, 0.15, 0.88]);
 
         // Subtle border
-        renderer.stroke_rounded_rect(
-            rect,
-            self.radius,
-            [1.0, 1.0, 1.0, 0.06],
-            1.0,
-        );
+        renderer.stroke_rounded_rect(rect, self.radius, [1.0, 1.0, 1.0, 0.06], 1.0);
 
         let y = rect.y + 6.0;
         let item_height = 28.0;
@@ -401,9 +393,10 @@ mod tests {
 
     #[test]
     fn test_toolbar_center() {
-        let toolbar = ValkyrieToolbar::new().center(vec![
-            ToolbarItem::segmented(vec!["List".into(), "Grid".into()], 0),
-        ]);
+        let toolbar = ValkyrieToolbar::new().center(vec![ToolbarItem::segmented(
+            vec!["List".into(), "Grid".into()],
+            0,
+        )]);
         assert_eq!(toolbar.center.len(), 1);
     }
 
@@ -515,9 +508,7 @@ mod tests {
                 ToolbarItem::separator(),
                 ToolbarItem::segmented(vec!["List".into(), "Grid".into()], 0),
             ])
-            .center(vec![
-                ToolbarItem::button("Center"),
-            ])
+            .center(vec![ToolbarItem::button("Center")])
             .trailing(vec![
                 ToolbarItem::flex_space(),
                 ToolbarItem::search_field("Search..."),

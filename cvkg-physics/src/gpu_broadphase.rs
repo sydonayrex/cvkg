@@ -114,22 +114,22 @@ impl GpuBroadphase {
         self.body_aabbs.clear();
 
         for (collider_idx, collider) in world.colliders().iter().enumerate() {
-            if let Some(&idx) = world.body_id_map().get(&collider.body_id) {
-                if let Some(body) = world.bodies().get(idx) {
-                    let (min, max) = if body.is_3d {
-                        let (min, max) = collider.world_aabb_3d(body.position_3d, body.rotation);
-                        (min, max)
-                    } else {
-                        let (min, max) = collider.world_aabb(body.position, body.angle);
-                        (min.extend(0.0), max.extend(0.0))
-                    };
+            if let Some(&idx) = world.body_id_map().get(&collider.body_id)
+                && let Some(body) = world.bodies().get(idx)
+            {
+                let (min, max) = if body.is_3d {
+                    let (min, max) = collider.world_aabb_3d(body.position_3d, body.rotation);
+                    (min, max)
+                } else {
+                    let (min, max) = collider.world_aabb(body.position, body.angle);
+                    (min.extend(0.0), max.extend(0.0))
+                };
 
-                    self.body_aabbs.push(GpuBodyAabb {
-                        min: [min.x, min.y, min.z, 0.0],
-                        max: [max.x, max.y, max.z, 0.0],
-                        id_and_flags: [collider.body_id.0 as u32, collider_idx as u32, 0, 0],
-                    });
-                }
+                self.body_aabbs.push(GpuBodyAabb {
+                    min: [min.x, min.y, min.z, 0.0],
+                    max: [max.x, max.y, max.z, 0.0],
+                    id_and_flags: [collider.body_id.0 as u32, collider_idx as u32, 0, 0],
+                });
             }
         }
     }
@@ -175,16 +175,16 @@ impl GpuBroadphase {
             crate::broadphase::SpatialHash::with_cell_size(self.config.cell_size);
 
         for (i, collider) in world.colliders().iter().enumerate() {
-            if let Some(&idx) = world.body_id_map().get(&collider.body_id) {
-                if let Some(body) = world.bodies().get(idx) {
-                    let (min, max) = if body.is_3d {
-                        let (min, max) = collider.world_aabb_3d(body.position_3d, body.rotation);
-                        (min.truncate(), max.truncate())
-                    } else {
-                        collider.world_aabb(body.position, body.angle)
-                    };
-                    spatial_hash.insert(BodyId(i as u64), min, max);
-                }
+            if let Some(&idx) = world.body_id_map().get(&collider.body_id)
+                && let Some(body) = world.bodies().get(idx)
+            {
+                let (min, max) = if body.is_3d {
+                    let (min, max) = collider.world_aabb_3d(body.position_3d, body.rotation);
+                    (min.truncate(), max.truncate())
+                } else {
+                    collider.world_aabb(body.position, body.angle)
+                };
+                spatial_hash.insert(BodyId(i as u64), min, max);
             }
         }
 

@@ -148,7 +148,7 @@ impl LodManager {
         // BFS to find connected components
         let mut visited: HashSet<BodyId> = HashSet::new();
 
-        for (body_id, _) in world.body_id_map() {
+        for body_id in world.body_id_map().keys() {
             if visited.contains(body_id) {
                 continue;
             }
@@ -194,17 +194,17 @@ impl LodManager {
             let mut any_awake = false;
 
             for body_id in &island.bodies {
-                if let Some(&idx) = world.body_id_map().get(body_id) {
-                    if let Some(body) = world.bodies().get(idx) {
-                        let ke = if body.is_3d {
-                            0.5 * body.mass * body.velocity_3d.length_squared()
-                        } else {
-                            0.5 * body.mass * body.velocity.length_squared()
-                        };
-                        total_ke += ke;
-                        if !body.is_sleeping {
-                            any_awake = true;
-                        }
+                if let Some(&idx) = world.body_id_map().get(body_id)
+                    && let Some(body) = world.bodies().get(idx)
+                {
+                    let ke = if body.is_3d {
+                        0.5 * body.mass * body.velocity_3d.length_squared()
+                    } else {
+                        0.5 * body.mass * body.velocity.length_squared()
+                    };
+                    total_ke += ke;
+                    if !body.is_sleeping {
+                        any_awake = true;
                     }
                 }
             }
@@ -215,14 +215,14 @@ impl LodManager {
             // Apply island sleep state to all bodies
             if island.is_sleeping {
                 for body_id in &island.bodies {
-                    if let Some(body) = world.body_mut(*body_id) {
-                        if !body.is_sleeping {
-                            body.is_sleeping = true;
-                            body.velocity = glam::Vec2::ZERO;
-                            body.velocity_3d = Vec3::ZERO;
-                            body.angular_velocity = 0.0;
-                            body.angular_velocity_3d = Vec3::ZERO;
-                        }
+                    if let Some(body) = world.body_mut(*body_id)
+                        && !body.is_sleeping
+                    {
+                        body.is_sleeping = true;
+                        body.velocity = glam::Vec2::ZERO;
+                        body.velocity_3d = Vec3::ZERO;
+                        body.angular_velocity = 0.0;
+                        body.angular_velocity_3d = Vec3::ZERO;
                     }
                 }
             }
@@ -231,16 +231,16 @@ impl LodManager {
 
     /// Wake an entire island when one body is activated.
     pub fn wake_island(&mut self, world: &mut PhysicsWorld, body_id: BodyId) {
-        if let Some(&island_idx) = self.body_island_map.get(&body_id) {
-            if let Some(island) = self.islands.get_mut(island_idx) {
-                island.is_sleeping = false;
-                for bid in &island.bodies {
-                    if let Some(body) = world.body_mut(*bid) {
-                        if body.is_sleeping {
-                            body.is_sleeping = false;
-                            body.sleep_counter = 0;
-                        }
-                    }
+        if let Some(&island_idx) = self.body_island_map.get(&body_id)
+            && let Some(island) = self.islands.get_mut(island_idx)
+        {
+            island.is_sleeping = false;
+            for bid in &island.bodies {
+                if let Some(body) = world.body_mut(*bid)
+                    && body.is_sleeping
+                {
+                    body.is_sleeping = false;
+                    body.sleep_counter = 0;
                 }
             }
         }

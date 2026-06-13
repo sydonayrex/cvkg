@@ -35,7 +35,16 @@ impl KvasirNode for OffscreenGeometryNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        let view = ctx.registry.get_texture_view(self.output_texture).unwrap();
+        let view = match ctx.registry.get_texture_view(self.output_texture) {
+            Some(v) => v,
+            None => {
+                log::error!(
+                    "Missing texture view for {}",
+                    stringify!(self.output_texture)
+                );
+                return;
+            }
+        };
         // Use a dummy depth view for offscreen passes for now (no depth testing)
         // or we need a dynamic depth texture in the registry.
 
@@ -58,6 +67,7 @@ impl KvasirNode for OffscreenGeometryNode {
 
         if !ctx.renderer.draw_calls.is_empty() {
             p.set_vertex_buffer(0, ctx.renderer.vertex_buffer.slice(..));
+            p.set_vertex_buffer(1, ctx.renderer.instance_buffer.slice(..));
             p.set_index_buffer(
                 ctx.renderer.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
@@ -88,7 +98,7 @@ impl KvasirNode for OffscreenGeometryNode {
                 p.draw_indexed(
                     call.index_start..call.index_start + call.index_count,
                     0,
-                    0..1,
+                    call.instance_start..call.instance_start + 1,
                 );
             }
         }
@@ -100,7 +110,6 @@ pub struct EffectCompositeNode {
     pub input_texture: ResourceId,
     pub output_scene: ResourceId,
     pub effect: String,
-    #[allow(dead_code)]
     pub blend_mode: u32,
     pub effect_args: [f32; 16],
     pub inputs: Vec<ResourceId>,
@@ -145,27 +154,40 @@ impl KvasirNode for EffectCompositeNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        let input_view = ctx.registry.get_texture_view(self.input_texture).unwrap();
-        let scene_view = ctx.registry.get_texture_view(self.output_scene).unwrap();
+        let input_view = match ctx.registry.get_texture_view(self.input_texture) {
+            Some(v) => v,
+            None => {
+                log::error!(
+                    "Missing texture view for {}",
+                    stringify!(self.input_texture)
+                );
+                return;
+            }
+        };
+        let scene_view = match ctx.registry.get_texture_view(self.output_scene) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture view for {}", stringify!(self.output_scene));
+                return;
+            }
+        };
 
-        // 1. Create a bind group for the input texture
-        let bind_group = ctx
-            .renderer
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("Effect Input Bind Group"),
-                layout: &ctx.renderer.texture_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&input_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&ctx.renderer.linear_sampler),
-                    },
-                ],
-            });
+        // 1. Retrieve or create bind group for the input texture from cache
+        let bind_group = ctx.get_or_create_bind_group(
+            (self.input_texture, 0, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&input_view; 256]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.linear_sampler),
+                },
+            ],
+            Some("Effect Input Bind Group"),
+        );
 
         // 2. Map effect name to pipeline
         // For now, we will use a dummy pipeline, or compile shaders on the fly?
@@ -182,7 +204,7 @@ impl KvasirNode for EffectCompositeNode {
             &ctx.renderer.effect_params_buffer,
             0,
             bytemuck::cast_slice(&[crate::types::EffectUniforms {
-                time: 0.0, // TODO: pass actual time
+                time: ctx.renderer.start_time.elapsed().as_secs_f32(),
                 pad0: 0.0,
                 size: [
                     ctx.renderer.current_width() as f32,

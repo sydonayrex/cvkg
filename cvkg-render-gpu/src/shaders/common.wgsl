@@ -64,13 +64,15 @@ struct VertexInput {
     @location(6) slice:    vec4<f32>,
     @location(7) logical:  vec2<f32>,
     @location(8) size:     vec2<f32>,
-    @location(9) screen:   vec2<f32>,
-    @location(10) clip:    vec4<f32>,
+    @location(9) clip:     vec4<f32>,
+    @location(10) tex_index:   u32,
+    
+    // --- Instance Data ---
     @location(11) translation: vec2<f32>,
     @location(12) scale:       vec2<f32>,
     @location(13) rotation:    f32,
-    @location(14) tex_index:   u32,
-    @location(15) glyph_time:  vec2<f32>,
+    @location(14) blur_radius: f32,
+    @location(15) ior_override: f32,
 };
 
 struct VertexOutput {
@@ -82,12 +84,12 @@ struct VertexOutput {
     @location(4) slice:       vec4<f32>,
     @location(5) logical:     vec2<f32>,
     @location(6) size:        vec2<f32>,
-    @location(7) screen:      vec2<f32>,
-    @location(8) normal:      vec3<f32>,
-    @location(9) clip:        vec4<f32>,
-    @location(10) @interpolate(flat) tex_index: u32,
-    @location(11) world_pos: vec2<f32>,
-    @location(12) glyph_time: vec2<f32>,
+    @location(7) normal:      vec3<f32>,
+    @location(8) clip:        vec4<f32>,
+    @location(9) @interpolate(flat) tex_index: u32,
+    @location(10) world_pos:  vec2<f32>,
+    @location(11) @interpolate(flat) blur_radius: f32,
+    @location(12) @interpolate(flat) ior_override: f32,
 };
 
 @vertex
@@ -105,10 +107,10 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.tex_index = 0u;
     out.clip   = vec4<f32>(-10000.0, -10000.0, 20000.0, 20000.0);
     out.size   = vec2<f32>(scene.resolution.x, scene.resolution.y);
-    out.screen = scene.resolution * scene.scale_factor;
     out.normal = vec3<f32>(0.0, 0.0, 1.0);
     out.world_pos = vec2<f32>(0.0, 0.0);
-    out.glyph_time = vec2<f32>(0.0, 0.0);
+    out.blur_radius = 0.0;
+    out.ior_override = 0.0;
     return out;
 }
 
@@ -152,11 +154,11 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.slice = in.slice;
     out.logical = in.logical;
     out.size = in.size;
-    out.screen = in.screen;
     out.normal = in.normal;
     out.clip = in.clip;
     out.tex_index = in.tex_index;
-    out.glyph_time = in.glyph_time;
+    out.blur_radius = in.blur_radius;
+    out.ior_override = in.ior_override;
 
     return out;
 }
@@ -170,6 +172,12 @@ fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
 fn sd_round_rect(p: vec2<f32>, b: vec2<f32>, r: f32) -> f32 {
     let d = abs(p) - b;
     return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0) - r;
+}
+
+fn sd_squircle(p: vec2<f32>, b: vec2<f32>, n: f32) -> f32 {
+    let d = abs(p) / b;
+    let q = pow(d.x, n) + pow(d.y, n);
+    return (pow(q, 1.0 / n) - 1.0) * min(b.x, b.y);
 }
 
 fn sd_triangle(p: vec2<f32>, r: f32) -> f32 {
@@ -226,6 +234,72 @@ fn neon_glow(dist: f32, width: f32, bloom: f32) -> f32 {
     let core  = smoothstep(width, 0.0, dist);
     let glow  = exp(-dist * dist / (bloom * bloom));
     return core + glow * 0.6;
+}
+
+// ─── OKLCH COLOR SPACE CONVERSIONS ──────────────────────────────────────────
+// WHY: To achieve Tahoe-parity blending gradients and glows, colors must be
+// blended in a perceptually uniform color space rather than raw non-linear sRGB.
+// CONTRACT: Inputs are vec3 float values representing either [R,G,B] in [0,1] or
+// [L,C,H] where L in [0,1], C in [0,0.4], and H in [0,360].
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        return c / 12.92;
+    }
+    return pow((c + 0.055) / 1.055, 2.4);
+}
+
+fn linear_to_srgb(c: f32) -> f32 {
+    let cl = clamp(c, 0.0, 1.0);
+    if cl <= 0.0031308 {
+        return 12.92 * cl;
+    }
+    return 1.055 * pow(cl, 1.0 / 2.4) - 0.055;
+}
+
+fn srgb_to_oklch(rgb: vec3<f32>) -> vec3<f32> {
+    let r = srgb_to_linear(rgb.r);
+    let g = srgb_to_linear(rgb.g);
+    let b = srgb_to_linear(rgb.b);
+
+    let l_raw = 0.41222146 * r + 0.53633255 * g + 0.051445995 * b;
+    let m_raw = 0.2119035 * r + 0.6806995 * g + 0.10739696 * b;
+    let s_raw = 0.08830246 * r + 0.28171885 * g + 0.6299787 * b;
+
+    let l_cbrt = sign(l_raw) * pow(abs(l_raw), 1.0 / 3.0);
+    let m_cbrt = sign(m_raw) * pow(abs(m_raw), 1.0 / 3.0);
+    let s_cbrt = sign(s_raw) * pow(abs(s_raw), 1.0 / 3.0);
+
+    let l = 0.21045426 * l_cbrt + 0.7936178 * m_cbrt - 0.004072047 * s_cbrt;
+    let a = 1.9779985 * l_cbrt - 2.4285922 * m_cbrt + 0.4505937 * s_cbrt;
+    let b_coord = 0.025904037 * l_cbrt + 0.78277177 * m_cbrt - 0.80867577 * s_cbrt;
+
+    let c = sqrt(a * a + b_coord * b_coord);
+    var h = atan2(b_coord, a) * 57.295779513;
+    if h < 0.0 {
+        h = h + 360.0;
+    }
+    return vec3<f32>(clamp(l, 0.0, 1.0), clamp(c, 0.0, 0.4), h);
+}
+
+fn oklch_to_srgb(lch: vec3<f32>) -> vec3<f32> {
+    let h_rad = lch.z * 0.01745329251;
+    let a = lch.y * cos(h_rad);
+    let b = lch.y * sin(h_rad);
+
+    let l = lch.x + 0.39633778 * a + 0.21580376 * b;
+    let m = lch.x - 0.105561346 * a - 0.06385417 * b;
+    let s = lch.x - 0.08948418 * a - 1.2914855 * b;
+
+    let l_cubed = l * l * l;
+    let m_cubed = m * m * m;
+    let s_cubed = s * s * s;
+
+    let r_lin = 4.0767417 * l_cubed - 3.3077116 * m_cubed + 0.23096994 * s_cubed;
+    let g_lin = -1.268438 * l_cubed + 2.6097574 * m_cubed - 0.34131938 * s_cubed;
+    let b_lin = -0.0041960863 * l_cubed - 0.7034186 * m_cubed + 1.7076147 * s_cubed;
+
+    return vec3<f32>(linear_to_srgb(r_lin), linear_to_srgb(g_lin), linear_to_srgb(b_lin));
 }
 
 fn heatmap_palette(t: f32) -> vec3<f32> {

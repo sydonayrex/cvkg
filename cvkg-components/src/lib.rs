@@ -146,7 +146,7 @@ pub fn draw_focus_ring_color(
 // BUTTON VARIANTS — Standard button styles
 // =============================================================================
 
-/// Button visual variants matching the shadcn/ui pattern.
+/// Button visual variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ButtonVariant {
     /// Primary action button.
@@ -182,6 +182,7 @@ pub mod ai_workflow_builder;
 pub mod bifrost_tabs;
 pub mod calendar;
 pub mod card;
+pub mod chrome;
 pub mod clipped_corner;
 pub mod collaboration;
 pub mod command;
@@ -196,7 +197,6 @@ pub mod error;
 pub mod file_tree;
 pub mod flexiscope;
 pub mod flux_layout;
-pub mod chrome;
 pub mod gpu_charts;
 pub mod grid;
 pub mod holographic_runestone;
@@ -226,7 +226,6 @@ pub mod shapes;
 pub mod shield_wall;
 pub mod valkyrie_indicator;
 pub mod virtual_list;
-pub mod virtual_table;
 pub mod visual;
 pub mod window;
 pub mod wyrd_hud;
@@ -253,14 +252,15 @@ pub use collaboration::*;
 pub use command::*;
 pub use command_palette::{BifrostLauncher, MimirSpotlight, PaletteCommand};
 pub use container::{
-    DialogAction, GarmAlert, GeriDialog, GjallarSplitter, GraniSheet, HStack, LazyVStack, Menu,
-    NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, SettingsForm, SheetModifier,
-    SheetPosition, TabView, Table, VStack,
+    Collapsible, DialogAction, FlexBox, GeriDialog, GjallarSplitter, GraniSheet, HStack,
+    LazyVStack, NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, SettingsForm,
+    SheetModifier, SheetPosition, VStack,
 };
 pub use data_grid::RunesTable;
 pub use devtools::*;
 pub use docking_workspace::*;
 pub use dropdown_menu::{DropdownItem, DropdownMenu};
+
 pub use effects::*;
 pub use error::*;
 pub use file_tree::{FileItem, FileKind, YggdrasilTree};
@@ -274,7 +274,7 @@ pub use hud::{AlertKind, GjallarAlert, TacticalGauge, Vegvísir};
 pub use idunn_persistence::*;
 pub use image::*;
 pub use interactive::{
-    BifrostColorPicker, Button, Checkbox, Dropdown, GeriTransfer, HringrPagination, Input, Picker,
+    BifrostColorPicker, Button, Checkbox, GeriTransfer, HringrPagination, Input, Picker,
     SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
 };
 pub use layer_system::*;
@@ -282,7 +282,6 @@ pub use memory::*;
 pub use mjolnir_frame::MjolnirFrame;
 pub use mjolnir_slider::MjolnirSlider;
 pub use multi_agent_orchestrator::*;
-pub use navigation::*;
 pub use niflheim_demo::*;
 pub use njord_theme::*;
 pub use oracle_orb::OracleOrb;
@@ -299,11 +298,10 @@ pub use skadi_scripting::*;
 pub use timeline_editor::*;
 pub use valkyrie_indicator::ValkyrieIndicator;
 pub use virtual_list::*;
-pub use virtual_table::*;
 pub use visual::{
-    AvatarStatus, ChartType, DraumaSkeleton, EmptyState, Gauge, HatiCarousel, HatiSpinner,
-    MerkiBadge, MimirsWell, MuninAvatar, RuneScript, RunicTooltip, SkollProgress, SleipnirGait,
-    SpinnerVariant, StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan,
+    AvatarStatus, ChartType, DraumaSkeleton, EmptyState, HatiCarousel, HatiSpinner, MerkiBadge,
+    MimirsWell, MuninAvatar, RuneScript, RunicTooltip, SkollProgress, SleipnirGait, SpinnerVariant,
+    StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan,
 };
 pub use window::{GinnungagapWindow, HiminnModal, YggdrasilWindow};
 pub use wyrd_hud::WyrdHUD;
@@ -316,7 +314,7 @@ pub mod ai_components;
 pub use ai_components::*;
 pub mod a11y_inspector;
 pub mod datepicker;
-pub mod eir_motion;
+
 pub mod font_axis_panel;
 pub mod form_validation;
 pub use font_axis_panel::FontAxisPanel;
@@ -340,28 +338,71 @@ pub mod sync_weave;
 pub mod text_editor;
 pub mod toast;
 pub mod token_stream;
-pub mod tooltip;
-pub mod transitions;
+
+pub mod anim;
 pub mod trustmark;
 pub mod tyr_security;
 pub mod vtree;
+
+// ── New UI parity components ──
+pub mod breadcrumb;
+pub mod button_group;
+pub mod context_menu;
+pub mod direction;
+pub mod hover_card;
+pub mod input_group;
+pub mod input_otp;
+pub mod item;
+pub mod kbd;
+pub mod native_select;
+pub mod sonner;
+pub mod toggle_group;
+
+// ── New HIGH priority components from cvkg-com-pool ──
+pub mod agent_chat;
+pub mod dialog;
+pub mod display;
+pub mod form_controls;
+pub mod layout_components;
+pub mod layout_primitives;
+pub mod m3_components;
+pub mod morph;
+pub mod multimedia;
+pub mod patterns;
+pub mod scheduler;
+pub mod text_anim;
+pub mod tree_view;
 
 pub use a11y_beacon::{A11yBeacon, A11yBeaconExt};
 pub use a11y_inspector::{A11yInspector, A11yNode};
 pub use autocomplete::*;
 pub use await_veil::AwaitVeil;
 pub use bragi_creative::*;
+pub use breadcrumb::{Breadcrumb, BreadcrumbItem};
+pub use button_group::ButtonGroup;
 pub use combobox::*;
 pub use computed_signal::{ComputedSignal, InputRef};
 pub use consent_gate::{ConsentGate, DataTrail, TrailKind};
+pub use context_menu::{ContextMenu, ContextMenuItem};
 pub use cvkg_layout as layout;
 pub use datepicker::*;
+pub use direction::{Direction, DirectionProvider};
 pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
-pub use eir_motion::*;
+pub use hover_card::{HoverCard, HoverCardPosition};
+pub use input_group::InputGroup;
+pub use input_otp::InputOTP;
+pub use item::Item;
+pub use kbd::Kbd;
+pub use native_select::NativeSelect;
+pub use sonner::{Sonner, SonnerPosition, SonnerToast, SonnerType};
+pub use toggle_group::ToggleGroup;
+
 pub use flexiscope::{ContainerLayout, FlexiScope, ScopeThreshold, fluid_typography};
 pub use flux_layout::FluxState;
 pub use hlin_accessibility::*;
-pub use lingua_tong::{current_locale, is_rtl, load_translations, set_locale, t, t_with};
+pub use lingua_tong::{
+    current_locale, init_english, is_rtl, load_translations, set_locale, t, t_with,
+};
 pub use morph_bridge::{MorphBridge, lerp_rect};
 pub use notification_center::*;
 pub use outline_view::{OutlineNode, OutlineView};
@@ -374,11 +415,42 @@ pub use sync_weave::{PeerCursor, SyncEditor, SyncWeave, WeaveOp};
 pub use text_editor::TextEditor;
 pub use toast::*;
 pub use token_stream::TokenStream;
-pub use tooltip::*;
-pub use transitions::*;
+
+pub use anim::*;
 pub use trustmark::*;
 pub use tyr_security::*;
 pub use vtree::{VTree, VTreeNode};
+
+// ── New HIGH priority component exports ──
+pub use dialog::{AlertDialog, AlertVariant, ConfirmationDialog, FullScreenCover};
+pub use display::{BackgroundPattern, BgPattern, Icon, ScrollArea, Typography, TypographyVariant};
+pub use form_controls::{DateTimePicker, Label, Link, SearchField, SearchSuggestions, Tag};
+pub use gpu_charts::{
+    BarChart, Candle, CandlestickChart, FunnelChart, GaugeChart, HeatmapChart, Histogram,
+    LineChart, PieChart, RadarChart, RangeChart, SankeyChart, ScatterPlot, SparkLineChart,
+    TreemapChart, TreemapNode,
+};
+pub use layout_components::{
+    BentoGrid, Carousel, FloatingNavbar, Loader, LoaderVariant, Marquee, MultiStepLoader,
+    NavbarMenu,
+};
+pub use layout_primitives::{
+    AspectRatio, Group, GroupBox, LazyHGrid, LazyHStack, LazyVGrid, Resizable, Separator, ZStack,
+};
+pub use m3_components::{
+    BgMediaHero, Codeblock, DateRangePicker, DynamicIsland, ExtendedFAB, FAB, HeroColorPanels,
+    Kanban, KanbanCard, KanbanColumn, LogoCarousel, SidePanel, TimePicker,
+};
+pub use morph::{MorphState, Morphed, ViewMorphExt};
+pub use multimedia::{Audio, Map, Video};
+pub use navigation::{DisclosureGroup, Drawer, List, Menubar, NavigationMenu, Section};
+pub use patterns::{Gallery, Login, Settings, Wizard};
+pub use scheduler::{Gantt, GanttTask, Scheduler, SchedulerEvent};
+pub use text_anim::{
+    CardHoverEffect, CardStack, DraggableCard, ExpandableCard, NumberTicker, RippleButton,
+    ShimmerButton, StatefulButton, TextAnimEffect, TextAnimate, TypewriterEffect,
+};
+pub use tree_view::{RichTreeView, TreeViewNode};
 
 // Internal Never type for primitive views
 #[doc(hidden)]

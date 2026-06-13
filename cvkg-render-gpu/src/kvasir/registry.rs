@@ -204,19 +204,19 @@ impl ResourceRegistry {
             }
         }
         for id in to_remove {
-            if let Some(res) = self.textures.remove(&id) {
-                if let Some(tex) = res.texture {
-                    let size = tex.size();
-                    let format = tex.format();
-                    let pool_key = (format, size.width, size.height);
-                    self.pool
-                        .entry(pool_key)
-                        .or_default()
-                        .push(TextureResource {
-                            texture: Some(tex),
-                            view: res.view,
-                            lifetime: res.lifetime,
-                        });
+            if let Some(res) = self.textures.remove(&id)
+                && let Some(tex) = res.texture
+            {
+                let size = tex.size();
+                let format = tex.format();
+                let pool_key = (format, size.width, size.height);
+                let pool_list = self.pool.entry(pool_key).or_default();
+                if pool_list.len() < 4 {
+                    pool_list.push(TextureResource {
+                        texture: Some(tex),
+                        view: res.view,
+                        lifetime: res.lifetime,
+                    });
                 }
             }
         }

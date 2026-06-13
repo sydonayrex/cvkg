@@ -189,11 +189,13 @@ impl KinematicCharacter {
         crate::queries::shape_cast_3d(
             world.colliders(),
             &body_map,
-            &shape,
-            self.position,
-            Quat::IDENTITY,
-            displacement,
-            max_dist,
+            &crate::queries::ShapeCastParams3D {
+                shape: &shape,
+                position: self.position,
+                rotation: Quat::IDENTITY,
+                direction: displacement,
+                max_distance: max_dist,
+            },
             None,
         )
     }

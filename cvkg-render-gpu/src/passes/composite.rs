@@ -46,10 +46,34 @@ impl KvasirNode for CompositeNode {
     fn execute(&self, ctx: &mut ExecutionContext) {
         let target_view = ctx.target_view;
 
+        // Get scene view and create cached bind group BEFORE render pass (avoids borrow conflict)
+        let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                return;
+            }
+        };
+        let scene_texture_bind_group = ctx.get_or_create_bind_group(
+            (RES_SCENE, 1, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&scene_view; 256]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.dummy_sampler),
+                },
+            ],
+            Some("composite_scene_bg"),
+        );
+
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr P7 Composite"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &target_view,
+                view: target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: if self.clear_target {
@@ -81,46 +105,14 @@ impl KvasirNode for CompositeNode {
 
         p.set_pipeline(&ctx.renderer.composite_pipeline);
 
-        let scene_view = ctx.registry.get_texture_view(RES_SCENE).unwrap();
-        let scene_texture_bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("composite_scene_bg"),
-            layout: &ctx.renderer.texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&scene_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.dummy_sampler),
-                },
-            ],
-        });
-
         let dummy_bg = &ctx.renderer.dummy_env_bind_group;
-        let bloom_bg = if self.has_bloom {
-            let bloom_view = ctx.registry.get_texture_view(RES_BLOOM_A).unwrap();
-            ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("composite_bloom_bg"),
-                layout: &ctx.renderer.env_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&bloom_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&ctx.renderer.dummy_sampler),
-                    },
-                ],
-            })
+        if self.has_bloom {
+            p.set_bind_group(1, ctx.bloom_env_bind_group_a, &[]);
         } else {
-            // No bloom texture needed — use dummy bind group for pass compatibility
-            dummy_bg.clone()
-        };
+            p.set_bind_group(1, dummy_bg, &[]);
+        }
 
         p.set_bind_group(0, &scene_texture_bind_group, &[]);
-        p.set_bind_group(1, &bloom_bg, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
         p.draw(0..3, 0..1);
     }

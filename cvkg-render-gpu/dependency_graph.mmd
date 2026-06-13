@@ -1,0 +1,181 @@
+flowchart TD
+    classDef workspace fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#e5e7eb
+    classDef external fill:#111827,stroke:#94a3b8,stroke-width:1px,color:#e5e7eb
+    classDef root fill:#312e81,stroke:#a78bfa,stroke-width:3px,color:#fff
+    cvkg_render_gpu["cvkg-render-gpu v0.2.10"]
+    class cvkg_render_gpu root
+    cvkg_compositor["cvkg-compositor v0.2.10"]
+    class cvkg_compositor workspace
+    cvkg_core["cvkg-core v0.2.10"]
+    class cvkg_core workspace
+    cvkg_runic_text["cvkg-runic-text v0.2.10"]
+    class cvkg_runic_text workspace
+    cvkg_svg_filters["cvkg-svg-filters v0.2.10"]
+    class cvkg_svg_filters workspace
+    cvkg_svg_serialize["cvkg-svg-serialize v0.2.10"]
+    class cvkg_svg_serialize workspace
+    accesskit["accesskit v0.24.0"]
+    class accesskit external
+    accesskit_winit["accesskit_winit v0.33.0"]
+    class accesskit_winit external
+    anyhow["anyhow v1.0.102"]
+    class anyhow external
+    arc_swap["arc-swap v1.9.1"]
+    class arc_swap external
+    bytemuck["bytemuck v1.25.0"]
+    class bytemuck external
+    console_error_panic_hook["console_error_panic_hook v0.1.7"]
+    class console_error_panic_hook external
+    criterion["criterion v0.5.1"]
+    class criterion external
+    env_logger["env_logger v0.11.10"]
+    class env_logger external
+    fontdb["fontdb v0.23.0"]
+    class fontdb external
+    futures["futures v0.3.32"]
+    class futures external
+    getrandom["getrandom v0.3.4"]
+    class getrandom external
+    glam["glam v0.30.10"]
+    class glam external
+    image["image v0.25.10"]
+    class image external
+    js_sys["js-sys v0.3.100"]
+    class js_sys external
+    log["log v0.4.32"]
+    class log external
+    lru["lru v0.12.5"]
+    class lru external
+    lyon["lyon v1.0.19"]
+    class lyon external
+    naga["naga v29.0.3"]
+    class naga external
+    once_cell["once_cell v1.21.4"]
+    class once_cell external
+    pollster["pollster v0.4.0"]
+    class pollster external
+    quick_xml["quick-xml v0.40.1"]
+    class quick_xml external
+    rayon["rayon v1.12.0"]
+    class rayon external
+    rfd["rfd v0.17.2"]
+    class rfd external
+    roxmltree["roxmltree v0.21.1"]
+    class roxmltree external
+    rustybuzz["rustybuzz v0.20.1"]
+    class rustybuzz external
+    serde["serde v1.0.228"]
+    class serde external
+    serde_json["serde_json v1.0.150"]
+    class serde_json external
+    stl_io["stl_io v0.7.0"]
+    class stl_io external
+    stm["stm v0.4.0"]
+    class stm external
+    strict_num["strict-num v0.1.1"]
+    class strict_num external
+    swash["swash v0.2.8"]
+    class swash external
+    thiserror["thiserror v2.0.18"]
+    class thiserror external
+    tobj["tobj v4.0.4"]
+    class tobj external
+    tokio["tokio v1.52.3"]
+    class tokio external
+    unicode_bidi["unicode-bidi v0.3.18"]
+    class unicode_bidi external
+    unicode_linebreak["unicode-linebreak v0.1.5"]
+    class unicode_linebreak external
+    unicode_segmentation["unicode-segmentation v1.13.3"]
+    class unicode_segmentation external
+    usvg["usvg v0.47.0"]
+    class usvg external
+    wasm_bindgen_futures["wasm-bindgen-futures v0.4.73"]
+    class wasm_bindgen_futures external
+    wasm_bindgen_rayon["wasm-bindgen-rayon v1.3.0"]
+    class wasm_bindgen_rayon external
+    wasm_bindgen["wasm-bindgen v0.2.123"]
+    class wasm_bindgen external
+    web_sys["web-sys v0.3.100"]
+    class web_sys external
+    wgpu["wgpu v29.0.3"]
+    class wgpu external
+    winit["winit v0.30.13"]
+    class winit external
+    cvkg_compositor --> anyhow
+    cvkg_compositor --> cvkg_core
+    cvkg_compositor --> glam
+    cvkg_compositor --> log
+    cvkg_compositor --> thiserror
+    cvkg_core --> anyhow
+    cvkg_core --> arc_swap
+    cvkg_core --> bytemuck
+    cvkg_core --> cvkg_runic_text
+    cvkg_core --> getrandom
+    cvkg_core --> glam
+    cvkg_core --> js_sys
+    cvkg_core --> log
+    cvkg_core --> once_cell
+    cvkg_core --> rfd
+    cvkg_core --> serde
+    cvkg_core --> serde_json
+    cvkg_core --> stl_io
+    cvkg_core --> stm
+    cvkg_core --> thiserror
+    cvkg_core --> tobj
+    cvkg_core --> tokio
+    cvkg_core --> wasm_bindgen
+    cvkg_core --> wasm_bindgen_futures
+    cvkg_render_gpu --> accesskit
+    cvkg_render_gpu --> accesskit_winit
+    cvkg_render_gpu --> bytemuck
+    cvkg_render_gpu --> console_error_panic_hook
+    cvkg_render_gpu --> criterion
+    cvkg_render_gpu --> cvkg_compositor
+    cvkg_render_gpu --> cvkg_core
+    cvkg_render_gpu --> cvkg_runic_text
+    cvkg_render_gpu --> cvkg_svg_filters
+    cvkg_render_gpu --> cvkg_svg_serialize
+    cvkg_render_gpu --> env_logger
+    cvkg_render_gpu --> futures
+    cvkg_render_gpu --> glam
+    cvkg_render_gpu --> image
+    cvkg_render_gpu --> log
+    cvkg_render_gpu --> lru
+    cvkg_render_gpu --> lyon
+    cvkg_render_gpu --> naga
+    cvkg_render_gpu --> pollster
+    cvkg_render_gpu --> rayon
+    cvkg_render_gpu --> roxmltree
+    cvkg_render_gpu --> serde
+    cvkg_render_gpu --> serde_json
+    cvkg_render_gpu --> swash
+    cvkg_render_gpu --> usvg
+    cvkg_render_gpu --> wasm_bindgen
+    cvkg_render_gpu --> wasm_bindgen_futures
+    cvkg_render_gpu --> wasm_bindgen_rayon
+    cvkg_render_gpu --> web_sys
+    cvkg_render_gpu --> wgpu
+    cvkg_render_gpu --> winit
+    cvkg_runic_text --> bytemuck
+    cvkg_runic_text --> fontdb
+    cvkg_runic_text --> glam
+    cvkg_runic_text --> log
+    cvkg_runic_text --> lru
+    cvkg_runic_text --> rustybuzz
+    cvkg_runic_text --> serde
+    cvkg_runic_text --> swash
+    cvkg_runic_text --> unicode_bidi
+    cvkg_runic_text --> unicode_linebreak
+    cvkg_runic_text --> unicode_segmentation
+    cvkg_svg_filters --> bytemuck
+    cvkg_svg_filters --> log
+    cvkg_svg_filters --> strict_num
+    cvkg_svg_filters --> thiserror
+    cvkg_svg_filters --> usvg
+    cvkg_svg_filters --> wgpu
+    cvkg_svg_serialize --> quick_xml
+    cvkg_svg_serialize --> thiserror
+    cvkg_svg_serialize --> usvg
+    ext_count["Transitive packages in cvkg-render-gpu closure: 527<br/>Workspace packages in closure: 6<br/>Direct external deps from closure packages: 44"]
+    class ext_count external

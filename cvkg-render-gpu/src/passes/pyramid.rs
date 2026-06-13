@@ -2,7 +2,6 @@ use crate::pyramid::ImagePyramid;
 use crate::renderer::SurtrRenderer;
 
 impl SurtrRenderer {
-    #[allow(dead_code)]
     pub(crate) fn execute_pass_pyramid_build(
         &mut self,
         post_encoder: &mut wgpu::CommandEncoder,

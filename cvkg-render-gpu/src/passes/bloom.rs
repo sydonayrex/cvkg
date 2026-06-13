@@ -34,7 +34,13 @@ impl KvasirNode for BloomExtractNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        let bloom_texture = ctx.registry.get_texture(RES_BLOOM_A).unwrap();
+        let bloom_texture = match ctx.registry.get_texture(RES_BLOOM_A) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture for {}", stringify!(RES_BLOOM_A));
+                return;
+            }
+        };
         // Create a single-mip view for the render pass (mip 0 only)
         let bloom_view = bloom_texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("bloom_extract_mip0"),
@@ -42,6 +48,30 @@ impl KvasirNode for BloomExtractNode {
             mip_level_count: Some(1),
             ..Default::default()
         });
+
+        // Get scene view and create cached bind group BEFORE render pass (avoids borrow conflict)
+        let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                return;
+            }
+        };
+        let bg = ctx.get_or_create_bind_group(
+            (RES_SCENE, 0, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&scene_view; 256]),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.dummy_sampler),
+                },
+            ],
+            Some("bloom_extract_scene_bg"),
+        );
 
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Bloom Extract"),
@@ -63,24 +93,6 @@ impl KvasirNode for BloomExtractNode {
         });
 
         p.set_pipeline(&ctx.renderer.bloom_extract_pipeline);
-
-        // Context bindings
-        let scene_view = ctx.registry.get_texture_view(RES_SCENE).unwrap();
-        let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bloom_extract_scene_bg"),
-            layout: &ctx.renderer.texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&scene_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.dummy_sampler),
-                },
-            ],
-        });
-
         p.set_bind_group(0, &bg, &[]);
         p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
@@ -124,7 +136,13 @@ impl KvasirNode for BloomBlurNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        let bloom_tex = ctx.registry.get_texture(RES_BLOOM_A).unwrap();
+        let bloom_tex = match ctx.registry.get_texture(RES_BLOOM_A) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture for {}", stringify!(RES_BLOOM_A));
+                return;
+            }
+        };
 
         // Derive mip count from the actual texture, not hardcoded
         let num_mips = bloom_tex.mip_level_count();
@@ -164,10 +182,10 @@ impl KvasirNode for BloomBlurNode {
 
         // Downsample chain
         for mip in 1..effective_mips {
-            let kernel_width = mip_scales[mip as usize].2;
+            let kernel_width = mip_scales[mip].2;
             let uniform_data: [f32; 8] = [
-                mip_scales[(mip - 1) as usize].0,
-                mip_scales[(mip - 1) as usize].1,
+                mip_scales[(mip - 1)].0,
+                mip_scales[(mip - 1)].1,
                 (mip - 1) as f32,
                 kernel_width,
                 0.0,
@@ -178,13 +196,14 @@ impl KvasirNode for BloomBlurNode {
             ctx.queue
                 .write_buffer(kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
 
-            let w = mip_scales[mip as usize].0.max(1.0) as u32;
-            let h = mip_scales[mip as usize].1.max(1.0) as u32;
+            let w = mip_scales[mip].0.max(1.0) as u32;
+            let h = mip_scales[mip].1.max(1.0) as u32;
 
-            let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(&format!("kawase_bloom_bg_{}", mip)),
-                layout: &ctx.renderer.kawase_bind_group_layout,
-                entries: &[
+            // Cache bind group per mip level (texture views + sampler are frame-stable)
+            let bg = ctx.get_or_create_bind_group(
+                (RES_BLOOM_A, mip as u32, false),
+                &ctx.renderer.kawase_bind_group_layout,
+                &[
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
@@ -195,21 +214,20 @@ impl KvasirNode for BloomBlurNode {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(
-                            &mip_views[(mip - 1) as usize],
-                        ),
+                        resource: wgpu::BindingResource::TextureView(&mip_views[(mip - 1)]),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
                     },
                 ],
-            });
+                Some(&format!("kawase_bloom_bg_{}", mip)),
+            );
 
             let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&format!("Kawase Bloom Down {}", mip)),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &mip_views[mip as usize],
+                    view: &mip_views[mip],
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -232,10 +250,10 @@ impl KvasirNode for BloomBlurNode {
 
         // Upsample chain
         for mip in (1..effective_mips).rev() {
-            let kernel_width = mip_scales[mip as usize].2;
+            let kernel_width = mip_scales[mip].2;
             let uniform_data: [f32; 8] = [
-                mip_scales[mip as usize].0,
-                mip_scales[mip as usize].1,
+                mip_scales[mip].0,
+                mip_scales[mip].1,
                 mip as f32,
                 kernel_width,
                 0.0,
@@ -246,13 +264,14 @@ impl KvasirNode for BloomBlurNode {
             ctx.queue
                 .write_buffer(kawase_uniform, 0, bytemuck::cast_slice(&uniform_data));
 
-            let w = mip_scales[(mip - 1) as usize].0.max(1.0) as u32;
-            let h = mip_scales[(mip - 1) as usize].1.max(1.0) as u32;
+            let w = mip_scales[(mip - 1)].0.max(1.0) as u32;
+            let h = mip_scales[(mip - 1)].1.max(1.0) as u32;
 
-            let bg = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some(&format!("kawase_bloom_up_{}", mip)),
-                layout: &ctx.renderer.kawase_bind_group_layout,
-                entries: &[
+            // Cache bind group per mip level (upsample)
+            let bg = ctx.get_or_create_bind_group(
+                (RES_BLOOM_A, (mip + 100) as u32, false), // offset key to avoid collision with downsample
+                &ctx.renderer.kawase_bind_group_layout,
+                &[
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
@@ -263,22 +282,24 @@ impl KvasirNode for BloomBlurNode {
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::TextureView(&mip_views[mip as usize]),
+                        resource: wgpu::BindingResource::TextureView(&mip_views[mip]),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
                     },
                 ],
-            });
+                Some(&format!("kawase_bloom_up_{}", mip)),
+            );
 
+            // Clear the target mip level on load to prevent additive brightening from previous frames/passes
             let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&format!("Kawase Bloom Up {}", mip)),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &mip_views[(mip - 1) as usize],
+                    view: &mip_views[(mip - 1)],
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,

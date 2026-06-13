@@ -120,61 +120,6 @@ impl View for SkollProgress {
     }
 }
 
-/// Radial or linear gauge display
-#[allow(dead_code)]
-#[derive(Clone)]
-pub struct Gauge {
-    pub(crate) value: f32,
-    pub(crate) range: std::ops::RangeInclusive<f32>,
-}
-
-impl Gauge {
-    pub fn new(value: f32, range: std::ops::RangeInclusive<f32>) -> Self {
-        Self { value, range }
-    }
-}
-
-impl View for Gauge {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        renderer.stroke_ellipse(rect, theme::surface_elevated(), 6.0);
-        let start = *self.range.start();
-        let end = *self.range.end();
-        let pct = if (end - start).abs() > f32::EPSILON {
-            ((self.value - start) / (end - start)).clamp(0.0, 1.0)
-        } else {
-            0.0
-        };
-        let inset = 6.0;
-        let inner = Rect {
-            x: rect.x + inset,
-            y: rect.y + inset,
-            width: (rect.width - 2.0 * inset) * pct,
-            height: rect.height - 2.0 * inset,
-        };
-        renderer.fill_ellipse(inner, theme::accent());
-    }
-
-    fn intrinsic_size(
-        &self,
-        _renderer: &mut dyn cvkg_core::Renderer,
-        proposal: cvkg_core::SizeProposal,
-    ) -> cvkg_core::Size {
-        let size = proposal
-            .width
-            .unwrap_or(100.0)
-            .min(proposal.height.unwrap_or(100.0));
-        cvkg_core::Size {
-            width: size,
-            height: size,
-        }
-    }
-}
-
 /// A horizontal status bar for system indicators
 #[derive(Clone)]
 pub struct StatusBar {

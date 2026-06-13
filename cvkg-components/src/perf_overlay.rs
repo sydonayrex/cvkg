@@ -56,18 +56,27 @@ impl PerfOverlay {
         self
     }
 
-    /// Record a frame completion with the given draw statistics.
-    pub fn record_frame(&mut self, draw_calls: u32, triangles: u32, vertices: u32) {
+    /// Record a frame completion with the given active frame duration and draw statistics.
+    ///
+    /// # Contract
+    /// `frame_time_ms` is the active duration (build + layout + paint + submit) of the frame.
+    /// Internal statistics use this active duration for graphing/averages to avoid sleep pollution.
+    pub fn record_frame(
+        &mut self,
+        frame_time_ms: f32,
+        draw_calls: u32,
+        triangles: u32,
+        vertices: u32,
+    ) {
         let now = Instant::now();
         if let Some(last) = self.last_frame {
             let dt = now.duration_since(last).as_secs_f32();
-            let dt_ms = dt * 1000.0;
-            self.current_frame_ms = dt_ms;
             if dt > 0.0 {
                 self.current_fps = 1.0 / dt;
             }
-            self.peak_frame_ms = self.peak_frame_ms.max(dt_ms);
-            self.history.push(dt_ms);
+            self.current_frame_ms = frame_time_ms;
+            self.peak_frame_ms = self.peak_frame_ms.max(frame_time_ms);
+            self.history.push(frame_time_ms);
             if self.history.len() > self.sample_window {
                 self.history.remove(0);
             }
@@ -115,13 +124,22 @@ impl View for PerfOverlay {
             return;
         }
 
-        renderer.push_vnode(rect, "PerfOverlay");
-
         let pad = 12.0;
         let overlay_w: f32 = 280.0;
         let overlay_h: f32 = 220.0;
         let ox = rect.x + rect.width - overlay_w - 16.0;
-        let oy = rect.y + 16.0;
+        let oy = rect.y + 170.0;
+
+        let panel_rect = Rect {
+            x: ox,
+            y: oy,
+            width: overlay_w,
+            height: overlay_h,
+        };
+
+        // Push vnode with the actual panel rectangle so it only captures pointer events
+        // within the overlay itself, leaving the rest of the window interactive.
+        renderer.push_vnode(panel_rect, "PerfOverlay");
 
         // Background
         renderer.fill_rounded_rect(

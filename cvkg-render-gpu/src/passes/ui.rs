@@ -2,12 +2,19 @@ use crate::kvasir::node::{ExecutionContext, KvasirNode};
 use crate::kvasir::nodes::{PassId, RES_SCENE};
 use crate::kvasir::resource::ResourceId;
 
+/// A render graph node responsible for drawing top-level UI overlays onto the resolved scene texture.
+///
+/// Draws overlays back-to-front using painter's algorithm without depth buffer testing,
+/// enabling crisp vector elements and text rendering over the composited 3D scene.
 pub struct UINode {
     pub inputs: Vec<ResourceId>,
     pub outputs: Vec<ResourceId>,
 }
 
 impl UINode {
+    /// Creates a new instance of the UINode.
+    ///
+    /// It consumes `RES_SCENE` and writes the rendered UI overlays directly back into it.
     pub fn new() -> Self {
         Self {
             inputs: vec![RES_SCENE],
@@ -38,8 +45,13 @@ impl KvasirNode for UINode {
         let rt_h = ctx.renderer.current_height() as i32;
         let scale = ctx.renderer.current_scale_factor();
 
-        let scene_view = ctx.registry.get_texture_view(RES_SCENE).unwrap();
-        let depth_view = ctx.depth_view;
+        let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                return;
+            }
+        };
 
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr P4 UI Layer"),
@@ -52,19 +64,13 @@ impl KvasirNode for UINode {
                 },
                 depth_slice: None,
             })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
+            depth_stencil_attachment: None,
             ..Default::default()
         });
 
-        p.set_pipeline(&ctx.renderer.opaque_pipeline);
+        p.set_pipeline(&ctx.renderer.ui_pipeline);
         p.set_vertex_buffer(0, ctx.renderer.vertex_buffer.slice(..));
+        p.set_vertex_buffer(1, ctx.renderer.instance_buffer.slice(..));
         p.set_index_buffer(
             ctx.renderer.index_buffer.slice(..),
             wgpu::IndexFormat::Uint32,
@@ -93,25 +99,26 @@ impl KvasirNode for UINode {
 
             p.set_bind_group(0, bg, &[]);
 
-            if let Some(rect) = call.scissor_rect {
-                if rt_w > 0 && rt_h > 0 {
-                    let x1 = (rect.x * scale).round() as i32;
-                    let y1 = (rect.y * scale).round() as i32;
-                    let x2 = ((rect.x + rect.width) * scale).round() as i32;
-                    let y2 = ((rect.y + rect.height) * scale).round() as i32;
-                    let w = (x2 - x1).clamp(0, rt_w);
-                    let h = (y2 - y1).clamp(0, rt_h);
-                    if w > 0 && h > 0 {
-                        p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32);
-                    } else {
-                        p.set_scissor_rect(0, 0, 1, 1);
-                    }
+            if let Some(rect) = call.scissor_rect
+                && rt_w > 0
+                && rt_h > 0
+            {
+                let x1 = (rect.x * scale).round() as i32;
+                let y1 = (rect.y * scale).round() as i32;
+                let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                let y2 = ((rect.y + rect.height) * scale).round() as i32;
+                let w = (x2 - x1).clamp(0, rt_w);
+                let h = (y2 - y1).clamp(0, rt_h);
+                if w > 0 && h > 0 {
+                    p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32);
+                } else {
+                    p.set_scissor_rect(0, 0, 1, 1);
                 }
             }
             p.draw_indexed(
                 call.index_start..call.index_start + call.index_count,
                 0,
-                0..1,
+                call.instance_start..call.instance_start + 1,
             );
         }
     }

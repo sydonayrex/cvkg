@@ -6,7 +6,6 @@ use cvkg_runic_text as runic;
 use std::sync::Arc;
 
 /// Text view for displaying strings
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Text {
     pub(crate) content: String,
@@ -136,7 +135,6 @@ impl LayoutView for Text {
 }
 
 /// Divider for separating content
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Divider {
     pub(crate) orientation: Orientation,
@@ -199,7 +197,6 @@ impl View for Divider {
 }
 
 /// Spacer for flexible layout gaps
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Spacer {
     pub(crate) min_length: f32,
@@ -260,7 +257,6 @@ impl LayoutView for Spacer {
 }
 
 /// Canvas for custom drawing
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Canvas<F>
 where
@@ -301,7 +297,6 @@ pub enum ShapeType {
 }
 
 /// A standard vector Shape
-#[allow(dead_code)]
 #[derive(Clone)]
 pub struct Shape {
     pub(crate) shape_type: ShapeType,

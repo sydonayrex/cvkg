@@ -29,7 +29,7 @@
 //! - `cvkg dev` for starting the development server with hot reload
 //! - `cvkg build` for building for target platforms
 //! - `cvkg serve` for starting the WebKit preview server
-//!  and other development tools.
+//! - Other development tools.
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;

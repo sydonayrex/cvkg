@@ -1,7 +1,7 @@
 //! Parallax depth system, performance contracts,
 //! and display environment for 2028 spatial computing readiness.
 
-use crate::{Rect, Renderer, View, ViewModifier, ModifiedView};
+use crate::{ModifiedView, Rect, Renderer, View, ViewModifier};
 
 // =============================================================================
 // PARALLAX DEPTH SYSTEM
@@ -159,8 +159,14 @@ mod tests {
     #[test]
     fn test_display_environment_variants() {
         assert!(matches!(DisplayEnvironment::Flat, DisplayEnvironment::Flat));
-        assert!(matches!(DisplayEnvironment::Spatial, DisplayEnvironment::Spatial));
-        assert!(matches!(DisplayEnvironment::HeadsUp, DisplayEnvironment::HeadsUp));
+        assert!(matches!(
+            DisplayEnvironment::Spatial,
+            DisplayEnvironment::Spatial
+        ));
+        assert!(matches!(
+            DisplayEnvironment::HeadsUp,
+            DisplayEnvironment::HeadsUp
+        ));
     }
 
     #[test]

@@ -697,7 +697,6 @@ impl View for NodeGraphEditor {
             let from_pos = from_node.port_position(from_port);
             let to_pos = [pending.cursor_x, pending.cursor_y];
             self.draw_dashed_bezier(renderer, from_pos, to_pos, [0.0, 0.8, 1.0, 0.6]);
-            // Start point indicator
             renderer.fill_ellipse(
                 Rect {
                     x: from_pos[0] - 6.0,

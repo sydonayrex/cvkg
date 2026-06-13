@@ -74,6 +74,54 @@ pub struct ShapeCastHit3D {
 pub type QueryFilter = dyn Fn(&Collider, BodyId) -> bool + Send + Sync;
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Config structs to reduce argument counts
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// Ray parameters: origin, direction, and maximum distance.
+pub struct RayParams {
+    pub origin: Vec2,
+    pub direction: Vec2,
+    pub max_distance: f32,
+}
+
+/// 3D ray parameters.
+pub struct RayParams3D {
+    pub origin: Vec3,
+    pub direction: Vec3,
+    pub max_distance: f32,
+}
+
+/// Shape pose: position and rotation for a shape in world space.
+pub struct ShapePose2D {
+    pub position: Vec2,
+    pub angle: f32,
+}
+
+/// 3D shape pose.
+pub struct ShapePose3D {
+    pub position: Vec3,
+    pub rotation: Quat,
+}
+
+/// Shape cast parameters: the shape being cast plus its pose and travel.
+pub struct ShapeCastParams2D<'a> {
+    pub shape: &'a Shape,
+    pub position: Vec2,
+    pub rotation: f32,
+    pub direction: Vec2,
+    pub max_distance: f32,
+}
+
+/// 3D shape cast parameters.
+pub struct ShapeCastParams3D<'a> {
+    pub shape: &'a Shape,
+    pub position: Vec3,
+    pub rotation: Quat,
+    pub direction: Vec3,
+    pub max_distance: f32,
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Raycasting (2D)
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -107,10 +155,10 @@ pub fn raycast_2d(
     let mut best_dist = max_distance;
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -130,23 +178,26 @@ pub fn raycast_2d(
             &collider.shape,
             collider.offset,
             collider.rotation_offset,
-            body.position,
-            body.angle,
-            origin,
-            dir,
-            max_distance,
-        ) {
-            if dist < best_dist {
-                best_dist = dist;
-                best_hit = Some(RaycastHit {
-                    point: origin + dir * dist,
-                    normal,
-                    distance: dist,
-                    body_id: collider.body_id,
-                    collider_index: idx,
-                    user_data: collider.user_data,
-                });
-            }
+            &ShapePose2D {
+                position: body.position,
+                angle: body.angle,
+            },
+            &RayParams {
+                origin,
+                direction: dir,
+                max_distance,
+            },
+        ) && dist < best_dist
+        {
+            best_dist = dist;
+            best_hit = Some(RaycastHit {
+                point: origin + dir * dist,
+                normal,
+                distance: dist,
+                body_id: collider.body_id,
+                collider_index: idx,
+                user_data: collider.user_data,
+            });
         }
     }
 
@@ -171,30 +222,27 @@ fn ray_vs_shape_2d(
     shape: &Shape,
     offset: Vec2,
     rot_offset: f32,
-    body_pos: Vec2,
-    body_angle: f32,
-    ray_origin: Vec2,
-    ray_dir: Vec2,
-    max_dist: f32,
+    body_pose: &ShapePose2D,
+    ray: &RayParams,
 ) -> Option<(f32, Vec2)> {
     // Transform ray into shape's local space
-    let total_angle = body_angle + rot_offset;
+    let total_angle = body_pose.angle + rot_offset;
     let cos = total_angle.cos();
     let sin = total_angle.sin();
     let world_offset = Vec2::new(
         cos * offset.x - sin * offset.y,
         sin * offset.x + cos * offset.y,
     );
-    let center = body_pos + world_offset;
+    let center = body_pose.position + world_offset;
 
     // Local ray origin and direction
     let local_origin = Vec2::new(
-        cos * (ray_origin.x - center.x) + sin * (ray_origin.y - center.y),
-        -sin * (ray_origin.x - center.x) + cos * (ray_origin.y - center.y),
+        cos * (ray.origin.x - center.x) + sin * (ray.origin.y - center.y),
+        -sin * (ray.origin.x - center.x) + cos * (ray.origin.y - center.y),
     );
     let local_dir = Vec2::new(
-        cos * ray_dir.x + sin * ray_dir.y,
-        -sin * ray_dir.x + cos * ray_dir.y,
+        cos * ray.direction.x + sin * ray.direction.y,
+        -sin * ray.direction.x + cos * ray.direction.y,
     );
 
     // For raycasting, we find the closest point on the shape along the ray.
@@ -211,12 +259,12 @@ fn ray_vs_shape_2d(
     // The shape spans [back_proj, front_proj] along the ray direction
     // Ray enters at max(0, back_proj - origin_proj) if origin is outside
     let enter_dist = back_proj - origin_proj;
-    if enter_dist > max_dist || enter_dist < -1e-6 {
+    if enter_dist > ray.max_distance || enter_dist < -1e-6 {
         // Ray starts inside the shape (enter_dist < 0) or misses
         if enter_dist < 0.0 {
             // Inside: cast from origin to find exit
             let exit_dist = front_proj - origin_proj;
-            if exit_dist > 0.0 && exit_dist <= max_dist {
+            if exit_dist > 0.0 && exit_dist <= ray.max_distance {
                 // Normal points opposite to ray direction when exiting from inside
                 let local_normal = -local_dir;
                 let world_normal = Vec2::new(
@@ -261,10 +309,10 @@ pub fn raycast_3d(
     let mut best_dist = max_distance;
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -287,23 +335,26 @@ pub fn raycast_3d(
             &collider.shape,
             collider.offset.extend(0.0), // 2D offset promoted to 3D
             collider.rotation_offset,
-            body.position_3d,
-            body.rotation,
-            origin,
-            dir,
-            max_distance,
-        ) {
-            if dist < best_dist {
-                best_dist = dist;
-                best_hit = Some(RaycastHit3D {
-                    point: origin + dir * dist,
-                    normal,
-                    distance: dist,
-                    body_id: collider.body_id,
-                    collider_index: idx,
-                    user_data: collider.user_data,
-                });
-            }
+            &ShapePose3D {
+                position: body.position_3d,
+                rotation: body.rotation,
+            },
+            &RayParams3D {
+                origin,
+                direction: dir,
+                max_distance,
+            },
+        ) && dist < best_dist
+        {
+            best_dist = dist;
+            best_hit = Some(RaycastHit3D {
+                point: origin + dir * dist,
+                normal,
+                distance: dist,
+                body_id: collider.body_id,
+                collider_index: idx,
+                user_data: collider.user_data,
+            });
         }
     }
 
@@ -327,15 +378,12 @@ fn ray_vs_shape_3d(
     shape: &Shape,
     offset: Vec3,
     _rot_offset: f32, // rotation around Y axis for simplicity
-    body_pos: Vec3,
-    body_rot: Quat,
-    ray_origin: Vec3,
-    ray_dir: Vec3,
-    max_dist: f32,
+    body_pose: &ShapePose3D,
+    ray: &RayParams3D,
 ) -> Option<(f32, Vec3)> {
     // Transform ray into shape's local space
-    let local_origin = body_rot.inverse() * (ray_origin - body_pos - offset);
-    let local_dir = body_rot.inverse() * ray_dir;
+    let local_origin = body_pose.rotation.inverse() * (ray.origin - body_pose.position - offset);
+    let local_dir = body_pose.rotation.inverse() * ray.direction;
 
     let back_support = shape.support_3d(-local_dir);
     let front_support = shape.support_3d(local_dir);
@@ -345,12 +393,12 @@ fn ray_vs_shape_3d(
     let front_proj = front_support.dot(local_dir);
 
     let enter_dist = back_proj - origin_proj;
-    if enter_dist > max_dist || enter_dist < -1e-6 {
+    if enter_dist > ray.max_distance || enter_dist < -1e-6 {
         if enter_dist < 0.0 {
             let exit_dist = front_proj - origin_proj;
-            if exit_dist > 0.0 && exit_dist <= max_dist {
+            if exit_dist > 0.0 && exit_dist <= ray.max_distance {
                 let local_normal = -local_dir;
-                let world_normal = body_rot * local_normal;
+                let world_normal = body_pose.rotation * local_normal;
                 return Some((exit_dist, world_normal));
             }
         }
@@ -358,7 +406,7 @@ fn ray_vs_shape_3d(
     }
 
     let local_normal = -local_dir;
-    let world_normal = body_rot * local_normal;
+    let world_normal = body_pose.rotation * local_normal;
     Some((enter_dist.max(0.0), world_normal))
 }
 
@@ -374,26 +422,22 @@ fn ray_vs_shape_3d(
 pub fn shape_cast_2d(
     colliders: &[Collider],
     bodies: &HashMap<BodyId, &RigidBody>,
-    shape: &Shape,
-    origin: Vec2,
-    rotation: f32,
-    direction: Vec2,
-    max_distance: f32,
+    cast_params: &ShapeCastParams2D<'_>,
     filter: Option<&QueryFilter>,
 ) -> Option<ShapeCastHit> {
-    if direction.length_squared() < 1e-12 {
+    if cast_params.direction.length_squared() < 1e-12 {
         return None;
     }
-    let dir = direction.normalize();
+    let dir = cast_params.direction.normalize();
 
     let mut best_hit: Option<ShapeCastHit> = None;
-    let mut best_dist = max_distance;
+    let mut best_dist = cast_params.max_distance;
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -403,39 +447,37 @@ pub fn shape_cast_2d(
 
         // Broad-phase: expanded AABB along cast direction
         let (min, max) = collider.world_aabb(body.position, body.angle);
-        let expanded_min = min - dir * max_distance;
-        let expanded_max = max + dir * max_distance;
-        let cast_aabb_min = origin - shape.bounding_radius() * Vec2::ONE;
-        let cast_aabb_max = origin + shape.bounding_radius() * Vec2::ONE;
+        let expanded_min = min - dir * cast_params.max_distance;
+        let expanded_max = max + dir * cast_params.max_distance;
+        let cast_aabb_min = cast_params.position - cast_params.shape.bounding_radius() * Vec2::ONE;
+        let cast_aabb_max = cast_params.position + cast_params.shape.bounding_radius() * Vec2::ONE;
         if !aabbs_overlap(expanded_min, expanded_max, cast_aabb_min, cast_aabb_max) {
             continue;
         }
 
         // Narrow-phase: conservative advancement using GJK
         if let Some((dist, normal)) = shape_cast_vs_shape_2d(
-            shape,
-            origin,
-            rotation,
-            dir,
-            max_distance,
+            cast_params.shape,
+            cast_params,
             &collider.shape,
             collider.offset,
             collider.rotation_offset,
-            body.position,
-            body.angle,
-        ) {
-            if dist < best_dist {
-                best_dist = dist;
-                best_hit = Some(ShapeCastHit {
-                    point: origin + dir * dist,
-                    normal,
-                    distance: dist,
-                    body_id: collider.body_id,
-                    collider_index: idx,
-                    user_data: collider.user_data,
-                    fraction: dist / max_distance,
-                });
-            }
+            &ShapePose2D {
+                position: body.position,
+                angle: body.angle,
+            },
+        ) && dist < best_dist
+        {
+            best_dist = dist;
+            best_hit = Some(ShapeCastHit {
+                point: cast_params.position + dir * dist,
+                normal,
+                distance: dist,
+                body_id: collider.body_id,
+                collider_index: idx,
+                user_data: collider.user_data,
+                fraction: dist / cast_params.max_distance,
+            });
         }
     }
 
@@ -451,50 +493,62 @@ fn aabbs_overlap(min_a: Vec2, max_a: Vec2, min_b: Vec2, max_b: Vec2) -> bool {
 /// Returns (distance, normal) of first contact, or None if no hit.
 fn shape_cast_vs_shape_2d(
     shape_a: &Shape,
-    pos_a: Vec2,
-    rot_a: f32,
-    dir: Vec2,
-    max_dist: f32,
+    cast_params: &ShapeCastParams2D<'_>,
     shape_b: &Shape,
     _offset_b: Vec2,
     _rot_offset_b: f32,
-    pos_b: Vec2,
-    rot_b: f32,
+    body_b_pose: &ShapePose2D,
 ) -> Option<(f32, Vec2)> {
     // Conservative advancement: iterate GJK with increasing offset
     // until we find contact or exceed max_dist
     let mut current_dist = 0.0;
-    let mut step = max_dist;
+    let mut step = cast_params.max_distance;
     let max_iterations = 32;
     let tolerance = 1e-4;
 
     for _ in 0..max_iterations {
-        let test_pos_a = pos_a + dir * current_dist;
+        let test_pos_a = cast_params.position + cast_params.direction * current_dist;
 
         // Check if shapes overlap at current position
-        if gjk_overlap(shape_a, test_pos_a, rot_a, shape_b, pos_b, rot_b) {
+        if gjk_overlap(
+            shape_a,
+            test_pos_a,
+            cast_params.rotation,
+            shape_b,
+            body_b_pose.position,
+            body_b_pose.angle,
+        ) {
             // Binary search for exact contact distance
-            let (contact_dist, normal) = binary_search_contact_2d(
+            let search = BinarySearch2D {
                 shape_a,
-                pos_a,
-                rot_a,
                 shape_b,
-                pos_b,
-                rot_b,
-                current_dist - step,
-                current_dist,
-                dir,
-            );
+                pose_a: &ShapePose2D {
+                    position: cast_params.position,
+                    angle: cast_params.rotation,
+                },
+                body_b_pose,
+                dir: cast_params.direction,
+                lo: current_dist - step,
+                hi: current_dist,
+            };
+            let (contact_dist, normal) = binary_search_contact_2d(&search);
             return Some((contact_dist, normal));
         }
 
         current_dist += step;
-        if current_dist > max_dist {
+        if current_dist > cast_params.max_distance {
             return None;
         }
 
         // Adaptive step size based on distance to Minkowski sum
-        let gr = gjk(shape_a, test_pos_a, rot_a, shape_b, pos_b, rot_b);
+        let gr = gjk(
+            shape_a,
+            test_pos_a,
+            cast_params.rotation,
+            shape_b,
+            body_b_pose.position,
+            body_b_pose.angle,
+        );
         if !gr.overlapping {
             // Estimate distance to collision from simplex
             let closest = gr.simplex[0];
@@ -508,26 +562,46 @@ fn shape_cast_vs_shape_2d(
     None
 }
 
-/// Binary search for exact contact distance and normal.
-fn binary_search_contact_2d(
-    shape_a: &Shape,
-    pos_a: Vec2,
-    rot_a: f32,
-    shape_b: &Shape,
-    pos_b: Vec2,
-    rot_b: f32,
+/// Binary search contact query parameters.
+struct BinarySearch2D<'a> {
+    shape_a: &'a Shape,
+    shape_b: &'a Shape,
+    pose_a: &'a ShapePose2D,
+    body_b_pose: &'a ShapePose2D,
+    dir: Vec2,
     lo: f32,
     hi: f32,
-    dir: Vec2,
-) -> (f32, Vec2) {
-    let mut low = lo.max(0.0);
-    let mut high = hi;
+}
+
+/// Binary search contact query parameters (3D).
+struct BinarySearch3D<'a> {
+    shape_a: &'a Shape,
+    shape_b: &'a Shape,
+    pos_a: Vec3,
+    rot_a: &'a Quat,
+    body_b_pose: &'a ShapePose3D,
+    dir: Vec3,
+    lo: f32,
+    hi: f32,
+}
+
+/// Binary search for exact contact distance and normal.
+fn binary_search_contact_2d(params: &BinarySearch2D<'_>) -> (f32, Vec2) {
+    let mut low = params.lo.max(0.0);
+    let mut high = params.hi;
 
     for _ in 0..16 {
         let mid = (low + high) * 0.5;
-        let test_pos = pos_a + dir * mid;
+        let test_pos = params.pose_a.position + params.dir * mid;
 
-        if gjk_overlap(shape_a, test_pos, rot_a, shape_b, pos_b, rot_b) {
+        if gjk_overlap(
+            params.shape_a,
+            test_pos,
+            params.pose_a.angle,
+            params.shape_b,
+            params.body_b_pose.position,
+            params.body_b_pose.angle,
+        ) {
             high = mid;
         } else {
             low = mid;
@@ -535,16 +609,20 @@ fn binary_search_contact_2d(
     }
 
     let contact_dist = high;
-    let contact_pos = pos_a + dir * contact_dist;
+    let contact_pos = params.pose_a.position + params.dir * contact_dist;
 
-    // Get contact normal via EPA
-    let normal = if let Some(epa_result) =
-        crate::narrowphase::epa(shape_a, contact_pos, rot_a, shape_b, pos_b, rot_b)
-    {
+    let normal = if let Some(epa_result) = crate::narrowphase::epa(
+        params.shape_a,
+        contact_pos,
+        params.pose_a.angle,
+        params.shape_b,
+        params.body_b_pose.position,
+        params.body_b_pose.angle,
+    ) {
         epa_result.normal
     } else {
         // Fallback: use direction from A to B
-        (pos_b - contact_pos).normalize()
+        (params.body_b_pose.position - contact_pos).normalize()
     };
 
     (contact_dist, normal)
@@ -558,26 +636,22 @@ fn binary_search_contact_2d(
 pub fn shape_cast_3d(
     colliders: &[Collider],
     bodies: &HashMap<BodyId, &RigidBody>,
-    shape: &Shape,
-    origin: Vec3,
-    rotation: Quat,
-    direction: Vec3,
-    max_distance: f32,
+    cast_params: &ShapeCastParams3D<'_>,
     filter: Option<&QueryFilter>,
 ) -> Option<ShapeCastHit3D> {
-    if direction.length_squared() < 1e-12 {
+    if cast_params.direction.length_squared() < 1e-12 {
         return None;
     }
-    let dir = direction.normalize();
+    let dir = cast_params.direction.normalize();
 
     let mut best_hit: Option<ShapeCastHit3D> = None;
-    let mut best_dist = max_distance;
+    let mut best_dist = cast_params.max_distance;
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -591,38 +665,42 @@ pub fn shape_cast_3d(
 
         // Broad-phase
         let (min, max) = collider.world_aabb_3d(body.position_3d, body.rotation);
-        let expanded_min = min - dir * max_distance;
-        let expanded_max = max + dir * max_distance;
-        let cast_min = origin - shape.bounding_radius() * Vec3::ONE;
-        let cast_max = origin + shape.bounding_radius() * Vec3::ONE;
+        let expanded_min = min - dir * cast_params.max_distance;
+        let expanded_max = max + dir * cast_params.max_distance;
+        let cast_min = cast_params.position - cast_params.shape.bounding_radius() * Vec3::ONE;
+        let cast_max = cast_params.position + cast_params.shape.bounding_radius() * Vec3::ONE;
         if !aabbs_overlap_3d(expanded_min, expanded_max, cast_min, cast_max) {
             continue;
         }
 
         if let Some((dist, normal)) = shape_cast_vs_shape_3d(
-            shape,
-            origin,
-            rotation,
-            dir,
-            max_distance,
+            cast_params.shape,
+            &ShapeCastParams3D {
+                shape: cast_params.shape,
+                position: cast_params.position,
+                rotation: cast_params.rotation,
+                direction: dir,
+                max_distance: cast_params.max_distance,
+            },
             &collider.shape,
             collider.offset.extend(0.0),
             collider.rotation_offset,
-            body.position_3d,
-            body.rotation,
-        ) {
-            if dist < best_dist {
-                best_dist = dist;
-                best_hit = Some(ShapeCastHit3D {
-                    point: origin + dir * dist,
-                    normal,
-                    distance: dist,
-                    body_id: collider.body_id,
-                    collider_index: idx,
-                    user_data: collider.user_data,
-                    fraction: dist / max_distance,
-                });
-            }
+            &ShapePose3D {
+                position: body.position_3d,
+                rotation: body.rotation,
+            },
+        ) && dist < best_dist
+        {
+            best_dist = dist;
+            best_hit = Some(ShapeCastHit3D {
+                point: cast_params.position + dir * dist,
+                normal,
+                distance: dist,
+                body_id: collider.body_id,
+                collider_index: idx,
+                user_data: collider.user_data,
+                fraction: dist / cast_params.max_distance,
+            });
         }
     }
 
@@ -642,45 +720,55 @@ fn aabbs_overlap_3d(min_a: Vec3, max_a: Vec3, min_b: Vec3, max_b: Vec3) -> bool 
 /// Conservative advancement 3D shape cast.
 fn shape_cast_vs_shape_3d(
     shape_a: &Shape,
-    pos_a: Vec3,
-    rot_a: Quat,
-    dir: Vec3,
-    max_dist: f32,
+    cast_params: &ShapeCastParams3D<'_>,
     shape_b: &Shape,
     _offset_b: Vec3,
     _rot_offset_b: f32,
-    pos_b: Vec3,
-    rot_b: Quat,
+    body_b_pose: &ShapePose3D,
 ) -> Option<(f32, Vec3)> {
     let mut current_dist = 0.0;
-    let mut step = max_dist;
+    let mut step = cast_params.max_distance;
     let max_iterations = 32;
     let tolerance = 1e-4;
 
     for _ in 0..max_iterations {
-        let test_pos_a = pos_a + dir * current_dist;
+        let test_pos_a = cast_params.position + cast_params.direction * current_dist;
 
-        if gjk_overlap_3d(shape_a, test_pos_a, &rot_a, shape_b, pos_b, &rot_b) {
-            let (contact_dist, normal) = binary_search_contact_3d(
+        if gjk_overlap_3d(
+            shape_a,
+            test_pos_a,
+            &cast_params.rotation,
+            shape_b,
+            body_b_pose.position,
+            &body_b_pose.rotation,
+        ) {
+            let search = BinarySearch3D {
                 shape_a,
-                pos_a,
-                rot_a,
                 shape_b,
-                pos_b,
-                rot_b,
-                current_dist - step,
-                current_dist,
-                dir,
-            );
+                pos_a: cast_params.position,
+                rot_a: &cast_params.rotation,
+                body_b_pose,
+                dir: cast_params.direction,
+                lo: current_dist - step,
+                hi: current_dist,
+            };
+            let (contact_dist, normal) = binary_search_contact_3d(&search);
             return Some((contact_dist, normal));
         }
 
         current_dist += step;
-        if current_dist > max_dist {
+        if current_dist > cast_params.max_distance {
             return None;
         }
 
-        let gr = gjk_3d(shape_a, test_pos_a, &rot_a, shape_b, pos_b, &rot_b);
+        let gr = gjk_3d(
+            shape_a,
+            test_pos_a,
+            &cast_params.rotation,
+            shape_b,
+            body_b_pose.position,
+            &body_b_pose.rotation,
+        );
         if !gr.overlapping {
             let closest = gr.simplex[0];
             let dist_to_origin = closest.length();
@@ -694,25 +782,22 @@ fn shape_cast_vs_shape_3d(
 }
 
 /// Binary search for 3D contact.
-fn binary_search_contact_3d(
-    shape_a: &Shape,
-    pos_a: Vec3,
-    rot_a: Quat,
-    shape_b: &Shape,
-    pos_b: Vec3,
-    rot_b: Quat,
-    lo: f32,
-    hi: f32,
-    dir: Vec3,
-) -> (f32, Vec3) {
-    let mut low = lo.max(0.0);
-    let mut high = hi;
+fn binary_search_contact_3d(params: &BinarySearch3D<'_>) -> (f32, Vec3) {
+    let mut low = params.lo.max(0.0);
+    let mut high = params.hi;
 
     for _ in 0..16 {
         let mid = (low + high) * 0.5;
-        let test_pos = pos_a + dir * mid;
+        let test_pos = params.pos_a + params.dir * mid;
 
-        if gjk_overlap_3d(shape_a, test_pos, &rot_a, shape_b, pos_b, &rot_b) {
+        if gjk_overlap_3d(
+            params.shape_a,
+            test_pos,
+            params.rot_a,
+            params.shape_b,
+            params.body_b_pose.position,
+            &params.body_b_pose.rotation,
+        ) {
             high = mid;
         } else {
             low = mid;
@@ -720,14 +805,19 @@ fn binary_search_contact_3d(
     }
 
     let contact_dist = high;
-    let contact_pos = pos_a + dir * contact_dist;
+    let contact_pos = params.pos_a + params.dir * contact_dist;
 
-    let normal = if let Some(epa_result) =
-        crate::narrowphase::epa_3d(shape_a, contact_pos, &rot_a, shape_b, pos_b, &rot_b)
-    {
+    let normal = if let Some(epa_result) = crate::narrowphase::epa_3d(
+        params.shape_a,
+        contact_pos,
+        params.rot_a,
+        params.shape_b,
+        params.body_b_pose.position,
+        &params.body_b_pose.rotation,
+    ) {
         epa_result.normal
     } else {
-        (pos_b - contact_pos).normalize()
+        (params.body_b_pose.position - contact_pos).normalize()
     };
 
     (contact_dist, normal)
@@ -755,10 +845,10 @@ pub fn point_query_2d(
     let mut hits = Vec::new();
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -817,10 +907,10 @@ pub fn point_query_3d(
     let mut hits = Vec::new();
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -876,10 +966,10 @@ pub fn aabb_query_2d(
     let mut hits = Vec::new();
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -911,10 +1001,10 @@ pub fn aabb_query_3d(
     let mut hits = Vec::new();
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -951,10 +1041,10 @@ pub fn circle_query_2d(
     let circle_shape = Shape::circle(radius);
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {
@@ -993,10 +1083,10 @@ pub fn sphere_query_3d(
     let sphere_shape = Shape::sphere(radius);
 
     for (idx, collider) in colliders.iter().enumerate() {
-        if let Some(ref f) = filter {
-            if !f(collider, collider.body_id) {
-                continue;
-            }
+        if let Some(ref f) = filter
+            && !f(collider, collider.body_id)
+        {
+            continue;
         }
 
         let body = match bodies.get(&collider.body_id) {

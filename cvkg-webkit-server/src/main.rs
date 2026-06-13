@@ -310,15 +310,12 @@ async fn handle_hmr_socket(mut ws: WebSocket) {
                 info!("HMR WebSocket client disconnected");
                 break;
             }
-            axum::extract::ws::Message::Text(text) => {
-                // Respond to ping/health checks
-                if text.contains("ping") {
-                    let _ = ws
-                        .send(axum::extract::ws::Message::Text(
-                            r#"{"type":"pong"}"#.to_string(),
-                        ))
-                        .await;
-                }
+            axum::extract::ws::Message::Text(text) if text.contains("ping") => {
+                let _ = ws
+                    .send(axum::extract::ws::Message::Text(
+                        r#"{"type":"pong"}"#.to_string(),
+                    ))
+                    .await;
             }
             _ => {}
         }

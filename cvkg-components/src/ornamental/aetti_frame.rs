@@ -228,12 +228,7 @@ impl ÆttiFrame {
     fn render_knotwork(&self, renderer: &mut dyn Renderer, rect: Rect, bw: f32) {
         let tint = self.intensity;
         let line_color = theme::accent();
-        let line_color = [
-            line_color[0],
-            line_color[1],
-            line_color[2],
-            tint * 0.9,
-        ];
+        let line_color = [line_color[0], line_color[1], line_color[2], tint * 0.9];
 
         let spacing = 24.0_f32;
         // Number of diamonds on the longer edges
@@ -337,7 +332,14 @@ impl ÆttiFrame {
         );
 
         // Left plate
-        renderer.draw_line(rect.x, rect.y, rect.x, rect.y + rect.height, plate, plate_bw);
+        renderer.draw_line(
+            rect.x,
+            rect.y,
+            rect.x,
+            rect.y + rect.height,
+            plate,
+            plate_bw,
+        );
         renderer.draw_line(
             rect.x + 1.0,
             rect.y,
@@ -636,49 +638,23 @@ mod tests {
                 .push(format!("FillEllipse({:.1},{:.1})", rect.x, rect.y));
         }
         fn stroke_rect(&mut self, _rect: Rect, _color: [f32; 4], _w: f32) {}
-        fn stroke_rounded_rect(
-            &mut self,
-            _rect: Rect,
-            _radius: f32,
-            _color: [f32; 4],
-            _w: f32,
-        ) {
-        }
+        fn stroke_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4], _w: f32) {}
         fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _w: f32) {}
-        fn draw_line(
-            &mut self,
-            x1: f32,
-            y1: f32,
-            x2: f32,
-            y2: f32,
-            _color: [f32; 4],
-            _w: f32,
-        ) {
-            self.commands
-                .push(format!("DrawLine({:.1},{:.1}->{:.1},{:.1})", x1, y1, x2, y2));
+        fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, _color: [f32; 4], _w: f32) {
+            self.commands.push(format!(
+                "DrawLine({:.1},{:.1}->{:.1},{:.1})",
+                x1, y1, x2, y2
+            ));
         }
         fn fill_polygon(&mut self, vertices: &[[f32; 2]], _color: [f32; 4]) {
             self.commands
                 .push(format!("FillPolygon(verts={})", vertices.len()));
         }
-        fn stroke_polygon(
-            &mut self,
-            vertices: &[[f32; 2]],
-            _color: [f32; 4],
-            _w: f32,
-        ) {
+        fn stroke_polygon(&mut self, vertices: &[[f32; 2]], _color: [f32; 4], _w: f32) {
             self.commands
                 .push(format!("StrokePolygon(verts={})", vertices.len()));
         }
-        fn draw_text(
-            &mut self,
-            _text: &str,
-            _x: f32,
-            _y: f32,
-            _size: f32,
-            _color: [f32; 4],
-        ) {
-        }
+        fn draw_text(&mut self, _text: &str, _x: f32, _y: f32, _size: f32, _color: [f32; 4]) {}
         fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
             (text.len() as f32 * size * 0.6, size)
         }
@@ -687,12 +663,7 @@ mod tests {
         fn set_key(&mut self, _key: &str) {}
         fn set_aria_role(&mut self, _role: &str) {}
         fn set_aria_label(&mut self, _label: &str) {}
-        fn memoize(
-            &mut self,
-            _id: u64,
-            _data_hash: u64,
-            render_fn: &dyn Fn(&mut dyn Renderer),
-        ) {
+        fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
             render_fn(self);
         }
     }

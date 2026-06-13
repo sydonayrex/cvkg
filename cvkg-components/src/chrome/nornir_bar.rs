@@ -1,7 +1,7 @@
 //! NornirBar — The application menu bar.
 //! Named after the Nornir (Urd, Verdandi, Skuld), the three fates.
 
-use cvkg_core::{MenuBar, MenuItem, Rect, Renderer, View, Never};
+use cvkg_core::{MenuBar, MenuItem, Never, Rect, Renderer, View};
 
 /// The application menu bar. Renders at the top of the window with
 /// glass background, horizontal menu items, and cascading submenus.
@@ -46,7 +46,9 @@ impl NornirBar {
 
 impl View for NornirBar {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass background (full width, 28pt tall)
@@ -56,10 +58,14 @@ impl View for NornirBar {
         let mut x = rect.x + 8.0;
         for (i, item) in self.menu_bar.items.iter().enumerate() {
             match item {
-                MenuItem::Submenu { label, items: sub_items } => {
+                MenuItem::Submenu {
+                    label,
+                    items: sub_items,
+                } => {
                     let label_w = renderer.measure_text(label, 13.0).0;
                     let item_rect = Rect {
-                        x, y: rect.y,
+                        x,
+                        y: rect.y,
                         width: label_w + 16.0,
                         height: 28.0,
                     };
@@ -84,7 +90,14 @@ impl View for NornirBar {
                     x += label_w + 16.0;
                 }
                 MenuItem::Separator => {
-                    renderer.draw_line(x, rect.y + 6.0, x, rect.y + 22.0, [0.3, 0.3, 0.35, 0.5], 1.0);
+                    renderer.draw_line(
+                        x,
+                        rect.y + 6.0,
+                        x,
+                        rect.y + 22.0,
+                        [0.3, 0.3, 0.35, 0.5],
+                        1.0,
+                    );
                     x += 12.0;
                 }
             }
@@ -121,9 +134,12 @@ fn render_submenu(renderer: &mut dyn Renderer, items: &[MenuItem], anchor: Rect)
             }
             MenuItem::Separator => {
                 renderer.draw_line(
-                    menu_rect.x + 6.0, iy + 12.0,
-                    menu_rect.x + menu_rect.width - 6.0, iy + 12.0,
-                    [0.2, 0.2, 0.25, 0.5], 1.0,
+                    menu_rect.x + 6.0,
+                    iy + 12.0,
+                    menu_rect.x + menu_rect.width - 6.0,
+                    iy + 12.0,
+                    [0.2, 0.2, 0.25, 0.5],
+                    1.0,
                 );
             }
             _ => {}

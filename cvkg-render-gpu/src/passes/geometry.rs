@@ -34,14 +34,33 @@ impl KvasirNode for GeometryNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        let scene_view = ctx.registry.get_texture_view(RES_SCENE).unwrap();
+        let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                return;
+            }
+        };
+        let msaa_view = match ctx
+            .registry
+            .get_texture_view(crate::kvasir::nodes::RES_SCENE_MSAA)
+        {
+            Some(v) => v,
+            None => {
+                log::error!(
+                    "Missing texture view for {}",
+                    stringify!(crate::kvasir::nodes::RES_SCENE_MSAA)
+                );
+                return;
+            }
+        };
         let depth_view = ctx.depth_view;
 
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr P1 Opaque Background"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &scene_view,
-                resolve_target: None,
+                view: &msaa_view,
+                resolve_target: Some(&scene_view),
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
                         r: 0.0,
@@ -81,7 +100,22 @@ impl KvasirNode for GeometryNode {
         }
 
         if !ctx.renderer.draw_calls.is_empty() {
+            log::trace!(
+                "[Kvasir] GeometryNode: draw_calls={}",
+                ctx.renderer.draw_calls.len()
+            );
+            for (i, call) in ctx.renderer.draw_calls.iter().enumerate() {
+                log::trace!(
+                    "[Kvasir]   call[{}]: material={:?}, target_id={:?}, index_start={}, index_count={}",
+                    i,
+                    call.material,
+                    call.target_id,
+                    call.index_start,
+                    call.index_count
+                );
+            }
             p.set_vertex_buffer(0, ctx.renderer.vertex_buffer.slice(..));
+            p.set_vertex_buffer(1, ctx.renderer.instance_buffer.slice(..));
             p.set_index_buffer(
                 ctx.renderer.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
@@ -89,9 +123,11 @@ impl KvasirNode for GeometryNode {
             p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
 
+            let mut opaque_calls_count = 0;
             for call in ctx.renderer.draw_calls.iter().filter(|c| {
                 matches!(c.material, cvkg_core::DrawMaterial::Opaque) && c.target_id.is_none()
             }) {
+                opaque_calls_count += 1;
                 p.set_pipeline(&ctx.renderer.opaque_pipeline);
                 let bg = if let Some(id) = call.texture_id {
                     if id == 0 {
@@ -109,9 +145,13 @@ impl KvasirNode for GeometryNode {
                 p.draw_indexed(
                     call.index_start..call.index_start + call.index_count,
                     0,
-                    0..1,
+                    call.instance_start..call.instance_start + 1,
                 );
             }
+            log::trace!(
+                "[Kvasir] GeometryNode: opaque_calls drawn={}",
+                opaque_calls_count
+            );
         }
     }
 }

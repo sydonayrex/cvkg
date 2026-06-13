@@ -54,6 +54,7 @@ fn journey_button_click_flow() {
         azimuth: None,
         pressure: Some(0.0),
         barrel_rotation: None,
+        pointer_precision: 0.0,
     });
 
     vdom.dispatch_event(Event::PointerClick {
@@ -64,6 +65,7 @@ fn journey_button_click_flow() {
         azimuth: None,
         pressure: Some(0.0),
         barrel_rotation: None,
+        pointer_precision: 0.0,
     });
 
     // 4. VERIFICATION: Check if state updated

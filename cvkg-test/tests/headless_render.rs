@@ -3,6 +3,7 @@ use cvkg_render_gpu::SurtrRenderer;
 
 #[tokio::test]
 async fn test_headless_render_capture() {
+    let _ = env_logger::try_init();
     let width = 128;
     let height = 128;
     let mut renderer = SurtrRenderer::forge_headless(width, height).await;

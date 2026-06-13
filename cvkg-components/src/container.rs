@@ -238,167 +238,6 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
     }
 }
 
-/// Tab bar navigation view with multiple selectable tabs.
-///
-/// Each tab has a label and content. Clicking a tab switches the displayed content.
-/// Keyboard shortcut: Cmd+1-9 / Ctrl+1-9 to switch tabs (OS-agnostic).
-#[derive(Clone)]
-pub struct TabView {
-    /// Tab definitions: (label, content_view_id)
-    tabs: Vec<(String, u64)>,
-    /// Currently active tab index.
-    active_tab: usize,
-    /// Unique hash for system state.
-    state_id: u64,
-}
-
-impl TabView {
-    /// Create a new TabView with the given tabs.
-    /// Each tab is a (label, content_view_id) pair.
-    pub fn new(tabs: Vec<(impl Into<String>, u64)>) -> Self {
-        Self {
-            tabs: tabs.into_iter().map(|(l, id)| (l.into(), id)).collect(),
-            active_tab: 0,
-            state_id: 0,
-        }
-    }
-
-    /// Set the active tab index.
-    pub fn active_tab(mut self, index: usize) -> Self {
-        self.active_tab = index;
-        self
-    }
-
-    /// Set the state ID for system state storage.
-    pub fn state_id(mut self, id: u64) -> Self {
-        self.state_id = id;
-        self
-    }
-
-    /// Get the number of tabs.
-    pub fn tab_count(&self) -> usize {
-        self.tabs.len()
-    }
-
-    /// Get the active tab index.
-    pub fn active_index(&self) -> usize {
-        self.active_tab
-    }
-}
-
-/// Internal tab state stored in system state map.
-#[derive(Clone, Copy, Debug, Default)]
-#[allow(dead_code)]
-struct TabState {
-    active_tab: usize,
-}
-
-impl View for TabView {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "TabView");
-
-        let tab_bar_h: f32 = 44.0;
-        let content_rect = Rect {
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height - tab_bar_h,
-        };
-        let tab_bar_rect = Rect {
-            x: rect.x,
-            y: rect.y + rect.height - tab_bar_h,
-            width: rect.width,
-            height: tab_bar_h,
-        };
-
-        // Render active tab content area background
-        renderer.fill_rect(content_rect, theme::bg());
-
-        // Render tab bar background
-        renderer.fill_rect(tab_bar_rect, theme::surface());
-        renderer.draw_line(
-            tab_bar_rect.x,
-            tab_bar_rect.y,
-            tab_bar_rect.x + tab_bar_rect.width,
-            tab_bar_rect.y,
-            theme::border(),
-            1.0,
-        );
-
-        // Render tab buttons
-        if !self.tabs.is_empty() {
-            let tab_w = (tab_bar_rect.width / self.tabs.len() as f32).min(160.0);
-            let tab_h = tab_bar_h - 4.0;
-            let start_x = tab_bar_rect.x + 4.0;
-
-            for (i, (label, _view_id)) in self.tabs.iter().enumerate() {
-                let tx = start_x + i as f32 * tab_w;
-                let ty = tab_bar_rect.y + 2.0;
-                let is_active = i == self.active_tab;
-
-                // Tab background
-                if is_active {
-                    renderer.fill_rounded_rect(
-                        Rect {
-                            x: tx,
-                            y: ty,
-                            width: tab_w - 4.0,
-                            height: tab_h,
-                        },
-                        6.0,
-                        theme::surface_elevated(),
-                    );
-                    // Active indicator
-                    renderer.fill_rounded_rect(
-                        Rect {
-                            x: tx + 8.0,
-                            y: ty + tab_h - 3.0,
-                            width: tab_w - 20.0,
-                            height: 3.0,
-                        },
-                        1.5,
-                        theme::accent(),
-                    );
-                }
-
-                // Tab label
-                let label_color = if is_active {
-                    theme::text()
-                } else {
-                    theme::text_dim()
-                };
-                renderer.draw_text(
-                    label,
-                    tx + 12.0,
-                    ty + (tab_h - 14.0) / 2.0,
-                    13.0,
-                    label_color,
-                );
-            }
-        }
-
-        // Render a placeholder for the active tab content
-        // In a full implementation, the VDom would render the child view here
-        // For now, we show a label indicating which tab is active
-        if self.active_tab < self.tabs.len() {
-            renderer.draw_text(
-                &format!("Content: {}", self.tabs[self.active_tab].0),
-                content_rect.x + 20.0,
-                content_rect.y + 20.0,
-                14.0,
-                theme::text_dim(),
-            );
-        }
-
-        renderer.pop_vnode();
-    }
-}
-
 /// Modal bottom sheet or centered dialog
 pub struct GraniSheet<V> {
     pub(crate) content: V,
@@ -476,20 +315,42 @@ impl<V: View> View for GraniSheet<V> {
         // ── Backdrop ──
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.65]);
 
-        // ── Animation progress from system state ──
-        let mut anim: f32 = cvkg_core::load_system_state()
-            .get_component_state::<f32>(SHEET_ANIM_HASH)
-            .and_then(|g| g.read().ok().map(|v| *v))
-            .unwrap_or(0.0);
-        anim = (anim + 0.08).min(1.0);
-        cvkg_core::update_system_state({
-            let anim = anim;
-            move |s| {
-                let mut s = s.clone();
-                s.set_component_state(SHEET_ANIM_HASH, anim);
-                s
+        // ── Animation progress using Sleipnir spring physics ──
+        let mut anim = 0.0f32;
+        let solver_hash = SHEET_ANIM_HASH;
+        {
+            let sys = cvkg_core::load_system_state();
+            if sys
+                .get_component_state::<cvkg_core::SleipnirSolver>(solver_hash)
+                .is_none()
+            {
+                cvkg_core::update_system_state(move |s| {
+                    let mut ns = s.clone();
+                    ns.set_component_state(
+                        solver_hash,
+                        cvkg_core::SleipnirSolver::new(
+                            cvkg_core::SleipnirParams::fluid(),
+                            1.0,
+                            0.0,
+                        ),
+                    );
+                    ns
+                });
             }
-        });
+        }
+        {
+            let sys = cvkg_core::load_system_state();
+            if let Some(solver_arc) =
+                sys.get_component_state::<cvkg_core::SleipnirSolver>(solver_hash)
+            {
+                let mut solver = solver_arc.write().expect("lock poisoned");
+                solver.set_target(1.0);
+                anim = solver.tick(renderer.delta_time());
+                if !solver.is_settled() {
+                    renderer.request_redraw();
+                }
+            }
+        }
 
         let sheet_rect = match self.position {
             SheetPosition::Left => {
@@ -575,7 +436,7 @@ impl<V: View> View for GraniSheet<V> {
                     }
                     cvkg_core::update_system_state(move |s| {
                         let mut s = s.clone();
-                        s.set_component_state(SHEET_ANIM_HASH, 0.0);
+                        s.component_states.remove(&solver_hash);
                         s
                     });
                 }
@@ -596,7 +457,7 @@ impl<V: View> View for GraniSheet<V> {
                     }
                     cvkg_core::update_system_state(move |s| {
                         let mut s = s.clone();
-                        s.set_component_state(SHEET_ANIM_HASH, 0.0);
+                        s.component_states.remove(&solver_hash);
                         s
                     });
                 }
@@ -902,143 +763,6 @@ pub enum DialogActionStyle {
     Cancel,
 }
 
-pub struct GarmAlert {
-    pub(crate) is_presented: bool,
-    pub(crate) title: String,
-    pub(crate) description: String,
-    pub(crate) on_confirm: std::sync::Arc<dyn Fn() + Send + Sync>,
-    pub(crate) on_cancel: std::sync::Arc<dyn Fn() + Send + Sync>,
-}
-
-impl GarmAlert {
-    pub fn new(title: impl Into<String>, description: impl Into<String>) -> Self {
-        Self {
-            is_presented: false,
-            title: title.into(),
-            description: description.into(),
-            on_confirm: std::sync::Arc::new(|| {}),
-            on_cancel: std::sync::Arc::new(|| {}),
-        }
-    }
-
-    pub fn presented(mut self, is_presented: bool) -> Self {
-        self.is_presented = is_presented;
-        self
-    }
-
-    pub fn on_confirm(mut self, callback: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_confirm = std::sync::Arc::new(callback);
-        self
-    }
-
-    pub fn on_cancel(mut self, callback: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_cancel = std::sync::Arc::new(callback);
-        self
-    }
-}
-
-impl View for GarmAlert {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if !self.is_presented {
-            renderer.set_aria_role("alert");
-            return;
-        }
-
-        renderer.fill_rect(rect, theme::shadow());
-        let modal_w = 400.0;
-        let modal_h = 200.0;
-        let modal_rect = Rect {
-            x: rect.x + (rect.width - modal_w) / 2.0,
-            y: rect.y + (rect.height - modal_h) / 2.0,
-            width: modal_w,
-            height: modal_h,
-        };
-
-        renderer.bifrost(modal_rect, 20.0, 1.2, 0.9);
-        renderer.fill_rounded_rect(modal_rect, 12.0, [0.08, 0.08, 0.1, 0.9]);
-        renderer.stroke_rounded_rect(modal_rect, 12.0, [1.0, 0.2, 0.2, 0.6], 2.0);
-
-        renderer.draw_text(
-            &self.title,
-            modal_rect.x + 20.0,
-            modal_rect.y + 20.0,
-            22.0,
-            theme::text(),
-        );
-        renderer.draw_text(
-            &self.description,
-            modal_rect.x + 20.0,
-            modal_rect.y + 55.0,
-            14.0,
-            theme::text_muted(),
-        );
-
-        let btn_w = 100.0;
-        let btn_h = 36.0;
-        let cancel_rect = Rect {
-            x: modal_rect.x + modal_w - 230.0,
-            y: modal_rect.y + modal_h - 56.0,
-            width: btn_w,
-            height: btn_h,
-        };
-        let confirm_rect = Rect {
-            x: modal_rect.x + modal_w - 120.0,
-            y: modal_rect.y + modal_h - 56.0,
-            width: btn_w,
-            height: btn_h,
-        };
-
-        renderer.fill_rounded_rect(cancel_rect, 6.0, theme::border_strong());
-        renderer.draw_text(
-            "Cancel",
-            cancel_rect.x + 25.0,
-            cancel_rect.y + 10.0,
-            14.0,
-            theme::text(),
-        );
-
-        renderer.fill_rounded_rect(confirm_rect, 6.0, theme::error_color());
-        renderer.draw_text(
-            "Confirm",
-            confirm_rect.x + 20.0,
-            confirm_rect.y + 10.0,
-            14.0,
-            theme::text(),
-        );
-    }
-}
-
-/// Context menu dropdown
-pub struct Menu<V> {
-    pub(crate) content: V,
-}
-
-impl<V: View> Menu<V> {
-    pub fn new(content: V) -> Self {
-        Self { content }
-    }
-}
-
-impl<V: View> View for Menu<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Render menu as a floating glass box
-        renderer.bifrost(rect, 15.0, 1.1, 0.95);
-        renderer.fill_rounded_rect(rect, 8.0, [0.1, 0.1, 0.15, 0.9]);
-        renderer.stroke_rounded_rect(rect, 8.0, [0.0, 0.8, 1.0, 0.4], 1.0);
-        self.content.render(renderer, rect);
-    }
-}
-
 /// Scrollable container for content that exceeds available space with smooth
 /// momentum scrolling, auto-hiding scrollbars, and proper clipping.
 /// Scroll state (position, velocity, scrollbar opacity) is stored in the
@@ -1059,22 +783,10 @@ pub struct ScrollView<V> {
     pub(crate) content: V,
     /// Unique identifier for this scroll view's state in the system state map.
     pub(crate) scroll_id: u64,
-    /// Current scroll offset of the scroll view.
-    #[allow(dead_code)]
-    pub(crate) scroll_offset: [f32; 2],
     /// Cached or specified content size.
     pub(crate) content_size: [f32; 2],
-    /// Cached or specified viewport size.
-    #[allow(dead_code)]
-    pub(crate) viewport_size: [f32; 2],
-    /// Current momentum velocity of the scroll view.
-    #[allow(dead_code)]
-    pub(crate) momentum_velocity: [f32; 2],
     /// Width of scrollbars.
     pub(crate) scrollbar_width: f32,
-    /// Rubber band physics factor (defaults to 0.3).
-    #[allow(dead_code)]
-    pub(crate) rubber_band_factor: f32,
     /// Scroll speed multiplier for wheel events.
     pub(crate) scroll_speed: f32,
     /// Momentum decay factor per frame.
@@ -1137,12 +849,8 @@ impl<V: View> ScrollView<V> {
         Self {
             content,
             scroll_id: 0,
-            scroll_offset: [0.0, 0.0],
             content_size: [0.0, 0.0],
-            viewport_size: [0.0, 0.0],
-            momentum_velocity: [0.0, 0.0],
             scrollbar_width: 6.0,
-            rubber_band_factor: 0.3,
             scroll_speed: 1.0,
             momentum_decay: 0.92,
             scrollbar_fade_delay: 60,
@@ -1456,10 +1164,30 @@ impl<V: View> View for ScrollView<V> {
                                 .get_component_state::<ScrollState>(scroll_id)
                                 .and_then(|g| g.read().ok().map(|v| *v))
                                 .unwrap_or_default();
-                            st.scroll_offset[0] = (st.scroll_offset[0] + delta_x * speed).max(0.0);
-                            st.scroll_offset[1] = (st.scroll_offset[1] + delta_y * speed).max(0.0);
-                            st.momentum_velocity[0] += delta_x * speed * 0.5;
-                            st.momentum_velocity[1] += delta_y * speed * 0.5;
+
+                            let max_scroll_x = (content_w - rect.width).max(0.0);
+                            let max_scroll_y = (content_h - rect.height).max(0.0);
+
+                            let mut dx = delta_x * speed;
+                            let mut dy = delta_y * speed;
+
+                            // Apply resistance out of bounds
+                            if (st.scroll_offset[0] <= 0.0 && dx < 0.0)
+                                || (st.scroll_offset[0] >= max_scroll_x && dx > 0.0)
+                            {
+                                dx *= 0.35;
+                            }
+                            if (st.scroll_offset[1] <= 0.0 && dy < 0.0)
+                                || (st.scroll_offset[1] >= max_scroll_y && dy > 0.0)
+                            {
+                                dy *= 0.35;
+                            }
+
+                            st.scroll_offset[0] += dx;
+                            st.scroll_offset[1] += dy;
+
+                            st.momentum_velocity[0] += dx * 0.5;
+                            st.momentum_velocity[1] += dy * 0.5;
                             st.scrollbar_opacity = 1.0;
                             st.last_scroll_frame = 0;
                             s.set_component_state(scroll_id, st);
@@ -1826,28 +1554,6 @@ impl<V: View> View for ScrollView<V> {
 }
 
 /// Multi-column table layout
-pub struct Table<V> {
-    pub(crate) content: V,
-}
-
-impl<V: View> Table<V> {
-    pub fn new(content: V) -> Self {
-        Self { content }
-    }
-}
-
-impl<V: View> View for Table<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Table layout logic would go here
-        self.content.render(renderer, rect);
-    }
-}
-
 /// Settings style grouped form layout
 pub struct SettingsForm<V> {
     pub(crate) content: V,
@@ -2300,159 +2006,9 @@ impl View for FlexBox {
     }
 }
 
-/// Tooltip component for displaying short messages on hover.
-#[deprecated(note = "Use tooltip::Tooltip instead")]
-pub use crate::tooltip::Tooltip;
-
 /// Popover component for displaying rich content in a floating bubble.
 #[deprecated(note = "Use popover::Popover instead")]
 pub use crate::popover::Popover;
-
-/// Accordion component for collapsible content sections.
-pub struct Accordion<V> {
-    pub(crate) items: Vec<AccordionItem<V>>,
-}
-
-impl<V: View> Default for Accordion<V> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<V: View> Accordion<V> {
-    pub fn new() -> Self {
-        Self { items: Vec::new() }
-    }
-    pub fn item(mut self, title: impl Into<String>, content: V) -> Self {
-        self.items.push(AccordionItem {
-            title: title.into(),
-            content,
-            is_expanded: false,
-        });
-        self
-    }
-}
-
-pub struct AccordionItem<V> {
-    pub(crate) title: String,
-    pub(crate) content: V,
-    pub(crate) is_expanded: bool,
-}
-
-impl<V: View> View for Accordion<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Accordion");
-
-        // System-state hash for tracking expanded indices (Vec<bool>)
-        let acc_hash: u64 = 0xE00_0001;
-        let mut expanded: Vec<bool> = cvkg_core::load_system_state()
-            .get_component_state::<Vec<bool>>(acc_hash)
-            .and_then(|v| v.read().ok().map(|g| g.clone()))
-            .unwrap_or_else(|| self.items.iter().map(|i| i.is_expanded).collect());
-        while expanded.len() < self.items.len() {
-            expanded.push(false);
-        }
-
-        let mut current_y = rect.y;
-        for (idx, item) in self.items.iter().enumerate() {
-            let header_h = 36.0;
-            let header_rect = Rect {
-                x: rect.x,
-                y: current_y,
-                width: rect.width,
-                height: header_h,
-            };
-
-            let is_expanded = expanded.get(idx).copied().unwrap_or(false);
-
-            // Header background
-            if is_expanded {
-                renderer.fill_rounded_rect(header_rect, 4.0, [0.08, 0.08, 0.14, 0.95]);
-                renderer.stroke_rounded_rect(header_rect, 4.0, [0.0, 0.8, 1.0, 0.4], 1.5);
-            } else {
-                renderer.fill_rounded_rect(header_rect, 4.0, theme::surface());
-                renderer.stroke_rounded_rect(header_rect, 4.0, [0.25, 0.25, 0.35, 0.5], 1.0);
-            }
-
-            let arrow = if is_expanded { "▼" } else { "▶" };
-            let accent = if is_expanded {
-                theme::accent()
-            } else {
-                theme::text_muted()
-            };
-            renderer.draw_text(
-                arrow,
-                header_rect.x + 8.0,
-                header_rect.y + 10.0,
-                12.0,
-                accent,
-            );
-            renderer.draw_text(
-                &item.title,
-                header_rect.x + 28.0,
-                header_rect.y + 10.0,
-                FONT_BASE + 1.0,
-                [1.0, 1.0, 1.0, 0.95],
-            );
-
-            // ── Click-to-toggle handler ──
-            let hdr_x = header_rect.x;
-            let hdr_y = header_rect.y;
-            let hdr_w = header_rect.width;
-            let hdr_h = header_rect.height;
-            let item_idx = idx;
-            let item_count = self.items.len();
-            renderer.register_handler(
-                "pointerclick",
-                Arc::new(move |event| {
-                    if let Event::PointerClick { x, y, .. } = event
-                        && x >= hdr_x
-                        && x <= hdr_x + hdr_w
-                        && y >= hdr_y
-                        && y <= hdr_y + hdr_h
-                    {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            let mut state: Vec<bool> = s
-                                .get_component_state::<Vec<bool>>(acc_hash)
-                                .and_then(|v| v.read().ok().map(|g| g.clone()))
-                                .unwrap_or_else(|| vec![false; item_count]);
-                            while state.len() <= item_idx {
-                                state.push(false);
-                            }
-                            state[item_idx] = !state[item_idx];
-                            s.set_component_state(acc_hash, state);
-                            s
-                        });
-                    }
-                }),
-            );
-
-            current_y += header_h + 4.0;
-
-            // Expanded content
-            if is_expanded {
-                let content_h = 100.0;
-                let content_rect = Rect {
-                    x: rect.x + 8.0,
-                    y: current_y,
-                    width: rect.width - 16.0,
-                    height: content_h,
-                };
-                renderer.fill_rounded_rect(content_rect, 4.0, [0.04, 0.04, 0.07, 0.4]);
-                item.content.render(renderer, content_rect);
-                current_y += content_h + 8.0;
-            }
-        }
-
-        renderer.pop_vnode();
-    }
-}
 
 const COLLAPSIBLE_ANIM_HASH: u64 = 0xD00_0001;
 

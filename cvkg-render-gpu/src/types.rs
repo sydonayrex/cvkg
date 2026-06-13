@@ -32,8 +32,8 @@ pub(crate) struct DrawCall {
     /// Material routing tag — determines which pass this draw call is routed to
     /// in the multi-pass Backdrop Capture pipeline.
     pub material: cvkg_core::DrawMaterial,
-    /// Which target to render this draw call to. None = main scene.
     pub target_id: Option<u64>,
+    pub instance_start: u32,
 }
 
 pub struct OffscreenEffectConfig {
@@ -50,11 +50,11 @@ pub(crate) struct ShadowState {
     pub _offset: [f32; 2],
 }
 
-#[allow(dead_code)]
 pub(crate) struct SurfaceContext {
     pub(crate) surface: wgpu::Surface<'static>,
     pub(crate) config: wgpu::SurfaceConfiguration,
     pub(crate) scene_texture: wgpu::TextureView,
+    pub(crate) scene_msaa_texture: wgpu::TextureView,
     pub(crate) scene_bind_group: wgpu::BindGroup,
     pub(crate) scene_texture_bind_group: wgpu::BindGroup,
     pub(crate) depth_texture_view: wgpu::TextureView,
@@ -62,14 +62,18 @@ pub(crate) struct SurfaceContext {
     pub(crate) blur_tex_b: crate::kvasir::resource::ResourceId,
     pub(crate) bloom_tex_a: crate::kvasir::resource::ResourceId,
     pub(crate) bloom_tex_b: crate::kvasir::resource::ResourceId,
+    pub(crate) blur_env_bind_group_a: wgpu::BindGroup,
+    pub(crate) blur_env_bind_group_b: wgpu::BindGroup,
+    pub(crate) bloom_env_bind_group_a: wgpu::BindGroup,
+    pub(crate) bloom_env_bind_group_b: wgpu::BindGroup,
     pub(crate) scale_factor: f32,
     pub(crate) sampler: wgpu::Sampler,
 }
 
 /// HeadlessContext — A rendering target for surface-less execution.
-#[allow(dead_code)]
 pub struct HeadlessContext {
     pub scene_texture: wgpu::TextureView,
+    pub scene_msaa_texture: wgpu::TextureView,
     pub scene_bind_group: wgpu::BindGroup,
     pub scene_texture_bind_group: wgpu::BindGroup,
     pub depth_texture_view: wgpu::TextureView,
@@ -77,6 +81,10 @@ pub struct HeadlessContext {
     pub blur_tex_b: crate::kvasir::resource::ResourceId,
     pub bloom_tex_a: crate::kvasir::resource::ResourceId,
     pub bloom_tex_b: crate::kvasir::resource::ResourceId,
+    pub blur_env_bind_group_a: wgpu::BindGroup,
+    pub blur_env_bind_group_b: wgpu::BindGroup,
+    pub bloom_env_bind_group_a: wgpu::BindGroup,
+    pub bloom_env_bind_group_b: wgpu::BindGroup,
     pub scale_factor: f32,
     pub sampler: wgpu::Sampler,
     pub width: u32,

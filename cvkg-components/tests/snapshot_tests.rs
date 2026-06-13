@@ -42,11 +42,11 @@ fn test_interactive_snapshots() {
 fn test_container_snapshots() {
     let _nav = NavigationStack::new(Text::new("Root"));
     let _split = NavigationSplitView::new(Text::new("Side"), Text::new("Detail"));
-    let _tab = TabView::new(vec![("Tab".to_string(), 1)]);
+    let _tab = BifrostTabs::new(vec!["Tab".to_string()], 0, |_| {});
     // let _sheet = Sheet::new(Text::new("Content"), true);
-    let _menu = Menu::new(Text::new("Item"));
+    let _menu = DropdownMenu::new(Text::new("Trigger"), vec![DropdownItem::new("Item", || {})]);
     let _list = VStack::new(0.0).child(Text::new("Row"));
-    let _table = Table::new(Text::new("Cell"));
+    let _table = RunesTable::new(vec!["Cell".to_string()]);
     let _form = SettingsForm::new(Text::new("Field"));
 
     insta::assert_snapshot!(
@@ -58,7 +58,7 @@ fn test_container_snapshots() {
 #[test]
 fn test_visual_snapshots() {
     // let _progress = Progress::new(0.5).max(1.0);
-    let _gauge = Gauge::new(50.0, 0.0..=100.0);
+    let _gauge = TacticalGauge::new("Tactical", 0.5);
 
     insta::assert_snapshot!(
         "Visual API",

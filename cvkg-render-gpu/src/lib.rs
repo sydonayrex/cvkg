@@ -21,7 +21,15 @@
 //! Sources:
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
-#![allow(clippy::type_complexity, clippy::unwrap_or_default)]
+#![allow(
+    clippy::type_complexity,
+    clippy::unwrap_or_default,
+    dead_code,
+    unused_variables,
+    unused_imports,
+    unused_mut,
+    unused_parens
+)]
 
 mod kvasir;
 mod material;
@@ -117,6 +125,7 @@ pub(crate) const WGSL_MATERIAL_GLASS: &str = include_str!("shaders/material_glas
 pub(crate) const WGSL_BIFROST: &str = include_str!("shaders/bifrost.wgsl");
 pub(crate) const WGSL_BLOOM: &str = include_str!("shaders/bloom.wgsl");
 pub(crate) const WGSL_COLOR_BLIND: &str = include_str!("shaders/color_blind.wgsl");
+pub(crate) const WGSL_TONEMAP: &str = include_str!("shaders/tonemap.wgsl");
 
 pub mod color_blindness;
 

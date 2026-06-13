@@ -89,7 +89,7 @@ pub enum DrawMaterial {
     #[default]
     Opaque,
     /// Glass/frosted panel — samples from blur pyramid during composite pass.
-    Glass { blur_radius: f32 },
+    Glass { blur_radius: f32, ior_override: f32 },
     /// UI element rendered after glass (crisp text, icons).
     TopUI,
 }

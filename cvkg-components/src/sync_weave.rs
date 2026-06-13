@@ -219,7 +219,7 @@ impl View for SyncEditor {
         // Render text
         let mut y = rect.y + 4.0;
         let line_height = 20.0;
-        for (_line_idx, line) in text.lines().enumerate() {
+        for line in text.lines() {
             renderer.draw_text(line, rect.x + 4.0, y, 14.0, theme::text());
             y += line_height;
         }

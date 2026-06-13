@@ -37,18 +37,17 @@ pub fn t(key: &str) -> String {
     let translations = TRANSLATIONS.get().and_then(|t| t.lock().ok());
 
     if let Some(guard) = translations {
-        if let Some(table) = guard.get(&locale) {
-            if let Some(value) = table.get(key) {
-                return value.clone();
-            }
+        if let Some(table) = guard.get(&locale)
+            && let Some(value) = table.get(key)
+        {
+            return value.clone();
         }
         // Fallback to "en"
-        if locale != "en" {
-            if let Some(table) = guard.get("en") {
-                if let Some(value) = table.get(key) {
-                    return value.clone();
-                }
-            }
+        if locale != "en"
+            && let Some(table) = guard.get("en")
+            && let Some(value) = table.get(key)
+        {
+            return value.clone();
         }
     }
 
@@ -137,5 +136,113 @@ pub fn init_english_translations() {
     // AwaitVeil
     en.insert("awaitveil.loading".to_string(), "Loading...".to_string());
 
+    load_translations("en", en);
+}
+
+/// Initialize with Japanese translations.
+pub fn init_japanese_translations() {
+    let mut ja = HashMap::new();
+
+    // PhaseGate
+    ja.insert("phasegate.tooltip".to_string(), "ツールチップ".to_string());
+    ja.insert(
+        "phasegate.dropdown".to_string(),
+        "ドロップダウン".to_string(),
+    );
+    ja.insert("phasegate.modal".to_string(), "モーダル".to_string());
+    ja.insert("phasegate.toast".to_string(), "トースト".to_string());
+
+    // TokenStream
+    ja.insert(
+        "tokenstream.streaming".to_string(),
+        "ストリーミング中...".to_string(),
+    );
+    ja.insert("tokenstream.complete".to_string(), "完了".to_string());
+
+    // TrustMark
+    ja.insert("trustmark.high".to_string(), "高い信頼性".to_string());
+    ja.insert("trustmark.medium".to_string(), "中程度の信頼性".to_string());
+    ja.insert(
+        "trustmark.low".to_string(),
+        "低い信頼性 - 要確認".to_string(),
+    );
+    ja.insert(
+        "trustmark.verylow".to_string(),
+        "推測 - 信頼できない".to_string(),
+    );
+    ja.insert("trustmark.unknown".to_string(), "信頼性不明".to_string());
+
+    // DropVault
+    ja.insert(
+        "dropvault.drop_here".to_string(),
+        "ここにファイルをドロップ".to_string(),
+    );
+    ja.insert(
+        "dropvault.browse".to_string(),
+        "ここにファイルをドラッグするか、クリックして参照".to_string(),
+    );
+    ja.insert("dropvault.waiting".to_string(), "待機中...".to_string());
+    ja.insert("dropvault.done".to_string(), "完了".to_string());
+
+    // ConsentGate
+    ja.insert(
+        "consentgate.title".to_string(),
+        "データ利用の同意".to_string(),
+    );
+    ja.insert("consentgate.accept".to_string(), "同意する".to_string());
+    ja.insert("consentgate.reject".to_string(), "拒否する".to_string());
+
+    // AwaitVeil
+    ja.insert("awaitveil.loading".to_string(), "読み込み中...".to_string());
+
+    load_translations("ja", ja);
+}
+
+/// Shorthand macro for translation lookup.
+/// Usage: `t!("key")` or `t!("key", "default")`
+#[macro_export]
+macro_rules! t {
+    ($key:expr) => {
+        $crate::lingua_tong::t($key)
+    };
+    ($key:expr, $default:expr) => {{
+        let result = $crate::lingua_tong::t($key);
+        if result == $key {
+            $default.to_string()
+        } else {
+            result
+        }
+    }};
+}
+
+/// Helper to initialize English translations with common UI strings.
+/// Call this at app startup before using any components with i18n labels.
+pub fn init_english() {
+    use std::collections::HashMap;
+    let mut en = HashMap::new();
+    // Common actions
+    en.insert("action.ok".to_string(), "OK".to_string());
+    en.insert("action.cancel".to_string(), "Cancel".to_string());
+    en.insert("action.save".to_string(), "Save".to_string());
+    en.insert("action.delete".to_string(), "Delete".to_string());
+    en.insert("action.edit".to_string(), "Edit".to_string());
+    en.insert("action.create".to_string(), "Create".to_string());
+    en.insert("action.submit".to_string(), "Submit".to_string());
+    en.insert("action.close".to_string(), "Close".to_string());
+    en.insert("action.back".to_string(), "Back".to_string());
+    en.insert("action.next".to_string(), "Next".to_string());
+    en.insert("action.search".to_string(), "Search".to_string());
+    en.insert("action.filter".to_string(), "Filter".to_string());
+    en.insert("action.refresh".to_string(), "Refresh".to_string());
+    // Navigation
+    en.insert("nav.home".to_string(), "Home".to_string());
+    en.insert("nav.settings".to_string(), "Settings".to_string());
+    en.insert("nav.profile".to_string(), "Profile".to_string());
+    en.insert("nav.logout".to_string(), "Sign out".to_string());
+    // Status
+    en.insert("status.loading".to_string(), "Loading...".to_string());
+    en.insert("status.error".to_string(), "Error".to_string());
+    en.insert("status.success".to_string(), "Success".to_string());
+    en.insert("status.empty".to_string(), "No data".to_string());
     load_translations("en", en);
 }

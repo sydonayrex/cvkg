@@ -2,7 +2,7 @@
 //! Named after Heimdall, guardian of the Bifrost bridge.
 
 use crate::theme;
-use cvkg_core::{Rect, Renderer, View, Never};
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// Compute magnified size for a dock item based on pointer proximity.
@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub fn dock_item_magnification(
     item_center: f32,
     pointer_x: f32,
-    base_size: f32,
+    _base_size: f32,
     max_scale: f32,
 ) -> f32 {
     let sigma = 80.0_f32;
@@ -31,7 +31,11 @@ pub struct DockItem {
 }
 
 impl DockItem {
-    pub fn new(id: impl Into<String>, label: impl Into<String>, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        label: impl Into<String>,
+        on_click: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
         Self {
             id: id.into(),
             label: label.into(),
@@ -123,7 +127,9 @@ impl HeimdallDock {
 
 impl View for HeimdallDock {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let platter_rect = self.platter_rect(rect);
@@ -140,7 +146,8 @@ impl View for HeimdallDock {
 
         for (i, item) in self.items.iter().enumerate() {
             let item_center = start_x + i as f32 * (base_size + 8.0);
-            let scale = dock_item_magnification(item_center, self.pointer_x, base_size, self.magnification);
+            let scale =
+                dock_item_magnification(item_center, self.pointer_x, base_size, self.magnification);
             let scaled_size = base_size * scale;
 
             let item_rect = Rect {
@@ -174,8 +181,18 @@ impl View for HeimdallDock {
                     height: 14.0,
                 };
                 renderer.fill_ellipse(badge_rect, [0.9, 0.2, 0.2, 0.9]);
-                let text = if count > 99 { "99+".to_string() } else { count.to_string() };
-                renderer.draw_text(&text, badge_rect.x + 2.0, badge_rect.y + 3.0, 9.0, [1.0, 1.0, 1.0, 1.0]);
+                let text = if count > 99 {
+                    "99+".to_string()
+                } else {
+                    count.to_string()
+                };
+                renderer.draw_text(
+                    &text,
+                    badge_rect.x + 2.0,
+                    badge_rect.y + 3.0,
+                    9.0,
+                    [1.0, 1.0, 1.0, 1.0],
+                );
             }
         }
     }
@@ -188,20 +205,33 @@ mod tests {
     #[test]
     fn test_dock_magnification_at_zero_distance() {
         let scale = dock_item_magnification(100.0, 100.0, 48.0, 2.0);
-        assert!((scale - 2.0).abs() < 0.01, "At zero distance, scale should be 2.0, got {}", scale);
+        assert!(
+            (scale - 2.0).abs() < 0.01,
+            "At zero distance, scale should be 2.0, got {}",
+            scale
+        );
     }
 
     #[test]
     fn test_dock_magnification_at_far_distance() {
         let scale = dock_item_magnification(100.0, 500.0, 48.0, 2.0);
-        assert!((scale - 1.0).abs() < 0.05, "At far distance, scale should approach 1.0, got {}", scale);
+        assert!(
+            (scale - 1.0).abs() < 0.05,
+            "At far distance, scale should approach 1.0, got {}",
+            scale
+        );
     }
 
     #[test]
     fn test_dock_magnification_symmetry() {
         let left = dock_item_magnification(100.0, 50.0, 48.0, 2.0);
         let right = dock_item_magnification(100.0, 150.0, 48.0, 2.0);
-        assert!((left - right).abs() < 0.001, "Magnification should be symmetric: left={}, right={}", left, right);
+        assert!(
+            (left - right).abs() < 0.001,
+            "Magnification should be symmetric: left={}, right={}",
+            left,
+            right
+        );
     }
 
     #[test]
@@ -209,7 +239,11 @@ mod tests {
         // At sigma distance (80px), scale should be about 1.0 + (2.0-1.0)*e^(-0.5) ≈ 1.606
         let scale = dock_item_magnification(100.0, 180.0, 48.0, 2.0);
         let expected = 1.0 + (-0.5f32).exp();
-        assert!((scale - expected).abs() < 0.01, "At sigma distance, scale should be ~1.606, got {}", scale);
+        assert!(
+            (scale - expected).abs() < 0.01,
+            "At sigma distance, scale should be ~1.606, got {}",
+            scale
+        );
     }
 
     #[test]

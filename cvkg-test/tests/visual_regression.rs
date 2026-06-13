@@ -126,18 +126,6 @@ async fn test_generate_niflheim_screenshot() {
     let pixels = renderer.capture_frame().await.expect("Capture failed");
 
     // Save as PNG
-    let img_buffer =
-        image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(width, height, pixels)
-            .expect("Failed to create image buffer");
-
-    let out_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("docs")
-        .join("images")
-        .join("cvkg_hero.png");
-
-    std::fs::create_dir_all(out_path.parent().unwrap()).unwrap();
-    img_buffer.save(&out_path).expect("Failed to save image");
-    println!("Saved screenshot to {:?}", out_path);
+    let golden = cvkg_test::GoldenImage::new("niflheim_hero");
+    golden.assert_match(width, height, &pixels);
 }

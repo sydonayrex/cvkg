@@ -43,18 +43,15 @@ pub fn render_mjolnir_frame(
                 let y = rect.y - 8.0;
                 renderer.draw_text(
                     &rune.character.to_string(),
-                    x, y, 10.0,
+                    x,
+                    y,
+                    10.0,
                     [0.9, 0.72, 0.3, rune.glow_intensity],
                 );
             }
         }
         MjolnirFrameStyle::HammeredMetal { oxidation } => {
-            let base = [
-                0.5 - *oxidation * 0.2,
-                0.45 - *oxidation * 0.15,
-                0.4,
-                0.9,
-            ];
+            let base = [0.5 - *oxidation * 0.2, 0.45 - *oxidation * 0.15, 0.4, 0.9];
             renderer.stroke_rect(rect, base, 4.0);
             // Rivets at corners
             let corners = [
@@ -65,7 +62,12 @@ pub fn render_mjolnir_frame(
             ];
             for (cx, cy) in &corners {
                 renderer.fill_ellipse(
-                    cvkg_core::Rect { x: cx - 3.0, y: cy - 3.0, width: 6.0, height: 6.0 },
+                    cvkg_core::Rect {
+                        x: cx - 3.0,
+                        y: cy - 3.0,
+                        width: 6.0,
+                        height: 6.0,
+                    },
                     [0.6, 0.55, 0.5, 1.0],
                 );
             }
@@ -75,7 +77,12 @@ pub fn render_mjolnir_frame(
             for i in 0..count.max(1) {
                 let x = rect.x + i as f32 * *scale_size;
                 renderer.fill_rounded_rect(
-                    cvkg_core::Rect { x, y: rect.y - 2.0, width: scale_size * 0.8, height: 6.0 },
+                    cvkg_core::Rect {
+                        x,
+                        y: rect.y - 2.0,
+                        width: scale_size * 0.8,
+                        height: 6.0,
+                    },
                     3.0,
                     [0.2, 0.5, 0.3, 0.7],
                 );
@@ -98,8 +105,10 @@ pub fn render_mjolnir_frame(
             let jitter = rift_intensity * 4.0;
             renderer.stroke_rect(
                 cvkg_core::Rect {
-                    x: rect.x - jitter, y: rect.y - jitter,
-                    width: rect.width + jitter * 2.0, height: rect.height + jitter * 2.0,
+                    x: rect.x - jitter,
+                    y: rect.y - jitter,
+                    width: rect.width + jitter * 2.0,
+                    height: rect.height + jitter * 2.0,
                 },
                 [0.1, 0.0, 0.15, 0.9],
                 2.0 + jitter,
@@ -115,7 +124,11 @@ mod tests {
     #[test]
     fn test_rune_stone_has_runes() {
         let style = MjolnirFrameStyle::RuneStone {
-            runes: vec![RuneGlyph { character: '\u{16A0}', position: 0.5, glow_intensity: 0.8 }],
+            runes: vec![RuneGlyph {
+                character: '\u{16A0}',
+                position: 0.5,
+                glow_intensity: 0.8,
+            }],
         };
         match style {
             MjolnirFrameStyle::RuneStone { runes } => {
@@ -130,7 +143,9 @@ mod tests {
     fn test_hammered_metal_oxidation() {
         let style = MjolnirFrameStyle::HammeredMetal { oxidation: 0.5 };
         match style {
-            MjolnirFrameStyle::HammeredMetal { oxidation } => assert!((oxidation - 0.5).abs() < 0.01),
+            MjolnirFrameStyle::HammeredMetal { oxidation } => {
+                assert!((oxidation - 0.5).abs() < 0.01)
+            }
             _ => panic!("wrong variant"),
         }
     }
@@ -139,14 +154,18 @@ mod tests {
     fn test_dragon_scale_size() {
         let style = MjolnirFrameStyle::DragonScale { scale_size: 12.0 };
         match style {
-            MjolnirFrameStyle::DragonScale { scale_size } => assert!((scale_size - 12.0).abs() < 0.01),
+            MjolnirFrameStyle::DragonScale { scale_size } => {
+                assert!((scale_size - 12.0).abs() < 0.01)
+            }
             _ => panic!("wrong variant"),
         }
     }
 
     #[test]
     fn test_ice_crystal_growth() {
-        let style = MjolnirFrameStyle::IceCrystal { growth_progress: 0.5 };
+        let style = MjolnirFrameStyle::IceCrystal {
+            growth_progress: 0.5,
+        };
         match style {
             MjolnirFrameStyle::IceCrystal { growth_progress } => {
                 assert!((growth_progress - 0.5).abs() < 0.01)
@@ -157,7 +176,9 @@ mod tests {
 
     #[test]
     fn test_void_rift_intensity() {
-        let style = MjolnirFrameStyle::VoidRift { rift_intensity: 1.0 };
+        let style = MjolnirFrameStyle::VoidRift {
+            rift_intensity: 1.0,
+        };
         match style {
             MjolnirFrameStyle::VoidRift { rift_intensity } => {
                 assert!((rift_intensity - 1.0).abs() < 0.01)

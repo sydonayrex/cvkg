@@ -348,7 +348,7 @@ pub fn draw_velocities(
     scale: f32,
     out: &mut Vec<DebugDrawCommand>,
 ) {
-    for (_body_id, &idx) in body_id_map {
+    for &idx in body_id_map.values() {
         if let Some(body) = bodies.get(idx) {
             if body.is_sleeping {
                 continue;

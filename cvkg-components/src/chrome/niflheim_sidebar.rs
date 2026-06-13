@@ -1,8 +1,7 @@
 //! NiflheimSidebar — Glass chrome wrapper for sidebar panels.
 //! Named after Niflheim, the realm of ice and mist.
 
-use crate::theme;
-use cvkg_core::{Rect, Renderer, View, Never};
+use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// A sidebar item in the source list.
@@ -100,8 +99,10 @@ impl NiflheimSidebar {
         // Separator line on trailing edge
         let sep_x = rect.x + rect.width - 0.5;
         renderer.draw_line(
-            sep_x, rect.y,
-            sep_x, rect.y + rect.height,
+            sep_x,
+            rect.y,
+            sep_x,
+            rect.y + rect.height,
             [0.15, 0.15, 0.18, 0.6],
             1.0,
         );
@@ -133,7 +134,13 @@ impl NiflheimSidebar {
 
         // Icon
         if let Some(ref icon) = item.icon {
-            renderer.draw_text(icon, rect.x + indent, rect.y + 6.0, 14.0, [0.7, 0.7, 0.75, 0.9]);
+            renderer.draw_text(
+                icon,
+                rect.x + indent,
+                rect.y + 6.0,
+                14.0,
+                [0.7, 0.7, 0.75, 0.9],
+            );
         }
 
         // Label
@@ -142,7 +149,13 @@ impl NiflheimSidebar {
         } else {
             [0.85, 0.85, 0.88, 0.95]
         };
-        renderer.draw_text(&item.label, rect.x + indent + 20.0, rect.y + 5.0, 12.0, text_color);
+        renderer.draw_text(
+            &item.label,
+            rect.x + indent + 20.0,
+            rect.y + 5.0,
+            12.0,
+            text_color,
+        );
 
         // Badge
         if let Some(count) = item.badge {
@@ -153,16 +166,28 @@ impl NiflheimSidebar {
                 height: 18.0,
             };
             renderer.fill_ellipse(badge_rect, [0.2, 0.4, 0.8, 0.9]);
-            let text = if count > 99 { "99+".to_string() } else { count.to_string() };
+            let text = if count > 99 {
+                "99+".to_string()
+            } else {
+                count.to_string()
+            };
             let tw = renderer.measure_text(&text, 9.0).0;
-            renderer.draw_text(&text, badge_rect.x + (18.0 - tw) / 2.0, badge_rect.y + 4.0, 9.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text(
+                &text,
+                badge_rect.x + (18.0 - tw) / 2.0,
+                badge_rect.y + 4.0,
+                9.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
         }
     }
 }
 
 impl View for NiflheimSidebar {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass background
@@ -207,8 +232,8 @@ mod tests {
 
     #[test]
     fn test_sidebar_item_with_children() {
-        let item = SidebarItem::new("folder", "Folder")
-            .children(vec![SidebarItem::new("sub", "Sub")]);
+        let item =
+            SidebarItem::new("folder", "Folder").children(vec![SidebarItem::new("sub", "Sub")]);
         assert_eq!(item.children.len(), 1);
     }
 

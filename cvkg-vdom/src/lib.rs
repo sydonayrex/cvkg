@@ -453,7 +453,7 @@ impl VDom {
     /// Apply a set of patches to the host's DOM environment.
     pub fn apply_to_dom(&self, patches: &[VDomPatch]) {
         // This is a bridge to the platform-specific accessibility tree (ShieldWall).
-        log::info!("Applying {} patches to host ShieldWall", patches.len());
+        log::debug!("Applying {} patches to host ShieldWall", patches.len());
         for patch in patches {
             match patch {
                 VDomPatch::Create(node) => log::debug!("ShieldWall: Create node {}", node.id.0),
@@ -563,7 +563,7 @@ impl VNodeRenderer {
 
     /// Convert the captured nodes into a VDom instance.
     pub fn into_vdom(self) -> VDom {
-        log::info!("[VDOM] Built VDOM with {} nodes", self.nodes.len());
+        log::debug!("[VDOM] Built VDOM with {} nodes", self.nodes.len());
         let mut parents = HashMap::new();
         for (id, node) in &self.nodes {
             for child_id in &node.children {
@@ -589,7 +589,7 @@ impl VNodeRenderer {
 
     fn add_node(&mut self, node: VNode) -> NodeId {
         let id = node.id;
-        log::info!(
+        log::trace!(
             "[VDOM] Adding node {:?} ({}): {:?}",
             id,
             node.component_type,
@@ -1452,29 +1452,72 @@ impl VDom {
     }
 
     /// Perform hit testing to find the front-most node at the given coordinates.
-    pub fn hit_test(&self, x: f32, y: f32) -> Option<(NodeId, f32)> {
+    ///
+    /// WHY: Looks up node at coordinates.
+    /// CONTRACT: Uses pointer_precision to define the maximum expansion radius for hit matching.
+    pub fn hit_test(&self, x: f32, y: f32, pointer_precision: f32) -> Option<(NodeId, f32)> {
         self.root
-            .and_then(|root_id| self.hit_test_recursive(root_id, x, y))
+            .and_then(|root_id| self.hit_test_recursive(root_id, x, y, pointer_precision))
     }
 
-    fn hit_test_recursive(&self, node_id: NodeId, x: f32, y: f32) -> Option<(NodeId, f32)> {
+    /// Perform recursive hit-testing down the VDOM tree.
+    ///
+    /// WHY: Returns the matched node ID and its proximity score.
+    /// CONTRACT: Prioritizes direct hits (proximity == 1.0, meaning the coordinates fall within the node's layout)
+    /// over proximity-based target expansion hits to prevent outer targets from blocking focused elements.
+    /// Dynamic bounds expansion is scaled using the provided `pointer_precision` metric.
+    fn hit_test_recursive(
+        &self,
+        node_id: NodeId,
+        x: f32,
+        y: f32,
+        pointer_precision: f32,
+    ) -> Option<(NodeId, f32)> {
         let node = self.nodes.get(&node_id)?;
 
         let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, x, y);
-        let proximity = (1.0 - (dist / 150.0)).clamp(0.0, 1.0);
+
+        // Scale proximity limit based on the precision of the pointer device.
+        let proximity_limit = pointer_precision.max(0.0);
+        let proximity = if dist <= 0.0 {
+            1.0
+        } else if proximity_limit > 0.0 {
+            (1.0 - (dist / proximity_limit)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
 
         if proximity > 0.0 {
-            // Search children in reverse (front-to-back)
+            // Search children in reverse (front-to-back) to maintain proper Z-ordering.
+            let mut best_hit: Option<(NodeId, f32)> = None;
             for child_id in node.children.iter().rev() {
-                if let Some((hit, hit_prox)) = self.hit_test_recursive(*child_id, x, y) {
+                if let Some((hit, hit_prox)) =
+                    self.hit_test_recursive(*child_id, x, y, pointer_precision)
+                {
                     if let Some(child_node) = self.nodes.get(&hit)
                         && child_node.aria_role == "presentation"
                         && self.event_handlers.contains_key(&node_id)
                     {
-                        return Some((node_id, proximity.max(hit_prox)));
+                        let resolved_prox = proximity.max(hit_prox);
+                        if resolved_prox >= 1.0 {
+                            return Some((node_id, resolved_prox));
+                        }
+                        if best_hit.is_none() || resolved_prox > best_hit.unwrap().1 {
+                            best_hit = Some((node_id, resolved_prox));
+                        }
+                    } else {
+                        if hit_prox >= 1.0 {
+                            return Some((hit, hit_prox));
+                        }
+                        if best_hit.is_none() || hit_prox > best_hit.unwrap().1 {
+                            best_hit = Some((hit, hit_prox));
+                        }
                     }
-                    return Some((hit, hit_prox));
                 }
+            }
+
+            if let Some(bh) = best_hit {
+                return Some(bh);
             }
 
             if dist <= 0.0 || self.event_handlers.contains_key(&node_id) {
@@ -1490,7 +1533,7 @@ impl VDom {
         let _span = tracing::info_span!("vdom_dispatch_event").entered();
         let event_name = event.name();
 
-        log::info!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
+        log::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
 
         let target_id = match event {
             cvkg_core::Event::PointerDown { x, y, .. }
@@ -1501,13 +1544,19 @@ impl VDom {
             | cvkg_core::Event::PointerDoubleClick { x, y, .. }
             | cvkg_core::Event::DragStart { x, y, .. }
             | cvkg_core::Event::DragMove { x, y, .. }
-            | cvkg_core::Event::DragEnd { x, y } => {
-                log::info!("[VDOM] Hit testing at ({}, {})", x, y);
-                let (id, proximity) = match self.hit_test(x, y) {
+            | cvkg_core::Event::DragEnd { x, y, .. }
+            | cvkg_core::Event::FileDrop { x, y, .. } => {
+                log::trace!(
+                    "[VDOM] Hit testing at ({}, {}) with precision {}",
+                    x,
+                    y,
+                    event.pointer_precision()
+                );
+                let (id, proximity) = match self.hit_test(x, y, event.pointer_precision()) {
                     Some((i, p)) => (Some(i), p),
                     None => (None, 0.0),
                 };
-                log::info!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
+                log::trace!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
 
                 if let cvkg_core::Event::PointerMove {
                     ref mut proximity_field,
@@ -1572,7 +1621,7 @@ impl VDom {
         };
 
         if let Some(id) = target_id {
-            log::info!(
+            log::trace!(
                 "[VDOM] Dispatching {} to node {:?} ({})",
                 event_name,
                 id,
@@ -1583,7 +1632,7 @@ impl VDom {
             );
             self.bubble_event_response(id, event)
         } else {
-            log::info!("[VDOM] No hit for event {} at {:?}", event_name, event);
+            log::trace!("[VDOM] No hit for event {} at {:?}", event_name, event);
             cvkg_core::EventResponse::Ignored
         }
     }
@@ -1756,6 +1805,7 @@ impl VDom {
                 .and_then(|f| *f)
                 .map(|id| accesskit::NodeId(id.0))
                 .unwrap_or(accesskit::NodeId(0)),
+            tree_id: accesskit::TreeId::ROOT,
         }
     }
 

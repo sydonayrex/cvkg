@@ -231,21 +231,20 @@ pub fn oklch_to_color_theme(seed: OklchColor) -> cvkg_core::ColorTheme {
 
     // Derive palette from seed using OKLCH color science
     let primary = seed.to_rgba();
-    let secondary = seed.rotate_hue(120.0).to_rgba();
-    let accent = seed.rotate_hue(60.0).saturate(0.1).to_rgba();
 
     let bg = if is_dark { 0.02 } else { 0.98 };
-    let surf = if is_dark { 0.08 } else { 0.95 };
-    let txt = if is_dark { 0.95 } else { 0.05 };
-
     let background = OklchColor::new(bg, seed.c * 0.1, seed.h, 1.0).to_rgba();
-    let surface = OklchColor::new(surf, seed.c * 0.15, seed.h, 1.0).to_rgba();
-    let text = OklchColor::new(txt, seed.c * 0.05, seed.h, 1.0).to_rgba();
 
     // Glass tints derived from seed
     let glass_base_l = if is_dark { 0.04 } else { 0.92 };
     let glass_base_c = seed.c * 0.08;
-    let glass_base = OklchColor::new(glass_base_l, glass_base_c, seed.h, if is_dark { 0.82 } else { 0.15 }).to_rgba();
+    let glass_base = OklchColor::new(
+        glass_base_l,
+        glass_base_c,
+        seed.h,
+        if is_dark { 0.82 } else { 0.15 },
+    )
+    .to_rgba();
     let glass_edge = OklchColor::new(0.5, seed.c * 0.2, seed.h + 180.0, 0.6).to_rgba();
 
     // Neon colors: primary = seed, shatter = complementary

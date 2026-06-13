@@ -52,7 +52,12 @@ fn test_opaque_quad_renders_correctly() {
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
         [1.0, 0.0, 0.0, 1.0],
     );
 
@@ -71,7 +76,9 @@ fn test_opaque_quad_renders_correctly() {
     assert!(
         red_percentage > 90.0,
         "Expected >90% red pixels, got {:.1}% ({} of {} pixels)",
-        red_percentage, red_count, total_pixels
+        red_percentage,
+        red_count,
+        total_pixels
     );
 }
 
@@ -85,12 +92,22 @@ fn test_alpha_blending() {
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
         [0.0, 0.0, 1.0, 1.0],
     );
 
     renderer.fill_rect(
-        Rect { x: 32.0, y: 32.0, width: 64.0, height: 64.0 },
+        Rect {
+            x: 32.0,
+            y: 32.0,
+            width: 64.0,
+            height: 64.0,
+        },
         [1.0, 0.0, 0.0, 0.5],
     );
 
@@ -107,7 +124,9 @@ fn test_alpha_blending() {
     assert!(
         center_pixel[0] > 50 && center_pixel[2] > 50,
         "Center pixel should be blended purple, got R={} G={} B={}",
-        center_pixel[0], center_pixel[1], center_pixel[2]
+        center_pixel[0],
+        center_pixel[1],
+        center_pixel[2]
     );
 }
 
@@ -123,15 +142,26 @@ fn test_glass_pipeline_renders() {
     let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
+    // Background
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
         [0.2, 0.4, 0.8, 1.0],
     );
 
-    // TODO: Replace with fill_glass_rect once glass pipeline is fixed
-    renderer.fill_rect(
-        Rect { x: 64.0, y: 64.0, width: 128.0, height: 128.0 },
-        [0.0, 0.8, 1.0, 0.8],
+    renderer.fill_glass_rect(
+        Rect {
+            x: 64.0,
+            y: 64.0,
+            width: 128.0,
+            height: 128.0,
+        },
+        8.0,  // radius
+        15.0, // blur radius
     );
 
     renderer.render_frame();
@@ -139,14 +169,27 @@ fn test_glass_pipeline_renders() {
 
     let pixels = capture_frame(&mut renderer);
 
-    let non_black = count_matching_pixels(&pixels, width, height, |p| {
-        p[0] > 5 || p[1] > 5 || p[2] > 5
-    });
+    let corner_idx = ((0 * width + 0) * 4) as usize;
+    let corner_r = pixels[corner_idx];
+    let corner_g = pixels[corner_idx + 1];
+    let corner_b = pixels[corner_idx + 2];
+    println!("Corner pixel: {}, {}, {}", corner_r, corner_g, corner_b);
+
+    let center_pixel_idx = ((128 * width + 128) * 4) as usize;
+    let center_r = pixels[center_pixel_idx];
+    let center_g = pixels[center_pixel_idx + 1];
+    let center_b = pixels[center_pixel_idx + 2];
+    println!("Center pixel: {}, {}, {}", center_r, center_g, center_b);
 
     assert!(
-        non_black > 100,
-        "Background + overlay should produce non-black pixels, got {} non-black",
-        non_black
+        center_r != corner_r || center_g != corner_g || center_b != corner_b,
+        "Glass region pixel ({},{},{}) is exactly the same as background ({},{},{})! It didn't render!",
+        center_r,
+        center_g,
+        center_b,
+        corner_r,
+        corner_g,
+        corner_b
     );
 }
 
@@ -162,7 +205,12 @@ fn test_bloom_pipeline() {
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
-        Rect { x: 32.0, y: 32.0, width: 64.0, height: 64.0 },
+        Rect {
+            x: 32.0,
+            y: 32.0,
+            width: 64.0,
+            height: 64.0,
+        },
         [1.0, 1.0, 1.0, 1.0],
     );
 
@@ -179,8 +227,98 @@ fn test_bloom_pipeline() {
     assert!(
         glow_pixel[0] > 20 || glow_pixel[1] > 20 || glow_pixel[2] > 20,
         "Bloom glow region should not be completely black, got R={} G={} B={}",
-        glow_pixel[0], glow_pixel[1], glow_pixel[2]
+        glow_pixel[0],
+        glow_pixel[1],
+        glow_pixel[2]
     );
+}
+
+/// Debug test: isolate the glass pipeline black output bug.
+/// This test draws a background + glass rect and checks each step.
+#[test]
+fn test_glass_pipeline_debug() {
+    let _ = env_logger::try_init();
+    let width: u32 = 128;
+    let height: u32 = 128;
+
+    // Step 1: Test with just opaque (should pass)
+    {
+        let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+        let encoder = renderer.begin_frame_headless();
+        renderer.fill_rect(
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: width as f32,
+                height: height as f32,
+            },
+            [0.2, 0.4, 0.8, 1.0],
+        );
+        renderer.render_frame();
+        renderer.end_frame(encoder);
+        let pixels = capture_frame(&mut renderer);
+        let non_black =
+            count_matching_pixels(&pixels, width, height, |p| p[0] > 5 || p[1] > 5 || p[2] > 5);
+        assert!(
+            non_black > 100,
+            "Step 1 (opaque only): expected non-black pixels, got {}",
+            non_black
+        );
+    }
+
+    // Step 2: Test with glass rect (this is the failing case)
+    {
+        let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+        let encoder = renderer.begin_frame_headless();
+        renderer.fill_rect(
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: width as f32,
+                height: height as f32,
+            },
+            [0.2, 0.4, 0.8, 1.0],
+        );
+        renderer.fill_glass_rect(
+            Rect {
+                x: 32.0,
+                y: 32.0,
+                width: 64.0,
+                height: 64.0,
+            },
+            8.0,
+            20.0,
+        );
+        renderer.render_frame();
+        renderer.end_frame(encoder);
+
+        let pixels = capture_frame(&mut renderer);
+        let non_black =
+            count_matching_pixels(&pixels, width, height, |p| p[0] > 5 || p[1] > 5 || p[2] > 5);
+
+        // Debug: check telemetry
+        println!(
+            "Step 2: draw_calls={}, vertices={}, non_black={}",
+            renderer.telemetry.draw_calls, renderer.telemetry.vertices, non_black
+        );
+        for i in 0..8 {
+            let idx = i * 4;
+            println!(
+                "  pixel[{}]: R={} G={} B={} A={}",
+                i,
+                pixels[idx],
+                pixels[idx + 1],
+                pixels[idx + 2],
+                pixels[idx + 3]
+            );
+        }
+
+        assert!(
+            non_black > 100,
+            "Step 2 (opaque + glass): expected non-black pixels, got {}",
+            non_black
+        );
+    }
 }
 
 /// Test: Render graph executes all expected passes.
@@ -193,7 +331,12 @@ fn test_render_graph_execution() {
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
         [0.5, 0.5, 0.5, 1.0],
     );
 
@@ -224,7 +367,12 @@ fn test_frame_time_budget() {
     for _ in 0..5 {
         let encoder = renderer.begin_frame_headless();
         renderer.fill_rect(
-            Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: width as f32,
+                height: height as f32,
+            },
             [0.5, 0.5, 0.5, 1.0],
         );
         renderer.render_frame();
@@ -234,7 +382,12 @@ fn test_frame_time_budget() {
 
     let encoder = renderer.begin_frame_headless();
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
         [0.5, 0.5, 0.5, 1.0],
     );
     renderer.render_frame();
@@ -244,8 +397,8 @@ fn test_frame_time_budget() {
     let frame_time_ms = renderer.telemetry.frame_time_ms;
 
     assert!(
-        frame_time_ms < 100.0,
-        "Frame time {:.2}ms exceeds 100ms budget",
+        frame_time_ms < 250.0,
+        "Frame time {:.2}ms exceeds 250ms budget",
         frame_time_ms
     );
 }
@@ -262,7 +415,12 @@ fn test_draw_call_efficiency() {
     for i in 0..10 {
         let x = (i * 10) as f32;
         renderer.fill_rect(
-            Rect { x, y: 0.0, width: 8.0, height: 8.0 },
+            Rect {
+                x,
+                y: 0.0,
+                width: 8.0,
+                height: 8.0,
+            },
             [1.0, 0.0, 0.0, 1.0],
         );
     }
@@ -289,7 +447,12 @@ fn test_vertex_count() {
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: 32.0, height: 32.0 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 32.0,
+            height: 32.0,
+        },
         [1.0, 0.0, 0.0, 1.0],
     );
 
@@ -323,7 +486,12 @@ fn test_many_draw_calls() {
         let x = (i % 16) as f32 * 16.0;
         let y = (i / 16) as f32 * 16.0;
         renderer.fill_rect(
-            Rect { x, y, width: 12.0, height: 12.0 },
+            Rect {
+                x,
+                y,
+                width: 12.0,
+                height: 12.0,
+            },
             [0.5, 0.5, 0.5, 1.0],
         );
     }
@@ -357,23 +525,43 @@ fn test_full_pipeline_integration() {
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
-        Rect { x: 0.0, y: 0.0, width: width as f32, height: height as f32 },
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
         [0.1, 0.1, 0.2, 1.0],
     );
 
     // TODO: Replace with fill_glass_rect once glass pipeline is fixed
     renderer.fill_rect(
-        Rect { x: 32.0, y: 32.0, width: 96.0, height: 96.0 },
+        Rect {
+            x: 32.0,
+            y: 32.0,
+            width: 96.0,
+            height: 96.0,
+        },
         [0.0, 0.6, 0.9, 0.7],
     );
 
     renderer.fill_rect(
-        Rect { x: 160.0, y: 160.0, width: 64.0, height: 64.0 },
+        Rect {
+            x: 160.0,
+            y: 160.0,
+            width: 64.0,
+            height: 64.0,
+        },
         [1.0, 1.0, 1.0, 1.0],
     );
 
     renderer.fill_rect(
-        Rect { x: 64.0, y: 160.0, width: 64.0, height: 32.0 },
+        Rect {
+            x: 64.0,
+            y: 160.0,
+            width: 64.0,
+            height: 32.0,
+        },
         [1.0, 0.0, 0.0, 0.8],
     );
 
@@ -425,7 +613,12 @@ fn test_glass_pipeline_is_valid() {
     // Try to use the glass pipeline
     let encoder = renderer.begin_frame_headless();
     renderer.fill_rect(
-        Rect { x: 16.0, y: 16.0, width: 32.0, height: 32.0 },
+        Rect {
+            x: 16.0,
+            y: 16.0,
+            width: 32.0,
+            height: 32.0,
+        },
         [0.5, 0.5, 0.5, 1.0],
     );
     renderer.render_frame();

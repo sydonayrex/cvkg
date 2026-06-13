@@ -116,7 +116,10 @@ impl<V: View> View for Focusable<V> {
                         let focused = state
                             .get_component_state::<String>(focus_id_hash(&focus_id))
                             .map(|v| {
-                                let guard = v.read().expect("lock poisoned");
+                                let guard = v.read().unwrap_or_else(|e| {
+                                    log::warn!("Lock poisoned, recovering...");
+                                    e.into_inner()
+                                });
                                 *guard == focus_id
                             })
                             .unwrap_or(false);
@@ -285,7 +288,10 @@ fn cycle_focus(forward: bool) {
     let focus_order = state
         .get_component_state::<Vec<String>>(FOCUS_ORDER_HASH)
         .map(|v| {
-            let guard = v.read().expect("lock poisoned");
+            let guard = v.read().unwrap_or_else(|e| {
+                log::warn!("Lock poisoned, recovering...");
+                e.into_inner()
+            });
             guard.clone()
         })
         .unwrap_or_default();
@@ -297,7 +303,10 @@ fn cycle_focus(forward: bool) {
     let current = state
         .get_component_state::<String>(CURRENT_FOCUS_HASH)
         .map(|v| {
-            let guard = v.read().expect("lock poisoned");
+            let guard = v.read().unwrap_or_else(|e| {
+                log::warn!("Lock poisoned, recovering...");
+                e.into_inner()
+            });
             guard.clone()
         })
         .unwrap_or_default();

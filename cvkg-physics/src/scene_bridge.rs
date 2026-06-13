@@ -87,31 +87,29 @@ impl SceneBridge {
         scene: &mut SceneGraph,
     ) {
         for (body_id, node_id) in &self.mappings {
-            if let Some(xform) = body_transforms.get(body_id) {
-                if let Some(node) = scene.nodes.get_mut(node_id) {
-                    let new_pos = [xform.position.x, xform.position.y, xform.position.z];
-                    let new_rot = [
-                        xform.rotation.x,
-                        xform.rotation.y,
-                        xform.rotation.z,
-                        xform.rotation.w,
-                    ];
+            if let Some(xform) = body_transforms.get(body_id)
+                && let Some(node) = scene.nodes.get_mut(node_id)
+            {
+                let new_pos = [xform.position.x, xform.position.y, xform.position.z];
+                let new_rot = [
+                    xform.rotation.x,
+                    xform.rotation.y,
+                    xform.rotation.z,
+                    xform.rotation.w,
+                ];
 
-                    // Only mark dirty if actually changed
-                    let pos_changed =
-                        (0..3).any(|i| (new_pos[i] - node.position_3d[i]).abs() > 0.001);
-                    let rot_changed =
-                        (0..4).any(|i| (new_rot[i] - node.rotation_3d[i]).abs() > 0.001);
+                // Only mark dirty if actually changed
+                let pos_changed = (0..3).any(|i| (new_pos[i] - node.position_3d[i]).abs() > 0.001);
+                let rot_changed = (0..4).any(|i| (new_rot[i] - node.rotation_3d[i]).abs() > 0.001);
 
-                    if pos_changed || rot_changed {
-                        node.position_3d = new_pos;
-                        node.rotation_3d = new_rot;
-                        node.is_3d = true;
-                        // Derive 2D fallback from 3D position for compatibility
-                        node.local_rect.x = new_pos[0] - node.local_rect.width * 0.5;
-                        node.local_rect.y = new_pos[1] - node.local_rect.height * 0.5;
-                        node.is_dirty = true;
-                    }
+                if pos_changed || rot_changed {
+                    node.position_3d = new_pos;
+                    node.rotation_3d = new_rot;
+                    node.is_3d = true;
+                    // Derive 2D fallback from 3D position for compatibility
+                    node.local_rect.x = new_pos[0] - node.local_rect.width * 0.5;
+                    node.local_rect.y = new_pos[1] - node.local_rect.height * 0.5;
+                    node.is_dirty = true;
                 }
             }
         }

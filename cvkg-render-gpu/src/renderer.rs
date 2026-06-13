@@ -6,7 +6,7 @@ use crate::types::*;
 use crate::vertex::*;
 use crate::{
     WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND, WGSL_COMMON, WGSL_MATERIAL_GLASS,
-    WGSL_MATERIAL_OPAQUE, WGSL_SHAPES,
+    WGSL_MATERIAL_OPAQUE, WGSL_SHAPES, WGSL_TONEMAP,
 };
 use bytemuck;
 use cvkg_core::Rect;
@@ -21,7 +21,6 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 /// SurtrRenderer implements the high-performance GPU backend.
-#[allow(dead_code)]
 pub struct SurtrRenderer {
     pub(crate) instance: Arc<wgpu::Instance>,
     pub(crate) adapter: Arc<wgpu::Adapter>,
@@ -53,6 +52,8 @@ pub struct SurtrRenderer {
     pub(crate) mega_heim_tex: wgpu::Texture,
     pub(crate) mega_heim_bind_group: wgpu::BindGroup,
     pub(crate) text_cache: LruCache<u64, (Rect, f32, f32, f32, f32)>,
+    pub(crate) shaped_text_cache:
+        std::collections::HashMap<(String, u32), cvkg_runic_text::ShapedText>,
     pub(crate) heim_packer: SundrPacker,
     pub(crate) image_uv_registry: LruCache<String, Rect>,
     pub(crate) texture_registry: LruCache<String, u32>,
@@ -105,6 +106,9 @@ pub struct SurtrRenderer {
     pub(crate) pipeline: wgpu::RenderPipeline,
     /// Specialized opaque/2D material pipeline (modes 0-20 excluding 7,13-15,18,21).
     pub(crate) opaque_pipeline: wgpu::RenderPipeline,
+    /// Non-multisampled pipeline used specifically to draw UI overlays.
+    /// Drawn with sample count 1 and no depth testing/depth stencil attachment.
+    pub(crate) ui_pipeline: wgpu::RenderPipeline,
     /// Specialized glass material pipeline (mode 7 only, ~150 lines of complex math).
     pub(crate) glass_pipeline: wgpu::RenderPipeline,
     pub(crate) background_pipeline: wgpu::RenderPipeline,
@@ -116,6 +120,10 @@ pub struct SurtrRenderer {
     pub(crate) color_blind_pipeline: wgpu::RenderPipeline,
     /// Volumetric raymarching pipeline (fullscreen triangle with SDF raymarch).
     pub(crate) volumetric_pipeline: wgpu::RenderPipeline,
+    /// Volumetric bind group layout for scene uniforms (time/resolution/light).
+    pub(crate) volumetric_bind_group_layout: wgpu::BindGroupLayout,
+    /// Persistent uniform buffer for volumetric data (updated each frame).
+    pub(crate) volumetric_uniform_buffer: wgpu::Buffer,
     /// Kawase blur pyramid downsample pipeline (separate shader module).
     pub(crate) kawase_down_pipeline: wgpu::RenderPipeline,
     /// Kawase blur pyramid upsample pipeline (separate shader module).
@@ -195,6 +203,19 @@ pub struct SurtrRenderer {
     /// Memoization cache for frame-level render skipping.
     /// Tracks (id, data_hash) -> skip_render for deduplication.
     pub(crate) memo_cache: std::collections::HashMap<u64, u64>,
+    /// Thread-safe bind group cache to avoid per-frame allocations during render passes.
+    /// Maps a cache key representing texture/pass metadata to the pre-created wgpu::BindGroup.
+    pub(crate) bind_group_cache: std::sync::Mutex<
+        std::collections::HashMap<
+            (crate::kvasir::resource::ResourceId, u32, bool),
+            wgpu::BindGroup,
+        >,
+    >,
+    /// Thread-safe texture view cache to avoid per-frame allocations of TextureViews.
+    /// Maps (texture id, mip level) -> wgpu::TextureView.
+    pub(crate) texture_view_cache: std::sync::Mutex<
+        std::collections::HashMap<(crate::kvasir::resource::ResourceId, u32), wgpu::TextureView>,
+    >,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -202,7 +223,47 @@ unsafe impl Send for SurtrRenderer {}
 #[cfg(target_arch = "wasm32")]
 unsafe impl Sync for SurtrRenderer {}
 
+/// SVG tessellation parameters.
+pub(crate) struct TessellateParams<'a> {
+    fill_tessellator: &'a mut FillTessellator,
+    stroke_tessellator: &'a mut StrokeTessellator,
+    vertices: &'a mut Vec<Vertex>,
+    indices: &'a mut Vec<u32>,
+    parsed_animations: &'a [SvgAnimation],
+    finalized_animations: &'a mut Vec<SvgAnimation>,
+}
+
 impl SurtrRenderer {
+    /// Update cursor pointer uniforms for tactile hover shader interactions.
+    ///
+    /// # Contract
+    /// - `mouse` represents logical window coordinates.
+    /// - `velocity` is the change in logical coordinates per second.
+    pub fn update_mouse(&mut self, mouse: [f32; 2], velocity: [f32; 2]) {
+        self.current_scene.mouse = mouse;
+        self.current_scene.mouse_velocity = velocity;
+    }
+
+    /// select_best_surface_format selects the highest precision/HDR texture format
+    /// supported by the surface. Favors floating point HDR (Rgba16Float) or Display P3 wide gamut
+    /// (Rgba8Unorm) over standard sRGB, falling back to sRGB/first option if not available.
+    pub(crate) fn select_best_surface_format(
+        formats: &[wgpu::TextureFormat],
+    ) -> wgpu::TextureFormat {
+        let preferred_formats = [
+            wgpu::TextureFormat::Rgba16Float, // HDR10 / Rec. 2020 FP16
+            wgpu::TextureFormat::Rgba8Unorm,  // Wide Color Display P3
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+        ];
+        for preferred in &preferred_formats {
+            if formats.contains(preferred) {
+                return *preferred;
+            }
+        }
+        formats[0]
+    }
+
     /// forge — Initializes the Surtr GPU renderer from a winit window.
     ///
     /// This method performs the following:
@@ -223,19 +284,21 @@ impl SurtrRenderer {
             .expect("Failed to create surface");
 
         // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
-        println!("[GPU] Requesting HighPerformance adapter...");
+        log::info!("[GPU] Requesting HighPerformance adapter...");
 
         let mut adapter = None;
 
         #[cfg(not(target_arch = "wasm32"))]
         if let Ok(filter) = std::env::var("WGPU_ADAPTER_NAME") {
             let adapters = instance.enumerate_adapters(wgpu::Backends::all()).await;
-            println!("[GPU] Available adapters:");
+            log::info!("[GPU] Available adapters:");
             for a in &adapters {
                 let info = a.get_info();
-                println!(
+                log::info!(
                     "  - Name: '{}' | Driver: '{}' | Backend: {:?}",
-                    info.name, info.driver, info.backend
+                    info.name,
+                    info.driver,
+                    info.backend
                 );
             }
 
@@ -244,21 +307,22 @@ impl SurtrRenderer {
                 let match_found = info.name.to_lowercase().contains(&filter.to_lowercase())
                     || info.driver.to_lowercase().contains(&filter.to_lowercase());
                 if match_found {
-                    println!(
+                    log::info!(
                         "[GPU] Manual selection match: {} | Driver: {}",
-                        info.name, info.driver
+                        info.name,
+                        info.driver
                     );
                 }
                 match_found
             });
 
             if adapter.is_some() {
-                println!(
+                log::info!(
                     "[GPU] Forced adapter selection via WGPU_ADAPTER_NAME='{}'",
                     filter
                 );
             } else {
-                println!(
+                log::warn!(
                     "[GPU] WGPU_ADAPTER_NAME='{}' provided but no matching adapter found. Falling back...",
                     filter
                 );
@@ -277,7 +341,7 @@ impl SurtrRenderer {
         }
 
         if adapter.is_none() {
-            println!(
+            log::warn!(
                 "[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower..."
             );
             adapter = instance
@@ -291,7 +355,7 @@ impl SurtrRenderer {
         }
 
         if adapter.is_none() {
-            println!("[GPU] Hardware adapters failed, trying Software fallback...");
+            log::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
             adapter = instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::LowPower,
@@ -304,11 +368,13 @@ impl SurtrRenderer {
 
         let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
         let info = adapter.get_info();
-        println!(
+        log::info!(
             "[GPU] Selected adapter: {} ({:?}) on backend: {:?}",
-            info.name, info.device_type, info.backend
+            info.name,
+            info.device_type,
+            info.backend
         );
-        println!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
         #[cfg(not(target_arch = "wasm32"))]
         let mut required_features =
@@ -638,14 +704,14 @@ impl SurtrRenderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), InstanceData::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -659,7 +725,11 @@ impl SurtrRenderer {
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: 4,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
             multiview_mask: None,
             cache: None,
         });
@@ -677,7 +747,7 @@ impl SurtrRenderer {
                 module: &shader,
                 entry_point: Some("fs_background"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -691,7 +761,11 @@ impl SurtrRenderer {
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: 4,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
             multiview_mask: None,
             cache: None,
         });
@@ -712,14 +786,14 @@ impl SurtrRenderer {
             vertex: wgpu::VertexState {
                 module: &opaque_shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), InstanceData::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &opaque_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -728,12 +802,45 @@ impl SurtrRenderer {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: Some(false),
+                depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: 4,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview_mask: None,
+            cache: None,
+        });
+        let ui_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Muspelheim UI"),
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &opaque_shader,
+                entry_point: Some("vs_main"),
+                buffers: &[Vertex::desc(), InstanceData::desc()],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &opaque_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
             multiview_mask: None,
             cache: None,
         });
@@ -743,14 +850,14 @@ impl SurtrRenderer {
             vertex: wgpu::VertexState {
                 module: &opaque_shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::desc()],
+                buffers: &[Vertex::desc(), InstanceData::desc()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &glass_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -758,7 +865,11 @@ impl SurtrRenderer {
             }),
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
             multiview_mask: None,
             cache: None,
         });
@@ -1253,16 +1364,33 @@ impl SurtrRenderer {
 
         // Volumetric raymarching pipeline (fullscreen triangle with SDF raymarch).
         // Uses the dedicated volumetric.wgsl shader for fog/light shaft effects.
+        // Now includes scene uniforms for time-based animation and light positioning.
         let volumetric_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Surtr Volumetric Shader"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
-                include_str!("shaders/volumetric.wgsl"),
-            )),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "shaders/volumetric.wgsl"
+            ))),
         });
-        // Volumetric pipeline layout — no bind groups needed for fullscreen SDF pass
+        // Volumetric bind group layout: uniform buffer for time/resolution/light
+        let volumetric_bgl =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Volumetric Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<[f32; 16]>() as u64
+                        ),
+                    },
+                    count: None,
+                }],
+            });
         let volumetric_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Surtr Volumetric Layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[Some(&volumetric_bgl)],
             immediate_size: 0,
         });
 
@@ -1279,7 +1407,7 @@ impl SurtrRenderer {
                 module: &volumetric_shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
                             src_factor: wgpu::BlendFactor::One,
@@ -1303,10 +1431,88 @@ impl SurtrRenderer {
             cache: None,
         });
 
-        // Color blindness uniform buffer (updated each frame when mode is active)
+        // HDR tone mapping pipeline (ACES filmic tone mapping).
+        // Converts HDR scene to LDR for display. Falls back to passthrough on LDR surfaces.
+        let tonemap_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Surtr ToneMap Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_TONEMAP)),
+        });
+        let tonemap_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("ToneMap Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<[f32; 4]>() as u64
+                        ),
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let tonemap_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Surtr ToneMap Layout"),
+            bind_group_layouts: &[Some(&tonemap_bgl)],
+            immediate_size: 0,
+        });
+        let tonemap_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Surtr ToneMapping"),
+            layout: Some(&tonemap_layout),
+            vertex: wgpu::VertexState {
+                module: &tonemap_shader,
+                entry_point: Some("vs_fullscreen"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &tonemap_shader,
+                entry_point: Some("fs_main"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview_mask: None,
+            cache: None,
+        });
+
+        // Tone map uniform buffer (exposure, gamma)
         let color_blind_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Color Blind Uniforms"),
             size: std::mem::size_of::<crate::color_blindness::ColorBlindUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Volumetric uniform buffer (updated each frame for time/resolution/light)
+        let volumetric_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Volumetric Uniforms"),
+            size: std::mem::size_of::<[f32; 16]>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1359,6 +1565,7 @@ impl SurtrRenderer {
             headless_context,
             pipeline,
             opaque_pipeline,
+            ui_pipeline,
             glass_pipeline,
             bloom_extract_pipeline,
             copy_pipeline,
@@ -1368,6 +1575,7 @@ impl SurtrRenderer {
             mega_heim_tex,
             mega_heim_bind_group,
             text_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
+            shaped_text_cache: std::collections::HashMap::new(),
             heim_packer: SundrPacker::new(4096, 4096),
             image_uv_registry: LruCache::new(NonZeroUsize::new(256).unwrap()),
             texture_registry: LruCache::new(NonZeroUsize::new(255).unwrap()),
@@ -1438,6 +1646,8 @@ impl SurtrRenderer {
             color_blind_intensity: 1.0,
             color_blind_pipeline,
             volumetric_pipeline,
+            volumetric_bind_group_layout: volumetric_bgl,
+            volumetric_uniform_buffer,
             color_blind_bind_group_layout: color_blind_bgl,
             color_blind_uniform_buffer,
             sampler,
@@ -1450,6 +1660,8 @@ impl SurtrRenderer {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
                 mapped_at_creation: false,
             }),
+            bind_group_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
+            texture_view_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -1524,6 +1736,9 @@ impl SurtrRenderer {
             }
 
             log::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
+            self.bind_group_cache.lock().unwrap().clear();
+            self.texture_view_cache.lock().unwrap().clear();
+            self.shaped_text_cache.clear();
             ctx.config.width = width;
             ctx.config.height = height;
             ctx.scale_factor = scale_factor;
@@ -1540,14 +1755,28 @@ impl SurtrRenderer {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: ctx.config.format,
+                format: wgpu::TextureFormat::Rgba16Float,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             };
 
             let scene_tex = self.device.create_texture(&texture_desc);
+
+            let msaa_desc = wgpu::TextureDescriptor {
+                label: Some("Scene MSAA"),
+                size: texture_desc.size,
+                mip_level_count: 1,
+                sample_count: 4,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba16Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            };
+            let scene_msaa_tex = self.device.create_texture(&msaa_desc);
             ctx.scene_texture = scene_tex.create_view(&wgpu::TextureViewDescriptor::default());
+            ctx.scene_msaa_texture =
+                scene_msaa_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
             self.registry.remove_image(ctx.blur_tex_a);
             self.registry.remove_image(ctx.blur_tex_b);
@@ -1675,6 +1904,7 @@ impl SurtrRenderer {
         self.current_window = None;
         self.vertices.clear();
         self.indices.clear();
+        self.instance_data.clear();
         self.draw_calls.clear();
         self.filter_batches.clear();
         self.shared_elements.clear();
@@ -1763,7 +1993,10 @@ impl SurtrRenderer {
                 if timestamps[1] > timestamps[0] {
                     let diff_ticks = timestamps[1] - timestamps[0];
                     self.last_gpu_time_ns = (diff_ticks as f64 * self.skuld_period as f64) as u64;
-                    // println!("[Skuld] GPU Time: {} ms", self.last_gpu_time_ns as f64 / 1_000_000.0);
+                    log::trace!(
+                        "[Skuld] GPU time: {} ms",
+                        self.last_gpu_time_ns as f64 / 1_000_000.0
+                    );
                 }
             }
         }
@@ -1772,6 +2005,7 @@ impl SurtrRenderer {
         self.current_window = Some(window_id);
         self.vertices.clear();
         self.indices.clear();
+        self.instance_data.clear();
         self.draw_calls.clear();
         self.filter_batches.clear();
         self.shared_elements.clear();
@@ -1903,7 +2137,7 @@ impl SurtrRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
                 | wgpu::TextureUsages::COPY_SRC,
@@ -1911,7 +2145,21 @@ impl SurtrRenderer {
         };
 
         let scene_tex = device.create_texture(&texture_desc);
+
+        let msaa_desc = wgpu::TextureDescriptor {
+            label: Some("Scene MSAA"),
+            size: texture_desc.size,
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        };
+        let scene_msaa_tex = device.create_texture(&msaa_desc);
         let scene_texture = scene_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let scene_msaa_texture =
+            scene_msaa_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
         let blur_width = (width / 2).max(1);
         let blur_height = (height / 2).max(1);
@@ -1998,6 +2246,68 @@ impl SurtrRenderer {
             label: Some("Headless Scene Bind Group"),
         });
 
+        let blur_view_a = registry.get_texture_view(blur_tex_a).unwrap();
+        let blur_view_b = registry.get_texture_view(blur_tex_b).unwrap();
+        let bloom_view_a = registry.get_texture_view(bloom_tex_a).unwrap();
+        let bloom_view_b = registry.get_texture_view(bloom_tex_b).unwrap();
+
+        let blur_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&blur_view_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Blur Env Bind Group A"),
+        });
+        let blur_env_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&blur_view_b),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Blur Env Bind Group B"),
+        });
+        let bloom_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bloom_view_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Bloom Env Bind Group A"),
+        });
+        let bloom_env_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bloom_view_b),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Headless Bloom Env Bind Group B"),
+        });
+
         let scene_views: Vec<&wgpu::TextureView> = (0..256).map(|_| &scene_texture).collect();
         let scene_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: texture_bind_group_layout,
@@ -2022,7 +2332,7 @@ impl SurtrRenderer {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: 4,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -2050,6 +2360,7 @@ impl SurtrRenderer {
 
         crate::types::HeadlessContext {
             scene_texture,
+            scene_msaa_texture,
             scene_bind_group,
             scene_texture_bind_group,
             depth_texture_view,
@@ -2057,6 +2368,10 @@ impl SurtrRenderer {
             blur_tex_b,
             bloom_tex_a,
             bloom_tex_b,
+            blur_env_bind_group_a,
+            blur_env_bind_group_b,
+            bloom_env_bind_group_a,
+            bloom_env_bind_group_b,
             scale_factor: 1.0,
             sampler,
             width,
@@ -2088,13 +2403,27 @@ impl SurtrRenderer {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: config.format,
+            format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };
 
         let scene_tex = device.create_texture(&texture_desc);
+
+        let msaa_desc = wgpu::TextureDescriptor {
+            label: Some("Scene MSAA"),
+            size: texture_desc.size,
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        };
+        let scene_msaa_tex = device.create_texture(&msaa_desc);
         let scene_texture = scene_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let scene_msaa_texture =
+            scene_msaa_tex.create_view(&wgpu::TextureViewDescriptor::default());
 
         let blur_width = (config.width / 2).max(1);
         let blur_height = (config.height / 2).max(1);
@@ -2181,6 +2510,68 @@ impl SurtrRenderer {
             label: Some("Scene Bind Group"),
         });
 
+        let blur_view_a = registry.get_texture_view(blur_tex_a).unwrap();
+        let blur_view_b = registry.get_texture_view(blur_tex_b).unwrap();
+        let bloom_view_a = registry.get_texture_view(bloom_tex_a).unwrap();
+        let bloom_view_b = registry.get_texture_view(bloom_tex_b).unwrap();
+
+        let blur_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&blur_view_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Blur Env Bind Group A"),
+        });
+        let blur_env_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&blur_view_b),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Blur Env Bind Group B"),
+        });
+        let bloom_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bloom_view_a),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Bloom Env Bind Group A"),
+        });
+        let bloom_env_bind_group_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: env_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&bloom_view_b),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+            label: Some("Bloom Env Bind Group B"),
+        });
+
         let scene_views: Vec<&wgpu::TextureView> = (0..256).map(|_| &scene_texture).collect();
         let scene_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: texture_bind_group_layout,
@@ -2205,7 +2596,7 @@ impl SurtrRenderer {
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
-            sample_count: 1,
+            sample_count: 4,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -2217,6 +2608,7 @@ impl SurtrRenderer {
             surface,
             config,
             scene_texture,
+            scene_msaa_texture,
             scene_bind_group,
             scene_texture_bind_group,
             depth_texture_view,
@@ -2224,6 +2616,10 @@ impl SurtrRenderer {
             blur_tex_b,
             bloom_tex_a,
             bloom_tex_b,
+            blur_env_bind_group_a,
+            blur_env_bind_group_b,
+            bloom_env_bind_group_a,
+            bloom_env_bind_group_b,
             scale_factor,
             sampler,
         }
@@ -2474,6 +2870,10 @@ impl SurtrRenderer {
         let dy = to[1] - from[1];
         let len = (dx * dx + dy * dy).sqrt();
 
+        if len < 1e-4 {
+            return;
+        }
+
         // Perpendicular offset for jaggedness
         let offset_scale = len * 0.15;
         let seed = (from[0] * 12.9898 + from[1] * 78.233 + (depth as f32) * 37.11)
@@ -2558,11 +2958,22 @@ impl SurtrRenderer {
         let scissor = self.clip_stack.last().copied();
         let texture_id = None; // Oriented quads like lightning don't use textures yet
 
+        let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        let current_instance_data = InstanceData {
+            translation,
+            scale: scale_transform,
+            rotation,
+            blur_radius: 0.0,
+            ior_override: 0.0,
+        };
+
         if self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
             || self.draw_calls.last().unwrap().scissor_rect != scissor
+            || self.instance_data.last() != Some(&current_instance_data)
         {
             self.current_texture_id = texture_id;
+            self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
                 texture_id,
@@ -2570,12 +2981,27 @@ impl SurtrRenderer {
                 index_start: self.indices.len() as u32,
                 index_count: 0,
                 material: if material_id == 7 {
-                    cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
+                    if let cvkg_core::DrawMaterial::Glass {
+                        blur_radius,
+                        ior_override,
+                    } = self.current_draw_material
+                    {
+                        cvkg_core::DrawMaterial::Glass {
+                            blur_radius,
+                            ior_override,
+                        }
+                    } else {
+                        cvkg_core::DrawMaterial::Glass {
+                            blur_radius: 20.0,
+                            ior_override: 0.0,
+                        }
+                    }
                 } else if material_id == 6 {
                     cvkg_core::DrawMaterial::TopUI
                 } else {
                     cvkg_core::DrawMaterial::Opaque
                 },
+                instance_start: (self.instance_data.len() - 1) as u32,
             });
         }
 
@@ -2609,13 +3035,8 @@ impl SurtrRenderer {
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [px - rect.x, py - rect.y],
                 size: [rect.width, rect.height],
-                screen,
                 clip: [-10000.0, -10000.0, 20000.0, 20000.0],
-                translation,
-                scale: scale_transform,
-                rotation,
                 tex_index: 0,
-                glyph_time: [0.0, 0.0],
             });
         }
 
@@ -2706,7 +3127,21 @@ impl SurtrRenderer {
         let scissor = self.clip_stack.last().copied();
 
         let material = if material_id == 7 {
-            cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 }
+            if let cvkg_core::DrawMaterial::Glass {
+                blur_radius,
+                ior_override,
+            } = self.current_draw_material
+            {
+                cvkg_core::DrawMaterial::Glass {
+                    blur_radius,
+                    ior_override,
+                }
+            } else {
+                cvkg_core::DrawMaterial::Glass {
+                    blur_radius: 20.0,
+                    ior_override: 0.0,
+                }
+            }
         } else if material_id == 6 {
             cvkg_core::DrawMaterial::TopUI
         } else if material_id == 0 {
@@ -2715,16 +3150,37 @@ impl SurtrRenderer {
             self.current_draw_material
         };
 
+        let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        let (blur_radius, ior_override) = if let cvkg_core::DrawMaterial::Glass {
+            blur_radius,
+            ior_override,
+        } = material
+        {
+            (blur_radius, ior_override)
+        } else {
+            (0.0, 0.0)
+        };
+
+        let current_instance_data = InstanceData {
+            translation,
+            scale: scale_transform,
+            rotation,
+            blur_radius,
+            ior_override,
+        };
+
         // Batching: check if we need to start a new DrawCall
         // With Texture Array, we no longer need to break batches when the texture changes,
         // as long as they are all part of the same array bind group (Group 0).
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().material != material;
+            || last_call.unwrap().material != material
+            || self.instance_data.last() != Some(&current_instance_data);
 
         if needs_new_call {
             self.current_texture_id = Some(0); // All textures are now in the binding array at Group 0
+            self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
                 texture_id: self.current_texture_id,
@@ -2732,6 +3188,7 @@ impl SurtrRenderer {
                 index_start: self.indices.len() as u32,
                 index_count: 0,
                 material,
+                instance_start: (self.instance_data.len() - 1) as u32,
             });
         }
 
@@ -2754,8 +3211,6 @@ impl SurtrRenderer {
         });
         let clip = [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height];
 
-        let (translation, scale_transform, rotation, _, _) = self.current_transform();
-
         let tex_index = texture_id.unwrap_or(0);
 
         self.vertices.push(Vertex {
@@ -2768,13 +3223,8 @@ impl SurtrRenderer {
             slice,
             logical: [0.0, 0.0],
             size: [rect.width, rect.height],
-            screen,
             clip,
-            translation,
-            scale: scale_transform,
-            rotation,
             tex_index,
-            glyph_time,
         });
         self.vertices.push(Vertex {
             position: [x2, y1, z],
@@ -2786,13 +3236,8 @@ impl SurtrRenderer {
             slice,
             logical: [rect.width, 0.0],
             size: [rect.width, rect.height],
-            screen,
             clip,
-            translation,
-            scale: scale_transform,
-            rotation,
             tex_index,
-            glyph_time,
         });
         self.vertices.push(Vertex {
             position: [x2, y2, z],
@@ -2804,13 +3249,8 @@ impl SurtrRenderer {
             slice,
             logical: [rect.width, rect.height],
             size: [rect.width, rect.height],
-            screen,
             clip,
-            translation,
-            scale: scale_transform,
-            rotation,
             tex_index,
-            glyph_time,
         });
         self.vertices.push(Vertex {
             position: [x1, y2, z],
@@ -2822,13 +3262,8 @@ impl SurtrRenderer {
             slice,
             logical: [0.0, rect.height],
             size: [rect.width, rect.height],
-            screen,
             clip,
-            translation,
-            scale: scale_transform,
-            rotation,
             tex_index,
-            glyph_time,
         });
 
         self.indices.extend_from_slice(&[
@@ -2852,8 +3287,7 @@ impl SurtrRenderer {
     // Called from end_frame() which assembles the graph-driven pass sequence.
 
     /// Pass 1: Clear scene+depth, draw atmosphere, draw opaque geometry.
-
-    /// end_frame — Quench the blade by submitting the full Muspelheim multi-pass effect.
+    /// end_frame -- Quench the blade by submitting the full Muspelheim multi-pass effect.
     ///
     /// Since the Renderer 3.0 migration, the pass sequence is driven by a Kvasir
     /// dependency graph rather than hardcoded ordering. The graph is built each
@@ -2861,19 +3295,16 @@ impl SurtrRenderer {
     /// input satisfiability), then executed. Conditional passes (glass, bloom,
     /// accessibility) are automatically eliminated when not needed.
     pub fn end_frame(&mut self, mut encoder: wgpu::CommandEncoder) {
-        #[allow(dead_code)]
         struct ActiveFrameResources {
             surface_texture: Option<wgpu::SurfaceTexture>,
             target_view: wgpu::TextureView,
             scene_texture: wgpu::TextureView,
+            scene_msaa_texture: wgpu::TextureView,
             depth_texture_view: wgpu::TextureView,
-            scene_texture_bind_group: wgpu::BindGroup,
-            blur_tex_a: wgpu::Texture,
             blur_env_bind_group_a: wgpu::BindGroup,
-            bloom_tex_a: wgpu::Texture,
-            bloom_texture_a: wgpu::TextureView,
+            blur_env_bind_group_b: wgpu::BindGroup,
             bloom_env_bind_group_a: wgpu::BindGroup,
-            scale_factor: f32,
+            bloom_env_bind_group_b: wgpu::BindGroup,
         }
 
         let res = if let Some(window_id) = self.current_window {
@@ -2901,52 +3332,16 @@ impl SurtrRenderer {
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
-            let blur_texture_a = self.registry.get_texture_view(ctx.blur_tex_a).unwrap();
-            let bloom_texture_a = self.registry.get_texture_view(ctx.bloom_tex_a).unwrap();
-
-            let blur_env_bind_group_a = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.env_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&blur_texture_a),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&ctx.sampler),
-                    },
-                ],
-                label: Some("Blur Env Bind Group A"),
-            });
-
-            let bloom_env_bind_group_a =
-                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &self.env_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&bloom_texture_a),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&ctx.sampler),
-                        },
-                    ],
-                    label: Some("Bloom Env Bind Group A"),
-                });
-
             ActiveFrameResources {
                 surface_texture: Some(frame),
                 target_view: view,
                 scene_texture: ctx.scene_texture.clone(),
+                scene_msaa_texture: ctx.scene_msaa_texture.clone(),
                 depth_texture_view: ctx.depth_texture_view.clone(),
-                scene_texture_bind_group: ctx.scene_texture_bind_group.clone(),
-                blur_tex_a: self.registry.get_texture(ctx.blur_tex_a).unwrap(),
-                blur_env_bind_group_a,
-                bloom_tex_a: self.registry.get_texture(ctx.bloom_tex_a).unwrap(),
-                bloom_texture_a,
-                bloom_env_bind_group_a,
-                scale_factor: ctx.scale_factor,
+                blur_env_bind_group_a: ctx.blur_env_bind_group_a.clone(),
+                blur_env_bind_group_b: ctx.blur_env_bind_group_b.clone(),
+                bloom_env_bind_group_a: ctx.bloom_env_bind_group_a.clone(),
+                bloom_env_bind_group_b: ctx.bloom_env_bind_group_b.clone(),
             }
         } else {
             let Some(ctx) = self.headless_context.as_ref() else {
@@ -2954,52 +3349,16 @@ impl SurtrRenderer {
                 return;
             };
 
-            let blur_texture_a = self.registry.get_texture_view(ctx.blur_tex_a).unwrap();
-            let bloom_texture_a = self.registry.get_texture_view(ctx.bloom_tex_a).unwrap();
-
-            let blur_env_bind_group_a = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &self.env_bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&blur_texture_a),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&ctx.sampler),
-                    },
-                ],
-                label: Some("Blur Env Bind Group A"),
-            });
-
-            let bloom_env_bind_group_a =
-                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &self.env_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&bloom_texture_a),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&ctx.sampler),
-                        },
-                    ],
-                    label: Some("Bloom Env Bind Group A"),
-                });
-
             ActiveFrameResources {
                 surface_texture: None,
                 target_view: ctx.output_view.clone(),
                 scene_texture: ctx.scene_texture.clone(),
+                scene_msaa_texture: ctx.scene_msaa_texture.clone(),
                 depth_texture_view: ctx.depth_texture_view.clone(),
-                scene_texture_bind_group: ctx.scene_texture_bind_group.clone(),
-                blur_tex_a: self.registry.get_texture(ctx.blur_tex_a).unwrap(),
-                blur_env_bind_group_a,
-                bloom_tex_a: self.registry.get_texture(ctx.bloom_tex_a).unwrap(),
-                bloom_texture_a,
-                bloom_env_bind_group_a,
-                scale_factor: self.current_scale_factor(),
+                blur_env_bind_group_a: ctx.blur_env_bind_group_a.clone(),
+                blur_env_bind_group_b: ctx.blur_env_bind_group_b.clone(),
+                bloom_env_bind_group_a: ctx.bloom_env_bind_group_a.clone(),
+                bloom_env_bind_group_b: ctx.bloom_env_bind_group_b.clone(),
             }
         };
 
@@ -3032,22 +3391,27 @@ impl SurtrRenderer {
         self.registry.alias(kvasir::nodes::RES_BLOOM_A, bloom_id);
         self.registry
             .alias_view(kvasir::nodes::RES_SCENE, res.scene_texture.clone());
+        self.registry.alias_view(
+            kvasir::nodes::RES_SCENE_MSAA,
+            res.scene_msaa_texture.clone(),
+        );
 
-        let render_graph = kvasir::nodes::build_render_graph(
+        let render_graph = kvasir::nodes::build_render_graph(&kvasir::nodes::RenderGraphConfig {
             has_glass,
             has_bloom,
             has_accessibility,
-            &self.active_offscreens,
-            &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
-            self.current_width(),
-            self.current_height(),
-            self.current_scale_factor(),
-        );
+            active_offscreens: &self.active_offscreens,
+            portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
+            width: self.current_width(),
+            height: self.current_height(),
+            scale: self.current_scale_factor(),
+        });
         let scale = self.current_scale_factor();
         let planner = kvasir::planner::ExecutionPlanner::new(&render_graph);
         let pass_nodes = planner.compile().expect("RenderGraph cycle detected!");
         for pass_id in pass_nodes {
             if let Some(node) = render_graph.node(pass_id) {
+                log::trace!("[Kvasir] Executing node: {}", node.label());
                 let mut ctx = kvasir::node::ExecutionContext {
                     device: &self.device,
                     queue: &self.queue,
@@ -3056,6 +3420,10 @@ impl SurtrRenderer {
                     renderer: self,
                     target_view: &res.target_view,
                     depth_view: &res.depth_texture_view,
+                    blur_env_bind_group_a: &res.blur_env_bind_group_a,
+                    blur_env_bind_group_b: &res.blur_env_bind_group_b,
+                    bloom_env_bind_group_a: &res.bloom_env_bind_group_a,
+                    bloom_env_bind_group_b: &res.bloom_env_bind_group_b,
                     scale_factor: scale,
                 };
                 node.execute(&mut ctx);
@@ -3167,7 +3535,10 @@ impl SurtrRenderer {
                     cvkg_compositor::Material::Glass {
                         blur_radius,
                         depth_index: _,
-                    } => cvkg_core::DrawMaterial::Glass { blur_radius },
+                    } => cvkg_core::DrawMaterial::Glass {
+                        blur_radius,
+                        ior_override: 0.0,
+                    },
                     cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
                     _ => cvkg_core::DrawMaterial::Opaque,
                 };
@@ -3192,15 +3563,14 @@ impl SurtrRenderer {
         target_id: Option<u64>,
     ) {
         let cmd = &routed.command;
-        let current_tail = self.indices.len() as u32;
-        let index_count = current_tail - self.compositor_index_cursor;
-        if index_count == 0 {
+        if cmd.index_count == 0 {
             return;
         }
         let material = match &routed.material {
             cvkg_compositor::Material::Glass { blur_radius, .. } => {
                 cvkg_core::DrawMaterial::Glass {
                     blur_radius: *blur_radius,
+                    ior_override: 0.0,
                 }
             }
             cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
@@ -3209,12 +3579,12 @@ impl SurtrRenderer {
         self.draw_calls.push(DrawCall {
             texture_id: cmd.texture_id,
             scissor_rect: cmd.scissor_rect,
-            index_start: self.compositor_index_cursor,
-            index_count,
+            index_start: cmd.index_start,
+            index_count: cmd.index_count,
             material,
             target_id,
+            instance_start: cmd.instance_id,
         });
-        self.compositor_index_cursor = current_tail;
     }
 }
 
@@ -3254,15 +3624,15 @@ impl SurtrRenderer {
         let mut finalized_animations = Vec::new();
 
         for child in tree.root().children() {
-            self.tessellate_node(
-                child,
-                &mut fill_tessellator,
-                &mut stroke_tessellator,
-                &mut vertices,
-                &mut indices,
-                &parsed_animations,
-                &mut finalized_animations,
-            );
+            let mut tess_params = TessellateParams {
+                fill_tessellator: &mut fill_tessellator,
+                stroke_tessellator: &mut stroke_tessellator,
+                vertices: &mut vertices,
+                indices: &mut indices,
+                parsed_animations: &parsed_animations,
+                finalized_animations: &mut finalized_animations,
+            };
+            self.tessellate_node(child, &mut tess_params);
         }
 
         self.svg_cache.put(
@@ -3277,17 +3647,8 @@ impl SurtrRenderer {
         self.svg_trees.put(name.to_string(), tree);
     }
 
-    pub(crate) fn tessellate_node(
-        &self,
-        node: &usvg::Node,
-        fill_tessellator: &mut FillTessellator,
-        stroke_tessellator: &mut StrokeTessellator,
-        vertices: &mut Vec<Vertex>,
-        indices: &mut Vec<u32>,
-        parsed_animations: &[SvgAnimation],
-        finalized_animations: &mut Vec<SvgAnimation>,
-    ) {
-        let start_idx = vertices.len();
+    pub(crate) fn tessellate_node(&self, node: &usvg::Node, params: &mut TessellateParams<'_>) {
+        let start_idx = params.vertices.len();
         let node_id = match node {
             usvg::Node::Group(g) => g.id().to_string(),
             usvg::Node::Path(p) => p.id().to_string(),
@@ -3296,15 +3657,15 @@ impl SurtrRenderer {
 
         if let usvg::Node::Group(ref group) = *node {
             for child in group.children() {
-                self.tessellate_node(
-                    child,
-                    fill_tessellator,
-                    stroke_tessellator,
-                    vertices,
-                    indices,
-                    parsed_animations,
-                    finalized_animations,
-                );
+                let mut child_params = TessellateParams {
+                    fill_tessellator: params.fill_tessellator,
+                    stroke_tessellator: params.stroke_tessellator,
+                    vertices: params.vertices,
+                    indices: params.indices,
+                    parsed_animations: params.parsed_animations,
+                    finalized_animations: params.finalized_animations,
+                };
+                self.tessellate_node(child, &mut child_params);
             }
         } else if let usvg::Node::Path(ref path) = *node {
             let has_fill = path.fill().is_some();
@@ -3341,20 +3702,12 @@ impl SurtrRenderer {
                 };
 
                 let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-                let base_index_idx = indices.len() as u32;
+                let base_index_idx = params.indices.len() as u32;
 
-                if let Err(e) = fill_tessellator.tessellate_path(
+                if let Err(e) = params.fill_tessellator.tessellate_path(
                     &lyon_path,
                     &FillOptions::default(),
-                    &mut BuffersBuilder::new(
-                        &mut buffers,
-                        SceneVertexConstructor {
-                            color,
-                            translation: [0.0, 0.0],
-                            scale: [1.0, 1.0],
-                            rotation: 0.0,
-                        },
-                    ),
+                    &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color }),
                 ) {
                     log::warn!(
                         "SVG fill tessellation failed for path '{}': {:?}, skipping",
@@ -3364,15 +3717,15 @@ impl SurtrRenderer {
                     return;
                 }
 
-                vertices.extend(buffers.vertices);
+                params.vertices.extend(buffers.vertices);
                 for idx in buffers.indices {
-                    indices.push(base_index_idx + idx);
+                    params.indices.push(base_index_idx + idx);
                 }
             }
 
             // Tessellate stroke if present
             if has_stroke && let Some(stroke) = path.stroke() {
-                let stroke_index_idx = indices.len() as u32; // New base for stroke indices
+                let stroke_index_idx = params.indices.len() as u32; // New base for stroke indices
                 let stroke_width = stroke.width().get(); // Direct float value
                 let color = match stroke.paint() {
                     usvg::Paint::Color(c) => [
@@ -3394,19 +3747,12 @@ impl SurtrRenderer {
 
                 let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
 
-                if let Err(e) = stroke_tessellator.tessellate_path(
+                if let Err(e) = params.stroke_tessellator.tessellate_path(
                     &lyon_path,
                     &StrokeOptions::default().with_line_width(stroke_width),
                     &mut BuffersBuilder::new(
                         &mut buffers,
-                        CustomStrokeVertexConstructor {
-                            color,
-                            translation: [0.0, 0.0],
-                            scale: [1.0, 1.0],
-                            rotation: 0.0,
-                            screen,
-                            clip,
-                        },
+                        CustomStrokeVertexConstructor { color, clip },
                     ),
                 ) {
                     log::warn!(
@@ -3417,20 +3763,20 @@ impl SurtrRenderer {
                     return;
                 }
 
-                vertices.extend(buffers.vertices);
+                params.vertices.extend(buffers.vertices);
                 for idx in buffers.indices {
-                    indices.push(stroke_index_idx + idx);
+                    params.indices.push(stroke_index_idx + idx);
                 }
             }
         }
 
-        let end_idx = vertices.len();
+        let end_idx = params.vertices.len();
         if !node_id.is_empty() && start_idx < end_idx {
-            for anim in parsed_animations {
+            for anim in params.parsed_animations {
                 if anim.target_id == node_id {
                     let mut final_anim = anim.clone();
                     final_anim.vertex_range = start_idx..end_idx;
-                    finalized_animations.push(final_anim);
+                    params.finalized_animations.push(final_anim);
                 }
             }
         }
@@ -3438,6 +3784,31 @@ impl SurtrRenderer {
 
     /// draw_svg — Renders a pre-loaded SVG icon at the specified logical rect.
     pub fn draw_svg(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32) {
+        let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
+            x: -10000.0,
+            y: -10000.0,
+            width: 20000.0,
+            height: 20000.0,
+        });
+        let scale = self.current_scale_factor();
+        let screen_w = self.current_width() as f32 / scale;
+        let screen_h = self.current_height() as f32 / scale;
+
+        if rect.x > clip_rect.x + clip_rect.width
+            || rect.x + rect.width < clip_rect.x
+            || rect.y > clip_rect.y + clip_rect.height
+            || rect.y + rect.height < clip_rect.y
+        {
+            return;
+        }
+        if rect.x > screen_w
+            || rect.x + rect.width < 0.0
+            || rect.y > screen_h
+            || rect.y + rect.height < 0.0
+        {
+            return;
+        }
+
         let model = if let Some(m) = self.svg_cache.get(name) {
             m.clone()
         } else {
@@ -3504,6 +3875,19 @@ impl SurtrRenderer {
             }
         }
 
+        let (blur_radius, ior_override) = if material_id == 7 {
+            if let cvkg_core::DrawMaterial::Glass {
+                blur_radius,
+                ior_override,
+            } = self.current_draw_material
+            {
+                (blur_radius, ior_override)
+            } else {
+                (20.0, 0.0)
+            }
+        } else {
+            (0.0, 0.0)
+        };
         for mut v in local_vertices {
             let rel_x = (v.position[0] - model.view_box.x) / model.view_box.width;
             let rel_y = (v.position[1] - model.view_box.y) / model.view_box.height;
@@ -3512,7 +3896,7 @@ impl SurtrRenderer {
             v.position[1] = snap(rect.y + rel_y * rect.height);
             v.position[2] = self.current_z;
             v.logical = [v.position[0], v.position[1]];
-            v.screen = screen;
+
             v.clip = clip;
             v.material_id = material_id;
 
@@ -3531,20 +3915,34 @@ impl SurtrRenderer {
         }
 
         let material = match material_id {
-            7 => cvkg_core::DrawMaterial::Glass { blur_radius: 20.0 },
+            7 => cvkg_core::DrawMaterial::Glass {
+                blur_radius,
+                ior_override,
+            },
             0 => cvkg_core::DrawMaterial::Opaque,
             _ => cvkg_core::DrawMaterial::TopUI,
         };
         let tid = self.get_texture_id("__mega_heim");
 
+        let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        let current_instance_data = InstanceData {
+            translation,
+            scale: scale_transform,
+            rotation,
+            blur_radius,
+            ior_override,
+        };
+
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != tid
             || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
-            || last_call.unwrap().material != material;
+            || last_call.unwrap().material != material
+            || self.instance_data.last() != Some(&current_instance_data);
 
         if needs_new_call {
             self.current_texture_id = tid;
+            self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
                 texture_id: tid,
@@ -3552,6 +3950,7 @@ impl SurtrRenderer {
                 index_start: (self.indices.len() - model.indices.len()) as u32,
                 index_count: 0,
                 material,
+                instance_start: (self.instance_data.len() - 1) as u32,
             });
         }
 
@@ -3571,7 +3970,7 @@ impl SurtrRenderer {
         });
 
         // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
-        println!("[GPU] Requesting HighPerformance adapter...");
+        log::info!("[GPU] Requesting HighPerformance adapter (headless)...");
         let mut adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -3582,7 +3981,7 @@ impl SurtrRenderer {
             .ok();
 
         if adapter.is_none() {
-            println!(
+            log::warn!(
                 "[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower..."
             );
             adapter = instance
@@ -3596,7 +3995,7 @@ impl SurtrRenderer {
         }
 
         if adapter.is_none() {
-            println!("[GPU] Hardware adapters failed, trying Software fallback...");
+            log::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
             adapter = instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::LowPower,
@@ -3609,11 +4008,13 @@ impl SurtrRenderer {
 
         let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
         let info = adapter.get_info();
-        println!(
+        log::info!(
             "[GPU] Selected adapter: {} ({:?}) on backend: {:?}",
-            info.name, info.device_type, info.backend
+            info.name,
+            info.device_type,
+            info.backend
         );
-        println!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let required_features = adapter.features()
             & (wgpu::Features::TIMESTAMP_QUERY
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -3671,6 +4072,9 @@ impl SurtrRenderer {
             .headless_context
             .as_ref()
             .ok_or("Headless context required for capture")?;
+        let current_width = self.current_width();
+        let current_height = self.current_height();
+
         let u32_size = std::mem::size_of::<u32>() as u32;
         let width = ctx.width;
         let height = ctx.height;
@@ -3736,8 +4140,8 @@ impl SurtrRenderer {
                 result.extend_from_slice(&data[start..end]);
             }
 
-            println!(
-                "Capture frame: data len={}, first 4 bytes={:?}",
+            log::trace!(
+                "[GPU] capture_frame: data len={}, first 4 bytes={:?}",
                 data.len(),
                 &data[0..4.min(data.len())]
             );
@@ -3781,6 +4185,12 @@ impl SurtrRenderer {
                 .map(|h| h.scale_factor)
                 .unwrap_or(1.0)
         }
+    }
+
+    /// Returns the elapsed time in seconds since the renderer was created.
+    /// Used by shaders for time-based animations (volumetric, particles, etc.).
+    pub(crate) fn current_time(&self) -> f32 {
+        self.start_time.elapsed().as_secs_f32()
     }
 
     /// Find a filter by ID in the SVG tree's filter list.
