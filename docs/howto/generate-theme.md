@@ -2,7 +2,17 @@
 
 Goal: Generate a type-safe Rust styling theme module from a JSON design tokens specification file.
 
+## Process Flow
+
+```mermaid
+graph TD
+    A["Prepare JSON file containing RGBA color float arrays"] --> B["Run theme compiler via: cargo run -p cvkg-cli -- theme"]
+    B --> C["Verify generated theme.rs file contains structs and constants"]
+    C --> D["Import module and use token constant values in views"]
+```
+
 ## Prerequisites
+
 - Rust compiler and Cargo setup active in the CVKG workspace.
 - A JSON file containing valid design color token entries (RGBA float arrays).
 

@@ -217,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_aabb() {
-        let hm = HeightmapShape::from_fn(8, 8, Vec2::new(100.0, 100.0), |x, z| (x as f32) * 2.0);
+        let hm = HeightmapShape::from_fn(8, 8, Vec2::new(100.0, 100.0), |x, _z| (x as f32) * 2.0);
         let (min, max) = hm.aabb();
         assert_eq!(min.x, -50.0);
         assert_eq!(max.x, 50.0);

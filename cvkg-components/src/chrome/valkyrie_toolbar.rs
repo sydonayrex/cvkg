@@ -526,7 +526,6 @@ mod tests {
         // that the View trait is implemented with Never body.
         // We can't call body() in a test without panicking, but we verify
         // the type system accepts the implementation.
-        fn assert_never<T: std::fmt::Debug>(_t: T) {}
         // This would fail to compile if Body were not Never:
         let toolbar = ValkyrieToolbar::new();
         // We just verify the toolbar can be constructed and is Send+Sync

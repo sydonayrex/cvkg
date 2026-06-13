@@ -1074,7 +1074,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
                 tex_index: 0,
             });
         }
@@ -1133,7 +1133,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 slice: [material.metallic, material.roughness, material.opacity, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
                 tex_index: 0,
             });
         }

@@ -1,13 +1,13 @@
 #![allow(clippy::assertions_on_constants)]
 
 use cvkg_components::ValkyrieIndicator;
-use cvkg_core::{FrameRenderer, Rect, RenderTier, View};
+use cvkg_core::{FrameRenderer, Rect, View};
 use cvkg_render_gpu::SurtrRenderer;
 // use cvkg_render_gpu::SurtrRenderer; // already imported above
 
 #[tokio::test]
 async fn test_journey_web_backend_stub() {
-    let mut web_renderer = SurtrRenderer::forge_headless(800, 600).await;
+    let _web_renderer = SurtrRenderer::forge_headless(800, 600).await;
 
     // On non-wasm32, this should be Tier1GPU
     #[cfg(not(target_arch = "wasm32"))]

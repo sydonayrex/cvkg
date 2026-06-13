@@ -370,3 +370,86 @@ fn test_form_binder() {
     );
     assert_eq!(binder.error_for("age").unwrap(), "Must be 18 or older");
 }
+
+#[test]
+fn test_phone_input_rendering() {
+    let mut renderer = MockRenderer::new();
+    let phone_input = cvkg_components::PhoneInput::new()
+        .country_code("+44")
+        .phone_number("123456789");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 300.0,
+        height: 44.0,
+    };
+    phone_input.render(&mut renderer, rect);
+
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(PhoneInput)")));
+    assert!(renderer.commands.iter().any(|c| c.contains("DrawText(123456789)")));
+}
+
+#[test]
+fn test_mention_input_rendering() {
+    let mut renderer = MockRenderer::new();
+    let mention_input = cvkg_components::MentionInput::new()
+        .value("hello @");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 300.0,
+        height: 44.0,
+    };
+    mention_input.render(&mut renderer, rect);
+
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(MentionInput)")));
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(MentionOption)")));
+}
+
+#[test]
+fn test_editable_rendering() {
+    let mut renderer = MockRenderer::new();
+    let editable = cvkg_components::Editable::new("Initial Text");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 40.0,
+    };
+    editable.render(&mut renderer, rect);
+
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(Editable)")));
+    assert!(renderer.commands.iter().any(|c| c.contains("DrawText(Initial Text)")));
+}
+
+#[test]
+fn test_popconfirm_rendering() {
+    let mut renderer = MockRenderer::new();
+    let button = Button::new("Delete", || {});
+    let popconfirm = cvkg_components::Popconfirm::new(button, "Are you sure?");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 100.0,
+        height: 40.0,
+    };
+    popconfirm.render(&mut renderer, rect);
+
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(Popconfirm)")));
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(Button)")));
+}
+
+#[test]
+fn test_qrcode_rendering() {
+    let mut renderer = MockRenderer::new();
+    let qr = cvkg_components::QRCode::new("https://rust-lang.org");
+    let rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 100.0,
+        height: 100.0,
+    };
+    qr.render(&mut renderer, rect);
+
+    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(QRCode)")));
+}

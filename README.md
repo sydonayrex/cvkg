@@ -1,6 +1,84 @@
 # CVKG: Cyber Viking Kvasir Graph
 
-https://github.com/user-attachments/assets/d03d7031-6ee2-4c6f-b38e-ea2db65f88d6
+```mermaid
+graph TD
+    cvkg-core["cvkg-core"]
+    cvkg-vdom["cvkg-vdom"]
+    cvkg-scene["cvkg-scene"]
+    cvkg-layout["cvkg-layout"]
+    cvkg-render-gpu["cvkg-render-gpu"]
+    cvkg-render-native["cvkg-render-native"]
+    cvkg-compositor["cvkg-compositor"]
+    cvkg-themes["cvkg-themes"]
+    cvkg-anim["cvkg-anim"]
+    cvkg-flow["cvkg-flow"]
+    cvkg-runic-text["cvkg-runic-text"]
+    cvkg-svg-filters["cvkg-svg-filters"]
+    cvkg-svg-serialize["cvkg-svg-serialize"]
+    cvkg-components["cvkg-components"]
+    cvkg-macros["cvkg-macros"]
+    cvkg-cli["cvkg-cli"]
+    cvkg-webkit-server["cvkg-webkit-server"]
+    cvkg-test["cvkg-test"]
+    cvkg-physics["cvkg-physics"]
+    cvkg["cvkg (umbrella)"]
+
+    cvkg-vdom --> cvkg-core
+    cvkg-vdom --> cvkg-scene
+    cvkg-layout --> cvkg-core
+    cvkg-layout --> cvkg-anim
+    cvkg-scene --> cvkg-core
+
+    cvkg-render-gpu --> cvkg-core
+    cvkg-render-gpu --> cvkg-compositor
+    cvkg-render-gpu --> cvkg-svg-filters
+    cvkg-render-gpu --> cvkg-svg-serialize
+    cvkg-render-gpu --> cvkg-runic-text
+
+    cvkg-render-native --> cvkg-core
+    cvkg-render-native --> cvkg-render-gpu
+    cvkg-render-native --> cvkg-vdom
+    cvkg-render-native --> cvkg-themes
+
+    cvkg-compositor --> cvkg-core
+
+    cvkg-themes --> cvkg-core
+    cvkg-themes --> cvkg-anim
+    cvkg-anim --> cvkg-core
+    cvkg-flow --> cvkg-core
+    cvkg-flow --> cvkg-scene
+    cvkg-flow --> cvkg-themes
+
+    cvkg-runic-text --> cvkg-core
+    cvkg-svg-filters --> cvkg-core
+
+    cvkg-components --> cvkg-core
+    cvkg-components --> cvkg-vdom
+    cvkg-components --> cvkg-layout
+    cvkg-components --> cvkg-themes
+    cvkg-components --> cvkg-anim
+    cvkg-components --> cvkg-runic-text
+
+    cvkg-macros --> cvkg-core
+    cvkg-cli --> cvkg-core
+    cvkg-cli --> cvkg-physics
+    cvkg-cli --> cvkg-anim
+    cvkg-cli --> cvkg-macros
+    cvkg-webkit-server --> cvkg-cli
+    cvkg-physics --> cvkg-core
+    cvkg-physics --> cvkg-scene
+
+    cvkg --> cvkg-core
+    cvkg --> cvkg-vdom
+    cvkg --> cvkg-scene
+    cvkg --> cvkg-layout
+    cvkg --> cvkg-themes
+    cvkg --> cvkg-anim
+    cvkg --> cvkg-macros
+    cvkg --> cvkg-components
+    cvkg --> cvkg-render-gpu
+    cvkg --> cvkg-render-native
+```
 
 CVKG is a high-fidelity graphic user interface framework for Rust, enabling developers to build visually intense, hardware-accelerated desktop and web applications.
 
@@ -12,7 +90,15 @@ A core feature of CVKG is the **Vili Interaction Paradigm**—a next-generation 
 
 Furthermore, CVKG includes a high-performance **GPU Vector Graphics Engine** capable of handling full SVG stroke tessellation (`lyon`), full 3x3 affine transformation stacks (scale, shear, rotation), and real-time CPU evaluation of embedded Animated SVGs (`<animate>`, `<animateTransform>`).
 
+## Recent Technical Updates
+
+- **AgX Tonemapping**: Replaced standard color mapping in `cvkg-render-gpu` with a custom logarithmic AgX tonemapping pipeline to prevent hue shifting in high-luminance highlight zones.
+- **Render Graph Caching**: Integrated `CachedGraphPlan` into the Surtr renderer to store topological sort sequences, avoiding sort calculation overhead on frames where geometry and bindings are static.
+- **Temporal Sub-Pixel Snapping**: Integrated dynamic snapping into `cvkg-layout` checking mass/spring velocities from `cvkg-anim` to skip standard pixel boundary snaps during active motion.
+- **New Atomic Components**: Equipped the base widget library (`cvkg-components`) with additional primitives: `PhoneInput` (formatted dialing), `MentionInput` (trigger dropdown lists), `Editable` (inline toggles), `Popconfirm` (action bubbles), and `QRCode` (vector barcode matrices).
+
 ---
+
 
 ## Prerequisites
 

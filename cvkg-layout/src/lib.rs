@@ -298,6 +298,7 @@ fn apply_layout_animations(
 
     let mut interpolated_rects = HashMap::new();
     let delta = cache.delta_time;
+    let scale = cache.scale_factor;
     let anim_engine = AnimationEngine::get_or_insert_engine(cache);
 
     for (hash, prev, target_rect) in transitions_to_update {
@@ -314,12 +315,24 @@ fn apply_layout_animations(
             )
         };
         spring.step(delta);
+        
+        // Temporal layout snapping: snap layout coordinates to integer pixels
+        // only when the spring has nearly settled to prevent jitter during motion.
+        let speed = (spring.velocity_a.length_sq() + spring.velocity_b.length_sq()).sqrt();
+        let snap = |v: f32| (v * scale).round() / scale;
+
+        let (rx, ry, rw) = if speed < 0.05 {
+            (snap(spring.position_a.x), snap(spring.position_a.y), snap(spring.position_a.z))
+        } else {
+            (spring.position_a.x, spring.position_a.y, spring.position_a.z)
+        };
+
         interpolated_rects.insert(
             hash,
             Rect {
-                x: spring.position_a.x,
-                y: spring.position_a.y,
-                width: spring.position_a.z,
+                x: rx,
+                y: ry,
+                width: rw,
                 height: target_rect.height,
             },
         );

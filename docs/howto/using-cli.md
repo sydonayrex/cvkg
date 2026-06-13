@@ -2,7 +2,20 @@
 
 Goal: Scaffold, audit, compile, and inspect a CVKG application using the unified command-line toolchain.
 
+## Process Flow
+
+```mermaid
+graph TD
+    A["Run CLI command"] --> B{"Choose Action"}
+    B -->|"New project"| C["cargo run -p cvkg-cli -- new <name>"]
+    B -->|"Build target"| D["cargo run -p cvkg-cli -- build --target <platform>"]
+    B -->|"Development"| E["cargo run -p cvkg-cli -- dev --port <port>"]
+    B -->|"Telemetry"| F["cargo run -p cvkg-cli -- inspect --url <url>"]
+    B -->|"Theme compile"| G["cargo run -p cvkg-cli -- theme --input <file>"]
+```
+
 ## Prerequisites
+
 - Rust toolchain (1.85+) installed.
 - System dependencies (Vulkan/Metal/DX12 GPU drivers, `libfontconfig1-dev` and `pkg-config` on Linux) installed.
 

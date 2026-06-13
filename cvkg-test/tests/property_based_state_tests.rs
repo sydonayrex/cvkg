@@ -88,7 +88,7 @@ prop_compose! {
 proptest! {
     #[test]
     fn test_vnode_diff_no_panic(node1 in arb_complex_vnode(), node2 in arb_complex_vnode()) {
-        use cvkg_vdom::{VDom, VDomPatch};
+        use cvkg_vdom::VDom;
         let mut vdom1 = VDom::new();
         let mut vdom2 = VDom::new();
         vdom1.nodes.insert(node1.id, node1.clone());

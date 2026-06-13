@@ -112,7 +112,29 @@ This guide provides diagnostics, symptoms, and resolution procedures for common 
      cargo run --release
      ```
 
+### Render Graph Cache Thrashing
+- **Symptoms**: Frequent graph sorting cycles printed to telemetry logs on consecutive frames.
+- **Cause**: Dynamic additions of nodes/passes on every frame preventing execution plan hits.
+- **Resolution**:
+  1. Ensure conditional passes are compiled as static branches rather than being rebuilt dynamically.
+  2. Audit `SurtrRenderer` pass generation using the telemetry inspector.
+
+### Color Distortion in Highlights (Abney Effect)
+- **Symptoms**: Bright colored zones shift towards white or blue unexpectedly in highlight regions.
+- **Cause**: AgX Tonemapper is bypassed or active HDR color spaces are not properly declared on the target surface configuration.
+- **Resolution**:
+  1. Ensure the WGPU target format matches sRGB formats.
+  2. Confirm AgX is activated in target shader configurations.
+
+### Visual Jitter on Static Text
+- **Symptoms**: Small text glyphs appear blurry or vibrating when spring motions settle.
+- **Cause**: Velocity state of the animating mass/spring solver is not fully reset to static, bypassing sub-pixel grid alignment.
+- **Resolution**:
+  1. Audit the `SleipnirSolver` parameter states; ensure damping ratios allow final velocity settling.
+  2. Verify that `snap_to_pixel_grid` evaluates static checks on frame settle triggers.
+
 ---
+
 
 ## 5. Diagnostic Data Collection
 

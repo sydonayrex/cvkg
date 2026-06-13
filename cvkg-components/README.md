@@ -1,6 +1,84 @@
 # cvkg-components
 
-![CVKG Component Showcase](../docs/images/cvkg_component_showcase.png)
+```mermaid
+graph TD
+    cvkg-core["cvkg-core"]
+    cvkg-vdom["cvkg-vdom"]
+    cvkg-scene["cvkg-scene"]
+    cvkg-layout["cvkg-layout"]
+    cvkg-render-gpu["cvkg-render-gpu"]
+    cvkg-render-native["cvkg-render-native"]
+    cvkg-compositor["cvkg-compositor"]
+    cvkg-themes["cvkg-themes"]
+    cvkg-anim["cvkg-anim"]
+    cvkg-flow["cvkg-flow"]
+    cvkg-runic-text["cvkg-runic-text"]
+    cvkg-svg-filters["cvkg-svg-filters"]
+    cvkg-svg-serialize["cvkg-svg-serialize"]
+    cvkg-components["cvkg-components"]
+    cvkg-macros["cvkg-macros"]
+    cvkg-cli["cvkg-cli"]
+    cvkg-webkit-server["cvkg-webkit-server"]
+    cvkg-test["cvkg-test"]
+    cvkg-physics["cvkg-physics"]
+    cvkg["cvkg (umbrella)"]
+
+    cvkg-vdom --> cvkg-core
+    cvkg-vdom --> cvkg-scene
+    cvkg-layout --> cvkg-core
+    cvkg-layout --> cvkg-anim
+    cvkg-scene --> cvkg-core
+
+    cvkg-render-gpu --> cvkg-core
+    cvkg-render-gpu --> cvkg-compositor
+    cvkg-render-gpu --> cvkg-svg-filters
+    cvkg-render-gpu --> cvkg-svg-serialize
+    cvkg-render-gpu --> cvkg-runic-text
+
+    cvkg-render-native --> cvkg-core
+    cvkg-render-native --> cvkg-render-gpu
+    cvkg-render-native --> cvkg-vdom
+    cvkg-render-native --> cvkg-themes
+
+    cvkg-compositor --> cvkg-core
+
+    cvkg-themes --> cvkg-core
+    cvkg-themes --> cvkg-anim
+    cvkg-anim --> cvkg-core
+    cvkg-flow --> cvkg-core
+    cvkg-flow --> cvkg-scene
+    cvkg-flow --> cvkg-themes
+
+    cvkg-runic-text --> cvkg-core
+    cvkg-svg-filters --> cvkg-core
+
+    cvkg-components --> cvkg-core
+    cvkg-components --> cvkg-vdom
+    cvkg-components --> cvkg-layout
+    cvkg-components --> cvkg-themes
+    cvkg-components --> cvkg-anim
+    cvkg-components --> cvkg-runic-text
+
+    cvkg-macros --> cvkg-core
+    cvkg-cli --> cvkg-core
+    cvkg-cli --> cvkg-physics
+    cvkg-cli --> cvkg-anim
+    cvkg-cli --> cvkg-macros
+    cvkg-webkit-server --> cvkg-cli
+    cvkg-physics --> cvkg-core
+    cvkg-physics --> cvkg-scene
+
+    cvkg --> cvkg-core
+    cvkg --> cvkg-vdom
+    cvkg --> cvkg-scene
+    cvkg --> cvkg-layout
+    cvkg --> cvkg-themes
+    cvkg --> cvkg-anim
+    cvkg --> cvkg-macros
+    cvkg --> cvkg-components
+    cvkg --> cvkg-render-gpu
+    cvkg --> cvkg-render-native
+```
 
 `cvkg-components` is the authoritative, premium UI component and widget library for the **Cyber Viking Kvasir Graph (CVKG)** framework. It provides a comprehensive suite of highly responsive, glassmorphic UI elements—ranging from fundamental atomic primitives to complex, stateful tactical HUDs and agentic dashboards.
 
@@ -68,6 +146,12 @@ These are our newly minted, high-fidelity widgets designed to enrich user experi
 | `Vegvísir` | Struct | Specialized directional nav and layout compass. | [hud.rs](file:///D/rex/projects/cvkg/cvkg-components/src/hud.rs) |
 | `FontAxisPanel` | Struct | Variable font axis slider panel with COLRv1 toggle. | [font_axis_panel.rs](file:///D/rex/projects/cvkg/cvkg-components/src/font_axis_panel.rs) |
 | `RadialMenu` | Struct | Pie-sector radial menu with polar hit-testing. | [radial_menu.rs](file:///D/rex/projects/cvkg/cvkg-components/src/radial_menu.rs) |
+| `PhoneInput` | Struct | Formatted phone number text field matching layout bounds. | [phone_input.rs](file:///D/rex/projects/cvkg/cvkg-components/src/phone_input.rs) |
+| `MentionInput` | Struct | Rich text input supporting trigger-activated overlay lists. | [mention_input.rs](file:///D/rex/projects/cvkg/cvkg-components/src/mention_input.rs) |
+| `Editable` | Struct | Inline click-to-edit label toggling state. | [editable.rs](file:///D/rex/projects/cvkg/cvkg-components/src/editable.rs) |
+| `Popconfirm` | Struct | Action trigger button with confirmation modal bubbles. | [popconfirm.rs](file:///D/rex/projects/cvkg/cvkg-components/src/popconfirm.rs) |
+| `QRCode` | Struct | Vector barcode generator drawing customized matrix patterns. | [qrcode.rs](file:///D/rex/projects/cvkg/cvkg-components/src/qrcode.rs) |
+
 
 ---
 
@@ -153,7 +237,10 @@ fn render_telemetry_node() -> impl View {
     // 2. Wrap that metric with an interactive click Popover showing full details
     Popover::new(
         hovered_metric,
-        Text::new("Detailed logs:\n- Temp: 92°C\n- Fan: 100%\n- Node: Bifrost-7"),
+        Text::new("Detailed logs:
+- Temp: 92°C
+- Fan: 100%
+- Node: Bifrost-7"),
     )
     .position(PopoverPosition::Bottom)
     .open(false)

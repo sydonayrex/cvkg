@@ -2,7 +2,21 @@
 
 Creating reusable components is the core workflow in CVKG. This guide covers how to use procedural macros and the modifier system to build everything from simple buttons to complex dashboards.
 
+## Process Overview
+
+```mermaid
+graph TD
+    A["Choose Component Style"] --> B{"Style Mode"}
+    B -->|"Declarative (Macro)"| C["Decorate function with #[view_component]"]
+    B -->|"Stateful Binding"| D["Decorate with #[state] struct & Binding<T>"]
+    B -->|"Low-level (Manual)"| E["Implement View trait manually"]
+    C --> F["Apply Chained ViewModifiers (padding, bifrost, frame)"]
+    D --> F
+    E --> F
+```
+
 ## 1. Using `#[view_component]`
+
 
 The simplest way to create a component is by decorating a function with `#[view_component]`. This macro transforms the function into a `View` struct and handles the boilerplate.
 

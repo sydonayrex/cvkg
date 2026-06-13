@@ -2,7 +2,20 @@
 
 Goal: Execute a CVKG demo application to see the framework in action.
 
+## Process Overview
+
+```mermaid
+graph TD
+    A["Install Rust & GPU Deps"] --> B["Clone CVKG Repository"]
+    B --> C["Build Workspace (cargo build)"]
+    C --> D{"Choose Target Environment"}
+    D -->|"Native GPU Desktop"| E["Run cargo run --example shatter_demo"]
+    D -->|"Web Canvas"| F["Run wasm-pack / demo server"]
+    D -->|"Headless Testing"| G["Run cargo test -p cvkg-test"]
+```
+
 ## Prerequisites
+
 
 - GPU with Vulkan, Metal, or DirectX 12 support
 - Rust toolchain installed

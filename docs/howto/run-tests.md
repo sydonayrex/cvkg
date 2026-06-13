@@ -2,7 +2,23 @@
 
 Goal: Execute the test suite for CVKG.
 
+## Process Overview
+
+```mermaid
+graph TD
+    A["Check dependencies"] --> B{"Choose Test Scope"}
+    B -->|"All workspace crates"| C["cargo test --workspace"]
+    B -->|"Single crate only"| D["cargo test -p <crate-name>"]
+    B -->|"Single test by name"| E["cargo test -p <crate-name> <test-name>"]
+    C --> F{"Test Results"}
+    D --> F
+    E --> F
+    F -->|"Success (Ok)"| G["All checks passed"]
+    F -->|"No adapter panic"| H["Apply: export WGPU_ADAPTER=mesa"]
+```
+
 ## Prerequisites
+
 
 - Build dependencies installed (see onboarding.md)
 

@@ -127,7 +127,7 @@ impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
             slice: [0.0, 0.0, 0.0, 1.0],
             logical: [vertex.position().x, vertex.position().y],
             size: [1.0, 1.0],
-            clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+            clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
             tex_index: 0,
         }
     }

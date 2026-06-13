@@ -94,7 +94,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         fract(sin(dot(local, vec2<f32>(93.9898, 67.345))) * 24634.6345)
     ) * 0.01;
 
-    let noise1 = fbm(uv * 6.0 + scene.time * 0.2);
+    let noise1 = vnoise(uv * 6.0 + scene.time * 0.2);
     let stress_offset = normalize(vec2<f32>(0.5, 0.8)) * noise1 * 0.02;
 
     // ─── Section 5: SDF Edge and Thickness ───────────────────────────────────

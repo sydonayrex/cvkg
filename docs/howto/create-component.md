@@ -2,7 +2,18 @@
 
 Goal: Implement a custom UI component in CVKG.
 
+## Process Flow
+
+```mermaid
+graph TD
+    A["Define target struct with fields and constructor builder methods"] --> B["Implement the View trait"]
+    B --> C["Define render method using Renderer draw APIs"]
+    C --> D["Define intrinsic_size to return bounding width and height"]
+    D --> E["Insert component inside container stack views (VStack, HStack)"]
+```
+
 ## Prerequisites
+
 
 - Understanding of the `View` trait
 - Basic Rust knowledge

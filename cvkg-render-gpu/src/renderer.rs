@@ -163,6 +163,8 @@ pub struct SurtrRenderer {
 
     /// Bloom post-processing enabled flag.
     pub bloom_enabled: bool,
+    /// Dynamic toggle to enable or disable the volumetric raymarching pass, which handles fog and light shaft simulations.
+    pub volumetric_enabled: bool,
     /// Color blindness bind group layout (texture + sampler + uniform).
     pub(crate) color_blind_bind_group_layout: wgpu::BindGroupLayout,
     /// Color blindness uniform buffer (updated each frame when mode changes).
@@ -200,6 +202,9 @@ pub struct SurtrRenderer {
     /// Used for per-element isolated backdrop blur (Tahoe feature)
     pub(crate) portal_regions: std::collections::VecDeque<cvkg_core::Rect>,
 
+    /// Cache of the compiled Kvasir render graph execution plan.
+    /// Used to bypass graph rebuilding and topological sorting when configuration is unchanged.
+    pub(crate) cached_graph_plan: Option<kvasir::graph_cache::CachedGraphPlan>,
     /// Memoization cache for frame-level render skipping.
     /// Tracks (id, data_hash) -> skip_render for deduplication.
     pub(crate) memo_cache: std::collections::HashMap<u64, u64>,
@@ -1645,8 +1650,10 @@ impl SurtrRenderer {
             glass_output_bind_group_layout,
             current_draw_material: cvkg_core::DrawMaterial::Opaque,
             portal_regions: VecDeque::new(),
+            cached_graph_plan: None,
             memo_cache: std::collections::HashMap::new(),
             bloom_enabled: true,
+            volumetric_enabled: false,
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
             color_blind_pipeline,
@@ -3040,7 +3047,7 @@ impl SurtrRenderer {
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [px - rect.x, py - rect.y],
                 size: [rect.width, rect.height],
-                clip: [-10000.0, -10000.0, 20000.0, 20000.0],
+                clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
                 tex_index: 0,
             });
         }
@@ -3401,21 +3408,63 @@ impl SurtrRenderer {
             res.scene_msaa_texture.clone(),
         );
 
-        let render_graph = kvasir::nodes::build_render_graph(&kvasir::nodes::RenderGraphConfig {
-            has_glass,
-            has_bloom,
-            has_accessibility,
-            active_offscreens: &self.active_offscreens,
-            portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
-            width: self.current_width(),
-            height: self.current_height(),
-            scale: self.current_scale_factor(),
-        });
         let scale = self.current_scale_factor();
-        let planner = kvasir::planner::ExecutionPlanner::new(&render_graph);
-        let pass_nodes = planner.compile().expect("RenderGraph cycle detected!");
-        for pass_id in pass_nodes {
-            if let Some(node) = render_graph.node(pass_id) {
+        let scale_bits = scale.to_bits();
+        let active_offscreens_count = self.active_offscreens.len();
+        let portal_regions_count = self.portal_regions.len();
+        let width = self.current_width();
+        let height = self.current_height();
+        let has_volumetric = self.volumetric_enabled;
+
+        let use_cache = if let Some(ref cached) = self.cached_graph_plan {
+            cached.matches(
+                has_glass,
+                has_bloom,
+                has_accessibility,
+                has_volumetric,
+                active_offscreens_count,
+                portal_regions_count,
+                width,
+                height,
+                scale_bits,
+            )
+        } else {
+            false
+        };
+
+        if !use_cache {
+            let render_graph = kvasir::nodes::build_render_graph(&kvasir::nodes::RenderGraphConfig {
+                has_glass,
+                has_bloom,
+                has_accessibility,
+                has_volumetric,
+                active_offscreens: &self.active_offscreens,
+                portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
+                width,
+                height,
+                scale,
+            });
+            let planner = kvasir::planner::ExecutionPlanner::new(&render_graph);
+            let compiled_plan = planner.compile().expect("RenderGraph cycle detected!");
+            
+            self.cached_graph_plan = Some(kvasir::graph_cache::CachedGraphPlan {
+                has_glass,
+                has_bloom,
+                has_accessibility,
+                has_volumetric,
+                active_offscreens_count,
+                portal_regions_count,
+                width,
+                height,
+                scale_bits,
+                graph: render_graph,
+                plan: compiled_plan,
+            });
+        }
+
+        let cached = self.cached_graph_plan.as_ref().unwrap();
+        for &pass_id in &cached.plan {
+            if let Some(node) = cached.graph.node(pass_id) {
                 log::trace!("[Kvasir] Executing node: {}", node.label());
                 let mut ctx = kvasir::node::ExecutionContext {
                     device: &self.device,
@@ -3684,7 +3733,7 @@ impl SurtrRenderer {
 
             let lyon_path = usvg_to_lyon(path);
             let screen = [4096.0, 4096.0]; // Placeholder, will be overridden if needed
-            let clip = [-10000.0, -10000.0, 20000.0, 20000.0]; // Default clip
+            let clip = [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY]; // Default clip
 
             // Tessellate fill if present
             if has_fill && let Some(fill) = path.fill() {

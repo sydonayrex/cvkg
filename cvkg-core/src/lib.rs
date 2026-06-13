@@ -5081,6 +5081,8 @@ pub mod layout {
     pub struct LayoutCache {
         pub safe_area: SafeArea,
         pub delta_time: f32,
+        /// Device scale factor for HiDPI / retina snapping. Defaults to 1.0.
+        pub scale_factor: f32,
         size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
         /// Monotonically increasing generation counter for cache invalidation.
         /// When a view tree changes, bumping the generation causes stale entries
@@ -5105,6 +5107,7 @@ pub mod layout {
             Self {
                 safe_area: SafeArea::default(),
                 delta_time: 0.016,
+                scale_factor: 1.0,
                 size_cache: HashMap::new(),
                 generation: 0,
                 engine: None,

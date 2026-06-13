@@ -169,7 +169,7 @@ fn test_glass_pipeline_renders() {
 
     let pixels = capture_frame(&mut renderer);
 
-    let corner_idx = ((0 * width + 0) * 4) as usize;
+    let corner_idx = 0usize;
     let corner_r = pixels[corner_idx];
     let corner_g = pixels[corner_idx + 1];
     let corner_b = pixels[corner_idx + 2];
@@ -534,7 +534,11 @@ fn test_full_pipeline_integration() {
         [0.1, 0.1, 0.2, 1.0],
     );
 
-    // TODO: Replace with fill_glass_rect once glass pipeline is fixed
+    // Draw glass rect utilizing the active Glass material pipeline
+    renderer.set_material(cvkg_core::DrawMaterial::Glass {
+        blur_radius: 20.0,
+        ior_override: 0.0,
+    });
     renderer.fill_rect(
         Rect {
             x: 32.0,
@@ -544,6 +548,7 @@ fn test_full_pipeline_integration() {
         },
         [0.0, 0.6, 0.9, 0.7],
     );
+    renderer.set_material(cvkg_core::DrawMaterial::Opaque);
 
     renderer.fill_rect(
         Rect {

@@ -603,8 +603,8 @@ impl ActiveAnimation {
                 initial_velocity,
                 friction,
             } => {
-                // Placeholder - We'll add the true solver logic via momentum.rs
-                // For now, this is just bridging the enum variant.
+                // Advance the decay simulation using DecaySolver from momentum.rs
+                // to calculate inertial momentum progress.
                 let mut solver = crate::momentum::DecaySolver::new(
                     *initial_velocity,
                     *friction,

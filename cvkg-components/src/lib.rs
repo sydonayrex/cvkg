@@ -358,6 +358,11 @@ pub mod kbd;
 pub mod native_select;
 pub mod sonner;
 pub mod toggle_group;
+pub mod phone_input;
+pub mod mention_input;
+pub mod editable;
+pub mod popconfirm;
+pub mod qrcode;
 
 // ── New HIGH priority components from cvkg-com-pool ──
 pub mod agent_chat;
@@ -398,6 +403,11 @@ pub use kbd::Kbd;
 pub use native_select::NativeSelect;
 pub use sonner::{Sonner, SonnerPosition, SonnerToast, SonnerType};
 pub use toggle_group::ToggleGroup;
+pub use phone_input::PhoneInput;
+pub use mention_input::MentionInput;
+pub use editable::Editable;
+pub use popconfirm::Popconfirm;
+pub use qrcode::QRCode;
 
 pub use flexiscope::{ContainerLayout, FlexiScope, ScopeThreshold, fluid_typography};
 pub use flux_layout::FluxState;

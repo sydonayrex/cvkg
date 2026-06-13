@@ -66,6 +66,8 @@ pub struct RenderGraphConfig<'a> {
     pub has_glass: bool,
     pub has_bloom: bool,
     pub has_accessibility: bool,
+    /// Whether volumetric raymarching pass is active for fog/light shaft effects.
+    pub has_volumetric: bool,
     pub active_offscreens: &'a [crate::types::OffscreenEffectConfig],
     pub portal_regions: &'a [cvkg_core::Rect],
     pub width: u32,
@@ -130,8 +132,7 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     last_scene_node = ui;
 
     // Volumetric raymarching (conditional, for fog/light shaft effects)
-    // TODO: make configurable per-frame; disabled until shader bindings are fixed
-    let has_volumetric = false;
+    let has_volumetric = config.has_volumetric;
     if has_volumetric {
         let volumetric = builder.add_node(Box::new(VolumetricNode::new()));
         builder.connect(last_scene_node, RES_SCENE, volumetric);

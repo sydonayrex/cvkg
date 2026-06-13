@@ -109,7 +109,7 @@ mod tests {
             &world,
             id1,
             id2,
-            |rect: Rect, pieces: u32, force: f32, color: [f32; 4]| {
+            |rect: Rect, pieces: u32, force: f32, _color: [f32; 4]| {
                 called = true;
                 assert_eq!(pieces, 12);
                 assert!((force - 5.0).abs() < 0.001);
@@ -124,7 +124,7 @@ mod tests {
         let mut called = false;
         shatter_at_position::<fn(Rect, u32, f32, [f32; 4])>(
             [400.0, 300.0],
-            |rect: Rect, pieces: u32, force: f32, color: [f32; 4]| {
+            |rect: Rect, pieces: u32, _force: f32, _color: [f32; 4]| {
                 called = true;
                 assert!((rect.x - 350.0).abs() < 1.0);
                 assert!((rect.y - 250.0).abs() < 1.0);

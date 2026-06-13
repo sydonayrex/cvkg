@@ -2,7 +2,18 @@
 
 Goal: Compile a CVKG application to WebAssembly for browser deployment.
 
+## Process Flow
+
+```mermaid
+graph TD
+    A["Add WASM Target"] --> B["Build with cargo build --target wasm32-unknown-unknown"]
+    B --> C["Verify build artifact exists (.wasm)"]
+    C --> D["Construct HTML template including JS initializer"]
+    D --> E["Serve assets locally (Python server or cvkg-webkit-server)"]
+```
+
 ## Prerequisites
+
 
 - Rust WASM target installed
 - Web server for local testing

@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::interactive::Input;
 use cvkg_core::{
     AnyView, Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -28,6 +29,13 @@ where
     pub(crate) selected_index: Option<usize>,
     pub(crate) on_select: Option<Arc<dyn Fn(usize) + Send + Sync>>,
     pub(crate) on_sort: Option<Arc<dyn Fn(String, SortOrder) + Send + Sync>>,
+    pub(crate) inline_edit: bool,
+    pub(crate) on_edit_commit: Option<Arc<dyn Fn(usize, String, String) + Send + Sync>>,
+    pub(crate) get_depth: Option<Arc<dyn Fn(&D) -> usize + Send + Sync>>,
+    pub(crate) get_expanded: Option<Arc<dyn Fn(&D) -> bool + Send + Sync>>,
+    pub(crate) on_toggle: Option<Arc<dyn Fn(usize) + Send + Sync>>,
+    pub(crate) bulk_selected: Vec<usize>,
+    pub(crate) on_bulk_select: Option<Arc<dyn Fn(Vec<usize>) + Send + Sync>>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -53,6 +61,13 @@ where
             on_sort: None,
             frozen_columns: 0,
             show_sparklines: false,
+            inline_edit: false,
+            on_edit_commit: None,
+            get_depth: None,
+            get_expanded: None,
+            on_toggle: None,
+            bulk_selected: Vec::new(),
+            on_bulk_select: None,
         }
     }
 
@@ -113,6 +128,48 @@ where
         self.selected_index = index;
         self
     }
+
+    /// Enables inline cell editing on double click.
+    pub fn inline_editable(mut self, enabled: bool) -> Self {
+        self.inline_edit = enabled;
+        self
+    }
+
+    /// Sets the callback for committing an inline cell edit.
+    pub fn on_edit_commit(mut self, callback: impl Fn(usize, String, String) + Send + Sync + 'static) -> Self {
+        self.on_edit_commit = Some(Arc::new(callback));
+        self
+    }
+
+    /// Sets the hierarchical tree depth function for rows.
+    pub fn tree_depth(mut self, depth_fn: impl Fn(&D) -> usize + Send + Sync + 'static) -> Self {
+        self.get_depth = Some(Arc::new(depth_fn));
+        self
+    }
+
+    /// Sets the hierarchical tree expanded state function for rows.
+    pub fn tree_expanded(mut self, expanded_fn: impl Fn(&D) -> bool + Send + Sync + 'static) -> Self {
+        self.get_expanded = Some(Arc::new(expanded_fn));
+        self
+    }
+
+    /// Sets the row toggle callback (for hierarchical expanding).
+    pub fn on_toggle(mut self, callback: impl Fn(usize) + Send + Sync + 'static) -> Self {
+        self.on_toggle = Some(Arc::new(callback));
+        self
+    }
+
+    /// Sets the selected rows for bulk actions.
+    pub fn bulk_selected(mut self, selected: Vec<usize>) -> Self {
+        self.bulk_selected = selected;
+        self
+    }
+
+    /// Sets the callback for bulk selections changes.
+    pub fn on_bulk_select(mut self, callback: impl Fn(Vec<usize>) + Send + Sync + 'static) -> Self {
+        self.on_bulk_select = Some(Arc::new(callback));
+        self
+    }
 }
 
 impl<D> View for RunesTable<D>
@@ -156,7 +213,7 @@ where
                 col_rect,
                 [0.3, 0.5, 0.8, if is_sorted { 0.8 } else { 0.4 }],
                 1.0,
-            );
+              );
 
             let sort_indicator = if is_sorted {
                 match self.sort_order {
@@ -233,10 +290,13 @@ where
                     height: self.row_height,
                 };
                 let is_selected = self.selected_index == Some(idx);
+                let is_bulk_selected = self.bulk_selected.contains(&idx);
 
                 // Row background: alternating + selection highlight
                 let bg = if is_selected {
                     [0.0, 0.4, 0.8, 0.4]
+                } else if is_bulk_selected {
+                    [0.0, 0.6, 0.6, 0.2]
                 } else if idx % 2 == 0 {
                     theme::input_bg()
                 } else {
@@ -247,35 +307,94 @@ where
                     renderer.stroke_rect(row_rect, [0.0, 0.8, 1.0, 0.6], 1.5);
                 }
 
+                // Check depth of this node if Tree view is active
+                let depth = self.get_depth.as_ref().map(|f| (f)(item)).unwrap_or(0);
+                let is_expanded = self.get_expanded.as_ref().map(|f| (f)(item)).unwrap_or(false);
+                let indent = depth as f32 * 16.0;
+
                 let mut cx = rect.x;
-                for col in &self.columns {
-                    let cell_rect = Rect {
+                for (col_idx, col) in self.columns.iter().enumerate() {
+                    let mut cell_rect = Rect {
                         x: cx,
                         y: row_y,
                         width: col.width,
                         height: self.row_height,
                     };
-                    let view = (col.cell_builder)(item);
-                    view.render(renderer, cell_rect);
+
+                    // Indent the first column if depth > 0
+                    if col_idx == 0 && depth > 0 {
+                        cell_rect.x += indent;
+                        cell_rect.width = (cell_rect.width - indent).max(10.0);
+
+                        // Draw expand/collapse arrow
+                        let arrow = if is_expanded { "▼ " } else { "▶ " };
+                        renderer.draw_text(arrow, cx + indent - 12.0, row_y + 8.0, 11.0, theme::text_muted());
+                    }
+
+                    // Check if we are currently inline editing this cell
+                    let is_editing = self.inline_edit && is_selected && col_idx == 0; // editable on selection
+
+                    if is_editing {
+                        let on_commit = self.on_edit_commit.clone();
+                        let col_name = col.header.clone();
+                        let input = Input::new("...")
+                            .value("")
+                            .focused(true)
+                            .on_commit(move |val| {
+                                if let Some(ref cb) = on_commit {
+                                    (cb)(idx, col_name.clone(), val);
+                                }
+                            });
+                        input.render(renderer, cell_rect);
+                    } else {
+                        let view = (col.cell_builder)(item);
+                        view.render(renderer, cell_rect);
+                    }
                     cx += col.width;
                 }
 
                 // ── Row selection click handler ──
                 let row_idx = idx;
                 let on_select = self.on_select.clone();
+                let on_toggle = self.on_toggle.clone();
+                let has_tree = self.get_depth.is_some();
                 let rr = row_rect;
                 renderer.register_handler(
                     "pointerclick",
                     Arc::new(move |event| {
                         if let Event::PointerClick { x, y, .. } = event
                             && rr.contains(x, y)
-                            && let Some(ref cb) = on_select
                         {
-                            (cb)(row_idx);
+                            if has_tree && x < rr.x + 40.0 {
+                                if let Some(ref cb) = on_toggle {
+                                    (cb)(row_idx);
+                                }
+                            } else if let Some(ref cb) = on_select {
+                                (cb)(row_idx);
+                            }
                         }
                     }),
                 );
             }
+        }
+
+        // ── Render Bulk Action Bar if active ──
+        if !self.bulk_selected.is_empty() {
+            let bar_rect = Rect {
+                x: rect.x + 20.0,
+                y: rect.y + rect.height - 50.0,
+                width: rect.width - 40.0,
+                height: 40.0,
+            };
+            renderer.fill_rounded_rect(bar_rect, 6.0, [0.08, 0.08, 0.12, 0.95]);
+            renderer.stroke_rounded_rect(bar_rect, 6.0, theme::accent(), 1.5);
+            renderer.draw_text(
+                &format!("{} items selected", self.bulk_selected.len()),
+                bar_rect.x + 16.0,
+                bar_rect.y + 12.0,
+                14.0,
+                theme::text(),
+            );
         }
 
         renderer.pop_vnode();

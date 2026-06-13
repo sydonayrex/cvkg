@@ -176,6 +176,12 @@ Several architectural choices separate CVKG from conventional UI systems.
    Text shaping is computationally heavy and interacts with volatile operating system font databases. Isolate this complexity to prevent OS font-linking quirks and external library compilation cycles from impacting core framework compilation speed.
 4. **Vili Interaction Paradigm**:
    Standard UI frameworks rely on discrete rectangular hitboxes (AABB) for mouse interactions. CVKG instead relies on continuous mathematical fields—evaluating exact distance metrics using Signed Distance Fields (SDFs). This approach unlocks rich, dynamic feedback where pointer velocity (`mimir_intent`), proximity (`mani_glow`), and layout adaptation (`fafnir_evolve`) directly influence visual elements before a click ever occurs.
+5. **AgX Tonemapping in Shader Pipelines**:
+   Standard color space mapping models cause color distortion (hue shifting/saturation loss) in bright highlights. CVKG incorporates logarithmic color conversions and cubic contrast curves to map wide-dynamic-range HDR spaces into sRGB target viewports, keeping color fidelity intact.
+6. **Render Graph Execution Plan Cache**:
+   Topological sorting of multi-pass pipelines using Kahn's algorithm is CPU-intensive. Since UI node connections and draw orders do not change on every frame, CVKG caches compiled `PassId`/`NodeKey` sequences in `CachedGraphPlan` structures, bypassing the sorting stage.
+7. **Temporal Sub-Pixel Snapping**:
+   Traditional UI toolkits snap element coordinates to integer pixels on every layout pass, creating visual jitter during slow spring animations. CVKG queries mass/spring velocities from `cvkg-anim` during layout passes to allow sub-pixel rendering on active motion, snapping to the physical pixel grid only when movement stops.
 
 ---
 

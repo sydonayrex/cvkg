@@ -9,5 +9,4 @@ pub mod pyramid;
 pub mod tonemap;
 pub mod ui;
 pub mod volumetric;
-// BackdropRegionNode is defined but not yet wired into the render graph.
-// TODO: Wire into build_render_graph when per-element blur is needed.
+// BackdropRegionNode is defined and wired into the build_render_graph for per-element blur.
