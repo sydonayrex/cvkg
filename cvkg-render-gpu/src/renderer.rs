@@ -386,6 +386,11 @@ impl SurtrRenderer {
         if supports_timestamps {
             required_features |= wgpu::Features::TIMESTAMP_QUERY;
         }
+                // Enable validation layer in debug builds for better error reporting
+        #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
+        {
+            log::info!("[GPU] Validation layer enabled (debug build)");
+        }
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {

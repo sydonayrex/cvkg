@@ -303,3 +303,70 @@ fn test_notification_system() {
             .dismissed
     );
 }
+
+#[test]
+fn test_form_binder() {
+    #[derive(Clone, Debug, PartialEq)]
+    struct MyFormState {
+        username: String,
+        age: u32,
+    }
+
+    let initial_state = MyFormState {
+        username: "vikings".to_string(),
+        age: 30,
+    };
+
+    let mut binder = cvkg_components::FormBinder::new(initial_state);
+
+    binder.add_rule("username", |state| {
+        if state.username.len() >= 3 {
+            Ok(())
+        } else {
+            Err("Username must be at least 3 characters".to_string())
+        }
+    });
+
+    binder.add_rule("age", |state| {
+        if state.age >= 18 {
+            Ok(())
+        } else {
+            Err("Must be 18 or older".to_string())
+        }
+    });
+
+    assert!(binder.validate());
+    assert!(binder.is_valid());
+
+    // Test binding updates
+    let last_state = std::sync::Arc::new(std::sync::Mutex::new(binder.state.clone()));
+    let last_state_clone = last_state.clone();
+
+    let username_binding = binder.bind_field(
+        |state| state.username.clone(),
+        |state, val| state.username = val,
+        move |new_state| {
+            *last_state_clone.lock().unwrap() = new_state;
+        },
+    );
+
+    assert_eq!(username_binding.get(), "vikings");
+    username_binding.set("ulf".to_string());
+
+    let updated_state = last_state.lock().unwrap().clone();
+    assert_eq!(updated_state.username, "ulf");
+
+    // Check validation failure
+    binder.state = MyFormState {
+        username: "ab".to_string(),
+        age: 15,
+    };
+
+    assert!(!binder.validate());
+    assert!(!binder.is_valid());
+    assert_eq!(
+        binder.error_for("username").unwrap(),
+        "Username must be at least 3 characters"
+    );
+    assert_eq!(binder.error_for("age").unwrap(), "Must be 18 or older");
+}

@@ -91,6 +91,8 @@ struct AppState {
     last_vdom_snapshot: ArcSwap<Option<String>>,
     /// Server configuration.
     _config: Config,
+    /// HMR broadcast sender for pushing updates to clients.
+    hmr_tx: tokio::sync::broadcast::Sender<String>,
 }
 
 /// Universal Build Orchestrator.
@@ -162,6 +164,39 @@ async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl IntoRe
 </head>
 <body>
     <div id="cvkg-root">{}</div>
+    <script>
+        // HMR Client Protocol Integration
+        (function() {{
+            function connect() {{
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const socketUrl = `${{protocol}}//${{window.location.host}}/hmr`;
+                console.log(`[HMR] Connecting to ${{socketUrl}}...`);
+                const ws = new WebSocket(socketUrl);
+
+                ws.onmessage = function(event) {{
+                    try {{
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'reload') {{
+                            console.log('[HMR] Reload signal received. Reloading page...');
+                            window.location.reload();
+                        }}
+                    }} catch (e) {{
+                        console.error('[HMR] Invalid message received:', event.data);
+                    }}
+                }};
+
+                ws.onclose = function() {{
+                    console.warn('[HMR] Connection closed. Reconnecting in 2 seconds...');
+                    setTimeout(connect, 2000);
+                }};
+
+                ws.onerror = function(err) {{
+                    console.error('[HMR] Connection error:', err);
+                }};
+            }}
+            connect();
+        }})();
+    </script>
     <script type="module">
         import init from '/cvkg-webkit-server/pkg/berserker_fire_web_demo.js';
         async function run() {{
@@ -227,8 +262,11 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 /// WebSocket handler for HMR (Hot Module Relays).
-async fn hmr_ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_hmr_socket)
+async fn hmr_ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_hmr_socket(socket, state))
 }
 
 /// Handle runtime protocol WebSocket connections.
@@ -282,7 +320,7 @@ async fn handle_socket(mut ws: WebSocket) {
 }
 
 /// Handle HMR WebSocket connections — broadcasts patches to connected clients.
-async fn handle_hmr_socket(mut ws: WebSocket) {
+async fn handle_hmr_socket(mut ws: WebSocket, state: Arc<AppState>) {
     use futures_util::SinkExt;
 
     // Send handshake
@@ -301,23 +339,34 @@ async fn handle_hmr_socket(mut ws: WebSocket) {
         return;
     }
 
-    // In a production build, this would subscribe to a broadcast channel
-    // from the build pipeline. For now, we keep the connection alive and
-    // respond to client messages.
-    while let Some(Ok(msg)) = ws.next().await {
-        match msg {
-            axum::extract::ws::Message::Close(_) => {
-                info!("HMR WebSocket client disconnected");
-                break;
+    let mut rx = state.hmr_tx.subscribe();
+
+    loop {
+        tokio::select! {
+            // Listen for broadcast messages from the watcher
+            Ok(msg_str) = rx.recv() => {
+                if let Err(e) = ws.send(axum::extract::ws::Message::Text(msg_str)).await {
+                    error!("Failed to send HMR update: {}", e);
+                    break;
+                }
             }
-            axum::extract::ws::Message::Text(text) if text.contains("ping") => {
-                let _ = ws
-                    .send(axum::extract::ws::Message::Text(
-                        r#"{"type":"pong"}"#.to_string(),
-                    ))
-                    .await;
+            // Keep connection alive or handle client close
+            msg = ws.next() => {
+                match msg {
+                    Some(Ok(axum::extract::ws::Message::Close(_))) | None => {
+                        info!("HMR WebSocket client disconnected");
+                        break;
+                    }
+                    Some(Ok(axum::extract::ws::Message::Text(text))) if text.contains("ping") => {
+                        let _ = ws
+                            .send(axum::extract::ws::Message::Text(
+                                r#"{"type":"pong"}"#.to_string(),
+                            ))
+                            .await;
+                    }
+                    _ => {}
+                }
             }
-            _ => {}
         }
     }
 }
@@ -366,6 +415,88 @@ async fn shutdown_signal() {
             info!("SIGTERM received, starting graceful shutdown...");
         },
     }
+}
+
+fn spawn_file_watcher(state: Arc<AppState>) {
+    let pkg_dir = state._config.pkg_dir.clone();
+    let static_dir = state._config.static_dir.clone();
+    let assets_dir = state._config.assets_dir.clone();
+    let hmr_tx = state.hmr_tx.clone();
+
+    tokio::spawn(async move {
+        use std::collections::HashMap;
+        use std::path::PathBuf;
+
+        let mut file_times: HashMap<PathBuf, std::time::SystemTime> = HashMap::new();
+
+        fn scan_dir(dir: &str, files: &mut HashMap<PathBuf, std::time::SystemTime>) {
+            let path = std::path::Path::new(dir);
+            if !path.exists() {
+                return;
+            }
+            if let Ok(entries) = std::fs::read_dir(path) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        scan_dir(&p.to_string_lossy(), files);
+                    } else if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            files.insert(p, modified);
+                        }
+                    }
+                }
+            }
+        }
+
+        scan_dir(&pkg_dir, &mut file_times);
+        scan_dir(&static_dir, &mut file_times);
+        scan_dir(&assets_dir, &mut file_times);
+
+        info!("[HMR Watcher] Initialized watcher for {}, {} and {}", pkg_dir, static_dir, assets_dir);
+
+        loop {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+
+            let mut current_files = HashMap::new();
+            scan_dir(&pkg_dir, &mut current_files);
+            scan_dir(&static_dir, &mut current_files);
+            scan_dir(&assets_dir, &mut current_files);
+
+            let mut changed = false;
+
+            for (path, modified) in &current_files {
+                match file_times.get(path) {
+                    Some(old_modified) => {
+                        if modified > old_modified {
+                            info!("[HMR Watcher] File modified: {:?}", path);
+                            changed = true;
+                        }
+                    }
+                    None => {
+                        info!("[HMR Watcher] File created: {:?}", path);
+                        changed = true;
+                    }
+                }
+            }
+
+            for path in file_times.keys() {
+                if !current_files.contains_key(path) {
+                    info!("[HMR Watcher] File deleted: {:?}", path);
+                    changed = true;
+                }
+            }
+
+            if changed {
+                file_times = current_files;
+                info!("[HMR Watcher] Broadcasting HMR reload event...");
+                let reload_msg = serde_json::json!({
+                    "type": "reload",
+                    "payload": {}
+                });
+                let _ = hmr_tx.send(reload_msg.to_string());
+            }
+        }
+    });
 }
 
 #[tokio::main]
@@ -434,10 +565,16 @@ async fn main() -> anyhow::Result<()> {
         .install_recorder()
         .expect("Failed to install prometheus recorder");
 
+    let (hmr_tx, _) = tokio::sync::broadcast::channel(16);
+
     let state = Arc::new(AppState {
         last_vdom_snapshot: ArcSwap::from_pointee(None),
         _config: config.clone(),
+        hmr_tx,
     });
+
+    // Spawn the background file watcher task
+    spawn_file_watcher(state.clone());
 
     // Build the router with middleware layers.
     let app = Router::new()
