@@ -3753,43 +3753,41 @@ impl SurtrRenderer {
 
             // Tessellate fill if present
             if has_fill && let Some(fill) = path.fill() {
-                let color = match fill.paint() {
-                    usvg::Paint::Color(c) => [
-                        c.red as f32 / 255.0,
-                        c.green as f32 / 255.0,
-                        c.blue as f32 / 255.0,
-                        fill.opacity().get(),
-                    ],
-                    usvg::Paint::LinearGradient(_)
-                    | usvg::Paint::RadialGradient(_)
-                    | usvg::Paint::Pattern(_) => {
+                let paint = fill.paint();
+                let fill_opacity = fill.opacity().get();
+
+                match paint {
+                    usvg::Paint::Color(c) => {
+                        let color = [
+                            c.red as f32 / 255.0,
+                            c.green as f32 / 255.0,
+                            c.blue as f32 / 255.0,
+                            fill_opacity,
+                        ];
+                        Self::tessellate_fill_solid(
+                            &lyon_path, color, &node_id, params,
+                        );
+                    }
+                    usvg::Paint::LinearGradient(g) => {
+                        Self::tessellate_fill_gradient(
+                            &lyon_path, g, fill_opacity, &node_id, params,
+                        );
+                    }
+                    usvg::Paint::RadialGradient(g) => {
+                        Self::tessellate_fill_radial_gradient(
+                            &lyon_path, g, fill_opacity, &node_id, params,
+                        );
+                    }
+                    usvg::Paint::Pattern(_) => {
                         log::warn!(
-                            "SVG path '{}' uses gradient/pattern fill which is not supported, using white fallback",
+                            "SVG path '{}' uses pattern fill which is not supported, using white fallback",
                             node_id
                         );
-                        [1.0, 1.0, 1.0, 1.0]
+                        let color = [1.0, 1.0, 1.0, fill_opacity];
+                        Self::tessellate_fill_solid(
+                            &lyon_path, color, &node_id, params,
+                        );
                     }
-                };
-
-                let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-                let base_vertex_idx = params.vertices.len() as u32;
-
-                if let Err(e) = params.fill_tessellator.tessellate_path(
-                    &lyon_path,
-                    &FillOptions::default(),
-                    &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color }),
-                ) {
-                    log::warn!(
-                        "SVG fill tessellation failed for path '{}': {:?}, skipping",
-                        node_id,
-                        e
-                    );
-                    return;
-                }
-
-                params.vertices.extend(buffers.vertices);
-                for idx in buffers.indices {
-                    params.indices.push(base_vertex_idx + idx);
                 }
             }
 
@@ -3859,6 +3857,156 @@ impl SurtrRenderer {
                     index_range: end_idx_indices..params.indices.len(),
                     local_transform: Default::default(),
                 });
+        }
+    }
+
+    /// Tessellate a solid-color fill.
+    fn tessellate_fill_solid(
+        lyon_path: &lyon::path::Path,
+        color: [f32; 4],
+        node_id: &String,
+        params: &mut TessellateParams<'_>,
+    ) {
+        let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+        let base_vertex_idx = params.vertices.len() as u32;
+        if let Err(e) = params.fill_tessellator.tessellate_path(
+            lyon_path,
+            &FillOptions::default(),
+            &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color }),
+        ) {
+            log::warn!(
+                "SVG fill tessellation failed for path '{}': {:?}, skipping",
+                node_id,
+                e
+            );
+            return;
+        }
+        params.vertices.extend(buffers.vertices);
+        for idx in buffers.indices {
+            params.indices.push(base_vertex_idx + idx);
+        }
+    }
+
+    /// Compute gradient color for a position in SVG space.
+    fn gradient_color_at(
+        stops: &[usvg::Stop],
+        pos: f32,
+        fill_opacity: f32,
+    ) -> [f32; 4] {
+        if stops.is_empty() {
+            return [1.0, 1.0, 1.0, fill_opacity];
+        }
+        let pos = pos.clamp(0.0, 1.0);
+        let mut start = &stops[0];
+        let mut end = &stops[stops.len() - 1];
+        for w in stops.windows(2) {
+            if pos >= w[0].offset().get() && pos <= w[1].offset().get() {
+                start = &w[0];
+                end = &w[1];
+                break;
+            }
+        }
+        let so = start.offset().get();
+        let eo = end.offset().get();
+        if pos <= so {
+            let c = start.color();
+            return [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, start.opacity().get() * fill_opacity];
+        }
+        if pos >= eo {
+            let c = end.color();
+            return [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, end.opacity().get() * fill_opacity];
+        }
+        let range = eo - so;
+        if range < 0.0001 {
+            let c = start.color();
+            return [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, start.opacity().get() * fill_opacity];
+        }
+        let t = (pos - so) / range;
+        let sc = start.color();
+        let ec = end.color();
+        [
+            (sc.red as f32 + (ec.red as f32 - sc.red as f32) * t) / 255.0,
+            (sc.green as f32 + (ec.green as f32 - sc.green as f32) * t) / 255.0,
+            (sc.blue as f32 + (ec.blue as f32 - sc.blue as f32) * t) / 255.0,
+            (start.opacity().get() + (end.opacity().get() - start.opacity().get()) * t) * fill_opacity,
+        ]
+    }
+
+    /// Tessellate a linear gradient fill with per-vertex colors.
+    fn tessellate_fill_gradient(
+        lyon_path: &lyon::path::Path,
+        gradient: &usvg::LinearGradient,
+        fill_opacity: f32,
+        node_id: &String,
+        params: &mut TessellateParams<'_>,
+    ) {
+        let x1 = gradient.x1();
+        let y1 = gradient.y1();
+        let x2 = gradient.x2();
+        let y2 = gradient.y2();
+        let dx = x2 - x1;
+        let dy = y2 - y1;
+        let grad_len_sq = dx * dx + dy * dy;
+
+        let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+        let base_vertex_idx = params.vertices.len() as u32;
+        if let Err(e) = params.fill_tessellator.tessellate_path(
+            lyon_path,
+            &FillOptions::default(),
+            &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color: [1.0, 1.0, 1.0, 1.0] }),
+        ) {
+            log::warn!("SVG gradient fill tessellation failed for path '{}': {:?}, skipping", node_id, e);
+            return;
+        }
+
+        let stops = gradient.stops();
+        for mut vertex in buffers.vertices {
+            let px = vertex.position[0];
+            let py = vertex.position[1];
+            let t = if grad_len_sq < 0.0001 { 0.5 } else { ((px - x1) * dx + (py - y1) * dy) / grad_len_sq };
+            vertex.color = Self::gradient_color_at(stops, t as f32, fill_opacity);
+            params.vertices.push(vertex);
+        }
+        for idx in buffers.indices {
+            params.indices.push(base_vertex_idx + idx);
+        }
+    }
+
+    /// Tessellate a radial gradient fill with per-vertex colors.
+    fn tessellate_fill_radial_gradient(
+        lyon_path: &lyon::path::Path,
+        gradient: &usvg::RadialGradient,
+        fill_opacity: f32,
+        node_id: &String,
+        params: &mut TessellateParams<'_>,
+    ) {
+        let cx = gradient.cx();
+        let cy = gradient.cy();
+        let r = gradient.r();
+        let stops = gradient.stops();
+
+        let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+        let base_vertex_idx = params.vertices.len() as u32;
+        if let Err(e) = params.fill_tessellator.tessellate_path(
+            lyon_path,
+            &FillOptions::default(),
+            &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color: [1.0, 1.0, 1.0, 1.0] }),
+        ) {
+            log::warn!("SVG radial gradient fill tessellation failed for path '{}': {:?}, skipping", node_id, e);
+            return;
+        }
+
+        for mut vertex in buffers.vertices {
+            let px = vertex.position[0];
+            let py = vertex.position[1];
+            let dist = ((px - cx) * (px - cx) + (py - cy) * (py - cy)).sqrt();
+            let r_val = r.get();
+            let t = if r_val < 0.001 { 0.5 } else { (dist / r_val).clamp(0.0, 1.0) };
+            vertex.color = Self::gradient_color_at(stops, t, fill_opacity);
+            params.vertices.push(vertex);
+        }
+        for idx in buffers.indices {
+            params.indices.push(base_vertex_idx + idx);
         }
     }
 
