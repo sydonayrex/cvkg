@@ -2758,6 +2758,31 @@ pub trait Renderer: ElapsedTime + Send {
         let _ = (rect, radius, blur_radius);
     }
 
+    /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
+    /// `n` controls the squareness: 2.0 = rounded rect, 4.0 = classic squircle, higher = more square.
+    fn fill_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4]) {
+        // Default fallback to rounded rect
+        self.fill_rounded_rect(rect, rect.width.min(rect.height) * 0.22, color);
+    }
+
+    /// Stroke a squircle (superellipse) outline.
+    fn stroke_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4], stroke_width: f32) {
+        self.stroke_rounded_rect(rect, rect.width.min(rect.height) * 0.22, color, stroke_width);
+    }
+
+    /// Draw a focus ring around a rect (for keyboard navigation accessibility).
+    /// `offset` is the gap between the rect and the ring, `width` is the ring thickness.
+    fn draw_focus_ring(&mut self, rect: Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
+        // Default fallback to a stroked rounded rect
+        let ring_rect = Rect {
+            x: rect.x - offset,
+            y: rect.y - offset,
+            width: rect.width + 2.0 * offset,
+            height: rect.height + 2.0 * offset,
+        };
+        self.stroke_rounded_rect(ring_rect, radius + offset, color, width);
+    }
+
     /// Draw a high-fidelity 3D cube inside the given rectangle using specialized shader logic.
     /// `rotation` is [pitch, yaw, roll] in radians.
     fn draw_3d_cube(&mut self, _rect: Rect, _color: [f32; 4], _rotation: [f32; 3]) {}

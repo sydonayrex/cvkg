@@ -1731,6 +1731,27 @@ impl cvkg_core::Renderer for NativeRenderer {
             .fill_glass_rect(rect, radius, blur_radius);
     }
 
+    fn fill_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4]) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_squircle")
+            .fill_squircle(rect, n, color);
+    }
+
+    fn stroke_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4], stroke_width: f32) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: stroke_squircle")
+            .stroke_squircle(rect, n, color, stroke_width);
+    }
+
+    fn draw_focus_ring(&mut self, rect: cvkg_core::Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_focus_ring")
+            .draw_focus_ring(rect, radius, offset, width, color);
+    }
+
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         self.gpu
             .lock()

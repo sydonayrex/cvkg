@@ -98,6 +98,49 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.current_draw_material = prev_material;
     }
 
+    /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
+    /// `n` controls the squareness: 2.0 = rounded rect, 4.0 = classic squircle, higher = more square.
+    fn fill_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4]) {
+        let prev_material = self.current_draw_material;
+        self.current_draw_material = cvkg_core::DrawMaterial::Opaque;
+        self.fill_rect_with_full_params(
+            rect,
+            self.apply_opacity(color),
+            0,
+            None,
+            rect.width.min(rect.height) * 0.22 * (n / 4.0),
+            Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 },
+        );
+        self.current_draw_material = prev_material;
+    }
+
+    /// Stroke a squircle (superellipse) outline.
+    fn stroke_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4], stroke_width: f32) {
+        let prev_material = self.current_draw_material;
+        self.current_draw_material = cvkg_core::DrawMaterial::Opaque;
+        self.fill_rect_with_full_params(
+            rect,
+            self.apply_opacity(color),
+            17,
+            None,
+            rect.width.min(rect.height) * 0.22 * (n / 4.0),
+            Rect { x: stroke_width, y: 0.0, width: 0.0, height: 0.0 },
+        );
+        self.current_draw_material = prev_material;
+    }
+
+    /// Draw a focus ring around a rect (for keyboard navigation accessibility).
+    /// `offset` is the gap between the rect and the ring, `width` is the ring thickness.
+    fn draw_focus_ring(&mut self, rect: Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
+        let ring_rect = Rect {
+            x: rect.x - offset,
+            y: rect.y - offset,
+            width: rect.width + 2.0 * offset,
+            height: rect.height + 2.0 * offset,
+        };
+        self.stroke_squircle(ring_rect, 4.0, color, width);
+    }
+
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]) {
         self.fill_rect_with_full_params(
             rect,
