@@ -22,6 +22,73 @@ fn snell_refraction(normal: vec2<f32>, incident: vec2<f32>, ior: f32) -> vec2<f3
     return n_ratio * incident + (n_ratio * cos_i - cos_t) * normal;
 }
 
+// ─── Section 1b: GGX Specular Highlight ─────────────────────────────────────
+
+/// GGX/Trowbridge-Reitz normal distribution function.
+fn ggx_ndf(n_dot_h: f32, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let denom = n_dot_h * n_dot_h * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159265 * denom * denom);
+}
+
+/// Compute specular highlight for liquid glass surface.
+/// light_dir: normalized direction to light source (in screen space)
+/// view_dir: normalized view direction
+/// normal: surface normal
+/// roughness: surface roughness (0 = mirror, 1 = diffuse)
+/// intensity: specular intensity multiplier
+fn ggx_specular(light_dir: vec2<f32>, view_dir: vec2<f32>, normal: vec2<f32>, roughness: f32, intensity: f32) -> f32 {
+    let half_vec = normalize(light_dir + view_dir);
+    let n_dot_h = max(dot(normal, half_vec), 0.0);
+    let n_dot_l = max(dot(normal, light_dir), 0.0);
+    let n_dot_v = max(dot(normal, view_dir), 0.0);
+
+    // Fresnel (Schlick approximation)
+    let f0 = 0.04; // IOR 1.5 glass
+    let fresnel = f0 + (1.0 - f0) * pow(1.0 - n_dot_v, 5.0);
+
+    // GGX distribution
+    let d = ggx_ndf(n_dot_h, roughness);
+
+    // Geometry function (Smith's method)
+    let k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+    let g = n_dot_v / (n_dot_v * (1.0 - k) + k);
+    let g2 = g * g;
+
+    let spec = (d * fresnel * g2) / (4.0 * n_dot_l * n_dot_v + 0.001);
+    return spec * intensity;
+}
+
+// ─── Section 1c: Displacement Map (feDisplacementMap analog) ─────────────────
+
+/// Compute displacement offset for liquid glass edge distortion.
+/// Uses screen-space derivatives to create the "wet glass" edge effect.
+/// The displacement is strongest at the edges and fades toward the center.
+fn displacement_offset(
+    uv: vec2<f32>,
+    local: vec2<f32>,
+    lens_dist: f32,
+    lens_normal: vec2<f32>,
+    time: f32,
+) -> vec2<f32> {
+    // Edge displacement: strongest at edges, fades inward
+    let edge_factor = smoothstep(0.3, 0.5, lens_dist);
+
+    // Use screen-space derivatives for distortion magnitude
+    let dx = length(vec2(dpdx(uv.x), dpdy(uv.x)));
+    let dy = length(vec2(dpdx(uv.y), dpdy(uv.y)));
+    let deriv_scale = max(dx, dy) * 50.0;
+
+    // Displacement direction: along the normal, pushing outward at edges
+    let disp_mag = edge_factor * deriv_scale * 0.15;
+
+    // Add subtle time-varying turbulence
+    let turb = sin(local.x * 20.0 + time * 0.5) * cos(local.y * 20.0 + time * 0.3) * 0.002;
+
+    return lens_normal * (disp_mag + turb * edge_factor);
+}
+
 // ─── Section 2: Adaptive Appearance ──────────────────────────────────────────
 
 /// Sample backdrop at 4 coarse mip-6 positions for dominant color.
@@ -190,7 +257,27 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let edge_mask = smoothstep(0.5, 0.0, abs(d_sdf));
     let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8))))) * 0.18;
 
-    // ─── Section 9: Final Composition ────────────────────────────────────────
+    // ─── Section 9: Displacement + Specular ────────────────────────────────────
+
+    // Apply displacement offset to the refraction for "wet glass" edge distortion
+    let disp = displacement_offset(screen_uv, local, lens_dist, lens_normal, scene.time);
+    let displaced_screen_uv = screen_uv + disp * dist_fade;
+    let displaced_refracted = vec3<f32>(
+        textureSampleLevel(t_env, s_env, displaced_screen_uv + safe_distortion * 0.04, blur_mip).r,
+        textureSampleLevel(t_env, s_env, displaced_screen_uv, blur_mip).g,
+        textureSampleLevel(t_env, s_env, displaced_screen_uv - safe_distortion * 0.04, blur_mip).b,
+    );
+
+    // Blend between normal refraction and displaced refraction based on edge proximity
+    let disp_blend = smoothstep(0.3, 0.5, lens_dist) * 0.6;
+    refracted = mix(refracted, displaced_refracted, disp_blend);
+
+    // GGX specular highlight (light from top-left, matching macOS convention)
+    let light_dir = normalize(vec2<f32>(-0.6, -0.8));
+    let spec = ggx_specular(light_dir, view_dir, lens_normal, 0.15, 2.5);
+    let specular_contribution = spec * vec3<f32>(1.0, 0.98, 0.95) * (1.0 - fresnel * 0.5);
+
+    // ─── Section 10: Final Composition ───────────────────────────────────────
 
     // Start with refracted backdrop, apply adaptive tint and SSS
     var final_rgb = refracted * adaptive_tint * sss_tint;
@@ -203,6 +290,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Add edge smear and crystalline highlight
     final_rgb += smear_contribution + crystal_edge;
+
+    // Add GGX specular highlight
+    final_rgb += specular_contribution * smoothstep(0.0, 0.4, 1.0 - lens_dist);
 
     // Apply SDF anti-aliasing to glass alpha
     let final_alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
