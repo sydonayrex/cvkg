@@ -496,8 +496,8 @@ fn draw_nornir_bar(
         // The draw_text y parameter is the text origin (top of cell).
         // Glyphs are baseline-relative, with the baseline roughly 75% down the cell.
         // To visually center: shift up so the baseline lands at bar_height/2 + descent/2.
-        // Approximation: y = (bar_height - lh) / 2 - lh * 0.25
-        let ty = (28.0 - lh) * 0.5 - lh * 0.25;
+        // Approximation: y = (bar_height - lh) / 2 - lh * 0.5
+        let ty = (28.0 - lh) * 0.5 - lh * 0.5;
         r.draw_text(label, tx, ty, 13.0, [0.9, 0.9, 0.92, 1.0]);
         let active_menu_clone = active_menu.clone();
         let h_closure = Arc::new(move |_| {
@@ -519,14 +519,14 @@ fn draw_nornir_bar(
     let title_str = format!("BERSERKER v{}", env!("CARGO_PKG_VERSION"));
     let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
-    let title_y = (28.0 - tlh) * 0.5 - tlh * 0.25;
+    let title_y = (28.0 - tlh) * 0.5 - tlh * 0.5;
     r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.3, 0.1, 1.0]);
 
     // Right-aligned, vertically centered rage meter
     let rage_str = format!("Rage: {:.0}%", _rage.get());
     let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
-    let rage_y = (28.0 - rlh) * 0.5 - rlh * 0.25;
+    let rage_y = (28.0 - rlh) * 0.5 - rlh * 0.5;
     r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.5, 1.0]);
 
     r.pop_vnode();
@@ -742,7 +742,7 @@ fn draw_dock(
         let text_size = 18.0;
         let (tw, th) = r.measure_text(icon, text_size);
         let tx = ix + (icon_size - tw) / 2.0;
-        let ty = dock_rect.y + (dock_rect.height - th) / 2.0;
+        let ty = dock_rect.y + (dock_rect.height - th) / 2.0 - th * 0.25;
         r.draw_text(icon, tx, ty, text_size, [0.95, 0.95, 0.98, 1.0]);
 
         if i < 3 {
@@ -839,10 +839,11 @@ fn draw_glass_cards(
                 };
                 r.push_vnode(rect, "Card");
                 r.fill_glass_rect(rect, 12.0, 60.0); // Use glass material for proper frosted effect
+                let (rw, rh) = r.measure_text(runes[i % runes.len()], 32.0);
                 r.draw_text(
                     runes[i % runes.len()],
-                    cx - 50.0,
-                    cy + 20.0,
+                    cx - rw / 2.0,
+                    cy - rh / 2.0,
                     32.0,
                     [0.8, 0.9, 1.0, 1.0],
                 );
@@ -1060,19 +1061,22 @@ fn draw_corner_buttons(
         };
         r.push_vnode(rect, "CornerButton");
         r.fill_rounded_rect(rect, 12.0, [0.2, 0.2, 0.3, 0.8]);
+        let (cw, ch) = r.measure_text(corner.2, 32.0);
         r.draw_text(
             corner.2,
-            corner.0 + 35.0,
-            corner.1 + 60.0,
+            corner.0 + (btn_size - cw) / 2.0,
+            corner.1 + (btn_size - ch) / 2.0 - ch * 0.25,
             32.0,
             [1.0, 1.0, 1.0, 1.0],
         );
 
         let val = counters[i].get();
+        let val_str = format!("{}", val);
+        let (vw, vh) = r.measure_text(&val_str, 24.0);
         r.draw_text(
-            &format!("{}", val),
+            &val_str,
             corner.0 + btn_size + 10.0,
-            corner.1 + 60.0,
+            corner.1 + (btn_size - vh) / 2.0 - vh * 0.25,
             24.0,
             [0.0, 1.0, 0.5, 1.0],
         );

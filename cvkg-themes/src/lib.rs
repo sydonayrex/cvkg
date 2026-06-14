@@ -325,25 +325,51 @@ impl std::fmt::Display for ApcaResult {
 // TYPOGRAPHY, SPACING, MOTION
 // =============================================================================
 
-/// Typography scale for consistent rhythmic text
+/// Typography scale matching Apple's text styles (HIG)
 #[derive(Debug, Clone)]
 pub struct TypographyScale {
+    // Apple HIG text styles
+    pub large_title: f32,   // 34px
+    pub title1: f32,        // 28px
+    pub title2: f32,        // 22px
+    pub title3: f32,        // 20px
+    pub headline: f32,      // 17px semibold
+    pub body: f32,          // 17px
+    pub callout: f32,       // 16px
+    pub subheadline: f32,   // 15px
+    pub footnote: f32,      // 13px
+    pub caption1: f32,      // 12px
+    pub caption2: f32,      // 11px
+    // Legacy aliases
     pub hero: f32,
     pub h1: f32,
     pub h2: f32,
-    pub body: f32,
     pub caption: f32,
     pub code: f32,
 }
 
-/// Spacing scale for layout consistency
+/// Corner radius scale anchored to Tahoe's 12px standard
+#[derive(Debug, Clone)]
+pub struct RadiusScale {
+    pub xs: f32,    // 4px  -- small controls, tags
+    pub s: f32,     // 6px  -- buttons, text fields
+    pub m: f32,     // 8px  -- cards, alerts
+    pub l: f32,     // 10px -- panels, popovers
+    pub xl: f32,    // 12px -- windows, dialogs (Tahoe standard)
+    pub xxl: f32,   // 16px -- large panels, sheets
+    pub full: f32,  // 9999px -- circles, pills, squircle icons
+}
+
+/// Spacing scale for layout consistency (4px grid)
 #[derive(Debug, Clone)]
 pub struct SpacingScale {
-    pub xs: f32,
-    pub s: f32,
-    pub m: f32,
-    pub l: f32,
-    pub xl: f32,
+    pub xs: f32,    // 4px
+    pub s: f32,     // 8px
+    pub m: f32,     // 12px
+    pub l: f32,     // 16px
+    pub xl: f32,    // 24px
+    pub xxl: f32,   // 32px
+    pub xxxl: f32,  // 48px
 }
 
 /// Motion scale for standardized animation physics
@@ -353,6 +379,17 @@ pub struct MotionScale {
     pub fluid: cvkg_anim::SleipnirParams,
     pub heavy: cvkg_anim::SleipnirParams,
     pub bouncy: cvkg_anim::SleipnirParams,
+}
+
+/// Accessibility override flags for theme generation
+#[derive(Debug, Clone, Default)]
+pub struct AccessibilityOverrides {
+    /// If true, replace all blur/glass effects with solid backgrounds
+    pub reduce_transparency: bool,
+    /// If true, disable spring animations and reduce motion
+    pub reduce_motion: bool,
+    /// If true, increase contrast for all text/background pairs
+    pub increase_contrast: bool,
 }
 
 // =============================================================================
@@ -365,8 +402,10 @@ pub struct Theme {
     pub colors: SemanticColors,
     pub typography: TypographyScale,
     pub spacing: SpacingScale,
+    pub radius: RadiusScale,
     pub motion: MotionScale,
     pub materials: Vec<GlassMaterial>,
+    pub accessibility: AccessibilityOverrides,
     is_dark: bool,
 }
 
@@ -423,19 +462,42 @@ impl Theme {
                 },
             },
             typography: TypographyScale {
+                // Apple HIG text styles
+                large_title: 34.0,
+                title1: 28.0,
+                title2: 22.0,
+                title3: 20.0,
+                headline: 17.0,
+                body: 17.0,
+                callout: 16.0,
+                subheadline: 15.0,
+                footnote: 13.0,
+                caption1: 12.0,
+                caption2: 11.0,
+                // Legacy aliases
                 hero: 48.0,
                 h1: 32.0,
                 h2: 24.0,
-                body: 16.0,
                 caption: 12.0,
                 code: 12.0,
             },
             spacing: SpacingScale {
                 xs: 4.0,
                 s: 8.0,
-                m: 16.0,
-                l: 24.0,
-                xl: 32.0,
+                m: 12.0,
+                l: 16.0,
+                xl: 24.0,
+                xxl: 32.0,
+                xxxl: 48.0,
+            },
+            radius: RadiusScale {
+                xs: 4.0,
+                s: 6.0,
+                m: 8.0,
+                l: 10.0,
+                xl: 12.0,
+                xxl: 16.0,
+                full: 9999.0,
             },
             motion: MotionScale {
                 snappy: cvkg_anim::SleipnirParams::snappy(),
@@ -444,6 +506,7 @@ impl Theme {
                 bouncy: cvkg_anim::SleipnirParams::bouncy(),
             },
             materials: vec![GlassMaterial::default_glass()],
+            accessibility: AccessibilityOverrides::default(),
         }
     }
 
@@ -489,19 +552,28 @@ impl Theme {
                 text_dim: text_dim.to_rgba(),
             },
             typography: TypographyScale {
+                large_title: 34.0,
+                title1: 28.0,
+                title2: 22.0,
+                title3: 20.0,
+                headline: 17.0,
+                body: 17.0,
+                callout: 16.0,
+                subheadline: 15.0,
+                footnote: 13.0,
+                caption1: 12.0,
+                caption2: 11.0,
                 hero: 48.0,
                 h1: 32.0,
                 h2: 24.0,
-                body: 16.0,
                 caption: 12.0,
                 code: 12.0,
             },
             spacing: SpacingScale {
-                xs: 4.0,
-                s: 8.0,
-                m: 16.0,
-                l: 24.0,
-                xl: 32.0,
+                xs: 4.0, s: 8.0, m: 12.0, l: 16.0, xl: 24.0, xxl: 32.0, xxxl: 48.0,
+            },
+            radius: RadiusScale {
+                xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0,
             },
             motion: MotionScale {
                 snappy: cvkg_anim::SleipnirParams::snappy(),
@@ -510,6 +582,7 @@ impl Theme {
                 bouncy: cvkg_anim::SleipnirParams::bouncy(),
             },
             materials: vec![GlassMaterial::default_glass()],
+            accessibility: AccessibilityOverrides::default(),
         }
     }
 
@@ -525,34 +598,40 @@ impl Theme {
         Self {
             is_dark: false,
             colors: SemanticColors {
-                // Derived from OKLCH seed (0.55, 0.12, 260.0) converted to sRGB
                 primary: Color::new(0.35, 0.30, 0.70, 1.0),
                 secondary: Color::new(0.30, 0.50, 0.30, 1.0),
                 accent: Color::new(0.30, 0.35, 0.75, 1.0),
-                // Near-white background
                 background: Color::new(0.97, 0.97, 0.98, 1.0),
                 surface: Color::new(0.93, 0.93, 0.95, 1.0),
                 error: Color::new(0.75, 0.15, 0.15, 1.0),
                 warning: Color::new(0.80, 0.60, 0.0, 1.0),
                 success: Color::new(0.15, 0.65, 0.30, 1.0),
-                // Near-black text
                 text: Color::new(0.08, 0.08, 0.10, 1.0),
                 text_dim: Color::new(0.40, 0.40, 0.45, 1.0),
             },
             typography: TypographyScale {
+                large_title: 34.0,
+                title1: 28.0,
+                title2: 22.0,
+                title3: 20.0,
+                headline: 17.0,
+                body: 17.0,
+                callout: 16.0,
+                subheadline: 15.0,
+                footnote: 13.0,
+                caption1: 12.0,
+                caption2: 11.0,
                 hero: 48.0,
                 h1: 32.0,
                 h2: 24.0,
-                body: 16.0,
                 caption: 12.0,
                 code: 12.0,
             },
             spacing: SpacingScale {
-                xs: 4.0,
-                s: 8.0,
-                m: 16.0,
-                l: 24.0,
-                xl: 32.0,
+                xs: 4.0, s: 8.0, m: 12.0, l: 16.0, xl: 24.0, xxl: 32.0, xxxl: 48.0,
+            },
+            radius: RadiusScale {
+                xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0,
             },
             motion: MotionScale {
                 snappy: cvkg_anim::SleipnirParams::snappy(),
@@ -569,6 +648,7 @@ impl Theme {
                 border_glow_color: OklchColor::new(0.6, 0.05, 200.0, 0.4),
                 border_glow_radius: 8.0,
             }],
+            accessibility: AccessibilityOverrides::default(),
         }
     }
 
