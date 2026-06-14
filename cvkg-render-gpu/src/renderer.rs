@@ -236,6 +236,7 @@ pub(crate) struct TessellateParams<'a> {
     indices: &'a mut Vec<u32>,
     parsed_animations: &'a [SvgAnimation],
     finalized_animations: &'a mut Vec<SvgAnimation>,
+    paths: &'a mut Vec<crate::types::SvgPath>,
 }
 
 impl SurtrRenderer {
@@ -1904,7 +1905,7 @@ impl SurtrRenderer {
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 1,
+                sample_count: 4,
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Depth32Float,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -3687,6 +3688,7 @@ impl SurtrRenderer {
         let mut fill_tessellator = FillTessellator::new();
         let mut stroke_tessellator = StrokeTessellator::new();
         let mut finalized_animations = Vec::new();
+        let mut paths = Vec::new();
 
         for child in tree.root().children() {
             let mut tess_params = TessellateParams {
@@ -3696,6 +3698,7 @@ impl SurtrRenderer {
                 indices: &mut indices,
                 parsed_animations: &parsed_animations,
                 finalized_animations: &mut finalized_animations,
+                paths: &mut paths,
             };
             self.tessellate_node(child, &mut tess_params);
         }
@@ -3706,6 +3709,7 @@ impl SurtrRenderer {
                 vertices,
                 indices,
                 view_box,
+                paths,
                 animations: finalized_animations,
             },
         );
@@ -3729,6 +3733,7 @@ impl SurtrRenderer {
                     indices: params.indices,
                     parsed_animations: params.parsed_animations,
                     finalized_animations: params.finalized_animations,
+                    paths: params.paths,
                 };
                 self.tessellate_node(child, &mut child_params);
             }
@@ -3838,6 +3843,7 @@ impl SurtrRenderer {
         }
 
         let end_idx = params.vertices.len();
+        let end_idx_indices = params.indices.len();
         if !node_id.is_empty() && start_idx < end_idx {
             for anim in params.parsed_animations {
                 if anim.target_id == node_id {
@@ -3846,11 +3852,24 @@ impl SurtrRenderer {
                     params.finalized_animations.push(final_anim);
                 }
             }
+            // Record this path's range for per-path transforms.
+            params.paths.push(crate::types::SvgPath {
+                    id: node_id,
+                    vertex_range: start_idx..end_idx,
+                    index_range: end_idx_indices..params.indices.len(),
+                    local_transform: Default::default(),
+                });
         }
     }
 
     /// draw_svg — Renders a pre-loaded SVG icon at the specified logical rect.
+    /// animation_time_offset shifts the animation phase for this instance,
+    /// allowing multiple draws of the same SVG to animate independently.
     pub fn draw_svg(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32) {
+        self.draw_svg_with_offset(name, rect, color, material_id, 0.0);
+    }
+
+    pub fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32, animation_time_offset: f32) {
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
             y: -10000.0,
@@ -3899,142 +3918,163 @@ impl SurtrRenderer {
         let scale = self.current_scale_factor();
         let snap = |v: f32| (v * scale).round() / scale;
 
-        let mut local_vertices = model.vertices.clone();
-        for anim in &model.animations {
-            let t = (self.current_scene.time % anim.duration) / anim.duration;
-            let val = anim.from_val + (anim.to_val - anim.from_val) * t;
-
-            if anim.attribute_name == "transform" {
-                // assume rotation
-                let mut min_x = f32::MAX;
-                let mut min_y = f32::MAX;
-                let mut max_x = f32::MIN;
-                let mut max_y = f32::MIN;
-                for i in anim.vertex_range.clone() {
-                    let p = local_vertices[i].position;
-                    if p[0] < min_x {
-                        min_x = p[0];
-                    }
-                    if p[1] < min_y {
-                        min_y = p[1];
-                    }
-                    if p[0] > max_x {
-                        max_x = p[0];
-                    }
-                    if p[1] > max_y {
-                        max_y = p[1];
-                    }
-                }
-                let cx = (min_x + max_x) * 0.5;
-                let cy = (min_y + max_y) * 0.5;
-
-                let c = val.to_radians().cos();
-                let s = val.to_radians().sin();
-
-                for i in anim.vertex_range.clone() {
-                    let p = local_vertices[i].position;
-                    let dx = p[0] - cx;
-                    let dy = p[1] - cy;
-                    local_vertices[i].position[0] = cx + dx * c - dy * s;
-                    local_vertices[i].position[1] = cy + dx * s + dy * c;
-                }
-            } else if anim.attribute_name == "opacity" {
-                for i in anim.vertex_range.clone() {
-                    local_vertices[i].color[3] = val;
-                }
-            } else if anim.attribute_name == "stroke-dashoffset" {
-                // Non-trivial algorithm: SVG Path Tracing
-                // WHY: CPU-side vertex alpha mutation creates blurry, hardware-interpolated fades.
-                // By passing the tracing progress threshold (1.0 - val) to the fragment shader,
-                // we enable sharp, pixel-perfect clipping of stroke segments along their path length.
-                for i in anim.vertex_range.clone() {
-                    let v = &mut local_vertices[i];
-                    v.slice[3] = 1.0 - val;
-                }
+        if model.paths.is_empty() {
+            // Fallback: no path data, treat all vertices as one blob.
+            let mut local_vertices = model.vertices.clone();
+            Self::position_vertices(&mut local_vertices, model.view_box, rect, material_id, clip, snap);
+            let base_vertex = self.vertices.len() as u32;
+            self.vertices.extend(local_vertices);
+            let index_count = model.indices.len();
+            for idx in &model.indices {
+                self.indices.push(base_vertex + *idx);
             }
-        }
-
-        let (blur_radius, ior_override) = if material_id == 7 {
-            if let cvkg_core::DrawMaterial::Glass {
-                blur_radius,
-                ior_override,
-            } = self.current_draw_material
-            {
-                (blur_radius, ior_override)
-            } else {
-                (20.0, 0.0)
-            }
+            let material = Self::resolve_material(material_id);
+            let tid = self.get_texture_id("__mega_heim");
+            Self::emit_draw_call(self, material, tid, clip_rect, index_count as u32, base_vertex);
+            // Emit single draw call for all vertices
+            let material = Self::resolve_material(material_id);
+            let tid = self.get_texture_id("__mega_heim");
+            Self::emit_draw_call(self, material, tid, clip_rect, index_count as u32, base_vertex);
         } else {
-            (0.0, 0.0)
-        };
-        for mut v in local_vertices {
-            let rel_x = (v.position[0] - model.view_box.x) / model.view_box.width;
-            let rel_y = (v.position[1] - model.view_box.y) / model.view_box.height;
-
-            v.position[0] = snap(rect.x + rel_x * rect.width);
-            v.position[1] = snap(rect.y + rel_y * rect.height);
-            v.position[2] = self.current_z;
-            v.logical = [v.position[0], v.position[1]];
-
-            v.clip = clip;
-            v.material_id = material_id;
-
-            if let Some(override_color) = color {
-                let mut c = override_color;
-                c[3] *= v.color[3]; // preserve animated opacity
-                v.color = self.apply_opacity(c);
-            } else {
-                v.color = self.apply_opacity(v.color);
+            // Per-path rendering: each path gets its own transform and draw call.
+            for path in &model.paths {
+                let mut path_verts: Vec<Vertex> = model.vertices[path.vertex_range.clone()].to_vec();
+                // Apply local transform (translate, rotate, scale) in SVG space.
+                if path.local_transform.scale != 1.0 || path.local_transform.rotation != 0.0 || path.local_transform.translate != [0.0, 0.0] {
+                    let s = path.local_transform.scale;
+                    let rad = path.local_transform.rotation.to_radians();
+                    let c = rad.cos();
+                    let sn = rad.sin();
+                    let tx = path.local_transform.translate[0];
+                    let ty = path.local_transform.translate[1];
+                    for v in &mut path_verts {
+                        let px = v.position[0] * s;
+                        let py = v.position[1] * s;
+                        v.position[0] = px * c - py * sn + tx;
+                        v.position[1] = px * sn + py * c + ty;
+                    }
+                }
+                // Apply animations targeting this path.
+                for anim in &model.animations {
+                    if anim.target_id == path.id {
+                        let effective_time = self.current_scene.time + animation_time_offset;
+                        let t = (effective_time % anim.duration) / anim.duration;
+                        let val = anim.from_val + (anim.to_val - anim.from_val) * t;
+                        if anim.attribute_name == "transform" {
+                            let mut min_x = f32::MAX; let mut min_y = f32::MAX;
+                            let mut max_x = f32::MIN; let mut max_y = f32::MIN;
+                            for v in &path_verts {
+                                min_x = min_x.min(v.position[0]);
+                                min_y = min_y.min(v.position[1]);
+                                max_x = max_x.max(v.position[0]);
+                                max_y = max_y.max(v.position[1]);
+                            }
+                            let cx = (min_x + max_x) * 0.5;
+                            let cy = (min_y + max_y) * 0.5;
+                            let c = val.to_radians().cos();
+                            let s = val.to_radians().sin();
+                            for v in &mut path_verts {
+                                let dx = v.position[0] - cx;
+                                let dy = v.position[1] - cy;
+                                v.position[0] = cx + dx * c - dy * s;
+                                v.position[1] = cy + dx * s + dy * c;
+                            }
+                        } else if anim.attribute_name == "opacity" {
+                            for v in &mut path_verts { v.color[3] = val; }
+                        } else if anim.attribute_name == "stroke-dashoffset" {
+                            for v in &mut path_verts { v.slice[3] = 1.0 - val; }
+                        }
+                    }
+                }
+                // Position into output rect.
+                Self::position_vertices(&mut path_verts, model.view_box, rect, material_id, clip, snap);
+                let base_vertex = self.vertices.len() as u32;
+                let index_start = self.indices.len();
+                self.vertices.extend(path_verts);
+                // Remap indices for this path's vertex offset.
+                let path_index_start = path.index_range.start;
+                for idx in &model.indices[path.index_range.clone()] {
+                    self.indices.push(base_vertex + *idx - path_index_start as u32);
+                }
+                let index_count = path.index_range.len() as u32;
+                let material = Self::resolve_material(material_id);
+                let tid = self.get_texture_id("__mega_heim");
+                Self::emit_draw_call(self, material, tid, clip_rect, index_count, base_vertex);
             }
-            self.vertices.push(v);
         }
+    }
 
-        for idx in &model.indices {
-            self.indices.push(base_idx + *idx);
-        }
-
-        let material = match material_id {
+    /// Helper: resolve material_id to DrawMaterial.
+    fn resolve_material(material_id: u32) -> cvkg_core::DrawMaterial {
+        match material_id {
             7 => cvkg_core::DrawMaterial::Glass {
-                blur_radius,
-                ior_override,
+                blur_radius: 20.0,
+                ior_override: 0.0,
             },
             0 => cvkg_core::DrawMaterial::Opaque,
             _ => cvkg_core::DrawMaterial::TopUI,
-        };
-        let tid = self.get_texture_id("__mega_heim");
+        }
+    }
 
-        let (translation, scale_transform, rotation, _, _) = self.current_transform();
+    /// Helper: position vertices from SVG view_box into output rect.
+    fn position_vertices(
+        vertices: &mut [Vertex],
+        view_box: Rect,
+        rect: Rect,
+        material_id: u32,
+        clip: [f32; 4],
+        snap: impl Fn(f32) -> f32,
+    ) {
+        for v in vertices.iter_mut() {
+            let rel_x = (v.position[0] - view_box.x) / view_box.width;
+            let rel_y = (v.position[1] - view_box.y) / view_box.height;
+            v.position[0] = snap(rect.x + rel_x * rect.width);
+            v.position[1] = snap(rect.y + rel_y * rect.height);
+            v.position[2] = 0.0; // z will be set by transform stack
+            v.logical = [v.position[0], v.position[1]];
+            v.clip = clip;
+            v.material_id = material_id;
+        }
+    }
+
+    /// Helper: emit a draw call for a batch of vertices.
+    fn emit_draw_call(
+        renderer: &mut SurtrRenderer,
+        material: cvkg_core::DrawMaterial,
+        texture_id: Option<u32>,
+        scissor_rect: Rect,
+        index_count: u32,
+        base_vertex: u32,
+    ) {
+        let (translation, scale_transform, rotation, _, _) = renderer.current_transform();
         let current_instance_data = InstanceData {
             translation,
             scale: scale_transform,
             rotation,
-            blur_radius,
-            ior_override,
+            blur_radius: 0.0,
+            ior_override: 0.0,
         };
-
-        let last_call = self.draw_calls.last();
-        let needs_new_call = self.draw_calls.is_empty()
-            || self.current_texture_id != tid
-            || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
+        let last_call = renderer.draw_calls.last();
+        let needs_new_call = renderer.draw_calls.is_empty()
+            || renderer.current_texture_id != texture_id
+            || last_call.unwrap().scissor_rect != renderer.clip_stack.last().copied()
             || last_call.unwrap().material != material
-            || self.instance_data.last() != Some(&current_instance_data);
+            || renderer.instance_data.last() != Some(&current_instance_data);
 
         if needs_new_call {
-            self.current_texture_id = tid;
-            self.instance_data.push(current_instance_data);
-            self.draw_calls.push(DrawCall {
+            renderer.current_texture_id = texture_id;
+            renderer.instance_data.push(current_instance_data);
+            renderer.draw_calls.push(DrawCall {
                 target_id: None,
-                texture_id: tid,
-                scissor_rect: self.clip_stack.last().copied(),
-                index_start: (self.indices.len() - model.indices.len()) as u32,
-                index_count: 0,
+                texture_id,
+                scissor_rect: renderer.clip_stack.last().copied(),
+                index_start: (renderer.indices.len() - index_count as usize) as u32,
+                index_count,
                 material,
-                instance_start: (self.instance_data.len() - 1) as u32,
+                instance_start: (renderer.instance_data.len() - 1) as u32,
             });
-        }
-
-        if let Some(call) = self.draw_calls.last_mut() {
-            call.index_count += model.indices.len() as u32;
+        } else if let Some(call) = renderer.draw_calls.last_mut() {
+            call.index_count += index_count;
         }
     }
 

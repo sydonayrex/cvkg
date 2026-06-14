@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-components"
-version = "0.2.11"
+version = "0.2.12"
 build = false
 autolib = false
 autobins = false
@@ -113,22 +113,22 @@ path = "tests/tactical_tests.rs"
 rfd.workspace = true
 
 [dependencies.cvkg-anim]
-version = "0.2.11"
+version = "0.2.12"
 
 [dependencies.cvkg-core]
-version = "0.2.11"
+version = "0.2.12"
 
 [dependencies.cvkg-runic-text]
-version = "0.2.11"
+version = "0.2.12"
 
 [dependencies.cvkg-layout]
-version = "0.2.11"
+version = "0.2.12"
 
 [dependencies.cvkg-themes]
-version = "0.2.11"
+version = "0.2.12"
 
 [dependencies.cvkg-vdom]
-version = "0.2.11"
+version = "0.2.12"
 
 [dependencies.log]
 version = "0.4"
@@ -140,14 +140,14 @@ version = "1.47.2"
 version = "0.3"
 
 [dev-dependencies.cvkg-render-native]
-version = "0.2.11"
+version = "0.2.12"
 
 
 [dev-dependencies.cvkg-macros]
-version = "0.2.11"
+version = "0.2.12"
 
 [dev-dependencies.cvkg-render-gpu]
-version = "0.2.11"
+version = "0.2.12"
 
 [dev-dependencies.winit]
 version = "0.30"

@@ -587,7 +587,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         let sf = self.current_scale_factor();
         let shaped = self.shape_text_with_stack(text, size * sf);
-        // Convert physical pixels back to logical units
         (shaped.width / sf, shaped.height / sf)
     }
 
@@ -1352,7 +1351,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn draw_svg(&mut self, name: &str, rect: Rect) {
-        SurtrRenderer::draw_svg(self, name, rect, None, 1);
+        SurtrRenderer::draw_svg(self, name, rect, None, 0);
+    }
+    fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, animation_time_offset: f32) {
+        SurtrRenderer::draw_svg_with_offset(self, name, rect, None, 0, animation_time_offset);
     }
 
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {

@@ -2771,6 +2771,12 @@ pub trait Renderer: ElapsedTime + Send {
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
     /// Measure the width and height of the specified text.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32);
+    /// Return the baseline offset (ascent) for the given text and size.
+    /// This is the distance from the text origin (y in draw_text) to the baseline.
+    /// Default returns 0.0; override in renderers that support text shaping.
+    fn measure_text_baseline(&mut self, _text: &str, _size: f32) -> f32 {
+        0.0
+    }
 
     fn shape_rich_text(
         &mut self,
@@ -3012,6 +3018,12 @@ pub trait Renderer: ElapsedTime + Send {
     fn load_svg(&mut self, _name: &str, _svg_data: &[u8]) {}
     /// Draw a pre-loaded SVG model.
     fn draw_svg(&mut self, _name: &str, _rect: Rect) {}
+    /// Draw a pre-loaded SVG model with a per-instance animation time offset.
+    /// The offset shifts the animation phase, allowing multiple draws of the same
+    /// SVG to animate independently. Default delegates to draw_svg (no offset).
+    fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, _animation_time_offset: f32) {
+        self.draw_svg(name, rect);
+    }
     /// Serialize a pre-loaded SVG model back to SVG XML markup.
     /// Returns the serialized SVG string, or an error if the model is not loaded
     /// or serialization is not supported by this renderer.

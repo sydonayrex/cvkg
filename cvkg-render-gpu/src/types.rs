@@ -3,12 +3,47 @@ use crate::vertex::Vertex;
 use cvkg_core::Rect;
 
 /// SvgModel — A collection of tessellated triangles representing a vector icon.
+/// Paths are stored as independent sub-models, each with its own vertex range
+/// and local transform, enabling per-path manipulation (e.g. in an SVG editor).
 #[derive(Clone, Debug)]
 pub struct SvgModel {
+    /// All vertices for all paths in this SVG.
     pub vertices: Vec<Vertex>,
+    /// All indices for all paths in this SVG.
     pub indices: Vec<u32>,
+    /// The SVG viewBox defining the coordinate space.
     pub view_box: Rect,
+    /// Per-path sub-models, each with its own vertex range and local transform.
+    pub paths: Vec<SvgPath>,
+    /// Animations parsed from SVG `<animate>` elements.
     pub animations: Vec<SvgAnimation>,
+}
+
+/// A single path within an SVG model, with its own vertex range and local transform.
+/// Multiple paths can share the same underlying vertex buffer but are drawn
+/// independently with different transforms.
+#[derive(Clone, Debug)]
+pub struct SvgPath {
+    /// The element id from the SVG (e.g. "t1", "path2").
+    pub id: String,
+    /// Range into SvgModel.vertices for this path's vertices.
+    pub vertex_range: std::ops::Range<usize>,
+    /// Range into SvgModel.indices for this path's indices.
+    pub index_range: std::ops::Range<usize>,
+    /// Local transform offset applied when drawing this path.
+    /// This allows per-path positioning, rotation, and scaling.
+    pub local_transform: SvgTransform,
+}
+
+/// A 2D affine transform for SVG path positioning.
+#[derive(Clone, Debug, Default)]
+pub struct SvgTransform {
+    /// Translation in SVG user units.
+    pub translate: [f32; 2],
+    /// Rotation in degrees.
+    pub rotation: f32,
+    /// Scale factor (1.0 = no scaling).
+    pub scale: f32,
 }
 
 #[derive(Clone, Debug)]

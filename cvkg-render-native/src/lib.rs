@@ -1947,6 +1947,12 @@ impl cvkg_core::Renderer for NativeRenderer {
             .expect("GPU mutex poisoned: draw_svg")
             .draw_svg(name, rect, None, 0);
     }
+    fn draw_svg_with_offset(&mut self, name: &str, rect: cvkg_core::Rect, animation_time_offset: f32) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: draw_svg_with_offset")
+            .draw_svg_with_offset(name, rect, None, 0, animation_time_offset);
+    }
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
         self.gpu
             .lock()

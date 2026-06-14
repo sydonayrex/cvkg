@@ -8,6 +8,85 @@ use cvkg_physics::ragdoll_bridge::RagdollBridge;
 use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig};
 use cvkg_vdom::signals::Signal;
 use glam::Vec2;
+
+// --- Valknut Procedural Animation ---
+
+/// Get a point along the valknut triangle path at parameter t.
+/// pts is [p1, p2, p3, p1] (closed loop), t is in [0, 3).
+fn get_triangle_point(pts: &[[f32; 2]; 4], mut t: f32) -> [f32; 2] {
+    let total_len = 3.0f32;
+    while t < 0.0 {
+        t += total_len;
+    }
+    t = t % total_len;
+    let segment_idx = t.floor() as usize;
+    let local_t = t.fract();
+    let p_start = pts[segment_idx];
+    let p_end = pts[segment_idx + 1];
+    [
+        p_start[0] + (p_end[0] - p_start[0]) * local_t,
+        p_start[1] + (p_end[1] - p_start[1]) * local_t,
+    ]
+}
+
+/// Draw a single valknut triangle with fuse animation.
+fn draw_valknut_triangle(
+    r: &mut dyn cvkg_core::Renderer,
+    p1: [f32; 2],
+    p2: [f32; 2],
+    p3: [f32; 2],
+    color: [f32; 4],
+    glow_color: [f32; 4],
+    time: f32,
+    speed: f32,
+    offset: f32,
+) {
+    let pts = [p1, p2, p3, p1];
+
+    // Draw the dim background triangle outline
+    let dim_color = [color[0], color[1], color[2], 0.25];
+    r.draw_line(p1[0], p1[1], p2[0], p2[1], dim_color, 2.5);
+    r.draw_line(p2[0], p2[1], p3[0], p3[1], dim_color, 2.5);
+    r.draw_line(p3[0], p3[1], p1[0], p1[1], dim_color, 2.5);
+
+    // Fuse animation: a bright traveling segment
+    let total_len = 3.0f32;
+    let head = ((time + offset) * speed) % total_len;
+    let tail_len = 0.5f32;
+    let start = head - tail_len;
+    if start < 0.0 {
+        return;
+    }
+
+    // Draw the bright tracing segments
+    let num_steps = 16;
+    for i in 0..num_steps {
+        let t1 = start + (i as f32 / num_steps as f32) * tail_len;
+        let t2 = start + ((i + 1) as f32 / num_steps as f32) * tail_len;
+        let p_start = get_triangle_point(&pts, t1);
+        let p_end = get_triangle_point(&pts, t2);
+        let alpha = i as f32 / num_steps as f32;
+        let seg_color = [
+            glow_color[0] * alpha + dim_color[0] * (1.0 - alpha),
+            glow_color[1] * alpha + dim_color[1] * (1.0 - alpha),
+            glow_color[2] * alpha + dim_color[2] * (1.0 - alpha),
+            alpha,
+        ];
+        r.draw_line(p_start[0], p_start[1], p_end[0], p_end[1], seg_color, 3.0 + alpha * 2.0);
+    }
+
+    // Draw a bright spark at the fuse head
+    if head >= 0.0 && head < total_len {
+        let spark_pos = get_triangle_point(&pts, head);
+        let spark_rect = cvkg_core::Rect {
+            x: spark_pos[0] - 4.0,
+            y: spark_pos[1] - 4.0,
+            width: 8.0,
+            height: 8.0,
+        };
+        r.draw_radial_gradient(spark_rect, [1.0, 1.0, 0.8, 0.9], glow_color);
+    }
+}
 use std::sync::{Arc, Mutex};
 
 // --- Particle System ---
@@ -57,19 +136,42 @@ struct BerserkerState {
     loaded_svgs: bool,
 }
 
-const VALKNUT_SVG: &[u8] = b"<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">
-  <g transform=\"translate(0, 0)\">
-    <path id=\"t1\" fill=\"none\" stroke=\"#FF4000\" stroke-width=\"4\" d=\"M50.0,15.0 L28.3,52.5 L71.7,52.5 Z\">
-      <animate attributeName=\"stroke-dashoffset\" from=\"1\" to=\"0\" dur=\"2s\" repeatCount=\"indefinite\" />
-    </path>
-    <path id=\"t2\" fill=\"none\" stroke=\"#FF8000\" stroke-width=\"4\" d=\"M18.3,72.5 L61.7,72.5 L40.0,35.0 Z\">
-      <animate attributeName=\"stroke-dashoffset\" from=\"1\" to=\"0\" dur=\"2s\" repeatCount=\"indefinite\" />
-    </path>
-    <path id=\"t3\" fill=\"none\" stroke=\"#FFC000\" stroke-width=\"4\" d=\"M81.7,72.5 L60.0,35.0 L38.3,72.5 Z\">
-      <animate attributeName=\"stroke-dashoffset\" from=\"1\" to=\"0\" dur=\"2s\" repeatCount=\"indefinite\" />
-    </path>
-  </g>
-</svg>";
+// --- Valknut Triangle Geometry ---
+// Three interlocking triangles forming the valknut symbol.
+// Coordinates match the original SVG viewBox 0 0 100 100, centered at (50, 50).
+// Each triangle is defined by 3 points.
+
+/// Draw the valknut symbol with procedural fuse animation.
+fn draw_valknut(r: &mut dyn cvkg_core::Renderer, cx: f32, cy: f32, size: f32, time: f32) {
+    // Triangle 1 (top, pointing up) -- original SVG: M50,15 L28.3,52.5 L71.7,52.5 Z
+    let t1_p1 = [cx, cy - size * 0.35];
+    let t1_p2 = [cx - size * 0.217, cy + size * 0.075];
+    let t1_p3 = [cx + size * 0.217, cy + size * 0.075];
+
+    // Triangle 2 (bottom-right) -- original SVG: M18.3,72.5 L61.7,72.5 L40,35 Z
+    let t2_p1 = [cx - size * 0.317, cy + size * 0.225];
+    let t2_p2 = [cx + size * 0.117, cy + size * 0.225];
+    let t2_p3 = [cx - size * 0.10, cy - size * 0.15];
+
+    // Triangle 3 (bottom-left) -- original SVG: M81.7,72.5 L60,35 L38.3,72.5 Z
+    let t3_p1 = [cx + size * 0.317, cy + size * 0.225];
+    let t3_p2 = [cx + size * 0.10, cy - size * 0.15];
+    let t3_p3 = [cx - size * 0.117, cy + size * 0.225];
+
+    // Colors matching the original SVG strokes
+    let c1 = [1.0, 0.25, 0.0, 1.0];    // #FF4000
+    let c2 = [1.0, 0.5, 0.0, 1.0];     // #FF8000
+    let c3 = [1.0, 0.75, 0.0, 1.0];    // #FFC000
+
+    let g1 = [1.0, 0.4, 0.1, 1.0];
+    let g2 = [1.0, 0.6, 0.1, 1.0];
+    let g3 = [1.0, 0.8, 0.2, 1.0];
+
+    // Draw each triangle with fuse animation, offset in time
+    draw_valknut_triangle(r, t1_p1, t1_p2, t1_p3, c1, g1, time, 1.2, 0.0);
+    draw_valknut_triangle(r, t2_p1, t2_p2, t2_p3, c2, g2, time, 1.2, 1.0);
+    draw_valknut_triangle(r, t3_p1, t3_p2, t3_p3, c3, g3, time, 1.2, 2.0);
+}
 
 impl BerserkerState {
     fn new(w: f32, h: f32) -> Self {
@@ -290,8 +392,6 @@ impl View for BerserkerFireView {
 
         r.push_vnode(rect, "BerserkerFireView");
 
-        r.load_svg("valknut", VALKNUT_SVG);
-
         // Draw the 3D rotating cubes in the background
         let t_cubes_start = std::time::Instant::now();
         draw_3d_cubes_bg(r, &s, w, h, t);
@@ -302,7 +402,11 @@ impl View for BerserkerFireView {
         draw_glass_cards(r, &s, w, h, t);
         let t_cards = t_cards_start.elapsed().as_secs_f32() * 1000.0;
 
-        r.draw_svg("valknut", cvkg_core::Rect { x: w / 2.0 - 150.0, y: h / 2.0 - 250.0, width: 300.0, height: 300.0 });
+        // Draw the valknut symbol with procedural fuse animation
+        let vk_cx = w / 2.0;
+        let vk_cy = h / 2.0 - 100.0;
+        let vk_size = 120.0;
+        draw_valknut(r, vk_cx, vk_cy, vk_size, t);
 
         let t_fire_start = std::time::Instant::now();
         if t > 0.0 {
@@ -387,10 +491,13 @@ fn draw_nornir_bar(
             height: 28.0,
         };
         r.push_vnode(item_rect, "NornirBarItem");
-        // Center text horizontally and vertically within each menu item cell
         let (lw, lh) = r.measure_text(label, 13.0);
         let tx = x + (*width - lw) / 2.0;
-        let ty = (28.0 - lh) / 2.0;
+        // The draw_text y parameter is the text origin (top of cell).
+        // Glyphs are baseline-relative, with the baseline roughly 75% down the cell.
+        // To visually center: shift up so the baseline lands at bar_height/2 + descent/2.
+        // Approximation: y = (bar_height - lh) / 2 - lh * 0.25
+        let ty = (28.0 - lh) * 0.5 - lh * 0.25;
         r.draw_text(label, tx, ty, 13.0, [0.9, 0.9, 0.92, 1.0]);
         let active_menu_clone = active_menu.clone();
         let h_closure = Arc::new(move |_| {
@@ -410,16 +517,16 @@ fn draw_nornir_bar(
 
     // Centered window title
     let title_str = format!("BERSERKER v{}", env!("CARGO_PKG_VERSION"));
-    let (tw, th) = r.measure_text(&title_str, 14.0);
+    let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
-    let title_y = (28.0 - th) / 2.0;
+    let title_y = (28.0 - tlh) * 0.5 - tlh * 0.25;
     r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.3, 0.1, 1.0]);
 
     // Right-aligned, vertically centered rage meter
     let rage_str = format!("Rage: {:.0}%", _rage.get());
-    let (rw, rh) = r.measure_text(&rage_str, 12.0);
+    let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
-    let rage_y = (28.0 - rh) / 2.0;
+    let rage_y = (28.0 - rlh) * 0.5 - rlh * 0.25;
     r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.5, 1.0]);
 
     r.pop_vnode();
