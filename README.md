@@ -1,5 +1,7 @@
 # CVKG: Cyber Viking Kvasir Graph
 
+[Screencast_20260613_191715.webm](https://github.com/user-attachments/assets/9ed913d6-1cc5-4af0-ad43-b4cc1ad43303)
+
 ```mermaid
 graph TD
     cvkg-core["cvkg-core"]
