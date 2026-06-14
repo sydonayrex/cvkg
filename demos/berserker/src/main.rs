@@ -410,8 +410,8 @@ impl View for BerserkerFireView {
 
         let t_fire_start = std::time::Instant::now();
         if t > 0.0 {
-            // Push clip to prevent lightning and fire from drawing over the top menu bar
-            r.push_clip_rect(cvkg_core::Rect { x: 0.0, y: 28.0, width: w, height: h - 28.0 });
+            // Clip fire to content area (safe area top is now 0 in content coordinates)
+            r.push_clip_rect(cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
             // Draw particles and Mjolnir lightning bolts
             draw_berserker_fire(r, &s, w, h, t);
             // Draw skeletal/ragdoll elements

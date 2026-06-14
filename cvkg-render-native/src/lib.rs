@@ -608,6 +608,8 @@ impl WindowManager {
             is_main,
             core_id,
             window_handle: handle.clone(),
+            focus_manager: cvkg_core::FocusManager::new(),
+            focused_node_id: None,
         };
 
         self.windows.insert(winit_id, data);
@@ -688,6 +690,10 @@ pub struct WindowData {
     is_main: bool,
     core_id: cvkg_core::WindowId,
     window_handle: cvkg_core::WindowHandle,
+
+    // ── Focus navigation ───────────────────────────────────────────────────
+    focus_manager: cvkg_core::FocusManager,
+    focused_node_id: Option<cvkg_vdom::NodeId>,
 }
 
 struct App<V: cvkg_core::View> {
@@ -960,12 +966,25 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     .push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
                             }
                         }
+                        // Determine focused node for AccessKit
+                        let focused_id = state.focused_node_id.map(|id| accesskit::NodeId(id.0)).unwrap_or(accesskit::NodeId(1));
+                        
+                        // Register new/updated nodes with FocusManager for Tab navigation
+                        for patch in &patches {
+                            if let cvkg_vdom::VDomPatch::Create(node)
+                            | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
+                            {
+                                if node.is_focusable() {
+                                    state.focus_manager.register(node.id.0.to_string());
+                                }
+                            }
+                        }
                         if !nodes.is_empty() {
                             if let Some(adapter) = &mut state.accesskit_adapter {
                                 adapter.update_if_active(|| accesskit::TreeUpdate {
                                     nodes,
                                     tree: None,
-                                    focus: accesskit::NodeId(1),
+                                    focus: focused_id,
                                     tree_id: accesskit::TreeId::ROOT,
                                 });
                             }
@@ -985,6 +1004,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         .expect("GPU mutex poisoned during frame begin");
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
                     let encoder = gpu.begin_frame(id);
+                    // Compute safe area insets based on current window state
+                    let safe_area = crate::SafeAreaInsets::for_window_state(self.state_detector.state());
+                    // Adjust content rect to respect safe areas (e.g., macOS menu bar)
+                    let content_rect = cvkg_core::Rect {
+                        x: safe_area.left,
+                        y: safe_area.top,
+                        width: rect.width - safe_area.left - safe_area.right,
+                        height: rect.height - safe_area.top - safe_area.bottom,
+                    };
                     let mut renderer = NativeRenderer::new(
                         state.window.clone(),
                         gpu_arc.clone(),
@@ -997,7 +1025,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // re-acquire it per-call, allowing the view tree to interleave with other
                     // work without holding one giant critical section across the whole draw.
                     drop(gpu);
-                    self.view.render(&mut renderer, rect);
+                    self.view.render(&mut renderer, content_rect);
                     let draw_end = std::time::Instant::now();
 
                     // Re-acquire to submit the frame
@@ -1428,6 +1456,25 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+f".to_string(),
                                             });
+                                        }
+                                        state.window.request_redraw();
+                                    }
+                                    // ── Focus navigation: Tab / Shift+Tab ───────────────
+                                    winit::keyboard::KeyCode::Tab => {
+                                        if is_shift {
+                                            if let Some(id) = state.focus_manager.focus_prev() {
+                                                if let Ok(node_id) = id.as_str().parse::<u64>() {
+                                                    state.focused_node_id = Some(cvkg_vdom::NodeId(node_id));
+                                                    log::info!("[Native] Focus previous: {:?}", node_id);
+                                                }
+                                            }
+                                        } else {
+                                            if let Some(id) = state.focus_manager.focus_next() {
+                                                if let Ok(node_id) = id.as_str().parse::<u64>() {
+                                                    state.focused_node_id = Some(cvkg_vdom::NodeId(node_id));
+                                                    log::info!("[Native] Focus next: {:?}", node_id);
+                                                }
+                                            }
                                         }
                                         state.window.request_redraw();
                                     }

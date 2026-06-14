@@ -1220,6 +1220,13 @@ impl KeyShortcut {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct FocusableId(String);
 
+impl FocusableId {
+    /// Returns the inner string representation of the focusable ID.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 impl From<&str> for FocusableId {
     fn from(s: &str) -> Self {
         Self(s.to_string())

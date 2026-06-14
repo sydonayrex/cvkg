@@ -190,6 +190,16 @@ impl VNode {
 
         node
     }
+
+    /// Returns true if this node can receive keyboard focus.
+    /// Focusable roles include: button, checkbox, radio, slider, tab, spinbutton, combobox, textbox, password, switch, scrollbar.
+    pub fn is_focusable(&self) -> bool {
+        matches!(
+            self.aria_role.as_str(),
+            "button" | "checkbox" | "radio" | "slider" | "tab" |
+            "spinbutton" | "combobox" | "textbox" | "password" | "switch" | "scrollbar"
+        )
+    }
 }
 
 /// A discrete mutation to the Virtual DOM tree.
