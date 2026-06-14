@@ -9,8 +9,8 @@
 #![allow(dead_code)]
 
 pub mod effects;
-pub mod graph_cache;
 pub mod graph;
+pub mod graph_cache;
 pub mod node;
 pub mod nodes;
 pub mod planner;

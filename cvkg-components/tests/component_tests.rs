@@ -385,15 +385,24 @@ fn test_phone_input_rendering() {
     };
     phone_input.render(&mut renderer, rect);
 
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(PhoneInput)")));
-    assert!(renderer.commands.iter().any(|c| c.contains("DrawText(123456789)")));
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(PhoneInput)"))
+    );
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("DrawText(123456789)"))
+    );
 }
 
 #[test]
 fn test_mention_input_rendering() {
     let mut renderer = MockRenderer::new();
-    let mention_input = cvkg_components::MentionInput::new()
-        .value("hello @");
+    let mention_input = cvkg_components::MentionInput::new().value("hello @");
     let rect = Rect {
         x: 0.0,
         y: 0.0,
@@ -402,8 +411,18 @@ fn test_mention_input_rendering() {
     };
     mention_input.render(&mut renderer, rect);
 
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(MentionInput)")));
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(MentionOption)")));
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(MentionInput)"))
+    );
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(MentionOption)"))
+    );
 }
 
 #[test]
@@ -418,8 +437,18 @@ fn test_editable_rendering() {
     };
     editable.render(&mut renderer, rect);
 
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(Editable)")));
-    assert!(renderer.commands.iter().any(|c| c.contains("DrawText(Initial Text)")));
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(Editable)"))
+    );
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("DrawText(Initial Text)"))
+    );
 }
 
 #[test]
@@ -435,8 +464,18 @@ fn test_popconfirm_rendering() {
     };
     popconfirm.render(&mut renderer, rect);
 
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(Popconfirm)")));
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(Button)")));
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(Popconfirm)"))
+    );
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(Button)"))
+    );
 }
 
 #[test]
@@ -451,5 +490,10 @@ fn test_qrcode_rendering() {
     };
     qr.render(&mut renderer, rect);
 
-    assert!(renderer.commands.iter().any(|c| c.contains("PushVNode(QRCode)")));
+    assert!(
+        renderer
+            .commands
+            .iter()
+            .any(|c| c.contains("PushVNode(QRCode)"))
+    );
 }

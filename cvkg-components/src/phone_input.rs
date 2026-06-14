@@ -4,7 +4,7 @@
 
 use crate::interactive::Input;
 use crate::native_select::NativeSelect;
-use cvkg_core::{Never, Rect, Renderer, View, SizeProposal, Size};
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 /// A specialized phone input component with a country-code selector and number input.

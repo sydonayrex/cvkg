@@ -24,7 +24,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
             && self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
     }
 
-    /// fill_rect — Standard rectangle drawing method.
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
         log::info!(
             "[Surtr] Pre-warming Mega-Heim with {} assets...",
@@ -71,6 +70,17 @@ impl cvkg_core::Renderer for SurtrRenderer {
             self.portal_regions.push_back(rect);
         }
 
+        // Non-trivial algorithm: Temporary Material Override Binding
+        // WHY: The underlying fill_rect_with_full_params method query-routes geometry attributes
+        // from self.current_draw_material. In immediate-mode rendering, we must bind the Glass material
+        // temporarily so that the instance generator receives the requested blur_radius and IOR override.
+        // CONTRACT: Restores self.current_draw_material to its original value after the draw call completes.
+        let prev_material = self.current_draw_material;
+        self.current_draw_material = cvkg_core::DrawMaterial::Glass {
+            blur_radius,
+            ior_override: 0.0,
+        };
+
         self.fill_rect_with_full_params(
             rect,
             [1.0, 1.0, 1.0, 0.4], // Glass tint: white at 40% opacity
@@ -84,6 +94,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 height: 1.0,
             },
         );
+
+        self.current_draw_material = prev_material;
     }
 
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]) {
@@ -470,10 +482,26 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 *info
             } else {
                 if let Some(image) = self.text_engine.rasterize(cache_key) {
+                    let glyph_id = image.glyph_id;
+                    let data_len = image.data.len();
                     let gw = image.width;
                     let gh = image.height;
                     let x_offset = image.x_offset;
                     let y_offset = image.y_offset;
+                    let (rgba_data, gw, gh) = glyph_image_to_rgba(image);
+                    if gw == 0 || gh == 0 {
+                        continue;
+                    }
+                    if rgba_data.is_empty() {
+                        log::warn!(
+                            "Glyph rasterizer returned unsupported pixel format for glyph {} ({} bytes, {}x{}), skipping",
+                            glyph_id,
+                            data_len,
+                            gw,
+                            gh
+                        );
+                        continue;
+                    }
 
                     let pack_res = self.heim_packer.pack(gw, gh);
                     let (nx, ny) = if let Some(pos) = pack_res {
@@ -495,21 +523,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         }
                     };
 
-                    // Uploads rasterized glyph image data to the GPU atlas texture.
-                    // CONTRACT: If the image already contains 32-bit RGBA data (as in subpixel/color mode),
-                    // we write it directly. Otherwise (grayscale 8-bit), we map to [255, 255, 255, alpha].
-                    let rgba_data = if image.data.len() == (gw * gh * 4) as usize {
-                        image.data
-                    } else {
-                        let mut data = Vec::with_capacity((gw * gh * 4) as usize);
-                        for alpha in &image.data {
-                            data.push(255);
-                            data.push(255);
-                            data.push(255);
-                            data.push(*alpha);
-                        }
-                        data
-                    };
+                    log::info!("Rasterized glyph {}, gw: {}, gh: {}, data len: {}, first 20 bytes: {:?}", glyph_id, gw, gh, rgba_data.len(), &rgba_data[0..std::cmp::min(rgba_data.len(), 20)]);
 
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
@@ -531,12 +545,14 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         },
                     );
 
+                    let tex_w = self.mega_heim_tex.width() as f32;
+                    let tex_h = self.mega_heim_tex.height() as f32;
                     let info = (
                         Rect {
-                            x: nx as f32 / 4096.0,
-                            y: ny as f32 / 4096.0,
-                            width: gw as f32 / 4096.0,
-                            height: gh as f32 / 4096.0,
+                            x: nx as f32 / tex_w,
+                            y: ny as f32 / tex_h,
+                            width: gw as f32 / tex_w,
+                            height: gh as f32 / tex_h,
                         },
                         gw as f32,
                         gh as f32,
@@ -630,10 +646,26 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 *info
             } else {
                 if let Some(image) = self.text_engine.rasterize(cache_key) {
+                    let glyph_id = image.glyph_id;
+                    let data_len = image.data.len();
                     let gw = image.width;
                     let gh = image.height;
                     let x_offset = image.x_offset;
                     let y_offset = image.y_offset;
+                    let (rgba_data, gw, gh) = glyph_image_to_rgba(image);
+                    if gw == 0 || gh == 0 {
+                        continue;
+                    }
+                    if rgba_data.is_empty() {
+                        log::warn!(
+                            "Glyph rasterizer returned unsupported pixel format for glyph {} ({} bytes, {}x{}), skipping",
+                            glyph_id,
+                            data_len,
+                            gw,
+                            gh
+                        );
+                        continue;
+                    }
 
                     let pack_res = self.heim_packer.pack(gw, gh);
                     let (nx, ny) = if let Some(pos) = pack_res {
@@ -652,23 +684,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
                             }
                         }
                     };
-
-                    // Uploads rasterized glyph image data to the GPU atlas texture.
-                    // CONTRACT: If the image already contains 32-bit RGBA data (as in subpixel/color mode),
-                    // we write it directly. Otherwise (grayscale 8-bit), we map to [255, 255, 255, alpha].
-                    let rgba_data = if image.data.len() == (gw * gh * 4) as usize {
-                        image.data
-                    } else {
-                        let mut data = Vec::with_capacity((gw * gh * 4) as usize);
-                        for alpha in &image.data {
-                            data.push(255);
-                            data.push(255);
-                            data.push(255);
-                            data.push(*alpha);
-                        }
-                        data
-                    };
-
+                    // DEBUG: print first few bytes to see if they are white
+                    let sample = &rgba_data[0..std::cmp::min(rgba_data.len(), 20)];
+                    log::info!("Rasterized glyph {}, gw: {}, gh: {}, data len: {}, first 20 bytes: {:?}", glyph_id, gw, gh, rgba_data.len(), sample);
+                    
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
                             texture: &self.mega_heim_tex,
@@ -689,12 +708,14 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         },
                     );
 
+                    let tex_w = self.mega_heim_tex.width() as f32;
+                    let tex_h = self.mega_heim_tex.height() as f32;
                     let info = (
                         Rect {
-                            x: nx as f32 / 4096.0,
-                            y: ny as f32 / 4096.0,
-                            width: gw as f32 / 4096.0,
-                            height: gh as f32 / 4096.0,
+                            x: nx as f32 / tex_w,
+                            y: ny as f32 / tex_h,
+                            width: gw as f32 / tex_w,
+                            height: gh as f32 / tex_h,
                         },
                         gw as f32,
                         gh as f32,
@@ -1326,6 +1347,14 @@ impl cvkg_core::Renderer for SurtrRenderer {
             .push(handler);
     }
 
+    fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
+        SurtrRenderer::load_svg(self, name, svg_data);
+    }
+
+    fn draw_svg(&mut self, name: &str, rect: Rect) {
+        SurtrRenderer::draw_svg(self, name, rect, None, 1);
+    }
+
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
         let tree = self
             .svg_trees
@@ -1421,7 +1450,7 @@ impl SurtrRenderer {
             &StrokeOptions::default().with_line_width(stroke_width),
             &mut BuffersBuilder::new(
                 &mut buffers,
-                CustomStrokeVertexConstructor { color: c, clip },
+                CustomStrokeVertexConstructor { color: c, clip, path_length: 1.0 },
             ),
         );
         if let Err(e) = result {
@@ -1480,20 +1509,21 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
     fn render_frame(&mut self) {
         // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
         // draw a 10px red border as a warning flash.
-        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
-            && let Some(window_id) = self.current_window
-            && let Some(surface_ctx) = self.surfaces.get(&window_id)
-        {
-            let w = surface_ctx.config.width as f32;
-            let h = surface_ctx.config.height as f32;
-            let border_rect = cvkg_core::Rect {
-                x: 0.0,
-                y: 0.0,
-                width: w,
-                height: h,
-            };
-            // Draw a thick red border to signal layout-thrashing
-            self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel) {
+            if let Some(window_id) = self.current_window {
+                if let Some(surface_ctx) = self.surfaces.get(&window_id) {
+                    let w = surface_ctx.config.width as f32;
+                    let h = surface_ctx.config.height as f32;
+                    let border_rect = cvkg_core::Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: w,
+                        height: h,
+                    };
+                    // Draw a thick red border to signal layout-thrashing
+                    self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+                }
+            }
         }
 
         // Dynamic Buffer Growth (Up to 4x capacity)
@@ -1618,5 +1648,137 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         // Delegate to the inherent end_frame which runs the render graph
         SurtrRenderer::end_frame(self, encoder);
         cvkg_core::end_render_phase();
+    }
+}
+
+fn glyph_image_to_rgba(image: cvkg_runic_text::GlyphImage) -> (Vec<u8>, u32, u32) {
+    let width = image.width;
+    let height = image.height;
+    let pixels = width.saturating_mul(height) as usize;
+
+    if pixels == 0 || image.data.is_empty() {
+        return (Vec::new(), width, height);
+    }
+
+    let (bytes_per_pixel, remainder) = (image.data.len() / pixels, image.data.len() % pixels);
+    if remainder != 0 {
+        log::warn!(
+            "Glyph rasterizer returned {} bytes for {}x{} glyph; expected whole pixels ({} bytes per pixel)",
+            image.data.len(),
+            width,
+            height,
+            bytes_per_pixel
+        );
+        return (Vec::new(), width, height);
+    }
+
+    let rgba_data = match bytes_per_pixel {
+        1 => {
+            let mut data = Vec::with_capacity(pixels * 4);
+            for alpha in &image.data {
+                data.push(255);
+                data.push(255);
+                data.push(255);
+                data.push(*alpha);
+            }
+            data
+        }
+        3 => {
+            let mut data = Vec::with_capacity(pixels * 4);
+            for rgb in image.data.chunks_exact(3) {
+                let alpha = rgb.iter().copied().max().unwrap_or(0);
+                data.push(255);
+                data.push(255);
+                data.push(255);
+                data.push(alpha);
+            }
+            data
+        }
+        4 => {
+            let mut data = image.data;
+            for chunk in data.chunks_exact_mut(4) {
+                // If it's a SubpixelMask, swash sets A=0. We need to reconstruct an alpha
+                // so the shader doesn't discard it.
+                if chunk[3] == 0 && (chunk[0] > 0 || chunk[1] > 0 || chunk[2] > 0) {
+                    chunk[3] = chunk[0].max(chunk[1]).max(chunk[2]);
+                }
+            }
+            data
+        }
+        _ => {
+            log::warn!(
+                "Glyph rasterizer returned unsupported {} bytes per pixel for {}x{} glyph ({} bytes total)",
+                bytes_per_pixel,
+                width,
+                height,
+                image.data.len()
+            );
+            Vec::new()
+        }
+    };
+
+    (rgba_data, width, height)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::glyph_image_to_rgba;
+
+    #[test]
+    fn glyph_image_to_rgba_keeps_rgba_color_data() {
+        let image = cvkg_runic_text::GlyphImage {
+            glyph_id: 1,
+            width: 2,
+            height: 1,
+            data: vec![1, 2, 3, 4, 5, 6, 7, 8],
+            x_offset: 0.0,
+            y_offset: 0.0,
+            cache_key: 42,
+        };
+
+        assert_eq!(
+            glyph_image_to_rgba(image),
+            (vec![1, 2, 3, 4, 5, 6, 7, 8], 2, 1)
+        );
+    }
+
+    #[test]
+    fn glyph_image_to_rgba_expands_grayscale_alpha() {
+        let image = cvkg_runic_text::GlyphImage {
+            glyph_id: 1,
+            width: 3,
+            height: 1,
+            data: vec![0, 128, 255],
+            x_offset: 0.0,
+            y_offset: 0.0,
+            cache_key: 42,
+        };
+
+        assert_eq!(
+            glyph_image_to_rgba(image),
+            (
+                vec![255, 255, 255, 0, 255, 255, 255, 128, 255, 255, 255, 255],
+                3,
+                1
+            )
+        );
+    }
+
+    #[test]
+    fn glyph_image_to_rgba_collapses_subpixel_rgb_to_alpha() {
+        let image = cvkg_runic_text::GlyphImage {
+            glyph_id: 1,
+            width: 2,
+            height: 1,
+            data: vec![0, 128, 255, 255, 0, 64],
+            x_offset: 0.0,
+            y_offset: 0.0,
+            cache_key: 42,
+        };
+
+        assert_eq!(
+            glyph_image_to_rgba(image),
+            (vec![255, 255, 255, 255, 255, 255, 255, 255], 2, 1)
+        );
     }
 }

@@ -2,10 +2,10 @@
 //!
 //! Provides quick Yes/No actions relative to an anchor target.
 
+use crate::interactive::Button;
 use crate::theme;
 use crate::{RADIUS_MD, SPACE_SM};
-use crate::interactive::Button;
-use cvkg_core::{Never, Rect, Renderer, View, SizeProposal, Size};
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 /// A lightweight popover confirmation box featuring Yes and No actions.

@@ -2,10 +2,10 @@
 //!
 //! Monitored input text to render inline tag popovers.
 
+use crate::interactive::Input;
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD, SPACE_SM};
-use crate::interactive::Input;
-use cvkg_core::{Never, Rect, Renderer, View, SizeProposal, Size};
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 /// A text input component that triggers autocomplete overlays when '@' or '#' are typed.
@@ -26,7 +26,11 @@ impl MentionInput {
     pub fn new() -> Self {
         Self {
             text: String::new(),
-            users: vec!["alice".to_string(), "bob".to_string(), "charlie".to_string()],
+            users: vec![
+                "alice".to_string(),
+                "bob".to_string(),
+                "charlie".to_string(),
+            ],
             topics: vec!["rust".to_string(), "ui".to_string(), "gpu".to_string()],
             on_change: Arc::new(|_| {}),
         }
@@ -84,7 +88,11 @@ impl View for MentionInput {
 
         // Render suggestion overlay if open
         if suggestions_open {
-            let items = if show_users { &self.users } else { &self.topics };
+            let items = if show_users {
+                &self.users
+            } else {
+                &self.topics
+            };
             let item_h = 32.0;
             let dropdown_h = items.len() as f32 * item_h;
             let dropdown_rect = Rect {

@@ -94,6 +94,7 @@ pub(crate) struct SceneVertexConstructor {
 pub(crate) struct CustomStrokeVertexConstructor {
     pub(crate) color: [f32; 4],
     pub(crate) clip: [f32; 4],
+    pub(crate) path_length: f32,
 }
 
 impl StrokeVertexConstructor<Vertex> for CustomStrokeVertexConstructor {
@@ -102,7 +103,7 @@ impl StrokeVertexConstructor<Vertex> for CustomStrokeVertexConstructor {
         Vertex {
             position: [pos.x, pos.y, 0.0],
             normal: [0.0, 0.0, 1.0],
-            uv: [0.0, 0.0],
+            uv: [vertex.advancement(), self.path_length],
             color: self.color,
             material_id: 0,
             radius: 0.0,

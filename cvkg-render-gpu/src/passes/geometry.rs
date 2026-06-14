@@ -34,6 +34,10 @@ impl KvasirNode for GeometryNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
+        let scale = ctx.renderer.current_scale_factor();
+        let rt_w = ctx.renderer.current_width() as i32;
+        let rt_h = ctx.renderer.current_height() as i32;
+
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
@@ -129,6 +133,29 @@ impl KvasirNode for GeometryNode {
             }) {
                 opaque_calls_count += 1;
                 p.set_pipeline(&ctx.renderer.opaque_pipeline);
+
+                // Non-trivial algorithm: Scissor Clipping and Resetting
+                // WHY: Limits geometry drawing to bounds specified by push_clip_rect (e.g. clipping lightning to main demo canvas).
+                // CONTRACT: If scissor_rect is Some, we calculate hardware coordinates and set it. Otherwise, we reset scissor to full texture.
+                if let Some(rect) = call.scissor_rect
+                    && rt_w > 0
+                    && rt_h > 0
+                {
+                    let x1 = (rect.x * scale).round() as i32;
+                    let y1 = (rect.y * scale).round() as i32;
+                    let x2 = ((rect.x + rect.width) * scale).round() as i32;
+                    let y2 = ((rect.y + rect.height) * scale).round() as i32;
+                    let w = (x2 - x1).clamp(0, rt_w);
+                    let h = (y2 - y1).clamp(0, rt_h);
+                    if w > 0 && h > 0 {
+                        p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32);
+                    } else {
+                        p.set_scissor_rect(0, 0, 1, 1);
+                    }
+                } else {
+                    p.set_scissor_rect(0, 0, rt_w as u32, rt_h as u32);
+                }
+
                 let bg = if let Some(id) = call.texture_id {
                     if id == 0 {
                         &ctx.renderer.mega_heim_bind_group

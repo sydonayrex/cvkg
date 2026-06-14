@@ -61,9 +61,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let uv = clamp(in.uv, vec2<f32>(0.0, 0.0), vec2<f32>(1.0, 1.0));
     let screen_uv = in.clip_position.xy / (scene.resolution * scene.scale_factor);
 
-    let panel_id = floor(in.uv.x * 3.0);
-    let seed = fract(sin(panel_id * 91.7) * 47453.5453);
-    let variation = 0.85 + seed * 0.3;
+    // Clean, constant variation factor to prevent high-frequency Moire/brushed-metal artifacts on rotating cards
+    let variation = 1.0;
 
     // Local coordinates
     let local = in.logical / in.size;
@@ -84,8 +83,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Compute refracted direction using Snell's law
     let refracted_dir = snell_refraction(lens_normal, view_dir, ior);
 
-    // Scale refraction by distance from center (stronger near edges)
-    let refraction_offset = refracted_dir * lens_dist * 0.04 * variation;
+    // Non-trivial algorithm: Magnifying Lens Refraction
+    // WHY: Traditional Snell refraction on a 2D quad often shrinks/displaces the backdrop. To simulate
+    // a premium convex liquid/ice lens, we must shift the texture coordinate inward towards the center.
+    // Near the center, magnification is strongest. Near the edges, it transitions to refraction roll-off
+    // to prevent edge-sampling artifacts outside the card bounds.
+    // CONTRACT: Returns a vec2 offset that contracts screen UV lookups towards the card center.
+    let mag_strength = 0.16 * (1.0 - smoothstep(0.0, 0.8, lens_dist));
+    var refraction_offset = refracted_dir * lens_dist * 0.08 * variation;
+    refraction_offset += -view_dir * lens_dist * mag_strength;
 
     // ─── Section 3: Material Noise and Stress ────────────────────────────────
 

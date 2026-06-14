@@ -54,10 +54,7 @@ impl<T: Clone + 'static> Binding<T> {
     {
         let get_fn = self.get.clone();
         let set_fn = self.set.clone();
-        Binding::new(
-            move || to(get_fn()),
-            move |val| set_fn(from(val)),
-        )
+        Binding::new(move || to(get_fn()), move |val| set_fn(from(val)))
     }
 }
 

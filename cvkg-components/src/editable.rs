@@ -2,9 +2,9 @@
 //!
 //! Provides a toggleable label that mutates into a text input field on double-click.
 
-use crate::theme;
 use crate::interactive::Input;
-use cvkg_core::{Never, Rect, Renderer, View, SizeProposal, Size};
+use crate::theme;
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 /// A component that renders static text and converts into an input field on click/double-click.

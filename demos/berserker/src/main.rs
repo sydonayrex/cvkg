@@ -54,7 +54,22 @@ struct BerserkerState {
     last_time: f32,
     physics: PhysicsState,
     anim: AnimState,
+    loaded_svgs: bool,
 }
+
+const VALKNUT_SVG: &[u8] = b"<svg viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\">
+  <g transform=\"translate(0, 0)\">
+    <path id=\"t1\" fill=\"none\" stroke=\"#FF4000\" stroke-width=\"4\" d=\"M50.0,15.0 L28.3,52.5 L71.7,52.5 Z\">
+      <animate attributeName=\"stroke-dashoffset\" from=\"1\" to=\"0\" dur=\"2s\" repeatCount=\"indefinite\" />
+    </path>
+    <path id=\"t2\" fill=\"none\" stroke=\"#FF8000\" stroke-width=\"4\" d=\"M18.3,72.5 L61.7,72.5 L40.0,35.0 Z\">
+      <animate attributeName=\"stroke-dashoffset\" from=\"1\" to=\"0\" dur=\"2s\" repeatCount=\"indefinite\" />
+    </path>
+    <path id=\"t3\" fill=\"none\" stroke=\"#FFC000\" stroke-width=\"4\" d=\"M81.7,72.5 L60.0,35.0 L38.3,72.5 Z\">
+      <animate attributeName=\"stroke-dashoffset\" from=\"1\" to=\"0\" dur=\"2s\" repeatCount=\"indefinite\" />
+    </path>
+  </g>
+</svg>";
 
 impl BerserkerState {
     fn new(w: f32, h: f32) -> Self {
@@ -191,6 +206,7 @@ impl BerserkerState {
                 dummy_torso,
             },
             anim: AnimState { blender, bridge },
+            loaded_svgs: false,
         }
     }
 }
@@ -274,6 +290,8 @@ impl View for BerserkerFireView {
 
         r.push_vnode(rect, "BerserkerFireView");
 
+        r.load_svg("valknut", VALKNUT_SVG);
+
         // Draw the 3D rotating cubes in the background
         let t_cubes_start = std::time::Instant::now();
         draw_3d_cubes_bg(r, &s, w, h, t);
@@ -284,12 +302,17 @@ impl View for BerserkerFireView {
         draw_glass_cards(r, &s, w, h, t);
         let t_cards = t_cards_start.elapsed().as_secs_f32() * 1000.0;
 
+        r.draw_svg("valknut", cvkg_core::Rect { x: w / 2.0 - 150.0, y: h / 2.0 - 250.0, width: 300.0, height: 300.0 });
+
         let t_fire_start = std::time::Instant::now();
         if t > 0.0 {
+            // Push clip to prevent lightning and fire from drawing over the top menu bar
+            r.push_clip_rect(cvkg_core::Rect { x: 0.0, y: 28.0, width: w, height: h - 28.0 });
             // Draw particles and Mjolnir lightning bolts
             draw_berserker_fire(r, &s, w, h, t);
             // Draw skeletal/ragdoll elements
             draw_ragdoll_dummy(r, &mut s, w, h, new_rage);
+            r.pop_clip_rect();
         }
         let t_fire = t_fire_start.elapsed().as_secs_f32() * 1000.0;
 
@@ -708,7 +731,7 @@ fn draw_glass_cards(
                     height: card_height,
                 };
                 r.push_vnode(rect, "Card");
-                r.fill_glass_rect(rect, 12.0, 20.0); // Use glass material for proper frosted effect
+                r.fill_glass_rect(rect, 12.0, 60.0); // Use glass material for proper frosted effect
                 r.draw_text(
                     runes[i % runes.len()],
                     cx - 50.0,
@@ -726,7 +749,7 @@ fn draw_glass_cards(
                     height: card_height,
                 };
                 r.push_vnode(rect_l, "CardLeft");
-                r.fill_glass_rect(rect_l, 12.0, 15.0);
+                r.fill_glass_rect(rect_l, 12.0, 45.0);
                 r.pop_vnode();
                 let rect_r = cvkg_core::Rect {
                     x: br.position.x - half_w,
@@ -735,7 +758,7 @@ fn draw_glass_cards(
                     height: card_height,
                 };
                 r.push_vnode(rect_r, "CardRight");
-                r.fill_glass_rect(rect_r, 12.0, 15.0);
+                r.fill_glass_rect(rect_r, 12.0, 45.0);
                 r.pop_vnode();
             }
         }

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-render-gpu"
-version = "0.2.10"
+version = "0.2.11"
 build = "build.rs"
 autolib = false
 autobins = false
@@ -37,6 +37,10 @@ path = "examples/list_adapters.rs"
 name = "hello_world"
 path = "tests/hello_world.rs"
 
+[[test]]
+name = "text_svg_trace"
+path = "tests/text_svg_trace.rs"
+
 [[bench]]
 name = "large_tree"
 path = "benches/large_tree.rs"
@@ -56,16 +60,16 @@ version = "1.14"
 features = ["derive"]
 
 [dependencies.cvkg-core]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-compositor]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-svg-filters]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-svg-serialize]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.futures]
 version = "0.3"
@@ -100,7 +104,7 @@ features = [
 version = "1.12"
 
 [dependencies.cvkg-runic-text]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.swash]
 version = "0.2"

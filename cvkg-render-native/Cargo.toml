@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-render-native"
-version = "0.2.10"
+version = "0.2.11"
 build = false
 autolib = false
 autobins = false
@@ -42,16 +42,16 @@ version = "1.9"
 version = "3.4"
 
 [dependencies.cvkg-core]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-render-gpu]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-vdom]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-themes]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.image]
 version = "0.25"
@@ -66,7 +66,7 @@ version = "0.4"
 version = "0.4.0"
 
 [dependencies.runic-text]
-version = "0.2.10"
+version = "0.2.11"
 package = "cvkg-runic-text"
 
 [dependencies.tokio]

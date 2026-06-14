@@ -452,7 +452,10 @@ fn spawn_file_watcher(state: Arc<AppState>) {
         scan_dir(&static_dir, &mut file_times);
         scan_dir(&assets_dir, &mut file_times);
 
-        info!("[HMR Watcher] Initialized watcher for {}, {} and {}", pkg_dir, static_dir, assets_dir);
+        info!(
+            "[HMR Watcher] Initialized watcher for {}, {} and {}",
+            pkg_dir, static_dir, assets_dir
+        );
 
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;

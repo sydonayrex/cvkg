@@ -1,5 +1,5 @@
-use crate::theme;
 use crate::interactive::Input;
+use crate::theme;
 use cvkg_core::{
     AnyView, Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -136,7 +136,10 @@ where
     }
 
     /// Sets the callback for committing an inline cell edit.
-    pub fn on_edit_commit(mut self, callback: impl Fn(usize, String, String) + Send + Sync + 'static) -> Self {
+    pub fn on_edit_commit(
+        mut self,
+        callback: impl Fn(usize, String, String) + Send + Sync + 'static,
+    ) -> Self {
         self.on_edit_commit = Some(Arc::new(callback));
         self
     }
@@ -148,7 +151,10 @@ where
     }
 
     /// Sets the hierarchical tree expanded state function for rows.
-    pub fn tree_expanded(mut self, expanded_fn: impl Fn(&D) -> bool + Send + Sync + 'static) -> Self {
+    pub fn tree_expanded(
+        mut self,
+        expanded_fn: impl Fn(&D) -> bool + Send + Sync + 'static,
+    ) -> Self {
         self.get_expanded = Some(Arc::new(expanded_fn));
         self
     }
@@ -213,7 +219,7 @@ where
                 col_rect,
                 [0.3, 0.5, 0.8, if is_sorted { 0.8 } else { 0.4 }],
                 1.0,
-              );
+            );
 
             let sort_indicator = if is_sorted {
                 match self.sort_order {
@@ -309,7 +315,11 @@ where
 
                 // Check depth of this node if Tree view is active
                 let depth = self.get_depth.as_ref().map(|f| (f)(item)).unwrap_or(0);
-                let is_expanded = self.get_expanded.as_ref().map(|f| (f)(item)).unwrap_or(false);
+                let is_expanded = self
+                    .get_expanded
+                    .as_ref()
+                    .map(|f| (f)(item))
+                    .unwrap_or(false);
                 let indent = depth as f32 * 16.0;
 
                 let mut cx = rect.x;
@@ -328,7 +338,13 @@ where
 
                         // Draw expand/collapse arrow
                         let arrow = if is_expanded { "▼ " } else { "▶ " };
-                        renderer.draw_text(arrow, cx + indent - 12.0, row_y + 8.0, 11.0, theme::text_muted());
+                        renderer.draw_text(
+                            arrow,
+                            cx + indent - 12.0,
+                            row_y + 8.0,
+                            11.0,
+                            theme::text_muted(),
+                        );
                     }
 
                     // Check if we are currently inline editing this cell
@@ -337,14 +353,15 @@ where
                     if is_editing {
                         let on_commit = self.on_edit_commit.clone();
                         let col_name = col.header.clone();
-                        let input = Input::new("...")
-                            .value("")
-                            .focused(true)
-                            .on_commit(move |val| {
-                                if let Some(ref cb) = on_commit {
-                                    (cb)(idx, col_name.clone(), val);
-                                }
-                            });
+                        let input =
+                            Input::new("...")
+                                .value("")
+                                .focused(true)
+                                .on_commit(move |val| {
+                                    if let Some(ref cb) = on_commit {
+                                        (cb)(idx, col_name.clone(), val);
+                                    }
+                                });
                         input.render(renderer, cell_rect);
                     } else {
                         let view = (col.cell_builder)(item);

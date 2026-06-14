@@ -315,16 +315,24 @@ fn apply_layout_animations(
             )
         };
         spring.step(delta);
-        
+
         // Temporal layout snapping: snap layout coordinates to integer pixels
         // only when the spring has nearly settled to prevent jitter during motion.
         let speed = (spring.velocity_a.length_sq() + spring.velocity_b.length_sq()).sqrt();
         let snap = |v: f32| (v * scale).round() / scale;
 
         let (rx, ry, rw) = if speed < 0.05 {
-            (snap(spring.position_a.x), snap(spring.position_a.y), snap(spring.position_a.z))
+            (
+                snap(spring.position_a.x),
+                snap(spring.position_a.y),
+                snap(spring.position_a.z),
+            )
         } else {
-            (spring.position_a.x, spring.position_a.y, spring.position_a.z)
+            (
+                spring.position_a.x,
+                spring.position_a.y,
+                spring.position_a.z,
+            )
         };
 
         interpolated_rects.insert(

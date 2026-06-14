@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "berserker"
-version = "0.2.10"
+version = "0.2.11"
 publish = false
 build = false
 autolib = false
@@ -36,25 +36,25 @@ path = "src/main.rs"
 
 [dependencies.cvkg]
 features = ["native"]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-core]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-vdom]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-physics]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-anim]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-components]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.cvkg-themes]
-version = "0.2.10"
+version = "0.2.11"
 
 [dependencies.env_logger]
 version = "0.10"

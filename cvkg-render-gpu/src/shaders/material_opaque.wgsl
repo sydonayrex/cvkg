@@ -32,6 +32,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         if (dist > 0.0) { discard; }
     }
 
+    // SVG Path/Stroke Tracing Animation
+    // WHY: Discards fragments along the path based on the animated threshold in slice.w.
+    // CONTRACT: If the material is a stroke/line path (1u, 17u, 19u), path length (uv.y) is non-zero,
+    // and slice.w is a valid tracing threshold (< 0.999), we discard fragments beyond the threshold.
+    if ((in.material_id == 1u || in.material_id == 17u || in.material_id == 19u) && in.uv.y > 0.0 && in.slice.w < 0.999) {
+        if (in.uv.x / max(in.uv.y, 0.0001) > in.slice.w) {
+            discard;
+        }
+    }
+
     if in.material_id == 1u {
         // Neon Line
         color = in.color * 1.5;

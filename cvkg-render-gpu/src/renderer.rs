@@ -1195,10 +1195,10 @@ impl SurtrRenderer {
             label: Some("Dummy Env Bind Group"),
         });
 
-        let mut texture_registry = std::collections::HashMap::new();
+        let mut texture_registry = LruCache::new(NonZeroUsize::new(255).unwrap());
         let mut texture_bind_groups = Vec::new();
 
-        texture_registry.insert("__mega_heim".to_string(), 0);
+        texture_registry.put("__mega_heim".to_string(), 0);
         texture_bind_groups.push(mega_heim_bind_group.clone());
 
         // Forge the Anvil (Buffers)
@@ -1587,8 +1587,12 @@ impl SurtrRenderer {
             text_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
             shaped_text_cache: std::collections::HashMap::new(),
             heim_packer: SundrPacker::new(4096, 4096),
-            image_uv_registry: LruCache::new(NonZeroUsize::new(256).unwrap()),
-            texture_registry: LruCache::new(NonZeroUsize::new(255).unwrap()),
+            image_uv_registry: {
+                let mut cache = LruCache::new(NonZeroUsize::new(256).unwrap());
+                cache.put("__mega_heim".to_string(), cvkg_core::Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 });
+                cache
+            },
+            texture_registry,
             texture_views: texture_views_list,
             dummy_sampler,
             svg_cache: LruCache::new(NonZeroUsize::new(128).unwrap()),
@@ -1804,7 +1808,7 @@ impl SurtrRenderer {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 5,
+                    mip_level_count: 6,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -1819,7 +1823,7 @@ impl SurtrRenderer {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 5,
+                    mip_level_count: 6,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -1834,7 +1838,7 @@ impl SurtrRenderer {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 5,
+                    mip_level_count: 6,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -1849,7 +1853,7 @@ impl SurtrRenderer {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 5,
+                    mip_level_count: 6,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -2181,7 +2185,7 @@ impl SurtrRenderer {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2196,7 +2200,7 @@ impl SurtrRenderer {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2211,7 +2215,7 @@ impl SurtrRenderer {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2226,7 +2230,7 @@ impl SurtrRenderer {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2445,7 +2449,7 @@ impl SurtrRenderer {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2460,7 +2464,7 @@ impl SurtrRenderer {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2475,7 +2479,7 @@ impl SurtrRenderer {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2490,7 +2494,7 @@ impl SurtrRenderer {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 5,
+                mip_level_count: 6,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -3156,10 +3160,12 @@ impl SurtrRenderer {
             }
         } else if material_id == 6 {
             cvkg_core::DrawMaterial::TopUI
-        } else if material_id == 0 {
-            cvkg_core::DrawMaterial::Opaque
         } else {
-            self.current_draw_material
+            // Non-trivial algorithm: Draw Material Routing
+            // WHY: Any material ID other than 7 (Glass) or 6 (TopUI/Text) is processed by the opaque WGSL pipeline.
+            // Under immediate-mode rendering, inheriting self.current_draw_material can route shapes incorrectly.
+            // CONTRACT: If the material ID is not Glass or TopUI, it maps directly to Opaque.
+            cvkg_core::DrawMaterial::Opaque
         };
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
@@ -3653,7 +3659,12 @@ impl SurtrRenderer {
 
     /// load_svg — Parses an SVG file and tessellates its paths into GPU triangles.
     pub fn load_svg(&mut self, name: &str, data: &[u8]) {
-        let opt = usvg::Options::default();
+        if self.svg_cache.contains(name) {
+            return;
+        }
+
+        let mut opt = usvg::Options::default();
+        opt.fontdb_mut().load_system_fonts();
         let tree = match usvg::Tree::from_data(data, &opt) {
             Ok(t) => t,
             Err(e) => {
@@ -3731,7 +3742,7 @@ impl SurtrRenderer {
                 return;
             }
 
-            let lyon_path = usvg_to_lyon(path);
+            let lyon_path = usvg_to_lyon(path, node.abs_transform());
             let screen = [4096.0, 4096.0]; // Placeholder, will be overridden if needed
             let clip = [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY]; // Default clip
 
@@ -3756,7 +3767,7 @@ impl SurtrRenderer {
                 };
 
                 let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
-                let base_index_idx = params.indices.len() as u32;
+                let base_vertex_idx = params.vertices.len() as u32;
 
                 if let Err(e) = params.fill_tessellator.tessellate_path(
                     &lyon_path,
@@ -3773,13 +3784,13 @@ impl SurtrRenderer {
 
                 params.vertices.extend(buffers.vertices);
                 for idx in buffers.indices {
-                    params.indices.push(base_index_idx + idx);
+                    params.indices.push(base_vertex_idx + idx);
                 }
             }
 
             // Tessellate stroke if present
             if has_stroke && let Some(stroke) = path.stroke() {
-                let stroke_index_idx = params.indices.len() as u32; // New base for stroke indices
+                let base_vertex_idx = params.vertices.len() as u32;
                 let stroke_width = stroke.width().get(); // Direct float value
                 let color = match stroke.paint() {
                     usvg::Paint::Color(c) => [
@@ -3801,12 +3812,14 @@ impl SurtrRenderer {
 
                 let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
 
+                let path_length = lyon::algorithms::length::approximate_length(&lyon_path, 0.1);
+
                 if let Err(e) = params.stroke_tessellator.tessellate_path(
                     &lyon_path,
                     &StrokeOptions::default().with_line_width(stroke_width),
                     &mut BuffersBuilder::new(
                         &mut buffers,
-                        CustomStrokeVertexConstructor { color, clip },
+                        CustomStrokeVertexConstructor { color, clip, path_length },
                     ),
                 ) {
                     log::warn!(
@@ -3819,7 +3832,7 @@ impl SurtrRenderer {
 
                 params.vertices.extend(buffers.vertices);
                 for idx in buffers.indices {
-                    params.indices.push(stroke_index_idx + idx);
+                    params.indices.push(base_vertex_idx + idx);
                 }
             }
         }
@@ -3855,6 +3868,9 @@ impl SurtrRenderer {
         {
             return;
         }
+
+        log::info!("DRAW_SVG '{}' called with rect: {:?}, model_view_box: {:?}", name, rect, self.svg_cache.get(name).map(|m| m.view_box));
+        
         if rect.x > screen_w
             || rect.x + rect.width < 0.0
             || rect.y > screen_h
@@ -3925,6 +3941,15 @@ impl SurtrRenderer {
             } else if anim.attribute_name == "opacity" {
                 for i in anim.vertex_range.clone() {
                     local_vertices[i].color[3] = val;
+                }
+            } else if anim.attribute_name == "stroke-dashoffset" {
+                // Non-trivial algorithm: SVG Path Tracing
+                // WHY: CPU-side vertex alpha mutation creates blurry, hardware-interpolated fades.
+                // By passing the tracing progress threshold (1.0 - val) to the fragment shader,
+                // we enable sharp, pixel-perfect clipping of stroke segments along their path length.
+                for i in anim.vertex_range.clone() {
+                    let v = &mut local_vertices[i];
+                    v.slice[3] = 1.0 - val;
                 }
             }
         }

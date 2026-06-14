@@ -168,7 +168,11 @@ impl KvasirNode for BackdropBlurNode {
 
         // Derive mip count from the actual texture, not hardcoded
         let num_mips = blur_tex.mip_level_count();
-        let effective_mips = (num_mips as usize).min(5);
+        // Non-trivial algorithm: Kawase Blur Mip Cap
+        // WHY: More mip levels allow downsampling the scene to coarser dimensions, yielding a wider
+        // backdrop blur ("bigger bloom"). We support up to 6 levels (960x540 down to 30x16) for intense glassmorphism.
+        // CONTRACT: effective_mips is clamped between 2 and the actual mip count of the texture.
+        let effective_mips = (num_mips as usize).min(6);
         if effective_mips < 2 {
             return;
         }
@@ -529,6 +533,8 @@ impl KvasirNode for GlassNode {
                 } else {
                     p.set_scissor_rect(0, 0, 1, 1);
                 }
+            } else {
+                p.set_scissor_rect(0, 0, rt_w as u32, rt_h as u32);
             }
             p.draw_indexed(
                 call.index_start..call.index_start + call.index_count,

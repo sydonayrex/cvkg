@@ -2,7 +2,7 @@
 //!
 //! Renders standard finder patterns and payload matrices without external dependencies.
 
-use cvkg_core::{Never, Rect, Renderer, View, SizeProposal, Size};
+use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
@@ -88,7 +88,10 @@ impl View for QRCode {
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
-        let size = proposal.width.unwrap_or(120.0).min(proposal.height.unwrap_or(120.0));
+        let size = proposal
+            .width
+            .unwrap_or(120.0)
+            .min(proposal.height.unwrap_or(120.0));
         Size {
             width: size,
             height: size,

@@ -21,11 +21,13 @@ impl SurtrRenderer {
 
         // Pack into heim
         if let Some((x, y)) = self.heim_packer.pack(width, height) {
+            let tex_w = self.mega_heim_tex.width() as f32;
+            let tex_h = self.mega_heim_tex.height() as f32;
             let uv_rect = Rect {
-                x: x as f32 / 4096.0,
-                y: y as f32 / 4096.0,
-                width: width as f32 / 4096.0,
-                height: height as f32 / 4096.0,
+                x: x as f32 / tex_w,
+                y: y as f32 / tex_h,
+                width: width as f32 / tex_w,
+                height: height as f32 / tex_h,
             };
 
             // Upload to GPU
@@ -113,7 +115,7 @@ impl SurtrRenderer {
             "Helvetica".to_string(),
             "Arial".to_string(),
         ];
-        style.render_mode = cvkg_runic_text::RenderMode::Subpixel;
+        style.render_mode = cvkg_runic_text::RenderMode::Grayscale;
         let spans = vec![cvkg_runic_text::TextSpan::new(text, style)];
         let shaped = self
             .text_engine

@@ -2118,6 +2118,8 @@ impl RunicTextEngine {
 
         if use_subpixel {
             render.format(swash::zeno::Format::Subpixel);
+        } else {
+            render.format(swash::zeno::Format::Alpha);
         }
 
         if style.synthesize_styles && style.weight >= Weight(700) {
@@ -2125,6 +2127,7 @@ impl RunicTextEngine {
         }
 
         if let Some(image) = render.render(&mut scaler, glyph_id) {
+            log::info!("Swash rendered image for glyph {}. content: {:?}, size: {}x{}, data len: {}", glyph_id, image.content, image.placement.width, image.placement.height, image.data.len());
             return Ok(GlyphImage {
                 glyph_id,
                 width: image.placement.width,

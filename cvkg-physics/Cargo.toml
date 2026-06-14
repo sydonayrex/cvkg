@@ -1,13 +1,13 @@
 [package]
 name = "cvkg-physics"
-version = "0.2.10"
+version = "0.2.11"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Rigid body physics simulation for CVKG — collision detection, constraint solving, scene graph bridge"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.2.10" }
-cvkg-scene = { path = "../cvkg-scene", version = "0.2.10" }
+cvkg-core = { path = "../cvkg-core", version = "0.2.11" }
+cvkg-scene = { path = "../cvkg-scene", version = "0.2.11" }
 glam = { workspace = true }
 log = { workspace = true }

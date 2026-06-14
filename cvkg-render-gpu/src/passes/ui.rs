@@ -114,6 +114,8 @@ impl KvasirNode for UINode {
                 } else {
                     p.set_scissor_rect(0, 0, 1, 1);
                 }
+            } else {
+                p.set_scissor_rect(0, 0, rt_w as u32, rt_h as u32);
             }
             p.draw_indexed(
                 call.index_start..call.index_start + call.index_count,
