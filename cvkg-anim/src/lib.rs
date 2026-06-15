@@ -251,6 +251,8 @@ pub struct SleipnirSolver {
     params: SleipnirParams,
     target: f32,
     state: SolverState,
+    /// When true, tick() snaps to target instantly (accessibility: reduce motion).
+    reduce_motion: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -266,6 +268,7 @@ impl SleipnirSolver {
             params,
             target,
             state: SolverState { x: current, v: 0.0 },
+            reduce_motion: false,
         }
     }
 
@@ -279,8 +282,19 @@ impl SleipnirSolver {
         self
     }
 
+    /// Set the reduce-motion flag. When true, tick() snaps to target instantly.
+    pub fn set_reduce_motion(&mut self, reduce: bool) {
+        self.reduce_motion = reduce;
+    }
+
     /// Advance the simulation by dt seconds using RK4 integration.
+    /// When reduce_motion is enabled, snaps to target value instantly.
     pub fn tick(&mut self, dt: f32) -> f32 {
+        if self.reduce_motion {
+            self.state.x = self.target;
+            self.state.v = 0.0;
+            return self.state.x;
+        }
         let a = self.evaluate(self.state, 0.0, SolverState { x: 0.0, v: 0.0 });
         let b = self.evaluate(self.state, dt * 0.5, a);
         let c = self.evaluate(self.state, dt * 0.5, b);
