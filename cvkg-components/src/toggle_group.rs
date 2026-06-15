@@ -253,6 +253,9 @@ impl View for ToggleGroup {
                                     (on_change_kb)(new_value);
                                 }
                             }
+                            "Tab" => {
+                                // Allow Tab to exit the group (default browser behavior)
+                            }
                             _ => {}
                         }
                     }

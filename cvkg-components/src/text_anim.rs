@@ -89,12 +89,7 @@ impl View for TextAnimate {
                     rect.x,
                     rect.y + offset_y,
                     self.font_size,
-                    [
-                        self.color[0],
-                        self.color[1],
-                        self.color[2],
-                        self.color[3] * p,
-                    ],
+                    theme::with_alpha(self.color, self.color[3] * p),
                 );
                 renderer.pop_vnode();
                 return;
@@ -107,12 +102,7 @@ impl View for TextAnimate {
             rect.x,
             rect.y,
             self.font_size,
-            [
-                self.color[0],
-                self.color[1],
-                self.color[2],
-                self.color[3] * alpha,
-            ],
+            theme::with_alpha(self.color, self.color[3] * alpha),
         );
         renderer.pop_vnode();
     }
@@ -421,13 +411,7 @@ impl View for CardStack {
                 height: self.card_height,
             };
             let alpha = 1.0 - (i as f32 * 0.15);
-            let color = [
-                self.base_color[0],
-                self.base_color[1],
-                self.base_color[2],
-                self.base_color[3] * alpha,
-            ];
-            renderer.fill_rounded_rect(card_rect, RADIUS_XL, color);
+            renderer.fill_rounded_rect(card_rect, RADIUS_XL, theme::with_alpha(self.base_color, self.base_color[3] * alpha));
             renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         }
         renderer.pop_vnode();
@@ -534,7 +518,7 @@ impl View for CardHoverEffect {
                 height: self.height,
             };
             let spot_color = theme::surface_overlay();
-            renderer.fill_rounded_rect(spot_rect, RADIUS_XL, [spot_color[0], spot_color[1], spot_color[2], 0.03 * self.hover]);
+            renderer.fill_rounded_rect(spot_rect, RADIUS_XL, theme::with_alpha(spot_color, 0.03 * self.hover));
         }
         // Label
         if !self.label.is_empty() {
@@ -682,12 +666,7 @@ impl View for ExpandableCard {
                 rect.x + 16.0,
                 rect.y + 60.0,
                 13.0,
-                [
-                    theme::text()[0],
-                    theme::text()[1],
-                    theme::text()[2],
-                    self.progress,
-                ],
+                theme::with_alpha(theme::text(), self.progress),
             );
         }
         renderer.pop_vnode();
@@ -936,7 +915,7 @@ impl View for ShimmerButton {
                 height: rect.height,
             };
             let shimmer_color = theme::accent();
-            renderer.fill_rounded_rect(shimmer_rect, RADIUS_XL, [shimmer_color[0], shimmer_color[1], shimmer_color[2], 0.15]);
+            renderer.fill_rounded_rect(shimmer_rect, RADIUS_XL, theme::with_alpha(shimmer_color, 0.15));
         }
         // Label
         let (tw, th) = renderer.measure_text(&self.label, 15.0);
@@ -1071,7 +1050,7 @@ impl View for RippleButton {
                     width: ripple_r * 2.0,
                     height: ripple_r * 2.0,
                 },
-                [ripple_color[0], ripple_color[1], ripple_color[2], ripple_alpha],
+                theme::with_alpha(ripple_color, ripple_alpha),
             );
         }
         // Label
@@ -1189,7 +1168,7 @@ impl View for StatefulButton {
                             width: 4.0,
                             height: 4.0,
                         },
-                        [tc[0], tc[1], tc[2], alpha],
+                        theme::with_alpha(tc, alpha),
                     );
                 }
             }
