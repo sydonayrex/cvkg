@@ -1,6 +1,7 @@
 //! NiflheimSidebar — Glass chrome wrapper for sidebar panels.
 //! Named after Niflheim, the realm of ice and mist.
 
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -94,7 +95,7 @@ impl NiflheimSidebar {
 
         // Glass background
         renderer.bifrost(rect, blur, 1.2, opacity);
-        renderer.fill_rounded_rect(rect, 0.0, [0.06, 0.06, 0.08, 0.88]);
+        renderer.fill_rounded_rect(rect, 0.0, theme::surface());
 
         // Separator line on trailing edge
         let sep_x = rect.x + rect.width - 0.5;
@@ -103,7 +104,7 @@ impl NiflheimSidebar {
             rect.y,
             sep_x,
             rect.y + rect.height,
-            [0.15, 0.15, 0.18, 0.6],
+            theme::border(),
             1.0,
         );
     }
@@ -119,9 +120,9 @@ impl NiflheimSidebar {
         depth: usize,
     ) {
         let bg = if is_selected {
-            [1.0, 1.0, 1.0, 0.14]
+            theme::active_color()
         } else if is_hovered {
-            [1.0, 1.0, 1.0, 0.08]
+            theme::hover()
         } else {
             [0.0, 0.0, 0.0, 0.0]
         };
@@ -139,15 +140,15 @@ impl NiflheimSidebar {
                 rect.x + indent,
                 rect.y + 6.0,
                 14.0,
-                [0.7, 0.7, 0.75, 0.9],
+                theme::text_muted(),
             );
         }
 
         // Label
         let text_color = if is_selected {
-            [1.0, 1.0, 1.0, 1.0]
+            theme::text()
         } else {
-            [0.85, 0.85, 0.88, 0.95]
+            theme::text()
         };
         renderer.draw_text(
             &item.label,
@@ -165,7 +166,7 @@ impl NiflheimSidebar {
                 width: 18.0,
                 height: 18.0,
             };
-            renderer.fill_ellipse(badge_rect, [0.2, 0.4, 0.8, 0.9]);
+            renderer.fill_ellipse(badge_rect, theme::accent());
             let text = if count > 99 {
                 "99+".to_string()
             } else {
@@ -177,7 +178,7 @@ impl NiflheimSidebar {
                 badge_rect.x + (18.0 - tw) / 2.0,
                 badge_rect.y + 4.0,
                 9.0,
-                [1.0, 1.0, 1.0, 1.0],
+                theme::text(),
             );
         }
     }

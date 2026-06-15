@@ -462,3 +462,129 @@ pub fn warning_orange() -> [f32; 4] {
 pub fn hazard_orange() -> [f32; 4] {
     [1.0, 0.2, 0.0, 1.0]
 }
+
+// === Workflow / Agent status tokens ===
+
+/// Running/active status color (uses accent).
+#[inline]
+pub fn status_running() -> [f32; 4] {
+    accent()
+}
+
+/// Completed/success status color.
+#[inline]
+pub fn status_completed() -> [f32; 4] {
+    success()
+}
+
+/// Failed/error status color.
+#[inline]
+pub fn status_failed() -> [f32; 4] {
+    error_color()
+}
+
+/// Waiting/idle status color.
+#[inline]
+pub fn status_waiting() -> [f32; 4] {
+    text_muted()
+}
+
+// === Inspector / debug panel tokens ===
+
+/// Inspector panel background.
+#[inline]
+pub fn inspector_bg() -> [f32; 4] {
+    surface()
+}
+
+/// Inspector panel border.
+#[inline]
+pub fn inspector_border() -> [f32; 4] {
+    border()
+}
+
+/// Inspector accent highlight.
+#[inline]
+pub fn inspector_accent() -> [f32; 4] {
+    accent()
+}
+
+/// Inspector warning highlight.
+#[inline]
+pub fn inspector_warning() -> [f32; 4] {
+    warning()
+}
+
+// === Collaboration status tokens ===
+
+/// Online indicator color.
+#[inline]
+pub fn collab_online() -> [f32; 4] {
+    success()
+}
+
+/// Away indicator color.
+#[inline]
+pub fn collab_away() -> [f32; 4] {
+    warning()
+}
+
+/// Offline indicator color.
+#[inline]
+pub fn collab_offline() -> [f32; 4] {
+    text_muted()
+}
+
+// === Node type tokens (for workflow / graph nodes) ===
+
+/// Concept node color (blue).
+#[inline]
+pub fn node_concept() -> [f32; 4] {
+    [0.2, 0.6, 0.9, 1.0]
+}
+
+/// Entity node color (green).
+#[inline]
+pub fn node_entity() -> [f32; 4] {
+    [0.4, 0.8, 0.4, 1.0]
+}
+
+/// Relation node color (orange).
+#[inline]
+pub fn node_relation() -> [f32; 4] {
+    [0.9, 0.6, 0.2, 1.0]
+}
+
+/// Context node color (purple).
+#[inline]
+pub fn node_context() -> [f32; 4] {
+    [0.8, 0.4, 0.8, 1.0]
+}
+
+// === Editor / canvas tokens ===
+
+/// Editor/drawing canvas background.
+#[inline]
+pub fn editor_bg() -> [f32; 4] {
+    surface()
+}
+
+/// Editor grid/axis line color.
+#[inline]
+pub fn editor_grid() -> [f32; 4] {
+    border()
+}
+
+// === QR code tokens ===
+
+/// QR code dark module color (adaptive).
+#[inline]
+pub fn qr_dark() -> [f32; 4] {
+    text()
+}
+
+/// QR code light module color (adaptive).
+#[inline]
+pub fn qr_light() -> [f32; 4] {
+    bg()
+}

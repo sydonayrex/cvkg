@@ -70,7 +70,7 @@ impl Button {
             }
             ButtonVariant::Ghost => {
                 if is_pressed {
-                    [0.08, 0.08, 0.12, 0.5]
+                    theme::active_color()
                 } else if is_hovered {
                     theme::hover()
                 } else {
@@ -80,11 +80,11 @@ impl Button {
             ButtonVariant::Link => theme::button_ghost_bg(),
             ButtonVariant::Glass => {
                 if is_pressed {
-                    [0.15, 0.15, 0.18, 0.9]
+                    theme::surface_elevated()
                 } else if is_hovered {
-                    [0.12, 0.12, 0.15, 0.85]
+                    theme::surface()
                 } else {
-                    [0.08, 0.08, 0.12, 0.7]
+                    theme::button_ghost_bg()
                 }
             }
             ButtonVariant::TintedGlass => {
@@ -160,7 +160,7 @@ impl Button {
             }
             ButtonVariant::Ghost => {
                 if is_pressed {
-                    ([0.3, 0.3, 0.4, 0.5], 1.0)
+                    (theme::border_strong(), 1.0)
                 } else {
                     (theme::button_ghost_bg(), 0.0)
                 }
@@ -168,9 +168,9 @@ impl Button {
             ButtonVariant::Link => (theme::button_ghost_bg(), 0.0),
             ButtonVariant::Glass => {
                 if is_hovered {
-                    ([1.0, 1.0, 1.0, 0.15], 1.0)
+                    (theme::border_strong(), 1.0)
                 } else {
-                    ([1.0, 1.0, 1.0, 0.08], 1.0)
+                    (theme::border(), 1.0)
                 }
             }
             ButtonVariant::TintedGlass => {
@@ -201,7 +201,7 @@ impl Button {
     /// Compute the text color based on variant and state.
     fn text_color(&self, is_hovered: bool) -> [f32; 4] {
         if self.disabled {
-            return [0.35, 0.35, 0.4, 0.5];
+            return theme::disabled_text();
         }
         match self.variant {
             ButtonVariant::Default | ButtonVariant::Destructive => theme::text(),
@@ -402,7 +402,12 @@ impl View for Button {
 
         // Apply mani_glow() soft lunar-like highlight
         if !self.disabled {
-            let glow_color = [0.0, 0.9, 1.0, 0.8 * proximity];
+            let glow_color = [
+                theme::accent()[0],
+                theme::accent()[1],
+                theme::accent()[2],
+                0.8 * proximity,
+            ];
             let glow_radius = 20.0 * proximity;
             if glow_radius > 0.0 {
                 renderer.mani_glow(final_rect, glow_color, glow_radius);
@@ -437,7 +442,7 @@ impl View for Button {
 
         // Elevation & Depth
         if !matches!(self.variant, ButtonVariant::Ghost | ButtonVariant::Link) {
-            renderer.push_shadow(1.0, [0.0, 0.0, 0.0, 0.5], [0.0, 1.0]);
+            renderer.push_shadow(1.0, theme::shadow(), [0.0, 1.0]);
         }
         let corner_radius = match self.variant {
             ButtonVariant::Link => 0.0,

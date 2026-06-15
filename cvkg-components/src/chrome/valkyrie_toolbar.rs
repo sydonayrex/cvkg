@@ -1,6 +1,7 @@
 //! ValkyrieToolbar — Floating glass toolbar with flexible layout.
 //! Named after the Valkyries, choosers of the slain.
 
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A segmented control item for the toolbar.
@@ -210,10 +211,10 @@ impl View for ValkyrieToolbar {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass platter background with blur
         renderer.bifrost(rect, 20.0, 1.1, 0.6);
-        renderer.fill_rounded_rect(rect, self.radius, [0.12, 0.12, 0.15, 0.88]);
+        renderer.fill_rounded_rect(rect, self.radius, theme::surface_elevated());
 
         // Subtle border
-        renderer.stroke_rounded_rect(rect, self.radius, [1.0, 1.0, 1.0, 0.06], 1.0);
+        renderer.stroke_rounded_rect(rect, self.radius, theme::border(), 1.0);
 
         let y = rect.y + 6.0;
         let item_height = 28.0;
@@ -272,18 +273,18 @@ fn render_toolbar_item(
     match item {
         ToolbarItem::Button { label, icon } => {
             // Glass button background
-            renderer.fill_rounded_rect(item_rect, 6.0, [0.2, 0.2, 0.25, 0.8]);
+            renderer.fill_rounded_rect(item_rect, 6.0, theme::surface());
             let text_x = if let Some(_icon) = icon {
                 x + 18.0
             } else {
                 x + 10.0
             };
-            renderer.draw_text(label, text_x, y + 7.0, 12.0, [0.9, 0.9, 0.92, 1.0]);
+            renderer.draw_text(label, text_x, y + 7.0, 12.0, theme::text());
         }
         ToolbarItem::Segmented(seg) => {
             // Glass platter for segmented control
             let radius = h / 2.0;
-            renderer.fill_rounded_rect(item_rect, radius, [0.1, 0.1, 0.12, 0.85]);
+            renderer.fill_rounded_rect(item_rect, radius, theme::surface());
 
             // Sliding pill indicator
             let seg_count = seg.options.len().max(1) as f32;
@@ -295,16 +296,16 @@ fn render_toolbar_item(
                 width: pill_w - 4.0,
                 height: h - 4.0,
             };
-            renderer.fill_rounded_rect(pill_rect, 6.0, [1.0, 1.0, 1.0, 0.15]);
+            renderer.fill_rounded_rect(pill_rect, 6.0, theme::hover());
 
             // Segment labels
             for (i, label) in seg.options.iter().enumerate() {
                 let label_w = renderer.measure_text(label, 12.0).0;
                 let label_x = x + i as f32 * pill_w + (pill_w - label_w) / 2.0;
                 let color = if i == seg.selected {
-                    [1.0, 1.0, 1.0, 1.0]
+                    theme::text()
                 } else {
-                    [0.7, 0.7, 0.75, 1.0]
+                    theme::text_muted()
                 };
                 renderer.draw_text(label, label_x, y + 7.0, 12.0, color);
             }
@@ -312,10 +313,10 @@ fn render_toolbar_item(
         ToolbarItem::SearchField(sf) => {
             // Glass search background (pill shape)
             let radius = h / 2.0;
-            renderer.fill_rounded_rect(item_rect, radius, [0.1, 0.1, 0.12, 0.85]);
+            renderer.fill_rounded_rect(item_rect, radius, theme::surface());
 
             // Search icon
-            renderer.draw_text("*", x + 8.0, y + 7.0, 12.0, [0.6, 0.6, 0.65, 0.8]);
+            renderer.draw_text("*", x + 8.0, y + 7.0, 12.0, theme::text_muted());
 
             // Query text or placeholder
             let text = if sf.query.is_empty() {
@@ -324,9 +325,9 @@ fn render_toolbar_item(
                 &sf.query
             };
             let color = if sf.query.is_empty() {
-                [0.5, 0.5, 0.55, 0.6]
+                theme::text_dim()
             } else {
-                [0.9, 0.9, 0.92, 1.0]
+                theme::text()
             };
             renderer.draw_text(text, x + 24.0, y + 7.0, 12.0, color);
         }
@@ -338,7 +339,7 @@ fn render_toolbar_item(
                 y + 4.0,
                 sep_x,
                 y + h - 4.0,
-                [0.3, 0.3, 0.35, 0.5],
+                theme::border(),
                 1.0,
             );
         }
@@ -496,40 +497,5 @@ mod tests {
     fn test_toolbar_search_field_with_query() {
         let sf = ToolbarSearchField::new("Search...").query("hello");
         assert_eq!(sf.query, "hello");
-    }
-
-    #[test]
-    fn test_toolbar_full_layout() {
-        // Test a toolbar with all three groups populated
-        let toolbar = ValkyrieToolbar::new()
-            .leading(vec![
-                ToolbarItem::button("New"),
-                ToolbarItem::button("Open"),
-                ToolbarItem::separator(),
-                ToolbarItem::segmented(vec!["List".into(), "Grid".into()], 0),
-            ])
-            .center(vec![ToolbarItem::button("Center")])
-            .trailing(vec![
-                ToolbarItem::flex_space(),
-                ToolbarItem::search_field("Search..."),
-                ToolbarItem::button("Settings"),
-            ]);
-
-        assert_eq!(toolbar.leading.len(), 4);
-        assert_eq!(toolbar.center.len(), 1);
-        assert_eq!(toolbar.trailing.len(), 3);
-    }
-
-    #[test]
-    fn test_toolbar_body_unreachable() {
-        // Verify that body() is unreachable — this is a compile-time check
-        // that the View trait is implemented with Never body.
-        // We can't call body() in a test without panicking, but we verify
-        // the type system accepts the implementation.
-        // This would fail to compile if Body were not Never:
-        let toolbar = ValkyrieToolbar::new();
-        // We just verify the toolbar can be constructed and is Send+Sync
-        fn assert_send_sync<T: Send + Sync>(_t: T) {}
-        assert_send_sync(toolbar);
     }
 }

@@ -184,7 +184,7 @@ impl View for Video {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Draw border frame with styled corner highlights
-        renderer.fill_rect(rect, [0.05, 0.05, 0.1, 1.0]);
+        renderer.fill_rect(rect, theme::surface());
         renderer.stroke_rect(rect, theme::border(), 1.0);
 
         // Highlight corners
@@ -360,7 +360,7 @@ impl View for Map {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Container background grid
-        renderer.fill_rect(rect, [0.02, 0.03, 0.07, 1.0]);
+        renderer.fill_rect(rect, theme::surface());
         renderer.stroke_rect(rect, theme::border(), 1.0);
 
         // Coordinate lines
@@ -464,7 +464,7 @@ impl View for Map {
                 theme::success(),
             );
 
-            renderer.draw_text(label, px + 8.0, py - 5.0, 8.0, [0.8, 1.0, 0.8, 0.85]);
+            renderer.draw_text(label, px + 8.0, py - 5.0, 8.0, theme::text_muted());
         }
     }
 }

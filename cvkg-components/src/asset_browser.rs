@@ -78,7 +78,7 @@ impl View for AssetBrowser {
 
                 let is_selected = self.selected.as_deref() == Some(&item.id);
                 let bg = if is_selected {
-                    [0.1, 0.2, 0.4, 1.0]
+                    theme::list_item_selected()
                 } else {
                     theme::input_bg()
                 };

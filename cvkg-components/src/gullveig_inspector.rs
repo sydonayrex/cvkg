@@ -75,14 +75,14 @@ impl View for GullveigInspector {
                 width: rect.width,
                 height: 26.0,
             },
-            [0.08, 0.04, 0.08, 1.0],
+            theme::inspector_bg(),
         );
         renderer.draw_text(
             &format!("Inspecting: {}", self.component_name),
             rect.x + 8.0,
             rect.y + 8.0,
             12.0,
-            [0.9, 0.6, 0.9, 1.0],
+            theme::inspector_accent(),
         );
 
         // Stats section
@@ -106,7 +106,7 @@ impl View for GullveigInspector {
             let bg = if current_y as usize % 56 < 28 {
                 theme::surface()
             } else {
-                [0.06, 0.06, 0.08, 1.0]
+                theme::inspector_bg()
             };
             renderer.fill_rect(
                 Rect {
@@ -123,14 +123,14 @@ impl View for GullveigInspector {
                 rect.x + 8.0,
                 current_y + 6.0,
                 10.0,
-                [0.8, 0.9, 1.0, 1.0],
+                theme::text(),
             );
             renderer.draw_text(
                 &attr.value,
                 rect.x + 100.0,
                 current_y + 6.0,
                 10.0,
-                [0.5, 0.7, 0.9, 1.0],
+                theme::inspector_accent(),
             );
 
             if attr.editable {
@@ -139,7 +139,7 @@ impl View for GullveigInspector {
                     rect.x + rect.width - 20.0,
                     current_y + 5.0,
                     10.0,
-                    [0.8, 0.8, 0.2, 1.0],
+                    theme::inspector_warning(),
                 );
             }
             current_y += 22.0;

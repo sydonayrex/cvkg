@@ -79,14 +79,13 @@ impl View for Textarea {
         let (tw, _) = renderer.measure_text(last_line, FONT_BASE);
         let cursor_x = rect.x + 8.0 + tw;
         let cursor_y = rect.y + 8.0 + (text_lines.len().max(1) - 1) as f32 * line_height;
-        let time = renderer.elapsed_time();
-        let alpha = if (time * 2.0).sin() > 0.0 { 1.0 } else { 0.3 };
+        let _time = renderer.elapsed_time();
         renderer.draw_line(
             cursor_x,
             cursor_y,
             cursor_x,
             cursor_y + 16.0,
-            [0.0, 1.0, 1.0, alpha],
+            theme::accent(),
             2.0,
         );
 
@@ -98,7 +97,7 @@ impl View for Textarea {
             rect.x + rect.width - cw - 8.0,
             rect.y + rect.height - 16.0,
             12.0,
-            [0.4, 0.4, 0.5, 0.7],
+            theme::text_muted(),
         );
 
         // Focus ring

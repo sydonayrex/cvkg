@@ -1,5 +1,6 @@
 ---
 source: cvkg-scene/tests/consistency_tests.rs
+assertion_line: 56
 expression: commands_json
 ---
 [
@@ -14,9 +15,9 @@ expression: commands_json
       },
       "radius": 8.0,
       "color": [
-        0.0,
-        0.0,
-        0.0,
+        0.101960786,
+        0.101960786,
+        0.14117648,
         1.0
       ]
     }

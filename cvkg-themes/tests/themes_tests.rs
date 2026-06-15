@@ -69,12 +69,49 @@ fn test_is_dark_method() {
 }
 
 #[test]
-fn test_accessibility_validation() {
+fn test_accessibility_validation_dark() {
     let theme = Theme::dark();
-    let warnings = theme.validate_accessibility();
+    let results = theme.validate_accessibility();
+    for result in &results {
+        assert!(
+            result.passes,
+            "APCA FAIL on dark theme: {} Lc={:.1} (level={})",
+            result.level,
+            result.contrast,
+            result.level
+        );
+    }
+}
 
-    for warning in &warnings {
-        println!("Warning: {}", warning);
+#[test]
+fn test_accessibility_validation_light() {
+    let theme = Theme::light();
+    let results = theme.validate_accessibility();
+    for result in &results {
+        assert!(
+            result.passes,
+            "APCA FAIL on light theme: {} Lc={:.1} (level={})",
+            result.level,
+            result.contrast,
+            result.level
+        );
+    }
+}
+
+#[test]
+fn test_accessibility_validation_custom_seed() {
+    use cvkg_themes::OklchColor;
+    let seed = OklchColor::new(0.55, 0.12, 260.0, 1.0);
+    let theme = Theme::from_seed(seed);
+    let results = theme.validate_accessibility();
+    for result in &results {
+        assert!(
+            result.passes,
+            "APCA FAIL on seeded theme: {} Lc={:.1} (level={})",
+            result.level,
+            result.contrast,
+            result.level
+        );
     }
 }
 

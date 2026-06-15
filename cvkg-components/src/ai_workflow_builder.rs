@@ -80,14 +80,14 @@ impl View for MultiAgentPanel {
                 width: rect.width,
                 height: 32.0,
             },
-            [0.08, 0.06, 0.12, 1.0],
+            theme::surface_elevated(),
         );
         renderer.draw_text(
             &self.title,
             rect.x + 12.0,
             rect.y + 11.0,
             14.0,
-            [0.8, 0.7, 1.0, 1.0],
+            theme::text(),
         );
 
         // Agent list
@@ -104,10 +104,10 @@ impl View for MultiAgentPanel {
             // Background
             let bg = match agent.status {
                 AgentStatus::Idle => theme::surface(),
-                AgentStatus::Running => [0.06, 0.08, 0.12, 1.0],
-                AgentStatus::Completed => [0.04, 0.10, 0.08, 1.0],
-                AgentStatus::Failed => [0.12, 0.04, 0.06, 1.0],
-                AgentStatus::Waiting => [0.08, 0.06, 0.10, 1.0],
+                AgentStatus::Running => theme::status_running(),
+                AgentStatus::Completed => theme::status_completed(),
+                AgentStatus::Failed => theme::status_failed(),
+                AgentStatus::Waiting => theme::status_waiting(),
             };
             renderer.fill_rect(agent_rect, bg);
 
@@ -138,24 +138,24 @@ impl View for MultiAgentPanel {
                     width: agent_rect.width - 140.0,
                     height: 4.0,
                 },
-                [0.3, 0.4, 0.5, 1.0],
+                theme::border(),
                 1.0,
             );
 
             // Status indicator
-            let status_text = match agent.status {
-                AgentStatus::Idle => "○",
-                AgentStatus::Running => "◐",
-                AgentStatus::Completed => "✓",
-                AgentStatus::Failed => "✗",
-                AgentStatus::Waiting => "…",
+            let (status_text, status_color) = match agent.status {
+                AgentStatus::Idle => ("○", theme::status_waiting()),
+                AgentStatus::Running => ("◐", theme::status_running()),
+                AgentStatus::Completed => ("✓", theme::status_completed()),
+                AgentStatus::Failed => ("✗", theme::status_failed()),
+                AgentStatus::Waiting => ("…", theme::status_waiting()),
             };
             renderer.draw_text(
                 status_text,
                 agent_rect.x + agent_rect.width - 20.0,
                 agent_rect.y + 24.0,
                 14.0,
-                theme::info(),
+                status_color,
             );
 
             current_y += row_h;
@@ -264,10 +264,10 @@ impl View for PromptChainVisualizer {
             let y = rect.y + 30.0 + i as f32 * 36.0;
 
             let color = match step.status {
-                PromptStatus::Pending => theme::text_muted(),
-                PromptStatus::Running => theme::accent(),
-                PromptStatus::Completed => [0.0, 0.9, 0.4, 1.0],
-                PromptStatus::Failed => [0.9, 0.3, 0.3, 1.0],
+                PromptStatus::Pending => theme::status_waiting(),
+                PromptStatus::Running => theme::status_running(),
+                PromptStatus::Completed => theme::status_completed(),
+                PromptStatus::Failed => theme::status_failed(),
             };
 
             renderer.fill_rounded_rect(
@@ -286,7 +286,7 @@ impl View for PromptChainVisualizer {
                 rect.x + 8.0,
                 y + 9.0,
                 11.0,
-                [0.95, 0.95, 1.0, 1.0],
+                theme::text(),
             );
 
             if step.status == PromptStatus::Completed {
@@ -298,7 +298,7 @@ impl View for PromptChainVisualizer {
                     rect.x + rect.width - 120.0,
                     y + 9.0,
                     9.0,
-                    [0.7, 0.8, 0.9, 1.0],
+                    theme::text_muted(),
                 );
             }
         }
@@ -406,7 +406,7 @@ impl View for MemoryGraphViewer {
                 let y1 = rect.y + rect.height / 2.0;
                 let x2 = rect.x + 50.0 + to_idx as f32 * 60.0;
                 let y2 = y1;
-                renderer.draw_line(x1, y1, x2, y2, [0.3, 0.4, 0.6, edge.strength], 1.5);
+                renderer.draw_line(x1, y1, x2, y2, theme::border(), 1.5);
             }
         }
 
@@ -417,10 +417,10 @@ impl View for MemoryGraphViewer {
             let radius = 15.0 + node.weight * 10.0;
 
             let color = match node.node_type {
-                NodeType::Concept => [0.2, 0.6, 0.9, 1.0],
-                NodeType::Entity => [0.4, 0.8, 0.4, 1.0],
-                NodeType::Relation => [0.9, 0.6, 0.2, 1.0],
-                NodeType::Context => [0.8, 0.4, 0.8, 1.0],
+                NodeType::Concept => theme::node_concept(),
+                NodeType::Entity => theme::node_entity(),
+                NodeType::Relation => theme::node_relation(),
+                NodeType::Context => theme::node_context(),
             };
 
             let node_rect = Rect {
@@ -430,7 +430,7 @@ impl View for MemoryGraphViewer {
                 height: radius * 2.0,
             };
             renderer.fill_ellipse(node_rect, color);
-            renderer.stroke_ellipse(node_rect, [0.9, 0.9, 1.0, 0.8], 2.0);
+            renderer.stroke_ellipse(node_rect, theme::border_strong(), 2.0);
             renderer.draw_text(
                 &node.label,
                 cx - 20.0,
@@ -524,7 +524,7 @@ impl View for TokenStreamViewer {
         for token in &self.tokens {
             let color = match token.token_type {
                 TokenType::Word => theme::text(),
-                TokenType::Punctuation => [0.8, 0.6, 0.2, 1.0],
+                TokenType::Punctuation => theme::warning(),
                 TokenType::Space => theme::text_dim(),
                 TokenType::NewLine => theme::text_dim(),
             };
@@ -619,7 +619,7 @@ impl View for ReasoningTraceInspector {
                 rect.x + 8.0,
                 y + 6.0,
                 11.0,
-                [0.7, 0.8, 1.0, 1.0],
+                theme::text(),
             );
 
             // Confidence bar
@@ -640,7 +640,7 @@ impl View for ReasoningTraceInspector {
                 rect.x + 8.0,
                 y + 42.0,
                 10.0,
-                [0.5, 0.6, 0.7, 1.0],
+                theme::text_muted(),
             );
         }
     }
@@ -731,7 +731,7 @@ impl View for ToolInvocationInspector {
                     height: 34.0,
                 },
                 3.0,
-                [0.06, 0.08, 0.12, 1.0],
+                theme::surface(),
             );
 
             renderer.draw_text(
@@ -739,21 +739,21 @@ impl View for ToolInvocationInspector {
                 rect.x + 10.0,
                 y + 8.0,
                 11.0,
-                [0.8, 0.9, 1.0, 1.0],
+                theme::text(),
             );
             renderer.draw_text(
                 &format!("{}ms", inv.duration_ms as i32),
                 rect.x + rect.width - 50.0,
                 y + 8.0,
                 10.0,
-                [0.5, 0.6, 0.7, 1.0],
+                theme::text_muted(),
             );
             renderer.draw_text(
                 &inv.result_preview,
                 rect.x + 10.0,
                 y + 22.0,
                 9.0,
-                [0.6, 0.7, 0.8, 1.0],
+                theme::text_muted(),
             );
         }
     }
@@ -864,17 +864,17 @@ impl View for AIWorkflowBuilder {
                 let y1 = rect.y + from.position.1;
                 let x2 = rect.x + to.position.0;
                 let y2 = rect.y + to.position.1;
-                renderer.draw_line(x1, y1, x2, y2, [0.4, 0.5, 0.7, 0.8], 2.0);
+                renderer.draw_line(x1, y1, x2, y2, theme::border(), 2.0);
             }
         }
 
         for node in &self.nodes {
             let color = match node.node_type {
-                WorkflowNodeType::Input => [0.0, 0.7, 0.9, 1.0],
-                WorkflowNodeType::Process => [0.4, 0.6, 0.9, 1.0],
-                WorkflowNodeType::Decision => [0.9, 0.7, 0.2, 1.0],
+                WorkflowNodeType::Input => theme::node_concept(),
+                WorkflowNodeType::Process => theme::accent(),
+                WorkflowNodeType::Decision => theme::node_relation(),
                 WorkflowNodeType::Output => theme::success(),
-                WorkflowNodeType::Agent => [0.8, 0.4, 0.9, 1.0],
+                WorkflowNodeType::Agent => theme::node_context(),
             };
 
             let cx = rect.x + node.position.0;
@@ -896,7 +896,7 @@ impl View for AIWorkflowBuilder {
                     width: 80.0,
                     height: 30.0,
                 },
-                [0.9, 0.9, 1.0, 0.8],
+                theme::border_strong(),
                 1.0,
             );
             renderer.draw_text(
@@ -904,7 +904,7 @@ impl View for AIWorkflowBuilder {
                 cx - 35.0,
                 cy - 2.0,
                 10.0,
-                [0.95, 0.95, 1.0, 1.0],
+                theme::text(),
             );
         }
     }
@@ -970,7 +970,7 @@ impl View for AIExecutionDebugger {
             rect.x + 10.0,
             rect.y + 20.0,
             14.0,
-            [0.8, 0.9, 1.0, 1.0],
+            theme::text(),
         );
 
         let y = rect.y + 45.0;
@@ -989,7 +989,7 @@ impl View for AIExecutionDebugger {
                 rect.x + 15.0,
                 y + 15.0,
                 11.0,
-                [0.7, 0.8, 0.9, 1.0],
+                theme::text_muted(),
             );
         }
     }

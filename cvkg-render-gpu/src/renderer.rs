@@ -102,6 +102,23 @@ pub struct SurtrRenderer {
     pub(crate) current_scene: SceneUniforms,
     pub(crate) current_z: f32,
 
+    /// Default background color for the canvas (RGBA).
+    /// Used when the app does not draw its own background.
+    /// Defaults to Deep Void [0.02, 0.02, 0.05, 1.0].
+    pub(crate) default_background_color: [f32; 4],
+
+    /// Whether the app drew any background geometry this frame.
+    /// If false, the renderer clears to default_background_color.
+    pub(crate) app_drew_background: bool,
+
+    /// Whether render_frame() was called this frame.
+    /// Used by end_frame() to auto-flush staging if render_frame() was skipped.
+    pub(crate) frame_rendered: bool,
+
+    /// Current draw order for SVG and other direct draw calls.
+    /// Set by draw_svg_with_order(), used by emit_draw_call().
+    pub(crate) current_draw_order: i32,
+
     // Muspelheim Pipelines (Shared)
     pub(crate) pipeline: wgpu::RenderPipeline,
     /// Specialized opaque/2D material pipeline (modes 0-20 excluding 7,13-15,18,21).
@@ -1632,6 +1649,10 @@ impl SurtrRenderer {
             current_scene,
             background_pipeline,
             current_z: 0.0,
+            default_background_color: [0.02, 0.02, 0.05, 1.0],
+            app_drew_background: false,
+            frame_rendered: false,
+            current_draw_order: 0,
             telemetry: cvkg_core::TelemetryData::default(),
             last_frame_start: std::time::Instant::now(),
             last_redraw_start: std::time::Instant::now(),
@@ -3019,6 +3040,7 @@ impl SurtrRenderer {
                     cvkg_core::DrawMaterial::Opaque
                 },
                 instance_start: (self.instance_data.len() - 1) as u32,
+                draw_order: 0,
             });
         }
 
@@ -3208,6 +3230,7 @@ impl SurtrRenderer {
                 index_count: 0,
                 material,
                 instance_start: (self.instance_data.len() - 1) as u32,
+                draw_order: 0,
             });
         }
 
@@ -3381,6 +3404,52 @@ impl SurtrRenderer {
             }
         };
 
+        // Auto-flush staging belt if render_frame() was not called but geometry was queued.
+        // This ensures apps that forget render_frame() still see their draw calls rendered.
+        if !self.frame_rendered && (!self.vertices.is_empty() || !self.indices.is_empty()) {
+            log::debug!("[GPU] Auto-flushing staging belt in end_frame (render_frame was not called)");
+            let mut staging_encoder =
+                self.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Surtr Auto-Flush Staging Encoder"),
+                    });
+            if !self.vertices.is_empty() {
+                let v_bytes = bytemuck::cast_slice(&self.vertices);
+                self.staging_belt
+                    .write_buffer(
+                        &mut staging_encoder,
+                        &self.vertex_buffer,
+                        0,
+                        wgpu::BufferSize::new(v_bytes.len() as u64).unwrap(),
+                    )
+                    .copy_from_slice(v_bytes);
+            }
+            if !self.indices.is_empty() {
+                let i_bytes = bytemuck::cast_slice(&self.indices);
+                self.staging_belt
+                    .write_buffer(
+                        &mut staging_encoder,
+                        &self.index_buffer,
+                        0,
+                        wgpu::BufferSize::new(i_bytes.len() as u64).unwrap(),
+                    )
+                    .copy_from_slice(i_bytes);
+            }
+            if !self.instance_data.is_empty() {
+                let inst_bytes = bytemuck::cast_slice(&self.instance_data);
+                self.staging_belt
+                    .write_buffer(
+                        &mut staging_encoder,
+                        &self.instance_buffer,
+                        0,
+                        wgpu::BufferSize::new(inst_bytes.len() as u64).unwrap(),
+                    )
+                    .copy_from_slice(inst_bytes);
+            }
+            self.staging_belt.finish();
+            self.staging_command_buffers.push(staging_encoder.finish());
+        }
+
         // ── Build and execute the Kvasir frame graph ─────────────────────────────
         let has_glass = self
             .draw_calls
@@ -3544,11 +3613,22 @@ impl SurtrRenderer {
     /// 2. Glass commands → Material Composite pass (samples blur pyramid)
     /// 3. Overlay commands → Top-Level Foreground pass
     pub fn submit_buckets(&mut self, buckets: &cvkg_compositor::CommandBuckets) {
-        // Scene pass — opaque draw calls
+        // Scene pass — opaque draw calls, sorted by (z_index, draw_order)
         let mut active_offscreens = Vec::new();
         let mut current_target_id = None;
 
-        for cmd in &buckets.scene_commands {
+        // Collect and sort scene commands by (z_index, draw_order) for correct painter's order.
+        let mut sorted_scene: Vec<_> = buckets.scene_commands.iter().collect();
+        sorted_scene.sort_by_key(|cmd| {
+            match cmd {
+                cvkg_compositor::engine::RenderCommand::Draw(routed) => {
+                    (routed.z_index as i64, routed.draw_order as i64)
+                }
+                _ => (0, 0),
+            }
+        });
+
+        for cmd in sorted_scene {
             match cmd {
                 cvkg_compositor::engine::RenderCommand::Draw(routed) => {
                     self.set_material(cvkg_core::DrawMaterial::Opaque);
@@ -3589,7 +3669,14 @@ impl SurtrRenderer {
         self.active_offscreens = active_offscreens;
 
         // Glass pass — glassmorphism draw calls sampling blur pyramid
-        for cmd in &buckets.glass_commands {
+        let mut sorted_glass: Vec<_> = buckets.glass_commands.iter().collect();
+        sorted_glass.sort_by_key(|cmd| match cmd {
+            cvkg_compositor::engine::RenderCommand::Draw(routed) => {
+                (routed.z_index as i64, routed.draw_order as i64)
+            }
+            _ => (0, 0),
+        });
+        for cmd in sorted_glass {
             if let cvkg_compositor::engine::RenderCommand::Draw(routed) = cmd {
                 let core_material = match routed.material {
                     cvkg_compositor::Material::Opaque => cvkg_core::DrawMaterial::Opaque,
@@ -3609,7 +3696,14 @@ impl SurtrRenderer {
         }
 
         // Overlay pass — foreground UI (crisp text, icons, edge lighting)
-        for cmd in &buckets.overlay_commands {
+        let mut sorted_overlay: Vec<_> = buckets.overlay_commands.iter().collect();
+        sorted_overlay.sort_by_key(|cmd| match cmd {
+            cvkg_compositor::engine::RenderCommand::Draw(routed) => {
+                (routed.z_index as i64, routed.draw_order as i64)
+            }
+            _ => (0, 0),
+        });
+        for cmd in sorted_overlay {
             if let cvkg_compositor::engine::RenderCommand::Draw(routed) = cmd {
                 self.set_material(cvkg_core::DrawMaterial::TopUI);
                 self.submit_routed(routed, None);
@@ -3645,6 +3739,7 @@ impl SurtrRenderer {
             material,
             target_id,
             instance_start: cmd.instance_id,
+            draw_order: 0,
         });
     }
 }
@@ -4018,6 +4113,10 @@ impl SurtrRenderer {
     }
 
     pub fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32, animation_time_offset: f32) {
+        self.draw_svg_with_order(name, rect, color, material_id, animation_time_offset, 0);
+    }
+
+    pub fn draw_svg_with_order(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32, animation_time_offset: f32, draw_order: i32) {
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
             y: -10000.0,
@@ -4194,6 +4293,7 @@ impl SurtrRenderer {
         index_count: u32,
         base_vertex: u32,
     ) {
+        let draw_order = renderer.current_draw_order;
         let (translation, scale_transform, rotation, _, _) = renderer.current_transform();
         let current_instance_data = InstanceData {
             translation,
@@ -4220,6 +4320,7 @@ impl SurtrRenderer {
                 index_count,
                 material,
                 instance_start: (renderer.instance_data.len() - 1) as u32,
+                draw_order: 0,
             });
         } else if let Some(call) = renderer.draw_calls.last_mut() {
             call.index_count += index_count;

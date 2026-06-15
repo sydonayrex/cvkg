@@ -2757,6 +2757,11 @@ pub trait Renderer: ElapsedTime + Send {
         // Default no-op implementation; GPU backend overrides
         let _ = (rect, radius, blur_radius);
     }
+    /// Fill a rounded rect with glass material with explicit intensity control.
+    /// `glass_intensity` ranges from 0.0 (solid) to 1.0 (full glass). Default: 1.0.
+    fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
+        let _ = (rect, radius, blur_radius, glass_intensity);
+    }
 
     /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
     /// `n` controls the squareness: 2.0 = rounded rect, 4.0 = classic squircle, higher = more square.
@@ -2957,6 +2962,14 @@ pub trait Renderer: ElapsedTime + Send {
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
     /// Set the desktop scene preset (Aurora, Void, Nebula, Glitch, Yggdrasil).
     fn set_scene(&mut self, _scene: &str) {}
+    /// Set the desktop scene by name. Case-insensitive.
+    /// Supports: "aurora", "void", "nebula", "glitch", "yggdrasil".
+    /// Aliases: "empty", "none", "blank" → Void.
+    fn set_scene_by_name(&mut self, name: &str) {
+        if let Some(preset) = resolve_scene_by_name(name) {
+            self.set_scene_preset(preset);
+        }
+    }
 
     // ── Export & Print ───────────────────────────────────────────────────
     /// Capture the current frame as a PNG byte buffer.
@@ -2973,6 +2986,11 @@ pub trait Renderer: ElapsedTime + Send {
     fn bifrost(&mut self, _rect: Rect, _blur: f32, _saturation: f32, _opacity: f32) {}
     /// Apply a Gungnir (Neon Glow) effect to the specified rect.
     fn gungnir(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
+    /// Soft glow variant — half the intensity of gungnir(). Use for hover highlights.
+    fn gungnir_soft(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
+    /// Set the default background color for the canvas (RGBA).
+    /// Used when the app does not draw its own background.
+    fn set_default_background_color(&mut self, _color: [f32; 4]) {}
     /// Apply a ManiGlow (Lunar Illuminator) effect.
     fn mani_glow(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32) {}
     /// Push a Mjolnir Slice (geometric clipping).
@@ -3054,6 +3072,11 @@ pub trait Renderer: ElapsedTime + Send {
     /// The offset shifts the animation phase, allowing multiple draws of the same
     /// SVG to animate independently. Default delegates to draw_svg (no offset).
     fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, _animation_time_offset: f32) {
+        self.draw_svg(name, rect);
+    }
+    /// Draw a pre-loaded SVG model with explicit draw_order for z-sorting.
+    /// draw_order=200 renders above UI chrome (draw_order=0).
+    fn draw_svg_with_order(&mut self, name: &str, rect: Rect, _draw_order: i32) {
         self.draw_svg(name, rect);
     }
     /// Serialize a pre-loaded SVG model back to SVG XML markup.
@@ -3362,6 +3385,22 @@ pub const SCENE_VOID: u32 = 1;
 pub const SCENE_NEBULA: u32 = 2;
 pub const SCENE_GLITCH: u32 = 3;
 pub const SCENE_YGGDRASIL: u32 = 4;
+
+/// Resolve a scene name string to a scene preset constant.
+/// Case-insensitive. Supports: "aurora", "void", "nebula", "glitch", "yggdrasil".
+/// Also supports common aliases: "empty", "none" → VOID.
+/// Returns None if the name is not recognized.
+pub fn resolve_scene_by_name(name: &str) -> Option<u32> {
+    let normalized = name.to_lowercase().replace(['-', '_', ' ', '.'], "");
+    match normalized.as_str() {
+        "aurora" => Some(SCENE_AURORA),
+        "void" | "empty" | "none" | "blank" => Some(SCENE_VOID),
+        "nebula" => Some(SCENE_NEBULA),
+        "glitch" => Some(SCENE_GLITCH),
+        "yggdrasil" | "worldtree" | "tree" => Some(SCENE_YGGDRASIL),
+        _ => None,
+    }
+}
 
 impl SceneUniforms {
     pub fn new(width: f32, height: f32) -> Self {

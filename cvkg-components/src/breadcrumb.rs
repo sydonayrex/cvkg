@@ -1,4 +1,5 @@
-use crate::{Color, FONT_SM, SPACE_XS};
+use crate::theme;
+use crate::{FONT_SM, SPACE_XS};
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// Breadcrumb item representing a single navigation segment.
@@ -35,8 +36,8 @@ impl BreadcrumbItem {
 pub struct Breadcrumb {
     pub(crate) items: Vec<BreadcrumbItem>,
     pub(crate) separator: String,
-    pub(crate) color: Color,
-    pub(crate) current_color: Color,
+    pub(crate) color: [f32; 4],
+    pub(crate) current_color: [f32; 4],
     pub(crate) font_size: f32,
 }
 
@@ -45,8 +46,8 @@ impl Breadcrumb {
         Self {
             items,
             separator: "/".to_string(),
-            color: Color::GRAY,
-            current_color: Color::WHITE,
+            color: theme::text_muted(),
+            current_color: theme::text(),
             font_size: FONT_SM,
         }
     }
@@ -56,13 +57,23 @@ impl Breadcrumb {
         self
     }
 
-    pub fn color(mut self, color: Color) -> Self {
+    pub fn color(mut self, color: [f32; 4]) -> Self {
         self.color = color;
         self
     }
 
-    pub fn current_color(mut self, color: Color) -> Self {
+    pub fn current_color(mut self, color: [f32; 4]) -> Self {
         self.current_color = color;
+        self
+    }
+
+    pub fn theme_color(mut self, key: &str) -> Self {
+        self.color = theme::color(key);
+        self
+    }
+
+    pub fn theme_current_color(mut self, key: &str) -> Self {
+        self.current_color = theme::color(key);
         self
     }
 
@@ -91,8 +102,7 @@ impl View for Breadcrumb {
                 self.color
             };
 
-            let label_color = color.as_array();
-            renderer.draw_text(&item.label, x, y, self.font_size, label_color);
+            renderer.draw_text(&item.label, x, y, self.font_size, color);
 
             // Measure text width for positioning
             let (w, _) = renderer.measure_text(&item.label, self.font_size);
@@ -100,8 +110,7 @@ impl View for Breadcrumb {
 
             // Draw separator between items
             if !is_last {
-                let sep_color = self.color.as_array();
-                renderer.draw_text(&self.separator, x, y, self.font_size, sep_color);
+                renderer.draw_text(&self.separator, x, y, self.font_size, self.color);
                 let (sep_w, _) = renderer.measure_text(&self.separator, self.font_size);
                 x += sep_w + SPACE_XS;
             }

@@ -229,6 +229,9 @@ pub trait RendererBerserker {
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
     fn set_scene(&mut self, _scene: &str) {}
     fn set_scene_preset(&mut self, _preset: u32) {}
+    /// Set the default background color for the canvas (RGBA).
+    /// Used when the app does not draw its own background.
+    fn set_default_background_color(&mut self, _color: [f32; 4]) {}
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -251,6 +254,8 @@ pub trait RendererExport {
 pub trait RendererCyberpunk {
     fn bifrost(&mut self, _rect: Rect, _blur: f32, _saturation: f32, _opacity: f32) {}
     fn gungnir(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
+    /// Soft glow variant — half the intensity of gungnir(). Use for hover highlights.
+    fn gungnir_soft(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
     fn mani_glow(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32) {}
     fn push_mjolnir_slice(&mut self, _angle: f32, _offset: f32) {}
     fn pop_mjolnir_slice(&mut self) {}

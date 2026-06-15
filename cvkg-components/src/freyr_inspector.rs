@@ -76,14 +76,14 @@ impl View for FreyrInspector {
                 width: rect.width,
                 height: 28.0,
             },
-            [0.08, 0.06, 0.12, 1.0],
+            theme::inspector_bg(),
         );
         renderer.draw_text(
             &self.title,
             rect.x + 10.0,
             rect.y + 9.0,
             13.0,
-            [0.9, 0.7, 1.0, 1.0],
+            theme::inspector_accent(),
         );
 
         let row_h = 28.0;
@@ -96,13 +96,13 @@ impl View for FreyrInspector {
                 width: rect.width,
                 height: row_h,
             };
-            renderer.fill_rect(prop_rect, [0.06, 0.06, 0.08, 1.0]);
+            renderer.fill_rect(prop_rect, theme::inspector_border());
             renderer.draw_text(
                 &prop.name,
                 prop_rect.x + 8.0,
                 prop_rect.y + 8.0,
                 11.0,
-                [0.8, 0.9, 1.0, 1.0],
+                theme::text(),
             );
 
             let value_str = match &prop.value {

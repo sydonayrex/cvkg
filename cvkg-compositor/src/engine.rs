@@ -27,6 +27,10 @@ pub struct RoutedDrawCommand {
     pub source_layer: LayerId,
     /// Z-order index for sorting within the same material pass.
     pub z_index: u32,
+    /// Explicit draw order for fine-grained sorting within the same z-pass.
+    /// Higher values render later (on top). Default: 0.
+    /// Convention: 0 = background, 100 = UI chrome, 200 = SVG content, 300 = overlays.
+    pub draw_order: i32,
 }
 
 /// A command emitted by the compositor to control the GPU rendering pipeline.
@@ -306,6 +310,7 @@ impl CompositorEngine {
                 material: material.clone(),
                 source_layer: layer_id,
                 z_index: *z_counter,
+                draw_order: 0,
             }));
             *z_counter += 1;
         }

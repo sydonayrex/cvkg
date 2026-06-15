@@ -83,8 +83,8 @@ impl Input {
     fn bg_color(&self) -> [f32; 4] {
         match self.input_state {
             InputState::Disabled => theme::surface(),
-            InputState::Error => [0.15, 0.05, 0.05, 1.0],
-            InputState::Success => [0.05, 0.15, 0.05, 1.0],
+            InputState::Error => theme::error_color(),
+            InputState::Success => theme::success(),
             _ => theme::surface_elevated(),
         }
     }
@@ -171,7 +171,7 @@ impl View for Input {
         let text_color = if self.text.is_empty() {
             theme::text_muted()
         } else if is_disabled {
-            theme::text_dim()
+            theme::disabled_text()
         } else {
             theme::text()
         };
@@ -199,12 +199,7 @@ impl View for Input {
             renderer.fill_rounded_rect(
                 sel_rect,
                 2.0,
-                [
-                    theme::accent()[0],
-                    theme::accent()[1],
-                    theme::accent()[2],
-                    0.3,
-                ],
+                theme::list_item_selected(),
             );
         }
 

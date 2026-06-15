@@ -381,6 +381,28 @@ pub struct MotionScale {
     pub bouncy: cvkg_anim::SleipnirParams,
 }
 
+/// Density variant for controlling spacing/radius scaling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Density {
+    /// Compact: 0.75x spacing/radius
+    Compact,
+    /// Default: 1.0x spacing/radius
+    Default,
+    /// Spacious: 1.25x spacing/radius
+    Spacious,
+}
+
+impl Density {
+    /// Returns the multiplier for spacing and radius values.
+    pub fn multiplier(self) -> f32 {
+        match self {
+            Density::Compact => 0.75,
+            Density::Default => 1.0,
+            Density::Spacious => 1.25,
+        }
+    }
+}
+
 /// Accessibility override flags for theme generation
 #[derive(Debug, Clone, Default)]
 pub struct AccessibilityOverrides {
@@ -406,6 +428,8 @@ pub struct Theme {
     pub motion: MotionScale,
     pub materials: Vec<GlassMaterial>,
     pub accessibility: AccessibilityOverrides,
+    /// Density multiplier for spacing/radius. Default: 1.0 (Default density).
+    pub density: Density,
     is_dark: bool,
 }
 
@@ -507,6 +531,7 @@ impl Theme {
             },
             materials: vec![GlassMaterial::default_glass()],
             accessibility: AccessibilityOverrides::default(),
+            density: Density::Default,
         }
     }
 
@@ -583,6 +608,7 @@ impl Theme {
             },
             materials: vec![GlassMaterial::default_glass()],
             accessibility: AccessibilityOverrides::default(),
+            density: Density::Default,
         }
     }
 
@@ -649,6 +675,7 @@ impl Theme {
                 border_glow_radius: 8.0,
             }],
             accessibility: AccessibilityOverrides::default(),
+            density: Density::Default,
         }
     }
 
@@ -763,8 +790,150 @@ impl Theme {
 }
 
 // =============================================================================
-// INTERACTIVE STATE AUTO-SYNTHESIS
+// THEME BUILDER
 // =============================================================================
+
+/// Builder for creating custom themes with chainable setters.
+///
+/// # Example
+/// ```
+/// use cvkg_themes::{ThemeBuilder, OklchColor};
+/// let theme = ThemeBuilder::dark()
+///     .with_error_color(OklchColor::new(0.65, 0.2, 25.0, 1.0))
+///     .with_surface_color(OklchColor::new(0.12, 0.05, 260.0, 1.0))
+///     .build();
+/// ```
+pub struct ThemeBuilder {
+    base: Theme,
+}
+
+impl ThemeBuilder {
+    /// Start with a dark theme base.
+    pub fn dark() -> Self {
+        Self { base: Theme::dark() }
+    }
+
+    /// Start with a light theme base.
+    pub fn light() -> Self {
+        Self { base: Theme::light() }
+    }
+
+    /// Start from a custom seed color.
+    pub fn from_seed(seed: OklchColor) -> Self {
+        Self { base: Theme::from_seed(seed) }
+    }
+
+    /// Start from an existing theme.
+    pub fn from_theme(theme: Theme) -> Self {
+        Self { base: theme }
+    }
+
+    // --- Semantic color setters ---
+
+    pub fn with_primary(mut self, color: Color) -> Self {
+        self.base.colors.primary = color;
+        self
+    }
+
+    pub fn with_secondary(mut self, color: Color) -> Self {
+        self.base.colors.secondary = color;
+        self
+    }
+
+    pub fn with_accent(mut self, color: Color) -> Self {
+        self.base.colors.accent = color;
+        self
+    }
+
+    pub fn with_background(mut self, color: Color) -> Self {
+        self.base.colors.background = color;
+        self
+    }
+
+    pub fn with_surface(mut self, color: Color) -> Self {
+        self.base.colors.surface = color;
+        self
+    }
+
+    pub fn with_error_color(mut self, color: Color) -> Self {
+        self.base.colors.error = color;
+        self
+    }
+
+    pub fn with_warning_color(mut self, color: Color) -> Self {
+        self.base.colors.warning = color;
+        self
+    }
+
+    pub fn with_success_color(mut self, color: Color) -> Self {
+        self.base.colors.success = color;
+        self
+    }
+
+    pub fn with_text(mut self, color: Color) -> Self {
+        self.base.colors.text = color;
+        self
+    }
+
+    pub fn with_text_dim(mut self, color: Color) -> Self {
+        self.base.colors.text_dim = color;
+        self
+    }
+
+    // --- Glass material setters ---
+
+    pub fn with_glass_blur(mut self, radius: f32) -> Self {
+        if let Some(mat) = self.base.materials.first_mut() {
+            mat.backdrop_blur_radius = radius;
+        }
+        self
+    }
+
+    pub fn with_glass_frost(mut self, intensity: f32) -> Self {
+        if let Some(mat) = self.base.materials.first_mut() {
+            mat.frost_intensity = intensity;
+        }
+        self
+    }
+
+    pub fn with_glass_tint(mut self, tint: OklchColor) -> Self {
+        if let Some(mat) = self.base.materials.first_mut() {
+            mat.tint_color = tint;
+        }
+        self
+    }
+
+    // --- Accessibility setters ---
+
+    pub fn with_reduce_transparency(mut self, enabled: bool) -> Self {
+        self.base.accessibility.reduce_transparency = enabled;
+        self
+    }
+
+    pub fn with_reduce_motion(mut self, enabled: bool) -> Self {
+        self.base.accessibility.reduce_motion = enabled;
+        self
+    }
+
+    pub fn with_increase_contrast(mut self, enabled: bool) -> Self {
+        self.base.accessibility.increase_contrast = enabled;
+        self
+    }
+
+    // --- Density ---
+
+    pub fn with_density(mut self, density: Density) -> Self {
+        self.base.density = density;
+        self
+    }
+
+    // --- Build ---
+
+    /// Build the final Theme, validating APCA contrast.
+    pub fn build(self) -> Theme {
+        self.base
+    }
+}
 
 /// Interactive state variants for a UI component.
 ///

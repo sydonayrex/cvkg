@@ -75,7 +75,7 @@ impl View for Checkbox {
         };
 
         renderer.fill_rounded_rect(box_rect, 3.0, bg);
-        renderer.stroke_rect(box_rect, theme::text_dim(), 1.0);
+        renderer.stroke_rect(box_rect, theme::border(), 1.0);
 
         match self.state {
             CheckboxState::Checked => {

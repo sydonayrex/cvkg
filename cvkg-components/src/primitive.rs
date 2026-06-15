@@ -11,17 +11,18 @@ pub struct Text {
     pub(crate) content: String,
     pub(crate) font_size: f32,
     pub(crate) font_weight: FontWeight,
-    pub(crate) color: Color,
+    pub(crate) color: [f32; 4],
 }
 
 impl Text {
     /// Create a new Text component with the given content.
+    /// Default color is theme::text() (adaptive to light/dark mode).
     pub fn new(content: impl Into<String>) -> Self {
         Self {
             content: content.into(),
             font_size: 14.0,
             font_weight: FontWeight::Regular,
-            color: Color::WHITE,
+            color: theme::text(),
         }
     }
 
@@ -30,10 +31,16 @@ impl Text {
         self
     }
 
-    pub fn color(mut self, color: Color) -> Self {
+    pub fn color(mut self, color: [f32; 4]) -> Self {
         self.color = color;
         self
     }
+
+    pub fn theme_color(mut self, key: &str) -> Self {
+        self.color = theme::color(key);
+        self
+    }
+
     pub fn font_weight(mut self, weight: FontWeight) -> Self {
         self.font_weight = weight;
         self
@@ -55,12 +62,11 @@ impl View for Text {
         if let FontWeight::Bold = self.font_weight {
             style = style.with_weight(700);
         }
-        let clr = self.color.as_array();
         style.color = [
-            (clr[0] * 255.0) as u8,
-            (clr[1] * 255.0) as u8,
-            (clr[2] * 255.0) as u8,
-            (clr[3] * 255.0) as u8,
+            (self.color[0] * 255.0) as u8,
+            (self.color[1] * 255.0) as u8,
+            (self.color[2] * 255.0) as u8,
+            (self.color[3] * 255.0) as u8,
         ];
         let span = runic::TextSpan::new(&self.content, style);
         if let Some(shaped) = renderer.shape_rich_text(
@@ -71,7 +77,7 @@ impl View for Text {
         ) {
             renderer.draw_shaped_text(&shaped, rect.x, rect.y);
         } else {
-            renderer.draw_text(&self.content, rect.x, rect.y, self.font_size, clr);
+            renderer.draw_text(&self.content, rect.x, rect.y, self.font_size, self.color);
         }
     }
 
@@ -80,7 +86,7 @@ impl View for Text {
         if let FontWeight::Bold = self.font_weight {
             style = style.with_weight(700);
         }
-        let clr = self.color.as_array();
+        let clr = self.color;
         style.color = [
             (clr[0] * 255.0) as u8,
             (clr[1] * 255.0) as u8,
@@ -139,15 +145,25 @@ impl LayoutView for Text {
 pub struct Divider {
     pub(crate) orientation: Orientation,
     pub(crate) width: f32,
-    pub(crate) color: Color,
+    pub(crate) color: [f32; 4],
 }
 
 impl Divider {
+    /// Create a horizontal divider. Default color is theme::border() (adaptive).
     pub fn horizontal() -> Self {
         Self {
             orientation: Orientation::Horizontal,
             width: 1.0,
-            color: Color::BLACK,
+            color: theme::border(),
+        }
+    }
+
+    /// Create a vertical divider. Default color is theme::border() (adaptive).
+    pub fn vertical() -> Self {
+        Self {
+            orientation: Orientation::Vertical,
+            width: 1.0,
+            color: theme::border(),
         }
     }
 }
@@ -167,7 +183,7 @@ impl View for Divider {
                     width: rect.width,
                     height: self.width,
                 },
-                self.color.as_array(),
+                self.color,
             ),
             Orientation::Vertical => (
                 Rect {
@@ -176,7 +192,7 @@ impl View for Divider {
                     width: self.width,
                     height: rect.height,
                 },
-                self.color.as_array(),
+                self.color,
             ),
         };
         renderer.fill_rect(line_rect, color);
@@ -300,19 +316,25 @@ pub enum ShapeType {
 #[derive(Clone)]
 pub struct Shape {
     pub(crate) shape_type: ShapeType,
-    pub(crate) fill: Color,
+    pub(crate) fill: [f32; 4],
 }
 
 impl Shape {
+    /// Create a rounded rect shape. Default fill is theme::surface_elevated() (adaptive).
     pub fn rounded_rect(corner_radius: f32) -> Self {
         Self {
             shape_type: ShapeType::RoundedRectangle { corner_radius },
-            fill: Color::BLACK,
+            fill: theme::surface_elevated(),
         }
     }
 
-    pub fn fill(mut self, color: Color) -> Self {
+    pub fn fill(mut self, color: [f32; 4]) -> Self {
         self.fill = color;
+        self
+    }
+
+    pub fn theme_fill(mut self, key: &str) -> Self {
+        self.fill = theme::color(key);
         self
     }
 }
@@ -325,12 +347,12 @@ impl View for Shape {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         match self.shape_type {
-            ShapeType::Rectangle => renderer.fill_rect(rect, self.fill.as_array()),
+            ShapeType::Rectangle => renderer.fill_rect(rect, self.fill),
             ShapeType::RoundedRectangle { corner_radius } => {
-                renderer.fill_rounded_rect(rect, corner_radius, self.fill.as_array());
+                renderer.fill_rounded_rect(rect, corner_radius, self.fill);
             }
             ShapeType::Circle => {
-                renderer.fill_ellipse(rect, self.fill.as_array());
+                renderer.fill_ellipse(rect, self.fill);
             }
         }
     }
@@ -400,6 +422,7 @@ pub enum BadgeVariant {
     Outline,
     Success,
     Warning,
+    Info,
 }
 
 /// Size variants controlling badge height and padding.
@@ -452,6 +475,7 @@ impl BadgeVariant {
             BadgeVariant::Outline => (theme::button_ghost_bg(), theme::accent()),
             BadgeVariant::Success => (theme::success(), theme::text()),
             BadgeVariant::Warning => (theme::warning(), theme::text()),
+            BadgeVariant::Info => (theme::info(), theme::text()),
         }
     }
 }
@@ -656,10 +680,17 @@ impl View for Skeleton {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        // Shimmer effect simulation
+        // Shimmer effect simulation using theme tokens
         let time = renderer.elapsed_time();
-        let shimmer = (time * 2.0).sin() * 0.1 + 0.2;
-        let color = [shimmer, shimmer, shimmer + 0.05, 1.0];
+        let shimmer = (time * 2.0).sin() * 0.1;
+        let base = theme::skeleton_base();
+        let highlight = theme::skeleton_highlight();
+        let color = [
+            base[0] + shimmer + (highlight[0] - base[0]) * 0.5,
+            base[1] + shimmer + (highlight[1] - base[1]) * 0.5,
+            base[2] + shimmer + (highlight[2] - base[2]) * 0.5,
+            1.0,
+        ];
 
         if self.rounded {
             renderer.fill_rounded_rect(rect, 4.0, color);

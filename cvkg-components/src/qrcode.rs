@@ -2,6 +2,7 @@
 //!
 //! Renders standard finder patterns and payload matrices without external dependencies.
 
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -72,13 +73,13 @@ impl View for QRCode {
                     let is_center = local_r >= 2 && local_r <= 4 && local_c >= 2 && local_c <= 4;
 
                     if is_border || is_center {
-                        renderer.fill_rect(cell_rect, [0.0, 0.0, 0.0, 1.0]);
+                        renderer.fill_rect(cell_rect, theme::qr_dark());
                     }
                 } else {
                     // Generate pseudo-random matrix cells based on payload hash
                     hash_val = hash_val.rotate_left(1);
                     if hash_val & 1 == 1 {
-                        renderer.fill_rect(cell_rect, [0.0, 0.0, 0.0, 1.0]);
+                        renderer.fill_rect(cell_rect, theme::qr_dark());
                     }
                 }
             }

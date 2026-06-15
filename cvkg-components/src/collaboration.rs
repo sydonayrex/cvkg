@@ -74,7 +74,7 @@ impl View for CollaborationEngine {
             rect.x + 8.0,
             rect.y + 12.0,
             14.0,
-            [0.8, 0.9, 1.0, 1.0],
+            theme::text(),
         );
 
         // Participants list
@@ -89,9 +89,9 @@ impl View for CollaborationEngine {
             };
 
             let status_color = match p.status {
-                ParticipantStatus::Online => theme::success(),
-                ParticipantStatus::Away => [0.8, 0.6, 0.0, 1.0],
-                ParticipantStatus::Offline => theme::text_dim(),
+                ParticipantStatus::Online => theme::collab_online(),
+                ParticipantStatus::Away => theme::collab_away(),
+                ParticipantStatus::Offline => theme::collab_offline(),
             };
 
             let status_rect = Rect {
@@ -117,7 +117,7 @@ impl View for CollaborationEngine {
                     part_rect.x + 28.0,
                     part_rect.y + 28.0,
                     10.0,
-                    [0.5, 0.6, 0.7, 1.0],
+                    theme::text_muted(),
                 );
             }
             current_y += item_h;

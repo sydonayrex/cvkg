@@ -131,9 +131,7 @@ fn test_alpha_blending() {
 }
 
 /// Test: Glass rendering pipeline produces visible output.
-/// NOTE: fill_glass_rect is currently broken — it causes the entire pipeline
-/// to produce black output. This test uses fill_rect as a placeholder until
-/// the glass pipeline is fixed.
+/// Previously broken (black output), now fixed in v0.2.13.
 #[test]
 fn test_glass_pipeline_renders() {
     let width: u32 = 256;

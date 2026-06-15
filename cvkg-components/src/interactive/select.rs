@@ -62,7 +62,7 @@ impl<V: Clone + View> View for Select<V> {
 
         // Main select box
         let border_color = if is_open {
-            [0.0, 0.8, 1.0, 0.8]
+            theme::input_border_focus()
         } else {
             theme::text_dim()
         };
@@ -113,8 +113,8 @@ impl<V: Clone + View> View for Select<V> {
 
             renderer.set_z_index(100.0);
             renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
-            renderer.fill_rounded_rect(popover_rect, RADIUS_MD, [0.05, 0.05, 0.1, 0.95]);
-            renderer.stroke_rect(popover_rect, [0.0, 1.0, 1.0, 0.5], 1.0);
+            renderer.fill_rounded_rect(popover_rect, RADIUS_MD, theme::surface_overlay());
+            renderer.stroke_rect(popover_rect, theme::input_border_focus(), 1.0);
 
             // Read hover index from system state
             let hover_idx = cvkg_core::load_system_state()
@@ -134,9 +134,9 @@ impl<V: Clone + View> View for Select<V> {
 
                 // Selected highlight
                 if self.selected_index == Some(i) {
-                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, [0.0, 0.5, 0.8, 0.3]);
+                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::list_item_selected());
                 } else if is_hovered {
-                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, [0.15, 0.15, 0.2, 0.5]);
+                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::list_item_hover());
                 }
 
                 renderer.draw_text(
@@ -363,8 +363,8 @@ impl View for Dropdown {
             // Z-Index boost for popover
             renderer.set_z_index(100.0);
             renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
-            renderer.fill_rounded_rect(popover_rect, 4.0, [0.05, 0.05, 0.1, 0.95]);
-            renderer.stroke_rect(popover_rect, [0.0, 1.0, 1.0, 0.5], 1.0);
+            renderer.fill_rounded_rect(popover_rect, 4.0, theme::surface_overlay());
+            renderer.stroke_rect(popover_rect, theme::input_border_focus(), 1.0);
 
             for (i, opt) in self.options.iter().enumerate() {
                 let item_rect = Rect {
@@ -375,7 +375,7 @@ impl View for Dropdown {
                 };
 
                 if i == self.selection {
-                    renderer.fill_rect(item_rect, [0.0, 0.5, 0.8, 0.3]);
+                    renderer.fill_rect(item_rect, theme::list_item_selected());
                 }
 
                 renderer.draw_text(
@@ -611,7 +611,7 @@ impl View for ColorPicker {
             height: rect.height - 10.0,
         };
         renderer.fill_rounded_rect(preview_rect, 2.0, self.color.as_array());
-        renderer.stroke_rect(preview_rect, [1.0, 1.0, 1.0, 0.3], 1.0);
+        renderer.stroke_rect(preview_rect, theme::border(), 1.0);
 
         // Color grid (4 colors for demo)
         let colors = [

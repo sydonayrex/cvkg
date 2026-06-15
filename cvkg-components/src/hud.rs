@@ -72,7 +72,7 @@ impl View for Vegvísir {
                     height: 60.0,
                 },
                 30.0,
-                [0.0, 0.5, 0.8, 0.8],
+                theme::accent(),
             );
 
             renderer.draw_text(&item.label, x - 20.0, y + 5.0, 10.0, theme::text());
@@ -121,7 +121,7 @@ impl TacticalGauge {
         Self {
             label: label.to_string(),
             value: value.clamp(0.0, 1.0),
-            color: [1.0, 0.84, 0.0, 0.9], // Viking Gold
+            color: theme::accent(),
             warning_level: 0.7,
             critical_level: 0.9,
         }
@@ -154,7 +154,7 @@ impl View for TacticalGauge {
             rect.x,
             rect.y - 5.0,
             10.0,
-            [1.0, 1.0, 1.0, 0.8],
+            theme::text(),
         );
 
         // 2. Background Track
@@ -165,15 +165,15 @@ impl View for TacticalGauge {
                 width: rect.width,
                 height: 4.0,
             },
-            [0.1, 0.1, 0.15, 0.5],
+            theme::surface_elevated(),
         );
 
         // 3. Fill
         let mut color = self.color;
         if self.value >= self.critical_level {
-            color = [1.0, 0.2, 0.2, 0.9]; // Critical Red
+            color = theme::error_color();
         } else if self.value >= self.warning_level {
-            color = [1.0, 0.5, 0.0, 0.9]; // Warning Orange
+            color = theme::warning();
         }
 
         renderer.fill_rect(
@@ -254,7 +254,7 @@ impl View for GjallarAlert {
         // 1. Mimir's Refraction (Glass Depth)
         // Simulate refractive thickness by layering bifrost with slight offsets
         renderer.bifrost(rect, 15.0, 1.5, 0.95);
-        renderer.fill_rounded_rect(rect, 4.0, [0.05, 0.05, 0.08, 0.8]);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface_elevated());
 
         // Secondary internal refraction line
         let inner_rect = Rect {
@@ -308,7 +308,7 @@ impl View for GjallarAlert {
             rect.x + 12.0,
             rect.y + 28.0,
             12.0,
-            [1.0, 1.0, 1.0, 0.8],
+            theme::text(),
         );
 
         renderer.pop_vnode();

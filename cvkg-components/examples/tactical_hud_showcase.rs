@@ -11,7 +11,7 @@ fn tactical_hud_showcase() -> impl View {
                 .header(
                     Text::new("Tactical Command Center")
                         .font_size(24.0)
-                        .color(Color::CYAN)
+                        .color([0.0, 1.0, 1.0, 1.0])
                         .erase(),
                 )
                 .content(

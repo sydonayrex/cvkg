@@ -21,20 +21,6 @@ use cvkg_core::{
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Color helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-/// Convert a `[u8; 4]` RGBA color to `[f32; 4]`.
-fn c(color: [u8; 4]) -> [f32; 4] {
-    [
-        color[0] as f32 / 255.0,
-        color[1] as f32 / 255.0,
-        color[2] as f32 / 255.0,
-        color[3] as f32 / 255.0,
-    ]
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // Node Types
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -66,16 +52,16 @@ impl OrchestratorNodeType {
     }
 
     pub fn color(&self) -> [f32; 4] {
-        c(match self {
-            Self::Agent => [0x4C, 0xC9, 0xF0, 0xFF],
-            Self::Conditional => [0xFF, 0xAB, 0x40, 0xFF],
-            Self::Loop => [0xAB, 0x47, 0xBC, 0xFF],
-            Self::Parallel => [0x66, 0xBB, 0x6A, 0xFF],
-            Self::Webhook => [0xEC, 0x40, 0x7A, 0xFF],
-            Self::Schedule => [0xFF, 0xEE, 0x58, 0xFF],
-            Self::DataSource => [0x78, 0x90, 0x9C, 0xFF],
-            Self::Sink => [0x8D, 0x6E, 0x63, 0xFF],
-        })
+        match self {
+            Self::Agent => theme::node_concept(),
+            Self::Conditional => theme::node_relation(),
+            Self::Loop => theme::node_context(),
+            Self::Parallel => theme::node_entity(),
+            Self::Webhook => theme::secondary(),
+            Self::Schedule => theme::warning(),
+            Self::DataSource => theme::text_muted(),
+            Self::Sink => theme::text_muted(),
+        }
     }
 
     pub fn icon(&self) -> &'static str {
@@ -124,16 +110,16 @@ impl NodeExecutionStatus {
     }
 
     pub fn color(&self) -> [f32; 4] {
-        c(match self {
-            Self::Pending => [0x90, 0xA4, 0xAE, 0xFF],
-            Self::Running => [0x42, 0xA5, 0xF5, 0xFF],
-            Self::Completed => [0x4C, 0xAF, 0x50, 0xFF],
-            Self::Failed => [0xF4, 0x43, 0x36, 0xFF],
-            Self::Skipped => [0x78, 0x90, 0x9C, 0xFF],
-            Self::Retrying(_) => [0xFF, 0x98, 0x00, 0xFF],
-            Self::TimedOut => [0xFF, 0x57, 0x22, 0xFF],
-            Self::Cancelled => [0x61, 0x61, 0x61, 0xFF],
-        })
+        match self {
+            Self::Pending => theme::status_waiting(),
+            Self::Running => theme::status_running(),
+            Self::Completed => theme::status_completed(),
+            Self::Failed => theme::status_failed(),
+            Self::Skipped => theme::text_muted(),
+            Self::Retrying(_) => theme::warning(),
+            Self::TimedOut => theme::error_color(),
+            Self::Cancelled => theme::disabled(),
+        }
     }
 
     pub fn is_terminal(&self) -> bool {
@@ -441,12 +427,12 @@ impl LogLevel {
     }
 
     pub fn color(&self) -> [f32; 4] {
-        c(match self {
-            Self::Debug => [0x90, 0xA4, 0xAE, 0xFF],
-            Self::Info => [0x42, 0xA5, 0xF5, 0xFF],
-            Self::Warn => [0xFF, 0x98, 0x00, 0xFF],
-            Self::Error => [0xF4, 0x43, 0x36, 0xFF],
-        })
+        match self {
+            Self::Debug => theme::text_muted(),
+            Self::Info => theme::info(),
+            Self::Warn => theme::warning(),
+            Self::Error => theme::error_color(),
+        }
     }
 }
 
@@ -552,13 +538,13 @@ impl RunStatus {
     }
 
     pub fn color(&self) -> [f32; 4] {
-        c(match self {
-            Self::Pending => [0x90, 0xA4, 0xAE, 0xFF],
-            Self::Running => [0x42, 0xA5, 0xF5, 0xFF],
-            Self::Completed => [0x4C, 0xAF, 0x50, 0xFF],
-            Self::Failed => [0xF4, 0x43, 0x36, 0xFF],
-            Self::Cancelled => [0x61, 0x61, 0x61, 0xFF],
-        })
+        match self {
+            Self::Pending => theme::status_waiting(),
+            Self::Running => theme::status_running(),
+            Self::Completed => theme::status_completed(),
+            Self::Failed => theme::status_failed(),
+            Self::Cancelled => theme::text_muted(),
+        }
     }
 }
 
@@ -1244,7 +1230,7 @@ impl View for MultiAgentOrchestrator {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // ── Background ──────────────────────────────────────────────────
-        renderer.fill_rect(rect, [0.04, 0.03, 0.06, 1.0]);
+        renderer.fill_rect(rect, theme::surface());
 
         // ── Layout: graph canvas (left) + side panels (right) ──────────
         let log_panel_w = if self.state.show_log_panel {
@@ -1480,7 +1466,7 @@ impl MultiAgentOrchestrator {
     /// Render the main graph canvas with nodes and edges.
     fn render_graph_canvas(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Background
-        renderer.fill_rect(rect, [0.05, 0.04, 0.08, 1.0]);
+        renderer.fill_rect(rect, theme::editor_bg());
 
         // Grid
         self.render_grid(renderer, rect);
@@ -1512,7 +1498,7 @@ impl MultiAgentOrchestrator {
         let grid_spacing = 40.0 * self.state.viewport_zoom;
         let offset_x = self.state.viewport_offset.0 % grid_spacing;
         let offset_y = self.state.viewport_offset.1 % grid_spacing;
-        let grid_color = [0.08, 0.07, 0.12, 1.0];
+        let grid_color = theme::editor_grid();
 
         let mut x = rect.x + offset_x;
         while x < rect.x + rect.width {
@@ -1954,7 +1940,7 @@ impl MultiAgentOrchestrator {
                     height: bar_h,
                 },
                 3.0,
-                [0.1, 0.08, 0.15, 1.0],
+                theme::surface(),
             );
             renderer.fill_rounded_rect(
                 Rect {
@@ -2002,7 +1988,7 @@ impl MultiAgentOrchestrator {
                 width: rect.width,
                 height: header_h,
             },
-            [0.08, 0.06, 0.12, 1.0],
+            theme::surface_elevated(),
         );
         renderer.draw_text(
             "Execution Log",
@@ -2083,7 +2069,7 @@ impl MultiAgentOrchestrator {
                 width: rect.width,
                 height: header_h,
             },
-            [0.08, 0.06, 0.12, 1.0],
+            theme::surface_elevated(),
         );
         renderer.draw_text(
             "Metrics",
@@ -2853,7 +2839,7 @@ impl MultiAgentOrchestrator {
     fn render_output_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
         if let Some(sel) = &state.selected_node {
             if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
@@ -2878,7 +2864,7 @@ impl MultiAgentOrchestrator {
     fn render_message_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text("Agent Messages", x + 12.0, y + 8.0, 14.0, theme::text());
         let mut cy = y + 30.0;
         for msg in state.message_log.iter().rev().take(20) {
@@ -2905,7 +2891,7 @@ impl MultiAgentOrchestrator {
     fn render_validation_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.validation_errors.is_empty() {
             renderer.draw_text(
@@ -2932,7 +2918,7 @@ impl MultiAgentOrchestrator {
     fn render_skills_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Skills Configuration",
             x + 12.0,
@@ -2966,7 +2952,7 @@ impl MultiAgentOrchestrator {
     fn render_webhook_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Webhook Configuration",
             x + 12.0,
@@ -3005,7 +2991,7 @@ impl MultiAgentOrchestrator {
     fn render_schedule_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Schedule Configuration",
             x + 12.0,
@@ -3044,7 +3030,7 @@ impl MultiAgentOrchestrator {
     fn render_recurring_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, [0.3, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
         renderer.draw_text("Recurring Runs", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.recurring_runs.is_empty() {
             renderer.draw_text(
@@ -3072,7 +3058,7 @@ impl MultiAgentOrchestrator {
     fn render_minimap(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), 4.0, [0.06, 0.06, 0.1, 0.9]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 4.0, [0.25, 0.25, 0.4, 1.0], 1.0);
+        renderer.stroke_rounded_rect(r(x, y, w, h), 4.0, theme::border(), 1.0);
         let scale = 0.1;
         for node in &state.nodes {
             let nx = x + node.position.0 * scale;

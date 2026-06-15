@@ -109,6 +109,10 @@ path = "tests/snapshot_tests.rs"
 name = "tactical_tests"
 path = "tests/tactical_tests.rs"
 
+[[test]]
+name = "theming_test"
+path = "tests/theming_test.rs"
+
 [dependencies]
 rfd.workspace = true
 

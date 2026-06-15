@@ -24,7 +24,7 @@ impl View for MainView {
             .child(
                 Text::new("CVKG INTERACTIVE DEMO")
                     .font_size(32.0)
-                    .color(Color::CYAN),
+                    .color([0.0, 1.0, 1.0, 1.0]),
             )
             .child(Input::new("Enter your name").value(&state.name).on_change({
                 let state = self.state.clone();

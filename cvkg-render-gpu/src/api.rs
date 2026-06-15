@@ -57,12 +57,21 @@ impl cvkg_core::Renderer for SurtrRenderer {
     /// Fill a rounded rect with glass material for frosted backdrop effect.
     /// This is the proper way to render glass cards that need macOS Tahoe-style blur.
     /// The blur_radius controls the intensity of the backdrop blur.
+    /// The glass_intensity controls overall glass effect strength (0.0 = solid, 1.0 = full glass).
     /// For Tahoe parity, this registers the rect as a portal region for
     /// per-element isolated backdrop blur when z_index != 0.
     fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32) {
+        self.fill_glass_rect_with_intensity(rect, radius, blur_radius, 1.0);
+    }
+
+    /// Fill a rounded rect with glass material with explicit intensity control.
+    /// `glass_intensity` ranges from 0.0 (solid, no glass effect) to 1.0 (full glass).
+    /// This allows per-component control over glass strength.
+    fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
         // Store blur radius for use during glass pass - the renderer will apply
         // this to the Kawase blur uniform during the backdrop blur phase
-        let blur_strength = (blur_radius / 100.0).clamp(0.0, 4.0);
+        let blur_strength = (blur_radius / 100.0).clamp(0.0, 4.0)
+            * glass_intensity.clamp(0.0, 1.0);
 
         // Register for portal-aware per-element backdrop blur (Tahoe feature)
         // When current_z != 0, this element is in a portal layer
@@ -96,6 +105,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
         );
 
         self.current_draw_material = prev_material;
+    }
+
+    /// Set the default background color for the canvas.
+    /// This color is used when the app does not draw its own background.
+    /// Default: `[0.02, 0.02, 0.05, 1.0]` (Deep Void).
+    fn set_default_background_color(&mut self, color: [f32; 4]) {
+        self.default_background_color = color;
     }
 
     /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
@@ -197,9 +213,9 @@ impl cvkg_core::Renderer for SurtrRenderer {
         let center_y = rect.y + rect.height * 0.5;
         let max_dim = rect.width.max(rect.height) * 0.5 + radius;
 
-        // Draw expanding glow layers
-        for i in 0..8 {
-            let alpha = intensity / (i as f32 + 1.0) * 0.3;
+        // Draw expanding glow layers (reduced from 8 to 4 layers, intensity / 8 for subtler effect)
+        for i in 0..4 {
+            let alpha = intensity / (i as f32 + 1.0) * 0.08;
             let glow_color = [color[0], color[1], color[2], alpha];
             self.fill_rect_with_mode(
                 Rect {
@@ -213,6 +229,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 None,
             );
         }
+    }
+
+    /// Soft glow variant — half the intensity of gungnir().
+    /// Use for hover highlights, non-critical indicators.
+    fn gungnir_soft(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
+        self.gungnir(rect, color, radius, intensity * 0.5);
     }
 
     /// Renders a dynamic glowing hover boundary field around a hit target.
@@ -1166,6 +1188,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 index_count: mesh.indices.len() as u32,
                 material: cvkg_core::DrawMaterial::Opaque,
                 instance_start: (self.instance_data.len() - 1) as u32,
+                draw_order: 0,
             });
         } else {
             self.draw_calls.last_mut().unwrap().index_count += mesh.indices.len() as u32;
@@ -1221,6 +1244,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             index_count: mesh.indices.len() as u32,
             material: cvkg_core::DrawMaterial::Opaque,
             instance_start: (self.instance_data.len() - 1) as u32,
+            draw_order: 0,
         });
     }
 
@@ -1400,6 +1424,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
         SurtrRenderer::draw_svg_with_offset(self, name, rect, None, 0, animation_time_offset);
     }
 
+    /// Draw SVG content with explicit draw_order for z-sorting within the same pass.
+    /// Use draw_order=200 for SVG content that should render above UI chrome (draw_order=0).
+    fn draw_svg_with_order(&mut self, name: &str, rect: Rect, draw_order: i32) {
+        SurtrRenderer::draw_svg_with_order(self, name, rect, None, 0, 0.0, draw_order);
+    }
+
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
         let tree = self
             .svg_trees
@@ -1535,6 +1565,7 @@ impl SurtrRenderer {
                 index_count: buffers.indices.len() as u32,
                 material,
                 instance_start: (self.instance_data.len() - 1) as u32,
+                draw_order: 0,
             });
         } else if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += buffers.indices.len() as u32;
@@ -1545,6 +1576,8 @@ impl SurtrRenderer {
 impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
     fn begin_frame(&mut self) -> wgpu::CommandEncoder {
         cvkg_core::begin_render_phase();
+        self.frame_rendered = false;
+        self.app_drew_background = false;
         let id = self
             .current_window
             .expect("No target window set for frame. Call set_target_window first.");
@@ -1687,6 +1720,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         // Populate telemetry for this frame
         self.telemetry.draw_calls = self.draw_calls.len() as u32;
         self.telemetry.vertices = self.vertices.len() as u32;
+        self.frame_rendered = true;
     }
 
     fn end_frame(&mut self, encoder: wgpu::CommandEncoder) {

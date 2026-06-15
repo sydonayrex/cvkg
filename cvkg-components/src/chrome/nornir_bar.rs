@@ -1,6 +1,7 @@
 //! NornirBar — The application menu bar.
 //! Named after the Nornir (Urd, Verdandi, Skuld), the three fates.
 
+use crate::theme;
 use cvkg_core::{MenuBar, MenuItem, Never, Rect, Renderer, View};
 
 /// The application menu bar. Renders at the top of the window with
@@ -72,10 +73,10 @@ impl View for NornirBar {
 
                     // Highlight if open
                     if self.open_menu == Some(i) {
-                        renderer.fill_rounded_rect(item_rect, 4.0, [1.0, 1.0, 1.0, 0.12]);
+                        renderer.fill_rounded_rect(item_rect, 4.0, theme::hover());
                     }
 
-                    renderer.draw_text(label, x + 8.0, rect.y + 8.0, 13.0, [0.9, 0.9, 0.92, 1.0]);
+                    renderer.draw_text(label, x + 8.0, rect.y + 8.0, 13.0, theme::text());
 
                     // If open, render submenu as floating glass panel
                     if self.open_menu == Some(i) {
@@ -86,7 +87,7 @@ impl View for NornirBar {
                 }
                 MenuItem::Action { label, .. } => {
                     let label_w = renderer.measure_text(label, 13.0).0;
-                    renderer.draw_text(label, x + 8.0, rect.y + 8.0, 13.0, [0.9, 0.9, 0.92, 1.0]);
+                    renderer.draw_text(label, x + 8.0, rect.y + 8.0, 13.0, theme::text());
                     x += label_w + 16.0;
                 }
                 MenuItem::Separator => {
@@ -95,7 +96,7 @@ impl View for NornirBar {
                         rect.y + 6.0,
                         x,
                         rect.y + 22.0,
-                        [0.3, 0.3, 0.35, 0.5],
+                        theme::border(),
                         1.0,
                     );
                     x += 12.0;
@@ -118,7 +119,7 @@ fn render_submenu(renderer: &mut dyn Renderer, items: &[MenuItem], anchor: Rect)
 
     // Glass panel
     renderer.bifrost(menu_rect, 20.0, 1.1, 0.7);
-    renderer.fill_rounded_rect(menu_rect, 8.0, [0.06, 0.06, 0.08, 0.92]);
+    renderer.fill_rounded_rect(menu_rect, 8.0, theme::surface_elevated());
 
     // Render submenu items
     let mut iy = menu_rect.y + 4.0;
@@ -126,9 +127,9 @@ fn render_submenu(renderer: &mut dyn Renderer, items: &[MenuItem], anchor: Rect)
         match item {
             MenuItem::Action { label, enabled, .. } => {
                 let color = if *enabled {
-                    [0.9, 0.9, 0.92, 1.0]
+                    theme::text()
                 } else {
-                    [0.5, 0.5, 0.55, 0.5]
+                    theme::text_dim()
                 };
                 renderer.draw_text(label, menu_rect.x + 8.0, iy + 5.0, 12.0, color);
             }
@@ -138,7 +139,7 @@ fn render_submenu(renderer: &mut dyn Renderer, items: &[MenuItem], anchor: Rect)
                     iy + 12.0,
                     menu_rect.x + menu_rect.width - 6.0,
                     iy + 12.0,
-                    [0.2, 0.2, 0.25, 0.5],
+                    theme::border(),
                     1.0,
                 );
             }

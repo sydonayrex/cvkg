@@ -91,14 +91,41 @@ fn displacement_offset(
 
 // ─── Section 2: Adaptive Appearance ──────────────────────────────────────────
 
-/// Sample backdrop at 4 coarse mip-6 positions for dominant color.
-/// Returns a tint color derived from the backdrop content.
+/// Sample backdrop at 9 positions (3x3 grid) at mip-4 for dominant color.
+/// Uses a wider spread than the old 4-sample mip-6 approach for better
+/// detection of high-frequency backdrop patterns that can kill legibility.
 fn sample_backdrop_dominant(uv: vec2<f32>) -> vec3<f32> {
-    let s0 = textureSampleLevel(t_env, s_env, uv + vec2<f32>(-0.1, -0.1), 6.0).rgb;
-    let s1 = textureSampleLevel(t_env, s_env, uv + vec2<f32>( 0.1, -0.1), 6.0).rgb;
-    let s2 = textureSampleLevel(t_env, s_env, uv + vec2<f32>(-0.1,  0.1), 6.0).rgb;
-    let s3 = textureSampleLevel(t_env, s_env, uv + vec2<f32>( 0.1,  0.1), 6.0).rgb;
-    return (s0 + s1 + s2 + s3) * 0.25;
+    let offsets = array<vec2<f32>, 9>(
+        vec2<f32>(-0.15, -0.15), vec2<f32>(0.0, -0.15), vec2<f32>(0.15, -0.15),
+        vec2<f32>(-0.15,  0.0),  vec2<f32>(0.0,  0.0),  vec2<f32>(0.15,  0.0),
+        vec2<f32>(-0.15,  0.15), vec2<f32>(0.0,  0.15), vec2<f32>(0.15,  0.15)
+    );
+    var sum = vec3<f32>(0.0);
+    for (var i = 0u; i < 9u; i++) {
+        sum += textureSampleLevel(t_env, s_env, uv + offsets[i], 4.0).rgb;
+    }
+    return sum / 9.0;
+}
+
+/// Compute backdrop variance across the 9 sample positions.
+/// Returns 0.0 (uniform) to 1.0 (high variance / busy backdrop).
+/// Used to dynamically reduce tint adaptation on complex backgrounds.
+fn sample_backdrop_variance(uv: vec2<f32>) -> f32 {
+    let mean = sample_backdrop_dominant(uv);
+    let offsets = array<vec2<f32>, 9>(
+        vec2<f32>(-0.15, -0.15), vec2<f32>(0.0, -0.15), vec2<f32>(0.15, -0.15),
+        vec2<f32>(-0.15,  0.0),  vec2<f32>(0.0,  0.0),  vec2<f32>(0.15,  0.0),
+        vec2<f32>(-0.15,  0.15), vec2<f32>(0.0,  0.15), vec2<f32>(0.15,  0.15)
+    );
+    var var_sum = 0.0;
+    for (var i = 0u; i < 9u; i++) {
+        let s = textureSampleLevel(t_env, s_env, uv + offsets[i], 4.0).rgb;
+        let diff = s - mean;
+        var_sum += dot(diff, diff);
+    }
+    // Normalize: variance ranges from 0 to ~0.33 (max for RGB in [0,1])
+    // We scale to [0, 1] range for use as a blend factor.
+    return clamp(var_sum / 9.0 * 3.0, 0.0, 1.0);
 }
 
 @fragment
@@ -228,12 +255,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // ─── Section 6: Adaptive Tint from Backdrop ──────────────────────────────
 
-    // Sample backdrop dominant color at coarse mip for adaptive tinting
+    // Sample backdrop dominant color and variance for adaptive tinting
     let backdrop_dominant = sample_backdrop_dominant(screen_uv);
+    let backdrop_var = sample_backdrop_variance(screen_uv);
 
-    // Adaptive tint: mix static theme tint with backdrop-derived tint
-    // glass_tint_adapt controls the weight (0 = static, 1 = fully adaptive)
-    let adaptive_tint = mix(theme.glass_base.rgb, backdrop_dominant * 0.3 + 0.7, theme.glass_tint_adapt);
+    // Adaptive tint: mix static theme tint with backdrop-derived tint.
+    // High variance (busy backdrop) reduces adaptation to prevent legibility issues.
+    // glass_tint_adapt controls the max weight (0 = static, 1 = fully adaptive).
+    let effective_adapt = theme.glass_tint_adapt * (1.0 - backdrop_var);
+    let adaptive_tint = mix(theme.glass_base.rgb, backdrop_dominant * 0.3 + 0.7, effective_adapt);
 
     // ─── Section 7: Sub-Surface Scattering Approximation ─────────────────────
 
