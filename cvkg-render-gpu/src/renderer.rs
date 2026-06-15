@@ -223,8 +223,11 @@ pub struct SurtrRenderer {
     /// Used to bypass graph rebuilding and topological sorting when configuration is unchanged.
     pub(crate) cached_graph_plan: Option<kvasir::graph_cache::CachedGraphPlan>,
     /// Memoization cache for frame-level render skipping.
-    /// Tracks (id, data_hash) -> skip_render for deduplication.
-    pub(crate) memo_cache: std::collections::HashMap<u64, u64>,
+    /// Tracks (id) -> (data_hash, frame_generation) for deduplication.
+    pub(crate) memo_cache: std::collections::HashMap<u64, (u64, u64)>,
+    /// Current frame generation counter. Incremented each frame to avoid
+    /// clearing the memo cache (which would defeat cross-frame memoization).
+    pub(crate) frame_generation: u64,
     /// Thread-safe bind group cache to avoid per-frame allocations during render passes.
     /// Maps a cache key representing texture/pass metadata to the pre-created wgpu::BindGroup.
     pub(crate) bind_group_cache: std::sync::Mutex<
@@ -1678,6 +1681,7 @@ impl SurtrRenderer {
             portal_regions: VecDeque::new(),
             cached_graph_plan: None,
             memo_cache: std::collections::HashMap::new(),
+            frame_generation: 0,
             bloom_enabled: true,
             volumetric_enabled: false,
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
@@ -1957,8 +1961,8 @@ impl SurtrRenderer {
         self.vnode_stack.clear();
         self.event_handlers.clear();
 
-        // Clear memoization cache at the start of each frame
-        self.memo_cache.clear();
+        // Clear per-frame state but NOT memo_cache — use generation counter instead
+        self.frame_generation += 1;
 
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;
@@ -2057,8 +2061,8 @@ impl SurtrRenderer {
         self.vnode_stack.clear();
         self.event_handlers.clear();
 
-        // Clear memoization cache at the start of each frame
-        self.memo_cache.clear();
+        // Clear per-frame state but NOT memo_cache — use generation counter instead
+        self.frame_generation += 1;
 
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;

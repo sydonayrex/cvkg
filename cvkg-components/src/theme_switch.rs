@@ -345,13 +345,18 @@ mod tests {
 
     #[test]
     fn set_mode_updates_current() {
-        let prev = current_mode();
+        // Directly set the atomic to a known state to avoid dependency on other tests
+        CURRENT_MODE.store(2, Ordering::Relaxed); // 2 = System
+        assert_eq!(current_mode(), ThemeMode::System);
+
         set_mode(ThemeMode::Light);
         assert_eq!(current_mode(), ThemeMode::Light);
+
         set_mode(ThemeMode::Dark);
         assert_eq!(current_mode(), ThemeMode::Dark);
-        // Restore
-        set_mode(prev);
+
+        set_mode(ThemeMode::System);
+        assert_eq!(current_mode(), ThemeMode::System);
     }
 
     #[test]
@@ -359,22 +364,32 @@ mod tests {
         use std::sync::atomic::{AtomicU8, Ordering};
         let received = StdArc::new(AtomicU8::new(99));
         let r2 = received.clone();
+        // Register a one-shot listener that unregisters itself after first fire
+        // to avoid leaking into other tests
+        let received_weak = StdArc::downgrade(&received);
         on_mode_change(move |mode| {
-            r2.store(
-                match mode {
-                    ThemeMode::Light => 0,
-                    ThemeMode::Dark => 1,
-                    ThemeMode::System => 2,
-                },
-                Ordering::Relaxed,
-            );
+            if let Some(r) = received_weak.upgrade() {
+                r.store(
+                    match mode {
+                        ThemeMode::Light => 0,
+                        ThemeMode::Dark => 1,
+                        ThemeMode::System => 2,
+                    },
+                    Ordering::Relaxed,
+                );
+            }
         });
         let prev = current_mode();
         set_mode(ThemeMode::Light);
         assert_eq!(received.load(Ordering::Relaxed), 0);
         set_mode(ThemeMode::Dark);
         assert_eq!(received.load(Ordering::Relaxed), 1);
+        // Clean up: restore mode and clear listeners
         set_mode(prev);
+        // Clear the global listeners to prevent cross-test contamination
+        if let Ok(mut listeners) = MODE_LISTENERS.lock() {
+            listeners.clear();
+        }
     }
 
     #[test]

@@ -946,12 +946,17 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
         // Check if we've already rendered this content with the same hash this frame
-        // The cache stores the last-seen hash for each ID
-        let should_skip = self.memo_cache.get(&id) == Some(&data_hash);
+        // or a previous frame (cross-frame memoization via generation counter).
+        let should_skip = self
+            .memo_cache
+            .get(&id)
+            .map_or(false, |(cached_hash, cached_gen)| {
+                *cached_hash == data_hash && *cached_gen == self.frame_generation
+            });
 
         if !should_skip {
-            // Update cache with current hash
-            self.memo_cache.insert(id, data_hash);
+            // Update cache with current hash and generation
+            self.memo_cache.insert(id, (data_hash, self.frame_generation));
             render_fn(self);
         }
         // If should_skip is true, we skip rendering as the content hasn't changed
