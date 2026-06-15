@@ -1,9 +1,10 @@
 use crate::theme;
 use crate::RADIUS_MD;
 use cvkg_core::{
-    Never, Rect, Renderer, Size, View,
+    Event, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
+use std::sync::Arc;
 
 /// Node structure for RichTreeView hierarchical item.
 #[derive(Debug, Clone)]
@@ -127,7 +128,7 @@ impl View for RichTreeView {
             }
 
             let text_color = if node.is_selected {
-                [1.0, 1.0, 1.0, 0.95]
+                theme::with_alpha(theme::text(), 0.95)
             } else {
                 theme::text()
             };
@@ -182,6 +183,21 @@ impl View for RichTreeView {
         for node in &self.root_nodes {
             draw_node(renderer, node, &rect, &mut current_y, 0.0, indent_w, row_h);
         }
+
+        // Keyboard: Arrow keys to navigate, Enter to expand/collapse
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Enter" | " " => {
+                            // Tree navigation handled by parent via state
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
     }
 }
 

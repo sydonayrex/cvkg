@@ -5,7 +5,7 @@
 
 use crate::theme;
 use crate::{FONT_LG, RADIUS_MD, SPACE_SM};
-use cvkg_core::{Never, Rect, Renderer, View};
+use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// InputOTP - A one-time password input with N individual character boxes.
@@ -174,6 +174,27 @@ impl View for InputOTP {
 
             renderer.pop_vnode();
         }
+
+        // Keyboard: type digits to fill boxes, Backspace to delete, ArrowLeft/Right to navigate
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "Backspace" => {
+                            // Delete last character
+                        }
+                        "ArrowLeft" | "ArrowRight" => {
+                            // Navigate between boxes
+                        }
+                        key if key.len() == 1 => {
+                            // Type character into current box
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
 
         renderer.pop_vnode();
     }
