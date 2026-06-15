@@ -4,6 +4,7 @@
 //! All components use the cvkg theme system (theme::* helpers) for full themability.
 
 use crate::theme;
+use crate::RADIUS_XL;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // =============================================================================
@@ -426,8 +427,8 @@ impl View for CardStack {
                 self.base_color[2],
                 self.base_color[3] * alpha,
             ];
-            renderer.fill_rounded_rect(card_rect, 12.0, color);
-            renderer.stroke_rounded_rect(card_rect, 12.0, theme::border(), 1.0);
+            renderer.fill_rounded_rect(card_rect, RADIUS_XL, color);
+            renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         }
         renderer.pop_vnode();
     }
@@ -519,8 +520,8 @@ impl View for CardHoverEffect {
         if self.hover > 0.0 {
             renderer.push_shadow(12.0 * self.hover, theme::shadow(), [tilt * 0.5, tilt * 0.5]);
         }
-        renderer.fill_rounded_rect(card_rect, 12.0, self.bg_color);
-        renderer.stroke_rounded_rect(card_rect, 12.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(card_rect, RADIUS_XL, self.bg_color);
+        renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         if self.hover > 0.0 {
             renderer.pop_shadow();
         }
@@ -533,7 +534,7 @@ impl View for CardHoverEffect {
                 height: self.height,
             };
             let spot_color = theme::surface_overlay();
-            renderer.fill_rounded_rect(spot_rect, 12.0, [spot_color[0], spot_color[1], spot_color[2], 0.03 * self.hover]);
+            renderer.fill_rounded_rect(spot_rect, RADIUS_XL, [spot_color[0], spot_color[1], spot_color[2], 0.03 * self.hover]);
         }
         // Label
         if !self.label.is_empty() {
@@ -642,8 +643,8 @@ impl View for ExpandableCard {
             width: self.width,
             height: h,
         };
-        renderer.fill_rounded_rect(card_rect, 12.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(card_rect, 12.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(card_rect, RADIUS_XL, theme::surface_elevated());
+        renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         // Title
         renderer.draw_text(
             &self.title,
@@ -787,8 +788,8 @@ impl View for DraggableCard {
         if self.is_dragging {
             renderer.push_shadow(16.0, theme::shadow(), [0.0, 4.0]);
         }
-        renderer.fill_rounded_rect(card_rect, 10.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(card_rect, 10.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(card_rect, RADIUS_XL, theme::surface_elevated());
+        renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         if self.is_dragging {
             renderer.pop_shadow();
         }
@@ -924,7 +925,7 @@ impl View for ShimmerButton {
         } else {
             self.text_color
         };
-        renderer.fill_rounded_rect(rect, 10.0, bg);
+        renderer.fill_rounded_rect(rect, RADIUS_XL, bg);
         // Shimmer sweep
         if !self.disabled {
             let sweep_x = rect.x + ((self.time * 100.0) % (rect.width + 80.0)) - 40.0;
@@ -935,7 +936,7 @@ impl View for ShimmerButton {
                 height: rect.height,
             };
             let shimmer_color = theme::accent();
-            renderer.fill_rounded_rect(shimmer_rect, 10.0, [shimmer_color[0], shimmer_color[1], shimmer_color[2], 0.15]);
+            renderer.fill_rounded_rect(shimmer_rect, RADIUS_XL, [shimmer_color[0], shimmer_color[1], shimmer_color[2], 0.15]);
         }
         // Label
         let (tw, th) = renderer.measure_text(&self.label, 15.0);
@@ -1054,7 +1055,7 @@ impl View for RippleButton {
         } else {
             self.text_color
         };
-        renderer.fill_rounded_rect(rect, 10.0, bg);
+        renderer.fill_rounded_rect(rect, RADIUS_XL, bg);
         // Ripple effect
         if self.ripple > 0.0 && !self.disabled {
             let max_r = (self.width * self.width + self.height * self.height).sqrt();
@@ -1164,7 +1165,7 @@ impl View for StatefulButton {
             ButtonState::Success => theme::success(),
             ButtonState::Error => theme::error_color(),
         };
-        renderer.fill_rounded_rect(rect, 10.0, bg);
+        renderer.fill_rounded_rect(rect, RADIUS_XL, bg);
         let tc = match self.state {
             ButtonState::Idle | ButtonState::Loading => theme::bg(),
             ButtonState::Success => theme::bg(),

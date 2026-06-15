@@ -1,3 +1,5 @@
+use crate::theme;
+use crate::RADIUS_XL;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{ElapsedTime, Never, Rect, Renderer, Size, View};
 
@@ -67,16 +69,16 @@ impl<V: View> View for RunesCard<V> {
         // Render frosted glass background
         renderer.bifrost(rect, 20.0, 1.2, 0.9);
         // Mostly clear center
-        renderer.fill_rounded_rect(rect, 12.0, [0.05, 0.05, 0.1, 0.4]);
+        renderer.fill_rounded_rect(rect, RADIUS_XL, theme::with_alpha(theme::bg(), 0.4));
         // Neon glass border
-        renderer.stroke_rounded_rect(rect, 12.0, [0.2, 0.3, 0.4, 0.6], 1.5);
+        renderer.stroke_rounded_rect(rect, RADIUS_XL, theme::with_alpha(theme::border(), 0.6), 1.5);
         // Inner highlight
         renderer.draw_line(
             rect.x,
             rect.y + 20.0,
             rect.x + rect.width,
             rect.y + 20.0,
-            [0.3, 0.4, 0.5, 0.3],
+            theme::with_alpha(theme::border(), 0.3),
             1.0,
         );
 

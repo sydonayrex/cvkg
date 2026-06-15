@@ -5,6 +5,7 @@
 
 use crate::lingua_tong;
 use crate::theme;
+use crate::{RADIUS_XL, RADIUS_MD};
 use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -85,8 +86,8 @@ impl View for ConsentGate {
         let dialog_y = rect.y + (rect.height - dialog_h) / 2.0;
         let dialog = Rect::new(dialog_x, dialog_y, dialog_w, dialog_h);
 
-        renderer.fill_rounded_rect(dialog, 12.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(dialog, 12.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(dialog, RADIUS_XL, theme::surface_elevated());
+        renderer.stroke_rounded_rect(dialog, RADIUS_XL, theme::border(), 1.0);
 
         // Title
         let title = lingua_tong::t("consentgate.title");
@@ -128,8 +129,8 @@ impl View for ConsentGate {
 
         // Reject button (left, secondary style)
         let reject_rect = Rect::new(dialog.x + 16.0, button_y, button_w, 36.0);
-        renderer.fill_rounded_rect(reject_rect, 6.0, theme::surface());
-        renderer.stroke_rounded_rect(reject_rect, 6.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(reject_rect, RADIUS_MD, theme::surface());
+        renderer.stroke_rounded_rect(reject_rect, RADIUS_MD, theme::border(), 1.0);
         let reject_text = lingua_tong::t("consentgate.reject");
         let (rw, _) = renderer.measure_text(&reject_text, 14.0);
         renderer.draw_text(
@@ -142,7 +143,7 @@ impl View for ConsentGate {
 
         // Accept button (right, accent style)
         let accept_rect = Rect::new(dialog.x + 32.0 + button_w, button_y, button_w, 36.0);
-        renderer.fill_rounded_rect(accept_rect, 6.0, theme::accent());
+        renderer.fill_rounded_rect(accept_rect, RADIUS_MD, theme::accent());
         let accept_text = lingua_tong::t("consentgate.accept");
         let (aw, _) = renderer.measure_text(&accept_text, 14.0);
         renderer.draw_text(

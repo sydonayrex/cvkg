@@ -6,6 +6,7 @@
 
 use crate::lingua_tong;
 use crate::theme;
+use crate::{RADIUS_XL, RADIUS_LG, RADIUS_2XL};
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // =============================================================================
@@ -407,8 +408,8 @@ impl View for DateRangePicker {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DateRangePicker");
-        renderer.fill_rounded_rect(rect, 12.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(rect, 12.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(rect, RADIUS_XL, theme::surface_elevated());
+        renderer.stroke_rounded_rect(rect, RADIUS_XL, theme::border(), 1.0);
         // Month/year header
         let header = format!(
             "{} {}",
@@ -803,8 +804,8 @@ impl View for LogoCarousel {
                 width: self.logo_width,
                 height: self.height - 20.0,
             };
-            renderer.fill_rounded_rect(logo_rect, 8.0, theme::surface_elevated());
-            renderer.stroke_rounded_rect(logo_rect, 8.0, theme::border(), 1.0);
+            renderer.fill_rounded_rect(logo_rect, RADIUS_LG, theme::surface_elevated());
+            renderer.stroke_rounded_rect(logo_rect, RADIUS_LG, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(logo, 14.0);
             renderer.draw_text(
                 logo,
@@ -823,8 +824,8 @@ impl View for LogoCarousel {
                 width: self.logo_width,
                 height: self.height - 20.0,
             };
-            renderer.fill_rounded_rect(logo_rect, 8.0, theme::surface_elevated());
-            renderer.stroke_rounded_rect(logo_rect, 8.0, theme::border(), 1.0);
+            renderer.fill_rounded_rect(logo_rect, RADIUS_LG, theme::surface_elevated());
+            renderer.stroke_rounded_rect(logo_rect, RADIUS_LG, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(logo, 14.0);
             renderer.draw_text(
                 logo,
@@ -1017,8 +1018,8 @@ impl View for SidePanel {
             width: self.width,
             height: self.height,
         };
-        renderer.fill_rounded_rect(panel_rect, 16.0, theme::surface_overlay());
-        renderer.stroke_rounded_rect(panel_rect, 16.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(panel_rect, RADIUS_2XL, theme::surface_overlay());
+        renderer.stroke_rounded_rect(panel_rect, RADIUS_2XL, theme::border(), 1.0);
         // Title
         renderer.draw_text(
             &self.title,
@@ -1101,8 +1102,8 @@ impl View for Codeblock {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Codeblock");
-        renderer.fill_rounded_rect(rect, 8.0, theme::code_bg());
-        renderer.stroke_rounded_rect(rect, 8.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(rect, RADIUS_LG, theme::code_bg());
+        renderer.stroke_rounded_rect(rect, RADIUS_LG, theme::border(), 1.0);
         // Top bar
         renderer.fill_rounded_rect(
             Rect {
@@ -1289,7 +1290,7 @@ impl View for Kanban {
                 height: self.height,
             };
             // Column background
-            renderer.fill_rounded_rect(col_rect, 12.0, theme::surface());
+            renderer.fill_rounded_rect(col_rect, RADIUS_XL, theme::surface());
             // Column header
             renderer.draw_text(&col.title, cx + 12.0, rect.y + 24.0, 14.0, theme::text());
             // Card count badge
@@ -1321,8 +1322,8 @@ impl View for Kanban {
                     width: self.column_width - 16.0,
                     height: 64.0,
                 };
-                renderer.fill_rounded_rect(card_rect, 8.0, theme::surface_elevated());
-                renderer.stroke_rounded_rect(card_rect, 8.0, theme::border(), 1.0);
+                renderer.fill_rounded_rect(card_rect, RADIUS_LG, theme::surface_elevated());
+                renderer.stroke_rounded_rect(card_rect, RADIUS_LG, theme::border(), 1.0);
                 renderer.draw_text(
                     &card.title,
                     card_rect.x + 12.0,

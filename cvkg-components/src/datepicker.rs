@@ -1,5 +1,6 @@
 use crate::theme;
 use crate::lingua_tong;
+use crate::{RADIUS_MD, RADIUS_XL, RADIUS_SM};
 use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -260,9 +261,9 @@ impl DatePicker {
         renderer.set_aria_label(&lingua_tong::t("datepicker.label"));
 
         // Background
-        renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.14, 1.0]);
+        renderer.fill_rounded_rect(rect, RADIUS_MD, [0.1, 0.1, 0.14, 1.0]);
         // Border
-        renderer.stroke_rounded_rect(rect, 6.0, [0.2, 0.3, 0.5, 0.8], 1.5);
+        renderer.stroke_rounded_rect(rect, RADIUS_MD, [0.2, 0.3, 0.5, 0.8], 1.5);
 
         // Date text
         let text = self.format_date();
@@ -303,8 +304,8 @@ impl DatePicker {
 
         // Glassmorphic background
         renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
-        renderer.fill_rounded_rect(pop_rect, 12.0, [0.06, 0.06, 0.1, 0.9]);
-        renderer.stroke_rounded_rect(pop_rect, 12.0, [0.15, 0.25, 0.4, 0.7], 1.5);
+        renderer.fill_rounded_rect(pop_rect, RADIUS_XL, [0.06, 0.06, 0.1, 0.9]);
+        renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, [0.15, 0.25, 0.4, 0.7], 1.5);
 
         let (display_month, display_year) = self.displayed_month_state();
 
@@ -487,7 +488,7 @@ impl DatePicker {
                             width: 24.0,
                             height: 24.0,
                         };
-                        renderer.fill_rounded_rect(highlight_rect, 12.0, [0.0, 0.7, 0.85, 0.9]);
+                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, [0.0, 0.7, 0.85, 0.9]);
                     } else if is_range_end {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -495,7 +496,7 @@ impl DatePicker {
                             width: 24.0,
                             height: 24.0,
                         };
-                        renderer.fill_rounded_rect(highlight_rect, 12.0, [0.0, 0.5, 0.7, 0.85]);
+                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, [0.0, 0.5, 0.7, 0.85]);
                     } else if is_in_range {
                         // Subtle range highlight
                         let range_rect = Rect {
@@ -504,7 +505,7 @@ impl DatePicker {
                             width: cell_w - 4.0,
                             height: 20.0,
                         };
-                        renderer.fill_rounded_rect(range_rect, 4.0, [0.0, 0.4, 0.6, 0.3]);
+                        renderer.fill_rounded_rect(range_rect, RADIUS_SM, [0.0, 0.4, 0.6, 0.3]);
                     } else if is_today {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -514,7 +515,7 @@ impl DatePicker {
                         };
                         renderer.stroke_rounded_rect(
                             highlight_rect,
-                            12.0,
+                            RADIUS_XL,
                             [0.0, 0.7, 0.85, 0.6],
                             1.5,
                         );

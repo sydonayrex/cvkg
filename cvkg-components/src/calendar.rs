@@ -1,5 +1,6 @@
 use crate::lingua_tong;
 use crate::theme;
+use crate::{RADIUS_LG, RADIUS_SM};
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -87,7 +88,7 @@ impl View for TyrCalendar {
         renderer.push_vnode(rect, "TyrCalendar");
 
         // Background
-        renderer.fill_rounded_rect(rect, 8.0, theme::surface_elevated());
+        renderer.fill_rounded_rect(rect, RADIUS_LG, theme::surface_elevated());
         renderer.stroke_rect(rect, theme::border_strong(), 1.0);
 
         // Header (Month Year)
@@ -175,9 +176,9 @@ impl View for TyrCalendar {
                 });
 
                 if is_selected {
-                    renderer.fill_rounded_rect(cell_rect, 4.0, theme::accent());
+                    renderer.fill_rounded_rect(cell_rect, RADIUS_SM, theme::accent());
                 } else if is_disabled {
-                    renderer.fill_rounded_rect(cell_rect, 4.0, [0.1, 0.1, 0.1, 0.2]);
+                    renderer.fill_rounded_rect(cell_rect, RADIUS_SM, [0.1, 0.1, 0.1, 0.2]);
                 }
 
                 let day_str = day_num.to_string();
@@ -304,7 +305,7 @@ impl View for DatePicker {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePicker");
-        renderer.fill_rounded_rect(rect, 4.0, theme::surface());
+        renderer.fill_rounded_rect(rect, RADIUS_SM, theme::surface());
         renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         let display = if self.selected_date.year == 0 {

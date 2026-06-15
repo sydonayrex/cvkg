@@ -1613,6 +1613,8 @@ impl<V: View, F: Fn() -> V + Send + Sync> MemoView<V, F> {
 impl<V: View + 'static, F: Fn() -> V + Send + Sync + 'static> View for MemoView<V, F> {
     type Body = Never;
     fn body(self) -> Self::Body {
+        // SAFETY: `Never` is uninhabitable (zero variants). MemoView renders via
+        // `render()` using the memoized builder closure and never exposes a body.
         unreachable!("MemoView does not have a body")
     }
 
@@ -1648,6 +1650,8 @@ impl AnyView {
 impl View for AnyView {
     type Body = Never;
     fn body(self) -> Self::Body {
+        // SAFETY: `Never` is uninhabitable. AnyView is a type-erased wrapper that
+        // renders via `render_erased()` and never exposes a composable body.
         unreachable!()
     }
 
@@ -2710,6 +2714,8 @@ pub enum Never {}
 impl View for Never {
     type Body = Never;
     fn body(self) -> Never {
+        // SAFETY: `Never` is an uninhabitable enum (zero variants), so this function
+        // can never be called with a valid value and can never return.
         unreachable!()
     }
 }
@@ -2721,6 +2727,8 @@ pub struct EmptyView;
 impl View for EmptyView {
     type Body = Never;
     fn body(self) -> Self::Body {
+        // SAFETY: `Never` is uninhabitable. EmptyView renders nothing and has no
+        // composable body — it registers zero paint commands.
         unreachable!()
     }
     fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
@@ -4499,6 +4507,8 @@ impl Color {
 impl View for Color {
     type Body = Never;
     fn body(self) -> Self::Body {
+        // SAFETY: `Never` is uninhabitable. Color is a primitive view that fills a
+        // rectangle directly in `render()` and never exposes a composable body.
         unreachable!()
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
@@ -6274,6 +6284,7 @@ mod error_boundary_tests {
     impl View for SuccessView {
         type Body = Never;
         fn body(self) -> Never {
+            // SAFETY: `Never` is uninhabitable — test helper with no composable body.
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
@@ -6287,6 +6298,7 @@ mod error_boundary_tests {
     impl View for PanicOnRender {
         type Body = Never;
         fn body(self) -> Never {
+            // SAFETY: `Never` is uninhabitable — test helper that only panics in render().
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
@@ -6300,6 +6312,7 @@ mod error_boundary_tests {
     impl View for PanicOnSize {
         type Body = Never;
         fn body(self) -> Never {
+            // SAFETY: `Never` is uninhabitable — test helper that only panics in intrinsic_size().
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
@@ -6316,6 +6329,7 @@ mod error_boundary_tests {
     impl View for PanicWithString {
         type Body = Never;
         fn body(self) -> Never {
+            // SAFETY: `Never` is uninhabitable — test helper that panics with a String payload.
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {

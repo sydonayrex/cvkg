@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use crate::theme;
+use crate::{RADIUS_LG, RADIUS_MD, RADIUS_SM, RADIUS_XS};
 use cvkg_core::{
     Renderer, Size, View,
     layout::{LayoutCache, LayoutView, Rect, SizeProposal},
@@ -1675,11 +1676,11 @@ impl MultiAgentOrchestrator {
         );
 
         // Node body
-        renderer.fill_rounded_rect(node_rect, 6.0, [0.08, 0.07, 0.12, 0.95]);
+        renderer.fill_rounded_rect(node_rect, RADIUS_MD, [0.08, 0.07, 0.12, 0.95]);
 
         // Selection highlight
         if is_selected {
-            renderer.stroke_rounded_rect(node_rect, 6.0, theme::accent(), 2.0);
+            renderer.stroke_rounded_rect(node_rect, RADIUS_MD, theme::accent(), 2.0);
         }
 
         // Title bar
@@ -1690,7 +1691,7 @@ impl MultiAgentOrchestrator {
             width: nw,
             height: title_h,
         };
-        renderer.fill_rounded_rect(title_rect, 6.0, node_color);
+        renderer.fill_rounded_rect(title_rect, RADIUS_MD, node_color);
         // Cover bottom corners of title bar
         renderer.fill_rect(
             Rect {
@@ -2192,8 +2193,8 @@ impl MultiAgentOrchestrator {
             width: panel_w,
             height: panel_h,
         };
-        renderer.fill_rounded_rect(panel_rect, 8.0, [0.08, 0.06, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(panel_rect, 8.0, [0.2, 0.15, 0.3, 0.8], 1.0);
+        renderer.fill_rounded_rect(panel_rect, RADIUS_LG, [0.08, 0.06, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, [0.2, 0.15, 0.3, 0.8], 1.0);
 
         // Title
         renderer.draw_text(
@@ -2239,7 +2240,7 @@ impl MultiAgentOrchestrator {
                     width: panel_w - 20.0,
                     height: 52.0,
                 };
-                renderer.fill_rounded_rect(card_rect, 4.0, [0.1, 0.08, 0.15, 0.9]);
+                renderer.fill_rounded_rect(card_rect, RADIUS_SM, [0.1, 0.08, 0.15, 0.9]);
                 renderer.draw_text(
                     &template.name,
                     card_rect.x + 8.0,
@@ -2298,8 +2299,8 @@ impl MultiAgentOrchestrator {
             width: panel_w,
             height: panel_h,
         };
-        renderer.fill_rounded_rect(panel_rect, 8.0, [0.08, 0.06, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(panel_rect, 8.0, [0.2, 0.15, 0.3, 0.8], 1.0);
+        renderer.fill_rounded_rect(panel_rect, RADIUS_LG, [0.08, 0.06, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, [0.2, 0.15, 0.3, 0.8], 1.0);
 
         // Title
         renderer.draw_text(
@@ -2838,8 +2839,8 @@ fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
 impl MultiAgentOrchestrator {
     fn render_output_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
         if let Some(sel) = &state.selected_node {
             if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
@@ -2863,8 +2864,8 @@ impl MultiAgentOrchestrator {
 
     fn render_message_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Agent Messages", x + 12.0, y + 8.0, 14.0, theme::text());
         let mut cy = y + 30.0;
         for msg in state.message_log.iter().rev().take(20) {
@@ -2890,8 +2891,8 @@ impl MultiAgentOrchestrator {
 
     fn render_validation_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.validation_errors.is_empty() {
             renderer.draw_text(
@@ -2917,8 +2918,8 @@ impl MultiAgentOrchestrator {
 
     fn render_skills_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Skills Configuration",
             x + 12.0,
@@ -2951,8 +2952,8 @@ impl MultiAgentOrchestrator {
 
     fn render_webhook_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Webhook Configuration",
             x + 12.0,
@@ -2990,8 +2991,8 @@ impl MultiAgentOrchestrator {
 
     fn render_schedule_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Schedule Configuration",
             x + 12.0,
@@ -3029,8 +3030,8 @@ impl MultiAgentOrchestrator {
 
     fn render_recurring_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 6.0, [0.08, 0.08, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 6.0, theme::border_strong(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Recurring Runs", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.recurring_runs.is_empty() {
             renderer.draw_text(
@@ -3057,8 +3058,8 @@ impl MultiAgentOrchestrator {
 
     fn render_minimap(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), 4.0, [0.06, 0.06, 0.1, 0.9]);
-        renderer.stroke_rounded_rect(r(x, y, w, h), 4.0, theme::border(), 1.0);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_SM, [0.06, 0.06, 0.1, 0.9]);
+        renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_SM, theme::border(), 1.0);
         let scale = 0.1;
         for node in &state.nodes {
             let nx = x + node.position.0 * scale;
@@ -3075,6 +3076,6 @@ impl MultiAgentOrchestrator {
         let vp_y = y + state.viewport_offset.1 * scale;
         let vp_w = 200.0 * state.viewport_zoom * scale;
         let vp_h = 150.0 * state.viewport_zoom * scale;
-        renderer.stroke_rounded_rect(r(vp_x, vp_y, vp_w, vp_h), 1.0, [0.0, 1.0, 0.5, 0.5], 1.0);
+        renderer.stroke_rounded_rect(r(vp_x, vp_y, vp_w, vp_h), RADIUS_XS, [0.0, 1.0, 0.5, 0.5], 1.0);
     }
 }

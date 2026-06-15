@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::RADIUS_SM;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 /// Hvergelmir - A hexagonal shape primitive (Norse equivalent of Hexagon)
@@ -153,7 +154,7 @@ impl<V: View> Idavoll<V> {
     pub fn new(content: V) -> Self {
         Self {
             content,
-            color: [1.0, 0.84, 0.0, 0.9], // Viking Gold
+            color: theme::with_alpha(theme::viking_gold(), 0.9),
             stroke_width: 1.5,
         }
     }
@@ -219,7 +220,7 @@ impl<V: View> PolygonFrame<V> {
         Self {
             content,
             sides: sides.max(3),
-            color: [1.0, 0.84, 0.0, 0.9], // Viking Gold
+            color: theme::with_alpha(theme::viking_gold(), 0.9),
             stroke_width: 1.5,
             rotation: 0.0,
         }
@@ -244,7 +245,7 @@ impl<V: View> View for PolygonFrame<V> {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
-            renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.12, 0.15, 0.1]);
+            renderer.fill_rounded_rect(rect, RADIUS_SM, theme::with_alpha(theme::surface(), 0.1));
             renderer.stroke_rect(rect, self.color, self.stroke_width);
             self.content.render(renderer, rect.inset(4.0));
             return;

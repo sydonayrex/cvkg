@@ -1,5 +1,5 @@
 use crate::theme;
-use crate::{FONT_BASE, RADIUS_LG, RADIUS_MD, draw_focus_ring};
+use crate::{FONT_BASE, RADIUS_LG, RADIUS_MD, RADIUS_XL, RADIUS_SM, draw_focus_ring};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Event, Never, Rect, Renderer, Size, View};
 use std::sync::Arc;
@@ -179,7 +179,7 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
             width: toggle_btn_size,
             height: toggle_btn_size,
         };
-        renderer.fill_rounded_rect(toggle_rect, 12.0, [0.1, 0.1, 0.15, 0.9]);
+        renderer.fill_rounded_rect(toggle_rect, RADIUS_XL, [0.1, 0.1, 0.15, 0.9]);
         let chevron = if is_collapsed { "▶" } else { "◀" };
         renderer.draw_text(
             chevron,
@@ -393,8 +393,8 @@ impl<V: View> View for GraniSheet<V> {
 
         // ── Panel background ──
         renderer.bifrost(sheet_rect, 16.0, 1.2, 0.9);
-        renderer.fill_rounded_rect(sheet_rect, 12.0, [0.04, 0.04, 0.07, 0.95]);
-        renderer.stroke_rounded_rect(sheet_rect, 12.0, [0.0, 0.8, 1.0, 0.3], 1.5);
+        renderer.fill_rounded_rect(sheet_rect, RADIUS_XL, [0.04, 0.04, 0.07, 0.95]);
+        renderer.stroke_rounded_rect(sheet_rect, RADIUS_XL, [0.0, 0.8, 1.0, 0.3], 1.5);
 
         // ── Content ──
         let padding = 16.0;
@@ -414,7 +414,7 @@ impl<V: View> View for GraniSheet<V> {
             width: btn_size,
             height: btn_size,
         };
-        renderer.fill_rounded_rect(close_rect, 14.0, [0.12, 0.12, 0.16, 0.8]);
+        renderer.fill_rounded_rect(close_rect, RADIUS_XL, [0.12, 0.12, 0.16, 0.8]);
         renderer.draw_text(
             "×",
             close_rect.x + 15.0,
@@ -494,8 +494,8 @@ impl<V2: View + Clone> cvkg_core::ViewModifier for SheetModifier<V2> {
             };
 
             renderer.bifrost(modal_rect, 25.0, 1.5, 0.85);
-            renderer.fill_rounded_rect(modal_rect, 12.0, [0.0, 0.0, 0.0, 0.3]);
-            renderer.stroke_rounded_rect(modal_rect, 12.0, [0.2, 0.25, 0.3, 0.6], 2.0);
+            renderer.fill_rounded_rect(modal_rect, RADIUS_XL, [0.0, 0.0, 0.0, 0.3]);
+            renderer.stroke_rounded_rect(modal_rect, RADIUS_XL, [0.2, 0.25, 0.3, 0.6], 2.0);
 
             self.content.render(renderer, modal_rect);
         }
@@ -1939,7 +1939,7 @@ impl View for FlexBox {
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        renderer.fill_rounded_rect(rect, 8.0, [0.0, 0.0, 0.0, 0.85]);
+        renderer.fill_rounded_rect(rect, RADIUS_LG, [0.0, 0.0, 0.0, 0.85]);
         renderer.stroke_rect(rect, [0.2, 0.2, 0.25, 0.5], 1.0);
         renderer.bifrost(rect, 15.0, 1.2, 0.85);
 
@@ -2047,8 +2047,8 @@ impl<V: View> View for Collapsible<V> {
         };
 
         // ── Header bar ──
-        renderer.fill_rounded_rect(header_rect, 6.0, [0.08, 0.08, 0.12, 0.9]);
-        renderer.stroke_rounded_rect(header_rect, 6.0, [0.2, 0.2, 0.3, 0.5], 1.0);
+        renderer.fill_rounded_rect(header_rect, RADIUS_MD, [0.08, 0.08, 0.12, 0.9]);
+        renderer.stroke_rounded_rect(header_rect, RADIUS_MD, [0.2, 0.2, 0.3, 0.5], 1.0);
 
         // Arrow indicator
         let arrow = if self.is_open { "▼" } else { "▶" };
@@ -2116,7 +2116,7 @@ impl<V: View> View for Collapsible<V> {
                     width: rect.width - 8.0,
                     height: content_h,
                 };
-                renderer.fill_rounded_rect(content_rect, 4.0, [0.04, 0.04, 0.07, 0.4]);
+                renderer.fill_rounded_rect(content_rect, RADIUS_SM, [0.04, 0.04, 0.07, 0.4]);
                 self.content.render(renderer, content_rect);
             }
         }
@@ -2415,14 +2415,14 @@ impl<V: View> View for SagaAccordion<V> {
 
             // 1. Mimir's Refraction (Glass Header)
             renderer.bifrost(header_rect, 4.0, 1.2, 0.9);
-            renderer.fill_rounded_rect(header_rect, 4.0, [0.1, 0.1, 0.15, 0.7]);
+            renderer.fill_rounded_rect(header_rect, RADIUS_SM, [0.1, 0.1, 0.15, 0.7]);
 
             // Surtur's Reactive Materials (Hover/Selection Glow)
             if is_expanded {
                 let pulse = (t * 3.0 + i as f32).sin() * 0.1 + 0.9;
-                renderer.stroke_rounded_rect(header_rect, 4.0, [0.0, 0.8, 1.0, 0.4 * pulse], 1.5);
+                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, [0.0, 0.8, 1.0, 0.4 * pulse], 1.5);
             } else {
-                renderer.stroke_rounded_rect(header_rect, 4.0, [0.3, 0.3, 0.4, 0.3], 1.0);
+                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, [0.3, 0.3, 0.4, 0.3], 1.0);
             }
 
             let arrow = if is_expanded { "▼" } else { "▶" };
@@ -2502,7 +2502,7 @@ impl<V: View> View for SagaAccordion<V> {
                 };
 
                 // Subtle content background
-                renderer.fill_rounded_rect(content_rect, 4.0, [0.05, 0.05, 0.08, 0.3]);
+                renderer.fill_rounded_rect(content_rect, RADIUS_SM, [0.05, 0.05, 0.08, 0.3]);
                 item.content.render(renderer, content_rect);
 
                 current_y += content_h + 8.0;

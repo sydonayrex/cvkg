@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::{RADIUS_LG, RADIUS_MD};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
 
@@ -49,7 +50,7 @@ impl<H: View, C: View> View for FafnirAccordion<H, C> {
 
             // Header background
             renderer.bifrost(header_rect, 8.0, 1.0, 0.8);
-            renderer.stroke_rounded_rect(header_rect, 8.0, [0.4, 0.5, 0.6, 0.5], 1.0);
+            renderer.stroke_rounded_rect(header_rect, RADIUS_LG, [0.4, 0.5, 0.6, 0.5], 1.0);
 
             header.render(renderer, header_rect.inset(12.0)); // 12px padding
             y_offset += header_size.height + spacing;
@@ -62,7 +63,7 @@ impl<H: View, C: View> View for FafnirAccordion<H, C> {
                     Rect::new(rect.x, rect.y + y_offset, rect.width, content_size.height);
 
                 // Content background
-                renderer.fill_rounded_rect(content_rect, 8.0, [0.05, 0.05, 0.08, 0.6]);
+                renderer.fill_rounded_rect(content_rect, RADIUS_LG, [0.05, 0.05, 0.08, 0.6]);
 
                 content.render(renderer, content_rect.inset(12.0));
                 y_offset += content_size.height + spacing;
@@ -209,7 +210,7 @@ impl<V: View> View for HuginHoverCard<V> {
             // Draw card background with shadow
             renderer.push_shadow(12.0, theme::shadow(), [0.0, 4.0]);
             renderer.bifrost(rect, 8.0, 1.5, 0.9);
-            renderer.stroke_rounded_rect(rect, 8.0, [0.3, 0.4, 0.5, 0.8], 1.0);
+            renderer.stroke_rounded_rect(rect, RADIUS_LG, [0.3, 0.4, 0.5, 0.8], 1.0);
             renderer.pop_shadow();
 
             content.render(renderer, rect.inset(8.0));
@@ -1147,13 +1148,13 @@ impl View for FafnirOTP {
             let box_x = rect.x + (i as f32) * (box_size + spacing);
             let box_rect = Rect::new(box_x, rect.y, box_size, box_size);
 
-            renderer.fill_rounded_rect(box_rect, 6.0, [0.05, 0.05, 0.08, 1.0]);
+            renderer.fill_rounded_rect(box_rect, RADIUS_MD, [0.05, 0.05, 0.08, 1.0]);
 
             // Highlight focused/next box
             if i == chars.len() {
-                renderer.stroke_rounded_rect(box_rect, 6.0, [0.3, 0.6, 1.0, 1.0], 2.0);
+                renderer.stroke_rounded_rect(box_rect, RADIUS_MD, [0.3, 0.6, 1.0, 1.0], 2.0);
             } else {
-                renderer.stroke_rounded_rect(box_rect, 6.0, [0.2, 0.2, 0.25, 1.0], 1.0);
+                renderer.stroke_rounded_rect(box_rect, RADIUS_MD, [0.2, 0.2, 0.25, 1.0], 1.0);
             }
 
             if let Some(&c) = chars.get(i) {

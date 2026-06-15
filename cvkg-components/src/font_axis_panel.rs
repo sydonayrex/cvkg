@@ -1,18 +1,20 @@
+use crate::theme;
+use crate::{RADIUS_LG, RADIUS_SM};
 use cvkg_core::{Never, Rect, Renderer, View};
 use cvkg_runic_text::{FontAxisInfo, TextStyle, VariableAxis};
 use std::sync::Arc;
 
-/// Colors used by the font axis panel.
-const COLOR_PANEL_BG: [f32; 4] = [0.12, 0.12, 0.16, 1.0];
-const COLOR_PANEL_BORDER: [f32; 4] = [0.25, 0.25, 0.35, 1.0];
-const COLOR_TEXT_TITLE: [f32; 4] = [0.95, 0.95, 1.0, 1.0];
-const COLOR_TEXT_LABEL: [f32; 4] = [0.7, 0.7, 0.85, 1.0];
-const COLOR_SLIDER_BG: [f32; 4] = [0.15, 0.15, 0.2, 1.0];
-const COLOR_SLIDER_FILL: [f32; 4] = [0.0, 0.8, 1.0, 0.85];
-const COLOR_SLIDER_BORDER: [f32; 4] = [0.3, 0.3, 0.4, 1.0];
-const COLOR_TOGGLE_ON: [f32; 4] = [0.0, 0.8, 1.0, 0.9];
-const COLOR_TOGGLE_OFF: [f32; 4] = [0.3, 0.3, 0.35, 1.0];
-const COLOR_TOGGLE_KNOB: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
+/// Colors used by the font axis panel (resolved from theme tokens).
+fn color_panel_bg() -> [f32; 4] { theme::surface() }
+fn color_panel_border() -> [f32; 4] { theme::border() }
+fn color_text_title() -> [f32; 4] { theme::text() }
+fn color_text_label() -> [f32; 4] { theme::text_muted() }
+fn color_slider_bg() -> [f32; 4] { theme::surface_elevated() }
+fn color_slider_fill() -> [f32; 4] { theme::with_alpha(theme::accent(), 0.85) }
+fn color_slider_border() -> [f32; 4] { theme::border() }
+fn color_toggle_on() -> [f32; 4] { theme::with_alpha(theme::accent(), 0.9) }
+fn color_toggle_off() -> [f32; 4] { theme::surface_elevated() }
+fn color_toggle_knob() -> [f32; 4] { theme::text() }
 
 /// A slider panel for controlling variable font axes.
 ///
@@ -137,8 +139,8 @@ impl View for FontAxisPanel {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Panel background
-        renderer.fill_rounded_rect(rect, 8.0, COLOR_PANEL_BG);
-        renderer.stroke_rounded_rect(rect, 8.0, COLOR_PANEL_BORDER, 1.0);
+        renderer.fill_rounded_rect(rect, RADIUS_LG, color_panel_bg());
+        renderer.stroke_rounded_rect(rect, RADIUS_LG, color_panel_border(), 1.0);
 
         let padding = 12.0;
         let slider_height = 28.0;
@@ -148,7 +150,7 @@ impl View for FontAxisPanel {
 
         // Title
         let title = format!("{} — Variable Axes", self.family);
-        renderer.draw_text(&title, rect.x + padding, y + 14.0, 14.0, COLOR_TEXT_TITLE);
+        renderer.draw_text(&title, rect.x + padding, y + 14.0, 14.0, color_text_title());
         y += label_height + row_gap + 4.0;
 
         // One slider per axis
@@ -167,7 +169,7 @@ impl View for FontAxisPanel {
                 rect.x + padding,
                 y + 14.0,
                 12.0,
-                COLOR_TEXT_LABEL,
+                color_text_label(),
             );
 
             // Slider track
@@ -187,8 +189,8 @@ impl View for FontAxisPanel {
             let fill_w = track_rect.width * normalized.clamp(0.0, 1.0);
 
             // Track background
-            renderer.fill_rounded_rect(track_rect, 4.0, COLOR_SLIDER_BG);
-            renderer.stroke_rounded_rect(track_rect, 4.0, COLOR_SLIDER_BORDER, 1.0);
+            renderer.fill_rounded_rect(track_rect, RADIUS_SM, color_slider_bg());
+            renderer.stroke_rounded_rect(track_rect, RADIUS_SM, color_slider_border(), 1.0);
 
             // Track fill
             if fill_w > 0.0 {
@@ -198,7 +200,7 @@ impl View for FontAxisPanel {
                     width: fill_w.max(8.0),
                     height: track_rect.height,
                 };
-                renderer.fill_rounded_rect(fill_rect, 4.0, COLOR_SLIDER_FILL);
+                renderer.fill_rounded_rect(fill_rect, RADIUS_SM, color_slider_fill());
             }
 
             y += row_height + row_gap;
@@ -212,7 +214,7 @@ impl View for FontAxisPanel {
             rect.x + padding,
             y + 14.0,
             12.0,
-            COLOR_TEXT_LABEL,
+            color_text_label(),
         );
 
         // Toggle switch
@@ -227,12 +229,12 @@ impl View for FontAxisPanel {
         };
 
         let toggle_bg = if self.colr_enabled {
-            COLOR_TOGGLE_ON
+            color_toggle_on()
         } else {
-            COLOR_TOGGLE_OFF
+            color_toggle_off()
         };
         renderer.fill_rounded_rect(toggle_rect, toggle_h * 0.5, toggle_bg);
-        renderer.stroke_rounded_rect(toggle_rect, toggle_h * 0.5, COLOR_SLIDER_BORDER, 1.0);
+        renderer.stroke_rounded_rect(toggle_rect, toggle_h * 0.5, color_slider_border(), 1.0);
 
         // Toggle knob
         let knob_r = toggle_h * 0.38;
@@ -248,7 +250,7 @@ impl View for FontAxisPanel {
             width: knob_r * 2.0,
             height: knob_r * 2.0,
         };
-        renderer.fill_ellipse(knob_rect, COLOR_TOGGLE_KNOB);
+        renderer.fill_ellipse(knob_rect, color_toggle_knob());
     }
 }
 

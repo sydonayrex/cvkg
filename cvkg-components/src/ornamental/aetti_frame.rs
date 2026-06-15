@@ -120,9 +120,9 @@ impl ÆttiFrame {
     /// with a darker shadow line offset below each edge for depth.
     fn render_carved_stone(&self, renderer: &mut dyn Renderer, rect: Rect, bw: f32) {
         let tint = self.intensity;
-        let rune_gold = [0.9, 0.72, 0.3, tint * 0.8];
-        let shadow = [0.4, 0.3, 0.1, tint * 0.4];
-        let glow = [1.0, 0.84, 0.4, tint * 0.3];
+        let rune_gold = theme::with_alpha(theme::viking_gold(), tint * 0.8);
+        let shadow = theme::with_alpha(theme::shadow(), tint * 0.4);
+        let glow = theme::with_alpha(theme::viking_gold(), tint * 0.3);
 
         // Top edge + glow + shadow
         renderer.draw_line(rect.x, rect.y, rect.x + rect.width, rect.y, glow, bw + 2.0);
@@ -202,7 +202,7 @@ impl ÆttiFrame {
 
         // Corner rune accents: small filled squares at each corner
         let cr = bw * 1.5;
-        let corner_color = [1.0, 0.84, 0.4, tint * 0.9];
+        let corner_color = theme::with_alpha(theme::viking_gold(), tint * 0.9);
         for &(cx, cy) in &[
             (rect.x, rect.y),
             (rect.x + rect.width, rect.y),
@@ -305,9 +305,9 @@ impl ÆttiFrame {
     /// Draws dark metallic border plates with rivets at the corners.
     fn render_hammered_metal(&self, renderer: &mut dyn Renderer, rect: Rect, bw: f32) {
         let tint = self.intensity;
-        let plate = [0.35, 0.35, 0.38, tint * 0.95];
-        let highlight = [0.55, 0.55, 0.6, tint * 0.6];
-        let rivet_color = [0.7, 0.65, 0.5, tint];
+        let plate = theme::with_alpha(theme::surface(), tint * 0.95);
+        let highlight = theme::with_alpha(theme::text_dim(), tint * 0.6);
+        let rivet_color = theme::with_alpha(theme::viking_gold(), tint);
         let plate_bw = bw * 2.0;
 
         // Top plate
@@ -390,8 +390,8 @@ impl ÆttiFrame {
     /// Draws overlapping scale/half-circle tessellation along edges.
     fn render_dragon_scale(&self, renderer: &mut dyn Renderer, rect: Rect, bw: f32) {
         let tint = self.intensity;
-        let scale_color = [0.2, 0.6, 0.3, tint * 0.85];
-        let outline_color = [0.1, 0.35, 0.15, tint * 0.9];
+        let scale_color = theme::with_alpha(theme::success(), tint * 0.85);
+        let outline_color = theme::with_alpha(theme::border(), tint * 0.9);
 
         let scale_w = 16.0_f32;
         let scale_h = bw * 3.0;
@@ -459,8 +459,8 @@ impl ÆttiFrame {
     /// Draws fractal ice crystal formations along edges.
     fn render_ice_crystal(&self, renderer: &mut dyn Renderer, rect: Rect, bw: f32) {
         let tint = self.intensity;
-        let ice_color = [0.7, 0.85, 1.0, tint * 0.7];
-        let ice_bright = [0.85, 0.95, 1.0, tint * 0.9];
+        let ice_color = theme::with_alpha(theme::info(), tint * 0.7);
+        let ice_bright = theme::with_alpha(theme::accent(), tint * 0.9);
         let t = renderer.elapsed_time();
 
         let spacing = 20.0_f32;

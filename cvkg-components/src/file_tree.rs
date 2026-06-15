@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::{RADIUS_MD, RADIUS_SM};
 use cvkg_core::{Event, Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
@@ -250,8 +251,8 @@ impl View for YggdrasilTree {
 
             renderer.push_vnode(menu_rect, "ContextMenu");
             renderer.bifrost(menu_rect, 15.0, 1.5, 0.95);
-            renderer.fill_rounded_rect(menu_rect, 6.0, [0.05, 0.05, 0.08, 0.9]);
-            renderer.stroke_rounded_rect(menu_rect, 6.0, theme::border(), 1.0);
+            renderer.fill_rounded_rect(menu_rect, RADIUS_MD, [0.05, 0.05, 0.08, 0.9]);
+            renderer.stroke_rounded_rect(menu_rect, RADIUS_MD, theme::border(), 1.0);
 
             let options = ["Open", "Rename", "Delete", "Copy Path"];
             for (idx, opt) in options.iter().enumerate() {
@@ -448,10 +449,10 @@ impl YggdrasilTree {
         };
         renderer.fill_rounded_rect(
             icon_rect,
-            3.0,
+            RADIUS_SM,
             [icon_color[0], icon_color[1], icon_color[2], 0.15],
         );
-        renderer.stroke_rounded_rect(icon_rect, 3.0, icon_color, 1.0);
+        renderer.stroke_rounded_rect(icon_rect, RADIUS_SM, icon_color, 1.0);
 
         if resolved_kind == FileKind::Folder {
             renderer.fill_rounded_rect(
@@ -500,8 +501,8 @@ impl YggdrasilTree {
                 width: width - (text_x - x) - 8.0,
                 height: row_h - 8.0,
             };
-            renderer.fill_rounded_rect(input_rect, 4.0, [0.1, 0.1, 0.15, 0.85]);
-            renderer.stroke_rounded_rect(input_rect, 4.0, theme::accent(), 1.0);
+            renderer.fill_rounded_rect(input_rect, RADIUS_SM, [0.1, 0.1, 0.15, 0.85]);
+            renderer.stroke_rounded_rect(input_rect, RADIUS_SM, theme::accent(), 1.0);
             renderer.draw_text(
                 &state.rename_text,
                 input_rect.x + 6.0,

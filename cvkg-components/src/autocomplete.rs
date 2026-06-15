@@ -6,6 +6,7 @@
 //! selection.
 
 use crate::theme;
+use crate::{RADIUS_LG, RADIUS_MD, RADIUS_SM};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -120,7 +121,7 @@ impl View for AutoComplete {
         let options_ptr = self.options.as_ptr();
 
         // ── Text field background ──────────────────────────────────────────
-        renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
+        renderer.fill_rounded_rect(rect, RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         // ── Display text or placeholder ────────────────────────────────────
@@ -175,8 +176,8 @@ impl View for AutoComplete {
         if dropdown_visible {
             // Glassmorphic background: bifrost blur + rounded rect fill
             renderer.bifrost(dropdown_rect, 12.0, 1.2, 0.15);
-            renderer.fill_rounded_rect(dropdown_rect, 8.0, [0.06, 0.06, 0.10, 0.85]);
-            renderer.stroke_rounded_rect(dropdown_rect, 8.0, [0.25, 0.25, 0.35, 0.6], 1.0);
+            renderer.fill_rounded_rect(dropdown_rect, RADIUS_LG, [0.06, 0.06, 0.10, 0.85]);
+            renderer.stroke_rounded_rect(dropdown_rect, RADIUS_LG, [0.25, 0.25, 0.35, 0.6], 1.0);
 
             // Render each filtered option
             for (vis_idx, &opt_idx) in state.filtered_indices.iter().enumerate() {
@@ -189,7 +190,7 @@ impl View for AutoComplete {
 
                 // Highlight the selected item
                 if state.selection == Some(vis_idx) {
-                    renderer.fill_rounded_rect(item_rect, 4.0, [0.0, 0.6, 1.0, 0.3]);
+                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, [0.0, 0.6, 1.0, 0.3]);
                 }
 
                 let opt_text = &self.options[opt_idx];

@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::{RADIUS_SM, RADIUS_MD};
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// SkollProgress indicator component.
@@ -334,7 +335,7 @@ impl View for TelemetryView {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
             renderer.set_aria_role("status");
-            renderer.fill_rounded_rect(rect, 4.0, theme::with_alpha(theme::bg(), 0.1));
+            renderer.fill_rounded_rect(rect, RADIUS_SM, theme::with_alpha(theme::bg(), 0.1));
             renderer.stroke_rect(rect, theme::surface(), 1.0);
             return;
         }
@@ -343,7 +344,7 @@ impl View for TelemetryView {
 
         // Bifrost Glassmorphism
         renderer.bifrost(rect, 20.0, 1.2, 0.85);
-        renderer.fill_rounded_rect(rect, 6.0, theme::with_alpha(theme::bg(), 0.6));
+        renderer.fill_rounded_rect(rect, RADIUS_MD, theme::with_alpha(theme::bg(), 0.6));
 
         let accent_cyan = theme::accent();
         let accent_gold = theme::viking_gold();
@@ -354,7 +355,7 @@ impl View for TelemetryView {
         } else {
             accent_cyan
         };
-        renderer.stroke_rounded_rect(rect, 6.0, border_color, 1.5);
+        renderer.stroke_rounded_rect(rect, RADIUS_MD, border_color, 1.5);
 
         // Tactical Header
         renderer.fill_rect(
@@ -814,7 +815,7 @@ impl<V: View> View for RunicTooltip<V> {
 
             renderer.set_z_index(200.0);
             renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
-            renderer.fill_rounded_rect(tip_rect, 4.0, theme::surface_overlay());
+            renderer.fill_rounded_rect(tip_rect, RADIUS_SM, theme::surface_overlay());
             renderer.stroke_rect(tip_rect, theme::with_alpha(theme::accent(), 0.6), 1.0);
 
             renderer.draw_text(
@@ -959,8 +960,8 @@ impl View for MerkiBadge {
         let mut bg = self.color;
         bg[3] *= 0.2;
 
-        renderer.fill_rounded_rect(rect, 4.0, bg);
-        renderer.stroke_rounded_rect(rect, 4.0, self.color, 1.0);
+        renderer.fill_rounded_rect(rect, RADIUS_SM, bg);
+        renderer.stroke_rounded_rect(rect, RADIUS_SM, self.color, 1.0);
 
         let (tw, _) = renderer.measure_text(&self.text, 10.0);
         renderer.draw_text(

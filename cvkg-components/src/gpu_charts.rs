@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::RADIUS_XS;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -748,7 +749,7 @@ impl View for HeatmapChart {
                     width: cell_w - 2.0,
                     height: cell_h - 2.0,
                 };
-                renderer.fill_rounded_rect(cell_rect, 2.0, cell_color);
+                renderer.fill_rounded_rect(cell_rect, RADIUS_XS, cell_color);
             }
         }
     }
@@ -1396,8 +1397,8 @@ impl View for TreemapChart {
                     width: w,
                     height: remaining_rect.height,
                 };
-                renderer.fill_rounded_rect(cell_rect, 2.0, color);
-                renderer.stroke_rounded_rect(cell_rect, 2.0, theme::border(), 0.5);
+                renderer.fill_rounded_rect(cell_rect, RADIUS_XS, color);
+                renderer.stroke_rounded_rect(cell_rect, RADIUS_XS, theme::border(), 0.5);
                 renderer.draw_text(
                     &node.label,
                     cell_rect.x + 4.0,
@@ -1416,8 +1417,8 @@ impl View for TreemapChart {
                     width: remaining_rect.width,
                     height: h,
                 };
-                renderer.fill_rounded_rect(cell_rect, 2.0, color);
-                renderer.stroke_rounded_rect(cell_rect, 2.0, theme::border(), 0.5);
+                renderer.fill_rounded_rect(cell_rect, RADIUS_XS, color);
+                renderer.stroke_rounded_rect(cell_rect, RADIUS_XS, theme::border(), 0.5);
                 renderer.draw_text(
                     &node.label,
                     cell_rect.x + 4.0,
