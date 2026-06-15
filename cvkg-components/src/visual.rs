@@ -143,7 +143,7 @@ impl View for StatusBar {
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        renderer.fill_rect(rect, [0.05, 0.05, 0.08, 0.9]);
+        renderer.fill_rect(rect, theme::surface());
         renderer.draw_line(
             rect.x,
             rect.y,
@@ -285,7 +285,7 @@ impl View for ValkyrieAnalytics {
                         - std::f32::consts::FRAC_PI_2;
                     let x = center_x + angle.cos() * max_radius;
                     let y = center_y + angle.sin() * max_radius;
-                    renderer.draw_line(center_x, center_y, x, y, [0.3, 0.3, 0.4, 0.5], 1.0);
+                    renderer.draw_line(center_x, center_y, x, y, theme::text_muted(), 1.0);
                 }
 
                 for i in 0..num_axes {
@@ -334,7 +334,7 @@ impl View for TelemetryView {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
             renderer.set_aria_role("status");
-            renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.12, 0.15, 0.1]);
+            renderer.fill_rounded_rect(rect, 4.0, theme::with_alpha(theme::bg(), 0.1));
             renderer.stroke_rect(rect, theme::surface(), 1.0);
             return;
         }
@@ -343,10 +343,10 @@ impl View for TelemetryView {
 
         // Bifrost Glassmorphism
         renderer.bifrost(rect, 20.0, 1.2, 0.85);
-        renderer.fill_rounded_rect(rect, 6.0, [0.02, 0.03, 0.05, 0.6]);
+        renderer.fill_rounded_rect(rect, 6.0, theme::with_alpha(theme::bg(), 0.6));
 
-        let accent_cyan = [0.0, 1.0, 1.0, 0.9];
-        let accent_gold = [1.0, 0.8, 0.0, 0.9];
+        let accent_cyan = theme::accent();
+        let accent_gold = theme::viking_gold();
         let alert_red = theme::error_color();
 
         let border_color = if stats.hardware_stall_detected {
@@ -389,7 +389,7 @@ impl View for TelemetryView {
         let start_y = rect.y + 28.0;
         for (i, (label, val)) in lines.iter().enumerate() {
             let y = start_y + i as f32 * 18.0;
-            renderer.draw_text(label, rect.x + 8.0, y, 10.0, [0.7, 0.7, 0.8, 0.8]);
+            renderer.draw_text(label, rect.x + 8.0, y, 10.0, theme::text_muted());
             renderer.draw_text(val, rect.x + 60.0, y, 11.0, accent_gold);
         }
 
@@ -420,7 +420,7 @@ impl View for TelemetryView {
             rect.y + 24.0,
             rect.x + rect.width - 5.0,
             rect.y + 24.0,
-            [1.0, 1.0, 1.0, 0.1],
+            theme::border(),
             1.0,
         );
     }
@@ -468,7 +468,7 @@ impl View for MimirsWell {
 
             // Animated Glow-Path (Bifrost)
             let alpha = 0.2 + (t * 3.0).sin().abs() * 0.2;
-            renderer.draw_line(x1, y1, x2, y2, [1.0, 0.0, 1.0, alpha], 1.0); // Magenta Liquid
+            renderer.draw_line(x1, y1, x2, y2, theme::with_alpha(theme::magenta_liquid(), alpha), 1.0); // Magenta Liquid
 
             // Traveling Pulse
             let progress = (t * 0.5 + (edge.source.len() as f32)).fract();
@@ -481,7 +481,7 @@ impl View for MimirsWell {
                     width: 3.0,
                     height: 3.0,
                 },
-                [1.0, 1.0, 1.0, 0.6],
+                theme::with_alpha(theme::text(), 0.6),
             );
         }
 
@@ -493,9 +493,9 @@ impl View for MimirsWell {
             let size = (10.0 + node.weight * 15.0) * activity_pulse;
 
             let mut color = match node.layer {
-                MemoryLayer::Episodic => [0.0, 0.8, 1.0, 0.9],  // Cyan
-                MemoryLayer::Semantic => [1.0, 0.84, 0.0, 0.9], // Viking Gold
-                MemoryLayer::Procedural => [1.0, 0.0, 1.0, 0.9], // Magenta Liquid
+                MemoryLayer::Episodic => theme::accent(),  // Cyan
+                MemoryLayer::Semantic => theme::viking_gold(), // Viking Gold
+                MemoryLayer::Procedural => theme::magenta_liquid(), // Magenta Liquid
             };
 
             // Boost brightness based on pulse
@@ -511,7 +511,7 @@ impl View for MimirsWell {
                     nx + size / 2.0 + 4.0,
                     ny - 4.0,
                     9.0,
-                    [1.0, 1.0, 1.0, 0.5 * activity_pulse],
+                    theme::with_alpha(theme::text(), 0.5 * activity_pulse),
                 );
             }
         }
@@ -754,7 +754,7 @@ impl<V: View> View for VölvaScan<V> {
                     noise.push('\n');
                 }
             }
-            renderer.draw_text(&noise, rect.x, rect.y + 10.0, 10.0, [0.0, 1.0, 1.0, 0.4]);
+            renderer.draw_text(&noise, rect.x, rect.y + 10.0, 10.0, theme::with_alpha(theme::accent(), 0.4));
         } else {
             // Reveal Content
             let opacity = ((t - self.duration) * 2.0).min(1.0);
@@ -814,8 +814,8 @@ impl<V: View> View for RunicTooltip<V> {
 
             renderer.set_z_index(200.0);
             renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
-            renderer.fill_rounded_rect(tip_rect, 4.0, [0.08, 0.08, 0.1, 0.9]);
-            renderer.stroke_rect(tip_rect, [0.0, 1.0, 1.0, 0.6], 1.0);
+            renderer.fill_rounded_rect(tip_rect, 4.0, theme::surface_overlay());
+            renderer.stroke_rect(tip_rect, theme::with_alpha(theme::accent(), 0.6), 1.0);
 
             renderer.draw_text(
                 &self.text,
@@ -882,7 +882,7 @@ impl View for MuninAvatar {
 
         // 1. Base Circle
         renderer.fill_ellipse(rect, theme::surface());
-        renderer.stroke_ellipse(rect, [0.3, 0.4, 0.5, 0.6], 1.0);
+        renderer.stroke_ellipse(rect, theme::border(), 1.0);
 
         // 2. Content
         if let Some(src) = &self.src {
@@ -894,7 +894,7 @@ impl View for MuninAvatar {
                 rect.x + (rect.width - tw) / 2.0,
                 rect.y + (rect.height - 14.0) / 2.0,
                 14.0,
-                [1.0, 1.0, 1.0, 0.8],
+                theme::text(),
             );
         }
 
@@ -916,7 +916,7 @@ impl View for MuninAvatar {
             };
 
             renderer.fill_ellipse(status_rect, color);
-            renderer.stroke_ellipse(status_rect, [0.0, 0.0, 0.0, 1.0], 1.5);
+            renderer.stroke_ellipse(status_rect, theme::bg(), 1.5);
         }
 
         renderer.pop_vnode();
@@ -968,7 +968,7 @@ impl View for MerkiBadge {
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - 10.0) / 2.0,
             10.0,
-            [1.0, 1.0, 1.0, 0.9],
+            theme::text(),
         );
 
         renderer.pop_vnode();
@@ -1022,7 +1022,7 @@ impl View for UrdrTimeline {
             rect.y,
             line_x,
             rect.y + rect.height,
-            [0.3, 0.3, 0.4, 0.5],
+            theme::text_muted(),
             1.5,
         );
 
@@ -1039,7 +1039,7 @@ impl View for UrdrTimeline {
                     width: 10.0,
                     height: 10.0,
                 },
-                [0.0, 1.0, 1.0, 0.3 * pulse],
+                theme::with_alpha(theme::accent(), 0.3 * pulse),
             );
             renderer.fill_ellipse(
                 Rect {
@@ -1057,14 +1057,14 @@ impl View for UrdrTimeline {
                 line_x + 20.0,
                 current_y - 2.0,
                 10.0,
-                [0.6, 0.6, 0.7, 0.8],
+                theme::text_muted(),
             );
             renderer.draw_text(
                 &event.title,
                 line_x + 20.0,
                 current_y + 12.0,
                 13.0,
-                [1.0, 1.0, 1.0, 0.9],
+                theme::text(),
             );
 
             current_y += item_spacing;
@@ -1119,7 +1119,7 @@ impl View for DraumaSkeleton {
         // 1. Mimir's Refraction (Skeletal Depth)
         // Drauma represents a "spectral" presence of content
         renderer.bifrost(rect, self.border_radius, 2.0, 0.8);
-        renderer.fill_rounded_rect(rect, self.border_radius, [0.1, 0.1, 0.15, 0.6]);
+        renderer.fill_rounded_rect(rect, self.border_radius, theme::with_alpha(theme::surface(), 0.6));
 
         // 2. Kinetic Shimmer Effect
         if self.shimmer {
@@ -1133,7 +1133,7 @@ impl View for DraumaSkeleton {
             };
 
             let shimmer_alpha = 0.15 * (1.0 - (shimmer_pos - 0.5).abs() * 2.0);
-            renderer.fill_rect(shimmer_rect, [0.0, 0.8, 1.0, shimmer_alpha]);
+            renderer.fill_rect(shimmer_rect, theme::with_alpha(theme::accent(), shimmer_alpha));
         }
 
         renderer.pop_vnode();
@@ -1432,7 +1432,7 @@ impl View for EmptyState {
                 center_x - tw / 2.0,
                 y + (crate::FONT_3XL - th).max(0.0),
                 crate::FONT_3XL,
-                [1.0, 1.0, 1.0, 0.7],
+                theme::text(),
             );
             y += crate::FONT_3XL + SPACE_SM;
         }
@@ -1444,7 +1444,7 @@ impl View for EmptyState {
             center_x - tw / 2.0,
             y + (FONT_LG - th).max(0.0),
             FONT_LG,
-            [1.0, 1.0, 1.0, 0.9],
+            theme::text(),
         );
         y += FONT_LG + SPACE_SM;
 
@@ -1455,7 +1455,7 @@ impl View for EmptyState {
             center_x - tw / 2.0,
             y + (FONT_BASE - th).max(0.0),
             FONT_BASE,
-            [0.6, 0.6, 0.7, 0.8],
+            theme::text_muted(),
         );
         y += FONT_BASE + SPACE_LG;
 

@@ -116,6 +116,9 @@ path = "tests/theming_test.rs"
 [dependencies]
 rfd.workspace = true
 
+[dependencies.arboard]
+workspace = true
+
 [dependencies.cvkg-anim]
 version = "0.2.12"
 

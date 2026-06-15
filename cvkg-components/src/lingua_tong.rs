@@ -171,6 +171,20 @@ pub fn init_english_translations() {
     en.insert("datepicker.day.fr".to_string(), "Fr".to_string());
     en.insert("datepicker.day.sa".to_string(), "Sa".to_string());
 
+    // Abbreviated month names (used by DateRangePicker and calendar headers)
+    en.insert("datepicker.month.jan".to_string(), "Jan".to_string());
+    en.insert("datepicker.month.feb".to_string(), "Feb".to_string());
+    en.insert("datepicker.month.mar".to_string(), "Mar".to_string());
+    en.insert("datepicker.month.apr".to_string(), "Apr".to_string());
+    en.insert("datepicker.month.may_short".to_string(), "May".to_string());
+    en.insert("datepicker.month.jun".to_string(), "Jun".to_string());
+    en.insert("datepicker.month.jul".to_string(), "Jul".to_string());
+    en.insert("datepicker.month.aug".to_string(), "Aug".to_string());
+    en.insert("datepicker.month.sep".to_string(), "Sep".to_string());
+    en.insert("datepicker.month.oct".to_string(), "Oct".to_string());
+    en.insert("datepicker.month.nov".to_string(), "Nov".to_string());
+    en.insert("datepicker.month.dec".to_string(), "Dec".to_string());
+
     load_translations("en", en);
 }
 
@@ -264,6 +278,20 @@ pub fn init_japanese_translations() {
     ja.insert("datepicker.day.th".to_string(), "木".to_string());
     ja.insert("datepicker.day.fr".to_string(), "金".to_string());
     ja.insert("datepicker.day.sa".to_string(), "土".to_string());
+
+    // Abbreviated month names (Japanese months are the same abbreviated/full)
+    ja.insert("datepicker.month.jan".to_string(), "1月".to_string());
+    ja.insert("datepicker.month.feb".to_string(), "2月".to_string());
+    ja.insert("datepicker.month.mar".to_string(), "3月".to_string());
+    ja.insert("datepicker.month.apr".to_string(), "4月".to_string());
+    ja.insert("datepicker.month.may_short".to_string(), "5月".to_string());
+    ja.insert("datepicker.month.jun".to_string(), "6月".to_string());
+    ja.insert("datepicker.month.jul".to_string(), "7月".to_string());
+    ja.insert("datepicker.month.aug".to_string(), "8月".to_string());
+    ja.insert("datepicker.month.sep".to_string(), "9月".to_string());
+    ja.insert("datepicker.month.oct".to_string(), "10月".to_string());
+    ja.insert("datepicker.month.nov".to_string(), "11月".to_string());
+    ja.insert("datepicker.month.dec".to_string(), "12月".to_string());
 
     load_translations("ja", ja);
 }

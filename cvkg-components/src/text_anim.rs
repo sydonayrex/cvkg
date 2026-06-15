@@ -532,7 +532,8 @@ impl View for CardHoverEffect {
                 width: self.width * 0.6,
                 height: self.height,
             };
-            renderer.fill_rounded_rect(spot_rect, 12.0, [1.0, 1.0, 1.0, 0.03 * self.hover]);
+            let spot_color = theme::surface_overlay();
+            renderer.fill_rounded_rect(spot_rect, 12.0, [spot_color[0], spot_color[1], spot_color[2], 0.03 * self.hover]);
         }
         // Label
         if !self.label.is_empty() {
@@ -933,7 +934,8 @@ impl View for ShimmerButton {
                 width: 40.0,
                 height: rect.height,
             };
-            renderer.fill_rounded_rect(shimmer_rect, 10.0, [1.0, 1.0, 1.0, 0.15]);
+            let shimmer_color = theme::accent();
+            renderer.fill_rounded_rect(shimmer_rect, 10.0, [shimmer_color[0], shimmer_color[1], shimmer_color[2], 0.15]);
         }
         // Label
         let (tw, th) = renderer.measure_text(&self.label, 15.0);
@@ -1060,6 +1062,7 @@ impl View for RippleButton {
             let cx = rect.x + self.ripple_cx * self.width;
             let cy = rect.y + self.ripple_cy * self.height;
             let ripple_alpha = (1.0 - self.ripple) * 0.3;
+            let ripple_color = theme::accent();
             renderer.fill_ellipse(
                 Rect {
                     x: cx - ripple_r,
@@ -1067,7 +1070,7 @@ impl View for RippleButton {
                     width: ripple_r * 2.0,
                     height: ripple_r * 2.0,
                 },
-                [1.0, 1.0, 1.0, ripple_alpha],
+                [ripple_color[0], ripple_color[1], ripple_color[2], ripple_alpha],
             );
         }
         // Label
@@ -1164,8 +1167,8 @@ impl View for StatefulButton {
         renderer.fill_rounded_rect(rect, 10.0, bg);
         let tc = match self.state {
             ButtonState::Idle | ButtonState::Loading => theme::bg(),
-            ButtonState::Success => [1.0, 1.0, 1.0, 1.0],
-            ButtonState::Error => [1.0, 1.0, 1.0, 1.0],
+            ButtonState::Success => theme::bg(),
+            ButtonState::Error => theme::bg(),
         };
         match self.state {
             ButtonState::Loading => {

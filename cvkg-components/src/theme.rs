@@ -143,6 +143,12 @@ pub fn focus_ring() -> [f32; 4] {
     color("focus_ring")
 }
 
+/// Override the alpha channel of any color.
+#[inline]
+pub fn with_alpha(c: [f32; 4], a: f32) -> [f32; 4] {
+    [c[0], c[1], c[2], a]
+}
+
 /// Shadow color. Adaptive.
 #[inline]
 pub fn shadow() -> [f32; 4] {

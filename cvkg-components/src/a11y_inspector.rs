@@ -1,5 +1,6 @@
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
+use cvkg_vdom::VDom;
 
 /// Accessibility Inspector — live a11y tree viewer.
 ///
@@ -125,6 +126,28 @@ impl A11yInspector {
         }
     }
 
+    /// Refresh the inspector's tree from the real VDOM accessibility state.
+    ///
+    /// Walks the VDOM tree from the root, collecting all nodes with
+    /// meaningful ARIA roles and converting them to `A11yNode` entries.
+    /// Nodes with `"presentation"` or `"none"` roles are skipped.
+    pub fn refresh_from_vdom(&mut self, vdom: &VDom) {
+        let root = vdom.root;
+        let entries = vdom.query_accessibility_tree(root);
+
+        self.nodes = entries
+            .into_iter()
+            .map(|e| A11yNode {
+                role: e.role,
+                label: e.label,
+                value: e.value,
+                focused: e.focused,
+                enabled: e.enabled,
+                depth: e.depth,
+            })
+            .collect();
+    }
+
     /// Show the inspector panel.
     pub fn show(mut self) -> Self {
         self.visible = true;
@@ -152,6 +175,16 @@ impl A11yInspector {
     /// Get the total number of nodes.
     pub fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Count the number of distinct roles in the tree.
+    pub fn role_count(&self) -> usize {
+        use std::collections::HashSet;
+        let mut roles = HashSet::new();
+        for node in &self.nodes {
+            roles.insert(&node.role);
+        }
+        roles.len()
     }
 }
 
@@ -201,9 +234,9 @@ impl View for A11yInspector {
         );
         y += 24.0;
 
-        // Stats
+        // Stats — use actual counts from the real tree
         renderer.draw_text(
-            &format!("{} nodes | 8 roles", self.node_count()),
+            &format!("{} nodes | {} roles", self.node_count(), self.role_count()),
             panel_rect.x + pad,
             y,
             11.0,

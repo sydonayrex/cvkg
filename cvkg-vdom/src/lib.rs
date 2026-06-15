@@ -55,6 +55,25 @@ pub struct LayoutRect {
     pub height: f32,
 }
 
+/// A single node in the accessibility tree, extracted from the VDOM.
+///
+/// Used by `A11yInspector` to display the real accessibility tree structure.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct A11yNodeEntry {
+    /// ARIA role (e.g., "button", "group", "slider")
+    pub role: String,
+    /// Accessible label for the node
+    pub label: String,
+    /// Current value display (e.g., "65%" for sliders)
+    pub value: Option<String>,
+    /// Whether the node is currently focused
+    pub focused: bool,
+    /// Whether the node is enabled
+    pub enabled: bool,
+    /// Tree depth for indentation
+    pub depth: u32,
+}
+
 /// Accessibility ARIA properties for the DOM shadow tree.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AriaProps {
@@ -1153,6 +1172,68 @@ impl cvkg_core::Renderer for VNodeRenderer {
     }
 }
 impl VDom {
+    /// Query the accessibility tree from the VDOM.
+    ///
+    /// Traverses the VDOM tree from the root, collecting all nodes with
+    /// ARIA roles and labels into a flat list suitable for display in
+    /// the A11yInspector.
+    pub fn query_accessibility_tree(
+        &self,
+        root: Option<NodeId>,
+    ) -> Vec<crate::A11yNodeEntry> {
+        let mut result = Vec::new();
+        if let Some(root_id) = root {
+            self.collect_a11y_nodes(root_id, 0, &mut result);
+        }
+        result
+    }
+
+    /// Recursively collect A11y nodes from the VDOM tree.
+    fn collect_a11y_nodes(
+        &self,
+        id: NodeId,
+        depth: u32,
+        result: &mut Vec<crate::A11yNodeEntry>,
+    ) {
+        if let Some(node) = self.nodes.get(&id) {
+            // Only include nodes that have meaningful ARIA roles
+            // (skip "presentation" and "none" which are structural only)
+            if node.aria_role != "presentation" && node.aria_role != "none" {
+                let label = node.aria_props.label.clone().unwrap_or_default();
+                let value = node.aria_props.aria_valuenow.map(|v| {
+                    let min = node.aria_props.aria_valuemin.unwrap_or(0.0);
+                    let max = node.aria_props.aria_valuemax.unwrap_or(100.0);
+                    let pct = if max > min {
+                        ((v - min) / (max - min) * 100.0).round() as u32
+                    } else {
+                        0
+                    };
+                    format!("{}%", pct)
+                });
+
+                let focused = *self
+                    .focused_node
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    == Some(id);
+
+                result.push(crate::A11yNodeEntry {
+                    role: node.aria_role.clone(),
+                    label,
+                    value,
+                    focused,
+                    enabled: !node.aria_props.disabled,
+                    depth,
+                });
+            }
+
+            // Recurse into children
+            for child_id in &node.children {
+                self.collect_a11y_nodes(*child_id, depth + 1, result);
+            }
+        }
+    }
+
     /// Mutate the Virtual DOM state by applying a sequence of patches.
     #[tracing::instrument(skip(self, patches))]
     pub fn apply_patches(&mut self, patches: Vec<VDomPatch>) {

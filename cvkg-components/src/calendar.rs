@@ -1,3 +1,4 @@
+use crate::lingua_tong;
 use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
@@ -113,7 +114,15 @@ impl View for TyrCalendar {
 
         // Days of week
         let day_w = rect.width / 7.0;
-        let days = ["S", "M", "T", "W", "T", "F", "S"];
+        let days = [
+            lingua_tong::t("datepicker.day.su"),
+            lingua_tong::t("datepicker.day.mo"),
+            lingua_tong::t("datepicker.day.tu"),
+            lingua_tong::t("datepicker.day.we"),
+            lingua_tong::t("datepicker.day.th"),
+            lingua_tong::t("datepicker.day.fr"),
+            lingua_tong::t("datepicker.day.sa"),
+        ];
         for (i, day) in days.iter().enumerate() {
             renderer.draw_text(
                 day,
@@ -246,22 +255,23 @@ impl LayoutView for TyrCalendar {
     }
 }
 
-fn month_name(m: u32) -> &'static str {
-    match m {
-        1 => "January",
-        2 => "February",
-        3 => "March",
-        4 => "April",
-        5 => "May",
-        6 => "June",
-        7 => "July",
-        8 => "August",
-        9 => "September",
-        10 => "October",
-        11 => "November",
-        12 => "December",
-        _ => "Unknown",
-    }
+fn month_name(m: u32) -> String {
+    let key = match m {
+        1 => "datepicker.month.jan",
+        2 => "datepicker.month.feb",
+        3 => "datepicker.month.mar",
+        4 => "datepicker.month.apr",
+        5 => "datepicker.month.may_short",
+        6 => "datepicker.month.jun",
+        7 => "datepicker.month.jul",
+        8 => "datepicker.month.aug",
+        9 => "datepicker.month.sep",
+        10 => "datepicker.month.oct",
+        11 => "datepicker.month.nov",
+        12 => "datepicker.month.dec",
+        _ => "???",
+    };
+    lingua_tong::t(key)
 }
 
 /// DatePicker component using a popover TyrCalendar.

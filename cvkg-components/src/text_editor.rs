@@ -9,6 +9,7 @@
 
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View, load_system_state, update_system_state};
+use log::info;
 use std::sync::Arc;
 
 /// Multi-line text editor with word wrapping and vertical scrolling.
@@ -33,7 +34,7 @@ pub struct TextEditor {
 }
 
 /// Internal text editor state stored in system state map.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct EditorState {
     /// Cursor position as byte offset into text.
     cursor_pos: usize,
@@ -48,6 +49,8 @@ pub struct EditorState {
     /// Whether the pointer is currently dragging for selection.
     #[allow(dead_code)]
     is_dragging: bool,
+    /// Current text content (persisted across renders for handler access).
+    text: String,
 }
 
 impl Default for EditorState {
@@ -59,6 +62,7 @@ impl Default for EditorState {
             blink_phase: 0,
             last_blink_time: 0.0,
             is_dragging: false,
+            text: String::new(),
         }
     }
 }
@@ -128,7 +132,7 @@ impl TextEditor {
         let state = load_system_state();
         state
             .get_component_state::<EditorState>(self.state_id)
-            .and_then(|guard| guard.read().ok().map(|v| *v))
+            .and_then(|guard| guard.read().ok().map(|v| v.clone()))
             .unwrap_or_default()
     }
 
@@ -282,6 +286,98 @@ impl TextEditor {
     }
 }
 
+// ── Free functions for handler closures (cannot capture &self) ──────────────
+
+/// Get the line number and column for a byte offset into text.
+fn pos_to_line_col(text: &str, byte_pos: usize) -> (usize, usize) {
+    let mut line = 0;
+    let mut col = 0;
+    for (i, c) in text.chars().enumerate() {
+        if i >= byte_pos {
+            break;
+        }
+        if c == '\n' {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+/// Get the byte offset for a line and column.
+fn line_col_to_pos(text: &str, target_line: usize, target_col: usize) -> usize {
+    let mut line = 0;
+    let mut col = 0;
+    for (i, c) in text.chars().enumerate() {
+        if line == target_line && col == target_col {
+            return i;
+        }
+        if c == '\n' {
+            if line == target_line {
+                return i;
+            }
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+    text.len()
+}
+
+/// Delete the selection or the character before the cursor.
+fn delete_backward(state: &mut EditorState) {
+    if let Some(anchor) = state.selection_anchor {
+        let start = state.cursor_pos.min(anchor);
+        let end = state.cursor_pos.max(anchor);
+        state.text.replace_range(start..end, "");
+        state.cursor_pos = start;
+        state.selection_anchor = None;
+    } else if state.cursor_pos > 0 {
+        state.cursor_pos -= 1;
+        state.text.remove(state.cursor_pos);
+    }
+}
+
+/// Delete the character after the cursor.
+fn delete_forward(state: &mut EditorState) {
+    if state.selection_anchor.is_some() {
+        delete_backward(state);
+    } else if state.cursor_pos < state.text.len() {
+        state.text.remove(state.cursor_pos);
+    }
+}
+
+/// Insert text at cursor position, replacing selection.
+fn insert_at_cursor(state: &mut EditorState, insert: &str) {
+    if let Some(anchor) = state.selection_anchor {
+        let start = state.cursor_pos.min(anchor);
+        let end = state.cursor_pos.max(anchor);
+        state.text.replace_range(start..end, insert);
+        state.cursor_pos = start + insert.len();
+        state.selection_anchor = None;
+    } else {
+        state.text.insert_str(state.cursor_pos, insert);
+        state.cursor_pos += insert.len();
+    }
+}
+
+/// Get selected text range.
+fn selection_range(state: &EditorState) -> Option<(usize, usize)> {
+    state.selection_anchor.map(|anchor| {
+        let start = state.cursor_pos.min(anchor);
+        let end = state.cursor_pos.max(anchor);
+        (start, end)
+    })
+}
+
+/// Get the selected text content.
+fn selected_text(state: &EditorState) -> Option<String> {
+    selection_range(state).map(|(start, end)| state.text[start..end].to_string())
+}
+
 impl View for TextEditor {
     type Body = Never;
     fn body(self) -> Self::Body {
@@ -291,7 +387,16 @@ impl View for TextEditor {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "TextEditor");
 
-        let state = self.read_state();
+        let mut state = self.read_state();
+
+        // Sync text from struct into state on render (parent is source of truth)
+        if state.text.is_empty() && !self.text.is_empty() {
+            state.text = self.text.clone();
+        } else if !self.text.is_empty() && state.text != self.text {
+            // Parent has updated text (e.g. from external source)
+            state.text = self.text.clone();
+        }
+
         let line_h = 18.0; // Line height in pixels
         let pad = 8.0;
         let editor_h = line_h * self.visible_lines as f32 + pad * 2.0;
@@ -467,21 +572,304 @@ impl View for TextEditor {
         // Register keyboard handler (OS-agnostic: cmd maps to Command on macOS, Ctrl elsewhere)
         if self.is_focused && self.state_id != 0 {
             let state_id = self.state_id;
+            let text_for_handlers = state.text.clone();
+            let on_change = self.on_change.clone();
+
+            // ── Keydown handler (arrow keys, backspace, delete, home/end, enter, Cmd+A) ──
             renderer.register_handler(
-                "keydown:cmd+a",
-                Arc::new(move |_| {
+                "keydown",
+                Arc::new(move |event| {
+                    if let cvkg_core::Event::KeyDown { ref key, .. } = event {
+                        match key.as_str() {
+                            // ── Cmd+A: Select All (dispatched by native renderer as "cmd+a") ──
+                            "cmd+a" => {
+                                info!("[TextEditor] Select All");
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let len = st.text.len();
+                                        st.selection_anchor = Some(0);
+                                        st.cursor_pos = len;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── ArrowLeft: Move cursor left ──
+                            "ArrowLeft" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        if st.cursor_pos > 0 {
+                                            st.cursor_pos -= 1;
+                                        }
+                                        st.selection_anchor = None;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── ArrowRight: Move cursor right ──
+                            "ArrowRight" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        if st.cursor_pos < st.text.len() {
+                                            st.cursor_pos += 1;
+                                        }
+                                        st.selection_anchor = None;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── ArrowUp: Move cursor up one line ──
+                            "ArrowUp" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let (line, col) = pos_to_line_col(&st.text, st.cursor_pos);
+                                        if line > 0 {
+                                            st.cursor_pos = line_col_to_pos(&st.text, line - 1, col);
+                                        }
+                                        st.selection_anchor = None;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── ArrowDown: Move cursor down one line ──
+                            "ArrowDown" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let (line, col) = pos_to_line_col(&st.text, st.cursor_pos);
+                                        let total_lines = st.text.split('\n').count();
+                                        if line + 1 < total_lines {
+                                            st.cursor_pos = line_col_to_pos(&st.text, line + 1, col);
+                                        }
+                                        st.selection_anchor = None;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── Home: Move to start of current line ──
+                            "Home" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let (line, _col) = pos_to_line_col(&st.text, st.cursor_pos);
+                                        st.cursor_pos = line_col_to_pos(&st.text, line, 0);
+                                        st.selection_anchor = None;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── End: Move to end of current line ──
+                            "End" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let (line, _col) = pos_to_line_col(&st.text, st.cursor_pos);
+                                        let lines: Vec<&str> = st.text.split('\n').collect();
+                                        if line < lines.len() {
+                                            st.cursor_pos = line_col_to_pos(&st.text, line, lines[line].len());
+                                        }
+                                        st.selection_anchor = None;
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── Backspace: Delete character before cursor (or selection) ──
+                            "Backspace" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        delete_backward(&mut st);
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── Delete: Delete character after cursor (or selection) ──
+                            "Delete" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        delete_forward(&mut st);
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── Enter: Insert newline ──
+                            "Enter" => {
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        insert_at_cursor(&mut st, "\n");
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            // ── Tab: Insert spaces ──
+                            "Tab" => {
+                                let tab_text = "    "; // 4 spaces
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        insert_at_cursor(&mut st, tab_text);
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+
+                            _ => {}
+                        }
+                    }
+                }),
+            );
+
+            // ── Copy handler (Cmd+C dispatched as Event::Copy by native renderer) ──
+            renderer.register_handler(
+                "copy",
+                Arc::new(move |_event| {
                     update_system_state(|s| {
                         let mut ns = s.clone();
-                        if let Some(guard) = ns.get_component_state::<EditorState>(state_id)
+                        if let Some(guard) =
+                            ns.get_component_state::<EditorState>(state_id)
                             && let Ok(guard) = guard.read()
                         {
-                            let mut st = *guard;
-                            // Select all — need access to text, handled via component state
-                            st.selection_anchor = Some(0);
-                            ns.set_component_state(state_id, st);
+                            let st = (*guard).clone();
+                            if let Some((start, end)) = selection_range(&st) {
+                                let selected = &st.text[start..end];
+                                if !selected.is_empty() {
+                                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                        let _ = clipboard.set_text(selected);
+                                        info!("[TextEditor] Copied {} bytes to clipboard", selected.len());
+                                    }
+                                }
+                            }
                         }
                         ns
                     });
+                }),
+            );
+
+            // ── Cut handler (Cmd+X dispatched as Event::Cut by native renderer) ──
+            renderer.register_handler(
+                "cut",
+                Arc::new(move |_event| {
+                    update_system_state(|s| {
+                        let mut ns = s.clone();
+                        if let Some(guard) =
+                            ns.get_component_state::<EditorState>(state_id)
+                            && let Ok(guard) = guard.read()
+                        {
+                            let mut st = (*guard).clone();
+                            if let Some((start, end)) = selection_range(&st) {
+                                let selected = &st.text[start..end];
+                                if !selected.is_empty() {
+                                    // Copy to clipboard
+                                    if let Ok(mut clipboard) = arboard::Clipboard::new() {
+                                        let _ = clipboard.set_text(selected);
+                                        info!("[TextEditor] Cut {} bytes to clipboard", selected.len());
+                                    }
+                                    // Delete the selection
+                                    st.text.replace_range(start..end, "");
+                                    st.cursor_pos = start;
+                                    st.selection_anchor = None;
+                                    ns.set_component_state(state_id, st);
+                                }
+                            }
+                        }
+                        ns
+                    });
+                }),
+            );
+
+            // ── Paste handler (Cmd+V dispatched as Event::Paste(text) by native renderer) ──
+            renderer.register_handler(
+                "paste",
+                Arc::new(move |event| {
+                    if let cvkg_core::Event::Paste(ref text) = event {
+                        if text.is_empty() {
+                            return;
+                        }
+                        let paste_text = text.clone();
+                        info!("[TextEditor] Pasting {} bytes from clipboard", paste_text.len());
+                        update_system_state(|s| {
+                            let mut ns = s.clone();
+                            if let Some(guard) =
+                                ns.get_component_state::<EditorState>(state_id)
+                                && let Ok(guard) = guard.read()
+                            {
+                                let mut st = (*guard).clone();
+                                insert_at_cursor(&mut st, &paste_text);
+                                ns.set_component_state(state_id, st);
+                            }
+                            ns
+                        });
+                    }
                 }),
             );
         }

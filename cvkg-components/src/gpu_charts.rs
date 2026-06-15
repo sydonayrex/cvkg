@@ -242,7 +242,7 @@ impl ScatterPlot {
     pub fn new() -> Self {
         Self {
             points: Vec::new(),
-            color: [0.8, 0.4, 0.0, 1.0],
+            color: theme::warning(),
         }
     }
 
@@ -327,7 +327,7 @@ impl Histogram {
         Self {
             data: Vec::new(),
             bins: 10,
-            color: [0.6, 0.2, 0.8, 1.0],
+            color: theme::secondary(),
         }
     }
 
@@ -697,7 +697,7 @@ impl HeatmapChart {
     pub fn new() -> Self {
         Self {
             grid: Vec::new(),
-            min_color: [0.1, 0.1, 0.2, 1.0],
+            min_color: theme::surface(),
             max_color: theme::accent(),
         }
     }
@@ -970,7 +970,7 @@ impl View for FunnelChart {
                 rect.x + 12.0,
                 y + stage_h / 2.0 - 4.0,
                 11.0,
-                [0.9, 0.9, 1.0, 0.9],
+                theme::text(),
             );
         }
     }
@@ -1403,7 +1403,7 @@ impl View for TreemapChart {
                     cell_rect.x + 4.0,
                     cell_rect.y + 14.0,
                     10.0,
-                    [1.0, 1.0, 1.0, 0.9],
+                    theme::text(),
                 );
 
                 remaining_rect.x += w;
@@ -1423,7 +1423,7 @@ impl View for TreemapChart {
                     cell_rect.x + 4.0,
                     cell_rect.y + 14.0,
                     10.0,
-                    [1.0, 1.0, 1.0, 0.9],
+                    theme::text(),
                 );
 
                 remaining_rect.y += h;
