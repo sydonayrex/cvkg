@@ -1,5 +1,5 @@
 use crate::theme;
-use crate::{Color, FONT_SM, FONT_XS, FontWeight, Orientation, SPACE_SM, SPACE_XS};
+use crate::{FONT_SM, FONT_XS, FontWeight, Orientation, SPACE_SM, SPACE_XS};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
 use cvkg_runic_text as runic;

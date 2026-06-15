@@ -799,8 +799,8 @@ impl Theme {
 /// ```
 /// use cvkg_themes::{ThemeBuilder, OklchColor};
 /// let theme = ThemeBuilder::dark()
-///     .with_error_color(OklchColor::new(0.65, 0.2, 25.0, 1.0))
-///     .with_surface_color(OklchColor::new(0.12, 0.05, 260.0, 1.0))
+///     .with_error_color(OklchColor::new(0.65, 0.22, 25.0, 1.0).to_rgba())
+///     .with_surface(OklchColor::new(0.15, 0.02, 260.0, 1.0).to_rgba())
 ///     .build();
 /// ```
 pub struct ThemeBuilder {
