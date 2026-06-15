@@ -6,6 +6,7 @@
 use crate::theme;
 use crate::{FONT_SM, RADIUS_LG, SPACE_MD};
 use cvkg_core::{Never, Rect, Renderer, View};
+use std::cell::Cell;
 
 /// HoverCard - A floating card that appears on hover with a delay.
 ///
@@ -32,6 +33,8 @@ pub struct HoverCard {
     delay_ms: u64,
     /// Preferred position of the card relative to the trigger.
     position: HoverCardPosition,
+    /// When the pointer entered the trigger area. None = not hovering.
+    hover_start: Cell<Option<std::time::Instant>>,
 }
 
 /// Position options for the hover card relative to its trigger.
@@ -52,6 +55,7 @@ impl HoverCard {
             content: content.into(),
             delay_ms: 500,
             position: HoverCardPosition::Bottom,
+            hover_start: Cell::new(None),
         }
     }
 
@@ -94,6 +98,21 @@ impl View for HoverCard {
         // Check hover state via pointer position
         let [px, py] = renderer.get_pointer_position();
         let is_hovering = trigger_rect.contains(px, py);
+        // Update hover_start timer
+        let hover_start = if is_hovering {
+            if self.hover_start.get().is_none() {
+                self.hover_start.set(Some(std::time::Instant::now()));
+            }
+            self.hover_start.get()
+        } else {
+            self.hover_start.set(None);
+            None
+        };
+
+        // Only show card after delay has elapsed
+        let show_card = hover_start.map_or(false, |start| {
+            start.elapsed().as_millis() as u64 >= self.delay_ms
+        });
 
         // Compute card dimensions
         let (tw, _) = renderer.measure_text(&self.content, FONT_SM);
@@ -128,12 +147,16 @@ impl View for HoverCard {
             },
         };
 
-        if is_hovering {
+        if show_card {
             renderer.push_vnode(card_rect, "HoverCardContent");
 
             // Glass background
             renderer.bifrost(card_rect, 15.0, 1.5, 0.95);
-            renderer.fill_rounded_rect(card_rect, RADIUS_LG, [0.06, 0.06, 0.1, 0.92]);
+            renderer.fill_rounded_rect(
+                card_rect,
+                RADIUS_LG,
+                theme::with_alpha(theme::surface(), 0.92),
+            );
             renderer.stroke_rounded_rect(card_rect, RADIUS_LG, theme::border(), 1.0);
 
             // Content text
