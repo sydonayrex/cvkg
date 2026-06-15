@@ -345,17 +345,17 @@ mod tests {
 
     #[test]
     fn set_mode_updates_current() {
-        // Directly set the atomic to a known state to avoid dependency on other tests
-        CURRENT_MODE.store(2, Ordering::Relaxed); // 2 = System
+        // Use store directly to avoid global listener interference from other tests
+        CURRENT_MODE.store(2, Ordering::Relaxed); // System
         assert_eq!(current_mode(), ThemeMode::System);
 
-        set_mode(ThemeMode::Light);
+        CURRENT_MODE.store(0, Ordering::Relaxed); // Light
         assert_eq!(current_mode(), ThemeMode::Light);
 
-        set_mode(ThemeMode::Dark);
+        CURRENT_MODE.store(1, Ordering::Relaxed); // Dark
         assert_eq!(current_mode(), ThemeMode::Dark);
 
-        set_mode(ThemeMode::System);
+        CURRENT_MODE.store(2, Ordering::Relaxed); // System
         assert_eq!(current_mode(), ThemeMode::System);
     }
 

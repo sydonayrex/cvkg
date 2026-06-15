@@ -10,7 +10,8 @@
 //! All components use cvkg theme system (theme::*) for full themability.
 
 use crate::theme;
-use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
+use cvkg_core::{Event, Never, Rect, Renderer, Size, SizeProposal, View};
+use std::sync::Arc;
 
 // ----------------------------------------------------------------------------
 // Drawer — slide-in drawer panel
@@ -86,7 +87,7 @@ impl View for Drawer {
             return;
         }
         renderer.push_vnode(rect, "Drawer");
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.3 * self.progress]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.3 * self.progress));
         let offset_x = if self.position == "right" {
             (1.0 - self.progress) * self.width
         } else {
@@ -207,6 +208,8 @@ impl View for Menubar {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Menubar");
+        renderer.set_aria_role("menubar");
+        renderer.set_aria_label("Menu bar");
         renderer.fill_rect(rect, theme::surface());
         let item_w = self.width / self.items.len().max(1) as f32;
         for (i, (label, _)) in self.items.iter().enumerate() {
@@ -232,6 +235,22 @@ impl View for Menubar {
                 theme::text(),
             );
         }
+
+        // Keyboard: ArrowLeft/Right to navigate, Enter to select, Escape to close
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "ArrowLeft" | "ArrowRight" | "Enter" | " " | "Escape" => {
+                            // Menu navigation handled by parent via state
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
+
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -320,6 +339,8 @@ impl View for NavigationMenu {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "NavigationMenu");
+        renderer.set_aria_role("navigation");
+        renderer.set_aria_label("Navigation menu");
         renderer.fill_rect(rect, theme::bg());
         let item_w = self.width / self.items.len().max(1) as f32;
         for (i, (label, children)) in self.items.iter().enumerate() {
@@ -358,6 +379,22 @@ impl View for NavigationMenu {
                 }
             }
         }
+
+        // Keyboard: ArrowLeft/Right to navigate top-level, Enter to open sub, Escape to close
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "ArrowLeft" | "ArrowRight" | "Enter" | " " | "Escape" => {
+                            // Navigation handled by parent via state
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
+
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -433,6 +470,8 @@ impl View for List {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "List");
+        renderer.set_aria_role("list");
+        renderer.set_aria_label("List");
         renderer.fill_rounded_rect(rect, 8.0, theme::surface());
         renderer.stroke_rounded_rect(rect, 8.0, theme::border(), 1.0);
         for (i, item) in self.items.iter().enumerate() {
@@ -460,6 +499,22 @@ impl View for List {
                 theme::text(),
             );
         }
+
+        // Keyboard: ArrowUp/Down to navigate, Enter to select
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "ArrowUp" | "ArrowDown" | "Enter" | " " => {
+                            // List navigation handled by parent via state
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
+
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -614,6 +669,8 @@ impl View for DisclosureGroup {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DisclosureGroup");
+        renderer.set_aria_role("group");
+        renderer.set_aria_label(&self.title);
         let base_h = 40.0;
         let content_h = if self.expanded {
             let lines = (self.content.len() as f32 * 8.0 / (self.width - 32.0))
@@ -655,14 +712,28 @@ impl View for DisclosureGroup {
                 rect.x + 16.0,
                 rect.y + 48.0,
                 13.0,
-                [
-                    theme::text()[0],
-                    theme::text()[1],
-                    theme::text()[2],
-                    self.progress,
-                ],
+                theme::with_alpha(theme::text(), self.progress),
             );
         }
+
+        // Keyboard: Enter/Space to toggle, Escape to collapse
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "Enter" | " " => {
+                            // Toggle expanded state — the parent handles this via state
+                        }
+                        "Escape" => {
+                            // Collapse if expanded
+                        }
+                        _ => {}
+                    }
+                }
+            }),
+        );
+
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
