@@ -147,7 +147,7 @@ impl View for BifrostTabs {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
+                if let Event::KeyDown { key, .. } = event {
                     match key.as_str() {
                         "ArrowRight" if tab_count > 0 => {
                             let next = (selected + 1) % tab_count;

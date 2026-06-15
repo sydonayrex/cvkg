@@ -5,7 +5,7 @@
 
 use crate::theme;
 use cvkg_core::{
-    Never, Rect, Renderer, Size, View,
+    AriaRole, Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
 
@@ -13,28 +13,10 @@ use cvkg_core::{
 #[derive(Debug, Clone)]
 pub struct HlinNode {
     pub id: String,
-    pub role: A11yRole,
+    pub role: AriaRole,
     pub label: String,
     pub description: String,
     pub children: Vec<HlinNode>,
-}
-
-/// Semantic accessibility roles
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum A11yRole {
-    Button,
-    Link,
-    Text,
-    Image,
-    Heading,
-    List,
-    ListItem,
-    Form,
-    Input,
-    Navigation,
-    Main,
-    Banner,
-    ContentInfo,
 }
 
 /// Focus management state
@@ -114,7 +96,7 @@ impl HlinAccessibility {
     }
 
     /// Add an accessibility node
-    pub fn node(mut self, id: &str, role: A11yRole, label: &str) -> Self {
+    pub fn node(mut self, id: &str, role: AriaRole, label: &str) -> Self {
         self.tree.push(HlinNode {
             id: id.to_string(),
             role,
@@ -127,7 +109,7 @@ impl HlinAccessibility {
     }
 
     /// Add a child node to a parent by ID
-    pub fn child(mut self, parent_id: &str, id: &str, role: A11yRole, label: &str) -> Self {
+    pub fn child(mut self, parent_id: &str, id: &str, role: AriaRole, label: &str) -> Self {
         let child = HlinNode {
             id: id.to_string(),
             role,
@@ -289,12 +271,18 @@ impl View for HlinAccessibility {
         let mut y = rect.y + 75.0;
         for node in &self.tree {
             let role_icon = match node.role {
-                A11yRole::Button => "[B]",
-                A11yRole::Link => "[L]",
-                A11yRole::Text => "[T]",
-                A11yRole::Image => "[I]",
-                A11yRole::Heading => "[H]",
-                A11yRole::Navigation => "[N]",
+                AriaRole::Button => "[B]",
+                AriaRole::Link => "[L]",
+                AriaRole::None => "[T]",
+                AriaRole::Img => "[I]",
+                AriaRole::Heading => "[H]",
+                AriaRole::Navigation => "[N]",
+                AriaRole::List => "[Ls]",
+                AriaRole::Listitem => "[Li]",
+                AriaRole::Form => "[F]",
+                AriaRole::Main => "[M]",
+                AriaRole::Banner => "[Ba]",
+                AriaRole::Contentinfo => "[Ci]",
                 _ => "[ ]",
             };
             renderer.draw_text(

@@ -172,7 +172,7 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         );
 
         // Collapse toggle button (chevron) at the sidebar edge
-        let toggle_btn_size: f32 = 24.0;
+        let toggle_btn_size: f32 = 44.0;
         let toggle_rect = Rect {
             x: rect.x + effective_sidebar_width - toggle_btn_size / 2.0,
             y: rect.y + 12.0,
@@ -183,9 +183,9 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         let chevron = if is_collapsed { "▶" } else { "◀" };
         renderer.draw_text(
             chevron,
-            toggle_rect.x + 6.0,
-            toggle_rect.y + 5.0,
-            12.0,
+            toggle_rect.x + 12.0,
+            toggle_rect.y + 13.0,
+            16.0,
             theme::text_muted(),
         );
 
@@ -400,14 +400,14 @@ impl<V: View> View for GraniSheet<V> {
         let padding = 16.0;
         let sheet_content_rect = Rect {
             x: sheet_rect.x + padding,
-            y: sheet_rect.y + padding + 28.0, // leave room for close button
+            y: sheet_rect.y + padding + 44.0, // leave room for close button
             width: (sheet_rect.width - padding * 2.0).max(0.0),
-            height: (sheet_rect.height - padding * 2.0 - 28.0).max(0.0),
+            height: (sheet_rect.height - padding * 2.0 - 44.0).max(0.0),
         };
         self.content.render(renderer, sheet_content_rect);
 
         // ── Close button (×) top-right ──
-        let btn_size: f32 = 28.0;
+        let btn_size: f32 = 44.0;
         let close_rect = Rect {
             x: sheet_rect.x + sheet_rect.width - btn_size - 8.0,
             y: sheet_rect.y + 8.0,
@@ -417,8 +417,8 @@ impl<V: View> View for GraniSheet<V> {
         renderer.fill_rounded_rect(close_rect, 14.0, [0.12, 0.12, 0.16, 0.8]);
         renderer.draw_text(
             "×",
-            close_rect.x + 9.0,
-            close_rect.y + 7.0,
+            close_rect.x + 15.0,
+            close_rect.y + 13.0,
             FONT_BASE + 2.0,
             theme::text_muted(),
         );

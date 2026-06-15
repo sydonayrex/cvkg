@@ -517,7 +517,7 @@ impl YggdrasilTree {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let Event::KeyDown { key } = event {
+                    if let Event::KeyDown { key, .. } = event {
                         if key == "Enter" || key == "Return" {
                             if let Some(cb) = &on_rename_c {
                                 cb(rename_id.clone(), current_rename_text.clone());

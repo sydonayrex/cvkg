@@ -11,6 +11,7 @@ pub struct Button {
     pub(crate) variant: ButtonVariant,
     pub(crate) size: ButtonSize,
     pub(crate) disabled: bool,
+    pub(crate) loading: bool,
 }
 
 impl Button {
@@ -22,6 +23,7 @@ impl Button {
             variant: ButtonVariant::Default,
             size: ButtonSize::Default,
             disabled: false,
+            loading: false,
         }
     }
 
@@ -43,9 +45,16 @@ impl Button {
         self
     }
 
+    /// Set the loading state. When loading, the button shows a spinner
+    /// and click events are suppressed.
+    pub fn loading(mut self, loading: bool) -> Self {
+        self.loading = loading;
+        self
+    }
+
     /// Compute the background color based on variant and state.
     fn bg_color(&self, is_pressed: bool, is_hovered: bool) -> [f32; 4] {
-        if self.disabled {
+        if self.disabled || self.loading {
             return theme::disabled();
         }
         match self.variant {
@@ -223,7 +232,7 @@ impl Button {
     /// Compute the height based on size variant.
     fn height(&self) -> f32 {
         match self.size {
-            ButtonSize::Small => 32.0,
+            ButtonSize::Small => 44.0,
             ButtonSize::Default => 44.0,
             ButtonSize::Large => 52.0,
             ButtonSize::Icon => 44.0,
@@ -367,10 +376,10 @@ impl View for Button {
             0.0
         };
 
-        let intensity = if self.disabled { 0.0 } else { 0.25 };
+        let intensity = if self.disabled || self.loading { 0.0 } else { 0.25 };
         let mut offset_x = 0.0;
         let mut offset_y = 0.0;
-        if dist < radius && dist > 0.0 && !self.disabled {
+        if dist < radius && dist > 0.0 && !self.disabled && !self.loading {
             let force = (1.0 - dist / radius) * intensity;
             offset_x = dx * force;
             offset_y = dy * force;
@@ -401,7 +410,7 @@ impl View for Button {
         renderer.set_aria_label(&self.label);
 
         // Apply mani_glow() soft lunar-like highlight
-        if !self.disabled {
+        if !self.disabled && !self.loading {
             let glow_color = [
                 theme::accent()[0],
                 theme::accent()[1],
@@ -465,18 +474,45 @@ impl View for Button {
         }
 
         // Focus ring — WCAG 2.4.7
-        if is_focused && !self.disabled {
+        if is_focused && !self.disabled && !self.loading {
             crate::draw_focus_ring(renderer, final_rect);
         }
 
-        // Label text centered
-        let (tw, _th) = renderer.measure_text(&self.label, font_size);
-        let text_x = final_rect.x + (final_rect.width - tw) / 2.0;
-        let text_y = final_rect.y + (final_rect.height - font_size) / 2.0;
-        renderer.draw_text(&self.label, text_x, text_y, font_size, text_color);
+        // Label text centered or spinner when loading
+        if self.loading {
+            // Spinning indicator: draw arc segments with varying opacity
+            let time = renderer.elapsed_time();
+            let cx = final_rect.x + final_rect.width / 2.0;
+            let cy = final_rect.y + final_rect.height / 2.0;
+            let spinner_radius = font_size * 0.4;
+            let segments = 8u32;
+            let rotation = time * 4.0; // radians per second
+            for i in 0..segments {
+                let angle = rotation + (i as f32 / segments as f32) * std::f32::consts::TAU;
+                let alpha = 0.15 + 0.85 * (i as f32 / segments as f32);
+                let dx = angle.cos();
+                let dy = angle.sin();
+                let start_dist = spinner_radius * 0.55;
+                let end_dist = spinner_radius;
+                renderer.draw_line(
+                    cx + dx * start_dist,
+                    cy + dy * start_dist,
+                    cx + dx * end_dist,
+                    cy + dy * end_dist,
+                    [theme::accent()[0], theme::accent()[1], theme::accent()[2], alpha],
+                    2.0,
+                );
+            }
+        } else {
+            // Label text centered
+            let (tw, _th) = renderer.measure_text(&self.label, font_size);
+            let text_x = final_rect.x + (final_rect.width - tw) / 2.0;
+            let text_y = final_rect.y + (final_rect.height - font_size) / 2.0;
+            renderer.draw_text(&self.label, text_x, text_y, font_size, text_color);
+        }
 
         // Register interaction handlers
-        if !self.disabled {
+        if !self.disabled && !self.loading {
             let on_click = self.on_click.clone();
             renderer.register_handler(
                 "pointerclick",
@@ -489,7 +525,7 @@ impl View for Button {
             );
         }
 
-        let is_disabled = self.disabled;
+        let is_disabled = self.disabled || self.loading;
         let set_pressed_down = set_pressed.clone();
         renderer.register_handler(
             "pointerdown",
@@ -555,7 +591,11 @@ impl View for Button {
         _proposal: cvkg_core::layout::SizeProposal,
     ) -> cvkg_core::Size {
         let font_size = self.font_size();
-        let (tw, _th) = renderer.measure_text(&self.label, font_size);
+        let (tw, _th) = if self.loading {
+            (font_size, font_size)
+        } else {
+            renderer.measure_text(&self.label, font_size)
+        };
         let h_pad = self.h_padding();
         cvkg_core::Size {
             width: (tw + h_pad * 2.0).max(self.height()),
@@ -564,11 +604,11 @@ impl View for Button {
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(AriaProperties::new(AriaRole::Button, &self.label).disabled(self.disabled))
+        Some(AriaProperties::new(AriaRole::Button, &self.label).disabled(self.disabled || self.loading))
     }
 
     fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {
-        if self.disabled {
+        if self.disabled || self.loading {
             return false;
         }
         match key {

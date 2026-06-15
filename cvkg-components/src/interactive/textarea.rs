@@ -112,7 +112,7 @@ impl View for Textarea {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let cvkg_core::Event::KeyDown { key } = event {
+                if let cvkg_core::Event::KeyDown { key, .. } = event {
                     let mut changed = false;
                     let mut new_text = String::new();
                     if let Ok(mut text_guard) = text_mutex_kd.lock() {

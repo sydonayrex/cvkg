@@ -111,7 +111,7 @@ impl<V: View> View for Focusable<V> {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let Event::KeyDown { key } = event {
+                    if let Event::KeyDown { key, .. } = event {
                         let state = cvkg_core::load_system_state();
                         let focused = state
                             .get_component_state::<String>(focus_id_hash(&focus_id))
@@ -256,7 +256,7 @@ impl<V: View> View for FocusTrap<V> {
                 renderer.register_handler(
                     "keydown",
                     Arc::new(move |event| {
-                        if let Event::KeyDown { key } = event
+                        if let Event::KeyDown { key, .. } = event
                             && key == "Escape"
                         {
                             on_escape();
@@ -269,10 +269,10 @@ impl<V: View> View for FocusTrap<V> {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let Event::KeyDown { key } = event
+                    if let Event::KeyDown { key, modifiers } = event
                         && key == "Tab"
                     {
-                        cycle_focus(true);
+                        cycle_focus(!modifiers.shift);
                     }
                 }),
             );
@@ -416,7 +416,7 @@ impl<V: View> View for ArrowNav<V> {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
+                if let Event::KeyDown { key, .. } = event {
                     let matches = match key.as_str() {
                         "ArrowUp" => Some(ArrowDirection::Up),
                         "ArrowDown" => Some(ArrowDirection::Down),

@@ -3,6 +3,7 @@
 //! Provides a consent request dialog for AI data usage and a data provenance
 //! indicator showing what data was used in AI inference.
 
+use crate::lingua_tong;
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
@@ -88,8 +89,9 @@ impl View for ConsentGate {
         renderer.stroke_rounded_rect(dialog, 12.0, theme::border(), 1.0);
 
         // Title
+        let title = lingua_tong::t("consentgate.title");
         renderer.draw_text(
-            "Data Usage Consent",
+            &title,
             dialog.x + 16.0,
             dialog.y + 24.0,
             16.0,
@@ -97,8 +99,12 @@ impl View for ConsentGate {
         );
 
         // Data description
+        let data_label = lingua_tong::t_with(
+            "consentgate.data_label",
+            &[("data", &self.data_description)],
+        );
         renderer.draw_text(
-            &format!("Data: {}", self.data_description),
+            &data_label,
             dialog.x + 16.0,
             dialog.y + 56.0,
             13.0,
@@ -106,8 +112,10 @@ impl View for ConsentGate {
         );
 
         // Purpose
+        let purpose_label =
+            lingua_tong::t_with("consentgate.purpose_label", &[("purpose", &self.purpose)]);
         renderer.draw_text(
-            &format!("Purpose: {}", self.purpose),
+            &purpose_label,
             dialog.x + 16.0,
             dialog.y + 80.0,
             13.0,
@@ -122,9 +130,10 @@ impl View for ConsentGate {
         let reject_rect = Rect::new(dialog.x + 16.0, button_y, button_w, 36.0);
         renderer.fill_rounded_rect(reject_rect, 6.0, theme::surface());
         renderer.stroke_rounded_rect(reject_rect, 6.0, theme::border(), 1.0);
-        let (rw, _) = renderer.measure_text("Reject", 14.0);
+        let reject_text = lingua_tong::t("consentgate.reject");
+        let (rw, _) = renderer.measure_text(&reject_text, 14.0);
         renderer.draw_text(
-            "Reject",
+            &reject_text,
             reject_rect.x + (button_w - rw) / 2.0,
             reject_rect.y + 22.0,
             14.0,
@@ -134,9 +143,10 @@ impl View for ConsentGate {
         // Accept button (right, accent style)
         let accept_rect = Rect::new(dialog.x + 32.0 + button_w, button_y, button_w, 36.0);
         renderer.fill_rounded_rect(accept_rect, 6.0, theme::accent());
-        let (aw, _) = renderer.measure_text("Accept", 14.0);
+        let accept_text = lingua_tong::t("consentgate.accept");
+        let (aw, _) = renderer.measure_text(&accept_text, 14.0);
         renderer.draw_text(
-            "Accept",
+            &accept_text,
             accept_rect.x + (button_w - aw) / 2.0,
             accept_rect.y + 22.0,
             14.0,
@@ -179,7 +189,8 @@ impl View for DataTrail {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let mut y = rect.y;
-        renderer.draw_text("Data used:", rect.x, y, 11.0, theme::text_muted());
+        let data_used_text = lingua_tong::t("consentgate.data_used");
+        renderer.draw_text(&data_used_text, rect.x, y, 11.0, theme::text_muted());
         y += 14.0;
 
         for source in &self.sources {
@@ -190,7 +201,11 @@ impl View for DataTrail {
                 TrailKind::Database => "[db]",
                 TrailKind::Web => "[web]",
             };
-            let text = format!("{} {} ({} items)", icon, source.name, source.item_count);
+            let items_label = lingua_tong::t_with(
+                "consentgate.items_count",
+                &[("count", &source.item_count.to_string())],
+            );
+            let text = format!("{} {} {}", icon, source.name, items_label);
             renderer.draw_text(&text, rect.x + 8.0, y, 11.0, theme::text());
             y += 14.0;
         }

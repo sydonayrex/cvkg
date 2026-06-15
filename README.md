@@ -136,30 +136,30 @@ cargo run -p berserker
 
 | Crate Path | Role / Responsibility |
 | :--- | :--- |
-| [cvkg](file:///D/rex/projects/cvkg/cvkg) | Main public entry point facade selecting native or web backends. |
-| [cvkg-core](file:///D/rex/projects/cvkg/cvkg-core) | Core traits defining view composition, renderers, and geometry types. |
-| [cvkg-vdom](file:///D/rex/projects/cvkg/cvkg-vdom) | Stateless Virtual DOM implementation managing tree diffs and updates. |
-| [cvkg-compositor](file:///D/rex/projects/cvkg/cvkg-compositor) | Retained-mode layer orchestration engine routing UI to GPU passes. |
-| [cvkg-scene](file:///D/rex/projects/cvkg/cvkg-scene) | Retained scene graph utilizing bounding box acceleration for culling. |
-| [cvkg-layout](file:///D/rex/projects/cvkg/cvkg-layout) | Coordinate layout engines distributing spacer proposed bounds. |
-| [cvkg-anim](file:///D/rex/projects/cvkg/cvkg-anim) | Physics-based RK4 Sleipnir spring motion solver system. |
-| [cvkg-physics](file:///D/rex/projects/cvkg/cvkg-physics) | Tyr rigid body physics engine: collision detection, constraint solving, scene graph bridge. |
-| [cvkg-render-gpu](file:///D/rex/projects/cvkg/cvkg-render-gpu) | Surtr graphics pipeline rendering custom GPU shader pipelines. |
-| [cvkg-render-native](file:///D/rex/projects/cvkg/cvkg-render-native) | Desktop platform windowing and event loops wrapping `winit`. |
-| [cvkg-render-web](file:///D/rex/projects/cvkg/cvkg-render-web) | Browser canvas drawing wrapper executing on WebGPU or WebGL2. |
-| [cvkg-components](file:///D/rex/projects/cvkg/cvkg-components) | Base widget library housing inputs, sliders, and advanced AI workflow components. |
-| [cvkg-themes](file:///D/rex/projects/cvkg/cvkg-themes) | OKLCH-based system token catalog managing semantic color and typography mappings. |
-| [cvkg-macros](file:///D/rex/projects/cvkg/cvkg-macros) | Procedural compiler macros scaffolding DSL views and reactive bindings. |
-| [cvkg-runic-text](file:///D/rex/projects/cvkg/cvkg-runic-text) | Font-discovery, word-wrapping, and HarfBuzz text shaper. |
-| [cvkg-cli](file:///D/rex/projects/cvkg/cvkg-cli) | Scaffolding command line interface managing development pipelines and AI templates. |
-| [cvkg-webkit-server](file:///D/rex/projects/cvkg/cvkg-webkit-server) | Headless WebSocket dev server handling local bundle reloading. |
-| [cvkg-flow](file:///D/rex/projects/cvkg/cvkg-flow) | Interactive node and flow-chart visual editor component. |
-| [cvkg-test](file:///D/rex/projects/cvkg/cvkg-test) | Pixel comparison engine executing visual regression testing. |
-| [berserker](file:///D/rex/projects/cvkg/berserker) | Native tactical HUD application showcasing layout and graphics. |
-| [demos/adele-web](file:///D/rex/projects/cvkg/demos/adele-web) | Web design system explorer and matrix comparison layout. |
-| [demos/niflheim-web](file:///D/rex/projects/cvkg/demos/niflheim-web) | WebAssembly showcase executing the standard components suite. |
-| [demos/niflheim-wasi](file:///D/rex/projects/cvkg/demos/niflheim-wasi) | Headless server-side WASI target checking view validation. |
-| [demos/berserker-fire-web](file:///D/rex/projects/cvkg/demos/berserker-fire-web) | Highly visual web stress-test drawing procedural fires and lightning. |
+| cvkg | Main public entry point facade selecting native or web backends. |
+| cvkg-core | Core traits defining view composition, renderers, and geometry types. |
+| cvkg-vdom | Stateless Virtual DOM implementation managing tree diffs and updates. |
+| cvkg-compositor | Retained-mode layer orchestration engine routing UI to GPU passes. |
+| cvkg-scene | Retained scene graph utilizing bounding box acceleration for culling. |
+| cvkg-layout | Coordinate layout engines distributing spacer proposed bounds. |
+| cvkg-anim | Physics-based RK4 Sleipnir spring motion solver system. |
+| cvkg-physics | Tyr rigid body physics engine: collision detection, constraint solving, scene graph bridge. |
+| cvkg-render-gpu | Surtr graphics pipeline rendering custom GPU shader pipelines. |
+| cvkg-render-native | Desktop platform windowing and event loops wrapping `winit`. |
+| cvkg-render-web | Browser canvas drawing wrapper executing on WebGPU or WebGL2. |
+| cvkg-components | Base widget library housing inputs, sliders, and advanced AI workflow components. |
+| cvkg-themes | OKLCH-based system token catalog managing semantic color and typography mappings. |
+| cvkg-macros | Procedural compiler macros scaffolding DSL views and reactive bindings. |
+| cvkg-runic-text | Font-discovery, word-wrapping, and HarfBuzz text shaper. |
+| cvkg-cli | Scaffolding command line interface managing development pipelines and AI templates. |
+| cvkg-webkit-server | Headless WebSocket dev server handling local bundle reloading. |
+| cvkg-flow | Interactive node and flow-chart visual editor component. |
+| cvkg-test | Pixel comparison engine executing visual regression testing. |
+| berserker | Native tactical HUD application showcasing layout and graphics. |
+| demos/adele-web | Web design system explorer and matrix comparison layout. |
+| demos/niflheim-web | WebAssembly showcase executing the standard components suite. |
+| demos/niflheim-wasi | Headless server-side WASI target checking view validation. |
+| demos/berserker-fire-web | Highly visual web stress-test drawing procedural fires and lightning. |
 
 ---
 

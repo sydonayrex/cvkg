@@ -132,9 +132,44 @@ pub fn init_english_translations() {
     );
     en.insert("consentgate.accept".to_string(), "Accept".to_string());
     en.insert("consentgate.reject".to_string(), "Reject".to_string());
+    en.insert("consentgate.data_label".to_string(), "Data: {data}".to_string());
+    en.insert("consentgate.purpose_label".to_string(), "Purpose: {purpose}".to_string());
+    en.insert("consentgate.data_used".to_string(), "Data used:".to_string());
+    en.insert("consentgate.items_count".to_string(), "({count} items)".to_string());
 
     // AwaitVeil
     en.insert("awaitveil.loading".to_string(), "Loading...".to_string());
+
+    // Dialog
+    en.insert("dialog.cancel".to_string(), "Cancel".to_string());
+    en.insert("dialog.delete".to_string(), "Delete".to_string());
+    en.insert("dialog.ok".to_string(), "OK".to_string());
+    en.insert("dialog.confirm".to_string(), "Confirm".to_string());
+
+    // DatePicker
+    en.insert("datepicker.placeholder".to_string(), "Select date...".to_string());
+    en.insert("datepicker.range_placeholder".to_string(), "Select range...".to_string());
+    en.insert("datepicker.label".to_string(), "Date picker".to_string());
+    en.insert("datepicker.format".to_string(), "DD/MM/YYYY".to_string());
+    en.insert("datepicker.month.january".to_string(), "January".to_string());
+    en.insert("datepicker.month.february".to_string(), "February".to_string());
+    en.insert("datepicker.month.march".to_string(), "March".to_string());
+    en.insert("datepicker.month.april".to_string(), "April".to_string());
+    en.insert("datepicker.month.may".to_string(), "May".to_string());
+    en.insert("datepicker.month.june".to_string(), "June".to_string());
+    en.insert("datepicker.month.july".to_string(), "July".to_string());
+    en.insert("datepicker.month.august".to_string(), "August".to_string());
+    en.insert("datepicker.month.september".to_string(), "September".to_string());
+    en.insert("datepicker.month.october".to_string(), "October".to_string());
+    en.insert("datepicker.month.november".to_string(), "November".to_string());
+    en.insert("datepicker.month.december".to_string(), "December".to_string());
+    en.insert("datepicker.day.su".to_string(), "Su".to_string());
+    en.insert("datepicker.day.mo".to_string(), "Mo".to_string());
+    en.insert("datepicker.day.tu".to_string(), "Tu".to_string());
+    en.insert("datepicker.day.we".to_string(), "We".to_string());
+    en.insert("datepicker.day.th".to_string(), "Th".to_string());
+    en.insert("datepicker.day.fr".to_string(), "Fr".to_string());
+    en.insert("datepicker.day.sa".to_string(), "Sa".to_string());
 
     load_translations("en", en);
 }
@@ -191,9 +226,44 @@ pub fn init_japanese_translations() {
     );
     ja.insert("consentgate.accept".to_string(), "同意する".to_string());
     ja.insert("consentgate.reject".to_string(), "拒否する".to_string());
+    ja.insert("consentgate.data_label".to_string(), "データ: {data}".to_string());
+    ja.insert("consentgate.purpose_label".to_string(), "目的: {purpose}".to_string());
+    ja.insert("consentgate.data_used".to_string(), "使用データ:".to_string());
+    ja.insert("consentgate.items_count".to_string(), "({count} 件)".to_string());
 
     // AwaitVeil
     ja.insert("awaitveil.loading".to_string(), "読み込み中...".to_string());
+
+    // Dialog
+    ja.insert("dialog.cancel".to_string(), "キャンセル".to_string());
+    ja.insert("dialog.delete".to_string(), "削除".to_string());
+    ja.insert("dialog.ok".to_string(), "OK".to_string());
+    ja.insert("dialog.confirm".to_string(), "確認".to_string());
+
+    // DatePicker
+    ja.insert("datepicker.placeholder".to_string(), "日付を選択...".to_string());
+    ja.insert("datepicker.range_placeholder".to_string(), "範囲を選択...".to_string());
+    ja.insert("datepicker.label".to_string(), "日付ピッカー".to_string());
+    ja.insert("datepicker.format".to_string(), "YYYY/MM/DD".to_string());
+    ja.insert("datepicker.month.january".to_string(), "1月".to_string());
+    ja.insert("datepicker.month.february".to_string(), "2月".to_string());
+    ja.insert("datepicker.month.march".to_string(), "3月".to_string());
+    ja.insert("datepicker.month.april".to_string(), "4月".to_string());
+    ja.insert("datepicker.month.may".to_string(), "5月".to_string());
+    ja.insert("datepicker.month.june".to_string(), "6月".to_string());
+    ja.insert("datepicker.month.july".to_string(), "7月".to_string());
+    ja.insert("datepicker.month.august".to_string(), "8月".to_string());
+    ja.insert("datepicker.month.september".to_string(), "9月".to_string());
+    ja.insert("datepicker.month.october".to_string(), "10月".to_string());
+    ja.insert("datepicker.month.november".to_string(), "11月".to_string());
+    ja.insert("datepicker.month.december".to_string(), "12月".to_string());
+    ja.insert("datepicker.day.su".to_string(), "日".to_string());
+    ja.insert("datepicker.day.mo".to_string(), "月".to_string());
+    ja.insert("datepicker.day.tu".to_string(), "火".to_string());
+    ja.insert("datepicker.day.we".to_string(), "水".to_string());
+    ja.insert("datepicker.day.th".to_string(), "木".to_string());
+    ja.insert("datepicker.day.fr".to_string(), "金".to_string());
+    ja.insert("datepicker.day.sa".to_string(), "土".to_string());
 
     load_translations("ja", ja);
 }

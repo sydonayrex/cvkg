@@ -1356,17 +1356,12 @@ impl FocusManager {
 // REDUCED MOTION
 // =============================================================================
 
-/// Detects OS-level reduced motion preference.
+/// Detects OS-level reduced motion preference via [`AccessibilityPreferences`].
+///
+/// This delegates to `AccessibilityPreferences::detect_from_system()` which
+/// queries the correct OS API on macOS, Linux, and Windows.
 pub fn is_reduced_motion() -> bool {
-    std::env::var("GTK_THEME")
-        .map(|v| v.to_lowercase().contains("reduced"))
-        .unwrap_or(false)
-        || std::env::var("NO_ANIMATIONS")
-            .map(|v| v == "1" || v.to_lowercase() == "true")
-            .unwrap_or(false)
-        || std::env::var("ACCESSIBILITY_REDUCED_MOTION")
-            .map(|v| v == "1" || v.to_lowercase() == "true")
-            .unwrap_or(false)
+    AccessibilityPreferences::detect_from_system().reduce_motion
 }
 
 /// Returns effective animation duration (0.0 if reduced motion is active).
@@ -4383,20 +4378,23 @@ pub fn default_tokens() -> YggdrasilTokens {
     // Core Norse Colorways
     tokens.color.insert(
         "background".to_string(),
-        TokenValue::Single {
-            value: "#000000".to_string(), // Ginnungagap (The Void)
+        TokenValue::Adaptive {
+            light: "#FFFFFF".to_string(), // Light mode: white background
+            dark: "#000000".to_string(),  // Dark mode: Ginnungagap (The Void)
         },
     );
     tokens.color.insert(
         "primary".to_string(),
-        TokenValue::Single {
-            value: "#00FFFF".to_string(), // NiflCyan (Aesir Primary)
+        TokenValue::Adaptive {
+            light: "#007B8A".to_string(), // Light mode: muted cyan
+            dark: "#00FFFF".to_string(),  // Dark mode: NiflCyan (Aesir Primary)
         },
     );
     tokens.color.insert(
         "secondary".to_string(),
-        TokenValue::Single {
-            value: "#FF00FF".to_string(), // MuspelMagenta (Berserker Secondary)
+        TokenValue::Adaptive {
+            light: "#8A008A".to_string(), // Light mode: muted magenta
+            dark: "#FF00FF".to_string(),  // Dark mode: MuspelMagenta (Berserker Secondary)
         },
     );
     tokens.color.insert(
@@ -4458,14 +4456,16 @@ pub fn default_tokens() -> YggdrasilTokens {
     );
     tokens.color.insert(
         "accent".to_string(),
-        TokenValue::Single {
-            value: "#00FFFF".to_string(), // NiflCyan
+        TokenValue::Adaptive {
+            light: "#007B8A".to_string(), // Light mode: muted cyan
+            dark: "#00FFFF".to_string(),  // Dark mode: NiflCyan
         },
     );
     tokens.color.insert(
         "accent_hover".to_string(),
-        TokenValue::Single {
-            value: "#33FFFF".to_string(),
+        TokenValue::Adaptive {
+            light: "#00A0B0".to_string(), // Light mode: lighter muted cyan
+            dark: "#33FFFF".to_string(),  // Dark mode: brighter cyan
         },
     );
     tokens.color.insert(
@@ -5580,9 +5580,11 @@ pub enum Event {
     },
     KeyDown {
         key: String,
+        modifiers: KeyModifiers,
     },
     KeyUp {
         key: String,
+        modifiers: KeyModifiers,
     },
     /// Focus gained by a node.
     FocusIn,
@@ -6459,7 +6461,103 @@ impl AccessibilityPreferences {
                 increase_contrast,
             }
         }
-        #[cfg(not(target_os = "macos"))]
+
+        #[cfg(target_os = "linux")]
+        {
+            // Reduced motion: check GTK_A11Y env var or GNOME gsettings
+            let reduce_motion = std::env::var("GTK_A11Y")
+                .map(|v| v.to_lowercase().contains("reduce-motion"))
+                .unwrap_or(false)
+                || {
+                    // Try gsettings for GNOME desktop animation preference
+                    std::process::Command::new("gsettings")
+                        .args([
+                            "get",
+                            "org.gnome.desktop.interface",
+                            "enable-animations",
+                        ])
+                        .output()
+                        .ok()
+                        .and_then(|o| String::from_utf8(o.stdout).ok())
+                        .map(|s| s.trim() == "'false'" || s.trim() == "false")
+                        .unwrap_or(false)
+                };
+
+            // Reduced transparency is not widely supported on Linux desktops
+            let reduce_transparency = false;
+
+            // Increased contrast: check GTK_THEME for high-contrast variants
+            let increase_contrast = std::env::var("GTK_THEME")
+                .map(|v| v.to_lowercase().contains("highcontrast"))
+                .unwrap_or(false);
+
+            Self {
+                reduce_motion,
+                reduce_transparency,
+                increase_contrast,
+            }
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::process::Command;
+
+            // Helper: run `reg query` and return the value string if found
+            fn reg_query(key: &str, value_name: &str) -> Option<String> {
+                Command::new("reg")
+                    .args(["query", key, "/v", value_name])
+                    .output()
+                    .ok()
+                    .and_then(|o| {
+                        if o.status.success() {
+                            String::from_utf8(o.stdout).ok()
+                        } else {
+                            None
+                        }
+                    })
+                    .and_then(|s| {
+                        // Output format: "    ValueName    REG_SZ    <value>"
+                        // or REG_DWORD lines; parse the last token on the last non-empty line
+                        s.lines()
+                            .last()?
+                            .split_whitespace()
+                            .last()
+                            .map(String::from)
+                    })
+            }
+
+            // Reduced motion: EffectsAnimationEfficiency = 1 means reduced
+            let reduce_motion = reg_query(
+                "HKCU\\Control Panel\\Accessibility\\EffectsAnimationEfficiency",
+                "EffectsAnimationEfficiency",
+            )
+            .map(|v| v == "1")
+            .unwrap_or(false);
+
+            // Reduced transparency: EnableTransparency = 0 means reduced
+            let reduce_transparency = reg_query(
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                "EnableTransparency",
+            )
+            .map(|v| v == "0")
+            .unwrap_or(false);
+
+            // Increased contrast: HighContrast = 1 means enabled
+            let increase_contrast = reg_query(
+                "HKCU\\Control Panel\\Accessibility\\HighContrast",
+                "HighContrast",
+            )
+            .map(|v| v == "1")
+            .unwrap_or(false);
+
+            Self {
+                reduce_motion,
+                reduce_transparency,
+                increase_contrast,
+            }
+        }
+
+        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
         {
             Self::default()
         }

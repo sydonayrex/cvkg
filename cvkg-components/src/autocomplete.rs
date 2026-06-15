@@ -225,7 +225,7 @@ impl View for AutoComplete {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
+                if let Event::KeyDown { key, .. } = event {
                     let mut changed = false;
                     let mut new_text = String::new();
 

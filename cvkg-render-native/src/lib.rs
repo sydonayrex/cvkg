@@ -1390,6 +1390,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+o".to_string(),
+                                                modifiers: cvkg_core::KeyModifiers::default(),
                                             });
                                         }
                                         state.window.request_redraw();
@@ -1399,6 +1400,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+s".to_string(),
+                                                modifiers: cvkg_core::KeyModifiers::default(),
                                             });
                                         }
                                         state.window.request_redraw();
@@ -1446,6 +1448,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+a".to_string(),
+                                                modifiers: cvkg_core::KeyModifiers::default(),
                                             });
                                         }
                                         state.window.request_redraw();
@@ -1455,6 +1458,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+f".to_string(),
+                                                modifiers: cvkg_core::KeyModifiers::default(),
                                             });
                                         }
                                         state.window.request_redraw();
@@ -2143,9 +2147,9 @@ fn convert_keyboard_event(event: winit::event::KeyEvent) -> Option<cvkg_core::Ev
     if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
         let key_str = format!("{:?}", code);
         if event.state == winit::event::ElementState::Pressed {
-            Some(cvkg_core::Event::KeyDown { key: key_str })
+            Some(cvkg_core::Event::KeyDown { key: key_str, modifiers: cvkg_core::KeyModifiers::default() })
         } else {
-            Some(cvkg_core::Event::KeyUp { key: key_str })
+            Some(cvkg_core::Event::KeyUp { key: key_str, modifiers: cvkg_core::KeyModifiers::default() })
         }
     } else {
         None

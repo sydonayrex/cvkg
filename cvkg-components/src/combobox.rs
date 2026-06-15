@@ -276,7 +276,7 @@ impl View for Combobox {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
+                if let Event::KeyDown { key, .. } = event {
                     match key.as_str() {
                         "ArrowUp" => {
                             update_system_state(|s| {
@@ -339,7 +339,7 @@ impl View for Combobox {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event
+                if let Event::KeyDown { key, .. } = event
                     && (key == "Return" || key == "Enter")
                 {
                     let state = load_system_state();
@@ -373,7 +373,7 @@ impl View for Combobox {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event
+                if let Event::KeyDown { key, .. } = event
                     && key == "Escape"
                 {
                     update_system_state(|s| {

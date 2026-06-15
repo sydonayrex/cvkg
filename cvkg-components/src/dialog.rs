@@ -7,6 +7,7 @@
 //! All components use cvkg theme system (theme::*) for full themability.
 
 use crate::theme;
+use crate::lingua_tong;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // ----------------------------------------------------------------------------
@@ -42,8 +43,8 @@ impl AlertDialog {
         Self {
             title: title.to_string(),
             description: String::new(),
-            confirm_label: "Confirm".to_string(),
-            cancel_label: "Cancel".to_string(),
+            confirm_label: lingua_tong::t("dialog.confirm"),
+            cancel_label: lingua_tong::t("dialog.cancel"),
             open: false,
             variant: AlertVariant::Default,
         }
@@ -131,12 +132,12 @@ impl View for AlertDialog {
                 theme::text_muted(),
             );
         }
-        let btn_y = dlg_rect.y + dlg_h - 52.0;
+        let btn_y = dlg_rect.y + dlg_h - 60.0;
         let cancel_rect = Rect {
             x: dlg_rect.x + dlg_w - 200.0,
             y: btn_y,
             width: 88.0,
-            height: 36.0,
+            height: 44.0,
         };
         renderer.fill_rounded_rect(cancel_rect, 8.0, theme::surface());
         renderer.stroke_rounded_rect(cancel_rect, 8.0, theme::border(), 1.0);
@@ -144,7 +145,7 @@ impl View for AlertDialog {
         renderer.draw_text(
             &self.cancel_label,
             cancel_rect.x + (88.0 - ctw) / 2.0,
-            cancel_rect.y + (36.0 - cth) / 2.0,
+            cancel_rect.y + (44.0 - cth) / 2.0,
             13.0,
             theme::text(),
         );
@@ -152,7 +153,7 @@ impl View for AlertDialog {
             x: dlg_rect.x + dlg_w - 104.0,
             y: btn_y,
             width: 88.0,
-            height: 36.0,
+            height: 44.0,
         };
         let confirm_bg = match self.variant {
             AlertVariant::Destructive => theme::error_color(),
@@ -163,7 +164,7 @@ impl View for AlertDialog {
         renderer.draw_text(
             &self.confirm_label,
             confirm_rect.x + (88.0 - ftw) / 2.0,
-            confirm_rect.y + (36.0 - fth) / 2.0,
+            confirm_rect.y + (44.0 - fth) / 2.0,
             13.0,
             theme::bg(),
         );
@@ -199,7 +200,7 @@ impl ConfirmationDialog {
         Self {
             title: title.to_string(),
             message: String::new(),
-            confirm_label: "Delete".to_string(),
+            confirm_label: lingua_tong::t("dialog.delete"),
             open: false,
         }
     }
@@ -260,20 +261,21 @@ impl View for ConfirmationDialog {
                 theme::text_muted(),
             );
         }
-        let btn_y = dlg_rect.y + dlg_h - 48.0;
+        let btn_y = dlg_rect.y + dlg_h - 56.0;
         let cancel_rect = Rect {
             x: dlg_rect.x + dlg_w - 180.0,
             y: btn_y,
             width: 72.0,
-            height: 32.0,
+            height: 44.0,
         };
         renderer.fill_rounded_rect(cancel_rect, 6.0, theme::surface());
         renderer.stroke_rounded_rect(cancel_rect, 6.0, theme::border(), 1.0);
-        let (ctw, cth) = renderer.measure_text("Cancel", 12.0);
+        let cancel_text = lingua_tong::t("dialog.cancel");
+        let (ctw, cth) = renderer.measure_text(&cancel_text, 12.0);
         renderer.draw_text(
-            "Cancel",
+            &cancel_text,
             cancel_rect.x + (72.0 - ctw) / 2.0,
-            cancel_rect.y + (32.0 - cth) / 2.0,
+            cancel_rect.y + (44.0 - cth) / 2.0,
             12.0,
             theme::text(),
         );
@@ -281,14 +283,14 @@ impl View for ConfirmationDialog {
             x: dlg_rect.x + dlg_w - 100.0,
             y: btn_y,
             width: 80.0,
-            height: 32.0,
+            height: 44.0,
         };
         renderer.fill_rounded_rect(confirm_rect, 6.0, theme::error_color());
         let (ftw, fth) = renderer.measure_text(&self.confirm_label, 12.0);
         renderer.draw_text(
             &self.confirm_label,
             confirm_rect.x + (80.0 - ftw) / 2.0,
-            confirm_rect.y + (32.0 - fth) / 2.0,
+            confirm_rect.y + (44.0 - fth) / 2.0,
             12.0,
             [1.0, 1.0, 1.0, 1.0],
         );

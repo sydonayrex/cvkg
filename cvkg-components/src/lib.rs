@@ -108,6 +108,10 @@ pub const FOCUS_RING_WIDTH: f32 = 2.0;
 pub const FOCUS_RING_OFFSET: f32 = 2.0;
 
 /// Default focus ring color (cyan accent).
+///
+/// **Deprecated:** Use `crate::theme::focus_ring()` instead, which respects the
+/// active theme and avoids hardcoded values.
+#[deprecated(since = "0.2.0", note = "use `theme::focus_ring()` instead")]
 pub const FOCUS_RING_COLOR: [f32; 4] = [0.0, 0.8, 1.0, 0.8];
 
 /// Draws a focus ring around the given rectangle.
@@ -116,7 +120,7 @@ pub const FOCUS_RING_COLOR: [f32; 4] = [0.0, 0.8, 1.0, 0.8];
 /// # Contract
 /// - Uses `FOCUS_RING_WIDTH` for stroke width
 /// - Uses `FOCUS_RING_OFFSET` to expand outward from the element bounds
-/// - Uses `FOCUS_RING_COLOR` or the theme's focus ring color
+/// - Uses `crate::theme::focus_ring()` for the color (theme-aware)
 pub fn draw_focus_ring(renderer: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
     let outline_rect = cvkg_core::Rect {
         x: rect.x - FOCUS_RING_OFFSET,
@@ -124,7 +128,8 @@ pub fn draw_focus_ring(renderer: &mut dyn cvkg_core::Renderer, rect: cvkg_core::
         width: rect.width + FOCUS_RING_OFFSET * 2.0,
         height: rect.height + FOCUS_RING_OFFSET * 2.0,
     };
-    renderer.stroke_rounded_rect(outline_rect, RADIUS_SM, FOCUS_RING_COLOR, FOCUS_RING_WIDTH);
+    let ring_color = crate::theme::focus_ring();
+    renderer.stroke_rounded_rect(outline_rect, RADIUS_SM, ring_color, FOCUS_RING_WIDTH);
 }
 
 /// Draws a focus ring with a custom color.

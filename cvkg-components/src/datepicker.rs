@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::lingua_tong;
 use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -24,24 +25,38 @@ pub struct DateRange {
 /// Global counter for generating unique DatePicker instance IDs.
 static DATEPICKER_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-/// Month names displayed in the calendar header.
-const MONTH_NAMES: [&str; 12] = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-];
+/// Return the translated month name for a given month (1-12).
+fn month_name(month: u32) -> String {
+    let key = match month {
+        1 => "datepicker.month.january",
+        2 => "datepicker.month.february",
+        3 => "datepicker.month.march",
+        4 => "datepicker.month.april",
+        5 => "datepicker.month.may",
+        6 => "datepicker.month.june",
+        7 => "datepicker.month.july",
+        8 => "datepicker.month.august",
+        9 => "datepicker.month.september",
+        10 => "datepicker.month.october",
+        11 => "datepicker.month.november",
+        12 => "datepicker.month.december",
+        _ => "datepicker.month.january",
+    };
+    lingua_tong::t(key)
+}
 
-/// Day-of-week column headers.
-const DAY_HEADERS: [&str; 7] = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+/// Return translated day-of-week column headers.
+fn day_headers() -> [String; 7] {
+    [
+        lingua_tong::t("datepicker.day.su"),
+        lingua_tong::t("datepicker.day.mo"),
+        lingua_tong::t("datepicker.day.tu"),
+        lingua_tong::t("datepicker.day.we"),
+        lingua_tong::t("datepicker.day.th"),
+        lingua_tong::t("datepicker.day.fr"),
+        lingua_tong::t("datepicker.day.sa"),
+    ]
+}
 
 /// Return the number of days in a given month (1-12) for a given year.
 fn days_in_month(month: u32, year: u32) -> u32 {
@@ -226,13 +241,13 @@ impl DatePicker {
                     }
                     return format!("{:02}/{:02}/{} –", sd, sm, sy);
                 }
-                "Select range...".to_string()
+                lingua_tong::t("datepicker.range_placeholder")
             }
             DatePickerMode::Single => {
                 if let Some((day, month, year)) = self.selected_date {
                     format!("{:02}/{:02}/{}", day, month, year)
                 } else {
-                    "DD/MM/YYYY".to_string()
+                    lingua_tong::t("datepicker.format")
                 }
             }
         }
@@ -242,7 +257,7 @@ impl DatePicker {
     fn render_text_field(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePickerField");
         renderer.set_aria_role("textbox");
-        renderer.set_aria_label("Date picker");
+        renderer.set_aria_label(&lingua_tong::t("datepicker.label"));
 
         // Background
         renderer.fill_rounded_rect(rect, 6.0, [0.1, 0.1, 0.14, 1.0]);
@@ -320,7 +335,7 @@ impl DatePicker {
         // Month/year label (centered)
         let label = format!(
             "{} {}",
-            MONTH_NAMES[(display_month - 1) as usize],
+            month_name(display_month),
             display_year
         );
         let (tw, _th) = renderer.measure_text(&label, 14.0);
@@ -348,7 +363,8 @@ impl DatePicker {
         let cell_w = pop_w / 7.0;
         let cell_h = 28.0;
 
-        for (i, day_name) in DAY_HEADERS.iter().enumerate() {
+        let day_hdrs = day_headers();
+        for (i, day_name) in day_hdrs.iter().enumerate() {
             let cx = pop_rect.x + i as f32 * cell_w + cell_w / 2.0;
             let (tw, _th) = renderer.measure_text(day_name, 11.0);
             renderer.draw_text(

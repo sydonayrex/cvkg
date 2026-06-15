@@ -3,8 +3,9 @@
 //
 // Run with: cargo run --example norse_tools_example
 
+use cvkg_core::AriaRole;
 use cvkg_components::{
-    A11yRole, Animated, BragiCreative, Easing, HlinAccessibility, PermissionLevel, Text,
+    Animated, BragiCreative, Easing, HlinAccessibility, PermissionLevel, Text,
     Transition, TyrSecurity,
 };
 
@@ -23,9 +24,9 @@ fn main() {
 
     // Hlin Accessibility - Accessibility infrastructure
     let hlin = HlinAccessibility::new()
-        .node("btn_1", A11yRole::Button, "Submit")
-        .node("nav_1", A11yRole::Navigation, "Main Menu")
-        .node("main_1", A11yRole::Main, "Content Area")
+        .node("btn_1", AriaRole::Button, "Submit")
+        .node("nav_1", AriaRole::Navigation, "Main Menu")
+        .node("main_1", AriaRole::Main, "Content Area")
         .high_contrast(true)
         .reduced_motion(true);
 

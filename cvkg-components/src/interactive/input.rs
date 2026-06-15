@@ -258,7 +258,7 @@ impl View for Input {
                 renderer.register_handler(
                     "keydown",
                     Arc::new(move |event| {
-                        if let cvkg_core::Event::KeyDown { key } = event {
+                        if let cvkg_core::Event::KeyDown { key, .. } = event {
                             let mut changed = false;
                             let mut commit = false;
 

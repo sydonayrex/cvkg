@@ -70,7 +70,7 @@ impl<V: View> View for Popconfirm<V> {
                 x: rect.x - 20.0,
                 y: rect.y + rect.height + 6.0,
                 width: 180.0,
-                height: 80.0,
+                height: 92.0,
             };
 
             renderer.set_z_index(200.0);
@@ -90,8 +90,8 @@ impl<V: View> View for Popconfirm<V> {
             let yes_rect = Rect {
                 x: overlay_rect.x + SPACE_SM,
                 y: overlay_rect.y + 40.0,
-                width: 70.0,
-                height: 28.0,
+                width: 72.0,
+                height: 44.0,
             };
             let on_confirm = self.on_confirm.clone();
             let state_id = self.state_id;
@@ -107,10 +107,10 @@ impl<V: View> View for Popconfirm<V> {
 
             // Draw "No" Button
             let no_rect = Rect {
-                x: overlay_rect.x + overlay_rect.width - 70.0 - SPACE_SM,
+                x: overlay_rect.x + overlay_rect.width - 72.0 - SPACE_SM,
                 y: overlay_rect.y + 40.0,
-                width: 70.0,
-                height: 28.0,
+                width: 72.0,
+                height: 44.0,
             };
             let no_btn = Button::new("No", move || {
                 cvkg_core::update_system_state(move |s| {

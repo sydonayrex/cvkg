@@ -207,7 +207,7 @@ impl View for RadioGroup {
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
-                if let Event::KeyDown { key } = event {
+                if let Event::KeyDown { key, .. } = event {
                     match key.as_str() {
                         "ArrowUp" | "ArrowLeft" => {
                             if options_len > 0 && current_selected > 0 {
