@@ -51,6 +51,11 @@ pub struct EditorState {
     is_dragging: bool,
     /// Current text content (persisted across renders for handler access).
     text: String,
+    /// Undo stack: previous text values before each modification.
+    /// Capped at 100 entries to prevent unbounded memory growth.
+    undo_stack: Vec<String>,
+    /// Redo stack: text values undone, available for redo.
+    redo_stack: Vec<String>,
 }
 
 impl Default for EditorState {
@@ -63,7 +68,55 @@ impl Default for EditorState {
             last_blink_time: 0.0,
             is_dragging: false,
             text: String::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
         }
+    }
+}
+
+/// Maximum number of undo steps to retain.
+const MAX_UNDO_DEPTH: usize = 100;
+
+/// Push the current text onto the undo stack and clear the redo stack.
+/// Call this BEFORE applying any text-modifying operation.
+fn push_undo_snapshot(state: &mut EditorState) {
+    state.undo_stack.push(state.text.clone());
+    if state.undo_stack.len() > MAX_UNDO_DEPTH {
+        state.undo_stack.remove(0);
+    }
+    state.redo_stack.clear();
+}
+
+/// Undo the last text modification. Returns true if a step was undone.
+fn perform_undo(state: &mut EditorState) -> bool {
+    if let Some(prev) = state.undo_stack.pop() {
+        state.redo_stack.push(state.text.clone());
+        if state.redo_stack.len() > MAX_UNDO_DEPTH {
+            state.redo_stack.remove(0);
+        }
+        state.text = prev;
+        // Clamp cursor to new text length
+        state.cursor_pos = state.cursor_pos.min(state.text.len());
+        state.selection_anchor = None;
+        true
+    } else {
+        false
+    }
+}
+
+/// Redo a previously undone modification. Returns true if a step was redone.
+fn perform_redo(state: &mut EditorState) -> bool {
+    if let Some(next) = state.redo_stack.pop() {
+        state.undo_stack.push(state.text.clone());
+        if state.undo_stack.len() > MAX_UNDO_DEPTH {
+            state.undo_stack.remove(0);
+        }
+        state.text = next;
+        state.cursor_pos = state.cursor_pos.min(state.text.len());
+        state.selection_anchor = None;
+        true
+    } else {
+        false
     }
 }
 
@@ -329,6 +382,7 @@ fn line_col_to_pos(text: &str, target_line: usize, target_col: usize) -> usize {
 
 /// Delete the selection or the character before the cursor.
 fn delete_backward(state: &mut EditorState) {
+    push_undo_snapshot(state);
     if let Some(anchor) = state.selection_anchor {
         let start = state.cursor_pos.min(anchor);
         let end = state.cursor_pos.max(anchor);
@@ -343,6 +397,7 @@ fn delete_backward(state: &mut EditorState) {
 
 /// Delete the character after the cursor.
 fn delete_forward(state: &mut EditorState) {
+    push_undo_snapshot(state);
     if state.selection_anchor.is_some() {
         delete_backward(state);
     } else if state.cursor_pos < state.text.len() {
@@ -352,6 +407,11 @@ fn delete_forward(state: &mut EditorState) {
 
 /// Insert text at cursor position, replacing selection.
 fn insert_at_cursor(state: &mut EditorState, insert: &str) {
+    // Don't push if text is unchanged (no-op insert)
+    if insert.is_empty() {
+        return;
+    }
+    push_undo_snapshot(state);
     if let Some(anchor) = state.selection_anchor {
         let start = state.cursor_pos.min(anchor);
         let end = state.cursor_pos.max(anchor);
@@ -579,8 +639,49 @@ impl View for TextEditor {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let cvkg_core::Event::KeyDown { ref key, .. } = event {
+                    if let cvkg_core::Event::KeyDown { ref key, modifiers, .. } = event {
                         match key.as_str() {
+                            // ── Undo: Cmd+Z (macOS) or Ctrl+Z (other) ──
+                            key if (key == "cmd+z" || key == "ctrl+z" || (modifiers.ctrl && key == "z" && !modifiers.shift)) => {
+                                info!("[TextEditor] Undo");
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let changed = perform_undo(&mut st);
+                                        if changed {
+                                            (on_change)(st.text.clone());
+                                        }
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
+                            // ── Redo: Cmd+Shift+Z / Ctrl+Shift+Z / Ctrl+Y ──
+                            key if (key == "cmd+shift+z"
+                                || key == "ctrl+shift+z"
+                                || key == "ctrl+y"
+                                || (modifiers.ctrl && modifiers.shift && key == "z")) => {
+                                info!("[TextEditor] Redo");
+                                update_system_state(|s| {
+                                    let mut ns = s.clone();
+                                    if let Some(guard) =
+                                        ns.get_component_state::<EditorState>(state_id)
+                                        && let Ok(guard) = guard.read()
+                                    {
+                                        let mut st = (*guard).clone();
+                                        let changed = perform_redo(&mut st);
+                                        if changed {
+                                            (on_change)(st.text.clone());
+                                        }
+                                        ns.set_component_state(state_id, st);
+                                    }
+                                    ns
+                                });
+                            }
                             // ── Cmd+A: Select All (dispatched by native renderer as "cmd+a") ──
                             "cmd+a" => {
                                 info!("[TextEditor] Select All");

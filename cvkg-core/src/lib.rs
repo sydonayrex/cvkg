@@ -4523,6 +4523,16 @@ impl EnvKey for AppearanceKey {
         Appearance::Dark // Default to Dark (Ginnungagap) for Berserker aesthetic
     }
 }
+
+/// Key for accessing the current text direction
+pub struct DirectionKey;
+impl EnvKey for DirectionKey {
+    type Value = Direction;
+    fn default_value() -> Self::Value {
+        Direction::LTR
+    }
+}
+
 /// StyleResolver provides high-level access to themed values from the environment.
 pub struct StyleResolver;
 impl StyleResolver {
@@ -5655,8 +5665,6 @@ pub mod layout {
     }
 }
 
-// Re-export layout items for convenience
-pub use layout::{LayoutCache, LayoutKey, LayoutView, Rect, SizeProposal};
 // Size and FrameRenderer are pub items in this module; no re-export alias needed.
 
 pub mod agents;
@@ -5667,8 +5675,11 @@ pub mod runtime;
 pub mod scene_graph;
 pub mod sdf_shadow;
 
+// Re-export commonly used types
+pub use layout::{LayoutCache, LayoutKey, LayoutView, Rect, SizeProposal};
 pub use material::DrawMaterial;
 pub use scene_graph::{NodeId, bifrost_registry};
+pub use color::SemanticColors;
 
 // Duplicate AssetState removed - original definition at line 67
 
@@ -6514,7 +6525,6 @@ thread_local! {
 /// can use it without depending on cvkg-themes.
 ///
 /// Components should access these via `use_theme()` rather than hardcoding RGBA.
-pub use color::SemanticColors;
 
 /// Set the current semantic colors for this thread.
 /// Called by the native renderer before each frame.

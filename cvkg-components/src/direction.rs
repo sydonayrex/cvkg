@@ -1,18 +1,9 @@
-use cvkg_core::{Never, Rect, Renderer, View};
-
-/// Direction -- RTL/LTR direction context provider.
-/// Affects layout direction for child components.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    LeftToRight,
-    RightToLeft,
-}
+use cvkg_core::{Direction, DirectionKey, Environment, Never, Rect, Renderer, View};
 
 /// Direction context component.
 /// Wraps content and provides direction context for RTL/LTR layout.
 #[derive(Clone)]
 pub struct DirectionProvider {
-    #[allow(dead_code)]
     pub(crate) direction: Direction,
 }
 
@@ -23,13 +14,13 @@ impl DirectionProvider {
 
     pub fn ltr() -> Self {
         Self {
-            direction: Direction::LeftToRight,
+            direction: Direction::LTR,
         }
     }
 
     pub fn rtl() -> Self {
         Self {
-            direction: Direction::RightToLeft,
+            direction: Direction::RTL,
         }
     }
 }
@@ -41,8 +32,17 @@ impl View for DirectionProvider {
     }
 
     fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
-        // Direction is a context provider -- it doesn't render anything itself.
-        // It sets the direction state in the renderer for children to read.
-        // The actual RTL flip happens in layout.
+        // Set the direction in the environment for children to read
+        cvkg_core::env::insert::<DirectionKey>(self.direction);
     }
+}
+
+/// Get the current text direction from the environment.
+pub fn current_direction() -> Direction {
+    Environment::<DirectionKey>::new().get()
+}
+
+/// Check if the current direction is RTL.
+pub fn is_rtl() -> bool {
+    current_direction() == Direction::RTL
 }

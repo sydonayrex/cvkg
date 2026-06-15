@@ -244,6 +244,7 @@ pub mod layer_system;
 pub mod njord_theme;
 pub mod skadi_scripting;
 pub mod theme;
+pub mod theme_switch;
 pub mod timeline_editor;
 
 pub use advanced_forms::{Calendar, EikonaForm};
@@ -397,7 +398,7 @@ pub use consent_gate::{ConsentGate, DataTrail, TrailKind};
 pub use context_menu::{ContextMenu, ContextMenuItem};
 pub use cvkg_layout as layout;
 pub use datepicker::*;
-pub use direction::{Direction, DirectionProvider};
+pub use direction::DirectionProvider;
 pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
 pub use editable::Editable;
 pub use form_binder::{Binding, FormBinder};
