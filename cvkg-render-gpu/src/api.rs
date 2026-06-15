@@ -92,8 +92,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
         self.fill_rect_with_full_params(
             rect,
-            [1.0, 1.0, 1.0, 0.4], // Glass tint: white at 40% opacity
-            7,                    // Mode 7 = Glass material
+            [1.0, 1.0, 1.0, 0.4 * glass_intensity.clamp(0.0, 1.0)],
+            7, // Mode 7 = Glass material
             None,
             radius,
             Rect {
@@ -105,6 +105,12 @@ impl cvkg_core::Renderer for SurtrRenderer {
         );
 
         self.current_draw_material = prev_material;
+    }
+
+    fn fill_glass_rect_with_pressure(&mut self, rect: Rect, radius: f32, blur_radius: f32, pressure: f32) {
+        // Pressure scales both blur and tint: full pressure = full glass effect
+        let p = pressure.clamp(0.0, 1.0);
+        self.fill_glass_rect_with_intensity(rect, radius, blur_radius * p, p);
     }
 
     /// Set the default background color for the canvas.

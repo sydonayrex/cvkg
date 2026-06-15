@@ -1731,6 +1731,21 @@ impl cvkg_core::Renderer for NativeRenderer {
             .fill_glass_rect(rect, radius, blur_radius);
     }
 
+    fn fill_glass_rect_with_intensity(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_glass_rect_with_intensity")
+            .fill_glass_rect_with_intensity(rect, radius, blur_radius, glass_intensity);
+    }
+
+    fn fill_glass_rect_with_pressure(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32, pressure: f32) {
+        // Scale glass intensity by pressure: full pressure = full glass, no pressure = solid
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: fill_glass_rect_with_pressure")
+            .fill_glass_rect_with_intensity(rect, radius, blur_radius, pressure);
+    }
+
     fn fill_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4]) {
         self.gpu
             .lock()

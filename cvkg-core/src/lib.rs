@@ -2762,6 +2762,14 @@ pub trait Renderer: ElapsedTime + Send {
     fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
         let _ = (rect, radius, blur_radius, glass_intensity);
     }
+    /// Fill a rounded rect with glass material, modulated by touch pressure.
+    /// `pressure` ranges from 0.0 (no touch) to 1.0 (full pressure).
+    /// When pressure > 0, refraction distortion is scaled by pressure amount.
+    /// Desktop stub: pressure is always 1.0 for mouse clicks, 0.0 otherwise.
+    fn fill_glass_rect_with_pressure(&mut self, rect: Rect, radius: f32, blur_radius: f32, pressure: f32) {
+        // Default: delegate to standard glass with intensity = pressure
+        self.fill_glass_rect_with_intensity(rect, radius, blur_radius, pressure);
+    }
 
     /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
     /// `n` controls the squareness: 2.0 = rounded rect, 4.0 = classic squircle, higher = more square.
