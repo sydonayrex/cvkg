@@ -6,9 +6,11 @@
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
-use crate::theme;
 use crate::lingua_tong;
+use crate::theme;
+use cvkg_core::Event;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
+use std::sync::Arc;
 
 // ----------------------------------------------------------------------------
 // AlertDialog — modal dialog for critical confirmations
@@ -28,6 +30,8 @@ pub struct AlertDialog {
     pub open: bool,
     /// Visual variant.
     pub variant: AlertVariant,
+    /// Close callback (invoked when dialog is dismissed).
+    pub on_close: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +51,7 @@ impl AlertDialog {
             cancel_label: lingua_tong::t("dialog.cancel"),
             open: false,
             variant: AlertVariant::Default,
+            on_close: None,
         }
     }
 
@@ -79,6 +84,11 @@ impl AlertDialog {
         self.variant = v;
         self
     }
+    /// Set the close callback.
+    pub fn on_close_cb(mut self, cb: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_close = Some(Arc::new(cb));
+        self
+    }
 }
 
 impl View for AlertDialog {
@@ -91,6 +101,8 @@ impl View for AlertDialog {
             return;
         }
         renderer.push_vnode(rect, "AlertDialog");
+        renderer.set_aria_role("alertdialog");
+        renderer.set_aria_label(&self.title);
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
         let dlg_w = 400.0;
         let dlg_h = 180.0;
@@ -139,6 +151,9 @@ impl View for AlertDialog {
             width: 88.0,
             height: 44.0,
         };
+        renderer.push_vnode(cancel_rect, "AlertDialog:Cancel");
+        renderer.set_aria_role("button");
+        renderer.set_aria_label(&self.cancel_label);
         renderer.fill_rounded_rect(cancel_rect, 8.0, theme::surface());
         renderer.stroke_rounded_rect(cancel_rect, 8.0, theme::border(), 1.0);
         let (ctw, cth) = renderer.measure_text(&self.cancel_label, 13.0);
@@ -149,6 +164,7 @@ impl View for AlertDialog {
             13.0,
             theme::text(),
         );
+        renderer.pop_vnode();
         let confirm_rect = Rect {
             x: dlg_rect.x + dlg_w - 104.0,
             y: btn_y,
@@ -159,6 +175,9 @@ impl View for AlertDialog {
             AlertVariant::Destructive => theme::error_color(),
             _ => theme::accent(),
         };
+        renderer.push_vnode(confirm_rect, "AlertDialog:Confirm");
+        renderer.set_aria_role("button");
+        renderer.set_aria_label(&self.confirm_label);
         renderer.fill_rounded_rect(confirm_rect, 8.0, confirm_bg);
         let (ftw, fth) = renderer.measure_text(&self.confirm_label, 13.0);
         renderer.draw_text(
@@ -167,6 +186,29 @@ impl View for AlertDialog {
             confirm_rect.y + (44.0 - fth) / 2.0,
             13.0,
             theme::bg(),
+        );
+        renderer.pop_vnode();
+        // ── Keyboard handler: Escape to close, Enter/Space to activate ──
+        let close_cb = self.on_close.clone();
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "Escape" => {
+                            if let Some(ref cb) = close_cb {
+                                (cb)();
+                            }
+                        }
+                        "Enter" | " " => {
+                            if let Some(ref cb) = close_cb {
+                                (cb)();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }),
         );
         renderer.pop_vnode();
     }
@@ -192,6 +234,10 @@ pub struct ConfirmationDialog {
     pub confirm_label: String,
     /// Whether the dialog is open.
     pub open: bool,
+    /// Confirm callback (invoked when Enter/Space is pressed).
+    pub on_confirm: Arc<dyn Fn() + Send + Sync>,
+    /// Cancel callback (invoked when Escape is pressed).
+    pub on_cancel: Arc<dyn Fn() + Send + Sync>,
 }
 
 impl ConfirmationDialog {
@@ -202,6 +248,8 @@ impl ConfirmationDialog {
             message: String::new(),
             confirm_label: lingua_tong::t("dialog.delete"),
             open: false,
+            on_confirm: Arc::new(|| {}),
+            on_cancel: Arc::new(|| {}),
         }
     }
 
@@ -222,6 +270,16 @@ impl ConfirmationDialog {
         self.open = o;
         self
     }
+    /// Set the confirm callback.
+    pub fn on_confirm_cb(mut self, cb: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_confirm = Arc::new(cb);
+        self
+    }
+    /// Set the cancel callback.
+    pub fn on_cancel_cb(mut self, cb: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_cancel = Arc::new(cb);
+        self
+    }
 }
 
 impl View for ConfirmationDialog {
@@ -234,6 +292,8 @@ impl View for ConfirmationDialog {
             return;
         }
         renderer.push_vnode(rect, "ConfirmationDialog");
+        renderer.set_aria_role("alertdialog");
+        renderer.set_aria_label(&self.title);
         renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
         let dlg_w = 360.0;
         let dlg_h = 160.0;
@@ -268,6 +328,9 @@ impl View for ConfirmationDialog {
             width: 72.0,
             height: 44.0,
         };
+        renderer.push_vnode(cancel_rect, "ConfirmationDialog:Cancel");
+        renderer.set_aria_role("button");
+        renderer.set_aria_label(&lingua_tong::t("dialog.cancel"));
         renderer.fill_rounded_rect(cancel_rect, 6.0, theme::surface());
         renderer.stroke_rounded_rect(cancel_rect, 6.0, theme::border(), 1.0);
         let cancel_text = lingua_tong::t("dialog.cancel");
@@ -279,12 +342,16 @@ impl View for ConfirmationDialog {
             12.0,
             theme::text(),
         );
+        renderer.pop_vnode();
         let confirm_rect = Rect {
             x: dlg_rect.x + dlg_w - 100.0,
             y: btn_y,
             width: 80.0,
             height: 44.0,
         };
+        renderer.push_vnode(confirm_rect, "ConfirmationDialog:Confirm");
+        renderer.set_aria_role("button");
+        renderer.set_aria_label(&self.confirm_label);
         renderer.fill_rounded_rect(confirm_rect, 6.0, theme::error_color());
         let (ftw, fth) = renderer.measure_text(&self.confirm_label, 12.0);
         renderer.draw_text(
@@ -293,6 +360,26 @@ impl View for ConfirmationDialog {
             confirm_rect.y + (44.0 - fth) / 2.0,
             12.0,
             [1.0, 1.0, 1.0, 1.0],
+        );
+        renderer.pop_vnode();
+        // ── Keyboard handler: Escape to cancel, Enter/Space to confirm ──
+        let cancel_cb = self.on_cancel.clone();
+        let confirm_cb = self.on_confirm.clone();
+        renderer.register_handler(
+            "keydown",
+            Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    match key.as_str() {
+                        "Escape" => {
+                            (cancel_cb)();
+                        }
+                        "Enter" | " " => {
+                            (confirm_cb)();
+                        }
+                        _ => {}
+                    }
+                }
+            }),
         );
         renderer.pop_vnode();
     }

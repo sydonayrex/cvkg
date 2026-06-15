@@ -320,6 +320,9 @@ pub trait RendererVolumetric {
 pub trait RendererAccessibility {
     fn set_aria_role(&mut self, _role: &str) {}
     fn set_aria_label(&mut self, _label: &str) {}
+    fn set_aria_valuemin(&mut self, _min: f32) {}
+    fn set_aria_valuemax(&mut self, _max: f32) {}
+    fn set_aria_valuenow(&mut self, _now: f32) {}
     fn register_shared_element(&mut self, _id: &str, _rect: Rect) {}
     fn set_key(&mut self, _key: &str) {}
 }

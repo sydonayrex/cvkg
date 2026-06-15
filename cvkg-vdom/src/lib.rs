@@ -68,6 +68,12 @@ pub struct AriaProps {
     pub disabled: bool,
     /// Whether the element is hidden from screen readers (Section 508 omission)
     pub hidden: bool,
+    /// ARIA aria-valuenow for slider/progress/meter roles
+    pub aria_valuenow: Option<f32>,
+    /// ARIA aria-valuemin for slider/progress/meter roles
+    pub aria_valuemin: Option<f32>,
+    /// ARIA aria-valuemax for slider/progress/meter roles
+    pub aria_valuemax: Option<f32>,
 }
 
 /// A node in the Virtual DOM tree representing a component instance.
@@ -214,6 +220,17 @@ impl VNode {
 
         if let Some(val) = &self.aria_props.value {
             node.set_value(val.clone());
+        }
+
+        // Expose ARIA slider/progress/meter numeric values to accesskit
+        if let Some(now) = self.aria_props.aria_valuenow {
+            node.set_numeric_value(now as f64);
+        }
+        if let Some(min) = self.aria_props.aria_valuemin {
+            node.set_min_numeric_value(min as f64);
+        }
+        if let Some(max) = self.aria_props.aria_valuemax {
+            node.set_max_numeric_value(max as f64);
         }
 
         if self.aria_props.disabled {
@@ -1080,6 +1097,30 @@ impl cvkg_core::Renderer for VNodeRenderer {
             && let Some(node) = self.nodes.get_mut(id)
         {
             node.aria_props.label = Some(label.to_string());
+        }
+    }
+
+    fn set_aria_valuemin(&mut self, min: f32) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id)
+        {
+            node.aria_props.aria_valuemin = Some(min);
+        }
+    }
+
+    fn set_aria_valuemax(&mut self, max: f32) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id)
+        {
+            node.aria_props.aria_valuemax = Some(max);
+        }
+    }
+
+    fn set_aria_valuenow(&mut self, now: f32) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id)
+        {
+            node.aria_props.aria_valuenow = Some(now);
         }
     }
 
@@ -1952,6 +1993,17 @@ impl VDom {
 
             if let Some(val) = &node.aria_props.value {
                 ak_node.set_value(val.clone());
+            }
+
+            // Expose ARIA slider/progress/meter numeric values to accesskit
+            if let Some(now) = node.aria_props.aria_valuenow {
+                ak_node.set_numeric_value(now as f64);
+            }
+            if let Some(min) = node.aria_props.aria_valuemin {
+                ak_node.set_min_numeric_value(min as f64);
+            }
+            if let Some(max) = node.aria_props.aria_valuemax {
+                ak_node.set_max_numeric_value(max as f64);
             }
 
             if node.aria_props.disabled {

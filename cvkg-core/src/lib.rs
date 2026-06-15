@@ -33,6 +33,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 use std::str::FromStr;
 
 pub mod error_types;
@@ -59,6 +60,189 @@ impl ComponentErrorState {
             error_message: Some(message.into()),
             error_location: Some(location.into()),
         }
+    }
+}
+
+/// An error boundary that catches panics during rendering and displays a fallback UI.
+///
+/// # Purpose
+/// Without error boundaries, a single panicking `View::render()` call unwinds the entire
+/// render pass, crashing the application. `ErrorBoundary` wraps a child view and catches
+/// panics via `std::panic::catch_unwind`, rendering a visible error indicator instead.
+///
+/// # Usage
+/// ```ignore
+/// use cvkg_core::ErrorBoundary;
+///
+/// let safe_view = ErrorBoundary::new(my_component)
+///     .fallback_label("Chart failed to render")
+///     .fallback_color([1.0, 0.2, 0.2, 1.0]);
+/// ```
+///
+/// # Design Notes
+/// - `render()` is protected via `catch_unwind` with `AssertUnwindSafe`.
+/// - `body()` is NOT protected because it is required to be pure and side-effect free
+///   per CVKG conformance rule #1. A panic in `body()` indicates a logic error that
+///   should be fixed, not silently caught.
+/// - `intrinsic_size()` IS protected to prevent layout panics from crashing the app.
+/// - Error state is tracked via `AtomicBool` so it can be queried from any thread.
+pub struct ErrorBoundary<V: View> {
+    /// The child view to render safely.
+    child: V,
+    /// Whether a panic was caught during the last render pass.
+    has_error: std::sync::atomic::AtomicBool,
+    /// The last panic message, if any.
+    last_error: std::sync::Mutex<Option<String>>,
+    /// Fallback background color when an error is caught.
+    fallback_color: [f32; 4],
+    /// Optional label to display in the error fallback.
+    fallback_label: Option<String>,
+}
+
+impl<V: View> ErrorBoundary<V> {
+    /// Create a new error boundary wrapping the given child view.
+    ///
+    /// The fallback color defaults to a semi-transparent red ([1.0, 0.2, 0.2, 0.9]).
+    pub fn new(child: V) -> Self {
+        Self {
+            child,
+            has_error: std::sync::atomic::AtomicBool::new(false),
+            last_error: std::sync::Mutex::new(None),
+            fallback_color: [1.0, 0.2, 0.2, 0.9],
+            fallback_label: None,
+        }
+    }
+
+    /// Set the fallback background color displayed when the child panics.
+    pub fn fallback_color(mut self, color: [f32; 4]) -> Self {
+        self.fallback_color = color;
+        self
+    }
+
+    /// Set a label to display in the error fallback UI.
+    pub fn fallback_label(mut self, label: impl Into<String>) -> Self {
+        self.fallback_label = Some(label.into());
+        self
+    }
+
+    /// Returns `true` if a panic was caught during the last render pass.
+    pub fn has_error(&self) -> bool {
+        self.has_error
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Returns the last captured panic message, if any.
+    pub fn last_error(&self) -> Option<String> {
+        self.last_error
+            .lock()
+            .ok()
+            .and_then(|guard| guard.clone())
+    }
+
+    /// Clear the error state, allowing the child to render again on the next pass.
+    pub fn clear_error(&self) {
+        self.has_error
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        if let Ok(mut guard) = self.last_error.lock() {
+            *guard = None;
+        }
+    }
+
+    /// Render the error fallback UI: a colored rectangle with an optional label.
+    fn render_fallback(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.fill_rounded_rect(rect, 4.0, self.fallback_color);
+
+        if let Some(ref label) = self.fallback_label {
+            renderer.draw_text(
+                label,
+                rect.x + 8.0,
+                rect.y + rect.height * 0.5,
+                12.0,
+                [1.0, 1.0, 1.0, 1.0],
+            );
+        }
+    }
+}
+
+impl<V: View> View for ErrorBoundary<V> {
+    /// `body()` delegates directly to the child. It is NOT wrapped in `catch_unwind`
+    /// because `body()` must be pure per CVKG conformance rule #1. A panic here
+    /// indicates a logic error that should be fixed, not silently absorbed.
+    type Body = V::Body;
+
+    fn body(self) -> Self::Body {
+        self.child.body()
+    }
+
+    /// Render the child inside a `catch_unwind` boundary. If the child panics,
+    /// the error state is set and the fallback UI is rendered instead.
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            self.child.render(renderer, rect);
+        }));
+
+        match result {
+            Ok(()) => {
+                // Child rendered successfully — clear any prior error state.
+                self.has_error
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+            }
+            Err(panic) => {
+                // Child panicked — capture the error and render fallback.
+                self.has_error
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic".to_string()
+                };
+
+                if let Ok(mut guard) = self.last_error.lock() {
+                    *guard = Some(msg.clone());
+                }
+
+                log::error!("ErrorBoundary caught panic: {msg}");
+                self.render_fallback(renderer, rect);
+            }
+        }
+    }
+
+    /// Protect layout measurement from panics. If the child's `intrinsic_size`
+    /// panics, return a zero-size fallback.
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+            self.child.intrinsic_size(renderer, proposal)
+        }));
+
+        match result {
+            Ok(size) => size,
+            Err(panic) => {
+                self.has_error
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
+
+                let msg = if let Some(s) = panic.downcast_ref::<&str>() {
+                    s.to_string()
+                } else if let Some(s) = panic.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "unknown panic in intrinsic_size".to_string()
+                };
+
+                if let Ok(mut guard) = self.last_error.lock() {
+                    *guard = Some(msg.clone());
+                }
+
+                log::error!("ErrorBoundary caught panic in intrinsic_size: {msg}");
+                Size::ZERO
+            }
+        }
+    }
+
+    fn flex_weight(&self) -> f32 {
+        self.child.flex_weight()
     }
 }
 
@@ -3025,6 +3209,9 @@ pub trait Renderer: ElapsedTime + Send {
     // ── Accessibility (ShieldWall) ───────────────────────────────────────
     fn set_aria_role(&mut self, _role: &str) {}
     fn set_aria_label(&mut self, _label: &str) {}
+    fn set_aria_valuemin(&mut self, _min: f32) {}
+    fn set_aria_valuemax(&mut self, _max: f32) {}
+    fn set_aria_valuenow(&mut self, _now: f32) {}
 
     /// Register a shared element for Bifrost Bridge transitions.
     fn register_shared_element(&mut self, _id: &str, _rect: Rect) {}
@@ -6074,6 +6261,219 @@ mod vili_tests {
         let undo = manager.undo().unwrap();
         undo();
         assert_eq!(*count.lock().unwrap(), -2);
+    }
+}
+
+#[cfg(test)]
+mod error_boundary_tests {
+    use super::*;
+
+    /// A trivial view that renders successfully.
+    struct SuccessView;
+
+    impl View for SuccessView {
+        type Body = Never;
+        fn body(self) -> Never {
+            unreachable!()
+        }
+        fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
+            // No-op — renders successfully.
+        }
+    }
+
+    /// A view that panics during render.
+    struct PanicOnRender;
+
+    impl View for PanicOnRender {
+        type Body = Never;
+        fn body(self) -> Never {
+            unreachable!()
+        }
+        fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
+            panic!("intentional render panic");
+        }
+    }
+
+    /// A view that panics during intrinsic_size.
+    struct PanicOnSize;
+
+    impl View for PanicOnSize {
+        type Body = Never;
+        fn body(self) -> Never {
+            unreachable!()
+        }
+        fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
+            // Render succeeds, but size panics.
+        }
+        fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+            panic!("intentional size panic");
+        }
+    }
+
+    /// A view that panics with a String payload.
+    struct PanicWithString;
+
+    impl View for PanicWithString {
+        type Body = Never;
+        fn body(self) -> Never {
+            unreachable!()
+        }
+        fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
+            panic!("{}", "custom error message".to_string());
+        }
+    }
+
+    struct DummyRenderer;
+    impl ElapsedTime for DummyRenderer {
+        fn elapsed_time(&self) -> f32 {
+            0.0
+        }
+        fn delta_time(&self) -> f32 {
+            0.0
+        }
+    }
+    impl Renderer for DummyRenderer {
+        fn fill_rect(&mut self, _r: Rect, _c: [f32; 4]) {}
+        fn fill_rounded_rect(&mut self, _r: Rect, _rad: f32, _c: [f32; 4]) {}
+        fn fill_ellipse(&mut self, _r: Rect, _c: [f32; 4]) {}
+        fn stroke_rect(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
+        fn stroke_rounded_rect(&mut self, _r: Rect, _rad: f32, _c: [f32; 4], _w: f32) {}
+        fn stroke_ellipse(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
+        fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
+        fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
+        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) {
+            (0.0, 0.0)
+        }
+        fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
+        fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {
+        }
+        fn set_camera_3d(&mut self, _camera: &Camera3D) {}
+        fn push_transform_3d(&mut self, _transform: &Transform3D) {}
+        fn pop_transform_3d(&mut self) {}
+    }
+
+    const TEST_RECT: Rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 200.0,
+        height: 100.0,
+    };
+
+    #[test]
+    fn error_boundary_renders_child_on_success() {
+        let boundary = ErrorBoundary::new(SuccessView);
+        let mut renderer = DummyRenderer;
+
+        boundary.render(&mut renderer, TEST_RECT);
+
+        assert!(
+            !boundary.has_error(),
+            "should not have error after successful render"
+        );
+        assert!(
+            boundary.last_error().is_none(),
+            "should have no error message"
+        );
+    }
+
+    #[test]
+    fn error_boundary_catches_render_panic() {
+        let boundary = ErrorBoundary::new(PanicOnRender);
+        let mut renderer = DummyRenderer;
+
+        // This must NOT panic — the boundary catches it.
+        boundary.render(&mut renderer, TEST_RECT);
+
+        assert!(
+            boundary.has_error(),
+            "should have error after catching panic"
+        );
+        let err = boundary.last_error().expect("should have error message");
+        assert!(
+            err.contains("intentional render panic"),
+            "error message should contain panic message, got: {err}"
+        );
+    }
+
+    #[test]
+    fn error_boundary_catches_size_panic() {
+        let boundary = ErrorBoundary::new(PanicOnSize);
+        let mut renderer = DummyRenderer;
+        let proposal = layout::SizeProposal {
+            width: Some(100.0),
+            height: Some(50.0),
+        };
+
+        let size = boundary.intrinsic_size(&mut renderer, proposal);
+
+        assert!(
+            boundary.has_error(),
+            "should have error after catching size panic"
+        );
+        assert_eq!(size, Size::ZERO, "fallback size should be zero");
+    }
+
+    #[test]
+    fn error_boundary_catches_string_panic() {
+        let boundary = ErrorBoundary::new(PanicWithString);
+        let mut renderer = DummyRenderer;
+
+        boundary.render(&mut renderer, TEST_RECT);
+
+        assert!(boundary.has_error());
+        let err = boundary.last_error().expect("should have error message");
+        assert!(
+            err.contains("custom error message"),
+            "should capture String panic payload, got: {err}"
+        );
+    }
+
+    #[test]
+    fn error_boundary_clear_error_resets_state() {
+        let boundary = ErrorBoundary::new(PanicOnRender);
+        let mut renderer = DummyRenderer;
+
+        boundary.render(&mut renderer, TEST_RECT);
+        assert!(boundary.has_error());
+
+        boundary.clear_error();
+        assert!(
+            !boundary.has_error(),
+            "should be clear after clear_error()"
+        );
+        assert!(
+            boundary.last_error().is_none(),
+            "error message should be cleared"
+        );
+    }
+
+    #[test]
+    fn error_boundary_fallback_color_is_configurable() {
+        let boundary = ErrorBoundary::new(SuccessView)
+            .fallback_color([0.0, 0.0, 1.0, 1.0])
+            .fallback_label("custom label");
+
+        assert_eq!(boundary.fallback_color, [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(
+            boundary.fallback_label.as_deref(),
+            Some("custom label")
+        );
+    }
+
+    #[test]
+    fn error_boundary_flex_weight_delegates_to_child() {
+        let boundary = ErrorBoundary::new(SuccessView);
+        assert_eq!(boundary.flex_weight(), 0.0, "should delegate to child (default 0.0)");
+    }
+
+    #[test]
+    fn error_boundary_body_delegates_to_child() {
+        // body() must be pure and delegate directly.
+        let boundary = ErrorBoundary::new(SuccessView);
+        // Calling body() should not panic and should return Never (unreachable).
+        // We test this indirectly — if it compiles and the Never type is correct,
+        // the body() call would diverge. We just verify the type compiles.
+        let _boundary_type = std::any::type_name::<ErrorBoundary<SuccessView>>();
     }
 }
 

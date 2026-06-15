@@ -1,5 +1,6 @@
 use crate::theme;
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
+use std::sync::Arc as StdArc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum CheckboxState {
@@ -51,6 +52,15 @@ impl View for Checkbox {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let focus_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            self.label.hash(&mut s);
+            "checkbox_focus".hash(&mut s);
+            s.finish()
+        };
+        let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
+
         renderer.push_vnode(rect, "Checkbox");
         renderer.set_aria_role("checkbox");
         renderer.set_aria_label(self.label.as_deref().unwrap_or("Checkbox"));
@@ -131,7 +141,30 @@ impl View for Checkbox {
                 (on_change)(!is_checked);
             }),
         );
+
+        // Focus handlers
+        let set_focused_in = set_focused.clone();
+        renderer.register_handler(
+            "focus",
+            StdArc::new(move |_| {
+                (set_focused_in)(true);
+            }),
+        );
+
+        let set_focused_out = set_focused.clone();
+        renderer.register_handler(
+            "blur",
+            StdArc::new(move |_| {
+                (set_focused_out)(false);
+            }),
+        );
+
         renderer.pop_vnode();
+
+        // Focus ring — WCAG 2.4.7
+        if is_focused {
+            crate::draw_focus_ring(renderer, rect);
+        }
     }
 
     fn intrinsic_size(

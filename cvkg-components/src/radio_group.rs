@@ -112,6 +112,17 @@ impl View for RadioGroup {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let focus_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "radiogroup".hash(&mut s);
+            self.selected_index.hash(&mut s);
+            self.options.len().hash(&mut s);
+            "radiogroup_focus".hash(&mut s);
+            s.finish()
+        };
+        let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
+
         renderer.push_vnode(rect, "RadioGroup");
         renderer.set_aria_role("radiogroup");
         renderer.set_aria_label("Radio group");
@@ -232,7 +243,29 @@ impl View for RadioGroup {
             }),
         );
 
+        // Focus handlers
+        let set_focused_in = set_focused.clone();
+        renderer.register_handler(
+            "focus",
+            Arc::new(move |_| {
+                (set_focused_in)(true);
+            }),
+        );
+
+        let set_focused_out = set_focused.clone();
+        renderer.register_handler(
+            "blur",
+            Arc::new(move |_| {
+                (set_focused_out)(false);
+            }),
+        );
+
         renderer.pop_vnode();
+
+        // Focus ring — WCAG 2.4.7
+        if is_focused {
+            crate::draw_focus_ring(renderer, rect);
+        }
     }
 
     fn intrinsic_size(

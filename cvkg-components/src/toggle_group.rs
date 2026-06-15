@@ -6,7 +6,8 @@
 
 use crate::theme;
 use crate::{FONT_SM, RADIUS_MD, RADIUS_SM, SPACE_XS};
-use cvkg_core::{Never, Rect, Renderer, View};
+use cvkg_core::{Event, Never, Rect, Renderer, View};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// ToggleGroup - A group of toggle buttons with single or multi-select.
@@ -35,6 +36,8 @@ pub struct ToggleGroup {
     multi: bool,
     /// Whether the entire group is disabled.
     disabled: bool,
+    /// Tracks which item currently has keyboard focus (0-indexed).
+    focused_index: Arc<AtomicUsize>,
 }
 
 impl ToggleGroup {
@@ -55,6 +58,7 @@ impl ToggleGroup {
             on_change: Arc::new(on_change),
             multi: false,
             disabled: false,
+            focused_index: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -76,6 +80,13 @@ impl ToggleGroup {
         self
     }
 
+    /// Set the initially focused item index (for keyboard navigation).
+    pub fn focused(self, index: usize) -> Self {
+        let clamped = index.min(self.items.len().saturating_sub(1));
+        self.focused_index.store(clamped, Ordering::Relaxed);
+        self
+    }
+
     /// Check if an index is selected.
     fn is_selected(&self, idx: usize) -> bool {
         self.value.contains(&idx)
@@ -91,6 +102,8 @@ impl View for ToggleGroup {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "ToggleGroup");
+        renderer.set_aria_role("group");
+        renderer.set_aria_label("Toggle group");
 
         if self.items.is_empty() {
             renderer.pop_vnode();
@@ -104,6 +117,8 @@ impl View for ToggleGroup {
         // Group background
         renderer.fill_rounded_rect(rect, RADIUS_MD, theme::surface());
 
+        let focused_idx = self.focused_index.load(Ordering::Relaxed);
+
         for (idx, label) in self.items.iter().enumerate() {
             let ix = rect.x + idx as f32 * (item_w + SPACE_XS);
             let item_rect = Rect {
@@ -114,6 +129,10 @@ impl View for ToggleGroup {
             };
 
             renderer.push_vnode(item_rect, "ToggleGroupItem");
+            renderer.set_aria_role("button");
+            let pressed = self.is_selected(idx);
+            let aria_label = format!("{}{}", label, if pressed { " (pressed)" } else { "" });
+            renderer.set_aria_label(&aria_label);
 
             let is_selected = self.is_selected(idx);
             let bg_color = if self.disabled {
@@ -135,6 +154,11 @@ impl View for ToggleGroup {
             // Item background
             if is_selected || self.disabled {
                 renderer.fill_rounded_rect(item_rect, RADIUS_SM, bg_color);
+            }
+
+            // Keyboard focus ring
+            if !self.disabled && idx == focused_idx {
+                renderer.stroke_rounded_rect(item_rect, RADIUS_SM, theme::accent(), 2.0);
             }
 
             // Label (centered)
@@ -172,6 +196,68 @@ impl View for ToggleGroup {
             }
 
             renderer.pop_vnode();
+        }
+
+        // Keyboard navigation: ArrowLeft/ArrowRight, Space/Enter, Home/End
+        if !self.disabled {
+            let items_len = self.items.len();
+            let on_change_kb = self.on_change.clone();
+            let current_value = self.value.clone();
+            let is_multi = self.multi;
+            let focused = self.focused_index.clone();
+
+            renderer.register_handler(
+                "keydown",
+                Arc::new(move |event| {
+                    if let Event::KeyDown { key, .. } = event {
+                        match key.as_str() {
+                            "ArrowLeft" => {
+                                if items_len > 0 {
+                                    let cur = focused.load(Ordering::Relaxed);
+                                    let next = if cur > 0 { cur - 1 } else { items_len - 1 };
+                                    focused.store(next, Ordering::Relaxed);
+                                }
+                            }
+                            "ArrowRight" => {
+                                if items_len > 0 {
+                                    let cur = focused.load(Ordering::Relaxed);
+                                    let next = if cur + 1 < items_len { cur + 1 } else { 0 };
+                                    focused.store(next, Ordering::Relaxed);
+                                }
+                            }
+                            "Home" => {
+                                if items_len > 0 {
+                                    focused.store(0, Ordering::Relaxed);
+                                }
+                            }
+                            "End" => {
+                                if items_len > 0 {
+                                    focused.store(items_len - 1, Ordering::Relaxed);
+                                }
+                            }
+                            " " | "Enter" => {
+                                let target_idx = focused.load(Ordering::Relaxed);
+                                if target_idx < items_len {
+                                    let mut new_value = current_value.clone();
+                                    if is_multi {
+                                        if let Some(pos) =
+                                            new_value.iter().position(|&v| v == target_idx)
+                                        {
+                                            new_value.remove(pos);
+                                        } else {
+                                            new_value.push(target_idx);
+                                        }
+                                    } else {
+                                        new_value = vec![target_idx];
+                                    }
+                                    (on_change_kb)(new_value);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }),
+            );
         }
 
         renderer.pop_vnode();

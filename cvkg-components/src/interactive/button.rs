@@ -681,6 +681,15 @@ impl View for Toggle {
             s.finish()
         };
 
+        let focus_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            self.label.hash(&mut s);
+            "toggle_focus".hash(&mut s);
+            s.finish()
+        };
+        let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
+
         let target = if self.is_on { 1.0 } else { 0.0 };
         let mut toggle_t = 0.0;
         {
@@ -784,7 +793,36 @@ impl View for Toggle {
             }),
         );
 
+        // Focus handlers
+        let set_focused_in = set_focused.clone();
+        renderer.register_handler(
+            "focus",
+            std::sync::Arc::new(move |_| {
+                (set_focused_in)(true);
+            }),
+        );
+
+        let set_focused_out = set_focused.clone();
+        renderer.register_handler(
+            "blur",
+            std::sync::Arc::new(move |_| {
+                (set_focused_out)(false);
+            }),
+        );
+
         renderer.pop_vnode();
+
+        // Focus ring — WCAG 2.4.7
+        if is_focused {
+            let total_w = 40.0 + 8.0 + renderer.measure_text(&self.label, 14.0).0;
+            let toggle_rect = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: total_w,
+                height: rect.height,
+            };
+            crate::draw_focus_ring(renderer, toggle_rect);
+        }
     }
 
     fn intrinsic_size(
@@ -862,6 +900,11 @@ impl View for Slider {
         renderer.push_vnode(rect, "Slider");
         renderer.set_aria_role("slider");
 
+        // ARIA value properties for screen readers
+        renderer.set_aria_valuemin(val_min);
+        renderer.set_aria_valuemax(val_max);
+        renderer.set_aria_valuenow(self.value);
+
         let track_h = 4.0;
         let track_y = rect.y + (rect.height - track_h) / 2.0;
         let track = Rect {
@@ -897,7 +940,7 @@ impl View for Slider {
         renderer.fill_rounded_rect(thumb, thumb_size / 2.0, theme::text());
         renderer.stroke_rounded_rect(thumb, thumb_size / 2.0, theme::border_strong(), 1.0);
 
-        // Interaction
+        // ── Pointer interaction ──
         let on_change = self.on_change.clone();
         let step = self.step;
         renderer.register_handler(
@@ -925,6 +968,46 @@ impl View for Slider {
                         val = (val / s).round() * s;
                     }
                     (on_move)(val);
+                }
+            }),
+        );
+
+        // ── Keyboard interaction ──
+        let on_key_change = self.on_change.clone();
+        let key_step = self.step;
+        let current_val = self.value;
+        renderer.register_handler(
+            "keydown",
+            std::sync::Arc::new(move |event| {
+                if let Event::KeyDown { key, .. } = event {
+                    let delta = match key.as_str() {
+                        "ArrowRight" | "ArrowUp" => Some(1.0),
+                        "ArrowLeft" | "ArrowDown" => Some(-1.0),
+                        "Home" => None, // sentinel: jump to min
+                        "End" => None,  // sentinel: jump to max
+                        "PageUp" => Some(10.0),
+                        "PageDown" => Some(-10.0),
+                        _ => return,
+                    };
+
+                    let new_val = match key.as_str() {
+                        "Home" => val_min,
+                        "End" => val_max,
+                        _ => {
+                            let multiplier = delta.unwrap();
+                            let step_size = key_step.unwrap_or(1.0);
+                            current_val + multiplier * step_size
+                        }
+                    };
+
+                    // Clamp to range and snap to step if defined
+                    let mut clamped = new_val.clamp(val_min, val_max);
+                    if let Some(s) = key_step {
+                        clamped = (clamped / s).round() * s;
+                        clamped = clamped.clamp(val_min, val_max);
+                    }
+
+                    (on_key_change)(clamped);
                 }
             }),
         );
