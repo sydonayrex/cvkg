@@ -62,8 +62,8 @@ features = ["derive"]
 version = "1.0"
 
 [dev-dependencies]
-cvkg-components = { path = "../cvkg-components" }
-cvkg-vdom = { path = "../cvkg-vdom" }
+cvkg-components = { path = "../cvkg-components", version = "0.2.13" }
+cvkg-vdom = { path = "../cvkg-vdom", version = "0.2.13" }
 
 [dev-dependencies.insta]
 version = "1.34"

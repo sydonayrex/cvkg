@@ -6,5 +6,5 @@ license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core" }
-cvkg-components = { path = "../cvkg-components" }
+cvkg-core = { path = "../cvkg-core", version = "0.2.13" }
+cvkg-components = { path = "../cvkg-components", version = "0.2.13" }

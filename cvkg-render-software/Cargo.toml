@@ -10,5 +10,5 @@ default = ["text"]
 text = ["cvkg-runic-text"]
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core" }
-cvkg-runic-text = { path = "../cvkg-runic-text", optional = true }
+cvkg-core = { path = "../cvkg-core", version = "0.2.13" }
+cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.2.13", optional = true }
