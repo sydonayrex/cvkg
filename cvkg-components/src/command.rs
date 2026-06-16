@@ -57,8 +57,8 @@ impl View for Command {
         };
 
         renderer.bifrost(palette_rect, 25.0, 1.5, 0.9);
-        renderer.fill_rounded_rect(palette_rect, 12.0, [0.05, 0.05, 0.1, 0.95]);
-        renderer.stroke_rounded_rect(palette_rect, 12.0, [0.0, 0.8, 1.0, 0.6], 1.5);
+        renderer.fill_rounded_rect(palette_rect, 12.0, theme::surface_elevated());
+        renderer.stroke_rounded_rect(palette_rect, 12.0, theme::with_alpha(theme::accent(), 0.6), 1.5);
 
         // Search input area
         let search_h = 45.0;

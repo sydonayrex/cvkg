@@ -308,7 +308,7 @@ impl View for TimePicker {
             let bg = if i == selected as usize {
                 theme::accent()
             } else {
-                [0.0, 0.0, 0.0, 0.0]
+                theme::button_ghost_bg()
             };
             if i == selected as usize {
                 renderer.fill_ellipse(
@@ -915,7 +915,7 @@ impl View for DynamicIsland {
             width: w,
             height: h,
         };
-        renderer.fill_rounded_rect(island_rect, h / 2.0, [0.05, 0.05, 0.08, 1.0]);
+        renderer.fill_rounded_rect(island_rect, h / 2.0, theme::surface());
         // Label
         let display = if self.progress > 0.5 && !self.expanded_label.is_empty() {
             &self.expanded_label

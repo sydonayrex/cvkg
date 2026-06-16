@@ -32,7 +32,7 @@ impl View for MemoryView {
             rect.x,
             rect.y + 15.0,
             16.0,
-            [0.0, 1.0, 0.8, 1.0], // NiflCyan
+            theme::accent(),
         );
 
         let mut y_offset = rect.y + 40.0;
@@ -56,7 +56,7 @@ impl View for MemoryView {
                     };
 
                     // Fragment background
-                    renderer.fill_rect(item_rect, [0.05, 0.05, 0.08, 0.9]);
+                    renderer.fill_rect(item_rect, theme::surface());
                     renderer.stroke_rect(item_rect, [0.0, 0.6, 0.7, 0.4], 1.0);
 
                     // Summary

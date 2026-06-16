@@ -218,7 +218,11 @@ where
             renderer.fill_rect(col_rect, header_bg);
             renderer.stroke_rect(
                 col_rect,
-                [0.3, 0.5, 0.8, if is_sorted { 0.8 } else { 0.4 }],
+                if is_sorted {
+                    theme::border_strong()
+                } else {
+                    theme::border()
+                },
                 1.0,
             );
 
@@ -301,7 +305,7 @@ where
 
                 // Row background: alternating + selection highlight
                 let bg = if is_selected {
-                    [0.0, 0.4, 0.8, 0.4]
+                    theme::with_alpha(theme::accent(), 0.4)
                 } else if is_bulk_selected {
                     [0.0, 0.6, 0.6, 0.2]
                 } else if idx % 2 == 0 {

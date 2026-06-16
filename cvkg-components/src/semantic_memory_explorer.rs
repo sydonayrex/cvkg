@@ -65,14 +65,14 @@ impl View for SemanticMemoryExplorer {
                 width: rect.width,
                 height: 28.0,
             },
-            [0.06, 0.08, 0.12, 1.0],
+            theme::surface_elevated(),
         );
         renderer.draw_text(
             "Semantic Memory",
             rect.x + 8.0,
             rect.y + 8.0,
             14.0,
-            [0.7, 0.8, 1.0, 1.0],
+            theme::text(),
         );
 
         // Cluster visualization area

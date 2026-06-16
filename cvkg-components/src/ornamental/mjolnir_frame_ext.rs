@@ -1,6 +1,7 @@
 //! Extended MjolnirFrame variants for berserker theming.
 //! Extends the existing MjolnirFrame system with 5 new frame styles.
 
+use crate::theme;
 use cvkg_core::{Rect, Renderer};
 
 pub enum MjolnirFrameStyle {
@@ -46,7 +47,7 @@ pub fn render_mjolnir_frame(
                     x,
                     y,
                     10.0,
-                    [0.9, 0.72, 0.3, rune.glow_intensity],
+                    theme::with_alpha(theme::viking_gold(), rune.glow_intensity),
                 );
             }
         }
@@ -68,7 +69,7 @@ pub fn render_mjolnir_frame(
                         width: 6.0,
                         height: 6.0,
                     },
-                    [0.6, 0.55, 0.5, 1.0],
+                    theme::text_muted(),
                 );
             }
         }

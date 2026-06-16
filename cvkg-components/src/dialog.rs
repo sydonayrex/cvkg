@@ -104,7 +104,7 @@ impl View for AlertDialog {
         renderer.push_vnode(rect, "AlertDialog");
         renderer.set_aria_role("alertdialog");
         renderer.set_aria_label(&self.title);
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.5));
         let dlg_w = 400.0;
         let dlg_h = 180.0;
         let dlg_rect = Rect {
@@ -295,7 +295,7 @@ impl View for ConfirmationDialog {
         renderer.push_vnode(rect, "ConfirmationDialog");
         renderer.set_aria_role("alertdialog");
         renderer.set_aria_label(&self.title);
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.5));
         let dlg_w = 360.0;
         let dlg_h = 160.0;
         let dlg_rect = Rect {

@@ -137,7 +137,7 @@ impl View for RavenMessenger {
                 (
                     'ᚢ',
                     "You",
-                    [0.15, 0.2, 0.35, 0.85],
+                    theme::chat_bubble_user(),
                     [1.0, 1.0, 1.0, 0.95],
                     true,
                 )
@@ -171,7 +171,7 @@ impl View for RavenMessenger {
                 let header_color = if is_user {
                     theme::accent()
                 } else {
-                    [0.0, 1.0, 0.8, 0.8]
+                    theme::accent()
                 };
                 let header_text = format!("{} {}", icon, role_label);
                 renderer.draw_text(&header_text, bubble_x, current_y, 11.0, header_color);

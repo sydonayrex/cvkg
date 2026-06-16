@@ -65,14 +65,14 @@ impl View for HringrPagination {
             };
             let is_selected = i == self.current_page;
             let bg = if is_selected {
-                [0.0, 0.8, 1.0, 0.4]
+                theme::with_alpha(theme::accent(), 0.4)
             } else {
                 theme::surface()
             };
 
             renderer.fill_rounded_rect(page_rect, 4.0, bg);
             if is_selected {
-                renderer.stroke_rect(page_rect, [0.0, 1.0, 1.0, 0.8], 1.0);
+                renderer.stroke_rect(page_rect, theme::accent(), 1.0);
             }
 
             renderer.draw_text(

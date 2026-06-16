@@ -100,13 +100,13 @@ impl View for DockingWorkspace {
             height: self.header_height,
         };
         renderer.fill_rect(header_rect, theme::surface_elevated());
-        renderer.stroke_rect(header_rect, [0.3, 0.5, 0.8, 1.0], 1.0);
+        renderer.stroke_rect(header_rect, theme::border(), 1.0);
         renderer.draw_text(
             "Docking Workspace",
             header_rect.x + 12.0,
             header_rect.y + 14.0,
             16.0,
-            [0.9, 0.95, 1.0, 1.0],
+            theme::text(),
         );
 
         // Render sidebar
