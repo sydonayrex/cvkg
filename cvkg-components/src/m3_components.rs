@@ -700,7 +700,7 @@ impl View for BgMediaHero {
         // Background
         renderer.fill_rect(rect, self.bg_color);
         // Gradient overlay
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, self.overlay]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), self.overlay));
         // Title
         let (tw, th) = renderer.measure_text(&self.title, 32.0);
         renderer.draw_text(

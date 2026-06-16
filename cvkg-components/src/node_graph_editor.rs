@@ -824,7 +824,7 @@ impl View for NodeGraphEditor {
                 );
 
                 // Port label
-                renderer.draw_text(&port.label, px + 10.0, py - 4.0, 9.0, [0.6, 0.7, 0.8, 0.9]);
+                renderer.draw_text(&port.label, px + 10.0, py - 4.0, 9.0, theme::text_muted());
             }
 
             // Output ports (right side)

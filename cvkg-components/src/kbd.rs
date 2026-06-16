@@ -74,7 +74,7 @@ impl View for Kbd {
             width: key_rect.width,
             height: key_rect.height,
         };
-        renderer.fill_rounded_rect(shadow_rect, RADIUS_SM, [0.0, 0.0, 0.0, 0.2]);
+        renderer.fill_rounded_rect(shadow_rect, RADIUS_SM, theme::with_alpha(theme::bg(), 0.2));
 
         // Key background
         renderer.fill_rounded_rect(key_rect, RADIUS_SM, theme::surface_elevated());

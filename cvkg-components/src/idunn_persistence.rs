@@ -153,7 +153,7 @@ impl View for IdunnPersistence {
 
         // Snapshots list
         let mut y = rect.y + 85.0;
-        renderer.draw_text("Snapshots:", rect.x + 10.0, y, 11.0, [0.8, 0.9, 0.8, 1.0]);
+        renderer.draw_text("Snapshots:", rect.x + 10.0, y, 11.0, theme::text());
         y += 20.0;
 
         for snap in &self.snapshots {

@@ -482,7 +482,7 @@ impl ToastManager {
         renderer.bifrost(rect, 15.0, 1.5, 0.95);
 
         // 2. Semi-transparent dark fill
-        renderer.fill_rounded_rect(rect, CORNER_RADIUS, [0.05, 0.05, 0.08, 0.85]);
+        renderer.fill_rounded_rect(rect, CORNER_RADIUS, theme::with_alpha(theme::surface_elevated(), 0.85));
 
         // 3. Subtle inner border for glass depth
         let inner_rect = rect.inset(1.0);

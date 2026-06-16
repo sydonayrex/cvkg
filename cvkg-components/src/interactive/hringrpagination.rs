@@ -279,7 +279,7 @@ impl<T: Clone + View> View for GeriTransfer<T> {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "GeriTransfer");
-        renderer.fill_rounded_rect(rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface_elevated());
 
         let half_w = rect.width / 2.0;
         let left_rect = Rect {

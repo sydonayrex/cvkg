@@ -117,7 +117,7 @@ impl View for DockingWorkspace {
             height: rect.height - self.header_height,
         };
         renderer.fill_rect(sidebar_rect, theme::input_bg());
-        renderer.stroke_rect(sidebar_rect, [0.2, 0.3, 0.5, 1.0], 1.0);
+        renderer.stroke_rect(sidebar_rect, theme::border(), 1.0);
 
         let mut current_y = sidebar_rect.y + 8.0;
         for panel in &self.panels {

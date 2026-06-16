@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 // Named after Hrungnir, whose heart was stone with three sharp corners.
@@ -54,7 +55,7 @@ impl View for HrungnirSegmented {
             SegmentedStyle::Capsule => rect.height / 2.0,
             _ => 8.0,
         };
-        renderer.fill_rounded_rect(rect, radius, [0.1, 0.1, 0.12, 0.85]);
+        renderer.fill_rounded_rect(rect, radius, theme::surface_elevated());
 
         // Sliding pill indicator (white tint at low opacity)
         let pill_rect = cvkg_core::Rect {

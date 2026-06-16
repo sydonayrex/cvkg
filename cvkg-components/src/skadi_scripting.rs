@@ -133,7 +133,7 @@ impl View for SkadiScripting {
                 let y1 = rect.y + from.position.1;
                 let x2 = rect.x + to.position.0;
                 let y2 = rect.y + to.position.1;
-                renderer.draw_line(x1, y1, x2, y2, [0.4, 0.5, 0.7, 0.8], 2.0);
+                renderer.draw_line(x1, y1, x2, y2, theme::with_alpha(theme::border(), 0.8), 2.0);
                 renderer.draw_text(
                     &conn.label,
                     (x1 + x2) / 2.0,

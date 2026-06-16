@@ -1,6 +1,7 @@
 //! RuneInspector — Detachable floating inspector panel.
 //! Named after the runic tablets used by Norse scholars.
 
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 pub struct RuneInspector {
@@ -35,7 +36,7 @@ impl View for RuneInspector {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass background (heavier blur than toolbars)
         renderer.bifrost(rect, 30.0, 1.3, 0.75);
-        renderer.fill_rounded_rect(rect, 12.0, [0.06, 0.06, 0.08, 0.9]);
+        renderer.fill_rounded_rect(rect, 12.0, theme::surface_elevated());
 
         // Title bar
         let _title_rect = Rect {
@@ -69,7 +70,7 @@ impl View for RuneInspector {
             width: 20.0,
             height: 20.0,
         };
-        renderer.fill_ellipse(close_rect, [0.8, 0.2, 0.2, 0.9]);
+        renderer.fill_ellipse(close_rect, theme::error_color());
     }
 }
 

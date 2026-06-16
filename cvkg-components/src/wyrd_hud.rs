@@ -32,7 +32,7 @@ impl View for WyrdHUD {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // 1. Technical Grid Background
-        renderer.fill_rect(rect, [0.01, 0.01, 0.02, 0.8]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.8));
 
         // Draw sub-grid lines
         let step = 20.0;

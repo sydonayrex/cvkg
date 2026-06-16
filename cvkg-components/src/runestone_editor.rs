@@ -25,7 +25,7 @@ impl View for RunestoneEditor {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // 1. Etched Stone Background
-        renderer.fill_rect(rect, [0.03, 0.03, 0.05, 1.0]);
+        renderer.fill_rect(rect, theme::surface_elevated());
         renderer.stroke_rect(rect, theme::border_strong(), 1.0);
 
         // 2. Line Numbers (Gutter)

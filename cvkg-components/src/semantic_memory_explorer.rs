@@ -115,7 +115,7 @@ impl View for SemanticMemoryExplorer {
                 height: radius * 2.0,
             };
             renderer.fill_ellipse(cluster_rect, color);
-            renderer.stroke_ellipse(cluster_rect, [0.6, 0.8, 1.0, 0.8], 2.0);
+            renderer.stroke_ellipse(cluster_rect, theme::with_alpha(theme::accent(), 0.8), 2.0);
             renderer.draw_text(
                 &cluster.topic,
                 cx - 20.0,

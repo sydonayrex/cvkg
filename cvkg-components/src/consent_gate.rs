@@ -77,7 +77,7 @@ impl View for ConsentGate {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Semi-transparent backdrop
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.5]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.5));
 
         // Dialog card (centered)
         let dialog_w = (rect.width - 40.0).min(400.0);

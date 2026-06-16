@@ -196,7 +196,7 @@ impl View for Minimap {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Draw minimap background
         renderer.fill_rounded_rect(rect, 4.0, theme::surface());
-        renderer.stroke_rounded_rect(rect, 4.0, [0.3, 0.5, 0.8, 1.0], 1.0);
+        renderer.stroke_rounded_rect(rect, 4.0, theme::border(), 1.0);
 
         // Render canvas preview (simplified)
         let preview_rect = Rect {

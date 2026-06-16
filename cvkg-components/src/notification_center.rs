@@ -100,7 +100,7 @@ impl View for NotificationCenterPanel {
         renderer.bifrost(panel_rect, 20.0, 1.5, 0.96);
 
         // 2. Translucent panel fill
-        renderer.fill_rounded_rect(panel_rect, 0.0, [0.03, 0.03, 0.05, 0.85]);
+        renderer.fill_rounded_rect(panel_rect, 0.0, theme::with_alpha(theme::surface_elevated(), 0.85));
 
         // 3. Leading border/separator line
         renderer.draw_line(

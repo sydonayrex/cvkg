@@ -31,7 +31,7 @@ impl View for ScribingStone {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // 1. Basalt Surface
-        renderer.fill_rect(rect, [0.02, 0.02, 0.03, 1.0]);
+        renderer.fill_rect(rect, theme::surface_elevated());
 
         // 2. Render existing strokes
         let strokes = self.strokes.lock().expect("mutex poisoned");

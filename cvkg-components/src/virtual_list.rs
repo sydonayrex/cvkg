@@ -113,7 +113,7 @@ where
 
                 // Focus ring on selected
                 if Some(idx) == selected_state {
-                    renderer.stroke_rect(item_rect, [0.3, 0.5, 0.8, 0.6], 1.0);
+                    renderer.stroke_rect(item_rect, theme::with_alpha(theme::border(), 0.6), 1.0);
                 }
 
                 // Render the item view

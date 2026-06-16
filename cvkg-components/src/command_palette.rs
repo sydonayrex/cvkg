@@ -287,7 +287,7 @@ impl View for MimirSpotlight {
         }
 
         // ── Render overlay background ──
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.6]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.6));
 
         // ── Calculate palette dimensions ──
         let palette_width = 480.0;

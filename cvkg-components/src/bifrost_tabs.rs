@@ -1,3 +1,4 @@
+use crate::theme;
 use crate::{RADIUS_LG, RADIUS_MD};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
@@ -54,7 +55,7 @@ impl View for BifrostTabs {
 
         // 1. Background Glass
         renderer.bifrost(rect, 20.0, 1.0, 0.8);
-        renderer.stroke_rounded_rect(rect, RADIUS_LG, [0.3, 0.3, 0.4, 0.3], 1.0);
+        renderer.stroke_rounded_rect(rect, RADIUS_LG, theme::with_alpha(theme::border(), 0.3), 1.0);
 
         // 2. Liquid Selection Indicator (The Bifrost bridge)
         let target_x = rect.x + (self.selected_index as f32 * tab_width);
@@ -69,7 +70,7 @@ impl View for BifrostTabs {
         };
 
         renderer.gungnir(indicator_rect, [0.0, 0.8, 1.0, 0.6], 10.0, 0.8);
-        renderer.fill_rounded_rect(indicator_rect, RADIUS_MD, [0.0, 0.5, 0.8, 0.4]);
+        renderer.fill_rounded_rect(indicator_rect, RADIUS_MD, theme::with_alpha(theme::primary(), 0.4));
 
         // 3. Tab Labels
         for (i, option) in self.options.iter().enumerate() {

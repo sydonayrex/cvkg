@@ -3,6 +3,7 @@
 //! Bragi the skaldic god governs poetry and creative expression - this suite
 //! provides rich text, markdown, and vector editing capabilities.
 
+use crate::theme;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -121,7 +122,7 @@ impl View for BragiCreative {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.fill_rect(rect, [0.08, 0.06, 0.12, 1.0]);
+        renderer.fill_rect(rect, theme::surface_elevated());
         renderer.draw_text(
             "Bragi Creative Suite",
             rect.x + 10.0,

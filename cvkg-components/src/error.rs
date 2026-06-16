@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{ComponentErrorState, Never, Rect, Renderer, State, View};
 
 /// ErrorBoundary provides fault isolation for a component subtree.
@@ -34,10 +35,10 @@ impl<V: View> View for ErrorBoundary<V> {
             let loc = err.error_location.as_deref().unwrap_or("unknown_loc");
 
             // Background - Deep void red
-            renderer.fill_rect(rect, [0.08, 0.02, 0.02, 1.0]);
+            renderer.fill_rect(rect, theme::error_color());
 
             // Hazard border
-            renderer.stroke_rect(rect, [1.0, 0.2, 0.0, 1.0], 1.5);
+            renderer.stroke_rect(rect, theme::error_color(), 1.5);
 
             // Error Details
             renderer.draw_text(

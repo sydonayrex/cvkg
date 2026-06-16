@@ -276,7 +276,7 @@ impl<V: View> View for HiminnModal<V> {
         renderer.push_vnode(rect, "HiminnModal");
 
         // 1. Overlay (Darken background)
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.4]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.4));
 
         // 2. Modal Centering
         let modal_width = 400.0;

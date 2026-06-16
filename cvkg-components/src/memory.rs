@@ -57,7 +57,7 @@ impl View for MemoryView {
 
                     // Fragment background
                     renderer.fill_rect(item_rect, theme::surface());
-                    renderer.stroke_rect(item_rect, [0.0, 0.6, 0.7, 0.4], 1.0);
+                    renderer.stroke_rect(item_rect, theme::with_alpha(theme::accent(), 0.4), 1.0);
 
                     // Summary
                     renderer.draw_text(
