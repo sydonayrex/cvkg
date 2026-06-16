@@ -80,49 +80,14 @@ impl Default for A11yInspector {
 }
 
 impl A11yInspector {
-    /// Create a new accessibility inspector with demo tree data.
+    /// Create a new accessibility inspector with an empty tree.
+    /// Call `refresh_from_vdom()` to populate from the live VDOM.
     pub fn new() -> Self {
-        let nodes = vec![
-            A11yNode::new("Window", "CVKG Showcase").depth(0),
-            A11yNode::new("MenuBar", "Main Menu").depth(1),
-            A11yNode::new("Menu", "File").depth(2),
-            A11yNode::new("MenuItem", "New").depth(3).value("Cmd+N"),
-            A11yNode::new("MenuItem", "Open\u{2026}")
-                .depth(3)
-                .value("Cmd+O"),
-            A11yNode::new("MenuItem", "Save").depth(3).value("Cmd+S"),
-            A11yNode::new("MenuItem", "Close").depth(3).value("Cmd+W"),
-            A11yNode::new("Menu", "Edit").depth(2),
-            A11yNode::new("MenuItem", "Undo").depth(3).value("Cmd+Z"),
-            A11yNode::new("MenuItem", "Redo")
-                .depth(3)
-                .value("Cmd+Shift+Z"),
-            A11yNode::new("MenuItem", "Copy").depth(3).value("Cmd+C"),
-            A11yNode::new("MenuItem", "Paste").depth(3).value("Cmd+V"),
-            A11yNode::new("SplitView", "Main Content").depth(1),
-            A11yNode::new("Sidebar", "Component List").depth(2),
-            A11yNode::new("Button", "Buttons").depth(3).focused(true),
-            A11yNode::new("Button", "Inputs").depth(3),
-            A11yNode::new("Button", "Layout").depth(3),
-            A11yNode::new("Button", "Overlays").depth(3),
-            A11yNode::new("Button", "Visual").depth(3),
-            A11yNode::new("Group", "Content Area").depth(2),
-            A11yNode::new("Heading", "Buttons").depth(3),
-            A11yNode::new("Button", "Default Button").depth(3),
-            A11yNode::new("Button", "Destructive Button").depth(3),
-            A11yNode::new("Button", "Secondary Button").depth(3),
-            A11yNode::new("Slider", "Volume").depth(3).value("65%"),
-            A11yNode::new("CheckBox", "Dark Mode").depth(3).value("on"),
-            A11yNode::new("ProgressIndicator", "Loading")
-                .depth(3)
-                .value("65%"),
-        ];
-
         Self {
             visible: false,
             panel_width: 320.0,
             selected_node: None,
-            nodes,
+            nodes: Vec::new(),
         }
     }
 
@@ -209,7 +174,7 @@ impl View for A11yInspector {
         };
 
         // Panel background
-        renderer.fill_rect(panel_rect, [0.06, 0.06, 0.1, 0.95]);
+        renderer.fill_rect(panel_rect, theme::with_alpha(theme::surface_elevated(), 0.95));
         renderer.stroke_rect(
             Rect {
                 x: panel_rect.x,
