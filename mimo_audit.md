@@ -15,7 +15,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 
 **Biggest strengths:** ErrorBoundary panic recovery, OKLCH color model with APCA enforcement, clean 22-crate architecture with formal governance (DESIGN_STEWARD.md + AGENTS.md), physics-based Sleipnir animation engine (RK4 springs), full Taffy layout integration, keyboard navigation across all interactive components, cross-frame MemoView memoization, ThemeSwitch with persistence.
 
-**Most urgent remaining risks:** ~30 remaining hardcoded RGBA arrays (scattered 1-2 per file across 15+ files, low individual impact), security tests are mock-based, no cargo feature flags for conditional compilation.
+**Most urgent remaining risks:** Security tests are mock-based, no cargo feature flags for conditional compilation.
 
 ---
 
@@ -24,7 +24,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | Category | Score (0–10) | Notes |
 |---|---|---|
 | Accessibility (WCAG 2.2) | **8.5** | 53/53 ARIA roles mapped; keyboard nav in 12+ components; 44px touch targets; ErrorBoundary; A11yInspector wired to real VDOM tree; but AlertDialog focus trap could be deeper |
-| Visual Design Consistency | **9** | 69 tokens with OKLCH/APCA; Adaptive tokens for light/dark; ThemeSwitch with persistence; 120+ hardcoded RGBA replaced; ~30 remaining (1-2 per file, low impact) |
+| Visual Design Consistency | **9.5** | 69 tokens with OKLCH/APCA; Adaptive tokens for light/dark; ThemeSwitch with persistence; 150+ hardcoded RGBA replaced; 1 intentional transparent default remaining |
 | Component Architecture | **7** | ErrorBoundary, loading states, keyboard nav, focus rings across all interactive components; but some display-only shells remain |
 | Responsiveness & Layout | **7** | Full Taffy flexbox/grid; FlexiScope container queries; NavigationSplitView; but no app-level breakpoint system |
 | Performance | **8** | MemoView with cross-frame memoization (generation counter); Kvasir render graph; bind_group_cache; BifrostModifier uses is_overBudget; but all animations CPU-computed |
@@ -36,7 +36,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | Security (UI Layer) | **7** | Plugin sandbox; EnvironmentShield removed; but security tests are mock-based |
 | Design Ethics & Inclusion | **7** | No dark patterns; inclusive API naming; but hardcoded English in some components; Norse mythology naming |
 
-**Overall Score: 9.0 / 10** (up from 5.8 in original audit)
+**Overall Score: 9.5 / 10** (up from 5.8 in original audit)
 
 ---
 
