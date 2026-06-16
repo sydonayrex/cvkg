@@ -3575,7 +3575,8 @@ pub struct SceneUniforms {
     pub scroll_offset: f32,
     pub scale_factor: f32,
     pub scene_type: u32,
-    pub _pad: [f32; 3], // Align to 16 bytes if needed, but current struct is 4x16 + 4x16 + 4x16 + ...
+    pub fireball_pos: [f32; 2],
+    pub _pad: [f32; 1], // Align to 16 bytes
 }
 
 pub const SCENE_AURORA: u32 = 0;
@@ -3618,7 +3619,8 @@ impl SceneUniforms {
             scroll_offset: 0.0,
             scale_factor: 1.0,
             scene_type: SCENE_AURORA,
-            _pad: [0.0; 3],
+            fireball_pos: [0.0, 0.0],
+            _pad: [0.0; 1],
         }
     }
 }

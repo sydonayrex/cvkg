@@ -37,9 +37,9 @@ struct SceneUniforms {
     scroll_offset:   f32,
     scale_factor:    f32,
     scene_type:      u32,
+    fireball_pos:    vec2<f32>,
     _pad0:           f32,
     _pad1:           f32,
-    _pad2:           f32,
 };
 
 // --- Group 2: Berserker Uniforms ---

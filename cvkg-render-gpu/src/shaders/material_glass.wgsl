@@ -302,9 +302,16 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let disp_blend = smoothstep(0.3, 0.5, lens_dist) * 0.6;
     refracted = mix(refracted, displaced_refracted, disp_blend);
 
-    // GGX specular highlight (light from top-left, matching macOS convention)
-    let light_dir = normalize(vec2<f32>(-0.6, -0.8));
-    let spec = ggx_specular(light_dir, view_dir, lens_normal, 0.15, 2.5);
+    // GGX specular highlight — dynamic light from fireball position
+    // Compute light direction from fireball position to fragment world position
+    let frag_world = in.clip_position.xy / scene.scale_factor;
+    let to_fireball = scene.fireball_pos - frag_world;
+    let fireball_dist = length(to_fireball);
+    // Normalize; default to top-left if fireball is at origin (uninitialized)
+    let light_dir = select(normalize(vec2<f32>(-0.6, -0.8)), normalize(to_fireball + vec2<f32>(1e-5, 1e-5)), fireball_dist > 1.0);
+    // Specular intensity falls off with distance (closer fireball = brighter spec)
+    let fireball_intensity = 2.5 * clamp(300.0 / (fireball_dist + 100.0), 0.0, 1.0);
+    let spec = ggx_specular(light_dir, view_dir, lens_normal, 0.15, fireball_intensity);
     let specular_contribution = spec * vec3<f32>(1.0, 0.98, 0.95) * (1.0 - fresnel * 0.5);
 
     // ─── Section 10: Final Composition ───────────────────────────────────────

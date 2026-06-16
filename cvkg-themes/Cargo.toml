@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-themes"
-version = "0.2.12"
+version = "0.2.13"
 build = false
 autolib = false
 autobins = false
@@ -34,10 +34,10 @@ name = "themes_tests"
 path = "tests/themes_tests.rs"
 
 [dependencies.cvkg-anim]
-version = "0.2.12"
+version = "0.2.13"
 
 [dependencies.cvkg-core]
-version = "0.2.12"
+version = "0.2.13"
 
 [dependencies.serde]
 version = "1.0"

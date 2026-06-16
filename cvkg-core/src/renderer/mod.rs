@@ -229,6 +229,8 @@ pub trait RendererBerserker {
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
     fn set_scene(&mut self, _scene: &str) {}
     fn set_scene_preset(&mut self, _preset: u32) {}
+    /// Set the fireball position for dynamic glass specular highlights.
+    fn set_fireball_pos(&mut self, _pos: [f32; 2]) {}
     /// Set the default background color for the canvas (RGBA).
     /// Used when the app does not draw its own background.
     fn set_default_background_color(&mut self, _color: [f32; 4]) {}

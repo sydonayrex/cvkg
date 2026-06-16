@@ -122,6 +122,8 @@ struct DemoState {
     start: Instant,
     mouse_pos: [f32; 2],
     card_effects: [CardEffect; 3],
+    prev_fireball_pos: [f32; 2],
+    fireball_pos: [f32; 2],
 }
 
 impl DemoState {
@@ -139,6 +141,8 @@ impl DemoState {
                 effect_type: 0,
                 progress: 0.0,
             }; 3],
+            prev_fireball_pos: [0.0, 0.0],
+            fireball_pos: [0.0, 0.0],
         }
     }
 
@@ -340,20 +344,41 @@ impl ApplicationHandler for App {
                 let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
                 let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
-                // Spawn particles
+                // Compute fireball velocity direction for trail emission
+                let fireball_vel = [cx - self.state.prev_fireball_pos[0], cy - self.state.prev_fireball_pos[1]];
+                let fireball_speed = (fireball_vel[0] * fireball_vel[0] + fireball_vel[1] * fireball_vel[1]).sqrt();
+                // Normalize velocity for direction; default to up if stationary
+                let fireball_dir = if fireball_speed > 0.01 {
+                    [-fireball_vel[0] / fireball_speed, -fireball_vel[1] / fireball_speed]
+                } else {
+                    [0.0, -1.0]
+                };
+                // Store positions for next frame
+                self.state.prev_fireball_pos = self.state.fireball_pos;
+                self.state.fireball_pos = [cx, cy];
+
+                // Upload fireball position to GPU for dynamic glass specular
+                renderer.set_fireball_pos([cx, cy]);
+
+                // Spawn particles — directional trail behind fireball
                 let spawn = if self.state.rage > 0.5 { 8 } else { 4 };
                 for _ in 0..spawn {
-                    let angle = self.state.rng.next_f32() * 6.28;
-                    let speed = 80.0 + self.state.rng.next_f32() * 180.0;
                     let is_ember = self.state.rng.next_f32() > 0.3;
                     let color = if is_ember {
                         [1.0, 0.3 + self.state.rng.next_f32() * 0.5, 0.0, 1.0]
                     } else {
                         [1.0, 0.6 + self.state.rng.next_f32() * 0.4, 0.1, 1.0]
                     };
+                    // Spread angle: ±40° cone behind fireball direction
+                    let spread = (self.state.rng.next_f32() - 0.5) * 1.396; // ±40° in radians
+                    let cos_s = spread.cos();
+                    let sin_s = spread.sin();
+                    let dir_x = fireball_dir[0] * cos_s - fireball_dir[1] * sin_s;
+                    let dir_y = fireball_dir[0] * sin_s + fireball_dir[1] * cos_s;
+                    let speed = 40.0 + self.state.rng.next_f32() * 120.0;
                     self.state.particles.push(Particle {
-                        pos: [cx, cy],
-                        vel: [angle.cos() * speed, angle.sin() * speed - 40.0],
+                        pos: [cx + dir_x * 2.0, cy + dir_y * 2.0], // Slightly offset from center
+                        vel: [dir_x * speed, dir_y * speed - 20.0], // Slight upward drift
                         color,
                         life: 0.8 + self.state.rng.next_f32() * 1.2,
                         size: 3.0 + self.state.rng.next_f32() * 6.0,
@@ -389,6 +414,7 @@ impl ApplicationHandler for App {
 
                 // ── Animated, Multi-Layered Burning Fire Ball ──
                 // Layer 1: Large soft outer atmospheric heat distortion/glow
+                // HDR-scaled: colors > 1.0 to ensure bloom extraction catches them
                 let glow_size = 160.0 + (t * 2.0).sin() * 10.0;
                 renderer.draw_radial_gradient(
                     Rect {
@@ -397,8 +423,8 @@ impl ApplicationHandler for App {
                         width: glow_size,
                         height: glow_size,
                     },
-                    [1.0, 0.3, 0.0, 0.2],
-                    [1.0, 0.1, 0.0, 0.0],
+                    [2.5, 0.8, 0.0, 0.3],
+                    [2.0, 0.2, 0.0, 0.0],
                 );
 
                 // Layer 2: Main burning flame body (wobbles organically)
@@ -411,8 +437,8 @@ impl ApplicationHandler for App {
                         width: flame_w,
                         height: flame_h,
                     },
-                    [1.0, 0.5, 0.05, 0.55],
-                    [0.8, 0.1, 0.0, 0.0],
+                    [2.5, 1.2, 0.1, 0.6],
+                    [1.8, 0.3, 0.0, 0.0],
                 );
 
                 // Layer 3: Dynamic turbulent flame blobs (simulates burning material/lumps rising/shifting)
@@ -428,8 +454,8 @@ impl ApplicationHandler for App {
                             width: blob_size,
                             height: blob_size,
                         },
-                        [1.0, 0.7, 0.15, 0.7],
-                        [0.9, 0.2, 0.0, 0.0],
+                        [2.5, 1.5, 0.3, 0.7],
+                        [2.0, 0.5, 0.0, 0.0],
                     );
                 }
 
@@ -442,8 +468,8 @@ impl ApplicationHandler for App {
                         width: core_size,
                         height: core_size,
                     },
-                    [1.0, 0.95, 0.6, 0.9],
-                    [1.0, 0.4, 0.0, 0.0],
+                    [2.5, 2.4, 1.5, 0.95],
+                    [2.0, 1.0, 0.0, 0.0],
                 );
 
                 // ── Liquid Glass Cards ──

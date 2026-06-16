@@ -1029,6 +1029,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
         // scene_buffer is updated every frame in begin_frame, so no need to write here
     }
 
+    fn set_fireball_pos(&mut self, pos: [f32; 2]) {
+        self.current_scene.fireball_pos = pos;
+    }
+
     fn trigger_shatter_event(&mut self, origin: [f32; 2], force: f32) {
         self.current_scene.shatter_origin = origin;
         self.current_scene.shatter_time = self.current_scene.time;

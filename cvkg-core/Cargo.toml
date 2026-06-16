@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-core"
-version = "0.2.12"
+version = "0.2.13"
 build = false
 autolib = false
 autobins = false
@@ -60,7 +60,7 @@ features = ["derive"]
 version = "1.0"
 
 [dependencies.cvkg-runic-text]
-version = "0.2.12"
+version = "0.2.13"
 
 [dependencies.stl_io]
 version = "0.7"
