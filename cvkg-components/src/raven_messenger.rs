@@ -235,8 +235,8 @@ impl View for RavenMessenger {
                             height: code_h,
                         };
                         // Dark code background
-                        renderer.fill_rounded_rect(code_rect, 4.0, [0.02, 0.02, 0.05, 0.95]);
-                        renderer.stroke_rounded_rect(code_rect, 4.0, [0.2, 0.3, 0.5, 0.6], 1.0);
+                        renderer.fill_rounded_rect(code_rect, 4.0, theme::with_alpha(theme::surface_elevated(), 0.95));
+                        renderer.stroke_rounded_rect(code_rect, 4.0, theme::border(), 1.0);
 
                         // Language label
                         if let Some(l) = lang {

@@ -315,7 +315,7 @@ where
                 };
                 renderer.fill_rect(row_rect, bg);
                 if is_selected {
-                    renderer.stroke_rect(row_rect, [0.0, 0.8, 1.0, 0.6], 1.5);
+                    renderer.stroke_rect(row_rect, theme::with_alpha(theme::accent(), 0.6), 1.5);
                 }
 
                 // Check depth of this node if Tree view is active
@@ -408,7 +408,7 @@ where
                 width: rect.width - 40.0,
                 height: 40.0,
             };
-            renderer.fill_rounded_rect(bar_rect, 6.0, [0.08, 0.08, 0.12, 0.95]);
+            renderer.fill_rounded_rect(bar_rect, 6.0, theme::with_alpha(theme::surface_elevated(), 0.95));
             renderer.stroke_rounded_rect(bar_rect, 6.0, theme::accent(), 1.5);
             renderer.draw_text(
                 &format!("{} items selected", self.bulk_selected.len()),

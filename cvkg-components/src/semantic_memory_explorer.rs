@@ -91,7 +91,7 @@ impl View for SemanticMemoryExplorer {
                     let y1 = viz_rect.y + viz_rect.height / 2.0;
                     let x2 = viz_rect.x + 40.0 + j as f32 * 80.0;
                     let y2 = y1;
-                    renderer.draw_line(x1, y1, x2, y2, [0.3, 0.4, 0.6, 0.6], 1.5);
+                    renderer.draw_line(x1, y1, x2, y2, theme::with_alpha(theme::border(), 0.6), 1.5);
                 }
             }
         }
