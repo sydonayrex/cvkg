@@ -1,0 +1,13 @@
+[package]
+name = "cvkg-telemetry"
+version = "0.2.12"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+
+[features]
+default = []
+telemetry = []
+
+[dependencies]
+cvkg-core = { path = "../cvkg-core" }

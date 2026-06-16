@@ -9,6 +9,7 @@ members = [
     "cvkg-render-native",
     "cvkg-render-gpu",
     "cvkg-render-software",
+    "cvkg-telemetry",
     "cvkg-compositor",
     "cvkg-cli",
     "cvkg-svg-serialize",
