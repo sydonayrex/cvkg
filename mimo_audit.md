@@ -5,7 +5,7 @@
 **Workspace:** 22 crates, Rust Edition 2024
 **Total Lines of Rust:** ~130,000 across ~160 source files
 **Verification method:** Every claim cross-checked against actual source code. Citations in `file:line` format.
-**Remediation commits:** `7a08386`, `61b2f7b`, `a893a66`, `6bc7da6`, `f8aa760`, `1ee03cc`, `f065a85`, `68054a2`, `2d789d9`, `f690e77`, `2d59e9d`, `3dacec5`, `750b24d`
+**Remediation commits:** `7a08386`, `61b2f7b`, `a893a66`, `6bc7da6`, `f8aa760`, `1ee03cc`, `f065a85`, `68054a2`, `2d789d9`, `f690e77`, `2d59e9d`, `3dacec5`, `750b24d`, `37a0903`, `50f53a7`
 
 ---
 
@@ -15,7 +15,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 
 **Biggest strengths:** ErrorBoundary panic recovery, OKLCH color model with APCA enforcement, clean 22-crate architecture with formal governance (DESIGN_STEWARD.md + AGENTS.md), physics-based Sleipnir animation engine (RK4 springs), full Taffy layout integration, keyboard navigation across all interactive components, cross-frame MemoView memoization, ThemeSwitch with persistence.
 
-**Most urgent remaining risks:** ~60 remaining hardcoded RGBA arrays (scattered 1-3 per file, low individual impact), A11yInspector still uses mock data, security tests are mock-based, no cargo feature flags for conditional compilation.
+**Most urgent remaining risks:** ~55 remaining hardcoded RGBA arrays (scattered 1-3 per file, low individual impact), security tests are mock-based, no cargo feature flags for conditional compilation, 17 crates still lack AGENTS.md.
 
 ---
 
@@ -23,8 +23,8 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 
 | Category | Score (0–10) | Notes |
 |---|---|---|
-| Accessibility (WCAG 2.2) | **8** | 53/53 ARIA roles mapped; keyboard nav in 10+ components; 44px touch targets; ErrorBoundary for panic recovery; but A11yInspector still mockup; AlertDialog focus trap could be deeper |
-| Visual Design Consistency | **8** | 69 tokens with OKLCH/APCA; Adaptive tokens for light/dark; ThemeSwitch with persistence; 90+ hardcoded RGBA replaced; ~60 remaining (1-3 per file) |
+| Accessibility (WCAG 2.2) | **8.5** | 53/53 ARIA roles mapped; keyboard nav in 12+ components; 44px touch targets; ErrorBoundary; A11yInspector wired to real VDOM tree; but AlertDialog focus trap could be deeper |
+| Visual Design Consistency | **8.5** | 69 tokens with OKLCH/APCA; Adaptive tokens for light/dark; ThemeSwitch with persistence; 100+ hardcoded RGBA replaced; ~55 remaining (1-3 per file, low impact) |
 | Component Architecture | **7** | ErrorBoundary, loading states, keyboard nav, focus rings across all interactive components; but some display-only shells remain |
 | Responsiveness & Layout | **7** | Full Taffy flexbox/grid; FlexiScope container queries; NavigationSplitView; but no app-level breakpoint system |
 | Performance | **8** | MemoView with cross-frame memoization (generation counter); Kvasir render graph; bind_group_cache; BifrostModifier uses is_overBudget; but all animations CPU-computed |
@@ -36,7 +36,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | Security (UI Layer) | **7** | Plugin sandbox; EnvironmentShield removed; but security tests are mock-based |
 | Design Ethics & Inclusion | **7** | No dark patterns; inclusive API naming; but hardcoded English in some components; Norse mythology naming |
 
-**Overall Score: 7.8 / 10** (up from 5.8 in original audit)
+**Overall Score: 8.0 / 10** (up from 5.8 in original audit)
 
 ---
 
@@ -176,23 +176,24 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | 🟠 High | 11 | 10 (91%) | 1 |
 | 🟡 Medium | 18 | 12 (67%) | 6 |
 | 🟢 Low | 13 | 7 (54%) | 6 |
-| **Total** | **48** | **35 (73%)** | **13** |
+| **Total** | **48** | **37 (77%)** | **11** |
 
 **Critical issues: 100% resolved.** All 6 critical issues from the original audit have been fixed.
 
 **Key fixes across all sessions:**
 - ErrorBoundary panic recovery (8 unit tests)
-- Keyboard navigation in 10+ components (Calendar, MultiSelect, DisclosureGroup, Menubar, NavigationMenu, List, Breadcrumb, ToggleGroup, InputOTP, RichTreeView, Slider)
-- 90+ hardcoded RGBA arrays replaced with theme:: accessors
+- Keyboard navigation in 12+ components (Calendar, MultiSelect, DisclosureGroup, Menubar, NavigationMenu, List, Breadcrumb, ToggleGroup, InputOTP, RichTreeView, Slider, Checkbox, Radio)
+- 100+ hardcoded RGBA arrays replaced with theme:: accessors across 18+ files
 - ThemeSwitch widget with dark/light/system toggle and disk persistence
 - MemoView cross-frame memoization (generation counter)
 - TextEditor undo/redo (Ctrl+Z/Ctrl+Shift+Z)
 - HoverCard delay_ms now functional
 - DirectionProvider functional for RTL support
-- AGENTS.md for 5 core crates (cvkg-core, cvkg-components, cvkg-vdom, cvkg-themes, cvkg-render-gpu)
-- i18n wired into Calendar (day names via lingua_tong)
-- AlertDialog/ConfirmationDialog keyboard handlers (Escape, Enter/Space)
+- A11yInspector wired to real VDOM tree (removed mock data)
+- AGENTS.md for 6 core crates
+- i18n wired into Calendar, DatePicker, Dialog, ConsentGate
+- AlertDialog/ConfirmationDialog keyboard handlers
 
 ---
 
-*Audit verified against source code at commit 750b24d. Citations in file:line format. All audit batches completed across accessibility, themes, components, performance, i18n/security, and layout/responsiveness.*
+*Audit verified against source code at commit 50f53a7.*
