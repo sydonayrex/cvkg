@@ -203,7 +203,7 @@ impl View for Combobox {
 
         // Dropdown background
         renderer.fill_rounded_rect(dropdown_rect, 6.0, theme::input_bg());
-        renderer.stroke_rounded_rect(dropdown_rect, 6.0, [0.2, 0.3, 0.5, 0.8], 1.0);
+        renderer.stroke_rounded_rect(dropdown_rect, 6.0, theme::with_alpha(theme::border(), 0.8), 1.0);
 
         // ── Render search input ──
         let search_rect = Rect {
@@ -213,7 +213,7 @@ impl View for Combobox {
             height: search_height,
         };
         renderer.fill_rounded_rect(search_rect, 4.0, theme::surface());
-        renderer.stroke_rounded_rect(search_rect, 4.0, [0.0, 0.7, 1.0, 0.6], 1.0);
+        renderer.stroke_rounded_rect(search_rect, 4.0, theme::with_alpha(theme::accent(), 0.6), 1.0);
 
         let display_text = if search_text.is_empty() {
             "Type to search..."
@@ -221,7 +221,7 @@ impl View for Combobox {
             &search_text
         };
         let text_color = if search_text.is_empty() {
-            [0.4, 0.4, 0.5, 0.7]
+            theme::with_alpha(theme::text_muted(), 0.7)
         } else {
             theme::text()
         };
@@ -441,12 +441,12 @@ impl Combobox {
         let text_color = if self.selected.is_some() {
             theme::text()
         } else {
-            [0.5, 0.5, 0.6, 0.7]
+            theme::with_alpha(theme::text_muted(), 0.7)
         };
 
         // Background
         renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(rect, 6.0, [0.25, 0.3, 0.5, 0.8], 1.0);
+        renderer.stroke_rounded_rect(rect, 6.0, theme::with_alpha(theme::border(), 0.8), 1.0);
 
         // Text
         renderer.draw_text(display_text, rect.x + 12.0, rect.y + 12.0, 14.0, text_color);
@@ -459,7 +459,7 @@ impl Combobox {
             rect.x + rect.width - tw - 12.0,
             rect.y + 12.0,
             14.0,
-            [0.5, 0.5, 0.6, 0.8],
+            theme::with_alpha(theme::text_muted(), 0.8),
         );
     }
 }

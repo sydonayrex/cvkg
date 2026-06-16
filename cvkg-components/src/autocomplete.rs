@@ -176,8 +176,8 @@ impl View for AutoComplete {
         if dropdown_visible {
             // Glassmorphic background: bifrost blur + rounded rect fill
             renderer.bifrost(dropdown_rect, 12.0, 1.2, 0.15);
-            renderer.fill_rounded_rect(dropdown_rect, RADIUS_LG, [0.06, 0.06, 0.10, 0.85]);
-            renderer.stroke_rounded_rect(dropdown_rect, RADIUS_LG, [0.25, 0.25, 0.35, 0.6], 1.0);
+            renderer.fill_rounded_rect(dropdown_rect, RADIUS_LG, theme::with_alpha(theme::surface_elevated(), 0.85));
+            renderer.stroke_rounded_rect(dropdown_rect, RADIUS_LG, theme::with_alpha(theme::border(), 0.6), 1.0);
 
             // Render each filtered option
             for (vis_idx, &opt_idx) in state.filtered_indices.iter().enumerate() {
@@ -190,7 +190,7 @@ impl View for AutoComplete {
 
                 // Highlight the selected item
                 if state.selection == Some(vis_idx) {
-                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, [0.0, 0.6, 1.0, 0.3]);
+                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::with_alpha(theme::accent(), 0.3));
                 }
 
                 let opt_text = &self.options[opt_idx];

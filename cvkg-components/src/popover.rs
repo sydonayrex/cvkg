@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -185,7 +186,7 @@ impl<V: View, C: View> Popover<V, C> {
 
     /// Draw a small arrow triangle pointing from the popover toward the trigger.
     fn draw_arrow(&self, renderer: &mut dyn Renderer, pop_rect: Rect, pos: PopoverPosition) {
-        let arrow_color = [0.06, 0.06, 0.1, 0.88];
+        let arrow_color = theme::with_alpha(theme::surface_elevated(), 0.88);
         let size = 5.0;
 
         // Compute the tip point (on the popover edge) and two base points.
@@ -289,7 +290,7 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
         // 3. If open, render the floating popover with backdrop.
         if is_open {
             // Semi-transparent backdrop.
-            renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.35]);
+            renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.35));
 
             let position = self.resolve_position(trigger_rect, rect);
             let pop_rect = self.popover_rect(trigger_rect, position);
@@ -300,9 +301,9 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
             // Bifrost (frosted glass) effect.
             renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
             // Semi-transparent dark fill.
-            renderer.fill_rounded_rect(pop_rect, 10.0, [0.06, 0.06, 0.1, 0.88]);
+            renderer.fill_rounded_rect(pop_rect, 10.0, theme::with_alpha(theme::surface_elevated(), 0.88));
             // Subtle neon border.
-            renderer.stroke_rounded_rect(pop_rect, 10.0, [0.15, 0.25, 0.4, 0.7], 1.5);
+            renderer.stroke_rounded_rect(pop_rect, 10.0, theme::with_alpha(theme::border(), 0.7), 1.5);
 
             // Draw the arrow triangle.
             self.draw_arrow(renderer, pop_rect, position);

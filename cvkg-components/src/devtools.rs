@@ -33,7 +33,7 @@ impl View for VdomInspector {
 
         // Bifrost background
         renderer.bifrost(panel_rect, 20.0, 0.5, 0.8);
-        renderer.fill_rect(panel_rect, [0.05, 0.05, 0.05, 0.8]);
+        renderer.fill_rect(panel_rect, theme::with_alpha(theme::surface_elevated(), 0.8));
         renderer.stroke_rect(panel_rect, theme::accent(), 1.0);
 
         // Title
@@ -112,15 +112,15 @@ impl View for TelemetryOverlay {
 
         // Bifrost background (frosted glass)
         renderer.bifrost(panel_rect, 15.0, 0.3, 0.7);
-        renderer.fill_rect(panel_rect, [0.02, 0.02, 0.03, 0.8]);
-        renderer.stroke_rect(panel_rect, [0.0, 0.8, 1.0, 0.5], 1.0);
+        renderer.fill_rect(panel_rect, theme::with_alpha(theme::surface_elevated(), 0.8));
+        renderer.stroke_rect(panel_rect, theme::with_alpha(theme::accent(), 0.5), 1.0);
 
         let mut y = panel_rect.y + 20.0;
         let x = panel_rect.x + 15.0;
         let line_h = 18.0;
 
         // Title
-        renderer.draw_text("SYSTEM_TELEMETRY", x, y, 14.0, [0.0, 1.0, 0.9, 1.0]);
+        renderer.draw_text("SYSTEM_TELEMETRY", x, y, 14.0, theme::accent());
         y += 25.0;
 
         // Frame timing
