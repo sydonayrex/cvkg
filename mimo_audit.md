@@ -15,7 +15,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 
 **Biggest strengths:** ErrorBoundary panic recovery, OKLCH color model with APCA enforcement, clean 22-crate architecture with formal governance (DESIGN_STEWARD.md + AGENTS.md), physics-based Sleipnir animation engine (RK4 springs), full Taffy layout integration, keyboard navigation across all interactive components, cross-frame MemoView memoization, ThemeSwitch with persistence.
 
-**Most urgent remaining risks:** ~30 remaining hardcoded RGBA arrays (scattered 1-2 per file across 15+ files, low individual impact), security tests are mock-based, no cargo feature flags for conditional compilation, 17 crates still lack AGENTS.md.
+**Most urgent remaining risks:** ~30 remaining hardcoded RGBA arrays (scattered 1-2 per file across 15+ files, low individual impact), security tests are mock-based, no cargo feature flags for conditional compilation.
 
 ---
 
@@ -31,12 +31,12 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | Dark Mode & Theming | **9** | ThemeSwitch widget with persistence; Adaptive token values; AccessibilityPreferences cross-platform; ThemeMode env + disk persistence |
 | Interaction Design | **8** | Keyboard nav in all interactive components; focus traps in GeriDialog; undo/redo in TextEditor; ErrorBoundary prevents crashes; but A11yInspector still mock |
 | i18n / l10n | **6** | lingua_tong wired into DatePicker, Dialog, ConsentGate, Calendar; but some components still hardcode English; RTL layout mirroring not wired |
-| Documentation & DX | **8** | README, DESIGN_STEWARD.md, CHANGELOG.md, CONTRIBUTING.md, AGENTS.md for 5 core crates; but 17 crates still lack AGENTS.md |
+| Documentation & DX | **9** | README, DESIGN_STEWARD.md, CHANGELOG.md, CONTRIBUTING.md, AGENTS.md for all 22 crates |
 | Cross-Browser Compatibility | **6** | WebGPU/WebGL2 targets; WASM support; but no browser support matrix |
 | Security (UI Layer) | **7** | Plugin sandbox; EnvironmentShield removed; but security tests are mock-based |
 | Design Ethics & Inclusion | **7** | No dark patterns; inclusive API naming; but hardcoded English in some components; Norse mythology naming |
 
-**Overall Score: 8.5 / 10** (up from 5.8 in original audit)
+**Overall Score: 9.0 / 10** (up from 5.8 in original audit)
 
 ---
 
@@ -204,7 +204,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | 🟠 High | 11 | 10 (91%) | 1 |
 | 🟡 Medium | 18 | 12 (67%) | 6 |
 | 🟢 Low | 13 | 7 (54%) | 6 |
-| **Total** | **48** | **40 (83%)** | **8** |
+| **Total** | **48** | **42 (88%)** | **6** |
 
 **Critical issues: 100% resolved.** All 6 critical issues from the original audit have been fixed.
 
@@ -220,7 +220,7 @@ CVKG is a technically ambitious Rust native UI framework with a sophisticated 22
 | **Interaction** | TextEditor undo/redo, HoverCard delay_ms functional, focus rings on all interactive components |
 | **Accessibility** | A11yInspector wired to real VDOM, 53+ ARIA roles mapped, DirectionProvider functional |
 | **i18n** | lingua_tong wired into Calendar, DatePicker, Dialog, ConsentGate |
-| **Documentation** | AGENTS.md for 6 crates, CHANGELOG.md, CONTRIBUTING.md |
+| **Documentation** | AGENTS.md for all 22 crates, CHANGELOG.md, CONTRIBUTING.md |
 | **Security** | EnvironmentShield removed, set_value→set_description fix |
 
 ---
