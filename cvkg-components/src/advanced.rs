@@ -50,7 +50,7 @@ impl<H: View, C: View> View for FafnirAccordion<H, C> {
 
             // Header background
             renderer.bifrost(header_rect, 8.0, 1.0, 0.8);
-            renderer.stroke_rounded_rect(header_rect, RADIUS_LG, [0.4, 0.5, 0.6, 0.5], 1.0);
+            renderer.stroke_rounded_rect(header_rect, RADIUS_LG, theme::border(), 1.0);
 
             header.render(renderer, header_rect.inset(12.0)); // 12px padding
             y_offset += header_size.height + spacing;
@@ -63,7 +63,7 @@ impl<H: View, C: View> View for FafnirAccordion<H, C> {
                     Rect::new(rect.x, rect.y + y_offset, rect.width, content_size.height);
 
                 // Content background
-                renderer.fill_rounded_rect(content_rect, RADIUS_LG, [0.05, 0.05, 0.08, 0.6]);
+                renderer.fill_rounded_rect(content_rect, RADIUS_LG, theme::with_alpha(theme::surface_elevated(), 0.6));
 
                 content.render(renderer, content_rect.inset(12.0));
                 y_offset += content_size.height + spacing;
@@ -210,7 +210,7 @@ impl<V: View> View for HuginHoverCard<V> {
             // Draw card background with shadow
             renderer.push_shadow(12.0, theme::shadow(), [0.0, 4.0]);
             renderer.bifrost(rect, 8.0, 1.5, 0.9);
-            renderer.stroke_rounded_rect(rect, RADIUS_LG, [0.3, 0.4, 0.5, 0.8], 1.0);
+            renderer.stroke_rounded_rect(rect, RADIUS_LG, theme::border(), 1.0);
             renderer.pop_shadow();
 
             content.render(renderer, rect.inset(8.0));
@@ -286,7 +286,7 @@ impl<V: View> View for SkollTimeline<V> {
                 let _next_item_size =
                     self.items[i + 1].intrinsic_size(renderer, SizeProposal::width(content_w));
                 let next_dot_y = rect.y + y_offset + item_size.height + spacing + 12.0;
-                renderer.draw_line(line_x, dot_y, line_x, next_dot_y, [0.3, 0.4, 0.5, 0.5], 2.0);
+                renderer.draw_line(line_x, dot_y, line_x, next_dot_y, theme::border(), 2.0);
             }
 
             // Draw dot
@@ -297,7 +297,7 @@ impl<V: View> View for SkollTimeline<V> {
                     dot_radius * 2.0,
                     dot_radius * 2.0,
                 ),
-                [0.8, 0.6, 0.2, 1.0],
+                theme::accent(),
             );
 
             // Render content
@@ -550,7 +550,7 @@ impl<V: View> View for VedrHero<V> {
         renderer.push_vnode(rect, "VedrHero");
 
         // Vibrant hero background
-        renderer.fill_rect(rect, [0.08, 0.05, 0.15, 1.0]);
+        renderer.fill_rect(rect, theme::surface_elevated());
         // Hero visual accent (glowing orb behind content)
         renderer.bifrost(rect, 15.0, 1.0, 0.5);
         renderer.fill_ellipse(
@@ -560,7 +560,7 @@ impl<V: View> View for VedrHero<V> {
                 300.0,
                 300.0,
             ),
-            [0.8, 0.2, 0.9, 0.2],
+            theme::with_alpha(theme::accent(), 0.2),
         );
 
         if let Some(content) = &self.content {
@@ -665,7 +665,7 @@ impl<V: View> View for GraniBreadcrumb<V> {
                     rect.x + x_offset,
                     rect.y + size.height * 0.7,
                     14.0,
-                    [0.4, 0.5, 0.6, 1.0],
+                    theme::text_muted(),
                 );
                 x_offset += 10.0 + spacing;
             }
@@ -724,7 +724,7 @@ impl<V: View> View for FrekiBottomNav<V> {
             rect.y,
             rect.x + rect.width,
             rect.y,
-            [0.3, 0.4, 0.5, 0.5],
+            theme::border(),
             1.0,
         ); // Top border
 
@@ -796,8 +796,8 @@ impl<V: View> View for GarmSpeedDial<V> {
             main_radius * 2.0,
             main_radius * 2.0,
         );
-        renderer.fill_ellipse(main_rect, [0.1, 0.5, 0.9, 1.0]);
-        renderer.stroke_ellipse(main_rect, [0.6, 0.8, 1.0, 0.8], 2.0);
+        renderer.fill_ellipse(main_rect, theme::primary());
+        renderer.stroke_ellipse(main_rect, theme::with_alpha(theme::primary(), 0.8), 2.0);
 
         // Draw cross icon
         let cx = main_rect.x + main_radius;
@@ -1148,13 +1148,13 @@ impl View for FafnirOTP {
             let box_x = rect.x + (i as f32) * (box_size + spacing);
             let box_rect = Rect::new(box_x, rect.y, box_size, box_size);
 
-            renderer.fill_rounded_rect(box_rect, RADIUS_MD, [0.05, 0.05, 0.08, 1.0]);
+            renderer.fill_rounded_rect(box_rect, RADIUS_MD, theme::surface_elevated());
 
             // Highlight focused/next box
             if i == chars.len() {
-                renderer.stroke_rounded_rect(box_rect, RADIUS_MD, [0.3, 0.6, 1.0, 1.0], 2.0);
+                renderer.stroke_rounded_rect(box_rect, RADIUS_MD, theme::focus_ring(), 2.0);
             } else {
-                renderer.stroke_rounded_rect(box_rect, RADIUS_MD, [0.2, 0.2, 0.25, 1.0], 1.0);
+                renderer.stroke_rounded_rect(box_rect, RADIUS_MD, theme::border(), 1.0);
             }
 
             if let Some(&c) = chars.get(i) {
@@ -1163,7 +1163,7 @@ impl View for FafnirOTP {
                     box_rect.x + box_size / 2.0 - 6.0,
                     box_rect.y + box_size / 2.0 + 6.0,
                     24.0,
-                    [0.9, 0.9, 0.9, 1.0],
+                    theme::text(),
                 );
             }
         }
@@ -1252,7 +1252,7 @@ impl<L: View, R: View> View for NidhugSplitter<L, R> {
             divider_width,
             rect.height,
         );
-        renderer.fill_rect(handle_rect, [0.2, 0.25, 0.3, 1.0]);
+        renderer.fill_rect(handle_rect, theme::border());
 
         renderer.pop_vnode();
     }

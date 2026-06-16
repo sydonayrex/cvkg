@@ -118,11 +118,11 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         if is_collapsed {
             // ── Collapsed: icon rail ──
             renderer.fill_rect(sidebar_rect, theme::surface());
-            renderer.stroke_rect(sidebar_rect, [0.2, 0.2, 0.3, 0.5], 1.0);
+            renderer.stroke_rect(sidebar_rect, theme::border(), 1.0);
         } else {
             // ── Full sidebar ──
             renderer.fill_rect(sidebar_rect, theme::surface());
-            renderer.stroke_rect(sidebar_rect, [0.2, 0.2, 0.3, 0.5], 1.0);
+            renderer.stroke_rect(sidebar_rect, theme::border(), 1.0);
             self.sidebar.render(renderer, sidebar_rect);
         }
 
@@ -143,14 +143,14 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         renderer.fill_rect(
             handle_rect,
             if is_hover_handle && !is_collapsed {
-                [0.0, 0.8, 1.0, 0.3]
+                theme::with_alpha(theme::accent(), 0.3)
             } else {
-                [0.12, 0.12, 0.16, 0.8]
+                theme::surface_elevated()
             },
         );
         renderer.stroke_rect(
             handle_rect,
-            [0.0, 0.8, 1.0, if is_hover_handle { 0.6 } else { 0.2 }],
+            theme::with_alpha(theme::accent(), if is_hover_handle { 0.6 } else { 0.2 }),
             1.0,
         );
 
@@ -179,7 +179,7 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
             width: toggle_btn_size,
             height: toggle_btn_size,
         };
-        renderer.fill_rounded_rect(toggle_rect, RADIUS_XL, [0.1, 0.1, 0.15, 0.9]);
+        renderer.fill_rounded_rect(toggle_rect, RADIUS_XL, theme::surface_elevated());
         let chevron = if is_collapsed { "▶" } else { "◀" };
         renderer.draw_text(
             chevron,
@@ -313,7 +313,7 @@ impl<V: View> View for GraniSheet<V> {
         }
 
         // ── Backdrop ──
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, 0.65]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.65));
 
         // ── Animation progress using Sleipnir spring physics ──
         let mut anim = 0.0f32;
@@ -393,8 +393,8 @@ impl<V: View> View for GraniSheet<V> {
 
         // ── Panel background ──
         renderer.bifrost(sheet_rect, 16.0, 1.2, 0.9);
-        renderer.fill_rounded_rect(sheet_rect, RADIUS_XL, [0.04, 0.04, 0.07, 0.95]);
-        renderer.stroke_rounded_rect(sheet_rect, RADIUS_XL, [0.0, 0.8, 1.0, 0.3], 1.5);
+        renderer.fill_rounded_rect(sheet_rect, RADIUS_XL, theme::surface_elevated());
+        renderer.stroke_rounded_rect(sheet_rect, RADIUS_XL, theme::with_alpha(theme::accent(), 0.3), 1.5);
 
         // ── Content ──
         let padding = 16.0;
@@ -414,7 +414,7 @@ impl<V: View> View for GraniSheet<V> {
             width: btn_size,
             height: btn_size,
         };
-        renderer.fill_rounded_rect(close_rect, RADIUS_XL, [0.12, 0.12, 0.16, 0.8]);
+        renderer.fill_rounded_rect(close_rect, RADIUS_XL, theme::surface_elevated());
         renderer.draw_text(
             "×",
             close_rect.x + 15.0,
@@ -494,8 +494,8 @@ impl<V2: View + Clone> cvkg_core::ViewModifier for SheetModifier<V2> {
             };
 
             renderer.bifrost(modal_rect, 25.0, 1.5, 0.85);
-            renderer.fill_rounded_rect(modal_rect, RADIUS_XL, [0.0, 0.0, 0.0, 0.3]);
-            renderer.stroke_rounded_rect(modal_rect, RADIUS_XL, [0.2, 0.25, 0.3, 0.6], 2.0);
+            renderer.fill_rounded_rect(modal_rect, RADIUS_XL, theme::with_alpha(theme::bg(), 0.3));
+            renderer.stroke_rounded_rect(modal_rect, RADIUS_XL, theme::border(), 2.0);
 
             self.content.render(renderer, modal_rect);
         }
@@ -585,16 +585,16 @@ impl<V: View> View for GeriDialog<V> {
 
         // Apply opacity to backdrop and modal colors
         let backdrop_alpha = 0.7 * opacity;
-        renderer.fill_rect(rect, [0.0, 0.0, 0.0, backdrop_alpha]);
+        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), backdrop_alpha));
 
         // ── Modal glass surface ──
         renderer.bifrost(modal_rect, 20.0, 1.2, 0.9);
-        let modal_bg = [0.05 * opacity, 0.05 * opacity, 0.1 * opacity, 0.8 * opacity];
+        let modal_bg = theme::with_alpha(theme::surface_elevated(), 0.8 * opacity);
         renderer.fill_rounded_rect(modal_rect, RADIUS_LG, modal_bg);
         renderer.stroke_rounded_rect(
             modal_rect,
             RADIUS_LG,
-            [0.0 * opacity, 0.8 * opacity, 1.0 * opacity, 0.5 * opacity],
+            theme::with_alpha(theme::accent(), 0.5 * opacity),
             1.5,
         );
 
@@ -613,7 +613,7 @@ impl<V: View> View for GeriDialog<V> {
                 modal_rect.x + padding,
                 current_y,
                 FONT_BASE + 6.0,
-                [1.0 * opacity, 1.0 * opacity, 1.0 * opacity, opacity],
+                theme::with_alpha(theme::text(), opacity),
             );
             current_y += 30.0;
         }
@@ -645,15 +645,15 @@ impl<V: View> View for GeriDialog<V> {
             let is_focused = focused_action == Some(i);
             // Focused button gets a brighter background
             let bg = if is_focused {
-                [0.25 * opacity, 0.25 * opacity, 0.35 * opacity, opacity]
+                theme::with_alpha(theme::surface_elevated(), opacity)
             } else {
-                [0.15 * opacity, 0.15 * opacity, 0.2 * opacity, opacity]
+                theme::with_alpha(theme::surface_elevated(), opacity)
             };
             renderer.fill_rounded_rect(action_rect, RADIUS_MD, bg);
             renderer.stroke_rounded_rect(
                 action_rect,
                 RADIUS_MD,
-                [0.0 * opacity, 0.8 * opacity, 1.0 * opacity, 0.8 * opacity],
+                theme::with_alpha(theme::accent(), 0.8 * opacity),
                 if is_focused { 2.0 } else { 1.0 },
             );
             // Focus ring on the focused button
@@ -665,7 +665,7 @@ impl<V: View> View for GeriDialog<V> {
                 action_rect.x + 8.0,
                 action_rect.y + 8.0,
                 FONT_BASE,
-                [1.0 * opacity, 1.0 * opacity, 1.0 * opacity, opacity],
+                theme::with_alpha(theme::text(), opacity),
             );
 
             // Click handler for this action button
@@ -1049,8 +1049,8 @@ impl<V: View> ScrollView<V> {
         }
 
         let sb_w = self.scrollbar_width;
-        let track_color = [0.0, 0.0, 0.0, 0.15 * opacity];
-        let thumb_color = [0.5, 0.5, 0.6, 0.6 * opacity];
+        let track_color = theme::with_alpha(theme::bg(), 0.15 * opacity);
+        let thumb_color = theme::with_alpha(theme::text_muted(), 0.6 * opacity);
 
         let thumb_ratio = viewport_size / content_size;
         let thumb_size = (viewport_size * thumb_ratio).max(24.0);
@@ -1939,8 +1939,8 @@ impl View for FlexBox {
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
-        renderer.fill_rounded_rect(rect, RADIUS_LG, [0.0, 0.0, 0.0, 0.85]);
-        renderer.stroke_rect(rect, [0.2, 0.2, 0.25, 0.5], 1.0);
+        renderer.fill_rounded_rect(rect, RADIUS_LG, theme::with_alpha(theme::bg(), 0.85));
+        renderer.stroke_rect(rect, theme::border(), 1.0);
         renderer.bifrost(rect, 15.0, 1.2, 0.85);
 
         if self.children.is_empty() {
@@ -2047,8 +2047,8 @@ impl<V: View> View for Collapsible<V> {
         };
 
         // ── Header bar ──
-        renderer.fill_rounded_rect(header_rect, RADIUS_MD, [0.08, 0.08, 0.12, 0.9]);
-        renderer.stroke_rounded_rect(header_rect, RADIUS_MD, [0.2, 0.2, 0.3, 0.5], 1.0);
+        renderer.fill_rounded_rect(header_rect, RADIUS_MD, theme::surface_elevated());
+        renderer.stroke_rounded_rect(header_rect, RADIUS_MD, theme::border(), 1.0);
 
         // Arrow indicator
         let arrow = if self.is_open { "▼" } else { "▶" };
@@ -2063,7 +2063,7 @@ impl<V: View> View for Collapsible<V> {
             rect.x + 30.0,
             rect.y + 10.0,
             FONT_BASE + 2.0,
-            [1.0, 1.0, 1.0, 0.95],
+            theme::text(),
         );
 
         // ── Click-to-toggle handler ──
@@ -2116,7 +2116,7 @@ impl<V: View> View for Collapsible<V> {
                     width: rect.width - 8.0,
                     height: content_h,
                 };
-                renderer.fill_rounded_rect(content_rect, RADIUS_SM, [0.04, 0.04, 0.07, 0.4]);
+                renderer.fill_rounded_rect(content_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.4));
                 self.content.render(renderer, content_rect);
             }
         }
@@ -2234,18 +2234,18 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
             .and_then(|v| v.read().ok().map(|v| *v))
             .unwrap_or(false);
         let handle_color = if is_dragging {
-            [0.0, 0.8, 1.0, 0.5]
+            theme::with_alpha(theme::accent(), 0.5)
         } else {
             theme::surface_elevated()
         };
         renderer.fill_rect(handle_rect, handle_color);
         renderer.stroke_rect(
             handle_rect,
-            [0.0, 0.8, 1.0, if is_dragging { 0.8 } else { 0.4 }],
+            theme::with_alpha(theme::accent(), if is_dragging { 0.8 } else { 0.4 }),
             1.0,
         );
 
-        // 3. Handle Center Glow (Mimir's Eye)
+        // 4. Handle Center Glow (Mimir's Eye)
         let center_x = handle_rect.x + handle_rect.width / 2.0;
         let center_y = handle_rect.y + handle_rect.height / 2.0;
         renderer.fill_rounded_rect(
@@ -2256,7 +2256,7 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
                 height: 20.0,
             },
             1.0,
-            [0.0, 1.0, 1.0, 0.8],
+            theme::with_alpha(theme::accent(), 0.8),
         );
 
         // 4. Drag interaction: pointerdown on handle starts drag
@@ -2415,14 +2415,14 @@ impl<V: View> View for SagaAccordion<V> {
 
             // 1. Mimir's Refraction (Glass Header)
             renderer.bifrost(header_rect, 4.0, 1.2, 0.9);
-            renderer.fill_rounded_rect(header_rect, RADIUS_SM, [0.1, 0.1, 0.15, 0.7]);
+            renderer.fill_rounded_rect(header_rect, RADIUS_SM, theme::surface_elevated());
 
             // Surtur's Reactive Materials (Hover/Selection Glow)
             if is_expanded {
                 let pulse = (t * 3.0 + i as f32).sin() * 0.1 + 0.9;
-                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, [0.0, 0.8, 1.0, 0.4 * pulse], 1.5);
+                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, theme::with_alpha(theme::accent(), 0.4 * pulse), 1.5);
             } else {
-                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, [0.3, 0.3, 0.4, 0.3], 1.0);
+                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, theme::border(), 1.0);
             }
 
             let arrow = if is_expanded { "▼" } else { "▶" };
@@ -2444,7 +2444,7 @@ impl<V: View> View for SagaAccordion<V> {
                 header_rect.x + 36.0,
                 header_rect.y + 14.0,
                 14.0,
-                [1.0, 1.0, 1.0, 0.95],
+                theme::text(),
             );
 
             // Click-to-toggle: pointerclick handler on header
@@ -2502,7 +2502,7 @@ impl<V: View> View for SagaAccordion<V> {
                 };
 
                 // Subtle content background
-                renderer.fill_rounded_rect(content_rect, RADIUS_SM, [0.05, 0.05, 0.08, 0.3]);
+                renderer.fill_rounded_rect(content_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.3));
                 item.content.render(renderer, content_rect);
 
                 current_y += content_h + 8.0;

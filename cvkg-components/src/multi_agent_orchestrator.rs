@@ -1536,17 +1536,17 @@ impl MultiAgentOrchestrator {
 
             // Glow (wider, translucent)
             let glow_color = if edge.is_active {
-                [0.0, 0.8, 1.0, 0.15]
+                theme::with_alpha(theme::accent(), 0.15)
             } else {
-                [0.2, 0.3, 0.4, 0.1]
+                theme::with_alpha(theme::border(), 0.1)
             };
             self.draw_bezier_edge(renderer, sx, sy, tx, ty, cp_offset, glow_color, 6.0);
 
             // Main edge
             let edge_color = if edge.is_active {
-                [0.0, 0.8, 1.0, 0.9]
+                theme::with_alpha(theme::accent(), 0.9)
             } else {
-                [0.3, 0.4, 0.5, 0.7]
+                theme::with_alpha(theme::border(), 0.7)
             };
             self.draw_bezier_edge(renderer, sx, sy, tx, ty, cp_offset, edge_color, 2.0);
 
@@ -1566,14 +1566,14 @@ impl MultiAgentOrchestrator {
                         height: 14.0,
                     },
                     3.0,
-                    [0.08, 0.06, 0.12, 0.85],
+                    theme::surface_elevated(),
                 );
                 renderer.draw_text(
                     cond,
                     mid_x - tw.0 / 2.0,
                     mid_y + 3.0,
                     9.0,
-                    [0.7, 0.8, 0.9, 0.9],
+                    theme::text(),
                 );
             }
         }
@@ -1676,7 +1676,7 @@ impl MultiAgentOrchestrator {
         );
 
         // Node body
-        renderer.fill_rounded_rect(node_rect, RADIUS_MD, [0.08, 0.07, 0.12, 0.95]);
+        renderer.fill_rounded_rect(node_rect, RADIUS_MD, theme::surface_elevated());
 
         // Selection highlight
         if is_selected {
@@ -1709,7 +1709,7 @@ impl MultiAgentOrchestrator {
             nx + 8.0,
             ny + 7.0,
             14.0,
-            [0.0, 0.0, 0.0, 0.9],
+            theme::with_alpha(theme::text(), 0.9),
         );
 
         // Name
@@ -1737,7 +1737,7 @@ impl MultiAgentOrchestrator {
             ny + title_h,
             nx + nw - 6.0,
             ny + title_h,
-            [0.15, 0.12, 0.2, 0.5],
+            theme::with_alpha(theme::border(), 0.5),
             1.0,
         );
 
@@ -1775,7 +1775,7 @@ impl MultiAgentOrchestrator {
                     width: port_radius * 2.0,
                     height: port_radius * 2.0,
                 },
-                [0.0, 0.8, 1.0, 0.9],
+                theme::accent(),
             );
             renderer.stroke_ellipse(
                 Rect {
@@ -1784,10 +1784,10 @@ impl MultiAgentOrchestrator {
                     width: port_radius * 2.0,
                     height: port_radius * 2.0,
                 },
-                [0.4, 0.6, 0.8, 0.6],
+                theme::with_alpha(theme::accent(), 0.6),
                 1.0,
             );
-            renderer.draw_text(port_name, px + 10.0, py - 4.0, 9.0, [0.6, 0.7, 0.8, 0.9]);
+            renderer.draw_text(port_name, px + 10.0, py - 4.0, 9.0, theme::text_muted());
         }
 
         // Output ports (right side)
@@ -1802,7 +1802,7 @@ impl MultiAgentOrchestrator {
                     width: port_radius * 2.0,
                     height: port_radius * 2.0,
                 },
-                [0.0, 1.0, 0.6, 0.9],
+                theme::success(),
             );
             renderer.stroke_ellipse(
                 Rect {
@@ -1811,7 +1811,7 @@ impl MultiAgentOrchestrator {
                     width: port_radius * 2.0,
                     height: port_radius * 2.0,
                 },
-                [0.4, 0.8, 0.6, 0.6],
+                theme::with_alpha(theme::success(), 0.6),
                 1.0,
             );
             let tw = renderer.measure_text(port_name, 9.0);
@@ -1820,7 +1820,7 @@ impl MultiAgentOrchestrator {
                 px - 10.0 - tw.0,
                 py - 4.0,
                 9.0,
-                [0.6, 0.8, 0.7, 0.9],
+                theme::text_muted(),
             );
         }
     }
@@ -1847,7 +1847,7 @@ impl MultiAgentOrchestrator {
         let cp_offset = dx * 0.4;
 
         // Dashed preview
-        let preview_color = [0.0, 0.8, 1.0, 0.5];
+        let preview_color = theme::with_alpha(theme::accent(), 0.5);
         self.draw_bezier_edge(renderer, sx, sy, tx, ty, cp_offset, preview_color, 1.5);
 
         // Source dot
@@ -1872,13 +1872,13 @@ impl MultiAgentOrchestrator {
             height: toolbar_h,
         };
 
-        renderer.fill_rect(toolbar_rect, [0.06, 0.05, 0.1, 0.95]);
+        renderer.fill_rect(toolbar_rect, theme::surface_elevated());
         renderer.draw_line(
             rect.x,
             rect.y + toolbar_h,
             rect.x + rect.width,
             rect.y + toolbar_h,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -1888,7 +1888,7 @@ impl MultiAgentOrchestrator {
             rect.x + 12.0,
             rect.y + 10.0,
             14.0,
-            [0.8, 0.7, 1.0, 1.0],
+            theme::text(),
         );
 
         // Run/Stop button
@@ -1906,7 +1906,7 @@ impl MultiAgentOrchestrator {
                     height: btn_h,
                 },
                 4.0,
-                [0.8, 0.2, 0.2, 0.9],
+                theme::error_color(),
             );
             renderer.draw_text("■ Stop", btn_x + 12.0, btn_y + 6.0, 11.0, theme::text());
         } else {
@@ -1918,7 +1918,7 @@ impl MultiAgentOrchestrator {
                     height: btn_h,
                 },
                 4.0,
-                [0.0, 0.7, 0.4, 0.9],
+                theme::success(),
             );
             renderer.draw_text("▶ Run", btn_x + 16.0, btn_y + 6.0, 11.0, theme::text());
         }
@@ -1951,7 +1951,7 @@ impl MultiAgentOrchestrator {
                     height: bar_h,
                 },
                 3.0,
-                [0.0, 0.8, 1.0, 0.9],
+                theme::accent(),
             );
             let pct_text = format!("{}/{}", current, total);
             let tw = renderer.measure_text(&pct_text, 9.0);
@@ -1960,7 +1960,7 @@ impl MultiAgentOrchestrator {
                 bar_x + bar_w / 2.0 - tw.0 / 2.0,
                 bar_y - 1.0,
                 9.0,
-                [0.6, 0.7, 0.8, 0.8],
+                theme::text_muted(),
             );
         }
     }
@@ -1968,7 +1968,7 @@ impl MultiAgentOrchestrator {
     /// Render the log panel on the right side.
     fn render_log_panel(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Background
-        renderer.fill_rect(rect, [0.06, 0.05, 0.1, 0.95]);
+        renderer.fill_rect(rect, theme::surface_elevated());
 
         // Left border
         renderer.draw_line(
@@ -1976,7 +1976,7 @@ impl MultiAgentOrchestrator {
             rect.y,
             rect.x,
             rect.y + rect.height,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -1996,14 +1996,14 @@ impl MultiAgentOrchestrator {
             rect.x + 10.0,
             rect.y + 9.0,
             13.0,
-            [0.8, 0.7, 1.0, 1.0],
+            theme::text(),
         );
         renderer.draw_line(
             rect.x,
             rect.y + header_h,
             rect.x + rect.width,
             rect.y + header_h,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -2019,7 +2019,7 @@ impl MultiAgentOrchestrator {
                 rect.x + 10.0,
                 rect.y + header_h + 20.0,
                 11.0,
-                [0.4, 0.4, 0.5, 0.8],
+                theme::text_dim(),
             );
             return;
         }
@@ -2040,7 +2040,7 @@ impl MultiAgentOrchestrator {
             renderer.draw_text(level_label, rect.x + 8.0, y, 9.0, level_color);
 
             // Message
-            renderer.draw_text(&log.message, rect.x + 36.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
+            renderer.draw_text(&log.message, rect.x + 36.0, y, 10.0, theme::text_muted());
 
             y += line_h;
         }
@@ -2049,7 +2049,7 @@ impl MultiAgentOrchestrator {
     /// Render the metrics panel.
     fn render_metrics_panel(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Background
-        renderer.fill_rect(rect, [0.06, 0.05, 0.1, 0.95]);
+        renderer.fill_rect(rect, theme::surface_elevated());
 
         // Left border
         renderer.draw_line(
@@ -2057,7 +2057,7 @@ impl MultiAgentOrchestrator {
             rect.y,
             rect.x,
             rect.y + rect.height,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -2077,14 +2077,14 @@ impl MultiAgentOrchestrator {
             rect.x + 10.0,
             rect.y + 9.0,
             13.0,
-            [0.8, 0.7, 1.0, 1.0],
+            theme::text(),
         );
         renderer.draw_line(
             rect.x,
             rect.y + header_h,
             rect.x + rect.width,
             rect.y + header_h,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -2094,7 +2094,7 @@ impl MultiAgentOrchestrator {
         if let Some(ref run) = self.state.current_run {
             // Run status
             let status_color = run.status.color();
-            renderer.draw_text("Status:", rect.x + 10.0, y, 11.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Status:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             renderer.draw_text(run.status.label(), rect.x + 16.0, y, 11.0, status_color);
             y += line_h + 6.0;
@@ -2117,17 +2117,17 @@ impl MultiAgentOrchestrator {
                 .filter(|s| s.status.is_active())
                 .count();
 
-            renderer.draw_text("Nodes:", rect.x + 10.0, y, 11.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Nodes:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             let node_summary = format!(
                 "{} total, {} done, {} running, {} failed",
                 total_nodes, completed, running, failed
             );
-            renderer.draw_text(&node_summary, rect.x + 16.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
+            renderer.draw_text(&node_summary, rect.x + 16.0, y, 10.0, theme::text_muted());
             y += line_h + 6.0;
 
             // Token usage
-            renderer.draw_text("Tokens:", rect.x + 10.0, y, 11.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Tokens:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             let token_text = format!(
                 "In: {}  Out: {}  Total: {}",
@@ -2135,18 +2135,18 @@ impl MultiAgentOrchestrator {
                 run.total_usage.output_tokens,
                 run.total_usage.total_tokens
             );
-            renderer.draw_text(&token_text, rect.x + 16.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
+            renderer.draw_text(&token_text, rect.x + 16.0, y, 10.0, theme::text_muted());
             y += line_h;
 
             // Cost
-            renderer.draw_text("Cost:", rect.x + 10.0, y, 11.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Cost:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             let cost_text = format!("${:.4}", run.total_usage.estimated_cost);
-            renderer.draw_text(&cost_text, rect.x + 16.0, y, 10.0, [0.0, 0.9, 0.5, 0.9]);
+            renderer.draw_text(&cost_text, rect.x + 16.0, y, 10.0, theme::success());
             y += line_h + 6.0;
 
             // Per-node breakdown
-            renderer.draw_text("Per-Node:", rect.x + 10.0, y, 11.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Per-Node:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
 
             for node in &self.state.nodes {
@@ -2171,7 +2171,7 @@ impl MultiAgentOrchestrator {
                 rect.x + 10.0,
                 y,
                 11.0,
-                [0.4, 0.4, 0.5, 0.8],
+                theme::text_dim(),
             );
         }
     }
@@ -2193,8 +2193,8 @@ impl MultiAgentOrchestrator {
             width: panel_w,
             height: panel_h,
         };
-        renderer.fill_rounded_rect(panel_rect, RADIUS_LG, [0.08, 0.06, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, [0.2, 0.15, 0.3, 0.8], 1.0);
+        renderer.fill_rounded_rect(panel_rect, RADIUS_LG, theme::surface_elevated());
+        renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, theme::border(), 1.0);
 
         // Title
         renderer.draw_text(
@@ -2202,14 +2202,14 @@ impl MultiAgentOrchestrator {
             panel_x + 16.0,
             panel_y + 14.0,
             14.0,
-            [0.8, 0.7, 1.0, 1.0],
+            theme::text(),
         );
         renderer.draw_line(
             panel_x,
             panel_y + 32.0,
             panel_x + panel_w,
             panel_y + 32.0,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -2221,14 +2221,14 @@ impl MultiAgentOrchestrator {
                 panel_x + 16.0,
                 panel_y + 50.0,
                 11.0,
-                [0.5, 0.5, 0.6, 0.8],
+                theme::text_dim(),
             );
             renderer.draw_text(
                 "Save your current workflow as a template.",
                 panel_x + 16.0,
                 panel_y + 66.0,
                 10.0,
-                [0.4, 0.4, 0.5, 0.7],
+                theme::text_dim(),
             );
         } else {
             let mut y = panel_y + 42.0;
@@ -2240,13 +2240,13 @@ impl MultiAgentOrchestrator {
                     width: panel_w - 20.0,
                     height: 52.0,
                 };
-                renderer.fill_rounded_rect(card_rect, RADIUS_SM, [0.1, 0.08, 0.15, 0.9]);
+                renderer.fill_rounded_rect(card_rect, RADIUS_SM, theme::surface_elevated());
                 renderer.draw_text(
                     &template.name,
                     card_rect.x + 8.0,
                     card_rect.y + 10.0,
                     11.0,
-                    [0.8, 0.8, 0.9, 0.9],
+                    theme::text(),
                 );
                 let desc = if template.description.len() > 40 {
                     &template.description[..40]
@@ -2258,7 +2258,7 @@ impl MultiAgentOrchestrator {
                     card_rect.x + 8.0,
                     card_rect.y + 26.0,
                     9.0,
-                    [0.5, 0.5, 0.6, 0.8],
+                    theme::text_dim(),
                 );
                 let meta = format!("v{} · {} nodes", template.version, template.nodes.len());
                 renderer.draw_text(
@@ -2266,7 +2266,7 @@ impl MultiAgentOrchestrator {
                     card_rect.x + 8.0,
                     card_rect.y + 38.0,
                     8.0,
-                    [0.4, 0.4, 0.5, 0.7],
+                    theme::text_dim(),
                 );
                 y += 58.0;
             }
@@ -2278,7 +2278,7 @@ impl MultiAgentOrchestrator {
             panel_x + 16.0,
             panel_y + panel_h - 16.0,
             9.0,
-            [0.4, 0.4, 0.5, 0.6],
+            theme::text_dim(),
         );
     }
 
@@ -2299,8 +2299,8 @@ impl MultiAgentOrchestrator {
             width: panel_w,
             height: panel_h,
         };
-        renderer.fill_rounded_rect(panel_rect, RADIUS_LG, [0.08, 0.06, 0.12, 0.95]);
-        renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, [0.2, 0.15, 0.3, 0.8], 1.0);
+        renderer.fill_rounded_rect(panel_rect, RADIUS_LG, theme::surface_elevated());
+        renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, theme::border(), 1.0);
 
         // Title
         renderer.draw_text(
@@ -2308,14 +2308,14 @@ impl MultiAgentOrchestrator {
             panel_x + 16.0,
             panel_y + 14.0,
             14.0,
-            [0.8, 0.7, 1.0, 1.0],
+            theme::text(),
         );
         renderer.draw_line(
             panel_x,
             panel_y + 32.0,
             panel_x + panel_w,
             panel_y + 32.0,
-            [0.15, 0.12, 0.2, 0.6],
+            theme::with_alpha(theme::border(), 0.6),
             1.0,
         );
 
@@ -2326,14 +2326,14 @@ impl MultiAgentOrchestrator {
                 panel_x + 16.0,
                 panel_y + 50.0,
                 11.0,
-                [0.5, 0.5, 0.6, 0.8],
+                theme::text_dim(),
             );
             renderer.draw_text(
                 "Run the workflow multiple times.",
                 panel_x + 16.0,
                 panel_y + 66.0,
                 10.0,
-                [0.4, 0.4, 0.5, 0.7],
+                theme::text_dim(),
             );
         } else {
             let mut y = panel_y + 42.0;
@@ -2346,39 +2346,39 @@ impl MultiAgentOrchestrator {
                 panel_x + 16.0,
                 y,
                 11.0,
-                [0.6, 0.8, 0.6, 0.9],
+                theme::success(),
             );
             renderer.draw_text(
                 "Run B (latest)",
                 panel_x + 260.0,
                 y,
                 11.0,
-                [0.6, 0.8, 1.0, 0.9],
+                theme::accent(),
             );
             y += 20.0;
 
             // Duration comparison
-            renderer.draw_text("Duration:", panel_x + 16.0, y, 10.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Duration:", panel_x + 16.0, y, 10.0, theme::text_muted());
             let dur_a = format!("{:?}", run_a.duration);
             let dur_b = format!("{:?}", run_b.duration);
-            renderer.draw_text(&dur_a, panel_x + 100.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
-            renderer.draw_text(&dur_b, panel_x + 260.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
+            renderer.draw_text(&dur_a, panel_x + 100.0, y, 10.0, theme::text_muted());
+            renderer.draw_text(&dur_b, panel_x + 260.0, y, 10.0, theme::text_muted());
             y += 16.0;
 
             // Token comparison
-            renderer.draw_text("Tokens:", panel_x + 16.0, y, 10.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Tokens:", panel_x + 16.0, y, 10.0, theme::text_muted());
             let tok_a = format!("{}", run_a.total_usage.total_tokens);
             let tok_b = format!("{}", run_b.total_usage.total_tokens);
-            renderer.draw_text(&tok_a, panel_x + 100.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
-            renderer.draw_text(&tok_b, panel_x + 260.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
+            renderer.draw_text(&tok_a, panel_x + 100.0, y, 10.0, theme::text_muted());
+            renderer.draw_text(&tok_b, panel_x + 260.0, y, 10.0, theme::text_muted());
             y += 16.0;
 
             // Cost comparison
-            renderer.draw_text("Cost:", panel_x + 16.0, y, 10.0, [0.6, 0.6, 0.7, 0.9]);
+            renderer.draw_text("Cost:", panel_x + 16.0, y, 10.0, theme::text_muted());
             let cost_a = format!("${:.4}", run_a.total_cost);
             let cost_b = format!("${:.4}", run_b.total_cost);
-            renderer.draw_text(&cost_a, panel_x + 100.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
-            renderer.draw_text(&cost_b, panel_x + 260.0, y, 10.0, [0.7, 0.7, 0.8, 0.9]);
+            renderer.draw_text(&cost_a, panel_x + 100.0, y, 10.0, theme::text_muted());
+            renderer.draw_text(&cost_b, panel_x + 260.0, y, 10.0, theme::text_muted());
             y += 24.0;
 
             // Per-node comparison
@@ -2387,7 +2387,7 @@ impl MultiAgentOrchestrator {
                 panel_x + 16.0,
                 y,
                 10.0,
-                [0.6, 0.6, 0.7, 0.9],
+                theme::text_muted(),
             );
             y += 16.0;
 
@@ -2402,9 +2402,9 @@ impl MultiAgentOrchestrator {
                     };
                     let line = format!("  {}: {} → {} ({})", node_id, tok_a, tok_b, diff);
                     let color = if tok_b > tok_a {
-                        [0.9, 0.5, 0.3, 0.9]
+                        theme::warning()
                     } else {
-                        [0.5, 0.9, 0.5, 0.9]
+                        theme::success()
                     };
                     renderer.draw_text(&line, panel_x + 16.0, y, 9.0, color);
                     y += 14.0;
@@ -2418,7 +2418,7 @@ impl MultiAgentOrchestrator {
             panel_x + 16.0,
             panel_y + panel_h - 16.0,
             9.0,
-            [0.4, 0.4, 0.5, 0.6],
+            theme::text_dim(),
         );
     }
 }
@@ -2839,7 +2839,7 @@ fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
 impl MultiAgentOrchestrator {
     fn render_output_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
         if let Some(sel) = &state.selected_node {
@@ -2864,14 +2864,14 @@ impl MultiAgentOrchestrator {
 
     fn render_message_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Agent Messages", x + 12.0, y + 8.0, 14.0, theme::text());
         let mut cy = y + 30.0;
         for msg in state.message_log.iter().rev().take(20) {
             let color = match msg.message_type {
                 MessageType::Request => theme::accent(),
-                MessageType::Response => [0.3, 1.0, 0.5, 1.0],
+                MessageType::Response => theme::success(),
                 MessageType::Error => theme::error_color(),
                 MessageType::Info => theme::text_muted(),
             };
@@ -2891,7 +2891,7 @@ impl MultiAgentOrchestrator {
 
     fn render_validation_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.validation_errors.is_empty() {
@@ -2900,7 +2900,7 @@ impl MultiAgentOrchestrator {
                 x + 12.0,
                 y + 30.0,
                 12.0,
-                [0.3, 1.0, 0.5, 1.0],
+                theme::success(),
             );
         } else {
             let mut cy = y + 30.0;
@@ -2908,7 +2908,7 @@ impl MultiAgentOrchestrator {
                 let color = if err.is_error {
                     theme::error_color()
                 } else {
-                    [1.0, 0.8, 0.2, 1.0]
+                    theme::warning()
                 };
                 renderer.draw_text(&err.message, x + 12.0, cy, 11.0, color);
                 cy += 18.0;
@@ -2918,7 +2918,7 @@ impl MultiAgentOrchestrator {
 
     fn render_skills_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Skills Configuration",
@@ -2952,7 +2952,7 @@ impl MultiAgentOrchestrator {
 
     fn render_webhook_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Webhook Configuration",
@@ -2991,7 +2991,7 @@ impl MultiAgentOrchestrator {
 
     fn render_schedule_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text(
             "Schedule Configuration",
@@ -3030,7 +3030,7 @@ impl MultiAgentOrchestrator {
 
     fn render_recurring_panel(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, [0.08, 0.08, 0.12, 0.95]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
         renderer.draw_text("Recurring Runs", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.recurring_runs.is_empty() {
@@ -3058,7 +3058,7 @@ impl MultiAgentOrchestrator {
 
     fn render_minimap(&self, renderer: &mut dyn Renderer, x: f32, y: f32, w: f32, h: f32) {
         let state = &self.state;
-        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_SM, [0.06, 0.06, 0.1, 0.9]);
+        renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_SM, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_SM, theme::border(), 1.0);
         let scale = 0.1;
         for node in &state.nodes {
@@ -3069,13 +3069,13 @@ impl MultiAgentOrchestrator {
             renderer.fill_rounded_rect(
                 r(nx, ny, nw.max(2.0), nh.max(2.0)),
                 1.0,
-                [0.4, 0.4, 0.6, 0.8],
+                theme::text_dim(),
             );
         }
         let vp_x = x + state.viewport_offset.0 * scale;
         let vp_y = y + state.viewport_offset.1 * scale;
         let vp_w = 200.0 * state.viewport_zoom * scale;
         let vp_h = 150.0 * state.viewport_zoom * scale;
-        renderer.stroke_rounded_rect(r(vp_x, vp_y, vp_w, vp_h), RADIUS_XS, [0.0, 1.0, 0.5, 0.5], 1.0);
+        renderer.stroke_rounded_rect(r(vp_x, vp_y, vp_w, vp_h), RADIUS_XS, theme::with_alpha(theme::success(), 0.5), 1.0);
     }
 }
