@@ -261,16 +261,16 @@ impl DatePicker {
         renderer.set_aria_label(&lingua_tong::t("datepicker.label"));
 
         // Background
-        renderer.fill_rounded_rect(rect, RADIUS_MD, [0.1, 0.1, 0.14, 1.0]);
+        renderer.fill_rounded_rect(rect, RADIUS_MD, theme::surface_elevated());
         // Border
-        renderer.stroke_rounded_rect(rect, RADIUS_MD, [0.2, 0.3, 0.5, 0.8], 1.5);
+        renderer.stroke_rounded_rect(rect, RADIUS_MD, theme::border(), 1.5);
 
         // Date text
         let text = self.format_date();
         let text_color = if self.selected_date.is_some() {
             theme::text()
         } else {
-            [0.5, 0.5, 0.6, 0.7]
+            theme::text_muted()
         };
         let text_x = rect.x + 10.0;
         let text_y = rect.y + (rect.height - 14.0) / 2.0;
@@ -279,7 +279,7 @@ impl DatePicker {
         // Calendar icon on the right
         let icon_x = rect.x + rect.width - 28.0;
         let icon_y = rect.y + (rect.height - 14.0) / 2.0;
-        renderer.draw_text("\u{1F4C5}", icon_x, icon_y, 14.0, [0.7, 0.7, 0.8, 0.9]);
+        renderer.draw_text("\u{1F4C5}", icon_x, icon_y, 14.0, theme::text_muted());
 
         renderer.pop_vnode();
     }
@@ -300,12 +300,12 @@ impl DatePicker {
         renderer.set_z_index(500.0);
 
         // Semi-transparent backdrop behind the popover
-        renderer.fill_rect(anchor_rect, [0.0, 0.0, 0.0, 0.25]);
+        renderer.fill_rect(anchor_rect, theme::with_alpha(theme::bg(), 0.25));
 
         // Glassmorphic background
         renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
-        renderer.fill_rounded_rect(pop_rect, RADIUS_XL, [0.06, 0.06, 0.1, 0.9]);
-        renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, [0.15, 0.25, 0.4, 0.7], 1.5);
+        renderer.fill_rounded_rect(pop_rect, RADIUS_XL, theme::with_alpha(theme::surface_elevated(), 0.9));
+        renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, theme::with_alpha(theme::primary(), 0.7), 1.5);
 
         let (display_month, display_year) = self.displayed_month_state();
 
@@ -330,7 +330,7 @@ impl DatePicker {
             prev_btn_rect.x + 6.0,
             prev_btn_rect.y + 4.0,
             14.0,
-            [0.7, 0.8, 1.0, 1.0],
+            theme::with_alpha(theme::accent(), 0.8),
         );
 
         // Month/year label (centered)
@@ -356,7 +356,7 @@ impl DatePicker {
             next_btn_rect.x + 6.0,
             next_btn_rect.y + 4.0,
             14.0,
-            [0.7, 0.8, 1.0, 1.0],
+            theme::with_alpha(theme::accent(), 0.8),
         );
 
         // Day-of-week headers
@@ -373,7 +373,7 @@ impl DatePicker {
                 cx - tw / 2.0,
                 grid_y_start + (cell_h - 11.0) / 2.0,
                 11.0,
-                [0.5, 0.5, 0.6, 0.8],
+                theme::text_muted(),
             );
         }
 
@@ -384,7 +384,7 @@ impl DatePicker {
             sep_y,
             pop_rect.x + pop_w - 8.0,
             sep_y,
-            [0.15, 0.15, 0.2, 0.5],
+            theme::with_alpha(theme::border(), 0.5),
             1.0,
         );
 
@@ -450,7 +450,7 @@ impl DatePicker {
                         cell_x + (cell_w - tw) / 2.0,
                         cell_y + (cell_h - 12.0) / 2.0,
                         12.0,
-                        [0.3, 0.3, 0.35, 0.5],
+                        theme::with_alpha(theme::text_muted(), 0.5),
                     );
                 } else {
                     let is_selected = self
@@ -488,7 +488,7 @@ impl DatePicker {
                             width: 24.0,
                             height: 24.0,
                         };
-                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, [0.0, 0.7, 0.85, 0.9]);
+                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, theme::with_alpha(theme::primary(), 0.9));
                     } else if is_range_end {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -496,7 +496,7 @@ impl DatePicker {
                             width: 24.0,
                             height: 24.0,
                         };
-                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, [0.0, 0.5, 0.7, 0.85]);
+                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, theme::with_alpha(theme::accent(), 0.85));
                     } else if is_in_range {
                         // Subtle range highlight
                         let range_rect = Rect {
@@ -505,7 +505,7 @@ impl DatePicker {
                             width: cell_w - 4.0,
                             height: 20.0,
                         };
-                        renderer.fill_rounded_rect(range_rect, RADIUS_SM, [0.0, 0.4, 0.6, 0.3]);
+                        renderer.fill_rounded_rect(range_rect, RADIUS_SM, theme::with_alpha(theme::primary(), 0.15));
                     } else if is_today {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -516,7 +516,7 @@ impl DatePicker {
                         renderer.stroke_rounded_rect(
                             highlight_rect,
                             RADIUS_XL,
-                            [0.0, 0.7, 0.85, 0.6],
+                            theme::with_alpha(theme::primary(), 0.6),
                             1.5,
                         );
                     }
