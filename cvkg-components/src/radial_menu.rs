@@ -1,3 +1,4 @@
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -221,7 +222,7 @@ impl View for RadialMenu {
             width: outer_r * 2.0,
             height: outer_r * 2.0,
         };
-        renderer.fill_ellipse(bg_rect, [0.08, 0.08, 0.12, 0.85]);
+        renderer.fill_ellipse(bg_rect, theme::with_alpha(theme::surface_elevated(), 0.85));
 
         // Draw each sector
         for (i, item) in self.items.iter().enumerate() {
@@ -232,15 +233,15 @@ impl View for RadialMenu {
             // Sector background
             let sector_color = if is_hovered {
                 if item.enabled {
-                    [0.0, 0.7, 1.0, 0.6]
+                    theme::with_alpha(theme::accent(), 0.6)
                 } else {
-                    [0.5, 0.2, 0.2, 0.4]
+                    theme::with_alpha(theme::error_color(), 0.4)
                 }
             } else {
                 if item.enabled {
-                    [0.15, 0.15, 0.22, 0.7]
+                    theme::with_alpha(theme::surface_elevated(), 0.7)
                 } else {
-                    [0.1, 0.1, 0.12, 0.5]
+                    theme::with_alpha(theme::surface_elevated(), 0.5)
                 }
             };
 
@@ -262,9 +263,9 @@ impl View for RadialMenu {
 
             // Sector border
             let border_color = if is_hovered {
-                [0.0, 0.9, 1.0, 0.9]
+                theme::with_alpha(theme::accent(), 0.9)
             } else {
-                [0.25, 0.25, 0.35, 0.6]
+                theme::with_alpha(theme::border(), 0.6)
             };
             // Draw radial lines
             let start_outer = [
@@ -308,12 +309,12 @@ impl View for RadialMenu {
 
             let label_color = if item.enabled {
                 if is_hovered {
-                    [1.0, 1.0, 1.0, 1.0]
+                    theme::text()
                 } else {
-                    [0.85, 0.85, 0.95, 1.0]
+                    theme::text()
                 }
             } else {
-                [0.4, 0.4, 0.5, 0.6]
+                theme::with_alpha(theme::text_muted(), 0.6)
             };
 
             // Simple centering: estimate text width
@@ -335,8 +336,8 @@ impl View for RadialMenu {
             width: inner_r * 2.0,
             height: inner_r * 2.0,
         };
-        renderer.fill_ellipse(center_circle, [0.12, 0.12, 0.16, 0.8]);
-        renderer.stroke_ellipse(center_circle, [0.25, 0.25, 0.35, 0.5], 1.0);
+        renderer.fill_ellipse(center_circle, theme::with_alpha(theme::surface_elevated(), 0.8));
+        renderer.stroke_ellipse(center_circle, theme::with_alpha(theme::border(), 0.5), 1.0);
     }
 }
 

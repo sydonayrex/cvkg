@@ -126,7 +126,7 @@ impl View for TyrSecurity {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.fill_rect(rect, [0.08, 0.04, 0.06, 1.0]);
+        renderer.fill_rect(rect, theme::surface_elevated());
         renderer.draw_text(
             "Tyr Security",
             rect.x + 10.0,
@@ -142,7 +142,7 @@ impl View for TyrSecurity {
                 rect.x + 110.0,
                 rect.y + 20.0,
                 10.0,
-                [0.8, 0.7, 0.9, 1.0],
+                theme::text(),
             );
 
             let remaining = session.expires_at
@@ -156,13 +156,13 @@ impl View for TyrSecurity {
                 rect.x + 110.0,
                 rect.y + 35.0,
                 9.0,
-                [0.6, 0.8, 0.9, 1.0],
+                theme::text_muted(),
             );
         }
 
         // Roles
         let mut y = rect.y + 60.0;
-        renderer.draw_text("Roles:", rect.x + 10.0, y, 11.0, [0.9, 0.7, 0.7, 1.0]);
+        renderer.draw_text("Roles:", rect.x + 10.0, y, 11.0, theme::text());
         y += 20.0;
 
         for role in &self.roles {
@@ -180,15 +180,15 @@ impl View for TyrSecurity {
                     width: 60.0,
                     height: 18.0,
                 },
-                [0.4, 0.2, 0.2, 1.0],
+                theme::surface_elevated(),
             );
-            renderer.draw_text(level_str, rect.x + 20.0, y + 4.0, 9.0, [0.9, 0.8, 0.8, 1.0]);
+            renderer.draw_text(level_str, rect.x + 20.0, y + 4.0, 9.0, theme::text());
             renderer.draw_text(
                 &role.name,
                 rect.x + 80.0,
                 y + 4.0,
                 10.0,
-                [0.8, 0.9, 1.0, 1.0],
+                theme::text(),
             );
             y += 22.0;
         }
@@ -200,15 +200,15 @@ impl View for TyrSecurity {
             rect.x + 10.0,
             audit_y,
             10.0,
-            [0.7, 0.8, 1.0, 1.0],
+            theme::text_muted(),
         );
 
         for (i, entry) in self.audit_log.iter().rev().take(3).enumerate() {
             let status = if entry.success { "✓" } else { "✗" };
             let color = if entry.success {
-                [0.4, 0.9, 0.4, 1.0]
+                theme::success()
             } else {
-                [0.9, 0.4, 0.4, 1.0]
+                theme::error_color()
             };
 
             renderer.draw_text(

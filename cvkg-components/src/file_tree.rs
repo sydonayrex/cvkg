@@ -251,7 +251,7 @@ impl View for YggdrasilTree {
 
             renderer.push_vnode(menu_rect, "ContextMenu");
             renderer.bifrost(menu_rect, 15.0, 1.5, 0.95);
-            renderer.fill_rounded_rect(menu_rect, RADIUS_MD, [0.05, 0.05, 0.08, 0.9]);
+            renderer.fill_rounded_rect(menu_rect, RADIUS_MD, theme::with_alpha(theme::surface_elevated(), 0.9));
             renderer.stroke_rounded_rect(menu_rect, RADIUS_MD, theme::border(), 1.0);
 
             let options = ["Open", "Rename", "Delete", "Copy Path"];
@@ -358,7 +358,7 @@ impl YggdrasilTree {
 
         // 1. Selection Highlight
         if item.is_selected {
-            renderer.fill_rect(row_rect, [0.0, 1.0, 1.0, 0.1]);
+            renderer.fill_rect(row_rect, theme::with_alpha(theme::accent(), 0.1));
             renderer.stroke_rect(
                 Rect {
                     x: row_rect.x,
@@ -432,13 +432,13 @@ impl YggdrasilTree {
         let resolved_kind = resolve_kind(&item.name, item.kind);
         let icon_x = item_x + 20.0;
         let icon_color = match resolved_kind {
-            FileKind::Folder => [0.0, 0.8, 1.0, 0.9],
-            FileKind::Image => [0.9, 0.4, 0.8, 0.9],
-            FileKind::Text => [0.2, 0.8, 0.4, 0.9],
-            FileKind::Audio => [1.0, 0.5, 0.0, 0.9],
-            FileKind::Video => [0.8, 0.2, 0.8, 0.9],
-            FileKind::Archive => [0.9, 0.8, 0.2, 0.9],
-            _ => [0.7, 0.7, 0.8, 0.9],
+            FileKind::Folder => theme::accent(),
+            FileKind::Image => theme::secondary(),
+            FileKind::Text => theme::success(),
+            FileKind::Audio => theme::warning(),
+            FileKind::Video => theme::secondary(),
+            FileKind::Archive => theme::viking_gold(),
+            _ => theme::text_muted(),
         };
 
         let icon_rect = Rect {
@@ -501,7 +501,7 @@ impl YggdrasilTree {
                 width: width - (text_x - x) - 8.0,
                 height: row_h - 8.0,
             };
-            renderer.fill_rounded_rect(input_rect, RADIUS_SM, [0.1, 0.1, 0.15, 0.85]);
+            renderer.fill_rounded_rect(input_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.85));
             renderer.stroke_rounded_rect(input_rect, RADIUS_SM, theme::accent(), 1.0);
             renderer.draw_text(
                 &state.rename_text,
@@ -546,7 +546,7 @@ impl YggdrasilTree {
             let label_color = if item.is_selected {
                 theme::text()
             } else {
-                [0.9, 0.9, 0.9, 0.8]
+                theme::with_alpha(theme::text(), 0.8)
             };
             renderer.draw_text(&item.name, text_x, y + 19.0, 13.0, label_color);
         }

@@ -136,7 +136,7 @@ impl View for HeimdallDock {
 
         // Glass platter background
         renderer.bifrost(platter_rect, 25.0, 1.2, 0.7);
-        renderer.fill_rounded_rect(platter_rect, 16.0, [0.15, 0.15, 0.18, 0.85]);
+        renderer.fill_rounded_rect(platter_rect, 16.0, theme::with_alpha(theme::surface_elevated(), 0.85));
 
         // Render each item with magnification
         let base_size = 48.0;
@@ -158,7 +158,7 @@ impl View for HeimdallDock {
             };
 
             // Icon background (rounded rect)
-            renderer.fill_rounded_rect(item_rect, 12.0, [0.2, 0.2, 0.25, 0.9]);
+            renderer.fill_rounded_rect(item_rect, 12.0, theme::with_alpha(theme::surface_elevated(), 0.9));
 
             // Running indicator dot
             if item.is_running {
@@ -169,7 +169,7 @@ impl View for HeimdallDock {
                     height: 4.0,
                 };
                 let accent = theme::accent();
-                renderer.fill_ellipse(dot_rect, [accent[0], accent[1], accent[2], 1.0]);
+                renderer.fill_ellipse(dot_rect, theme::accent());
             }
 
             // Badge
@@ -180,7 +180,7 @@ impl View for HeimdallDock {
                     width: 14.0,
                     height: 14.0,
                 };
-                renderer.fill_ellipse(badge_rect, [0.9, 0.2, 0.2, 0.9]);
+                renderer.fill_ellipse(badge_rect, theme::with_alpha(theme::error_color(), 0.9));
                 let text = if count > 99 {
                     "99+".to_string()
                 } else {
@@ -191,7 +191,7 @@ impl View for HeimdallDock {
                     badge_rect.x + 2.0,
                     badge_rect.y + 3.0,
                     9.0,
-                    [1.0, 1.0, 1.0, 1.0],
+                    theme::text(),
                 );
             }
         }
