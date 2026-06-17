@@ -208,6 +208,12 @@ impl LayerTree {
 
     /// Removes a layer from the tree.
     pub fn remove_layer(&mut self, id: LayerId) -> Option<Layer> {
+        // Remove from parent's children list to avoid dangling references
+        for layer in self.layers.values_mut() {
+            layer.children.retain(|&child_id| child_id != id);
+        }
+        // Also remove from roots if present
+        self.roots.retain(|&root_id| root_id != id);
         self.layer_generations.remove(&id);
         self.layers.remove(&id)
     }

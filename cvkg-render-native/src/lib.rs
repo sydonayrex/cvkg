@@ -595,6 +595,14 @@ impl WindowManager {
             cvkg_core::Rect::new(0.0, 0.0, config.size.0, config.size.1),
         );
 
+        // On Linux, the accesskit_winit adapter automatically initializes the
+        // AT-SPI bus connection via accesskit_unix (added as a dependency).
+        // Screen readers and other assistive technologies will connect through this.
+        #[cfg(target_os = "linux")]
+        {
+            log::info!("[Accessibility] AT-SPI backend available (accesskit_unix)");
+        }
+
         let accesskit_adapter = Some(accesskit_winit::Adapter::with_event_loop_proxy(
             event_loop,
             &window,
@@ -1204,6 +1212,17 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     barrel_rotation: None,
                                     pointer_precision: 0.0,
                                 });
+                                // Dispatch PointerClick after PointerUp for mouse clicks
+                                vdom.dispatch_event(cvkg_core::Event::PointerClick {
+                                    x: state.cursor_pos[0],
+                                    y: state.cursor_pos[1],
+                                    button: btn_id,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(0.0),
+                                    barrel_rotation: None,
+                                    pointer_precision: 0.0,
+                                });
                             }
                         }
                         state.window.request_redraw();
@@ -1250,7 +1269,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     tilt: None,
                                     azimuth: None,
                                     pressure: Some(
-                                        touch.force.map(|f| f.normalized() as f32).unwrap_or(1.0),
+                                        touch.force.map(|f| f.normalized() as f32).unwrap_or(0.5),
                                     ),
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
@@ -1264,7 +1283,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     tilt: None,
                                     azimuth: None,
                                     pressure: Some(
-                                        touch.force.map(|f| f.normalized() as f32).unwrap_or(1.0),
+                                        touch.force.map(|f| f.normalized() as f32).unwrap_or(0.5),
                                     ),
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
@@ -1510,7 +1529,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     }
 
                     if let Some(vdom) = &state.vdom
-                        && let Some(cvkg_event) = convert_keyboard_event(event)
+                        && let Some(cvkg_event) = convert_keyboard_event(event, &self.modifiers)
                     {
                         vdom.dispatch_event(cvkg_event);
                         state.window.request_redraw();
@@ -1539,6 +1558,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         new_st.modifiers_logo = logo;
                         new_st
                     });
+                }
+                WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                    // Update the scale factor and request a redraw.
+                    // The surface will be reconfigured on the next frame via the
+                    // existing resize path in begin_frame.
+                    let _ = scale_factor;
+                    if let Some(ctx) = self.window_manager.windows.get(&id) {
+                        ctx.window.request_redraw();
+                    }
                 }
                 _ => {}
             }
@@ -2164,13 +2192,19 @@ impl cvkg_core::Renderer for NativeRenderer {
 
 // ── Event Conversion Helpers ───────────────────────────────────────────
 
-fn convert_keyboard_event(event: winit::event::KeyEvent) -> Option<cvkg_core::Event> {
+fn convert_keyboard_event(event: winit::event::KeyEvent, modifiers: &winit::keyboard::ModifiersState) -> Option<cvkg_core::Event> {
     if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
         let key_str = format!("{:?}", code);
+        let cvkg_mods = cvkg_core::KeyModifiers {
+            shift: modifiers.shift_key(),
+            ctrl: modifiers.control_key(),
+            alt: modifiers.alt_key(),
+            meta: modifiers.super_key(),
+        };
         if event.state == winit::event::ElementState::Pressed {
-            Some(cvkg_core::Event::KeyDown { key: key_str, modifiers: cvkg_core::KeyModifiers::default() })
+            Some(cvkg_core::Event::KeyDown { key: key_str, modifiers: cvkg_mods })
         } else {
-            Some(cvkg_core::Event::KeyUp { key: key_str, modifiers: cvkg_core::KeyModifiers::default() })
+            Some(cvkg_core::Event::KeyUp { key: key_str, modifiers: cvkg_mods })
         }
     } else {
         None

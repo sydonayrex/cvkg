@@ -924,12 +924,16 @@ impl FilterEngine {
                 padding,
             );
 
-            let input_views: Vec<&wgpu::TextureView> = node
+            let input_views: Vec<std::sync::Arc<wgpu::TextureView>> = node
                 .inputs
                 .iter()
                 .map(|input| match graph.resolve_input(input)? {
-                    ResolvedInput::SourceGraphic => Ok(ctx.source_view),
-                    ResolvedInput::SourceAlpha => Ok(ctx.source_view), // Alpha extraction handled implicitly by primitives or a separate pass
+                    ResolvedInput::SourceGraphic => {
+                        Ok(std::sync::Arc::new(ctx.source_view.clone()))
+                    }
+                    ResolvedInput::SourceAlpha => {
+                        Ok(std::sync::Arc::new(ctx.source_view.clone()))
+                    }
                     ResolvedInput::BackdropImage | ResolvedInput::BackdropAlpha => {
                         if cached_backdrop.is_none() {
                             let bv = ctx.backdrop_view.ok_or_else(|| {
@@ -940,26 +944,11 @@ impl FilterEngine {
                             let cropped = self.crop_backdrop(bv, ctx.screen_size, ctx.region)?;
                             cached_backdrop = Some(cropped.output_view);
                         }
-                        // Note: BackdropAlpha could be extracted similarly to SourceAlpha
-                        // but most primitives just use the alpha channel of the image.
-                        // We will borrow the arc's content for the lifetime of this iteration.
-                        // Since `input_views` borrows from `ctx` or `results`, we have to be careful about lifetimes.
-                        // We can't return a reference to `cached_backdrop.as_ref().unwrap() ` easily if it escapes the closure
-                        // wait, `map` closure returns `Result<&wgpu::TextureView, ...>`.
-                        // Let's refactor this.
-                        Ok(unsafe {
-                            std::mem::transmute::<&wgpu::TextureView, &'a wgpu::TextureView>(
-                                cached_backdrop.as_ref().unwrap().as_ref(),
-                            )
-                        })
+                        Ok(cached_backdrop.clone().unwrap())
                     }
                     ResolvedInput::NodeIndex(idx) => results
                         .get(&idx)
-                        .map(|v| unsafe {
-                            std::mem::transmute::<&wgpu::TextureView, &'a wgpu::TextureView>(
-                                v.as_ref(),
-                            )
-                        })
+                        .cloned()
                         .ok_or_else(|| {
                             FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))
                         }),
@@ -990,7 +979,7 @@ impl FilterEngine {
     fn evaluate_primitive(
         &mut self,
         kind: &usvg::filter::Kind,
-        input_views: &[&wgpu::TextureView],
+        input_views: &[std::sync::Arc<wgpu::TextureView>],
         rect: usvg::NonZeroRect,
         element_bbox: usvg::NonZeroRect,
         color_interpolation: usvg::filter::ColorInterpolation,
@@ -1001,47 +990,46 @@ impl FilterEngine {
 
         match kind {
             usvg::filter::Kind::GaussianBlur(gb) => {
-                self.apply_gaussian_blur(input_views[0], w, h, gb)
+                self.apply_gaussian_blur(&*input_views[0], w, h, gb)
             }
             usvg::filter::Kind::ColorMatrix(cm) => {
-                self.apply_color_matrix(input_views[0], w, h, cm)
+                self.apply_color_matrix(&*input_views[0], w, h, cm)
             }
             usvg::filter::Kind::Blend(blend) => {
-                self.apply_blend(input_views[0], input_views[1], w, h, blend)
+                self.apply_blend(&*input_views[0], &*input_views[1], w, h, blend)
             }
             usvg::filter::Kind::Composite(comp) => {
-                self.apply_composite(input_views[0], input_views[1], w, h, comp)
+                self.apply_composite(&*input_views[0], &*input_views[1], w, h, comp)
             }
             usvg::filter::Kind::Flood(flood) => self.apply_flood(w, h, flood),
             usvg::filter::Kind::Offset(offset) => {
-                self.apply_offset(input_views[0], w, h, rect, element_bbox, offset)
+                self.apply_offset(&*input_views[0], w, h, rect, element_bbox, offset)
             }
             usvg::filter::Kind::Merge(merge) => {
-                let views: Vec<&wgpu::TextureView> = input_views.to_vec();
-                self.apply_merge(&views, w, h, merge)
+                self.apply_merge(input_views, w, h, merge)
             }
-            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(input_views[0], w, h, ds),
+            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(&*input_views[0], w, h, ds),
             usvg::filter::Kind::ComponentTransfer(ct) => {
-                self.apply_component_transfer(input_views[0], w, h, ct)
+                self.apply_component_transfer(&*input_views[0], w, h, ct)
             }
             usvg::filter::Kind::ConvolveMatrix(cm) => {
-                self.apply_convolve_matrix(input_views[0], w, h, cm)
+                self.apply_convolve_matrix(&*input_views[0], w, h, cm)
             }
             usvg::filter::Kind::DisplacementMap(dm) => {
-                self.apply_displacement_map(input_views[0], input_views[1], w, h, dm)
+                self.apply_displacement_map(&*input_views[0], &*input_views[1], w, h, dm)
             }
-            usvg::filter::Kind::Morphology(m) => self.apply_morphology(input_views[0], w, h, m),
+            usvg::filter::Kind::Morphology(m) => self.apply_morphology(&*input_views[0], w, h, m),
             usvg::filter::Kind::Tile(tile) => {
-                self.apply_tile(input_views[0], w, h, rect, element_bbox, tile)
+                self.apply_tile(&*input_views[0], w, h, rect, element_bbox, tile)
             }
             usvg::filter::Kind::Turbulence(t) => self.apply_turbulence(w, h, t),
             usvg::filter::Kind::DiffuseLighting(dl) => {
-                self.apply_diffuse_lighting(input_views[0], w, h, dl)
+                self.apply_diffuse_lighting(&*input_views[0], w, h, dl)
             }
             usvg::filter::Kind::SpecularLighting(sl) => {
-                self.apply_specular_lighting(input_views[0], w, h, sl)
+                self.apply_specular_lighting(&*input_views[0], w, h, sl)
             }
-            usvg::filter::Kind::Image(img) => self.apply_image(input_views[0], w, h, img),
+            usvg::filter::Kind::Image(img) => self.apply_image(&*input_views[0], w, h, img),
         }
     }
 
@@ -1367,7 +1355,7 @@ impl FilterEngine {
 
     fn apply_merge(
         &mut self,
-        inputs: &[&wgpu::TextureView],
+        inputs: &[std::sync::Arc<wgpu::TextureView>],
         w: u32,
         h: u32,
         _merge: &usvg::filter::Merge,
@@ -1397,12 +1385,11 @@ impl FilterEngine {
                 Some(&self.linear_sampler),
                 input_size,
             )?;
-            result_view = temp_out;
+            result_view = std::sync::Arc::new(temp_out);
         }
 
-        let output_surface = result_view.clone();
         Ok(FilterResult {
-            output_view: std::sync::Arc::new(output_surface),
+            output_view: result_view,
             region: (0, 0, w, h),
         })
     }

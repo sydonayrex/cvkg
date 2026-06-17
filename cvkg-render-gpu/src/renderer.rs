@@ -2064,6 +2064,13 @@ impl SurtrRenderer {
         // Clear per-frame state but NOT memo_cache — use generation counter instead
         self.frame_generation += 1;
 
+        // Evict memo cache entries that are too old to prevent unbounded growth.
+        const MAX_MEMO_AGE: u64 = 1000;
+        if self.frame_generation > MAX_MEMO_AGE {
+            let cutoff = self.frame_generation - MAX_MEMO_AGE;
+            self.memo_cache.retain(|_, (_, frame_gen)| { *frame_gen >= cutoff });
+        }
+
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;
         self.telemetry.vertices = 0;
@@ -3027,20 +3034,25 @@ impl SurtrRenderer {
                     if let cvkg_core::DrawMaterial::Glass {
                         blur_radius,
                         ior_override,
+                        glass_intensity,
                     } = self.current_draw_material
                     {
                         cvkg_core::DrawMaterial::Glass {
                             blur_radius,
                             ior_override,
+                            glass_intensity,
                         }
                     } else {
                         cvkg_core::DrawMaterial::Glass {
                             blur_radius: 20.0,
                             ior_override: 0.0,
+                            glass_intensity: 1.0,
                         }
                     }
                 } else if material_id == 6 {
                     cvkg_core::DrawMaterial::TopUI
+                } else if (8..=22).contains(&material_id) {
+                    cvkg_core::DrawMaterial::Blend { mode: (material_id - 7) as u32 }
                 } else {
                     cvkg_core::DrawMaterial::Opaque
                 },
@@ -3174,37 +3186,40 @@ impl SurtrRenderer {
             if let cvkg_core::DrawMaterial::Glass {
                 blur_radius,
                 ior_override,
+                glass_intensity,
             } = self.current_draw_material
             {
                 cvkg_core::DrawMaterial::Glass {
                     blur_radius,
                     ior_override,
+                    glass_intensity,
                 }
             } else {
                 cvkg_core::DrawMaterial::Glass {
                     blur_radius: 20.0,
                     ior_override: 0.0,
+                    glass_intensity: 1.0,
                 }
             }
         } else if material_id == 6 {
             cvkg_core::DrawMaterial::TopUI
+        } else if (8..=22).contains(&material_id) {
+            // Blend modes: material_id 8-22 map to blend modes 1-15
+            cvkg_core::DrawMaterial::Blend { mode: (material_id - 7) as u32 }
         } else {
-            // Non-trivial algorithm: Draw Material Routing
-            // WHY: Any material ID other than 7 (Glass) or 6 (TopUI/Text) is processed by the opaque WGSL pipeline.
-            // Under immediate-mode rendering, inheriting self.current_draw_material can route shapes incorrectly.
-            // CONTRACT: If the material ID is not Glass or TopUI, it maps directly to Opaque.
             cvkg_core::DrawMaterial::Opaque
         };
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
-        let (blur_radius, ior_override) = if let cvkg_core::DrawMaterial::Glass {
+        let (blur_radius, ior_override, glass_intensity) = if let cvkg_core::DrawMaterial::Glass {
             blur_radius,
             ior_override,
+            glass_intensity,
         } = material
         {
-            (blur_radius, ior_override)
+            (blur_radius, ior_override, glass_intensity)
         } else {
-            (0.0, 0.0)
+            (0.0, 0.0, 1.0)
         };
 
         let current_instance_data = InstanceData {
@@ -3213,7 +3228,7 @@ impl SurtrRenderer {
             rotation,
             blur_radius,
             ior_override,
-            glass_intensity: 1.0,
+            glass_intensity,
         };
 
         // Batching: check if we need to start a new DrawCall
@@ -3692,8 +3707,24 @@ impl SurtrRenderer {
                     } => cvkg_core::DrawMaterial::Glass {
                         blur_radius,
                         ior_override: 0.0,
+                        glass_intensity: 1.0,
                     },
                     cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
+                    cvkg_compositor::Material::Multiply => cvkg_core::DrawMaterial::Blend { mode: 1 },
+                    cvkg_compositor::Material::Screen => cvkg_core::DrawMaterial::Blend { mode: 2 },
+                    cvkg_compositor::Material::BlendOverlay => cvkg_core::DrawMaterial::Blend { mode: 3 },
+                    cvkg_compositor::Material::Darken => cvkg_core::DrawMaterial::Blend { mode: 4 },
+                    cvkg_compositor::Material::Lighten => cvkg_core::DrawMaterial::Blend { mode: 5 },
+                    cvkg_compositor::Material::ColorDodge => cvkg_core::DrawMaterial::Blend { mode: 6 },
+                    cvkg_compositor::Material::ColorBurn => cvkg_core::DrawMaterial::Blend { mode: 7 },
+                    cvkg_compositor::Material::HardLight => cvkg_core::DrawMaterial::Blend { mode: 8 },
+                    cvkg_compositor::Material::SoftLight => cvkg_core::DrawMaterial::Blend { mode: 9 },
+                    cvkg_compositor::Material::Difference => cvkg_core::DrawMaterial::Blend { mode: 10 },
+                    cvkg_compositor::Material::Exclusion => cvkg_core::DrawMaterial::Blend { mode: 11 },
+                    cvkg_compositor::Material::Hue => cvkg_core::DrawMaterial::Blend { mode: 12 },
+                    cvkg_compositor::Material::Saturation => cvkg_core::DrawMaterial::Blend { mode: 13 },
+                    cvkg_compositor::Material::Color => cvkg_core::DrawMaterial::Blend { mode: 14 },
+                    cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
                     _ => cvkg_core::DrawMaterial::Opaque,
                 };
                 self.set_material(core_material);
@@ -3732,9 +3763,25 @@ impl SurtrRenderer {
                 cvkg_core::DrawMaterial::Glass {
                     blur_radius: *blur_radius,
                     ior_override: 0.0,
+                    glass_intensity: 1.0,
                 }
             }
             cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
+            cvkg_compositor::Material::Multiply => cvkg_core::DrawMaterial::Blend { mode: 1 },
+            cvkg_compositor::Material::Screen => cvkg_core::DrawMaterial::Blend { mode: 2 },
+            cvkg_compositor::Material::BlendOverlay => cvkg_core::DrawMaterial::Blend { mode: 3 },
+            cvkg_compositor::Material::Darken => cvkg_core::DrawMaterial::Blend { mode: 4 },
+            cvkg_compositor::Material::Lighten => cvkg_core::DrawMaterial::Blend { mode: 5 },
+            cvkg_compositor::Material::ColorDodge => cvkg_core::DrawMaterial::Blend { mode: 6 },
+            cvkg_compositor::Material::ColorBurn => cvkg_core::DrawMaterial::Blend { mode: 7 },
+            cvkg_compositor::Material::HardLight => cvkg_core::DrawMaterial::Blend { mode: 8 },
+            cvkg_compositor::Material::SoftLight => cvkg_core::DrawMaterial::Blend { mode: 9 },
+            cvkg_compositor::Material::Difference => cvkg_core::DrawMaterial::Blend { mode: 10 },
+            cvkg_compositor::Material::Exclusion => cvkg_core::DrawMaterial::Blend { mode: 11 },
+            cvkg_compositor::Material::Hue => cvkg_core::DrawMaterial::Blend { mode: 12 },
+            cvkg_compositor::Material::Saturation => cvkg_core::DrawMaterial::Blend { mode: 13 },
+            cvkg_compositor::Material::Color => cvkg_core::DrawMaterial::Blend { mode: 14 },
+            cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
             _ => cvkg_core::DrawMaterial::Opaque,
         };
         self.draw_calls.push(DrawCall {
@@ -3775,6 +3822,8 @@ impl SurtrRenderer {
             }
         };
 
+        // The viewBox is applied as the root group's transform.
+        // Use the tree size as the viewBox (which is the SVG's width/height).
         let view_box = Rect {
             x: 0.0,
             y: 0.0,
@@ -3856,6 +3905,11 @@ impl SurtrRenderer {
             if has_fill && let Some(fill) = path.fill() {
                 let paint = fill.paint();
                 let fill_opacity = fill.opacity().get();
+                // Convert SVG fill rule to Lyon fill rule
+                let fill_rule = match fill.rule() {
+                    usvg::FillRule::EvenOdd => lyon::tessellation::FillRule::EvenOdd,
+                    usvg::FillRule::NonZero => lyon::tessellation::FillRule::NonZero,
+                };
 
                 match paint {
                     usvg::Paint::Color(c) => {
@@ -3866,17 +3920,17 @@ impl SurtrRenderer {
                             fill_opacity,
                         ];
                         Self::tessellate_fill_solid(
-                            &lyon_path, color, &node_id, params,
+                            &lyon_path, color, &node_id, params, fill_rule,
                         );
                     }
                     usvg::Paint::LinearGradient(g) => {
                         Self::tessellate_fill_gradient(
-                            &lyon_path, g, fill_opacity, &node_id, params,
+                            &lyon_path, g, fill_opacity, &node_id, params, fill_rule,
                         );
                     }
                     usvg::Paint::RadialGradient(g) => {
                         Self::tessellate_fill_radial_gradient(
-                            &lyon_path, g, fill_opacity, &node_id, params,
+                            &lyon_path, g, fill_opacity, &node_id, params, fill_rule,
                         );
                     }
                     usvg::Paint::Pattern(_) => {
@@ -3886,7 +3940,7 @@ impl SurtrRenderer {
                         );
                         let color = [1.0, 1.0, 1.0, fill_opacity];
                         Self::tessellate_fill_solid(
-                            &lyon_path, color, &node_id, params,
+                            &lyon_path, color, &node_id, params, fill_rule,
                         );
                     }
                 }
@@ -3914,13 +3968,37 @@ impl SurtrRenderer {
                     }
                 };
 
-                let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+                // Build stroke options from SVG stroke properties
+                let mut stroke_opts = StrokeOptions::default()
+                    .with_line_width(stroke_width);
 
+                // Line cap
+                stroke_opts = match stroke.linecap() {
+                    usvg::LineCap::Butt => stroke_opts.with_line_cap(lyon::tessellation::LineCap::Butt),
+                    usvg::LineCap::Round => stroke_opts.with_line_cap(lyon::tessellation::LineCap::Round),
+                    usvg::LineCap::Square => stroke_opts.with_line_cap(lyon::tessellation::LineCap::Square),
+                };
+
+                // Line join
+                stroke_opts = match stroke.linejoin() {
+                    usvg::LineJoin::Miter => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Miter),
+                    usvg::LineJoin::Round => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Round),
+                    usvg::LineJoin::Bevel => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Bevel),
+                    usvg::LineJoin::MiterClip => stroke_opts.with_line_join(lyon::tessellation::LineJoin::MiterClip),
+                };
+
+                // Miter limit
+                stroke_opts = stroke_opts.with_miter_limit(stroke.miterlimit().get());
+
+                // Dash array (not supported by this version of Lyon tessellation)
+                // TODO: Implement custom dashed stroke tessellation if needed
+
+                let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
                 let path_length = lyon::algorithms::length::approximate_length(&lyon_path, 0.1);
 
                 if let Err(e) = params.stroke_tessellator.tessellate_path(
                     &lyon_path,
-                    &StrokeOptions::default().with_line_width(stroke_width),
+                    &stroke_opts,
                     &mut BuffersBuilder::new(
                         &mut buffers,
                         CustomStrokeVertexConstructor { color, clip, path_length },
@@ -3967,12 +4045,13 @@ impl SurtrRenderer {
         color: [f32; 4],
         node_id: &String,
         params: &mut TessellateParams<'_>,
+        fill_rule: lyon::tessellation::FillRule,
     ) {
         let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
         let base_vertex_idx = params.vertices.len() as u32;
         if let Err(e) = params.fill_tessellator.tessellate_path(
             lyon_path,
-            &FillOptions::default(),
+            &FillOptions::default().with_fill_rule(fill_rule),
             &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color }),
         ) {
             log::warn!(
@@ -4040,6 +4119,7 @@ impl SurtrRenderer {
         fill_opacity: f32,
         node_id: &String,
         params: &mut TessellateParams<'_>,
+        fill_rule: lyon::tessellation::FillRule,
     ) {
         let x1 = gradient.x1();
         let y1 = gradient.y1();
@@ -4080,6 +4160,7 @@ impl SurtrRenderer {
         fill_opacity: f32,
         node_id: &String,
         params: &mut TessellateParams<'_>,
+        fill_rule: lyon::tessellation::FillRule,
     ) {
         let cx = gradient.cx();
         let cy = gradient.cy();
@@ -4263,6 +4344,7 @@ impl SurtrRenderer {
             7 => cvkg_core::DrawMaterial::Glass {
                 blur_radius: 20.0,
                 ior_override: 0.0,
+                glass_intensity: 1.0,
             },
             0 => cvkg_core::DrawMaterial::Opaque,
             _ => cvkg_core::DrawMaterial::TopUI,

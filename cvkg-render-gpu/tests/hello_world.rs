@@ -536,6 +536,7 @@ fn test_full_pipeline_integration() {
     renderer.set_material(cvkg_core::DrawMaterial::Glass {
         blur_radius: 20.0,
         ior_override: 0.0,
+        glass_intensity: 1.0,
     });
     renderer.fill_rect(
         Rect {

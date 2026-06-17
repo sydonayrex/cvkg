@@ -3,6 +3,7 @@
 **Date:** 2026-06-17
 **Scope:** Full rendering pipeline audit across 10 use cases
 **Auditor:** OWL (automated code review with subagent parallelism)
+**Status:** All P0 and P1 issues addressed (see fixes below)
 
 ---
 

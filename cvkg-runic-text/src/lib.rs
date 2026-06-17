@@ -1581,14 +1581,17 @@ impl RunicTextEngine {
         for span in spans {
             // Determine direction from BiDi analysis
             let direction = if let Some(para_info) = bidi.paragraphs.first() {
+                // Scan all bytes in the paragraph to find the first strong directional character.
+                // The unicode_bidi library assigns levels to each byte; we need to find
+                // the first byte with an RTL level to determine paragraph direction.
                 let mut dir = Direction::LeftToRight;
                 for bi in para_info.range.clone() {
                     if bi < bidi.levels.len() {
                         if bidi.levels[bi].is_rtl() {
                             dir = Direction::RightToLeft;
                             has_rtl = true;
+                            break;
                         }
-                        break;
                     }
                 }
                 dir
@@ -1976,7 +1979,7 @@ impl RunicTextEngine {
             if line.glyph_start < line.glyph_end && line.glyph_end <= glyphs.len() {
                 let level = line_bidi_level(bidi, line.byte_offset);
                 if level.is_rtl() {
-                    reorder_line_rtl(glyphs, line.glyph_start, line.glyph_end);
+                    reorder_line_rtl(glyphs, line.glyph_start, line.glyph_end, bidi);
                 }
             }
         }
@@ -2492,16 +2495,53 @@ fn line_bidi_level(bidi: &BidiInfo, byte_offset: usize) -> unicode_bidi::Level {
     byte_offset_level(bidi, byte_offset)
 }
 
-fn reorder_line_rtl(glyphs: &mut [GlyphInstance], start: usize, end: usize) {
+fn reorder_line_rtl(
+    glyphs: &mut [GlyphInstance],
+    start: usize,
+    end: usize,
+    bidi: &BidiInfo,
+) {
     if end <= start {
         return;
     }
-    let slice = &mut glyphs[start..end];
-    slice.reverse();
-    let mut x = 0.0f32;
-    for g in slice.iter_mut() {
-        g.x = x;
-        x += g.advance_width;
+    // Proper BiDi reordering: reverse each contiguous run of RTL glyphs.
+    // Glyphs in LTR runs stay in logical order; glyphs in RTL runs are reversed.
+    let mut i = start;
+    while i < end {
+        // Find the start of an RTL run
+        let byte_off = glyphs[i].cluster as usize;
+        let level = byte_offset_level(bidi, byte_off);
+        if level.is_rtl() {
+            // Find the end of this RTL run
+            let mut j = i + 1;
+            while j < end {
+                let next_byte = glyphs[j].cluster as usize;
+                let next_level = byte_offset_level(bidi, next_byte);
+                if !next_level.is_rtl() {
+                    break;
+                }
+                j += 1;
+            }
+            // Compute starting x before mutable borrow
+            let start_x = if i > start {
+                glyphs[i - 1].x + glyphs[i - 1].advance_width
+            } else {
+                0.0
+            };
+            // Reverse the RTL run [i, j)
+            let slice = &mut glyphs[i..j];
+            slice.reverse();
+            // Recalculate x positions
+            let mut x = start_x;
+            for g in slice.iter_mut() {
+                g.x = x;
+                x += g.advance_width;
+            }
+            i = j;
+        } else {
+            // LTR run: just advance
+            i += 1;
+        }
     }
 }
 

@@ -90,6 +90,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.current_draw_material = cvkg_core::DrawMaterial::Glass {
             blur_radius: blur_strength,
             ior_override: 0.0,
+            glass_intensity: gi,
         };
 
         // Tint color alpha is modulated by intensity so intensity=0 gives a near-invisible fill

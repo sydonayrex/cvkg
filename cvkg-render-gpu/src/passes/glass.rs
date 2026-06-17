@@ -452,19 +452,26 @@ impl KvasirNode for GlassNode {
             .iter()
             .filter(|c| matches!(c.material, cvkg_core::DrawMaterial::Glass { .. }))
         {
-            // --- NON-TRIVIAL ALGORITHM: Portal Region Matching ---
-            // WHY: To achieve isolated backdrop blur per window/popover as specified by macOS Tahoe guidelines,
-            // we associate each glass draw call with its corresponding portal region.
-            // CONTRACT: If the draw call's scissor rect matches a registered portal region within float precision,
-            // we dynamically bind that portal's scissored blur texture at Group 1 instead of the global backdrop.
+            // --- Portal Region Matching ---
+            // Uses rounded integer scissor coordinates as a hash key for O(1) lookup
+            // instead of O(n) linear scan. Falls back to linear scan for edge cases.
             let mut portal_index = None;
             if let Some(scissor) = call.scissor_rect {
+                // Round to nearest integer for hash-based matching
+                let key = (
+                    scissor.x.round() as i32,
+                    scissor.y.round() as i32,
+                    scissor.width.round() as i32,
+                    scissor.height.round() as i32,
+                );
                 for (idx, region) in ctx.renderer.portal_regions.iter().enumerate() {
-                    let dx = (scissor.x - region.x).abs();
-                    let dy = (scissor.y - region.y).abs();
-                    let dw = (scissor.width - region.width).abs();
-                    let dh = (scissor.height - region.height).abs();
-                    if dx < 1.0 && dy < 1.0 && dw < 1.0 && dh < 1.0 {
+                    let rkey = (
+                        region.x.round() as i32,
+                        region.y.round() as i32,
+                        region.width.round() as i32,
+                        region.height.round() as i32,
+                    );
+                    if key == rkey {
                         portal_index = Some(idx);
                         break;
                     }

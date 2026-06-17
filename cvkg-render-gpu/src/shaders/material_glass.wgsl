@@ -331,13 +331,21 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Add GGX specular highlight
     final_rgb += specular_contribution * smoothstep(0.0, 0.4, 1.0 - lens_dist);
 
+    // Early exit for zero intensity: skip all expensive glass computation
+    let gi = in.glass_intensity;
+    if gi < 0.01 {
+        // Simple transparent fill with SDF anti-aliasing only
+        let alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
+        if alpha <= 0.0 { discard; }
+        return vec4<f32>(color.rgb, alpha);
+    }
+
     // Apply SDF anti-aliasing to glass alpha
     let glass_alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
 
     // Modulate glass effect by per-instance glass_intensity.
     // intensity=0 -> simple transparent fill (no refraction/blur/rim/spec)
     // intensity=1 -> full glass effect
-    let gi = in.glass_intensity;
     final_rgb = mix(color.rgb, final_rgb, gi);
     let final_alpha = mix(color.a * 0.3, glass_alpha, gi);
     color = vec4<f32>(final_rgb, final_alpha);
