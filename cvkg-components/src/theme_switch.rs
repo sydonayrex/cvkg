@@ -15,7 +15,7 @@
 //! ```
 
 use crate::theme;
-use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, View};
+use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc as StdArc;
 
 /// User-selectable theme mode.

@@ -30,6 +30,8 @@ pub struct InstanceData {
     pub blur_radius: f32,
     /// Per-instance Index of Refraction (IOR) override for custom glass thickness refraction.
     pub ior_override: f32,
+    /// Per-instance glass effect intensity (0.0 = frosted/minimal, 1.0 = full refraction+specular).
+    pub glass_intensity: f32,
 }
 
 impl Default for InstanceData {
@@ -40,17 +42,19 @@ impl Default for InstanceData {
             rotation: 0.0,
             blur_radius: 0.0,
             ior_override: 0.0,
+            glass_intensity: 1.0,
         }
     }
 }
 
 impl InstanceData {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
         11 => Float32x2, // translation
         12 => Float32x2, // scale
         13 => Float32,   // rotation
         14 => Float32,   // blur_radius
         15 => Float32,   // ior_override
+        16 => Float32,   // glass_intensity
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {

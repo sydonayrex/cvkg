@@ -83,6 +83,7 @@ features = [
 
 [dependencies.image]
 version = "0.25"
+features = ["jpeg"]
 
 [dependencies.log]
 version = "0.4"

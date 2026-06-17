@@ -396,8 +396,9 @@ impl NativeRenderer {
     }
 
     /// Start the CVKG native application with the given view.
-    /// This is the main entry point for desktop applications.
-    pub fn run<V: cvkg_core::View + 'static>(view: V) {
+    /// `prewarm_assets` is a list of (name, raw_bytes) pairs uploaded to the GPU
+    /// texture atlas on the first frame before any draw calls.
+    pub fn run<V: cvkg_core::View + 'static>(view: V, prewarm_assets: Option<Vec<(String, Vec<u8>)>>) {
         let event_loop = EventLoop::<AppEvent>::with_user_event()
             .build()
             .expect("Failed to create event loop");
@@ -417,9 +418,20 @@ impl NativeRenderer {
             modifiers: winit::keyboard::ModifiersState::default(),
             audio_engine: None,
             haptic_engine: Arc::new(VisualHapticEngine::new()),
+            pending_prewarm: prewarm_assets,
         };
 
         event_loop.run_app(&mut app).expect("Event loop error");
+    }
+
+    /// Convenience: run with a single background image loaded from a file path.
+    /// The image is loaded from disk and pre-warmed on the first frame.
+    /// `image_name` is the key used in `draw_image` / `draw_background_image`.
+    pub fn run_with_background<V: cvkg_core::View + 'static>(view: V, image_name: &str, image_path: &str) {
+        let image_data = std::fs::read(image_path)
+            .unwrap_or_else(|e| panic!("Failed to load background image '{}': {}", image_path, e));
+        let assets = vec![(image_name.to_string(), image_data)];
+        Self::run(view, Some(assets));
     }
 }
 
@@ -715,6 +727,8 @@ struct App<V: cvkg_core::View> {
     audio_engine: Option<Arc<dyn cvkg_core::AudioEngine>>,
     /// Visual haptic engine for micro-feedback animations.
     haptic_engine: Arc<dyn cvkg_core::HapticEngine>,
+    /// Assets to prewarm on the first frame (name, raw bytes). Drained once.
+    pending_prewarm: Option<Vec<(String, Vec<u8>)>>,
 }
 
 impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
@@ -1004,6 +1018,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         .expect("GPU mutex poisoned during frame begin");
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
                     let encoder = gpu.begin_frame(id);
+                    // One-time prewarm: drain any pending assets into the GPU texture atlas
+                    // on the first frame. This must happen after begin_frame (which clears
+                    // per-frame state) but while we still hold the GPU mutex.
+                    if let Some(assets) = self.pending_prewarm.take() {
+                        log::info!("[Native] Pre-warming {} assets on first frame", assets.len());
+                        gpu.prewarm_vram(assets);
+                    }
                     // Compute safe area insets based on current window state
                     let safe_area = crate::SafeAreaInsets::for_window_state(self.state_detector.state());
                     // Adjust content rect to respect safe areas (e.g., macOS menu bar)

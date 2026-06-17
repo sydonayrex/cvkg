@@ -8,6 +8,7 @@ use cvkg_physics::ragdoll_bridge::RagdollBridge;
 use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig};
 use cvkg_vdom::signals::Signal;
 use glam::Vec2;
+use std::fs;
 
 // --- Valknut Procedural Animation ---
 
@@ -313,7 +314,6 @@ impl BerserkerState {
     }
 }
 
-#[derive(Clone)]
 struct BerserkerFireView {
     counters: [Signal<u32>; 4],
     rage: Signal<f32>,
@@ -355,6 +355,9 @@ impl View for BerserkerFireView {
     fn render(&self, r: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
         let w = rect.width;
         let h = rect.height;
+
+        // Draw background image (prewarmed on first frame via NativeRenderer::run assets)
+        r.draw_image("background", cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
 
         // Record telemetry data to the PerfOverlay
         let tel = r.get_telemetry();
@@ -780,16 +783,8 @@ fn draw_dock(
     r.pop_vnode();
 }
 
-fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, w: f32, h: f32, _t: f32) {
-    r.fill_rect(
-        cvkg_core::Rect {
-            x: 0.0,
-            y: 28.0,
-            width: w,
-            height: h - 96.0,
-        },
-        [0.01, 0.01, 0.03, 1.0],
-    );
+fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32, _h: f32, _t: f32) {
+    // Background is now drawn by the main render() function via draw_image
 
     for &(id, size) in &s.physics.cube_ids {
         if let Some(body) = s.physics.world.body(id) {
@@ -979,6 +974,9 @@ fn draw_berserker_fire(
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
+    // Update fireball position for glass specular highlights
+    r.set_fireball_pos([cx, cy]);
+
     r.draw_radial_gradient(
         cvkg_core::Rect {
             x: cx - 100.0,
@@ -1072,7 +1070,7 @@ fn draw_corner_buttons(
 
         let val = counters[i].get();
         let val_str = format!("{}", val);
-        let (vw, vh) = r.measure_text(&val_str, 24.0);
+        let (_vw, vh) = r.measure_text(&val_str, 24.0);
         r.draw_text(
             &val_str,
             corner.0 + btn_size + 10.0,
@@ -1107,11 +1105,33 @@ fn main() {
         PerformanceContract::chrome_standard()
     );
     log::info!("═══════════════════════════════════════════════════");
+    // Load background image
+        let bg_image_data = fs::read("demos/berserker/background.jpg")
+            .or_else(|_| fs::read("../demos/berserker/background.jpg"))
+            .or_else(|_| fs::read("background.jpg"))
+            .or_else(|_| {
+                // Try from workspace root using env var
+                std::env::var("CARGO_MANIFEST_DIR")
+                    .map_err(|_| std::io::Error::other("CARGO_MANIFEST_DIR not set"))
+                    .and_then(|manifest_dir| {
+                        let path = std::path::Path::new(&manifest_dir).join("demos/berserker/background.jpg");
+                        fs::read(&path)
+                    })
+            })
+            .inspect(|data| log::info!("[Berserker] Loaded background image: {} bytes", data.len()))
+            .inspect_err(|e| log::warn!("[Berserker] Failed to load background image: {}", e))
+            .ok();
+
+        log::info!("[Berserker] CWD: {:?}", std::env::current_dir());
 
     std::panic::set_hook(Box::new(|info| {
         log::error!("CRITICAL_FAILURE: Application panicked: {}", info);
     }));
 
     log::info!("Launching with full debug logging enabled...");
-    cvkg::native::NativeRenderer::run(BerserkerFireView::new(1280.0, 720.0));
+    let prewarm_assets = bg_image_data.map(|data| vec![("background".to_string(), data)]);
+    cvkg::native::NativeRenderer::run(
+        BerserkerFireView::new(1280.0, 720.0),
+        prewarm_assets,
+    );
 }

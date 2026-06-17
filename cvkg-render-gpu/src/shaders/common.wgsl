@@ -73,6 +73,7 @@ struct VertexInput {
     @location(13) rotation:    f32,
     @location(14) blur_radius: f32,
     @location(15) ior_override: f32,
+    @location(16) glass_intensity: f32,
 };
 
 struct VertexOutput {
@@ -90,6 +91,7 @@ struct VertexOutput {
     @location(10) world_pos:  vec2<f32>,
     @location(11) @interpolate(flat) blur_radius: f32,
     @location(12) @interpolate(flat) ior_override: f32,
+    @location(13) @interpolate(flat) glass_intensity: f32,
 };
 
 @vertex
@@ -111,7 +113,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.world_pos = vec2<f32>(0.0, 0.0);
     out.blur_radius = 0.0;
     out.ior_override = 0.0;
-    return out;
+    out.glass_intensity = 0.0;
 }
 
 /// Main vertex shader — transforms 2D quads with rotation/scale/translation.
@@ -159,6 +161,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.tex_index = in.tex_index;
     out.blur_radius = in.blur_radius;
     out.ior_override = in.ior_override;
+    out.glass_intensity = in.glass_intensity;
 
     return out;
 }

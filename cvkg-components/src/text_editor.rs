@@ -433,11 +433,6 @@ fn selection_range(state: &EditorState) -> Option<(usize, usize)> {
     })
 }
 
-/// Get the selected text content.
-fn selected_text(state: &EditorState) -> Option<String> {
-    selection_range(state).map(|(start, end)| state.text[start..end].to_string())
-}
-
 impl View for TextEditor {
     type Body = Never;
     fn body(self) -> Self::Body {
@@ -632,7 +627,7 @@ impl View for TextEditor {
         // Register keyboard handler (OS-agnostic: cmd maps to Command on macOS, Ctrl elsewhere)
         if self.is_focused && self.state_id != 0 {
             let state_id = self.state_id;
-            let text_for_handlers = state.text.clone();
+            let _text_for_handlers = state.text.clone();
             let on_change = self.on_change.clone();
 
             // ── Keydown handler (arrow keys, backspace, delete, home/end, enter, Cmd+A) ──
@@ -895,7 +890,7 @@ impl View for TextEditor {
                 "copy",
                 Arc::new(move |_event| {
                     update_system_state(|s| {
-                        let mut ns = s.clone();
+                        let ns = s.clone();
                         if let Some(guard) =
                             ns.get_component_state::<EditorState>(state_id)
                             && let Ok(guard) = guard.read()

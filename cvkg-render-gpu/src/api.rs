@@ -68,31 +68,41 @@ impl cvkg_core::Renderer for SurtrRenderer {
     /// `glass_intensity` ranges from 0.0 (solid, no glass effect) to 1.0 (full glass).
     /// This allows per-component control over glass strength.
     fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
-        // Store blur radius for use during glass pass - the renderer will apply
-        // this to the Kawase blur uniform during the backdrop blur phase
-        let blur_strength = (blur_radius / 100.0).clamp(0.0, 4.0)
-            * glass_intensity.clamp(0.0, 1.0);
+        // Default tint: neutral white with moderate alpha, matching pre-tint behavior
+        self.fill_glass_rect_with_tint(rect, radius, blur_radius, [1.0, 1.0, 1.0, 0.4], glass_intensity);
+    }
+
+    /// Fill a rounded rect with glass material with explicit tint color and intensity.
+    /// `tint_color` is the glass base color (RGBA). `glass_intensity` controls effect strength.
+    fn fill_glass_rect_with_tint(&mut self, rect: Rect, radius: f32, blur_radius: f32, tint_color: [f32; 4], glass_intensity: f32) {
+        let gi = glass_intensity.clamp(0.0, 1.0);
+        // Per-instance blur_radius drives the shader's blur_mip level.
+        // Scale: 0-100 input maps to 0-4 mip levels for the Kawase blur chain.
+        let blur_strength = (blur_radius / 25.0).clamp(0.0, 4.0) * gi;
 
         // Register for portal-aware per-element backdrop blur (Tahoe feature)
-        // When current_z != 0, this element is in a portal layer
         if self.current_z != 0.0 {
             self.portal_regions.push_back(rect);
         }
 
-        // Non-trivial algorithm: Temporary Material Override Binding
-        // WHY: The underlying fill_rect_with_full_params method query-routes geometry attributes
-        // from self.current_draw_material. In immediate-mode rendering, we must bind the Glass material
-        // temporarily so that the instance generator receives the requested blur_radius and IOR override.
-        // CONTRACT: Restores self.current_draw_material to its original value after the draw call completes.
+        // Temporary Material Override Binding
         let prev_material = self.current_draw_material;
         self.current_draw_material = cvkg_core::DrawMaterial::Glass {
-            blur_radius,
+            blur_radius: blur_strength,
             ior_override: 0.0,
         };
 
+        // Tint color alpha is modulated by intensity so intensity=0 gives a near-invisible fill
+        let fill_color = [
+            tint_color[0],
+            tint_color[1],
+            tint_color[2],
+            tint_color[3] * gi,
+        ];
+
         self.fill_rect_with_full_params(
             rect,
-            [1.0, 1.0, 1.0, 0.4 * glass_intensity.clamp(0.0, 1.0)],
+            fill_color,
             7, // Mode 7 = Glass material
             None,
             radius,
@@ -1194,6 +1204,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 rotation,
                 blur_radius: 0.0,
                 ior_override: 0.0,
+                glass_intensity: 1.0,
             });
             self.draw_calls.push(DrawCall {
                 target_id: None,
@@ -1249,6 +1260,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             rotation: 0.0,
             blur_radius: 0.0,
             ior_override: 0.0,
+            glass_intensity: 1.0,
         });
 
         self.draw_calls.push(DrawCall {
@@ -1571,6 +1583,7 @@ impl SurtrRenderer {
                 rotation,
                 blur_radius: 0.0,
                 ior_override: 0.0,
+                glass_intensity: 1.0,
             });
             self.draw_calls.push(DrawCall {
                 target_id: None,

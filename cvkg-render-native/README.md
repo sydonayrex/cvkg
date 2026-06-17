@@ -113,7 +113,10 @@ use cvkg_core::View;
 
 fn main() {
     let app_view = MyApp::new();
-    NativeRenderer::run(app_view);
+    // Run without prewarm assets:
+    NativeRenderer::run(app_view, None);
+    // Or with a background image:
+    // NativeRenderer::run_with_background(app_view, "bg", "path/to/image.jpg");
 }
 ```
 

@@ -55,6 +55,7 @@ version = "0.2.13"
 
 [dependencies.image]
 version = "0.25"
+features = ["jpeg"]
 
 [dependencies.libc]
 version = "0.2"

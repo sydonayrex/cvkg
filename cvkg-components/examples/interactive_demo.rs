@@ -85,5 +85,5 @@ fn main() {
     // In a real app, we would wrap MainView in a VdomInspector for debugging
     // But VdomInspector is a component too!
 
-    cvkg_render_native::NativeRenderer::run(MainView { state });
+    cvkg_render_native::NativeRenderer::run(MainView { state }, None);
 }

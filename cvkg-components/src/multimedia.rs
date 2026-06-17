@@ -1,5 +1,4 @@
 use crate::theme;
-use crate::RADIUS_SM;
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},

@@ -3007,6 +3007,7 @@ impl SurtrRenderer {
             rotation,
             blur_radius: 0.0,
             ior_override: 0.0,
+            glass_intensity: 1.0,
         };
 
         if self.draw_calls.is_empty()
@@ -3212,6 +3213,7 @@ impl SurtrRenderer {
             rotation,
             blur_radius,
             ior_override,
+            glass_intensity: 1.0,
         };
 
         // Batching: check if we need to start a new DrawCall
@@ -4305,6 +4307,7 @@ impl SurtrRenderer {
             rotation,
             blur_radius: 0.0,
             ior_override: 0.0,
+            glass_intensity: 1.0,
         };
         let last_call = renderer.draw_calls.last();
         let needs_new_call = renderer.draw_calls.is_empty()

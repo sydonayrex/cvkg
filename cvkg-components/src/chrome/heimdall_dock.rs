@@ -168,7 +168,7 @@ impl View for HeimdallDock {
                     width: 4.0,
                     height: 4.0,
                 };
-                let accent = theme::accent();
+                let _accent = theme::accent();
                 renderer.fill_ellipse(dot_rect, theme::accent());
             }
 

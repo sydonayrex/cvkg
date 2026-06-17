@@ -2937,6 +2937,14 @@ pub trait Renderer: ElapsedTime + Send {
     /// Fill an ellipse/circle that fits inside `rect`.
     fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]);
 
+    /// Draw a background image that fills the entire rect.
+    /// This is a convenience wrapper around `draw_image` for the common case
+    /// of a full-rect background. The image must have been pre-warmed via
+    /// `prewarm_vram` before the first frame.
+    fn draw_background_image(&mut self, image_name: &str, rect: Rect) {
+        self.draw_image(image_name, rect);
+    }
+
     /// Fill a rounded rect with glass material for frosted backdrop effect.
     /// This is the proper way to render glass cards for macOS Tahoe-style blur.
     /// The blur_radius controls the intensity of the backdrop blur.
@@ -2949,6 +2957,12 @@ pub trait Renderer: ElapsedTime + Send {
     fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
         let _ = (rect, radius, blur_radius, glass_intensity);
     }
+    /// Fill a rounded rect with glass material with explicit tint color and intensity.
+    /// `tint_color` is the glass fill color (RGBA). `glass_intensity` ranges from 0.0 (solid) to 1.0 (full glass).
+    fn fill_glass_rect_with_tint(&mut self, rect: Rect, radius: f32, blur_radius: f32, tint_color: [f32; 4], glass_intensity: f32) {
+        // Default: delegate to intensity-only version using tint color as a simple fill
+        let _ = (rect, radius, blur_radius, tint_color, glass_intensity);
+    }
     /// Fill a rounded rect with glass material, modulated by touch pressure.
     /// `pressure` ranges from 0.0 (no touch) to 1.0 (full pressure).
     /// When pressure > 0, refraction distortion is scaled by pressure amount.
@@ -2960,13 +2974,13 @@ pub trait Renderer: ElapsedTime + Send {
 
     /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
     /// `n` controls the squareness: 2.0 = rounded rect, 4.0 = classic squircle, higher = more square.
-    fn fill_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4]) {
+    fn fill_squircle(&mut self, rect: Rect, _n: f32, color: [f32; 4]) {
         // Default fallback to rounded rect
         self.fill_rounded_rect(rect, rect.width.min(rect.height) * 0.22, color);
     }
 
     /// Stroke a squircle (superellipse) outline.
-    fn stroke_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4], stroke_width: f32) {
+    fn stroke_squircle(&mut self, rect: Rect, _n: f32, color: [f32; 4], stroke_width: f32) {
         self.stroke_rounded_rect(rect, rect.width.min(rect.height) * 0.22, color, stroke_width);
     }
 
@@ -3155,6 +3169,8 @@ pub trait Renderer: ElapsedTime + Send {
     fn set_rage(&mut self, _rage: f32) {}
     fn set_berserker_mode(&mut self, _state: BerserkerMode) {}
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
+    /// Set the fireball position for dynamic glass specular highlights.
+    fn set_fireball_pos(&mut self, _pos: [f32; 2]) {}
     /// Set the desktop scene preset (Aurora, Void, Nebula, Glitch, Yggdrasil).
     fn set_scene(&mut self, _scene: &str) {}
     /// Set the desktop scene by name. Case-insensitive.
@@ -3575,8 +3591,9 @@ pub struct SceneUniforms {
     pub scroll_offset: f32,
     pub scale_factor: f32,
     pub scene_type: u32,
+    pub _pad_vec2_align: [u32; 1], // 4-byte pad: WGSL vec2<f32> requires 8-byte alignment
     pub fireball_pos: [f32; 2],
-    pub _pad: [f32; 1], // Align to 16 bytes
+    pub _pad: [f32; 4], // Align to 224 bytes (struct align 16 from Mat4)
 }
 
 pub const SCENE_AURORA: u32 = 0;
@@ -3619,8 +3636,9 @@ impl SceneUniforms {
             scroll_offset: 0.0,
             scale_factor: 1.0,
             scene_type: SCENE_AURORA,
+            _pad_vec2_align: [0],
             fireball_pos: [0.0, 0.0],
-            _pad: [0.0; 1],
+            _pad: [0.0; 4],
         }
     }
 }

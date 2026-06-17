@@ -127,5 +127,5 @@ fn main() {
         text: String::new(),
         toggle: false,
     }));
-    cvkg::native::NativeRenderer::run(HitTestView { state });
+    cvkg::native::NativeRenderer::run(HitTestView { state }, None);
 }
