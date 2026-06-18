@@ -123,6 +123,26 @@ pub(crate) struct DrawCall {
     pub draw_order: i32,
 }
 
+/// A snapshot of all GPU data emitted by a memoized render closure.
+///
+/// `memoize()` caches the vertex/index/instance buffers and draw calls
+/// produced by `render_fn` on first call so they can be replayed on
+/// subsequent calls when `data_hash` is unchanged. Without this cache,
+/// memoize's skip path would emit zero draw commands and memoized content
+/// would vanish after the first frame.
+///
+/// Offsets are stored RELATIVE to the start of the cached buffers, not the
+/// current buffer state, so replay can shift them by appending offsets.
+#[derive(Debug, Clone)]
+pub(crate) struct MemoEntry {
+    pub hash: u64,
+    pub frame_gen: u64,
+    pub vertices: Vec<crate::vertex::Vertex>,
+    pub indices: Vec<u32>,
+    pub instance_data: Vec<crate::vertex::InstanceData>,
+    pub draw_calls: Vec<DrawCall>,
+}
+
 pub struct OffscreenEffectConfig {
     pub target_id: u64,
     pub effect: String,

@@ -281,7 +281,7 @@ pub struct SurtrRenderer {
     pub(crate) cached_graph_plan: Option<kvasir::graph_cache::CachedGraphPlan>,
     /// Memoization cache for frame-level render skipping.
     /// Tracks (id) -> (data_hash, frame_generation) for deduplication.
-    pub(crate) memo_cache: std::collections::HashMap<u64, (u64, u64)>,
+    pub(crate) memo_cache: std::collections::HashMap<u64, crate::types::MemoEntry>,
     /// Current frame generation counter. Incremented each frame to avoid
     /// clearing the memo cache (which would defeat cross-frame memoization).
     pub(crate) frame_generation: u64,
@@ -2321,7 +2321,8 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         const MAX_MEMO_AGE: u64 = 1000;
         if self.frame_generation > MAX_MEMO_AGE {
             let cutoff = self.frame_generation - MAX_MEMO_AGE;
-            self.memo_cache.retain(|_, (_, frame_gen)| { *frame_gen >= cutoff });
+            self.memo_cache
+                .retain(|_, entry| entry.frame_gen >= cutoff);
         }
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;

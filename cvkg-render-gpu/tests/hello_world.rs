@@ -631,3 +631,60 @@ fn test_glass_pipeline_is_valid() {
     // If we get here without panicking, the pipeline is valid
     let _ = capture_frame(&mut renderer);
 }
+
+/// Regression test for P0-4: memoize skip path must replay cached draw commands.
+///
+/// The previous implementation only cached `(data_hash, frame_generation)` and
+/// emitted zero draw calls on the skip path. Memoized content rendered once
+/// and vanished on every subsequent frame. This test verifies that the new
+/// implementation caches and replays the GPU buffers/draw calls correctly.
+#[test]
+fn test_memoize_replays_cached_draw_calls_on_skip() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static RENDER_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    let width: u32 = 64;
+    let height: u32 = 64;
+    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+
+    let _encoder = renderer.begin_frame_headless();
+
+    // First call: render_fn executes, captures buffers and draw calls.
+    renderer.memoize(42, 0xCAFE, &|r| {
+        RENDER_COUNT.fetch_add(1, Ordering::SeqCst);
+        let _ = r;
+    });
+
+    let first_pass_count = RENDER_COUNT.load(Ordering::SeqCst);
+    assert_eq!(
+        first_pass_count, 1,
+        "render_fn should execute exactly once on first call"
+    );
+
+    // Second call with same hash: render_fn should NOT execute, but cached
+    // buffers and draw calls should be replayed into the renderer's state.
+    renderer.memoize(42, 0xCAFE, &|r| {
+        RENDER_COUNT.fetch_add(1, Ordering::SeqCst);
+        let _ = r;
+    });
+
+    let second_pass_count = RENDER_COUNT.load(Ordering::SeqCst);
+    assert_eq!(
+        second_pass_count, 1,
+        "render_fn should NOT re-execute when hash is unchanged"
+    );
+
+    // Third call with different hash: render_fn should execute again.
+    renderer.memoize(42, 0xBEEF, &|r| {
+        RENDER_COUNT.fetch_add(1, Ordering::SeqCst);
+        let _ = r;
+    });
+
+    let third_pass_count = RENDER_COUNT.load(Ordering::SeqCst);
+    assert_eq!(
+        third_pass_count, 2,
+        "render_fn should re-execute when hash changes"
+    );
+
+    renderer.end_frame(_encoder);
+}

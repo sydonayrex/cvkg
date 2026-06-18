@@ -961,17 +961,83 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        // Cross-frame memoization: skip rendering if the content hash is unchanged
-        // from any previous frame. The generation counter tracks staleness for eviction.
+        // P0-4 fix: actually cache and replay GPU draw commands.
+        //
+        // The previous implementation only cached `(data_hash, frame_generation)`
+        // and emitted ZERO draw calls on the skip path. Any content using
+        // `memoize` rendered once and then vanished on every subsequent frame.
+        //
+        // The fix: on first call (or when hash changes), record the vertex/
+        // index/instance buffers and DrawCall list produced by `render_fn`,
+        // with offsets remapped relative to the captured slice. On replay,
+        // append the cached buffers to the current buffer state and shift
+        // the cached DrawCall offsets by the current buffer length so the
+        // replayed commands reference the freshly-appended data.
+        use crate::types::{DrawCall, MemoEntry};
+
         let should_skip = self
             .memo_cache
             .get(&id)
-            .map_or(false, |(cached_hash, _)| *cached_hash == data_hash);
+            .map_or(false, |entry| entry.hash == data_hash);
 
-        if !should_skip {
-            self.memo_cache
-                .insert(id, (data_hash, self.frame_generation));
+        if should_skip {
+            // Replay path: append cached buffers and remap cached DrawCall offsets.
+            if let Some(entry) = self.memo_cache.get(&id) {
+                let i_offset = self.indices.len() as u32;
+                let inst_offset = self.instance_data.len() as u32;
+
+                self.vertices.extend_from_slice(&entry.vertices);
+                self.indices.extend_from_slice(&entry.indices);
+                self.instance_data
+                    .extend_from_slice(&entry.instance_data);
+
+                for dc in &entry.draw_calls {
+                    let mut replayed = dc.clone();
+                    // Offsets stored relative to the captured slice start;
+                    // shift them by the current buffer lengths so they
+                    // reference the freshly-appended data.
+                    replayed.index_start += i_offset;
+                    replayed.instance_start += inst_offset;
+                    self.draw_calls.push(replayed);
+                }
+            }
+        } else {
+            // Capture path: snapshot lengths, render, then record deltas.
+            let v_start = self.vertices.len();
+            let i_start = self.indices.len();
+            let inst_start = self.instance_data.len();
+            let dc_start = self.draw_calls.len();
+
             render_fn(self);
+
+            // Remap DrawCall offsets to be relative to the captured slice.
+            let draw_calls: Vec<DrawCall> = self.draw_calls[dc_start..]
+                .iter()
+                .map(|dc| {
+                    let mut remapped = dc.clone();
+                    // saturating_sub guards against underflow if a draw call
+                    // somehow already had an offset below the slice start
+                    // (should not happen, but defensive).
+                    remapped.index_start = remapped
+                        .index_start
+                        .saturating_sub(i_start as u32);
+                    remapped.instance_start = remapped
+                        .instance_start
+                        .saturating_sub(inst_start as u32);
+                    remapped
+                })
+                .collect();
+
+            let entry = MemoEntry {
+                hash: data_hash,
+                frame_gen: self.frame_generation,
+                vertices: self.vertices[v_start..].to_vec(),
+                indices: self.indices[i_start..].to_vec(),
+                instance_data: self.instance_data[inst_start..].to_vec(),
+                draw_calls,
+            };
+
+            self.memo_cache.insert(id, entry);
         }
     }
 
