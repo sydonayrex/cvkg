@@ -6134,11 +6134,61 @@ impl Event {
     }
 }
 
+
 /// Response from an event handler
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventResponse {
     Handled,
     Ignored,
+}
+
+// =========================================================================
+// P1-40: EventPhase -- documents event propagation phases
+// =========================================================================
+//
+// The CVKG event system follows the standard capture/target/bubble
+// model used by the W3C DOM Event spec. When an event fires, it
+// propagates through 3 phases:
+//
+// 1. Capture: the event travels from the root down to the
+//    target's parent. Listeners registered for the capture
+//    phase fire first.
+// 2. Target: the event reaches the target node itself. Listeners
+//    on the target fire (regardless of capture/bubble).
+// 3. Bubble: the event travels back up from the target's
+//    parent to the root. Listeners registered for the bubble
+//    phase fire last.
+//
+// Cancellation: any handler can call Event::stop_propagation()
+// to prevent the event from continuing to the next phase or
+// the next node. This affects only the current event instance.
+//
+// Example: a click on a button inside a panel:
+//  - panel's capture handler fires
+//  - button's capture handler fires
+//  - button's target handler fires
+//  - button's bubble handler fires
+//  - panel's bubble handler fires
+//
+// Use this enum when registering listeners to specify which
+// phase to listen for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum EventPhase {
+    /// Event is traveling from the root toward the target.
+    Capture,
+    /// Event has reached the target node.
+    Target,
+    /// Event is traveling from the target back toward the root.
+    Bubble,
+}
+
+impl EventPhase {
+    /// All phases in propagation order.
+    pub const ALL: [EventPhase; 3] = [
+        EventPhase::Capture,
+        EventPhase::Target,
+        EventPhase::Bubble,
+    ];
 }
 
 /// A basic implementation of AssetManager that can be overridden by platform backends.
@@ -9511,5 +9561,43 @@ mod p1_43_frame_budget_tests {
         let mut fb = FrameBudgetTracker::default_60fps();
         fb.new_frame();
         assert!(fb.frame_within_budget());
+    }
+}
+
+// =========================================================================
+// P1-40: EventPhase tests
+// =========================================================================
+
+#[cfg(test)]
+mod p1_40_event_phase_tests {
+    use super::EventPhase;
+
+    #[test]
+    fn all_phases_in_capture_order() {
+        // P1-40: propagation order is Capture -> Target -> Bubble.
+        let phases = EventPhase::ALL;
+        assert_eq!(phases[0], EventPhase::Capture);
+        assert_eq!(phases[1], EventPhase::Target);
+        assert_eq!(phases[2], EventPhase::Bubble);
+        assert_eq!(phases.len(), 3);
+    }
+
+    #[test]
+    fn phase_distinct() {
+        // P1-40: each phase should be a distinct value.
+        let capture = EventPhase::Capture;
+        let target = EventPhase::Target;
+        let bubble = EventPhase::Bubble;
+        assert_ne!(capture, target);
+        assert_ne!(target, bubble);
+        assert_ne!(capture, bubble);
+    }
+
+    #[test]
+    fn phase_clone_preserves_value() {
+        // P1-40: EventPhase should be Copy/Clone.
+        let phase = EventPhase::Bubble;
+        let copied = phase;
+        assert_eq!(phase, copied);
     }
 }
