@@ -52,6 +52,12 @@ pub mod vertex;
 pub mod heim;
 pub use heim::SundrPacker;
 
+// P1-1 (phase 6): subsystems module. Each subsystem (config,
+// geometry, text, svg, particles) is a self-contained module
+// that can be tested, reviewed, and modified in isolation.
+pub mod subsystems;
+pub use subsystems::SurtrConfig;
+
 #[cfg(test)]
 mod tests {
     use super::*;
