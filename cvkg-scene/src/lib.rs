@@ -266,14 +266,22 @@ impl SceneGraph {
     /// Returns candidates that need further AABB testing.
     pub fn query_region(&self, rect: Rect) -> Vec<NodeId> {
         let mut candidates = Vec::new();
-        let min_cell_x = (rect.x / self.cell_size).floor() as u32;
-        let min_cell_y = (rect.y / self.cell_size).floor() as u32;
-        let max_cell_x = ((rect.x + rect.width) / self.cell_size).floor() as u32;
-        let max_cell_y = ((rect.y + rect.height) / self.cell_size).floor() as u32;
+        // P1-16 fix: compute cell coordinates as signed i32 first to
+        // handle negative rect.x/rect.y (common in scrolled/panned
+        // canvases, negative camera offsets, etc.). The previous code
+        // used `as u32` on a possibly-negative f32, which saturates to
+        // 0 and collapses all negative-coordinate content into bucket
+        // (0,0) -- defeating the spatial index for panned scenes.
+        let min_cell_x = (rect.x / self.cell_size).floor() as i32;
+        let min_cell_y = (rect.y / self.cell_size).floor() as i32;
+        let max_cell_x = ((rect.x + rect.width) / self.cell_size).floor() as i32;
+        let max_cell_y = ((rect.y + rect.height) / self.cell_size).floor() as i32;
 
         for cx in min_cell_x..=max_cell_x {
             for cy in min_cell_y..=max_cell_y {
-                if let Some(cell) = self.spatial_grid.get(&(cx, cy)) {
+                if let Some(key) = encode_cell_key(cx, cy)
+                    && let Some(cell) = self.spatial_grid.get(&key)
+                {
                     for id in cell {
                         if let Some(node) = self.nodes.get(id)
                             && self.intersects(node.world_rect, rect)
@@ -291,16 +299,19 @@ impl SceneGraph {
     fn rebuild_spatial_hash(&mut self) {
         self.spatial_grid.clear();
         for (id, node) in &self.nodes {
-            let min_cell_x = (node.world_rect.x / self.cell_size).floor() as u32;
-            let min_cell_y = (node.world_rect.y / self.cell_size).floor() as u32;
+            // P1-16 fix: signed i32 cell coords (see query_region).
+            let min_cell_x = (node.world_rect.x / self.cell_size).floor() as i32;
+            let min_cell_y = (node.world_rect.y / self.cell_size).floor() as i32;
             let max_cell_x =
-                ((node.world_rect.x + node.world_rect.width) / self.cell_size).floor() as u32;
+                ((node.world_rect.x + node.world_rect.width) / self.cell_size).floor() as i32;
             let max_cell_y =
-                ((node.world_rect.y + node.world_rect.height) / self.cell_size).floor() as u32;
+                ((node.world_rect.y + node.world_rect.height) / self.cell_size).floor() as i32;
 
             for cx in min_cell_x..=max_cell_x {
                 for cy in min_cell_y..=max_cell_y {
-                    self.spatial_grid.entry((cx, cy)).or_default().push(*id);
+                    if let Some(key) = encode_cell_key(cx, cy) {
+                        self.spatial_grid.entry(key).or_default().push(*id);
+                    }
                 }
             }
         }
@@ -519,6 +530,26 @@ pub enum Change {
     ZIndex(f32),
 }
 
+/// P1-16: Encode signed (i32, i32) cell coordinates as a (u32, u32) key
+/// for the spatial grid HashMap. The offset is 1 << 30 (~1 billion)
+/// which is large enough to handle reasonable panned scenes (up to
+/// ~32M cells in either direction at typical cell sizes of 64 pixels).
+///
+/// Returns None if the cell coordinates are out of range (the offset
+/// cannot represent them). In practice the spatial grid should never
+/// encounter cells outside this range, but the Option return makes the
+/// overflow case explicit and safe (the cell is silently dropped rather
+/// than panicking on arithmetic overflow).
+fn encode_cell_key(cx: i32, cy: i32) -> Option<(u32, u32)> {
+    const OFFSET: i64 = 1i64 << 30; // ~1.07 billion
+    let x = (cx as i64) + OFFSET;
+    let y = (cy as i64) + OFFSET;
+    if x < 0 || x > u32::MAX as i64 || y < 0 || y > u32::MAX as i64 {
+        return None;
+    }
+    Some((x as u32, y as u32))
+}
+
 /// Compute the union (bounding box) of two rects.
 /// Returns None if the rects don't overlap or touch.
 fn rect_union(a: Rect, b: Rect) -> Option<Rect> {
@@ -676,5 +707,128 @@ mod tests {
         let layers2 = scene2.batch(&[x, y]);
         let l0 = layers2.get(&0).unwrap();
         assert_eq!(l0, &vec![y, x], "negative z must sort before positive z");
+    }
+
+    // P1-16 regression: spatial hash must handle negative world rect
+    // coordinates (e.g., panned canvases) without collapsing all
+    // negative-coordinate content into bucket (0, 0). The previous
+    // implementation used `as u32` on a negative f32 which saturated
+    // to 0, defeating the spatial index.
+    #[test]
+    fn test_query_region_negative_basic() {
+        // Test with a single node at negative coord.
+        let mut scene = SceneGraph::new();
+        let id = scene.next_id();
+        let mut root = VNode::new(id, "R", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        scene.add_node(root, None);
+        scene.update_transforms();
+        scene.nodes.get_mut(&id).unwrap().world_rect =
+            Rect { x: -200.0, y: 0.0, width: 50.0, height: 50.0 };
+        scene.rebuild_spatial_hash();
+        // At cell_size=64, -200/64 = -3.125, floor = -4
+        // Cell key for (-4, 0) should be (OFFSET-4, OFFSET+0)
+        // Query at (-190, 0, 20, 20): cell x range is -3 to -2 (positive direction)
+        // Hmm, the node at cell -4 with width 50 spans cells -4 to -3
+        let result = scene.query_region(Rect { x: -190.0, y: 0.0, width: 20.0, height: 20.0 });
+        assert!(result.contains(&id), "negative coord test failed, got {:?}", result);
+    }
+
+    #[test]
+    fn test_query_region_handles_negative_coordinates() {
+        let mut scene = SceneGraph::new();
+        let id_a = scene.next_id();
+        let id_b = scene.next_id();
+        let id_c = scene.next_id();
+        let rect_small = Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 };
+
+        // Three nodes at distinct world positions: A at (-5000, 0),
+        // B at (5000, 0), C at (0, 0). We add them as siblings under
+        // a single root, then set their world_rects directly after
+        // update_transforms (which otherwise recomputes world_rect from
+        // local_rect + parent).
+        let mut root = VNode::new(id_c, "C_root", rect_small);
+        scene.add_node(root, None);
+        scene.add_node(VNode::new(id_a, "A", rect_small), Some(id_c));
+        scene.add_node(VNode::new(id_b, "B", rect_small), Some(id_c));
+        scene.update_transforms();
+
+        // Now manually set the world_rects to where we want them.
+        scene.nodes.get_mut(&id_a).unwrap().world_rect =
+            Rect { x: -5000.0, y: 0.0, width: 10.0, height: 10.0 };
+        scene.nodes.get_mut(&id_b).unwrap().world_rect =
+            Rect { x: 5000.0, y: 0.0, width: 10.0, height: 10.0 };
+        scene.nodes.get_mut(&id_c).unwrap().world_rect =
+            Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 };
+        scene.rebuild_spatial_hash();
+
+        // Verify the world_rects are set as expected.
+        assert_eq!(scene.nodes.get(&id_a).unwrap().world_rect.x, -5000.0);
+        assert_eq!(scene.nodes.get(&id_b).unwrap().world_rect.x, 5000.0);
+        assert_eq!(scene.nodes.get(&id_c).unwrap().world_rect.x, 0.0);
+
+        // Debug: dump state (remove for final)
+        // eprintln!("A world_rect: {:?}", scene.nodes.get(&id_a).unwrap().world_rect);
+        // ...
+
+        // Query near A (overlapping, not just touching):
+        // A spans x = [-5000, -4990]. Query must overlap, so use x = [-4995, -4975].
+        let query_a = Rect { x: -4995.0, y: 0.0, width: 20.0, height: 20.0 };
+        let result_a = scene.query_region(query_a);
+        assert!(
+            result_a.contains(&id_a),
+            "query near A must include A, got {:?}",
+            result_a
+        );
+        assert!(
+            !result_a.contains(&id_b),
+            "query near A must NOT include B (different cell), got {:?}",
+            result_a
+        );
+        assert!(
+            !result_a.contains(&id_c),
+            "query near A must NOT include C (different cell), got {:?}",
+            result_a
+        );
+
+        // Query near C: must return C only.
+        let query_c = Rect { x: -5.0, y: -5.0, width: 20.0, height: 20.0 };
+        let result_c = scene.query_region(query_c);
+        assert!(result_c.contains(&id_c), "query near C must include C");
+        assert!(!result_c.contains(&id_a), "query near C must NOT include A");
+        assert!(!result_c.contains(&id_b), "query near C must NOT include B");
+
+        // Query spanning A and C: must include both.
+        let query_span = Rect { x: -4995.0, y: 0.0, width: 5000.0, height: 20.0 };
+        let result_span = scene.query_region(query_span);
+        assert!(result_span.contains(&id_a), "span must include A");
+        assert!(result_span.contains(&id_c), "span must include C");
+    }
+
+    #[test]
+    fn test_query_region_basic_works() {
+        // Sanity check: spatial hash works for positive coords.
+        let mut scene = SceneGraph::new();
+        let id = scene.next_id();
+        let mut root = VNode::new(id, "R", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        scene.add_node(root, None);
+        scene.update_transforms();
+        scene.nodes.get_mut(&id).unwrap().world_rect =
+            Rect { x: 100.0, y: 100.0, width: 50.0, height: 50.0 };
+        scene.rebuild_spatial_hash();
+        let result = scene.query_region(Rect { x: 110.0, y: 110.0, width: 10.0, height: 10.0 });
+        assert!(result.contains(&id), "positive coord test failed, got {:?}", result);
+    }
+
+    #[test]
+    fn test_encode_cell_key_handles_negative() {
+        // Negative cell coords should produce distinct, non-zero keys.
+        let k_neg = encode_cell_key(-5, -10).unwrap();
+        let k_pos = encode_cell_key(5, 10).unwrap();
+        let k_zero = encode_cell_key(0, 0).unwrap();
+        assert_ne!(k_neg, k_pos, "negative and positive cells must not collide");
+        assert_ne!(k_neg, k_zero, "negative cells must not collide with origin");
+        // All three keys must be valid u32 pairs.
+        let _ = (k_neg.0, k_neg.1);
+        let _ = (k_pos.0, k_pos.1);
     }
 }
