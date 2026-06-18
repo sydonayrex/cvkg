@@ -1,0 +1,17 @@
+[package]
+name = "cvkg-accessibility"
+version = "0.2.13"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "CVKG accessibility — tree, focus management, screen reader bridge"
+
+[lib]
+name = "cvkg_accessibility"
+path = "src/lib.rs"
+
+[dependencies]
+cvkg-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }

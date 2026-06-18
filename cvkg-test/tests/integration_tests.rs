@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod tests {
     use cvkg_render_gpu::SurtrRenderer;
+use cvkg_core::KvasirId;
     use cvkg_runic_text::subpixel::{SubpixelGlyph, render_lcd};
     use cvkg_runic_text::{
         PortalAlignment, RunicPathSegment, RunicTextEngine, TextAlign, TextOverflow, TextSpan,
@@ -204,15 +205,15 @@ mod tests {
     fn test_flow_spatial_hash_query_correctness() {
         use cvkg_flow::FlowCanvas;
         use cvkg_flow::node::FlowNode;
-        use cvkg_flow::types::NodeId;
+        
 
         let mut canvas = FlowCanvas::new();
-        canvas.add_node(FlowNode::new(NodeId(101), "Alpha", (10.0, 10.0)));
-        canvas.add_node(FlowNode::new(NodeId(102), "Beta", (500.0, 500.0)));
+        canvas.add_node(FlowNode::new(KvasirId(101), "Alpha", (10.0, 10.0)));
+        canvas.add_node(FlowNode::new(KvasirId(102), "Beta", (500.0, 500.0)));
 
         let in_rect = canvas.graph.nodes_in_rect(0.0, 0.0, 200.0, 200.0);
         assert_eq!(in_rect.len(), 1);
-        assert_eq!(in_rect[0], NodeId(101));
+        assert_eq!(in_rect[0], KvasirId(101));
     }
 
     #[test]

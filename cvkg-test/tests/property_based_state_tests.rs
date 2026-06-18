@@ -2,13 +2,14 @@
 // Tests state transitions, VDOM patches, and component behavior using proptest
 
 use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VNode};
+use cvkg_core::KvasirId;
 use proptest::prelude::*;
 use std::collections::HashMap;
 
 // Strategy for generating valid NodeId values
 prop_compose! {
     fn arb_node_id()(id in 1u64..10000u64) -> NodeId {
-        NodeId(id)
+        KvasirId(id)
     }
 }
 
@@ -18,7 +19,7 @@ prop_compose! {
         id in 1u64..10000u64,
     ) -> VNode {
         VNode {
-            id: NodeId(id),
+            id: KvasirId(id),
             key: None,
             component_type: "test_node".to_string(),
             sdf_shape: None,
@@ -37,7 +38,7 @@ proptest! {
     #[test]
     fn test_vnode_creation(id in 1u64..10000u64) {
         let node = VNode {
-            id: NodeId(id),
+            id: KvasirId(id),
             key: None,
             component_type: "test".to_string(),
             sdf_shape: None,
@@ -70,7 +71,7 @@ prop_compose! {
         aria_role in "(button|group|text|switch|slider)",
     ) -> VNode {
         VNode {
-            id: NodeId(id),
+            id: KvasirId(id),
             key,
             component_type,
             sdf_shape: None,

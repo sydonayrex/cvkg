@@ -1,10 +1,11 @@
 use cvkg_anim::{RunicEmitter, SleipnirParams, SleipnirSolver};
+use cvkg_core::KvasirId;
 use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
 use cvkg_flow::port::FlowPort;
-use cvkg_flow::types::{NodeId as FlowNodeId, PortDirection, PortId, PortPosition};
+use cvkg_flow::types::{PortDirection, PortId, PortPosition};
 use cvkg_flow::{FlowEdge, FlowGraph, FlowNode};
 use cvkg_layout::HStack;
-use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
+use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -107,7 +108,7 @@ fn test_journey_vdom_patch_lifecycle() {
     let mut vdom = VDom::new();
 
     let node = VNode {
-        id: NodeId(1),
+        id: KvasirId(1),
         key: None,
         component_type: "div".to_string(),
         sdf_shape: None,
@@ -126,7 +127,7 @@ fn test_journey_vdom_patch_lifecycle() {
 
     // 2. Update State
     vdom.apply_patches(vec![VDomPatch::Update {
-        id: NodeId(1),
+        id: KvasirId(1),
         sdf_shape: None,
         props: None,
         layout: Some(LayoutRect {
@@ -142,7 +143,7 @@ fn test_journey_vdom_patch_lifecycle() {
     }]);
 
     // 3. Removal
-    vdom.apply_patches(vec![VDomPatch::Remove(NodeId(1))]);
+    vdom.apply_patches(vec![VDomPatch::Remove(KvasirId(1))]);
     assert_eq!(vdom.nodes.len(), 0);
 }
 
@@ -151,25 +152,25 @@ fn test_journey_flow_graph_interaction() {
     let mut graph = FlowGraph::new();
 
     // 1. Build a simple graph
-    let mut n1 = FlowNode::new(FlowNodeId(1), "Input", (0.0, 0.0));
+    let mut n1 = FlowNode::new(KvasirId(1), "Input", (0.0, 0.0));
     n1.add_port(FlowPort::new(
         PortId(1),
-        FlowNodeId(1),
+        KvasirId(1),
         PortPosition::Right,
         PortDirection::Output,
     ));
 
-    let mut n2 = FlowNode::new(FlowNodeId(2), "Output", (200.0, 0.0));
+    let mut n2 = FlowNode::new(KvasirId(2), "Output", (200.0, 0.0));
     n2.add_port(FlowPort::new(
         PortId(2),
-        FlowNodeId(2),
+        KvasirId(2),
         PortPosition::Left,
         PortDirection::Input,
     ));
 
     graph.add_node(n1);
     graph.add_node(n2);
-    graph.add_edge(FlowEdge::new(1, FlowNodeId(1), 0, FlowNodeId(2), 0));
+    graph.add_edge(FlowEdge::new(1, KvasirId(1), 0, KvasirId(2), 0));
 
     // 2. Verify graph topology
     assert_eq!(graph.nodes.len(), 2);
@@ -177,5 +178,5 @@ fn test_journey_flow_graph_interaction() {
 
     // 3. Verify lookup
     let node = graph.get_node_by_port(PortId(1)).unwrap();
-    assert_eq!(node.id, FlowNodeId(1));
+    assert_eq!(node.id, KvasirId(1));
 }

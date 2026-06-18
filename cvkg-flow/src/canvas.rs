@@ -1,5 +1,7 @@
 use crate::edge::FlowEdge;
 use crate::graph::FlowGraph;
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use crate::node::FlowNode;
 use crate::ribbon::{RibbonBatch, build_ribbon_batch};
 use crate::types::{EdgeId, LevelOfDetail, NodeId};
@@ -501,9 +503,9 @@ mod tests {
     fn test_canvas_fit_to_content() {
         let mut canvas = FlowCanvas::new().with_screen_size(800.0, 600.0);
 
-        let mut n1 = FlowNode::new(NodeId(1), "A", (100.0, 100.0));
+        let mut n1 = FlowNode::new(KvasirId(1), "A", (100.0, 100.0));
         n1.size = (200.0, 100.0);
-        let mut n2 = FlowNode::new(NodeId(2), "B", (400.0, 300.0));
+        let mut n2 = FlowNode::new(KvasirId(2), "B", (400.0, 300.0));
         n2.size = (200.0, 100.0);
 
         canvas.add_node(n1);
@@ -524,7 +526,7 @@ mod tests {
     fn test_canvas_add_node_invalidates_ribbons() {
         let mut canvas = FlowCanvas::new();
         canvas.ribbon_dirty = false;
-        let node = FlowNode::new(NodeId(1), "Test", (0.0, 0.0));
+        let node = FlowNode::new(KvasirId(1), "Test", (0.0, 0.0));
         canvas.add_node(node);
         assert!(canvas.ribbon_dirty);
     }
@@ -532,12 +534,12 @@ mod tests {
     #[test]
     fn test_canvas_node_at_screen() {
         let mut canvas = FlowCanvas::new();
-        let mut node = FlowNode::new(NodeId(1), "Test", (100.0, 100.0));
+        let mut node = FlowNode::new(KvasirId(1), "Test", (100.0, 100.0));
         node.size = (150.0, 80.0);
         canvas.add_node(node);
 
         let found = canvas.node_at_screen(150.0, 120.0);
-        assert_eq!(found, Some(NodeId(1)));
+        assert_eq!(found, Some(KvasirId(1)));
 
         let found = canvas.node_at_screen(50.0, 50.0);
         assert_eq!(found, None);
@@ -546,24 +548,24 @@ mod tests {
     #[test]
     fn test_canvas_nodes_in_screen_rect() {
         let mut canvas = FlowCanvas::new();
-        canvas.add_node(FlowNode::new(NodeId(1), "A", (50.0, 50.0)));
-        canvas.add_node(FlowNode::new(NodeId(2), "B", (500.0, 500.0)));
+        canvas.add_node(FlowNode::new(KvasirId(1), "A", (50.0, 50.0)));
+        canvas.add_node(FlowNode::new(KvasirId(2), "B", (500.0, 500.0)));
 
         let found = canvas.nodes_in_screen_rect(0.0, 0.0, 200.0, 200.0);
-        assert!(found.contains(&NodeId(1)));
-        assert!(!found.contains(&NodeId(2)));
+        assert!(found.contains(&KvasirId(1)));
+        assert!(!found.contains(&KvasirId(2)));
     }
 
     #[test]
     fn test_canvas_tick_animations() {
         let mut canvas = FlowCanvas::new();
 
-        let n1 = FlowNode::new(NodeId(1), "A", (0.0, 0.0));
-        let n2 = FlowNode::new(NodeId(2), "B", (200.0, 0.0));
+        let n1 = FlowNode::new(KvasirId(1), "A", (0.0, 0.0));
+        let n2 = FlowNode::new(KvasirId(2), "B", (200.0, 0.0));
         canvas.add_node(n1);
         canvas.add_node(n2);
 
-        let mut edge = FlowEdge::new(1, NodeId(1), 0, NodeId(2), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(1), 0, KvasirId(2), 0);
         edge.restart_animation();
         canvas.add_edge(edge);
 
@@ -590,25 +592,25 @@ mod tests {
         use crate::port::FlowPort;
         use crate::types::{PortDirection, PortPosition};
         let mut canvas = FlowCanvas::new();
-        let mut n1 = FlowNode::new(NodeId(1), "A", (0.0, 0.0));
+        let mut n1 = FlowNode::new(KvasirId(1), "A", (0.0, 0.0));
         n1.add_port(FlowPort::new(
             crate::types::PortId(1),
-            NodeId(1),
+            KvasirId(1),
             PortPosition::Right,
             PortDirection::Output,
         ));
         canvas.add_node(n1);
 
-        let mut n2 = FlowNode::new(NodeId(2), "B", (200.0, 0.0));
+        let mut n2 = FlowNode::new(KvasirId(2), "B", (200.0, 0.0));
         n2.add_port(FlowPort::new(
             crate::types::PortId(2),
-            NodeId(2),
+            KvasirId(2),
             PortPosition::Left,
             PortDirection::Input,
         ));
         canvas.add_node(n2);
 
-        let edge = FlowEdge::new(1, NodeId(1), 0, NodeId(2), 0);
+        let edge = FlowEdge::new(1, KvasirId(1), 0, KvasirId(2), 0);
         canvas.add_edge(edge);
 
         let batch = canvas.ribbons();
@@ -620,21 +622,21 @@ mod tests {
     #[test]
     fn test_spatial_hash_grid_correctness() {
         let mut canvas = FlowCanvas::new();
-        canvas.add_node(FlowNode::new(NodeId(1), "NodeA", (10.0, 10.0)));
-        canvas.add_node(FlowNode::new(NodeId(2), "NodeB", (500.0, 500.0)));
-        canvas.add_node(FlowNode::new(NodeId(3), "NodeC", (1000.0, 10.0)));
+        canvas.add_node(FlowNode::new(KvasirId(1), "NodeA", (10.0, 10.0)));
+        canvas.add_node(FlowNode::new(KvasirId(2), "NodeB", (500.0, 500.0)));
+        canvas.add_node(FlowNode::new(KvasirId(3), "NodeC", (1000.0, 10.0)));
 
         let in_rect = canvas.graph.nodes_in_rect(0.0, 0.0, 600.0, 600.0);
         assert_eq!(in_rect.len(), 2);
-        assert!(in_rect.contains(&NodeId(1)));
-        assert!(in_rect.contains(&NodeId(2)));
-        assert!(!in_rect.contains(&NodeId(3)));
+        assert!(in_rect.contains(&KvasirId(1)));
+        assert!(in_rect.contains(&KvasirId(2)));
+        assert!(!in_rect.contains(&KvasirId(3)));
 
         let near_b = canvas
             .graph
             .nodes_near_point(glam::Vec2::new(510.0, 510.0), 30.0);
         assert_eq!(near_b.len(), 1);
-        assert_eq!(near_b[0], NodeId(2));
+        assert_eq!(near_b[0], KvasirId(2));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 use cvkg_flow::port::*;
+use cvkg_core::KvasirId;
 use cvkg_flow::types::*;
 use cvkg_flow::*;
 
@@ -7,24 +8,24 @@ pub fn create_styled_nodes() -> FlowGraph {
     let mut graph = FlowGraph::new();
 
     // Input Node (Cyber Neon Green)
-    let mut input = FlowNode::new(NodeId(1), "Data Input", (50.0, 50.0));
+    let mut input = FlowNode::new(KvasirId(1), "Data Input", (50.0, 50.0));
     input.node_type = NodeType::Input;
     input.add_port(FlowPort::new(
         PortId(11),
-        NodeId(1),
+        KvasirId(1),
         PortPosition::Bottom,
         PortDirection::Output,
     ));
     graph.add_node(input);
 
     // Group Node (Larger area)
-    let mut group = FlowNode::new(NodeId(2), "Processing Cluster", (250.0, 50.0));
+    let mut group = FlowNode::new(KvasirId(2), "Processing Cluster", (250.0, 50.0));
     group.size = (300.0, 200.0);
     group.node_type = NodeType::Group;
     graph.add_node(group);
 
     // Annotation Node (No ports)
-    let mut note = FlowNode::new(NodeId(3), "Note: Optimize this path", (50.0, 200.0));
+    let mut note = FlowNode::new(KvasirId(3), "Note: Optimize this path", (50.0, 200.0));
     note.node_type = NodeType::Annotation;
     graph.add_node(note);
 

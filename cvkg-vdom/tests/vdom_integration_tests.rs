@@ -1,9 +1,10 @@
 use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
+use cvkg_core::KvasirId;
 use std::collections::HashMap;
 
 fn create_node(id: u64, key: Option<&str>, c_type: &str, children: Vec<NodeId>) -> VNode {
     VNode {
-        id: NodeId(id),
+        id: KvasirId(id),
         key: key.map(|k| k.to_string()),
         component_type: c_type.to_string(),
         props: HashMap::new(),
@@ -26,31 +27,31 @@ fn create_node(id: u64, key: Option<&str>, c_type: &str, children: Vec<NodeId>) 
 fn test_vdom_keyed_reordering() {
     // 1. Initial list: [A (key: "a"), B (key: "b")]
     let mut vdom1 = VDom::new();
-    vdom1.root = Some(NodeId(0));
+    vdom1.root = Some(KvasirId(0));
     vdom1.nodes.insert(
-        NodeId(0),
-        create_node(0, None, "List", vec![NodeId(1), NodeId(2)]),
+        KvasirId(0),
+        create_node(0, None, "List", vec![KvasirId(1), KvasirId(2)]),
     );
     vdom1
         .nodes
-        .insert(NodeId(1), create_node(1, Some("a"), "Item", vec![]));
+        .insert(KvasirId(1), create_node(1, Some("a"), "Item", vec![]));
     vdom1
         .nodes
-        .insert(NodeId(2), create_node(2, Some("b"), "Item", vec![]));
+        .insert(KvasirId(2), create_node(2, Some("b"), "Item", vec![]));
 
     // 2. Reordered list: [B (key: "b"), A (key: "a")]
     let mut vdom2 = VDom::new();
-    vdom2.root = Some(NodeId(0));
+    vdom2.root = Some(KvasirId(0));
     vdom2.nodes.insert(
-        NodeId(0),
-        create_node(0, None, "List", vec![NodeId(2), NodeId(1)]),
+        KvasirId(0),
+        create_node(0, None, "List", vec![KvasirId(2), KvasirId(1)]),
     );
     vdom2
         .nodes
-        .insert(NodeId(1), create_node(1, Some("a"), "Item", vec![]));
+        .insert(KvasirId(1), create_node(1, Some("a"), "Item", vec![]));
     vdom2
         .nodes
-        .insert(NodeId(2), create_node(2, Some("b"), "Item", vec![]));
+        .insert(KvasirId(2), create_node(2, Some("b"), "Item", vec![]));
 
     let patches = vdom1.diff(&vdom2);
 
@@ -61,7 +62,7 @@ fn test_vdom_keyed_reordering() {
     // Check if the root List node was updated to reflect the new children order
     let root_update = patches
         .iter()
-        .find(|p| matches!(p, VDomPatch::Update { id, .. } if *id == NodeId(0)));
+        .find(|p| matches!(p, VDomPatch::Update { id, .. } if *id == KvasirId(0)));
     assert!(
         root_update.is_some(),
         "Root list should be updated with new children order"
@@ -72,26 +73,26 @@ fn test_vdom_keyed_reordering() {
 fn test_vdom_deep_diffing() {
     // 1. Initial tree: List -> Item -> Text
     let mut vdom1 = VDom::new();
-    vdom1.root = Some(NodeId(0));
+    vdom1.root = Some(KvasirId(0));
     vdom1
         .nodes
-        .insert(NodeId(0), create_node(0, None, "List", vec![NodeId(1)]));
+        .insert(KvasirId(0), create_node(0, None, "List", vec![KvasirId(1)]));
     vdom1
         .nodes
-        .insert(NodeId(1), create_node(1, None, "Item", vec![NodeId(2)]));
+        .insert(KvasirId(1), create_node(1, None, "Item", vec![KvasirId(2)]));
     vdom1
         .nodes
-        .insert(NodeId(2), create_node(2, None, "Text", vec![]));
+        .insert(KvasirId(2), create_node(2, None, "Text", vec![]));
 
     // 2. Tree with removed leaf: List -> Item -> (Empty)
     let mut vdom2 = VDom::new();
-    vdom2.root = Some(NodeId(0));
+    vdom2.root = Some(KvasirId(0));
     vdom2
         .nodes
-        .insert(NodeId(0), create_node(0, None, "List", vec![NodeId(1)]));
+        .insert(KvasirId(0), create_node(0, None, "List", vec![KvasirId(1)]));
     vdom2
         .nodes
-        .insert(NodeId(1), create_node(1, None, "Item", vec![]));
+        .insert(KvasirId(1), create_node(1, None, "Item", vec![]));
 
     let patches = vdom1.diff(&vdom2);
 
@@ -99,12 +100,12 @@ fn test_vdom_deep_diffing() {
     assert!(
         patches
             .iter()
-            .any(|p| matches!(p, VDomPatch::Remove(id) if *id == NodeId(2)))
+            .any(|p| matches!(p, VDomPatch::Remove(id) if *id == KvasirId(2)))
     );
     assert!(
         patches
             .iter()
-            .any(|p| matches!(p, VDomPatch::Update { id, .. } if *id == NodeId(1)))
+            .any(|p| matches!(p, VDomPatch::Update { id, .. } if *id == KvasirId(1)))
     );
 }
 

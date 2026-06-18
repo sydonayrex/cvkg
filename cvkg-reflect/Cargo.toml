@@ -1,0 +1,16 @@
+[package]
+name = "cvkg-reflect"
+version = "0.2.13"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "CVKG runtime reflection — type metadata, property access, inspector support"
+
+[lib]
+name = "cvkg_reflect"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }

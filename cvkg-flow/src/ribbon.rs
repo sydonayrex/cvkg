@@ -1,5 +1,7 @@
 use crate::edge::FlowEdge;
 use crate::node::FlowNode;
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use crate::types::{NodeId, PortPosition};
 use glam::Vec2;
 use std::collections::HashMap;
@@ -349,7 +351,7 @@ mod tests {
     use super::*;
     use crate::edge::FlowEdge;
     use crate::node::FlowNode;
-    use crate::types::{NodeId, PortDirection, PortPosition};
+    use crate::types::{PortDirection, PortPosition};
 
     #[test]
     fn test_tessellate_bezier() {
@@ -414,27 +416,27 @@ mod tests {
     fn test_build_ribbon_batch_single_edge() {
         let mut nodes = HashMap::new();
 
-        let mut n1 = FlowNode::new(NodeId(1), "Source", (0.0, 0.0));
+        let mut n1 = FlowNode::new(KvasirId(1), "Source", (0.0, 0.0));
         n1.size = (100.0, 60.0);
         n1.ports.push(crate::port::FlowPort::new(
             crate::types::PortId(1),
-            NodeId(1),
+            KvasirId(1),
             PortPosition::Right,
             PortDirection::Output,
         ));
-        nodes.insert(NodeId(1), n1);
+        nodes.insert(KvasirId(1), n1);
 
-        let mut n2 = FlowNode::new(NodeId(2), "Target", (300.0, 0.0));
+        let mut n2 = FlowNode::new(KvasirId(2), "Target", (300.0, 0.0));
         n2.size = (100.0, 60.0);
         n2.ports.push(crate::port::FlowPort::new(
             crate::types::PortId(2),
-            NodeId(2),
+            KvasirId(2),
             PortPosition::Left,
             PortDirection::Input,
         ));
-        nodes.insert(NodeId(2), n2);
+        nodes.insert(KvasirId(2), n2);
 
-        let edge = FlowEdge::new(1, NodeId(1), 0, NodeId(2), 0);
+        let edge = FlowEdge::new(1, KvasirId(1), 0, KvasirId(2), 0);
         let edges = vec![edge];
 
         let batch = build_ribbon_batch(&edges, &nodes);
@@ -449,10 +451,10 @@ mod tests {
     #[test]
     fn test_build_ribbon_batch_missing_node() {
         let mut nodes = HashMap::new();
-        nodes.insert(NodeId(1), FlowNode::new(NodeId(1), "Only", (0.0, 0.0)));
+        nodes.insert(KvasirId(1), FlowNode::new(KvasirId(1), "Only", (0.0, 0.0)));
 
         // Edge references non-existent target node
-        let edge = FlowEdge::new(1, NodeId(1), 0, NodeId(99), 0);
+        let edge = FlowEdge::new(1, KvasirId(1), 0, KvasirId(99), 0);
         let edges = vec![edge];
 
         let batch = build_ribbon_batch(&edges, &nodes);
@@ -461,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_port_center_right() {
-        let mut node = FlowNode::new(NodeId(1), "Test", (100.0, 200.0));
+        let mut node = FlowNode::new(KvasirId(1), "Test", (100.0, 200.0));
         node.size = (150.0, 80.0);
         let center = port_center(&node, PortPosition::Right);
         assert!((center.x - 250.0).abs() < 0.001);
@@ -470,7 +472,7 @@ mod tests {
 
     #[test]
     fn test_port_center_left() {
-        let mut node = FlowNode::new(NodeId(1), "Test", (100.0, 200.0));
+        let mut node = FlowNode::new(KvasirId(1), "Test", (100.0, 200.0));
         node.size = (150.0, 80.0);
         let center = port_center(&node, PortPosition::Left);
         assert!((center.x - 100.0).abs() < 0.001);

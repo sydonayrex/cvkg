@@ -24,6 +24,13 @@ members = [
     "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
     "demos/berserker",
     "cvkg-flow",
+    # Platform infrastructure crates (crosscrate.md audit findings)
+    "cvkg-scheduler",
+    "cvkg-spatial",
+    "cvkg-reflect",
+    "cvkg-materials",
+    "cvkg-accessibility",
+    "cvkg-certification",
 ]
 
 [workspace.package]
@@ -53,6 +60,14 @@ cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.13" }
 cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.13" }
 cvkg-cli = { path = "cvkg-cli", version = "0.2.13" }
 cvkg = { path = "cvkg", version = "0.2.13" }
+# Platform infrastructure crates
+cvkg-scheduler = { path = "cvkg-scheduler", version = "0.2.13" }
+cvkg-spatial = { path = "cvkg-spatial", version = "0.2.13" }
+cvkg-reflect = { path = "cvkg-reflect", version = "0.2.13" }
+cvkg-materials = { path = "cvkg-materials", version = "0.2.13" }
+cvkg-accessibility = { path = "cvkg-accessibility", version = "0.2.13" }
+cvkg-certification = { path = "cvkg-certification", version = "0.2.13" }
+bitflags = "2.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.0", default-features = false, features = ["sync", "rt", "macros"] }
@@ -123,6 +138,13 @@ cvkg-webkit-server = { path = "cvkg-webkit-server" }
 cvkg-test = { path = "cvkg-test" }
 cvkg-flow = { path = "cvkg-flow" }
 cvkg = { path = "cvkg" }
+# Platform infrastructure crates
+cvkg-scheduler = { path = "cvkg-scheduler" }
+cvkg-spatial = { path = "cvkg-spatial" }
+cvkg-reflect = { path = "cvkg-reflect" }
+cvkg-materials = { path = "cvkg-materials" }
+cvkg-accessibility = { path = "cvkg-accessibility" }
+cvkg-certification = { path = "cvkg-certification" }
 
 [profile.dev]
 # Limit debug info to prevent memory exhaustion (Bus error) in GitHub Actions

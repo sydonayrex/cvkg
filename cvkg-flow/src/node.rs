@@ -1,4 +1,6 @@
 use crate::port::FlowPort;
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use crate::types::{NodeId, NodeType};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
@@ -336,7 +338,7 @@ mod tests {
 
     #[test]
     fn test_node_creation() {
-        let node = FlowNode::new(NodeId(1), "Test Node", (0.0, 0.0));
+        let node = FlowNode::new(KvasirId(1), "Test Node", (0.0, 0.0));
         assert_eq!(node.label, "Test Node");
         assert_eq!(node.ports.len(), 0);
         assert!(node.glass_material.is_none());
@@ -345,10 +347,10 @@ mod tests {
 
     #[test]
     fn test_add_port() {
-        let mut node = FlowNode::new(NodeId(1), "Test Node", (0.0, 0.0));
+        let mut node = FlowNode::new(KvasirId(1), "Test Node", (0.0, 0.0));
         node.add_port(FlowPort::new(
             PortId(10),
-            NodeId(1),
+            KvasirId(1),
             PortPosition::Right,
             PortDirection::Output,
         ));
@@ -357,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_set_glass_material() {
-        let mut node = FlowNode::new(NodeId(1), "Glass Node", (0.0, 0.0));
+        let mut node = FlowNode::new(KvasirId(1), "Glass Node", (0.0, 0.0));
         assert!(!node.has_glass_material());
 
         let material = GlassNodeMaterial::new()
@@ -377,7 +379,7 @@ mod tests {
 
     #[test]
     fn test_clear_glass_material() {
-        let mut node = FlowNode::new(NodeId(1), "Glass Node", (0.0, 0.0));
+        let mut node = FlowNode::new(KvasirId(1), "Glass Node", (0.0, 0.0));
         node.set_glass_material(GlassNodeMaterial::new());
         assert!(node.has_glass_material());
         node.clear_glass_material();
@@ -417,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_node_shadow() {
-        let mut node = FlowNode::new(NodeId(1), "Shadow Node", (0.0, 0.0));
+        let mut node = FlowNode::new(KvasirId(1), "Shadow Node", (0.0, 0.0));
         assert!(!node.has_shadow());
 
         let shadow = NodeShadow::new()
@@ -439,7 +441,7 @@ mod tests {
 
     #[test]
     fn test_node_rect() {
-        let node = FlowNode::new(NodeId(1), "Rect Node", (10.0, 20.0));
+        let node = FlowNode::new(KvasirId(1), "Rect Node", (10.0, 20.0));
         assert_eq!(node.rect(), (10.0, 20.0, 150.0, 80.0));
     }
 }

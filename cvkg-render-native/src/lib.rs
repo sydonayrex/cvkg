@@ -40,6 +40,7 @@
 //  using winit for window/event handling and AccessKit for accessibility tree integration.
 
 use cvkg_core::{FrameRenderer, Renderer};
+use cvkg_core::KvasirId;
 use image;
 // FIX #10: Wayland import gated to Linux only -- was unconditional, broke macOS/Windows builds.
 use std::sync::Arc;
@@ -1542,14 +1543,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         if is_shift {
                                             if let Some(id) = state.focus_manager.focus_prev() {
                                                 if let Ok(node_id) = id.as_str().parse::<u64>() {
-                                                    state.focused_node_id = Some(cvkg_vdom::NodeId(node_id));
+                                                    state.focused_node_id = Some(cvkg_core::KvasirId(node_id));
                                                     log::info!("[Native] Focus previous: {:?}", node_id);
                                                 }
                                             }
                                         } else {
                                             if let Some(id) = state.focus_manager.focus_next() {
                                                 if let Ok(node_id) = id.as_str().parse::<u64>() {
-                                                    state.focused_node_id = Some(cvkg_vdom::NodeId(node_id));
+                                                    state.focused_node_id = Some(cvkg_core::KvasirId(node_id));
                                                     log::info!("[Native] Focus next: {:?}", node_id);
                                                 }
                                             }
@@ -1641,7 +1642,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::AccessibilityAction(request) => {
-                let node_id = cvkg_vdom::NodeId(request.target_node.0);
+                let node_id = cvkg_core::KvasirId(request.target_node.0);
                 let target_state = self.window_manager.windows.values_mut().find(|s| {
                     s.vdom
                         .as_ref()

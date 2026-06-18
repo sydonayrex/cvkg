@@ -28,6 +28,7 @@ pub mod animated;
 pub mod physics;
 pub mod signals;
 use cvkg_core::Renderer;
+pub use cvkg_core::KvasirId;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,8 +40,12 @@ pub type EventHandlerMap = HashMap<String, Arc<dyn Fn(cvkg_core::Event) + Send +
 pub type NodeEventHandlerMap = HashMap<NodeId, EventHandlerMap>;
 
 /// A unique identifier for a node within the Virtual DOM tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct NodeId(pub u64);
+///
+/// # Crosscrate identity (crosscrate.md Finding #2)
+///
+/// Type alias for [`cvkg_core::KvasirId`] so that VDOM nodes, scene nodes,
+/// and flow nodes share the same identity type. Allocates via `KvasirId::new()`.
+pub type NodeId = KvasirId;
 
 /// Represents the computed layout bounds of a component in the Virtual DOM.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
@@ -598,7 +603,7 @@ impl VDom {
             .ok_or_else(|| format!("Node {} missing in VDom", id.0))?;
         let snode = scene
             .nodes
-            .get(&cvkg_scene::NodeId(id.0))
+            .get(&cvkg_core::KvasirId(id.0))
             .ok_or_else(|| format!("Node {} missing in SceneGraph", id.0))?;
 
         // Check child count and IDs
@@ -678,7 +683,7 @@ impl VNodeRenderer {
     }
 
     fn next_id(&mut self) -> NodeId {
-        let id = NodeId(self.next_id);
+        let id = KvasirId(self.next_id);
         self.next_id += 1;
         id
     }

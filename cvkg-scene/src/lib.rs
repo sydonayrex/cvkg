@@ -22,11 +22,13 @@
 //! This crate implements hierarchical AABB culling, automatic layering,
 //! and dirty-rect tracking for the Surtr GPU pipeline.
 
-pub mod quadtree;
 pub mod test_renderer;
 
-use quadtree::Quadtree;
+// Spatial types are now provided by cvkg-spatial (crosscrate audit Finding #5).
+// Re-exported here so existing downstream consumers of cvkg-scene::Quadtree keep working.
+pub use cvkg_spatial::{Bvh, BvhNode, Quadtree, SpatialHash};
 
+pub use cvkg_core::KvasirId;
 use cvkg_core::Rect;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -35,8 +37,15 @@ use std::collections::{BTreeMap, HashMap};
 const DEFAULT_CELL_SIZE: f32 = 64.0;
 
 /// Unique identifier for a node in the retained scene graph.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct NodeId(pub u64);
+///
+/// # Crosscrate identity (crosscrate.md Finding #2)
+///
+/// This is a type alias for [`cvkg_core::KvasirId`], the platform-wide unique
+/// identifier. Every crate (`cvkg-scene`, `cvkg-vdom`, `cvkg-flow`) uses the
+/// same `KvasirId` type so that nodes can be referenced across crate
+/// boundaries without conversion. Use `KvasirId::new()` to allocate a fresh id,
+/// or `KvasirId::from(some_u64)` to wrap an existing literal.
+pub type NodeId = KvasirId;
 
 /// A node in the retained scene graph.
 /// Section 3.2: "Retained tree of rendered nodes for efficient differential updates."
@@ -136,7 +145,7 @@ impl SceneGraph {
 
     /// Generate a new unique NodeId.
     pub fn next_id(&mut self) -> NodeId {
-        let id = NodeId(self.next_id);
+        let id = KvasirId(self.next_id);
         self.next_id += 1;
         id
     }

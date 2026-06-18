@@ -4,6 +4,8 @@
 //! position_3d, rotation_3d, and scale_3d into the corresponding VNode's
 //! 3D transform fields.
 
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use glam::Vec2;
 use glam::Vec3;
 
@@ -139,10 +141,10 @@ mod tests {
     #[test]
     fn test_bridge_bind() {
         let mut bridge = SceneBridge::new();
-        bridge.bind(BodyId(1), NodeId(100));
+        bridge.bind(BodyId(1), KvasirId(100));
         assert_eq!(bridge.len(), 1);
 
-        bridge.bind(BodyId(2), NodeId(200));
+        bridge.bind(BodyId(2), KvasirId(200));
         assert_eq!(bridge.len(), 2);
 
         bridge.unbind(BodyId(1));
@@ -155,7 +157,7 @@ mod tests {
         let mut scene = SceneGraph::new();
 
         // Create a node with 3D transform
-        let node_id = NodeId(42);
+        let node_id = KvasirId(42);
         scene.nodes.insert(
             node_id,
             cvkg_scene::VNode::new(node_id, "Cube", cvkg_core::Rect::new(-0.5, -0.5, 1.0, 1.0)),

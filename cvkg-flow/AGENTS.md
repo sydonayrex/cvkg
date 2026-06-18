@@ -11,6 +11,7 @@ Own the flow engine: data flow management, reactive state propagation, and the c
 - Flow propagation must be deterministic and cycle-safe.
 - State updates must follow the STM (Software Transactional Memory) model where applicable.
 - Must integrate with cvkg-core's state management (use_state, etc.).
+- NodeId (in types.rs) is a type alias for cvkg_core::KvasirId — never define a separate identity struct.
 
 ## Verification
 - Run `cargo test -p cvkg-flow`

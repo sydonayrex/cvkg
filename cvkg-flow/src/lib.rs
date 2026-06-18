@@ -9,6 +9,7 @@ pub mod ribbon;
 pub mod types;
 
 pub use canvas::{Camera, FlowCanvas};
+pub use cvkg_core::KvasirId;
 pub use edge::{EdgeInteraction, FlowEdge, SplineEasing};
 pub use graph::FlowGraph;
 pub use layout::apply_force_directed_layout;

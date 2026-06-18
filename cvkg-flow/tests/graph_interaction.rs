@@ -1,4 +1,5 @@
 use cvkg_flow::interaction::*;
+use cvkg_core::KvasirId;
 use cvkg_flow::port::*;
 use cvkg_flow::types::*;
 use cvkg_flow::*;
@@ -8,7 +9,7 @@ fn test_complex_workflow_interaction() {
     let mut container = FlowContainer::default();
 
     // 1. Initial State
-    let n1_id = NodeId(1);
+    let n1_id = KvasirId(1);
     let p1_id = PortId(101);
     let mut n1 = FlowNode::new(n1_id, "Source", (0.0, 0.0));
     n1.add_port(FlowPort::new(
@@ -22,7 +23,7 @@ fn test_complex_workflow_interaction() {
     // 2. Push history BEFORE adding n2
     container.push_history(); // history = [graph_with_n1]
 
-    let n2_id = NodeId(2);
+    let n2_id = KvasirId(2);
     let p2_id = PortId(201);
     let mut n2 = FlowNode::new(n2_id, "Target", (200.0, 200.0));
     n2.add_port(FlowPort::new(

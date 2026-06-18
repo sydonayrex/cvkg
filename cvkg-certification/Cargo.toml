@@ -1,0 +1,25 @@
+[package]
+name = "cvkg-certification"
+version = "0.2.13"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "CVKG platform certification — cross-crate integration test suites"
+
+[lib]
+name = "cvkg_certification"
+path = "src/lib.rs"
+
+[dependencies]
+cvkg-core = { workspace = true }
+cvkg-scene = { workspace = true }
+log = { workspace = true }
+serde = { workspace = true }
+
+[[test]]
+name = "pipeline_cert"
+path = "tests/pipeline_cert.rs"
+
+[[test]]
+name = "scene_layout_render"
+path = "tests/scene_layout_render.rs"

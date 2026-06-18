@@ -1,0 +1,16 @@
+[package]
+name = "cvkg-spatial"
+version = "0.2.13"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "CVKG spatial indexing — QuadTree, BVH, and SpatialHash for platform-wide use"
+
+[lib]
+name = "cvkg_spatial"
+path = "src/lib.rs"
+
+[dependencies]
+cvkg-core = { workspace = true }
+serde = { workspace = true }
+log = { workspace = true }

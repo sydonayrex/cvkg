@@ -363,7 +363,7 @@ mod tests {
     fn on_mode_change_listener_fires() {
         use std::sync::atomic::{AtomicU8, Ordering};
         let received = StdArc::new(AtomicU8::new(99));
-        let r2 = received.clone();
+        let _r2 = received.clone();
         // Register a one-shot listener that unregisters itself after first fire
         // to avoid leaking into other tests
         let received_weak = StdArc::downgrade(&received);

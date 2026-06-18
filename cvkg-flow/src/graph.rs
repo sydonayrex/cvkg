@@ -1,5 +1,7 @@
 use crate::edge::FlowEdge;
 use crate::node::FlowNode;
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use crate::types::{EdgeId, NodeId, PortId};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
@@ -229,45 +231,45 @@ mod tests {
     #[test]
     fn test_graph_add_node_edge() {
         let mut graph = FlowGraph::new();
-        let mut n1 = FlowNode::new(NodeId(1), "N1", (0.0, 0.0));
+        let mut n1 = FlowNode::new(KvasirId(1), "N1", (0.0, 0.0));
         n1.add_port(FlowPort::new(
             PortId(10),
-            NodeId(1),
+            KvasirId(1),
             PortPosition::Right,
             PortDirection::Output,
         ));
         graph.add_node(n1);
 
-        let mut n2 = FlowNode::new(NodeId(2), "N2", (100.0, 0.0));
+        let mut n2 = FlowNode::new(KvasirId(2), "N2", (100.0, 0.0));
         n2.add_port(FlowPort::new(
             PortId(20),
-            NodeId(2),
+            KvasirId(2),
             PortPosition::Left,
             PortDirection::Input,
         ));
         graph.add_node(n2);
 
-        graph.add_edge(FlowEdge::new(100, NodeId(1), 0, NodeId(2), 0));
+        graph.add_edge(FlowEdge::new(100, KvasirId(1), 0, KvasirId(2), 0));
 
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.edges.len(), 1);
 
         let node = graph.get_node_by_port(PortId(10)).unwrap();
-        assert_eq!(node.id, NodeId(1));
+        assert_eq!(node.id, KvasirId(1));
     }
 
     #[test]
     fn test_nodes_in_rect_basic() {
         let mut graph = FlowGraph::new();
-        graph.add_node(FlowNode::new(NodeId(1), "A", (10.0, 10.0)));
-        graph.add_node(FlowNode::new(NodeId(2), "B", (200.0, 200.0)));
-        graph.add_node(FlowNode::new(NodeId(3), "C", (50.0, 50.0)));
+        graph.add_node(FlowNode::new(KvasirId(1), "A", (10.0, 10.0)));
+        graph.add_node(FlowNode::new(KvasirId(2), "B", (200.0, 200.0)));
+        graph.add_node(FlowNode::new(KvasirId(3), "C", (50.0, 50.0)));
 
         // Query that covers A and C but not B
         let result = graph.nodes_in_rect(0.0, 0.0, 120.0, 120.0);
-        assert!(result.contains(&NodeId(1)));
-        assert!(result.contains(&NodeId(3)));
-        assert!(!result.contains(&NodeId(2)));
+        assert!(result.contains(&KvasirId(1)));
+        assert!(result.contains(&KvasirId(3)));
+        assert!(!result.contains(&KvasirId(2)));
     }
 
     #[test]
@@ -281,49 +283,49 @@ mod tests {
     fn test_nodes_in_rect_edge_touching() {
         let mut graph = FlowGraph::new();
         // Node at (0, 0) with default size (150, 80)
-        graph.add_node(FlowNode::new(NodeId(1), "A", (0.0, 0.0)));
+        graph.add_node(FlowNode::new(KvasirId(1), "A", (0.0, 0.0)));
 
         // Query rectangle that just touches the right edge of the node
         let result = graph.nodes_in_rect(150.0, 0.0, 50.0, 80.0);
-        assert!(result.contains(&NodeId(1)));
+        assert!(result.contains(&KvasirId(1)));
     }
 
     #[test]
     fn test_nodes_near_point_inside() {
         let mut graph = FlowGraph::new();
-        graph.add_node(FlowNode::new(NodeId(1), "A", (0.0, 0.0)));
+        graph.add_node(FlowNode::new(KvasirId(1), "A", (0.0, 0.0)));
 
         // Point is inside the node
         let result = graph.nodes_near_point(Vec2::new(10.0, 10.0), 5.0);
-        assert!(result.contains(&NodeId(1)));
+        assert!(result.contains(&KvasirId(1)));
     }
 
     #[test]
     fn test_nodes_near_point_outside() {
         let mut graph = FlowGraph::new();
         // Node at (0, 0) with default size (150, 80)
-        graph.add_node(FlowNode::new(NodeId(1), "A", (0.0, 0.0)));
+        graph.add_node(FlowNode::new(KvasirId(1), "A", (0.0, 0.0)));
 
         // Point is 50 units to the right of the node (right edge at x=150)
         let result = graph.nodes_near_point(Vec2::new(200.0, 40.0), 60.0);
-        assert!(result.contains(&NodeId(1)));
+        assert!(result.contains(&KvasirId(1)));
 
         // Point is 200 units away, radius is 100
         let result = graph.nodes_near_point(Vec2::new(350.0, 40.0), 100.0);
-        assert!(!result.contains(&NodeId(1)));
+        assert!(!result.contains(&KvasirId(1)));
     }
 
     #[test]
     fn test_nodes_near_point_zero_radius() {
         let mut graph = FlowGraph::new();
-        graph.add_node(FlowNode::new(NodeId(1), "A", (0.0, 0.0)));
+        graph.add_node(FlowNode::new(KvasirId(1), "A", (0.0, 0.0)));
 
         // With zero radius, only points exactly on the node boundary are included
         let result = graph.nodes_near_point(Vec2::new(0.0, 0.0), 0.0);
-        assert!(result.contains(&NodeId(1)));
+        assert!(result.contains(&KvasirId(1)));
 
         let result = graph.nodes_near_point(Vec2::new(200.0, 200.0), 0.0);
-        assert!(!result.contains(&NodeId(1)));
+        assert!(!result.contains(&KvasirId(1)));
     }
 
     #[test]

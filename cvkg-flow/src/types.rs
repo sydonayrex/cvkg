@@ -1,7 +1,14 @@
+use cvkg_core::KvasirId;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct NodeId(pub u64);
+/// Unique identifier for a node in a flow graph.
+///
+/// # Crosscrate identity (crosscrate.md Finding #2)
+///
+/// Type alias for [`cvkg_core::KvasirId`] so that flow nodes, scene nodes,
+/// and VDOM nodes share the same identity type. Use `KvasirId::new()` to
+/// allocate, or `KvasirId::from(some_u64)` to wrap a literal.
+pub type NodeId = KvasirId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PortId(pub u64);
@@ -58,7 +65,7 @@ mod tests {
 
     #[test]
     fn test_id_serialization() {
-        let id = NodeId(123);
+        let id = KvasirId(123);
         let serialized = serde_json::to_string(&id).unwrap();
         assert_eq!(serialized, "123");
         let deserialized: NodeId = serde_json::from_str(&serialized).unwrap();

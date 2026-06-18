@@ -1,4 +1,6 @@
 use crate::types::NodeId;
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use serde::{Deserialize, Serialize};
 
 /// Cubic Bezier easing parameters for edge animation.
@@ -298,10 +300,10 @@ mod tests {
 
     #[test]
     fn test_edge_creation() {
-        let edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         assert_eq!(edge.id, 1);
-        assert_eq!(edge.source_node, NodeId(10));
-        assert_eq!(edge.target_node, NodeId(20));
+        assert_eq!(edge.source_node, KvasirId(10));
+        assert_eq!(edge.target_node, KvasirId(20));
         assert_eq!(edge.width, 2.0);
         assert!(edge.visible);
         assert_eq!(edge.interaction, EdgeInteraction::Default);
@@ -309,7 +311,7 @@ mod tests {
 
     #[test]
     fn test_edge_hover() {
-        let mut edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         assert!(!edge.is_hovered());
         edge.set_hovered();
         assert!(edge.is_hovered());
@@ -318,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_edge_selected() {
-        let mut edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         assert!(!edge.is_selected());
         edge.set_selected();
         assert!(edge.is_selected());
@@ -326,7 +328,7 @@ mod tests {
 
     #[test]
     fn test_edge_default() {
-        let mut edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         edge.set_hovered();
         edge.set_default();
         assert_eq!(edge.interaction, EdgeInteraction::Default);
@@ -334,7 +336,7 @@ mod tests {
 
     #[test]
     fn test_edge_effective_width() {
-        let mut edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         edge.animation_progress = 1.0;
         assert_eq!(edge.effective_width(), 2.0);
 
@@ -344,7 +346,7 @@ mod tests {
 
     #[test]
     fn test_edge_animation_tick() {
-        let mut edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         edge.restart_animation();
         assert_eq!(edge.animation_progress, 0.0);
 
@@ -362,7 +364,7 @@ mod tests {
 
     #[test]
     fn test_edge_with_builder() {
-        let edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0)
+        let edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0)
             .with_color([1.0, 0.0, 0.0, 1.0])
             .with_width(4.0)
             .with_hover_color([0.0, 1.0, 0.0, 1.0])
@@ -392,7 +394,7 @@ mod tests {
 
     #[test]
     fn test_edge_effective_color() {
-        let mut edge = FlowEdge::new(1, NodeId(10), 0, NodeId(20), 0);
+        let mut edge = FlowEdge::new(1, KvasirId(10), 0, KvasirId(20), 0);
         edge.animation_progress = 1.0;
         let default_color = edge.effective_color();
         assert_eq!(default_color, edge.color);

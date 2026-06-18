@@ -13,6 +13,7 @@ Own the core View system, Renderer trait, layout engine, focus management, and a
 - Renderer trait methods must remain object-safe (no generics on methods).
 - ErrorBoundary must use `catch_unwind` + `AssertUnwindSafe` — never suppress panics silently.
 - All public types must have doc comments.
+- KvasirId is the platform-wide unified identity type. All crates (cvkg-scene, cvkg-vdom, cvkg-flow, etc.) must use KvasirId or a type alias of it — never define a competing NodeId struct.
 
 ## Work Guidance
 - When adding new Renderer methods, provide a default no-op implementation so existing backends don't break.

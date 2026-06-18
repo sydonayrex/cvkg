@@ -1,0 +1,16 @@
+[package]
+name = "cvkg-scheduler"
+version = "0.2.13"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "CVKG frame and task scheduler — platform-wide update ordering"
+
+[lib]
+name = "cvkg_scheduler"
+path = "src/lib.rs"
+
+[dependencies]
+cvkg-core = { workspace = true }
+serde = { workspace = true }
+log = { workspace = true }

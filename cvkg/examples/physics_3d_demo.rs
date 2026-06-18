@@ -6,6 +6,7 @@
 //! Run: cargo run --example physics_3d_demo
 
 use cvkg::prelude::*;
+use cvkg_core::KvasirId;
 use cvkg_core::{Rect, Renderer};
 use cvkg_scene::{NodeId, SceneGraph, VNode};
 use std::cell::RefCell;
@@ -136,7 +137,7 @@ impl View for Physics3DDemo {
                 let size = 30.0 + (idx as f32 * 7.0) % 40.0;
                 cubes.push(PhysicsCube::new(x, y, z, size, color));
 
-                let node_id = NodeId((idx + 1) as u64);
+                let node_id = KvasirId((idx + 1) as u64);
                 let mut node = VNode::new(
                     node_id,
                     "Cube3D",
@@ -259,7 +260,7 @@ fn main() {
 
     // 2. Validate scene graph 3D
     let mut scene = SceneGraph::new();
-    let node_id = NodeId(1);
+    let node_id = KvasirId(1);
     let mut node = VNode::new(node_id, "Cube3D", Rect::new(-0.5, -0.5, 1.0, 1.0));
     node.is_3d = true;
     node.position_3d = [10.0, 20.0, 5.0];

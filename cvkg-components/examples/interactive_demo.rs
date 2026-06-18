@@ -1,7 +1,7 @@
 // Interactive Demo
 
 use cvkg_components::{Button, HStack, Input, Slider, Spacer, Text, Toggle, VStack};
-use cvkg_core::{Color, View};
+use cvkg_core::View;
 use std::sync::{Arc, Mutex};
 
 struct DemoState {

@@ -1,5 +1,5 @@
 use cvkg_core::{Rect, Renderer};
-use cvkg_flow::types::*;
+use cvkg_core::KvasirId;
 use cvkg_flow::*;
 
 /// This example shows how to render a FlowCanvas which automatically includes the mini-map.
@@ -10,7 +10,7 @@ pub fn render_flow_with_minimap(_renderer: &mut dyn Renderer, _canvas_rect: Rect
     for i in 0..10 {
         let x = (i as f32) * 300.0;
         let y = (i as f32) * 200.0;
-        let node = FlowNode::new(NodeId(i), format!("Node {}", i), (x, y));
+        let node = FlowNode::new(KvasirId(i), format!("Node {}", i), (x, y));
         graph.add_node(node);
     }
 
