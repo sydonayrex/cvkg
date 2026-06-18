@@ -4252,17 +4252,28 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 let write_count = self.particle_staging.len();
                 let max = MAX_PARTICLES;
 
+                // P1-6 fix: cap the write to max particles to prevent
+                // wrap-around overlap. If write_count > max, only the
+                // LAST `max` particles are kept (the most recent ones
+                // are most relevant for particle effects, and the
+                // earlier ones are dropped). Without this cap, if
+                // write_count > max - write_start, the second chunk
+                // would write past offset 0 and overlap the first
+                // chunk, corrupting the buffer.
+                let effective_count = write_count.min(max);
+                let drop_count = write_count - effective_count;
+
                 // Write particles in ring-buffer fashion
-                let first_chunk = (max - write_start).min(write_count);
-                let bytes = bytemuck::cast_slice(&self.particle_staging[..first_chunk]);
+                let first_chunk = (max - write_start).min(effective_count);
+                let bytes = bytemuck::cast_slice(&self.particle_staging[drop_count..drop_count + first_chunk]);
                 self.queue.write_buffer(
                     &self.particle_buffer,
                     (write_start * std::mem::size_of::<crate::types::GpuParticle>()) as u64,
                     bytes,
                 );
-                if first_chunk < write_count {
-                    let remaining = write_count - first_chunk;
-                    let bytes2 = bytemuck::cast_slice(&self.particle_staging[first_chunk..]);
+                if first_chunk < effective_count {
+                    let remaining = effective_count - first_chunk;
+                    let bytes2 = bytemuck::cast_slice(&self.particle_staging[drop_count + first_chunk..drop_count + first_chunk + remaining]);
                     self.queue.write_buffer(
                         &self.particle_buffer,
                         0,
@@ -4271,9 +4282,9 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     self.particle_write_head = remaining as u32;
                 } else {
                     self.particle_write_head =
-                        ((write_start + write_count) % max) as u32;
+                        ((write_start + effective_count) % max) as u32;
                 }
-                self.particle_count = (self.particle_count as usize + write_count)
+                self.particle_count = (self.particle_count as usize + effective_count)
                     .min(max) as u32;
                 self.particle_staging.clear();
 
@@ -6016,5 +6027,86 @@ mod p1_7_surface_format_tests {
         // Either the exotic format itself or a safe fallback.
         // In this case the only option is the exotic one, which is fine.
         assert_eq!(result, TextureFormat::Rgb9e5Ufloat);
+    }
+}
+
+// =========================================================================
+// P1-6: Particle ring buffer write math
+// =========================================================================
+//
+// P1-6 regression tests for the ring buffer write logic. We can't
+// easily test the actual GPU write_buffer call without a SurtrRenderer
+// instance, but we CAN test the math (chunk sizes, drop counts, head
+// updates) which is where the bug was.
+
+#[cfg(test)]
+mod p1_6_particle_ring_buffer_tests {
+    /// Reproduces the ring buffer write math in isolation. Returns
+    /// (bytes_to_write_at_head, bytes_to_write_at_zero, new_write_head).
+    fn compute_ring_buffer_write(
+        write_start: usize,
+        write_count: usize,
+        max: usize,
+    ) -> (usize, usize, usize) {
+        // P1-6 fix: cap to max
+        let effective_count = write_count.min(max);
+        let drop_count = write_count - effective_count;
+        let first_chunk = (max - write_start).min(effective_count);
+        if first_chunk < effective_count {
+            let remaining = effective_count - first_chunk;
+            (first_chunk, remaining, remaining)
+        } else {
+            (first_chunk, 0, (write_start + effective_count) % max)
+        }
+    }
+
+    #[test]
+    fn no_wrap_no_overflow() {
+        // write_count < (max - write_start), no wrap, no overflow
+        let (first, second, head) = compute_ring_buffer_write(0, 10, 100);
+        assert_eq!(first, 10);
+        assert_eq!(second, 0);
+        assert_eq!(head, 10);
+    }
+
+    #[test]
+    fn wrap_without_overflow() {
+        // write_count > (max - write_start), but < max total
+        let (first, second, head) = compute_ring_buffer_write(80, 50, 100);
+        assert_eq!(first, 20);  // 80..100
+        assert_eq!(second, 30); // 0..30
+        assert_eq!(head, 30);
+    }
+
+    #[test]
+    fn overflow_caps_to_max() {
+        // P1-6 regression: write_count > max must cap, not overlap
+        let (first, second, head) = compute_ring_buffer_write(80, 200, 100);
+        // effective_count = 100, drop_count = 100
+        // first_chunk = (100-80).min(100) = 20
+        // remaining = 100-20 = 80
+        assert_eq!(first, 20);
+        assert_eq!(second, 80);
+        assert_eq!(head, 80);
+    }
+
+    #[test]
+    fn overflow_at_offset_zero() {
+        // Edge case: write_start=0, write_count > max
+        let (first, second, head) = compute_ring_buffer_write(0, 150, 100);
+        // effective_count = 100, drop_count = 50
+        // first_chunk = 100.min(100) = 100
+        // 100 < 100 is false, so no wrap
+        assert_eq!(first, 100);
+        assert_eq!(second, 0);
+        assert_eq!(head, 0);  // (0 + 100) % 100 = 0
+    }
+
+    #[test]
+    fn empty_write() {
+        let (first, second, head) = compute_ring_buffer_write(50, 0, 100);
+        assert_eq!(first, 0);
+        assert_eq!(second, 0);
+        assert_eq!(head, 50);
     }
 }
