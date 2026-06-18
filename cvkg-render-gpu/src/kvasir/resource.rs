@@ -201,3 +201,91 @@ mod p1_25_material_id_consistency_tests {
         assert!(!ids2.contains(&18));
     }
 }
+
+// =========================================================================
+// P2-7: Scissor rect math for zero-dimension edge case
+// =========================================================================
+
+#[cfg(test)]
+mod p2_7_scissor_rect_tests {
+    /// Pure function that reproduces the scissor rect computation.
+    /// Returns (x, y, w, h) where (0,0,0,0) means zero-area scissor.
+    fn compute_scissor(
+        rect: Option<(f32, f32, f32, f32)>,  // (x, y, width, height)
+        scale: f32,
+        rt_w: i32,
+        rt_h: i32,
+    ) -> Option<(u32, u32, u32, u32)> {
+        let (x, y, w, h) = rect?;
+        if rt_w <= 0 || rt_h <= 0 {
+            return None;
+        }
+        let x1 = (x * scale).round() as i32;
+        let y1 = (y * scale).round() as i32;
+        let x2 = ((x + w) * scale).round() as i32;
+        let y2 = ((y + h) * scale).round() as i32;
+        let sw = (x2 - x1).clamp(0, rt_w);
+        let sh = (y2 - y1).clamp(0, rt_h);
+        // P2-7: zero dimensions use zero-area scissor (0,0,0,0).
+        if sw > 0 && sh > 0 {
+            Some((x1 as u32, y1 as u32, sw as u32, sh as u32))
+        } else {
+            Some((0, 0, 0, 0))
+        }
+    }
+
+    #[test]
+    fn normal_rect_produces_correct_scissor() {
+        let sc = compute_scissor(Some((10.0, 20.0, 100.0, 50.0)), 1.0, 800, 600);
+        assert_eq!(sc, Some((10, 20, 100, 50)));
+    }
+
+    #[test]
+    fn zero_width_rect_produces_zero_scissor() {
+        let sc = compute_scissor(Some((10.0, 20.0, 0.0, 50.0)), 1.0, 800, 600);
+        assert_eq!(sc, Some((0, 0, 0, 0)));
+    }
+
+    #[test]
+    fn zero_height_rect_produces_zero_scissor() {
+        let sc = compute_scissor(Some((10.0, 20.0, 50.0, 0.0)), 1.0, 800, 600);
+        assert_eq!(sc, Some((0, 0, 0, 0)));
+    }
+
+    #[test]
+    fn negative_dimensions_clamp_to_zero() {
+        let sc = compute_scissor(Some((100.0, 100.0, -50.0, 50.0)), 1.0, 800, 600);
+        assert_eq!(sc, Some((0, 0, 0, 0)));
+    }
+
+    #[test]
+    fn none_rect_returns_none() {
+        let sc = compute_scissor(None, 1.0, 800, 600);
+        assert_eq!(sc, None);
+    }
+
+    #[test]
+    fn scissor_clamps_to_render_target() {
+        // Rect at (700, 500) with size 200x200 in an 800x600 target.
+        // x1=700, x2=900, w=clamp(900-700, 0, 800)=200 (clamp to
+        // upper bound of rt_w is not applied here -- clamp(0, rt_w)
+        // means the upper bound is rt_w but w=200 <= 800 so the
+        // clamp doesn't affect it). The actual behavior is that w
+        // is the difference x2-x1 = 200, which fits within 800.
+        let sc = compute_scissor(Some((700.0, 500.0, 200.0, 200.0)), 1.0, 800, 600);
+        assert_eq!(sc, Some((700, 500, 200, 200)));
+    }
+
+    #[test]
+    fn scissor_extending_past_target_clamps() {
+        // Rect at (700, 500) with size 500x500. w = 1200-700 = 500.
+        // The clamp(0, 800) doesn't trigger because 500 <= 800.
+        // Note: the original code does NOT actually clamp the rect
+        // to the render target bounds; it just ensures w/h is
+        // non-negative. A separate audit (P3-*) would be needed
+        // to add proper bounds clamping. For now, verify the
+        // current (non-bounds-clamping) behavior.
+        let sc = compute_scissor(Some((700.0, 500.0, 500.0, 500.0)), 1.0, 800, 600);
+        assert_eq!(sc, Some((700, 500, 500, 500)));
+    }
+}

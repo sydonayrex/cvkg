@@ -151,7 +151,12 @@ impl KvasirNode for GeometryNode {
                     if w > 0 && h > 0 {
                         p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32);
                     } else {
-                        p.set_scissor_rect(0, 0, 1, 1);
+                        // P2-7 fix: when scissor dimensions are zero, use
+                        // a zero-area scissor rect (e.g., 0,0,0,0) which
+                        // causes wgpu to skip the draw entirely, instead
+                        // of the previous behavior of drawing to a single
+                        // 1x1 pixel which is visually wrong.
+                        p.set_scissor_rect(0, 0, 0, 0);
                     }
                 } else {
                     p.set_scissor_rect(0, 0, rt_w as u32, rt_h as u32);
