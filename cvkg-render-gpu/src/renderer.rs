@@ -827,11 +827,18 @@ impl SurtrRenderer {
 
         let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
         let info = adapter.get_info();
+        // P1-26: detect GPU vendor for logging and future
+        // capability-based shader selection.
+        let caps = crate::subsystems::GpuCapabilities::detect(
+            &info.name,
+            format!("{:?}", info.backend),
+        );
         log::info!(
-            "[GPU] Selected adapter: {} ({:?}) on backend: {:?}",
+            "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
             info.name,
             info.device_type,
-            info.backend
+            info.backend,
+            caps.vendor
         );
         log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
@@ -5413,11 +5420,18 @@ impl SurtrRenderer {
 
         let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
         let info = adapter.get_info();
+        // P1-26: detect GPU vendor for logging and future
+        // capability-based shader selection.
+        let caps = crate::subsystems::GpuCapabilities::detect(
+            &info.name,
+            format!("{:?}", info.backend),
+        );
         log::info!(
-            "[GPU] Selected adapter: {} ({:?}) on backend: {:?}",
+            "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
             info.name,
             info.device_type,
-            info.backend
+            info.backend,
+            caps.vendor
         );
         log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let required_features = adapter.features()
