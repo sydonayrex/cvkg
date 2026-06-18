@@ -5406,4 +5406,38 @@ mod wgsl_tests {
             }
         }
     }
+
+    /// P1-12 regression: the native WGSL files must declare t_diffuse as
+    /// a 32-element binding_array (in common.wgsl) to match the count=32
+    /// bind group layout. Note: WGSL files are concatenated at runtime
+    /// and only parse cleanly when combined, so we only check textual
+    /// content here, not standalone parse.
+    #[test]
+    fn test_wgsl_common_uses_binding_array_on_native() {
+        let source = include_str!("shaders/common.wgsl");
+        assert!(
+            source.contains("binding_array<texture_2d<f32>, 32>"),
+            "native common.wgsl must declare a 32-element texture binding_array"
+        );
+        assert!(
+            source.contains("t_diffuse:"),
+            "native common.wgsl must declare t_diffuse"
+        );
+    }
+
+    /// P1-12 regression: the native bloom and material_opaque WGSL files
+    /// must index t_diffuse with [N] since t_diffuse is a 32-element array.
+    #[test]
+    fn test_wgsl_native_indexed_access() {
+        let bloom = include_str!("shaders/bloom.wgsl");
+        let material = include_str!("shaders/material_opaque.wgsl");
+        assert!(
+            bloom.contains("t_diffuse["),
+            "native bloom.wgsl must index t_diffuse as an array"
+        );
+        assert!(
+            material.contains("t_diffuse["),
+            "native material_opaque.wgsl must index t_diffuse as an array"
+        );
+    }
 }

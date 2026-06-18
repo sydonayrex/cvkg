@@ -113,12 +113,33 @@ mod tests {
     }
 }
 
+// P1-12 fix: on wasm32/WebGL2, texture binding arrays are not supported.
+// The bind group layout uses count: None (single texture) on WASM, so the
+// WGSL must declare t_diffuse as a single texture, not a binding_array.
+// We swap the three affected WGSL files (common, material_opaque, bloom)
+// to WASM-specific variants on wasm32 targets. All other shader files
+// (shapes, material_glass, bifrost, color_blind, tonemap, particles) are
+// the same on both targets.
+#[cfg(target_arch = "wasm32")]
+pub(crate) const WGSL_COMMON: &str = include_str!("shaders/common_wasm.wgsl");
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const WGSL_COMMON: &str = include_str!("shaders/common.wgsl");
+
 pub(crate) const WGSL_SHAPES: &str = include_str!("shaders/shapes.wgsl");
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) const WGSL_MATERIAL_OPAQUE: &str = include_str!("shaders/material_opaque_wasm.wgsl");
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const WGSL_MATERIAL_OPAQUE: &str = include_str!("shaders/material_opaque.wgsl");
+
 pub(crate) const WGSL_MATERIAL_GLASS: &str = include_str!("shaders/material_glass.wgsl");
 pub(crate) const WGSL_BIFROST: &str = include_str!("shaders/bifrost.wgsl");
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) const WGSL_BLOOM: &str = include_str!("shaders/bloom_wasm.wgsl");
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) const WGSL_BLOOM: &str = include_str!("shaders/bloom.wgsl");
+
 pub(crate) const WGSL_COLOR_BLIND: &str = include_str!("shaders/color_blind.wgsl");
 pub(crate) const WGSL_TONEMAP: &str = include_str!("shaders/tonemap.wgsl");
 pub(crate) const WGSL_PARTICLES: &str = include_str!("shaders/particles.wgsl");
