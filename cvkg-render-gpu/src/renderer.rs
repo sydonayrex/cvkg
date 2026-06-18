@@ -333,10 +333,63 @@ pub struct HologramInstance {
     pub time: f32,
 }
 
+/// Trait for types that can be cleared in place. Implemented for the
+/// collection types used as cache values (HashMap, Vec).
+///
+/// Used by `lock_or_clear_cache` to wipe cache data after a poisoned
+/// mutex recovery, since a partially-mutated cache (from a panic
+/// mid-insert) must not be reused on subsequent frames.
+pub trait ClearInto {
+    fn clear_into(&mut self);
+}
+
+impl<K, V, S> ClearInto for std::collections::HashMap<K, V, S>
+where
+    S: std::hash::BuildHasher,
+{
+    fn clear_into(&mut self) {
+        self.clear();
+    }
+}
+
+impl<T> ClearInto for Vec<T> {
+    fn clear_into(&mut self) {
+        self.clear();
+    }
+}
+
 impl SurtrRenderer {
     /// Access the hologram instances submitted this frame.
     pub fn hologram_instances(&self) -> &[HologramInstance] {
         &self.hologram_instances
+    }
+
+    /// Acquire a poisoned-mutex guard and CLEAR the underlying data on recovery.
+    ///
+    /// P1-3 fix: the previous SurtrRenderer::lock_or_clear_cache(` pattern
+    /// silently accepted a partially-mutated cache (e.g. a bind group
+    /// insertion interrupted by panic), which could then be used on the
+    /// next frame and cause GPU validation errors or visual glitches.
+    ///
+    /// For GPU resource caches (bind groups, texture views, etc.) the
+    /// safe recovery is to clear the cache so the next frame rebuilds
+    /// from scratch. Use this in place of `into_inner()` for any cache
+    /// that holds GPU resources whose state may be inconsistent after
+    /// a panic mid-insert.
+    pub(crate) fn lock_or_clear_cache<'a, T: ClearInto>(
+        mutex: &'a std::sync::Mutex<T>,
+    ) -> std::sync::MutexGuard<'a, T> {
+        match mutex.lock() {
+            Ok(g) => g,
+            Err(poisoned) => {
+                log::warn!(
+                    "[GPU] poisoned cache mutex recovered; clearing data to avoid stale state"
+                );
+                let mut g = poisoned.into_inner();
+                g.clear_into();
+                g
+            }
+        }
     }
 
     /// Update cursor pointer uniforms for tactile hover shader interactions.
@@ -2097,8 +2150,8 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             }
 
             log::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
-            self.bind_group_cache.lock().unwrap_or_else(|p| p.into_inner()).clear();
-            self.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner()).clear();
+            SurtrRenderer::lock_or_clear_cache(&self.bind_group_cache).clear();
+            SurtrRenderer::lock_or_clear_cache(&self.texture_view_cache).clear();
             self.shaped_text_cache.clear();
             ctx.config.width = width;
             ctx.config.height = height;
@@ -5202,6 +5255,67 @@ impl SurtrRenderer {
             .iter()
             .find(|f| f.id() == filter_id)
             .map(|arc| arc.as_ref())
+    }
+}
+
+#[cfg(test)]
+mod lock_or_clear_cache_tests {
+    use crate::renderer::SurtrRenderer;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    #[test]
+    fn returns_lock_when_not_poisoned() {
+        let mutex = Mutex::new(HashMap::<u64, u32>::new());
+        let guard = SurtrRenderer::lock_or_clear_cache(&mutex);
+        assert!(guard.is_empty());
+    }
+
+    #[test]
+    fn clears_cache_when_poisoned() {
+        let mutex = Mutex::new(HashMap::<u64, u32>::new());
+        {
+            let mut guard = mutex.lock().unwrap();
+            guard.insert(1, 100);
+            guard.insert(2, 200);
+        }
+        // Poison the mutex by panicking while holding the lock.
+        let result = std::panic::catch_unwind(|| {
+            let mutex = std::panic::AssertUnwindSafe(&mutex);
+            let _guard = mutex.lock().unwrap();
+            panic!("intentional panic to poison the mutex");
+        });
+        assert!(result.is_err(), "the inner panic should propagate");
+
+        // Now access the poisoned mutex via our helper. The cache should
+        // be cleared (not the pre-poison state with {1:100, 2:200}).
+        let guard = SurtrRenderer::lock_or_clear_cache(&mutex);
+        assert!(
+            guard.is_empty(),
+            "cache must be cleared after poison recovery, got {:?}",
+            *guard
+        );
+    }
+
+    #[test]
+    fn works_with_vec_cache() {
+        let mutex = Mutex::new(Vec::<u32>::new());
+        {
+            let mut guard = mutex.lock().unwrap();
+            guard.push(1);
+            guard.push(2);
+            guard.push(3);
+        }
+        // Poison
+        let _ = std::panic::catch_unwind(|| {
+            let mutex = std::panic::AssertUnwindSafe(&mutex);
+            let _guard = mutex.lock().unwrap();
+            panic!("poison");
+        });
+
+        // After recovery, the Vec should be empty.
+        let guard = SurtrRenderer::lock_or_clear_cache(&mutex);
+        assert!(guard.is_empty(), "Vec cache should be cleared on poison");
     }
 }
 

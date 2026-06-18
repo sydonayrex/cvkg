@@ -1,6 +1,7 @@
 //! KvasirNode trait and ExecutionContext.
 
 use super::resource::ResourceId;
+use crate::renderer::SurtrRenderer;
 
 /// Hint to the planner about preferred execution backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,7 +44,7 @@ impl<'a> ExecutionContext<'a> {
         entries: &[wgpu::BindGroupEntry<'_>],
         label: Option<&str>,
     ) -> wgpu::BindGroup {
-        let mut cache = self.renderer.bind_group_cache.lock().unwrap_or_else(|p| p.into_inner());
+        let mut cache = SurtrRenderer::lock_or_clear_cache(&self.renderer.bind_group_cache);
         // Use entry API: if key exists, return a clone of the cached bind group.
         // If not, create it, insert it, and return a clone.
         if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(key) {

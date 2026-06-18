@@ -6,6 +6,7 @@
 use crate::kvasir::node::{ExecutionContext, KvasirNode};
 use crate::kvasir::nodes::PassId;
 use crate::kvasir::resource::ResourceId;
+use crate::renderer::SurtrRenderer;
 
 /// Copies a rectangular region from the scene texture into a
 /// blur target resource, then runs a Kawase downsample chain.
@@ -96,7 +97,7 @@ impl KvasirNode for BackdropRegionNode {
 
             for mip in 1..mip_count {
                 let src_view = {
-                    let mut cache = ctx.renderer.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner());
+                    let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
                         .entry((self.output_id, (mip - 1)))
                         .or_insert_with(|| {
@@ -110,7 +111,7 @@ impl KvasirNode for BackdropRegionNode {
                         .clone()
                 };
                 let dst_view = {
-                    let mut cache = ctx.renderer.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner());
+                    let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
                         .entry((self.output_id, mip))
                         .or_insert_with(|| {
@@ -187,7 +188,7 @@ impl KvasirNode for BackdropRegionNode {
             // Upsample chain
             for mip in (1..mip_count).rev() {
                 let src_view = {
-                    let mut cache = ctx.renderer.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner());
+                    let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
                         .entry((self.output_id, mip))
                         .or_insert_with(|| {
@@ -201,7 +202,7 @@ impl KvasirNode for BackdropRegionNode {
                         .clone()
                 };
                 let dst_view = {
-                    let mut cache = ctx.renderer.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner());
+                    let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
                         .entry((self.output_id, (mip - 1)))
                         .or_insert_with(|| {
