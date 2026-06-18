@@ -300,11 +300,53 @@ pub struct SurtrRenderer {
     >,
 }
 
-// SAFETY: On WASM, wgpu's Device and Queue are !Send + !Sync because WASM is
-// single-threaded. However, SurtrRenderer needs to be Send so it can be held
-// across async .await points in winit's event loop. On a single-threaded target
-// this is sound: no actual concurrent access occurs, and there are no other
-// threads that could observe or mutate the renderer's internals.
+// P0-3 safety audit: unsafe Send/Sync on WASM.
+//
+// SurtrRenderer contains the following shared state:
+//   - wgpu::Device and wgpu::Queue  (transitively !Send + !Sync on WASM)
+//   - Mutex<HashMap<...>> caches    (bind_group_cache, texture_view_cache,
+//                                    shaped_text_cache -- Mutex<T> is Send+Sync
+//                                    iff T: Send, which holds for our HashMaps)
+//   - Vec<Vertex>, Vec<u32>, Vec<InstanceData>, Vec<DrawCall> -- the GPU
+//     buffer staging areas. These are mutated each frame and may be observed
+//     by the GPU submission queue.
+//   - Vec<HologramInstance>         (only accessed from the main thread)
+//
+// SAFETY JUSTIFICATION (wasm32 target only):
+//
+// 1. WASM is single-threaded: JavaScript executes on a single thread and
+//    async tasks are cooperatively scheduled on the same thread. There is
+//    no preemption and no actual concurrent access to the renderer's
+//    mutable state. wgpu's !Send+!Sync on WASM reflects this same
+//    single-threaded guarantee -- wgpu's Device/Queue can be sent across
+//    await points because the WebGPU spec guarantees a single-threaded
+//    execution model.
+//
+// 2. The Mutex fields (bind_group_cache, texture_view_cache,
+//    shaped_text_cache) provide their own synchronization for any code
+//    that DOES run on multiple threads (i.e. native builds). On WASM
+//    these locks are no-ops in practice but the data is still safe to
+//    access from a single thread.
+//
+// 3. SurtrRenderer's GPU buffer staging vectors are only mutated by the
+//    renderer's own methods, all of which are called sequentially from
+//    the event loop on a single thread. No background task, no worker
+//    thread, no async task post-yield can observe partial state.
+//
+// 4. The HologramInstance Vec is also only accessed from the event loop.
+//
+// 5. We intentionally do NOT impl Send+Sync on non-WASM targets because
+//    on those platforms wgpu's Device/Queue are Send+Sync by design, but
+//    our internal GPU buffer state is not actually safe for cross-thread
+//    access without additional synchronization. The Mutex-wrapped caches
+//    are the only state that is genuinely thread-safe on native targets.
+//
+// This is a known intentional divergence from wgpu's conservative
+// !Send+!Sync on WASM. It is necessary because winit's event loop on
+// WASM requires the application state to be Send so it can be held
+// across .await points. The single-threaded WASM execution model
+// guarantees that no two threads ever access the renderer concurrently,
+// so the safety contract holds.
 #[cfg(target_arch = "wasm32")]
 unsafe impl Send for SurtrRenderer {}
 #[cfg(target_arch = "wasm32")]
@@ -3938,7 +3980,18 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
 
         for &node_key in &cached.plan {
             // Frame budget enforcement: if we're already over budget and degradation
-            // is allowed, skip expensive non-essential passes (bloom, volumetric, etc).
+            // is allowed, skip expensive COSMETIC passes (bloom, volumetric).
+            //
+            // P0-2 fix: BackdropBlur, BackdropRegion, and Accessibility are FUNCTIONAL
+            // passes, not cosmetic effects:
+            //   * BackdropBlur/BackdropRegion implement glassmorphism (frosted glass
+            //     panels, modals, sidebars). Skipping them makes glass elements
+            //     render as opaque solid rectangles, breaking the visual contract
+            //     for any app using glass materials.
+            //   * Accessibility is required for screen readers and other AT;
+            //     skipping it makes the UI unusable for visually-impaired users.
+            // Only BloomExtract/BloomBlur (post-processing glow) and Volumetric
+            // (raymarched lighting) are true cosmetics and safe to degrade.
             if allow_degradation && budget_ms > 0.0 {
                 let elapsed_ms = frame_start.elapsed().as_secs_f32() * 1000.0;
                 if elapsed_ms > budget_ms {
@@ -3946,10 +3999,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                         match node.pass_id() {
                             kvasir::nodes::PassId::BloomExtract
                             | kvasir::nodes::PassId::BloomBlur
-                            | kvasir::nodes::PassId::Volumetric
-                            | kvasir::nodes::PassId::Accessibility
-                            | kvasir::nodes::PassId::BackdropBlur
-                            | kvasir::nodes::PassId::BackdropRegion => {
+                            | kvasir::nodes::PassId::Volumetric => {
                                 log::trace!(
                                     "[Kvasir] Skipping {} (over budget: {:.1}ms > {:.1}ms)",
                                     node.label(),
@@ -3958,7 +4008,8 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                                 );
                                 continue;
                             }
-                            _ => {} // Always run: Geometry, Glass, UI, Composite, Present, etc.
+                            _ => {} // Always run: Glass, BackdropBlur, BackdropRegion,
+                                    // Accessibility, Geometry, UI, Composite, Present, ...
                         }
                     }
                 }
