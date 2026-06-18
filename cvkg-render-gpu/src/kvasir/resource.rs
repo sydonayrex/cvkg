@@ -116,3 +116,88 @@ mod p1_20_hazard_tracking_tests {
         }
     }
 }
+
+// =========================================================================
+// P1-25: CPU/Shader Material ID drift detection
+// =========================================================================
+
+#[cfg(test)]
+mod p1_25_material_id_consistency_tests {
+    // Reference values from the Rust `material_id` module in
+    // cvkg-render-gpu/src/renderer.rs. If you change the Rust
+    // constants, you MUST also update the WGSL shader files (and
+    // these expected values).
+    const RUST_GLASS: u32 = 7;
+    const RUST_DROP_SHADOW: u32 = 18;
+    const RUST_MESH_3D: u32 = 21;
+
+    /// Scan a WGSL file for `Nu` literal patterns and return the
+    /// set of material_id values it references.
+    fn scan_wgsl_for_material_ids(source: &str) -> std::collections::HashSet<u32> {
+        let mut ids = std::collections::HashSet::new();
+        let bytes = source.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i].is_ascii_digit() {
+                let start = i;
+                while i < bytes.len() && bytes[i].is_ascii_digit() {
+                    i += 1;
+                }
+                let num_str = std::str::from_utf8(&bytes[start..i]).unwrap();
+                if let Ok(n) = num_str.parse::<u32>() {
+                    let mut j = i;
+                    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                        j += 1;
+                    }
+                    if j < bytes.len() && bytes[j] == b'u' {
+                        ids.insert(n);
+                    }
+                }
+            } else {
+                i += 1;
+            }
+        }
+        ids
+    }
+
+    #[test]
+    fn glass_id_appears_in_wgsl() {
+        let source = include_str!("../shaders/material_opaque.wgsl");
+        let ids = scan_wgsl_for_material_ids(source);
+        assert!(
+            ids.contains(&RUST_GLASS),
+            "WGSL must reference material_id {RUST_GLASS} (GLASS)"
+        );
+    }
+
+    #[test]
+    fn drop_shadow_id_appears_in_wgsl() {
+        let source = include_str!("../shaders/material_opaque.wgsl");
+        let ids = scan_wgsl_for_material_ids(source);
+        assert!(
+            ids.contains(&RUST_DROP_SHADOW),
+            "WGSL must reference material_id {RUST_DROP_SHADOW} (DROP_SHADOW)"
+        );
+    }
+
+    #[test]
+    fn mesh_3d_id_appears_in_wgsl() {
+        let source = include_str!("../shaders/material_opaque.wgsl");
+        let ids = scan_wgsl_for_material_ids(source);
+        assert!(
+            ids.contains(&RUST_MESH_3D),
+            "WGSL must reference material_id {RUST_MESH_3D} (MESH_3D)"
+        );
+    }
+
+    #[test]
+    fn scanner_works() {
+        let src = "if (in.material_id == 18u) { } else if (in.material_id == 21u) { }";
+        let ids = scan_wgsl_for_material_ids(src);
+        assert!(ids.contains(&18));
+        assert!(ids.contains(&21));
+        let src2 = "let x = 18;";
+        let ids2 = scan_wgsl_for_material_ids(src2);
+        assert!(!ids2.contains(&18));
+    }
+}
