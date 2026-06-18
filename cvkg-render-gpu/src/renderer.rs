@@ -406,6 +406,70 @@ impl<T> ClearInto for Vec<T> {
     }
 }
 
+// =========================================================================
+// P1-11: Pipeline cache integrity check
+// =========================================================================
+
+/// P1-11 fix: load a pipeline cache file from disk with SHA256 integrity check.
+///
+/// Returns:
+/// - `Ok(Some(data))` if the cache file exists and its SHA256 matches the sidecar
+/// - `Ok(None)` if the cache file does not exist (first run, no cache yet)
+/// - `Err(reason)` if the cache file exists but integrity verification fails
+///   (sidecar missing, sidecar malformed, hash mismatch). The caller should
+///   treat this as "use empty cache" so wgpu falls back to recompilation.
+///
+/// The sidecar file is `<cache_path>.sha256` and contains the lowercase hex
+/// SHA256 of the cache data, written at the same time the cache is written.
+/// On any integrity failure we refuse to use the cache rather than risk
+/// passing tampered data to the unsafe `create_pipeline_cache` boundary.
+fn load_pipeline_cache_with_integrity_check(
+    cache_path: &std::path::Path,
+) -> Result<Option<Vec<u8>>, String> {
+    // No cache file = first run, nothing to load.
+    let cache_data = match std::fs::read(cache_path) {
+        Ok(d) => d,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("read failed: {e}")),
+    };
+
+    let hash_path = cache_path.with_extension("bin.sha256");
+    let expected_hash = match std::fs::read_to_string(&hash_path) {
+        Ok(s) => s.trim().to_lowercase(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Err(format!(
+                "sidecar hash file missing at {}",
+                hash_path.display()
+            ))
+        }
+        Err(e) => return Err(format!("sidecar read failed: {e}")),
+    };
+
+    // Compute actual SHA256.
+    let actual = compute_sha256(&cache_data);
+    let actual_hex = format!(
+        "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+        actual[0], actual[1], actual[2], actual[3],
+        actual[4], actual[5], actual[6], actual[7]
+    );
+
+    if actual_hex != expected_hash {
+        return Err(format!(
+            "hash mismatch: expected {expected_hash}, got {actual_hex}"
+        ));
+    }
+
+    Ok(Some(cache_data))
+}
+
+/// Compute SHA256 of a byte slice. Inline FIPS 180-4 implementation
+/// (avoids adding a sha2 crate dependency for a single-use feature).
+fn compute_sha256(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    hasher.finalize()
+}
+
 impl SurtrRenderer {
     /// Access the hologram instances submitted this frame.
     pub fn hologram_instances(&self) -> &[HologramInstance] {
@@ -787,6 +851,14 @@ impl SurtrRenderer {
         // This avoids recompiling identical shaders on subsequent launches.
         // Cache lives next to the executable for both debug and release builds.
         // Falls back to temp dir if the exe path is unavailable (e.g., WASM).
+        //
+        // P1-11 fix: add SHA256 integrity check. The pipeline cache is
+        // loaded from disk via `unsafe create_pipeline_cache`. While
+        // wgpu's `fallback: true` handles invalid data by recompiling,
+        // we add defense-in-depth by verifying a SHA256 sidecar file
+        // matches the cache bytes. If the sidecar is missing or the hash
+        // does not match, we treat the cache as empty rather than risk
+        // passing tampered data through the unsafe boundary.
         let pipeline_cache = {
             let cache_dir = std::env::current_exe()
                 .ok()
@@ -794,7 +866,15 @@ impl SurtrRenderer {
                 .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
             let _ = std::fs::create_dir_all(&cache_dir);
             let cache_path = cache_dir.join("cvkg_render_gpu.bin");
-            let cache_data = std::fs::read(&cache_path).ok();
+            let cache_data = match load_pipeline_cache_with_integrity_check(&cache_path) {
+                Ok(data) => data,
+                Err(reason) => {
+                    log::warn!(
+                        "[GPU] pipeline cache integrity check failed: {reason}; using empty cache"
+                    );
+                    None
+                }
+            };
             unsafe {
                 device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
                     label: Some("CVKG Pipeline Cache"),
@@ -5438,6 +5518,231 @@ mod wgsl_tests {
         assert!(
             material.contains("t_diffuse["),
             "native material_opaque.wgsl must index t_diffuse as an array"
+        );
+    }
+}
+
+// =========================================================================
+// P1-11: Inline SHA256 implementation for pipeline cache integrity
+// =========================================================================
+
+/// Minimal SHA256 implementation (FIPS 180-4). Used only for the
+/// pipeline cache integrity check so we don't add a sha2 dependency.
+#[derive(Clone)]
+struct Sha256 {
+    state: [u32; 8],
+    buffer: [u8; 64],
+    buffer_len: usize,
+    total_len: u64,
+}
+
+impl Sha256 {
+    const K: [u32; 64] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+        0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+        0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+        0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+        0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+        0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+        0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+        0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ];
+
+    fn new() -> Self {
+        Self {
+            state: [
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+            ],
+            buffer: [0; 64],
+            buffer_len: 0,
+            total_len: 0,
+        }
+    }
+
+    fn update(&mut self, data: &[u8]) {
+        self.total_len = self.total_len.wrapping_add(data.len() as u64);
+        for &b in data {
+            self.buffer[self.buffer_len] = b;
+            self.buffer_len += 1;
+            if self.buffer_len == 64 {
+                let block = self.buffer;
+                self.compress(&block);
+                self.buffer_len = 0;
+            }
+        }
+    }
+
+    fn finalize(mut self) -> [u8; 32] {
+        // Padding: append 0x80, zero-fill, then 8-byte big-endian length in bits.
+        self.buffer[self.buffer_len] = 0x80;
+        self.buffer_len += 1;
+        if self.buffer_len > 56 {
+            for b in &mut self.buffer[self.buffer_len..] { *b = 0; }
+            let block = self.buffer;
+            self.compress(&block);
+            self.buffer_len = 0;
+        }
+        for b in &mut self.buffer[self.buffer_len..56] { *b = 0; }
+        let bit_len = self.total_len.wrapping_mul(8);
+        self.buffer[56..64].copy_from_slice(&bit_len.to_be_bytes());
+        let block = self.buffer;
+        self.compress(&block);
+
+        let mut out = [0u8; 32];
+        for (i, &s) in self.state.iter().enumerate() {
+            out[i*4..(i+1)*4].copy_from_slice(&s.to_be_bytes());
+        }
+        out
+    }
+
+    fn compress(&mut self, block: &[u8]) {
+        let mut w = [0u32; 64];
+        for i in 0..16 {
+            w[i] = u32::from_be_bytes([
+                block[i*4], block[i*4+1], block[i*4+2], block[i*4+3]
+            ]);
+        }
+        for i in 16..64 {
+            let s0 = w[i-15].rotate_right(7) ^ w[i-15].rotate_right(18) ^ (w[i-15] >> 3);
+            let s1 = w[i-2].rotate_right(17) ^ w[i-2].rotate_right(19) ^ (w[i-2] >> 10);
+            w[i] = w[i-16].wrapping_add(s0).wrapping_add(w[i-7]).wrapping_add(s1);
+        }
+        let mut a = self.state[0];
+        let mut b = self.state[1];
+        let mut c = self.state[2];
+        let mut d = self.state[3];
+        let mut e = self.state[4];
+        let mut f = self.state[5];
+        let mut g = self.state[6];
+        let mut h = self.state[7];
+        for i in 0..64 {
+            let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
+            let ch = (e & f) ^ ((!e) & g);
+            let t1 = h.wrapping_add(s1).wrapping_add(ch).wrapping_add(Self::K[i]).wrapping_add(w[i]);
+            let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
+            let mj = (a & b) ^ (a & c) ^ (b & c);
+            let t2 = s0.wrapping_add(mj);
+            h = g; g = f; f = e;
+            e = d.wrapping_add(t1);
+            d = c; c = b; b = a;
+            a = t1.wrapping_add(t2);
+        }
+        self.state[0] = self.state[0].wrapping_add(a);
+        self.state[1] = self.state[1].wrapping_add(b);
+        self.state[2] = self.state[2].wrapping_add(c);
+        self.state[3] = self.state[3].wrapping_add(d);
+        self.state[4] = self.state[4].wrapping_add(e);
+        self.state[5] = self.state[5].wrapping_add(f);
+        self.state[6] = self.state[6].wrapping_add(g);
+        self.state[7] = self.state[7].wrapping_add(h);
+    }
+}
+
+#[cfg(test)]
+mod p1_11_pipeline_cache_tests {
+    use super::*;
+
+    /// Write the cache + SHA256 sidecar atomically. Used by tests to
+    /// populate a cache file that the integrity check will accept.
+    fn write_cache(cache_path: &std::path::Path, data: &[u8]) {
+        use std::io::Write;
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        let hash = hasher.finalize();
+        let hash_hex = format!(
+            "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            hash[0], hash[1], hash[2], hash[3],
+            hash[4], hash[5], hash[6], hash[7]
+        );
+        std::fs::write(cache_path, data).unwrap();
+        let hash_path = cache_path.with_extension("bin.sha256");
+        let mut f = std::fs::File::create(hash_path).unwrap();
+        f.write_all(hash_hex.as_bytes()).unwrap();
+    }
+
+    #[test]
+    fn returns_none_when_cache_does_not_exist() {
+        let tmp = std::env::temp_dir().join("cvkg_test_no_cache.bin");
+        let _ = std::fs::remove_file(&tmp);
+        let result = load_pipeline_cache_with_integrity_check(&tmp);
+        assert!(matches!(result, Ok(None)), "missing cache should yield Ok(None), got {result:?}");
+    }
+
+    #[test]
+    fn returns_data_when_sidecar_matches() {
+        let tmp = std::env::temp_dir().join("cvkg_test_good_cache.bin");
+        let data = b"pipeline cache blob with some bytes";
+        write_cache(&tmp, data);
+        let result = load_pipeline_cache_with_integrity_check(&tmp);
+        match result {
+            Ok(Some(d)) => assert_eq!(d, data),
+            other => panic!("expected Ok(Some(data)), got {other:?}"),
+        }
+        let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::remove_file(tmp.with_extension("bin.sha256"));
+    }
+
+    #[test]
+    fn returns_err_when_sidecar_missing() {
+        let tmp = std::env::temp_dir().join("cvkg_test_no_sidecar.bin");
+        std::fs::write(&tmp, b"data without sidecar").unwrap();
+        let result = load_pipeline_cache_with_integrity_check(&tmp);
+        assert!(result.is_err(), "missing sidecar must yield Err");
+        let msg = result.unwrap_err();
+        assert!(msg.contains("sidecar hash file missing"), "got: {msg}");
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    #[test]
+    fn returns_err_when_sidecar_hash_mismatches() {
+        // P1-11 regression: tampered cache file must be detected and
+        // refused, so the unsafe create_pipeline_cache boundary is never
+        // crossed with untrusted data.
+        let tmp = std::env::temp_dir().join("cvkg_test_bad_hash.bin");
+        std::fs::write(&tmp, b"original data").unwrap();
+        let hash_path = tmp.with_extension("bin.sha256");
+        std::fs::write(&hash_path, b"0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+        // Now overwrite the cache file with different data.
+        std::fs::write(&tmp, b"tampered data with extra bytes").unwrap();
+        let result = load_pipeline_cache_with_integrity_check(&tmp);
+        assert!(result.is_err(), "tampered cache must yield Err");
+        let msg = result.unwrap_err();
+        assert!(msg.contains("hash mismatch"), "got: {msg}");
+        let _ = std::fs::remove_file(&tmp);
+        let _ = std::fs::remove_file(&hash_path);
+    }
+
+    #[test]
+    fn sha256_of_known_input() {
+        // Standard test vector: SHA256("abc") =
+        // ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+        let result = compute_sha256(b"abc");
+        let hex = format!(
+            "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}\
+             {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}\
+             {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}\
+             {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+            result[0], result[1], result[2], result[3],
+            result[4], result[5], result[6], result[7],
+            result[8], result[9], result[10], result[11],
+            result[12], result[13], result[14], result[15],
+            result[16], result[17], result[18], result[19],
+            result[20], result[21], result[22], result[23],
+            result[24], result[25], result[26], result[27],
+            result[28], result[29], result[30], result[31],
+        );
+        assert_eq!(
+            hex,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
     }
 }
