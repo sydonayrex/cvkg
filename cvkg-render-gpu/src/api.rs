@@ -560,11 +560,11 @@ impl cvkg_core::Renderer for SurtrRenderer {
         for glyph in shaped.glyphs {
             let cache_key = glyph.cache_key;
 
-            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key)
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text.glyph_cache.get(&cache_key)
             {
                 *info
             } else {
-                if let Some(image) = self.text_engine.rasterize(cache_key) {
+                if let Some(image) = self.text.engine.rasterize(cache_key) {
                     let glyph_id = image.glyph_id;
                     let data_len = image.data.len();
                     let gw = image.width;
@@ -640,7 +640,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         x_offset,
                         y_offset,
                     );
-                    self.text_cache.put(cache_key, info);
+                    self.text.glyph_cache.put(cache_key, info);
                     info
                 } else {
                     (Rect::zero(), 0.0, 0.0, 0.0, 0.0)
@@ -694,7 +694,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             }
         }
         let scaled_max_width = max_width.map(|w| w * sf);
-        self.text_engine
+        self.text.engine
             .shape_layout(&scaled_spans, scaled_max_width, align, overflow)
             .ok()
     }
@@ -721,11 +721,11 @@ impl cvkg_core::Renderer for SurtrRenderer {
             let c = self.apply_opacity(span_color);
 
             let cache_key = glyph.cache_key;
-            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text_cache.get(&cache_key)
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text.glyph_cache.get(&cache_key)
             {
                 *info
             } else {
-                if let Some(image) = self.text_engine.rasterize(cache_key) {
+                if let Some(image) = self.text.engine.rasterize(cache_key) {
                     let glyph_id = image.glyph_id;
                     let data_len = image.data.len();
                     let gw = image.width;
@@ -799,7 +799,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         x_offset,
                         y_offset,
                     );
-                    self.text_cache.put(cache_key, info);
+                    self.text.glyph_cache.put(cache_key, info);
                     info
                 } else {
                     (Rect::zero(), 0.0, 0.0, 0.0, 0.0)

@@ -100,7 +100,7 @@ impl SurtrRenderer {
         size: f32,
     ) -> cvkg_runic_text::ShapedText {
         let cache_key = (text.to_string(), (size * 100.0) as u32);
-        if let Some(shaped) = self.shaped_text_cache.get(&cache_key) {
+        if let Some(shaped) = self.text.shaped_cache.get(&cache_key) {
             return shaped.clone();
         }
 
@@ -124,7 +124,8 @@ impl SurtrRenderer {
         style.render_mode = cvkg_runic_text::RenderMode::Grayscale;
         let spans = vec![cvkg_runic_text::TextSpan::new(text, style)];
         let shaped = self
-            .text_engine
+            .text
+            .engine
             .shape_layout(
                 &spans,
                 None,
@@ -145,7 +146,7 @@ impl SurtrRenderer {
                 grapheme_boundaries: vec![],
             });
 
-        self.shaped_text_cache.insert(cache_key, shaped.clone());
+        self.text.shaped_cache.insert(cache_key, shaped.clone());
         shaped
     }
 }

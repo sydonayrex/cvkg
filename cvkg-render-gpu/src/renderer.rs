@@ -191,12 +191,12 @@ pub struct SurtrRenderer {
     pub headless_context: Option<HeadlessContext>,
 
     // Mega-Heim (Shared across all windows)
-    pub(crate) text_engine: cvkg_runic_text::RunicTextEngine,
+    /// P1-1: text rendering caches and engine grouped into a single
+    /// TextSubsystem struct. This is the third step toward moving
+    /// subsystems into their own modules.
+    pub(crate) text: crate::types::TextSubsystem,
     pub(crate) mega_heim_tex: wgpu::Texture,
     pub(crate) mega_heim_bind_group: wgpu::BindGroup,
-    pub(crate) text_cache: LruCache<u64, (Rect, f32, f32, f32, f32)>,
-    pub(crate) shaped_text_cache:
-        std::collections::HashMap<(String, u32), cvkg_runic_text::ShapedText>,
     pub(crate) heim_packer: SundrPacker,
     pub(crate) image_uv_registry: LruCache<String, Rect>,
     pub(crate) texture_registry: LruCache<String, u32>,
@@ -2277,7 +2277,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             copy_pipeline,
             composite_pipeline,
             env_bind_group_layout,
-            text_engine: cvkg_runic_text::RunicTextEngine::default(),
+            // text_engine moved into TextSubsystem -- see above.
             mega_heim_tex,
             mega_heim_bind_group,
             // P1-5 fix: increased LRU cache sizes to handle the
@@ -2299,8 +2299,11 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             // values, so behavior is preserved. See SurtrConfig
             // for available presets (low_vram, high_end, default).
             config: SurtrConfig::default(),
-            text_cache: LruCache::new(NonZeroUsize::new(8192).unwrap()),
-            shaped_text_cache: std::collections::HashMap::new(),
+            // P1-1: text subsystem (engine + caches) initialized
+            // via TextSubsystem::forge().
+            text: crate::types::TextSubsystem::forge(
+                NonZeroUsize::new(8192).unwrap(),
+            ),
             heim_packer: SundrPacker::new(4096, 4096),
             image_uv_registry: {
                 let mut cache = LruCache::new(NonZeroUsize::new(256).unwrap());
@@ -2501,7 +2504,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             log::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
             SurtrRenderer::lock_or_clear_cache(&self.bind_group_cache).clear();
             SurtrRenderer::lock_or_clear_cache(&self.texture_view_cache).clear();
-            self.shaped_text_cache.clear();
+            self.text.shaped_cache.clear();
             ctx.config.width = width;
             ctx.config.height = height;
             ctx.scale_factor = scale_factor;
@@ -3470,7 +3473,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         }
 
         let text_entries: Vec<(u64, (Rect, f32, f32, f32, f32))> =
-            self.text_cache.iter().map(|(k, v)| (*k, *v)).collect();
+            self.text.glyph_cache.iter().map(|(k, v)| (*k, *v)).collect();
         for (hash, (old_uv, w_f, h_f, x_off, y_off)) in text_entries {
             let w_px = (old_uv.width * 4096.0).round() as u32;
             let h_px = (old_uv.height * 4096.0).round() as u32;
@@ -3512,7 +3515,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     width: old_uv.width,
                     height: old_uv.height,
                 };
-                self.text_cache.put(hash, (new_uv, w_f, h_f, x_off, y_off));
+                self.text.glyph_cache.put(hash, (new_uv, w_f, h_f, x_off, y_off));
             }
         }
 

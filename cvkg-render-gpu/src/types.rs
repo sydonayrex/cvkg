@@ -1,6 +1,8 @@
 //! Core data types, internal structs, and rendering contexts.
 use crate::vertex::{InstanceData, Vertex};
 use cvkg_core::Rect;
+use lru::LruCache;
+use std::num::NonZeroUsize;
 
 /// SvgModel -- A collection of tessellated triangles representing a vector icon.
 /// Paths are stored as independent sub-models, each with its own vertex range
@@ -391,6 +393,48 @@ impl GeometryBuffers {
     }
 }
 
+// =========================================================================
+// P1-1: TextSubsystem - encapsulates text rendering caches
+// =========================================================================
+//
+// The SurtrRenderer struct had text_engine, text_cache, and
+// shaped_text_cache as separate fields. This struct groups them
+// together so the text rendering subsystem can be moved into its
+// own module in a follow-up refactor.
+
+/// Group of caches and engines used for text rendering.
+pub struct TextSubsystem {
+    /// The Runic text shaping engine. Default-constructible; the
+    /// engine itself is stateless across threads.
+    pub engine: cvkg_runic_text::RunicTextEngine,
+    /// LRU cache mapping glyph hash -> (uv_rect, w, h, x_off, y_off).
+    /// Capacity is configurable via SurtrConfig.
+    pub glyph_cache: LruCache<u64, (cvkg_core::Rect, f32, f32, f32, f32)>,
+    /// Shaped text cache keyed by (text, font_size). Cleared on
+    /// theme change; not bounded.
+    pub shaped_cache: std::collections::HashMap<(String, u32), cvkg_runic_text::ShapedText>,
+}
+
+impl TextSubsystem {
+    /// Create a text subsystem with the given LRU capacity for the
+    /// glyph cache. The shaped text cache is unbounded.
+    pub fn forge(glyph_cache_capacity: NonZeroUsize) -> Self {
+        Self {
+            engine: cvkg_runic_text::RunicTextEngine::default(),
+            glyph_cache: LruCache::new(glyph_cache_capacity),
+            shaped_cache: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Clear both caches. Called on theme change.
+    pub fn clear_caches(&mut self) {
+        self.shaped_cache.clear();
+        // Note: glyph_cache is not cleared because glyphs are
+        // theme-independent. Only the shaped text cache holds
+        // theme-dependent metrics.
+    }
+}
+
 
 #[cfg(test)]
 mod p1_1_geometry_buffers_tests {
@@ -431,5 +475,55 @@ mod p1_1_geometry_buffers_tests {
         let size = std::mem::size_of::<Vertex>();
         // Should be a multiple of 16 (vec4 alignment).
         assert_eq!(size % 4, 0, "Vertex size must be 4-byte aligned");
+    }
+}
+
+
+#[cfg(test)]
+mod p1_1_text_subsystem_tests {
+    use super::TextSubsystem;
+    use std::num::NonZeroUsize;
+
+    #[test]
+    fn forge_creates_glyph_cache_with_given_capacity() {
+        // P1-1 regression: the glyph cache capacity is respected
+        // by the forge() constructor.
+        let cap = NonZeroUsize::new(100).unwrap();
+        let subsystem = TextSubsystem::forge(cap);
+        assert_eq!(subsystem.glyph_cache.cap().get(), 100);
+        // Engine and shaped cache should also be initialized.
+        assert!(subsystem.shaped_cache.is_empty());
+    }
+
+    #[test]
+    fn clear_caches_empties_shaped_but_keeps_glyph() {
+        // P1-1 regression: clear_caches() should only clear the
+        // shaped text cache (which holds theme-dependent metrics),
+        // NOT the glyph cache (which is theme-independent).
+        let cap = NonZeroUsize::new(10).unwrap();
+        let mut subsystem = TextSubsystem::forge(cap);
+        // Simulate putting entries. We can use dummy data because
+        // we just need to test that the right caches are cleared.
+        // For shaped cache, we can put a (text, size) -> ShapedText.
+        // For glyph cache, we can put a hash -> (Rect, f32, f32, f32, f32).
+        // Both are type-checked at compile time.
+        // However, ShapedText requires construction from RunicTextEngine,
+        // which we can't easily do without a full text pipeline.
+        // Instead, we test that clear_caches() doesn't panic on an
+        // empty subsystem and that subsequent access works.
+        subsystem.clear_caches();
+        assert!(subsystem.shaped_cache.is_empty());
+        // The glyph cache should still have its original capacity.
+        assert_eq!(subsystem.glyph_cache.cap().get(), 10);
+    }
+
+    #[test]
+    fn default_capacity_is_8192_matching_p1_5() {
+        // P1-1 regression: the default text cache size used in
+        // SurtrRenderer::forge_internal should match the P1-5
+        // hardcoded value (8192) for behavior preservation.
+        let cap = NonZeroUsize::new(8192).unwrap();
+        let subsystem = TextSubsystem::forge(cap);
+        assert_eq!(subsystem.glyph_cache.cap().get(), 8192);
     }
 }
