@@ -473,7 +473,7 @@ impl View for Button {
             renderer.stroke_rect(final_rect, border_color, border_width);
         }
 
-        // Focus ring — WCAG 2.4.7
+        // Focus ring -- WCAG 2.4.7
         if is_focused && !self.disabled && !self.loading {
             crate::draw_focus_ring(renderer, final_rect);
         }
@@ -812,7 +812,7 @@ impl View for Toggle {
 
         renderer.pop_vnode();
 
-        // Focus ring — WCAG 2.4.7
+        // Focus ring -- WCAG 2.4.7
         if is_focused {
             let total_w = 40.0 + 8.0 + renderer.measure_text(&self.label, 14.0).0;
             let toggle_rect = Rect {

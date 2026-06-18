@@ -1,11 +1,11 @@
 //! Navigation components.
 //!
-//! Drawer — slide-in drawer panel.
-//! Menubar — horizontal menu bar with dropdowns.
-//! NavigationMenu — hierarchical navigation menu.
-//! List — selectable list component.
-//! Section — grouped section with header.
-//! DisclosureGroup — expandable/collapsible group.
+//! Drawer -- slide-in drawer panel.
+//! Menubar -- horizontal menu bar with dropdowns.
+//! NavigationMenu -- hierarchical navigation menu.
+//! List -- selectable list component.
+//! Section -- grouped section with header.
+//! DisclosureGroup -- expandable/collapsible group.
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
@@ -14,7 +14,7 @@ use cvkg_core::{Event, Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 // ----------------------------------------------------------------------------
-// Drawer — slide-in drawer panel
+// Drawer -- slide-in drawer panel
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -131,7 +131,7 @@ impl View for Drawer {
 }
 
 // ----------------------------------------------------------------------------
-// Menubar — horizontal menu bar with dropdowns
+// Menubar -- horizontal menu bar with dropdowns
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -262,7 +262,7 @@ impl View for Menubar {
 }
 
 // ----------------------------------------------------------------------------
-// NavigationMenu — hierarchical navigation menu
+// NavigationMenu -- hierarchical navigation menu
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -406,7 +406,7 @@ impl View for NavigationMenu {
 }
 
 // ----------------------------------------------------------------------------
-// List — selectable list component
+// List -- selectable list component
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -526,7 +526,7 @@ impl View for List {
 }
 
 // ----------------------------------------------------------------------------
-// Section — grouped section with header
+// Section -- grouped section with header
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -608,7 +608,7 @@ impl View for Section {
 }
 
 // ----------------------------------------------------------------------------
-// DisclosureGroup — expandable/collapsible group
+// DisclosureGroup -- expandable/collapsible group
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -723,7 +723,7 @@ impl View for DisclosureGroup {
                 if let Event::KeyDown { key, .. } = event {
                     match key.as_str() {
                         "Enter" | " " => {
-                            // Toggle expanded state — the parent handles this via state
+                            // Toggle expanded state -- the parent handles this via state
                         }
                         "Escape" => {
                             // Collapse if expanded

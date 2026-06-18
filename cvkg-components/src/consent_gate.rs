@@ -1,4 +1,4 @@
-//! ConsentGate — GDPR consent dialog and data provenance UI.
+//! ConsentGate -- GDPR consent dialog and data provenance UI.
 //!
 //! Provides a consent request dialog for AI data usage and a data provenance
 //! indicator showing what data was used in AI inference.

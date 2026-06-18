@@ -20,7 +20,7 @@ pub enum LoaderVariant {
     Bar,
 }
 
-/// Loader — animated loading spinner with variants.
+/// Loader -- animated loading spinner with variants.
 #[derive(Clone)]
 pub struct Loader {
     /// Size of the loader.
@@ -195,7 +195,7 @@ impl View for Loader {
 }
 
 // ----------------------------------------------------------------------------
-// MultiStepLoader — multi-step progress loader with labels
+// MultiStepLoader -- multi-step progress loader with labels
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -306,7 +306,7 @@ impl View for MultiStepLoader {
 // NAVIGATION
 // =============================================================================
 
-/// FloatingNavbar — floating navigation bar with blur backdrop.
+/// FloatingNavbar -- floating navigation bar with blur backdrop.
 #[derive(Clone)]
 pub struct FloatingNavbar {
     /// Navigation item labels.
@@ -429,7 +429,7 @@ impl View for FloatingNavbar {
 }
 
 // ----------------------------------------------------------------------------
-// NavbarMenu — animated navbar with dropdown menus
+// NavbarMenu -- animated navbar with dropdown menus
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -541,7 +541,7 @@ impl View for NavbarMenu {
 // CAROUSELS
 // =============================================================================
 
-/// Carousel — generic carousel with navigation.
+/// Carousel -- generic carousel with navigation.
 #[derive(Clone)]
 pub struct Carousel {
     /// Page count.
@@ -647,7 +647,7 @@ impl View for Carousel {
 }
 
 // ----------------------------------------------------------------------------
-// Marquee — horizontal scrolling marquee
+// Marquee -- horizontal scrolling marquee
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -759,7 +759,7 @@ impl View for Marquee {
 // LAYOUT
 // =============================================================================
 
-/// BentoGrid — bento-style grid layout.
+/// BentoGrid -- bento-style grid layout.
 #[derive(Clone)]
 pub struct BentoGrid {
     /// Number of columns.

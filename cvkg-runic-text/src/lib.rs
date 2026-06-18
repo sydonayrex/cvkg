@@ -1,4 +1,4 @@
-// CVKG Runic Text — Production text shaping, layout, and rasterization engine
+// CVKG Runic Text -- Production text shaping, layout, and rasterization engine
 //
 // Features:
 //   - Font discovery via fontdb (system fonts + user fonts)
@@ -1191,7 +1191,7 @@ impl RunicTextEngine {
         engine
     }
 
-    /// Create a light text engine for testing — no system/user font loading.
+    /// Create a light text engine for testing -- no system/user font loading.
     /// Only bundled fonts (loaded via `load_font_data()`) are available.
     pub fn new_light() -> Self {
         RunicTextEngine {
@@ -2298,8 +2298,8 @@ impl RunicTextEngine {
     /// Returns `Err` if the font cannot be found.
     ///
     /// # Arguments
-    /// * `family` — Font family name.
-    /// * `font_size` — Font size for resolving the face.
+    /// * `family` -- Font family name.
+    /// * `font_size` -- Font size for resolving the face.
     pub fn query_font_axes(
         &mut self,
         family: &str,

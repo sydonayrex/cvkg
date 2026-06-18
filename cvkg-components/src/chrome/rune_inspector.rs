@@ -1,4 +1,4 @@
-//! RuneInspector — Detachable floating inspector panel.
+//! RuneInspector -- Detachable floating inspector panel.
 //! Named after the runic tablets used by Norse scholars.
 
 use crate::theme;

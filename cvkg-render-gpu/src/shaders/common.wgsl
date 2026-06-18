@@ -48,7 +48,7 @@ struct SceneUniforms {
 @group(2) @binding(1) var<uniform> scene: SceneUniforms;
 
 // --- Group 0: Main Texture Array ---
-@group(0) @binding(0) var t_diffuse: binding_array<texture_2d<f32>, 256>;
+@group(0) @binding(0) var t_diffuse: binding_array<texture_2d<f32>, 32>;
 @group(0) @binding(1) var s_diffuse: sampler;
 
 // --- Group 1: Environment / Blur ---

@@ -7,7 +7,7 @@ use glam::Vec2;
 use std::collections::HashMap;
 
 // ============================================================================
-// L-System — Organic Growth via Turtle Graphics
+// L-System -- Organic Growth via Turtle Graphics
 // ============================================================================
 
 /// A single stochastic rule: maps a predecessor to a successor with a probability.
@@ -295,7 +295,7 @@ impl LSystem {
 // ============================================================================
 
 /// Minimal deterministic PRNG used internally by the L-system.  Not exposed
-/// publicly — lives here to avoid a `rand` dependency for the L-system alone.
+/// publicly -- lives here to avoid a `rand` dependency for the L-system alone.
 #[derive(Debug, Clone)]
 struct SimpleRng {
     state: u64,
@@ -325,7 +325,7 @@ impl SimpleRng {
 }
 
 // ============================================================================
-// Voronoi Fracture — Destruction via Voronoi Partitioning
+// Voronoi Fracture -- Destruction via Voronoi Partitioning
 // ============================================================================
 
 /// An axis-aligned bounding box used as the sampling domain for Voronoi seeds.
@@ -407,9 +407,9 @@ pub struct Fragment {
 /// decompositions suitable for real-time animation.
 ///
 /// # Pipeline
-/// 1. `generate(seed_count, bounds)` — place random seeds and compute cells.
-/// 2. `clip_polygon(polygon)` — clip an arbitrary polygon against each cell.
-/// 3. `fracture(polygon)` — runs the full pipeline and returns `Fragment`s.
+/// 1. `generate(seed_count, bounds)` -- place random seeds and compute cells.
+/// 2. `clip_polygon(polygon)` -- clip an arbitrary polygon against each cell.
+/// 3. `fracture(polygon)` -- runs the full pipeline and returns `Fragment`s.
 ///
 /// # Example
 /// ```
@@ -634,7 +634,7 @@ impl VoronoiFracture {
                             boundary_points.push(Vec2::new(x1, y1));
                             boundary_points.push(Vec2::new(x0, y1));
                         } else {
-                            // Interior cell — emit centre for robustness.
+                            // Interior cell -- emit centre for robustness.
                             boundary_points.push(Vec2::new((x0 + x1) * 0.5, (y0 + y1) * 0.5));
                         }
                     }
@@ -859,11 +859,11 @@ fn convex_hull_graham(points: &[Vec2]) -> Vec<Vec2> {
         })
     });
 
-    // Remove duplicate angles (keep farthest — last in sorted order).
+    // Remove duplicate angles (keep farthest -- last in sorted order).
     let mut filtered: Vec<Vec2> = Vec::with_capacity(sorted.len());
     for i in 0..sorted.len() {
         if i + 1 < sorted.len() && (sorted[i + 1].0 - sorted[i].0).abs() < 1e-10 {
-            // Next point has same angle — skip this one (keep the farther one).
+            // Next point has same angle -- skip this one (keep the farther one).
             continue;
         }
         filtered.push(sorted[i].1);
@@ -970,7 +970,7 @@ mod tests {
     #[test]
     fn test_lsystem_no_rule_identity() {
         let lsys = LSystem::new("F+F--F+F", 90.0, 1.0);
-        // No rules added — identity expansion.
+        // No rules added -- identity expansion.
         assert_eq!(lsys.expanded(), "F+F--F+F");
     }
 

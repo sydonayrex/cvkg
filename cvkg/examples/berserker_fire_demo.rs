@@ -1,4 +1,4 @@
-//! Berserker Fire — Desktop GPU Demo
+//! Berserker Fire -- Desktop GPU Demo
 //!
 //! Run: cargo run -p cvkg --example berserker_fire_demo --features gpu
 
@@ -360,7 +360,7 @@ impl ApplicationHandler for App {
                 // Upload fireball position to GPU for dynamic glass specular
                 renderer.set_fireball_pos([cx, cy]);
 
-                // Spawn particles — directional trail behind fireball
+                // Spawn particles -- directional trail behind fireball
                 let spawn = if self.state.rage > 0.5 { 8 } else { 4 };
                 for _ in 0..spawn {
                     let is_ember = self.state.rng.next_f32() > 0.3;

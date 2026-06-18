@@ -1,4 +1,4 @@
-//! PromptForge — Prompt Template Editor with variable binding UI.
+//! PromptForge -- Prompt Template Editor with variable binding UI.
 //!
 //! Provides a prompt template editor with {{variable}} placeholders and
 //! a side panel for filling in variable values.
@@ -11,8 +11,8 @@ use std::sync::{Arc, Mutex};
 /// A prompt template with {{variable}} placeholders.
 ///
 /// # Syntax:
-/// - `{{name}}` — required variable (highlighted in accent color)
-/// - `{{name:default}}` — variable with default value (highlighted in muted color)
+/// - `{{name}}` -- required variable (highlighted in accent color)
+/// - `{{name:default}}` -- variable with default value (highlighted in muted color)
 #[derive(Clone)]
 pub struct PromptForge {
     template: String,

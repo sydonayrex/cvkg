@@ -160,7 +160,7 @@ impl View for Input {
         renderer.fill_rounded_rect(rect, RADIUS_MD, bg);
         renderer.stroke_rect(rect, border, if self.is_focused { 2.0 } else { 1.0 });
 
-        // Focus ring — WCAG 2.4.7
+        // Focus ring -- WCAG 2.4.7
         if self.is_focused && !is_disabled {
             crate::draw_focus_ring(renderer, rect);
         }

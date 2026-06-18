@@ -5,6 +5,8 @@ use crate::kvasir::nodes::{PassId, RES_SCENE};
 /// Renders a fullscreen triangle with SDF raymarching for fog/light shaft effects.
 /// Uses scene-aware uniforms (time, resolution, light position) for animated output.
 /// Writes directly to the scene texture with additive blending.
+/// Now reads hologram instance data from the renderer to constrain rendering
+/// to the hologram bounding rect and add per-hologram variation.
 pub struct VolumetricNode {
     pub inputs: Vec<crate::kvasir::resource::ResourceId>,
     pub outputs: Vec<crate::kvasir::resource::ResourceId>,
@@ -56,23 +58,44 @@ impl KvasirNode for VolumetricNode {
         let light_pos = [0.5_f32, 0.3, 2.0];
         let light_color = [0.8_f32, 0.85, 1.0]; // Cool white light
 
-        let uniform_data: [f32; 16] = [
-            current_time,
-            resolution[0],
-            resolution[1],
-            0.0, // _pad
-            light_pos[0],
-            light_pos[1],
-            light_pos[2],
-            0.0, // _pad
-            light_color[0],
-            light_color[1],
-            light_color[2],
-            1.0,  // density
-            0.15, // falloff (soft glow falloff factor used by shader)
-            0.0,  // _pad0
-            0.0,  // _pad1
-            0.0,  // struct alignment pad to 64 bytes (16 floats)
+        // Pack hologram instance data into extended uniform buffer.
+        // If no hologram instances are active, zeros are written (shader renders nothing).
+        let instances = ctx.renderer.hologram_instances();
+        let holo = instances.first(); // Primary hologram (single-instance fast path)
+        let holo_rect_x = holo.map_or(0.0, |h| h.rect.x);
+        let holo_rect_y = holo.map_or(0.0, |h| h.rect.y);
+        let holo_rect_w = holo.map_or(0.0, |h| h.rect.width);
+        let holo_rect_h = holo.map_or(0.0, |h| h.rect.height);
+        let holo_id_hash = holo.map_or(0.0f32, |h| h.id_hash as f32);
+        let holo_time = holo.map_or(0.0f32, |h| h.time);
+        let holo_count = instances.len() as f32;
+
+        let uniform_data: [f32; 24] = [
+            current_time,         // 0: time
+            resolution[0],        // 1: resolution.x
+            resolution[1],        // 2: resolution.y
+            0.0,                  // 3: _pad
+            light_pos[0],         // 4: light_pos.x
+            light_pos[1],         // 5: light_pos.y
+            light_pos[2],         // 6: light_pos.z
+            0.0,                  // 7: _pad
+            light_color[0],       // 8: light_color.x
+            light_color[1],       // 9: light_color.y
+            light_color[2],       // 10: light_color.z
+            1.0,                  // 11: density
+            0.15,                 // 12: falloff
+            0.0,                  // 13: _pad0
+            0.0,                  // 14: _pad1
+            0.0,                  // 15: struct alignment pad to 64 bytes
+            // -- Hologram extension (bytes 64..96) --
+            holo_rect_x,          // 16: holo_rect.x
+            holo_rect_y,          // 17: holo_rect.y
+            holo_rect_w,          // 18: holo_rect.width
+            holo_rect_h,          // 19: holo_rect.height
+            holo_id_hash,         // 20: hologram_id hash (f32 cast)
+            holo_time,            // 21: hologram instance time
+            holo_count,           // 22: number of active hologram instances
+            0.0,                  // 23: _pad2
         ];
         ctx.renderer.queue.write_buffer(
             &ctx.renderer.volumetric_uniform_buffer,

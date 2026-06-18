@@ -1142,7 +1142,7 @@ impl View for DraumaSkeleton {
 }
 
 // =============================================================================
-// SPINNER — Animated loading indicator with multiple variants
+// SPINNER -- Animated loading indicator with multiple variants
 // =============================================================================
 
 /// HatiSpinner variant determining the visual style of the loading animation.
@@ -1224,7 +1224,7 @@ impl View for HatiSpinner {
                 ];
                 renderer.stroke_ellipse(circ_rect, bg_color, 2.5);
 
-                // Rotating arc — simulated by drawing short line segments
+                // Rotating arc -- simulated by drawing short line segments
                 // along an arc with a trailing fade, creating the appearance
                 // of a rotating spinner with a gap.
                 let rotation = t * 2.5;
@@ -1369,7 +1369,7 @@ impl View for HatiSpinner {
 }
 
 // =============================================================================
-// EMPTY STATE — Centered placeholder for empty content
+// EMPTY STATE -- Centered placeholder for empty content
 // =============================================================================
 
 /// A centered empty state component with icon, title, description, and optional CTA.

@@ -1,4 +1,4 @@
-//! Audio and Haptic Feedback — Item 14
+//! Audio and Haptic Feedback -- Item 14
 //!
 //! OS-agnostic audio and haptic feedback abstractions.
 //! Platform implementations are behind feature flags.
@@ -68,7 +68,7 @@ pub trait HapticEngine: Send + Sync {
     /// Error notification haptic.
     fn error(&self) {}
 
-    /// Visual micro-feedback tick — subtle visual pulse for UI interactions.
+    /// Visual micro-feedback tick -- subtle visual pulse for UI interactions.
     ///
     /// Unlike haptic methods which trigger physical feedback, this triggers
     /// a brief visual animation (e.g., a glow or scale pulse) synchronized

@@ -1,4 +1,4 @@
-//! A11yBeacon — Live Region Accessibility Integration.
+//! A11yBeacon -- Live Region Accessibility Integration.
 //!
 //! Provides screen reader announcements for dynamic content changes.
 //! Wraps any view and announces messages when content changes.

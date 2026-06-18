@@ -7,9 +7,9 @@
 //!
 //! The engine produces three command buckets that feed into the
 //! Backdrop Capture Architecture in `cvkg-render-gpu`:
-//! 1. `scene_commands` — Opaque/standard UI (Scene Capture pass)
-//! 2. `glass_commands` — Glassmorphism (Material Composite pass)
-//! 3. `overlay_commands` — Foreground UI (Top-Level pass)
+//! 1. `scene_commands` -- Opaque/standard UI (Scene Capture pass)
+//! 2. `glass_commands` -- Glassmorphism (Material Composite pass)
+//! 3. `overlay_commands` -- Foreground UI (Top-Level pass)
 
 use crate::layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 use cvkg_core::Rect;

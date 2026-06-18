@@ -1,4 +1,4 @@
-//! LinguaTong — i18n Localization Infrastructure.
+//! LinguaTong -- i18n Localization Infrastructure.
 //!
 //! Provides translation lookup, locale management, and RTL detection.
 //! All user-visible strings in components should go through this system.

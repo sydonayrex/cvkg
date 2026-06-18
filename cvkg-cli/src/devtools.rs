@@ -40,8 +40,8 @@ impl Panel {
     ///
     /// # Arguments
     ///
-    /// * `title` — The tab title displayed in the dashboard.
-    /// * `content` — The [`PanelContent`] variant to render.
+    /// * `title` -- The tab title displayed in the dashboard.
+    /// * `content` -- The [`PanelContent`] variant to render.
     pub fn new(title: &str, content: PanelContent) -> Self {
         Self {
             title: title.to_string(),
@@ -195,7 +195,7 @@ impl DevToolsDashboard {
     ///
     /// # Arguments
     ///
-    /// * `panel` — The [`Panel`] to add.
+    /// * `panel` -- The [`Panel`] to add.
     pub fn add_panel(&mut self, panel: Panel) {
         self.panels.push(panel);
     }
@@ -207,7 +207,7 @@ impl DevToolsDashboard {
     ///
     /// # Arguments
     ///
-    /// * `index` — The zero-based index of the panel to remove.
+    /// * `index` -- The zero-based index of the panel to remove.
     pub fn remove_panel(&mut self, index: usize) {
         if index < self.panels.len() {
             self.panels.remove(index);
@@ -223,7 +223,7 @@ impl DevToolsDashboard {
     ///
     /// # Arguments
     ///
-    /// * `index` — The zero-based index of the panel to activate.
+    /// * `index` -- The zero-based index of the panel to activate.
     pub fn set_active(&mut self, index: usize) {
         if index < self.panels.len() {
             self.active_panel = index;
@@ -365,7 +365,7 @@ pub fn update_metrics(metrics: PerfMetrics) {
 ///
 /// # Arguments
 ///
-/// * `entry` — The [`LogEntry`] to format.
+/// * `entry` -- The [`LogEntry`] to format.
 ///
 /// # Examples
 ///

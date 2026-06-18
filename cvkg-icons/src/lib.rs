@@ -204,8 +204,15 @@ impl<'a> View for Icon<'a> {
                 );
                 renderer.draw_svg_with_offset(&svg, rect, 0.0);
             }
-            IconData::Glyph(_idx) => {
-                // TODO: icon font rendering not yet implemented
+            IconData::Glyph(idx) => {
+                // Render the icon font glyph by converting the glyph index
+                // (which is a Unicode codepoint) to a character and drawing it
+                // as text at the icon's position with the icon's color.
+                if let Some(ch) = char::from_u32(*idx) {
+                    let mut text_buf = [0u8; 4];
+                    let text = ch.encode_utf8(&mut text_buf);
+                    renderer.draw_text(text, rect.x, rect.y, rect.height, self.color);
+                }
             }
         }
     }

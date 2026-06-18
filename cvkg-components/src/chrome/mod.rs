@@ -1,4 +1,4 @@
-//! Chrome components — Application shell elements (menu bar, dock, toolbar).
+//! Chrome components -- Application shell elements (menu bar, dock, toolbar).
 //! These components provide the structural UI that surrounds content.
 
 pub mod heimdall_dock;

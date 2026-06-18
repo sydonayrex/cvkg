@@ -1,4 +1,4 @@
-//! NornirBar — The application menu bar.
+//! NornirBar -- The application menu bar.
 //! Named after the Nornir (Urd, Verdandi, Skuld), the three fates.
 
 use crate::theme;

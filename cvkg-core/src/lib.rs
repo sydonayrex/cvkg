@@ -3,18 +3,18 @@
 //! All AI agents contributing to this crate MUST follow ALL seven rules:
 //!
 //! ── Karpathy Guidelines (1–4) ────────────────────────────────────────────
-//! 1. THINK FIRST     — State assumptions. Surface ambiguity. Push back on complexity.
-//! 2. STAY SIMPLE     — Minimum code. No speculative features. No unasked-for abstractions.
-//! 3. BE SURGICAL     — Touch only what's required. Own your orphans. Don't improve neighbors.
-//! 4. VERIFY GOALS    — Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
+//! 1. THINK FIRST     -- State assumptions. Surface ambiguity. Push back on complexity.
+//! 2. STAY SIMPLE     -- Minimum code. No speculative features. No unasked-for abstractions.
+//! 3. BE SURGICAL     -- Touch only what's required. Own your orphans. Don't improve neighbors.
+//! 4. VERIFY GOALS    -- Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
 //!
 //! ── CVKG Extended Protocols (5–7) ────────────────────────────────────────
-//! 5. TRIPLE-PASS     — Read the target, its surrounding context, and its full call graph
+//! 5. TRIPLE-PASS     -- Read the target, its surrounding context, and its full call graph
 //                      at least THREE TIMES before making any edit or revision.
-//! 6. COMMENT ALL     — Every major pub fn, unsafe block, and non-trivial algorithm in
+//! 6. COMMENT ALL     -- Every major pub fn, unsafe block, and non-trivial algorithm in
 //                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
 //                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
-//! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
+//! 7. MONITOR LOOPS   -- Check every tool call / command for progress every 30 seconds.
 //                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //                      and move to unblocked work. Never silently accept a broken state.
 //!
@@ -22,8 +22,8 @@
 //   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //   CVKG Extended: Section 2 of the CVKG Design Specification
 
-//! The View trait is the fundamental building block of CVKG. Every UI element — from a plain text label
-//! to a complex navigation controller — is a View. The trait is intentionally minimal; complexity emerges
+//! The View trait is the fundamental building block of CVKG. Every UI element -- from a plain text label
+//! to a complex navigation controller -- is a View. The trait is intentionally minimal; complexity emerges
 //! through modifier composition.
 //!
 //! # Conformance rules:
@@ -183,12 +183,12 @@ impl<V: View> View for ErrorBoundary<V> {
 
         match result {
             Ok(()) => {
-                // Child rendered successfully — clear any prior error state.
+                // Child rendered successfully -- clear any prior error state.
                 self.has_error
                     .store(false, std::sync::atomic::Ordering::Relaxed);
             }
             Err(panic) => {
-                // Child panicked — capture the error and render fallback.
+                // Child panicked -- capture the error and render fallback.
                 self.has_error
                     .store(true, std::sync::atomic::Ordering::Relaxed);
 
@@ -2728,7 +2728,7 @@ impl View for EmptyView {
     type Body = Never;
     fn body(self) -> Self::Body {
         // SAFETY: `Never` is uninhabitable. EmptyView renders nothing and has no
-        // composable body — it registers zero paint commands.
+        // composable body -- it registers zero paint commands.
         unreachable!()
     }
     fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {}
@@ -3197,7 +3197,7 @@ pub trait Renderer: ElapsedTime + Send {
     fn bifrost(&mut self, _rect: Rect, _blur: f32, _saturation: f32, _opacity: f32) {}
     /// Apply a Gungnir (Neon Glow) effect to the specified rect.
     fn gungnir(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
-    /// Soft glow variant — half the intensity of gungnir(). Use for hover highlights.
+    /// Soft glow variant -- half the intensity of gungnir(). Use for hover highlights.
     fn gungnir_soft(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
     /// Set the default background color for the canvas (RGBA).
     /// Used when the app does not draw its own background.
@@ -3702,7 +3702,7 @@ impl Mesh {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// 3D TYPES — Phase 1: Camera, Transform, and 2.5D layer support
+// 3D TYPES -- Phase 1: Camera, Transform, and 2.5D layer support
 // ══════════════════════════════════════════════════════════════════════════
 
 /// A 3D transform: position, rotation (quaternion), and scale.
@@ -4173,7 +4173,7 @@ impl KnowledgeState {
         // SAFETY: We verify the type via Any::is::<T> before transmuting
         let any_ref = lock.read().ok()?;
         if any_ref.is::<T>() {
-            // Type matches — safe to transmute the Arc
+            // Type matches -- safe to transmute the Arc
             drop(any_ref);
             let cloned: Arc<std::sync::RwLock<dyn std::any::Any + Send + Sync>> = Arc::clone(lock);
             // Transmute Arc<RwLock<dyn Any>> to Arc<RwLock<T>>
@@ -6321,11 +6321,11 @@ mod error_boundary_tests {
     impl View for SuccessView {
         type Body = Never;
         fn body(self) -> Never {
-            // SAFETY: `Never` is uninhabitable — test helper with no composable body.
+            // SAFETY: `Never` is uninhabitable -- test helper with no composable body.
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
-            // No-op — renders successfully.
+            // No-op -- renders successfully.
         }
     }
 
@@ -6335,7 +6335,7 @@ mod error_boundary_tests {
     impl View for PanicOnRender {
         type Body = Never;
         fn body(self) -> Never {
-            // SAFETY: `Never` is uninhabitable — test helper that only panics in render().
+            // SAFETY: `Never` is uninhabitable -- test helper that only panics in render().
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
@@ -6349,7 +6349,7 @@ mod error_boundary_tests {
     impl View for PanicOnSize {
         type Body = Never;
         fn body(self) -> Never {
-            // SAFETY: `Never` is uninhabitable — test helper that only panics in intrinsic_size().
+            // SAFETY: `Never` is uninhabitable -- test helper that only panics in intrinsic_size().
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
@@ -6366,7 +6366,7 @@ mod error_boundary_tests {
     impl View for PanicWithString {
         type Body = Never;
         fn body(self) -> Never {
-            // SAFETY: `Never` is uninhabitable — test helper that panics with a String payload.
+            // SAFETY: `Never` is uninhabitable -- test helper that panics with a String payload.
             unreachable!()
         }
         fn render(&self, _renderer: &mut dyn Renderer, _rect: Rect) {
@@ -6432,7 +6432,7 @@ mod error_boundary_tests {
         let boundary = ErrorBoundary::new(PanicOnRender);
         let mut renderer = DummyRenderer;
 
-        // This must NOT panic — the boundary catches it.
+        // This must NOT panic -- the boundary catches it.
         boundary.render(&mut renderer, TEST_RECT);
 
         assert!(
@@ -6522,14 +6522,14 @@ mod error_boundary_tests {
         // body() must be pure and delegate directly.
         let boundary = ErrorBoundary::new(SuccessView);
         // Calling body() should not panic and should return Never (unreachable).
-        // We test this indirectly — if it compiles and the Never type is correct,
+        // We test this indirectly -- if it compiles and the Never type is correct,
         // the body() call would diverge. We just verify the type compiles.
         let _boundary_type = std::any::type_name::<ErrorBoundary<SuccessView>>();
     }
 }
 
 // =============================================================================
-// THEME CONTEXT — Thread-local theme access for components
+// THEME CONTEXT -- Thread-local theme access for components
 // =============================================================================
 //
 // Components call `use_theme()` to get the current SemanticColors.
@@ -6590,7 +6590,7 @@ pub fn use_theme() -> color::SemanticColors {
 }
 
 // =============================================================================
-// COLOR MODULE — Standalone semantic colors type
+// COLOR MODULE -- Standalone semantic colors type
 // =============================================================================
 //
 // This module provides `SemanticColors`, a self-contained color palette that
@@ -6618,21 +6618,21 @@ pub mod color {
     /// ```
     #[derive(Debug, Clone)]
     pub struct SemanticColors {
-        /// Primary brand color — used for key interactive elements.
+        /// Primary brand color -- used for key interactive elements.
         pub primary: Color,
-        /// Secondary color — used for less prominent interactive elements.
+        /// Secondary color -- used for less prominent interactive elements.
         pub secondary: Color,
-        /// Accent color — used for highlights, focus rings, CTAs.
+        /// Accent color -- used for highlights, focus rings, CTAs.
         pub accent: Color,
         /// Page/window background color.
         pub background: Color,
-        /// Surface color — used for cards, panels, sheets.
+        /// Surface color -- used for cards, panels, sheets.
         pub surface: Color,
-        /// Error color — used for destructive actions, error messages.
+        /// Error color -- used for destructive actions, error messages.
         pub error: Color,
-        /// Warning color — used for caution indicators.
+        /// Warning color -- used for caution indicators.
         pub warning: Color,
-        /// Success color — used for positive feedback.
+        /// Success color -- used for positive feedback.
         pub success: Color,
         /// Primary text color.
         pub text: Color,
@@ -6755,7 +6755,7 @@ pub mod color {
 }
 
 // =============================================================================
-// USE_STATE HOOK — Local component state with automatic re-render
+// USE_STATE HOOK -- Local component state with automatic re-render
 // =============================================================================
 //
 // Components call `use_state(id, initial)` to get a `(getter, setter)` pair.
@@ -6831,7 +6831,7 @@ pub fn use_state_hash(key: &str) -> u64 {
 }
 
 // =============================================================================
-// ACCESSIBILITY PREFERENCES — System accessibility settings
+// ACCESSIBILITY PREFERENCES -- System accessibility settings
 // =============================================================================
 //
 // Components and the renderer query these to adapt behavior:
@@ -7054,7 +7054,7 @@ pub fn set_accessibility_preferences(prefs: AccessibilityPreferences) {
 }
 
 // =============================================================================
-// CLIPBOARD — System clipboard access
+// CLIPBOARD -- System clipboard access
 // =============================================================================
 
 /// Trait for clipboard operations.
@@ -7102,7 +7102,7 @@ impl ClipboardProvider for SystemClipboard {
 }
 
 // =============================================================================
-// TEXT INPUT — Direction enum for cursor movement
+// TEXT INPUT -- Direction enum for cursor movement
 // =============================================================================
 
 /// Direction for cursor movement in text input.
@@ -7120,7 +7120,7 @@ pub enum TextDirection {
 
 /// Text input state managed by the renderer.
 ///
-/// Components don't store this directly — the renderer maintains it
+/// Components don't store this directly -- the renderer maintains it
 /// and components query/modify it through the Renderer trait methods.
 #[derive(Debug, Clone, Default)]
 pub struct TextInputState {
@@ -7772,7 +7772,7 @@ impl MenuBar {
 
     /// Build the standard CVKG menu structure with all conventional shortcuts.
     ///
-    /// The `cmd` modifier maps to ⌘ on macOS and Ctrl on Windows/Linux — this
+    /// The `cmd` modifier maps to ⌘ on macOS and Ctrl on Windows/Linux -- this
     /// translation is enforced by the renderer, not here.
     ///
     /// Menus included:
@@ -7973,7 +7973,7 @@ impl Default for MenuBar {
 }
 
 // =============================================================================
-// LOCALIZATION — Item 12: Localization / Internationalization
+// LOCALIZATION -- Item 12: Localization / Internationalization
 // =============================================================================
 // OS-agnostic: works on all platforms. No platform-specific string loading.
 
@@ -8148,7 +8148,7 @@ pub fn is_rtl() -> bool {
 }
 
 // =============================================================================
-// SYSTEM THEME DETECTION — Dark/Light mode detection
+// SYSTEM THEME DETECTION -- Dark/Light mode detection
 // =============================================================================
 //
 // OS-agnostic theme detection. Checks the CVKG_THEME environment variable first,
@@ -8188,7 +8188,7 @@ pub fn detect_system_theme() -> SystemTheme {
 }
 
 // =============================================================================
-// AUDIO / HAPTIC — Item 14: Spatial Audio / Haptic Feedback
+// AUDIO / HAPTIC -- Item 14: Spatial Audio / Haptic Feedback
 // =============================================================================
 // OS-agnostic: pure trait abstractions. Platform backends via cfg in renderer.
 
@@ -8200,7 +8200,7 @@ pub use audio_haptic::{
 };
 
 // =============================================================================
-// PARALLAX — Depth-based scroll offset system
+// PARALLAX -- Depth-based scroll offset system
 // =============================================================================
 
 pub mod parallax;

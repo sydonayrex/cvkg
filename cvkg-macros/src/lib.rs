@@ -4,7 +4,7 @@ use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{DeriveInput, Expr, FnArg, ItemFn, ItemStruct, Pat, braced, parse_macro_input};
 
-/// State attribute macro — derives common traits for state structs
+/// State attribute macro -- derives common traits for state structs
 ///
 /// Section 4.2: "expressed as Rust attributes via procedural macros"
 /// Automates: Clone, Debug, Default, Serialize, Deserialize
@@ -20,7 +20,7 @@ pub fn state(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// View derive macro — automatically implements cvkg_core::View
+/// View derive macro -- automatically implements cvkg_core::View
 ///
 /// If the struct has a `body` method defined in an `impl` block, it will be used.
 /// Otherwise, it defaults to a primitive View (Body = Never).
@@ -39,7 +39,7 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// View component attribute macro — transforms a function into a View struct
+/// View component attribute macro -- transforms a function into a View struct
 ///
 /// Section 4.1: "automate the boilerplate... generating the View trait implementation"
 #[proc_macro_attribute]
@@ -98,9 +98,9 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Binding attribute macro — marks a struct as a reactive binding
+/// Binding attribute macro -- marks a struct as a reactive binding
 ///
-/// Section 4.2: "Binding — read/write reference to parent state"
+/// Section 4.2: "Binding -- read/write reference to parent state"
 /// This macro derives serialization traits for debug inspection.
 #[proc_macro_attribute]
 pub fn binding(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -114,7 +114,7 @@ pub fn binding(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Component attribute macro — generates a component with builder pattern
+/// Component attribute macro -- generates a component with builder pattern
 ///
 /// Section 7.2: "Reduce component boilerplate"
 /// Generates: struct, View impl, builder pattern, and modifier-chain scaffolding
@@ -251,7 +251,7 @@ impl quote::ToTokens for HamrNode {
     }
 }
 
-/// hamr! macro — DSL for declarative UI definition
+/// hamr! macro -- DSL for declarative UI definition
 ///
 /// Example:
 /// hamr! {
@@ -270,7 +270,7 @@ pub fn hamr(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// cvkg_model! macro — generates data models with VDOM metadata
+/// cvkg_model! macro -- generates data models with VDOM metadata
 #[proc_macro]
 pub fn cvkg_model(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);

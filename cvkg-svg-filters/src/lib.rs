@@ -2038,13 +2038,31 @@ impl FilterEngine {
         input: &wgpu::TextureView,
         w: u32,
         h: u32,
-        _img: &usvg::filter::Image,
+        img: &usvg::filter::Image,
     ) -> Result<FilterResult, FilterError> {
         // feImage: render the referenced image/SVG into a texture.
-        // usvg::filter::Image contains a root Group with child nodes.
-        // Full implementation would render the subtree to a texture.
-        // For now, fall back to passthrough.
-        // TODO: Render image subtree to texture via SVG renderer.
+        // usvg::filter::Image contains a root Group with child nodes that would
+        // need to be rendered to a texture. Full SVG subtree rendering requires
+        // the host renderer (cvkg-render-gpu) which is not available in this
+        // filter context. Instead, check for a pre-uploaded image texture keyed
+        // by the root Group's ID (uploaded via `upload_image`).
+        let root = img.root();
+        if root.has_children() {
+            // Look for a pre-uploaded image texture matching this feImage's ID.
+            let id = root.id();
+            if !id.is_empty() {
+                if let Some((_tex, view)) = self.image_textures.get(id) {
+                    return Ok(FilterResult {
+                        output_view: std::sync::Arc::new(view.clone()),
+                        region: (0, 0, w, h),
+                    });
+                }
+            }
+            // No pre-uploaded texture found; fall through to passthrough.
+            // A full implementation would render the subtree via an SVG renderer
+            // callback provided by the host (see upload_image for manual texture
+            // upload as an alternative).
+        }
         self.apply_passthrough(input, w, h)
     }
 

@@ -813,7 +813,7 @@ impl ExecutionEngine {
                     self.steps
                         .push(ExecutionStep::Wait(Duration::from_millis(800)));
 
-                    // Check retry config — simulate a retry if max_retries > 1.
+                    // Check retry config -- simulate a retry if max_retries > 1.
                     if node.retry_config.max_retries > 1 {
                         self.steps.push(ExecutionStep::Log(
                             node.id.clone(),
@@ -1035,7 +1035,7 @@ impl ExecutionEngine {
 // Multi-Agent Orchestrator Component
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// The main orchestrator component — a `View` that renders the workflow graph,
+/// The main orchestrator component -- a `View` that renders the workflow graph,
 /// execution logs, metrics panel, and controls.
 #[derive(Debug, Clone)]
 pub struct MultiAgentOrchestrator {
@@ -1218,7 +1218,7 @@ impl MultiAgentOrchestrator {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// View Implementation — Rendering
+// View Implementation -- Rendering
 // ═══════════════════════════════════════════════════════════════════════════
 
 use cvkg_core::Never;
@@ -2760,7 +2760,7 @@ pub fn zoom_to_fit(
 }
 
 // ============================================================
-// AgentMessage — inter-agent message passing visualization
+// AgentMessage -- inter-agent message passing visualization
 // ============================================================
 
 #[derive(Clone, Debug)]
@@ -2804,7 +2804,7 @@ impl Default for AgentMessage {
 }
 
 // ============================================================
-// NodeMetrics — per-node performance metrics
+// NodeMetrics -- per-node performance metrics
 // ============================================================
 
 #[derive(Clone, Debug, Default)]

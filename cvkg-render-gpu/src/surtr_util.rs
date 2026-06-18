@@ -3,7 +3,7 @@ use crate::renderer::SurtrRenderer;
 use cvkg_core::{Rect, Renderer};
 
 impl SurtrRenderer {
-    /// load_image_to_heim — Packs a raw asset into the Mega-Heim.
+    /// load_image_to_heim -- Packs a raw asset into the Mega-Heim.
     /// This is used for common icons to enable aggressive batching (1 draw call).
     pub fn load_image_to_heim(&mut self, name: &str, data: &[u8]) {
         if self.image_uv_registry.contains(name) {

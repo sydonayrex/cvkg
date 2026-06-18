@@ -1,5 +1,6 @@
 //! Bridging the internal renderer to `cvkg-core` traits.
 use crate::renderer::SurtrRenderer;
+use crate::renderer::material_id;
 use crate::types::*;
 use crate::vertex::*;
 use cvkg_core::LAYOUT_DIRTY;
@@ -154,7 +155,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-            17,
+            material_id::SQUIRCLE_STROKE,
             None,
             rect.width.min(rect.height) * 0.22 * (n / 4.0),
             Rect { x: stroke_width, y: 0.0, width: 0.0, height: 0.0 },
@@ -194,7 +195,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params_and_slice(
             rect,
             self.apply_opacity(color),
-            21,
+            material_id::MESH_3D,
             None,
             0.0,
             Rect {
@@ -248,7 +249,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
     }
 
-    /// Soft glow variant — half the intensity of gungnir().
+    /// Soft glow variant -- half the intensity of gungnir().
     /// Use for hover highlights, non-critical indicators.
     fn gungnir_soft(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
         self.gungnir(rect, color, radius, intensity * 0.5);
@@ -258,7 +259,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
     ///
     /// # Contract
     /// Expands the bounding box of the visual target by `radius` to establish
-    /// a continuous proximity glow. Uses blending mode 18 (GPU drop shadow/glow)
+    /// a continuous proximity glow. Uses the drop shadow/glow SDF material
     /// to rasterize the glow with specialized radius-to-margin uv coordinate mappings.
     fn mani_glow(&mut self, rect: Rect, color: [f32; 4], radius: f32) {
         let margin = radius;
@@ -277,7 +278,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             glow_rect,
             self.apply_opacity(color),
-            18,
+            material_id::DROP_SHADOW,
             None,
             8.0,
             uv_rect,
@@ -338,7 +339,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-            17,
+            material_id::SQUIRCLE_STROKE,
             None,
             radius,
             Rect {
@@ -406,7 +407,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params_and_slice(
             rect,
             self.apply_opacity(inner_color),
-            16,
+            material_id::RADIAL_GRADIENT,
             None,
             0.0,
             Rect {
@@ -439,7 +440,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             inflated,
             self.apply_opacity(color),
-            18,
+            material_id::DROP_SHADOW,
             None,
             radius,
             Rect {
@@ -463,7 +464,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.fill_rect_with_full_params(
             rect,
             self.apply_opacity(color),
-            19,
+            material_id::DASHED_STROKE,
             None,
             radius,
             Rect {
@@ -529,7 +530,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn draw_image(&mut self, image_name: &str, rect: Rect) {
-        // Guard: skip if image not loaded — avoids rendering garbage from uninitialized atlas regions
+        // Guard: skip if image not loaded -- avoids rendering garbage from uninitialized atlas regions
         if !self.image_uv_registry.contains(image_name) {
             log::warn!("[Surtr] draw_image: '{}' not loaded, skipping", image_name);
             return;
@@ -663,7 +664,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         }
     }
 
-    /// measure_text — Calculates the dimensions of a text string without rendering.
+    /// measure_text -- Calculates the dimensions of a text string without rendering.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         let sf = self.current_scale_factor();
         let shaped = self.shape_text_with_stack(text, size * sf);
@@ -856,8 +857,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
         );
     }
 
-    /// load_image — Proactively pushes a raw asset into the Mega-Heim.
-    /// load_image — Proactively pushes a raw asset into the Texture Array.
+    /// load_image -- Proactively pushes a raw asset into the Mega-Heim.
+    /// load_image -- Proactively pushes a raw asset into the Texture Array.
     fn load_image(&mut self, name: &str, data: &[u8]) {
         if self.image_uv_registry.contains(name) {
             return;
@@ -907,8 +908,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Slot allocation (Skip index 0 which is the dummy/atlas)
-        // texture_views is a fixed 256-element Vec; indices 1..=255 are usable.
-        let index = if self.texture_registry.len() < 255 {
+        // texture_views is a fixed 32-element Vec; indices 1..=31 are usable.
+        let index = if self.texture_registry.len() < 31 {
             (self.texture_registry.len() + 1) as u32
         } else {
             // Evict the least recently used texture and reuse its slot.
@@ -922,7 +923,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             }
         };
 
-        // Bounds guard: index must be in 1..256 (index 0 is the atlas).
+        // Bounds guard: index must be in 1..32 (index 0 is the atlas).
         if index == 0 || index as usize >= self.texture_views.len() {
             log::error!("[GPU] load_image: invalid texture index {} (registry has {} entries)", index, self.texture_registry.len());
             return;
@@ -1055,13 +1056,13 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.current_scene.scene_type = preset;
     }
 
-    /// push_mjolnir_slice — Pushes a geometric clipping plane onto the stack.
+    /// push_mjolnir_slice -- Pushes a geometric clipping plane onto the stack.
     /// All subsequent draw calls will be sliced by this plane until it is popped.
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
         self.slice_stack.push((angle, offset));
     }
 
-    /// pop_mjolnir_slice — Removes the top-most geometric clipping plane from the stack.
+    /// pop_mjolnir_slice -- Removes the top-most geometric clipping plane from the stack.
     fn pop_mjolnir_slice(&mut self) {
         self.slice_stack.pop();
     }
@@ -1083,27 +1084,77 @@ impl cvkg_core::Renderer for SurtrRenderer {
         origin: [f32; 2],
         count: u32,
         effect_type: &str,
-        _color: [f32; 4],
+        color: [f32; 4],
     ) {
-        // Stub: particle dispatch requires a compute pass pipeline that is not yet wired.
+        use crate::types::{GpuParticle, MAX_PARTICLES};
+
+        let dt = self.current_scene.delta_time;
+        let now = std::time::Instant::now();
+
+        // Determine spawn parameters based on effect type
+        let (speed_range, life_range, spread_angle) = match effect_type {
+            "firework" => (100.0..300.0, 1.0..2.5, std::f32::consts::TAU),
+            "spark" => (50.0..150.0, 0.5..1.5, std::f32::consts::PI),
+            "rain" => (20.0..80.0, 1.0..3.0, std::f32::consts::FRAC_PI_4),
+            "data_stream" => (80.0..200.0, 0.8..2.0, std::f32::consts::FRAC_PI_6),
+            "bubble" => (10.0..40.0, 2.0..4.0, std::f32::consts::TAU),
+            _ => (30.0..120.0, 1.0..2.0, std::f32::consts::TAU),
+        };
+
+        let count = count.min((MAX_PARTICLES - self.particle_count as usize) as u32);
+        if count == 0 {
+            return;
+        }
+
+        let mut rng_state = (now.elapsed().as_nanos() as u64).wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let mut rand_f32 = |range: std::ops::Range<f32>| -> f32 {
+            rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            let t = (rng_state >> 33) as f32 / (1u64 << 31) as f32;
+            range.start + t * (range.end - range.start)
+        };
+
+        for _ in 0..count {
+            let angle = rand_f32(0.0..spread_angle);
+            let speed = rand_f32(speed_range.clone());
+            let life = rand_f32(life_range.clone());
+            let vx = angle.cos() * speed;
+            let vy = angle.sin() * speed;
+
+            let particle = GpuParticle {
+                pos_vel: [origin[0], origin[1], vx, vy],
+                color_life: [color[0], color[1], color[2], life],
+            };
+            self.particle_staging.push(particle);
+        }
+
         log::debug!(
-            "[Surtr] dispatch_particles: {} {} particles at {:?} (stub, no-op)",
+            "[Surtr] dispatch_particles: {} {} particles at {:?} (staged, {} total pending)",
             count,
             effect_type,
-            origin
+            origin,
+            self.particle_staging.len()
         );
     }
 
     fn draw_hologram(&mut self, rect: Rect, hologram_id: &str, time: f32) {
-        // Stub: volumetric hologram rendering is not yet implemented.
-        // Fallback: render a glowing wireframe rectangle as a placeholder.
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        hologram_id.hash(&mut hasher);
+        let id_hash = hasher.finish() as u32;
+
         log::debug!(
-            "[Surtr] draw_hologram: {} at {:?} t={} (stub, wireframe fallback)",
+            "[Surtr] draw_hologram: {} at {:?} t={} (hologram pipeline)",
             hologram_id,
             rect,
             time
         );
-        self.stroke_rect(rect, [0.0, 1.0, 1.0, 0.5], 2.0);
+
+        self.hologram_instances.push(crate::renderer::HologramInstance {
+            rect,
+            id_hash,
+            time,
+        });
+        self.volumetric_enabled = true;
     }
 
     fn upload_data_texture(&mut self, id: &str, data: &[f32], width: u32, height: u32) {
@@ -1138,23 +1189,19 @@ impl cvkg_core::Renderer for SurtrRenderer {
             size,
         );
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = self.device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            ..Default::default()
-        });
+        // Reuse the renderer's pre-created linear sampler (ClampToEdge + Linear)
+        // instead of allocating a new sampler on every upload.
         let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &self.texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    // The layout requires 256 entries; only index 0 is the actual texture.
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&view; 256]),
+                    // The layout requires 32 entries; only index 0 is the actual texture.
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&view; 32]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
                 },
             ],
             label: Some(id),
@@ -1171,7 +1218,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn draw_mesh(&mut self, mesh: &Mesh, color: [f32; 4], transform: glam::Mat4) {
         let base_idx = self.vertices.len() as u32;
-        let screen = [self.current_width() as f32, self.current_height() as f32];
 
         for i in 0..mesh.vertices.len() {
             let pos = transform.transform_point3(glam::Vec3::from(mesh.vertices[i]));
@@ -1231,7 +1277,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
         transform: &cvkg_core::Transform3D,
     ) {
         let base_idx = self.vertices.len() as u32;
-        let screen = [self.current_width() as f32, self.current_height() as f32];
         let model_matrix = transform.to_matrix();
 
         for i in 0..mesh.vertices.len() {

@@ -218,7 +218,7 @@ async fn handle_devtools_socket(mut ws: WebSocket, _state: AppState) {
                         .await;
                     }
                     Ok(DevtoolsCommand::QueryGraph) => {
-                        // Return empty graph for now — populated by build pipeline
+                        // Return empty graph for now -- populated by build pipeline
                         let response = serde_json::json!({
                             "type": "graph",
                             "nodes": [],

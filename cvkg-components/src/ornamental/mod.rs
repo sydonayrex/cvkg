@@ -1,4 +1,4 @@
-//! Ornamental components — Decorative border systems inspired by Norse art.
+//! Ornamental components -- Decorative border systems inspired by Norse art.
 //!
 //! This module provides runic ornament borders that decorate rectangular
 //! regions with patterns drawn from Elder Futhark runes, Celtic knotwork,

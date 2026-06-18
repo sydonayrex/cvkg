@@ -3,18 +3,18 @@
 //! All AI agents contributing to this crate MUST follow ALL seven rules:
 //!
 //! ── Karpathy Guidelines (1–4) ────────────────────────────────────────────
-//! 1. THINK FIRST     — State assumptions. Surface ambiguity. Push back on complexity.
-//! 2. STAY SIMPLE     — Minimum code. No speculative features. No unasked-for abstractions.
-//! 3. BE SURGICAL     — Touch only what's required. Own your orphans. Don't improve neighbors.
-//! 4. VERIFY GOALS    — Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
+//! 1. THINK FIRST     -- State assumptions. Surface ambiguity. Push back on complexity.
+//! 2. STAY SIMPLE     -- Minimum code. No speculative features. No unasked-for abstractions.
+//! 3. BE SURGICAL     -- Touch only what's required. Own your orphans. Don't improve neighbors.
+//! 4. VERIFY GOALS    -- Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
 //!
 //! ── CVKG Extended Protocols (5–7) ────────────────────────────────────────
-//! 5. TRIPLE-PASS     — Read the target, its surrounding context, and its full call graph
+//! 5. TRIPLE-PASS     -- Read the target, its surrounding context, and its full call graph
 //!                      at least THREE TIMES before making any edit or revision.
-//! 6. COMMENT ALL     — Every major pub fn, unsafe block, and non-trivial algorithm in
+//! 6. COMMENT ALL     -- Every major pub fn, unsafe block, and non-trivial algorithm in
 //!                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
 //!                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
-//! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
+//! 7. MONITOR LOOPS   -- Check every tool call / command for progress every 30 seconds.
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
 //!
@@ -121,13 +121,14 @@ pub(crate) const WGSL_BIFROST: &str = include_str!("shaders/bifrost.wgsl");
 pub(crate) const WGSL_BLOOM: &str = include_str!("shaders/bloom.wgsl");
 pub(crate) const WGSL_COLOR_BLIND: &str = include_str!("shaders/color_blind.wgsl");
 pub(crate) const WGSL_TONEMAP: &str = include_str!("shaders/tonemap.wgsl");
+pub(crate) const WGSL_PARTICLES: &str = include_str!("shaders/particles.wgsl");
 
 pub mod color_blindness;
 
 // Re-export ColorBlindMode for downstream users
 pub use color_blindness::ColorBlindMode;
 
-// ShieldWall — re-export AccessKit types so callers can build tree updates
+// ShieldWall -- re-export AccessKit types so callers can build tree updates
 // without depending on accesskit directly.
 pub use accesskit::{
     ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role, Tree,

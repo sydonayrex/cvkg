@@ -77,7 +77,7 @@ impl RuntimeStateSnapshot {
 }
 
 // =============================================================================
-// FILE WATCHER — Item 17: Hot Reload / Dev Server
+// FILE WATCHER -- Item 17: Hot Reload / Dev Server
 // =============================================================================
 // Uses `notify` crate (already a workspace dependency) for cross-platform
 // file system event monitoring.

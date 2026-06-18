@@ -1,4 +1,4 @@
-//! Renderer sub-traits — logical groupings of the Renderer capability surface.
+//! Renderer sub-traits -- logical groupings of the Renderer capability surface.
 //!
 //! The main `Renderer` trait (in the parent module) aggregates all of these.
 //! Backends continue to implement `Renderer` as before. These sub-traits exist
@@ -9,7 +9,7 @@ use super::{
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Core — required by every backend
+// Core -- required by every backend
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Core rendering control. Every backend must implement these.
@@ -21,7 +21,7 @@ pub trait RendererCore: Send {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Shapes — 2D primitive drawing
+// Shapes -- 2D primitive drawing
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// 2D shape drawing operations.
@@ -61,17 +61,17 @@ pub trait RendererShapes {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 3D — mesh and cube drawing
+// 3D -- mesh and cube drawing
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// 3D drawing operations. Optional — defaults to no-op.
+/// 3D drawing operations. Optional -- defaults to no-op.
 pub trait Renderer3D {
     fn draw_3d_cube(&mut self, _rect: Rect, _color: [f32; 4], _rotation: [f32; 3]) {}
     fn draw_mesh(&mut self, _mesh: &Mesh, _color: [f32; 4], _transform: glam::Mat4) {}
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Text — text layout and measurement
+// Text -- text layout and measurement
 // ══════════════════════════════════════════════════════════════════════════════
 
 pub trait RendererText {
@@ -92,7 +92,7 @@ pub trait RendererText {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Images — texture and image handling
+// Images -- texture and image handling
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Image and texture operations.
@@ -104,7 +104,7 @@ pub trait RendererImages {
 }
 
 // ════════════════════════════════════════════════════════════════════════════──
-// Data Viz — heatmap / data texture support
+// Data Viz -- heatmap / data texture support
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Data-visualisation helpers.
@@ -121,7 +121,7 @@ pub trait RendererDataViz {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Vector Graphics — SVG loading and drawing
+// Vector Graphics -- SVG loading and drawing
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// SVG vector graphics.
@@ -131,7 +131,7 @@ pub trait RendererVectorGraphics {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Effects — gradients, shadows, 9-slice, dashed strokes
+// Effects -- gradients, shadows, 9-slice, dashed strokes
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Visual effects.
@@ -185,7 +185,7 @@ pub trait RendererEffects {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Clipping — scissor / clip-rect stack
+// Clipping -- scissor / clip-rect stack
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Clip-rect stack operations.
@@ -198,7 +198,7 @@ pub trait RendererClipping {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Transforms — 2D affine transform stack
+// Transforms -- 2D affine transform stack
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// 2D transform stack.
@@ -208,7 +208,7 @@ pub trait RendererTransforms {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Opacity — opacity stack
+// Opacity -- opacity stack
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Opacity stack operations.
@@ -218,7 +218,7 @@ pub trait RendererOpacity {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Berserker — scene / rage / shatter pipeline
+// Berserker -- scene / rage / shatter pipeline
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Berserker pipeline (rage, shatter, scene presets).
@@ -237,7 +237,7 @@ pub trait RendererBerserker {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Export — PNG capture / print
+// Export -- PNG capture / print
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Frame export operations.
@@ -249,14 +249,14 @@ pub trait RendererExport {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Cyberpunk — bifrost, gungnir, mani, mjolnir, memoize
+// Cyberpunk -- bifrost, gungnir, mani, mjolnir, memoize
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Cyberpunk-specific visual effects.
 pub trait RendererCyberpunk {
     fn bifrost(&mut self, _rect: Rect, _blur: f32, _saturation: f32, _opacity: f32) {}
     fn gungnir(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
-    /// Soft glow variant — half the intensity of gungnir(). Use for hover highlights.
+    /// Soft glow variant -- half the intensity of gungnir(). Use for hover highlights.
     fn gungnir_soft(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
     fn mani_glow(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32) {}
     fn push_mjolnir_slice(&mut self, _angle: f32, _offset: f32) {}
@@ -288,7 +288,7 @@ pub trait RendererCyberpunk {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Compute & Particles — fluid simulations, generative physics
+// Compute & Particles -- fluid simulations, generative physics
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Generic compute and particle dispatch operations for futuristic UIs.
@@ -305,7 +305,7 @@ pub trait RendererCompute {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Volumetric — holograms, raymarching
+// Volumetric -- holograms, raymarching
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Volumetric and raymarching projections.
@@ -315,7 +315,7 @@ pub trait RendererVolumetric {
 }
 
 // ════════════════════════════════════════════════════════════════════════════──
-// Accessibility — ARIA / shared elements / keys
+// Accessibility -- ARIA / shared elements / keys
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Accessibility helpers.
@@ -330,7 +330,7 @@ pub trait RendererAccessibility {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Telemetry — frame budget / performance data
+// Telemetry -- frame budget / performance data
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Performance telemetry.
@@ -341,7 +341,7 @@ pub trait RendererTelemetry {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// VDOM — virtual-DOM node tracking + event handler registration
+// VDOM -- virtual-DOM node tracking + event handler registration
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// VDOM integration.
@@ -363,7 +363,7 @@ pub trait RendererVDOM {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Z-Index — depth ordering
+// Z-Index -- depth ordering
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Z-index ordering.
@@ -375,7 +375,7 @@ pub trait RendererZIndex {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Layout Debug — query / visualize layout
+// Layout Debug -- query / visualize layout
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Layout debugging helpers.
@@ -393,7 +393,7 @@ pub trait RendererLayoutDebug {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Pointer — mouse / touch position query
+// Pointer -- mouse / touch position query
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Pointer position query.
@@ -404,10 +404,10 @@ pub trait RendererPointer {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Material — draw call routing for multi-pass pipeline
+// Material -- draw call routing for multi-pass pipeline
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Material routing — controls which pass a draw call is routed to.
+/// Material routing -- controls which pass a draw call is routed to.
 pub trait RendererMaterial {
     /// Set the active material for subsequent draw calls.
     fn set_material(&mut self, _material: crate::material::DrawMaterial) {}

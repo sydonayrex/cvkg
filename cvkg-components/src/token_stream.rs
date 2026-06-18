@@ -1,4 +1,4 @@
-//! TokenStream — Streaming AI diff renderer with word-by-word highlight.
+//! TokenStream -- Streaming AI diff renderer with word-by-word highlight.
 //!
 //! Displays incrementally arriving text tokens with a visual highlight
 //! that fades from accent color to normal text color. Includes a blinking
@@ -18,7 +18,7 @@ use std::sync::{Arc, Mutex};
 ///
 /// Instead, the TokenStream holds a raw Arc<Mutex<String>> that the
 /// renderer reads during render(), and a generation counter that IS
-/// a State<u64> — only the counter triggers re-renders, not the string clone.
+/// a State<u64> -- only the counter triggers re-renders, not the string clone.
 #[derive(Clone)]
 pub struct TokenStream {
     /// The accumulated text so far. Displayed to the user.

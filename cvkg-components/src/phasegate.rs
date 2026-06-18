@@ -1,4 +1,4 @@
-//! PhaseGate — Portal/teleport rendering system.
+//! PhaseGate -- Portal/teleport rendering system.
 //!
 //! PhaseGate allows overlay content (dropdowns, tooltips, popovers, modals, toasts)
 //! to render at the root level instead of inline in the component tree. This prevents

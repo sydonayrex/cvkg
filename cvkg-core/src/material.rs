@@ -88,11 +88,11 @@ pub enum DrawMaterial {
     /// Standard opaque shape (default).
     #[default]
     Opaque,
-    /// Glass/frosted panel — samples from blur pyramid during composite pass.
+    /// Glass/frosted panel -- samples from blur pyramid during composite pass.
     Glass { blur_radius: f32, ior_override: f32, glass_intensity: f32 },
     /// UI element rendered after glass (crisp text, icons).
     TopUI,
-    /// Blend mode compositing — uses Porter-Duff or arithmetic blending.
+    /// Blend mode compositing -- uses Porter-Duff or arithmetic blending.
     /// The `mode` field maps to the SVG/CSS blend mode enumeration.
     Blend { mode: u32 },
 }

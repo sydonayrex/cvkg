@@ -28,9 +28,9 @@ use std::sync::Arc;
 /// Phases of a spring snap event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SnapPhase {
-    /// Spring has crossed the target but not settled — "tick" feel.
+    /// Spring has crossed the target but not settled -- "tick" feel.
     CrossedTarget,
-    /// Spring is stretching past equilibrium — light "pop" feel.
+    /// Spring is stretching past equilibrium -- light "pop" feel.
     Overshoot,
     /// Spring has come to rest at the target.
     Settled,
@@ -68,8 +68,8 @@ impl SnapTracker {
     /// Create a new snap tracker.
     ///
     /// # Arguments
-    /// * `initial_value` — Current animated value.
-    /// * `threshold` — Distance from target considered "settled" (pixels).
+    /// * `initial_value` -- Current animated value.
+    /// * `threshold` -- Distance from target considered "settled" (pixels).
     pub fn new(initial_value: f32, threshold: f32) -> Self {
         Self {
             target: 0.0,

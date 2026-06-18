@@ -211,7 +211,7 @@ impl View for NativeSelect {
             renderer.register_handler(
                 "pointerclick",
                 Arc::new(move |_| {
-                    // Toggle — in a real app this would flip a state flag
+                    // Toggle -- in a real app this would flip a state flag
                     let _ = &on_change;
                     let _ = &current_value;
                 }),

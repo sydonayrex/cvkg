@@ -1,8 +1,8 @@
 //! Dialog and overlay components.
 //!
-//! AlertDialog — modal dialog for critical confirmations.
-//! ConfirmationDialog — destructive action confirmation.
-//! FullScreenCover — full screen overlay.
+//! AlertDialog -- modal dialog for critical confirmations.
+//! ConfirmationDialog -- destructive action confirmation.
+//! FullScreenCover -- full screen overlay.
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
@@ -14,7 +14,7 @@ use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;
 
 // ----------------------------------------------------------------------------
-// AlertDialog — modal dialog for critical confirmations
+// AlertDialog -- modal dialog for critical confirmations
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -222,7 +222,7 @@ impl View for AlertDialog {
 }
 
 // ----------------------------------------------------------------------------
-// ConfirmationDialog — confirmation dialog with destructive action
+// ConfirmationDialog -- confirmation dialog with destructive action
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -393,7 +393,7 @@ impl View for ConfirmationDialog {
 }
 
 // ----------------------------------------------------------------------------
-// FullScreenCover — full screen overlay
+// FullScreenCover -- full screen overlay
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]

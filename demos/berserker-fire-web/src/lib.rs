@@ -1,4 +1,4 @@
-//! Berserker Fire Demo — Web (WASM) target.
+//! Berserker Fire Demo -- Web (WASM) target.
 //!
 //! This crate compiles as a cdylib for wasm32-unknown-unknown.
 //! Full wasm integration is not yet implemented.

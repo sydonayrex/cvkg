@@ -1,4 +1,4 @@
-//! SyncWeave — Real-Time Collaboration Primitives.
+//! SyncWeave -- Real-Time Collaboration Primitives.
 //!
 //! Provides a CRDT-backed collaborative text buffer with remote cursor
 //! visualization. Uses a simplified LogootSplit CRDT for deterministic

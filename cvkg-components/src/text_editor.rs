@@ -1,4 +1,4 @@
-//! TextEditor — Multi-line text editing component.
+//! TextEditor -- Multi-line text editing component.
 //!
 //! Supports word wrapping, vertical scrolling, selection, copy/paste,
 //! and all standard editing operations.
@@ -557,7 +557,7 @@ impl View for TextEditor {
                         // Blink
                         let t = renderer.elapsed_time();
                         if t - state.last_blink_time > 0.5 {
-                            // Toggle blink — in a real impl, we'd write this back
+                            // Toggle blink -- in a real impl, we'd write this back
                         }
                         let cursor_alpha = if state.blink_phase == 0 { 1.0 } else { 0.0 };
                         let cursor_x = content_rect.x + cursor_col as f32 * 8.0;

@@ -363,7 +363,7 @@ pub fn break_text_simple(
             line_start = char_end;
             last_break = None;
         } else if line_px > line_width && line_start < pos {
-            // Exceeds width — break at last known break point
+            // Exceeds width -- break at last known break point
             let break_pos = last_break.unwrap_or(pos);
             let break_px = (break_pos - line_start) as f32 * char_width;
             lines.push(KnuthPlassLine {

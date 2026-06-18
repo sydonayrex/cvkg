@@ -88,7 +88,7 @@ impl KvasirGraph {
         }
 
         if order.len() != n {
-            // Cycle detected — find nodes still with in-degree > 0
+            // Cycle detected -- find nodes still with in-degree > 0
             let cycle_nodes: Vec<String> = in_degree
                 .iter()
                 .filter(|(_, d)| **d > 0)

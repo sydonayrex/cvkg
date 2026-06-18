@@ -60,7 +60,7 @@ impl KvasirNode for CompositeNode {
             &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&scene_view; 256]),
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&scene_view; 32]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

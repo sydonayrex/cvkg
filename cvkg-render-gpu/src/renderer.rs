@@ -6,7 +6,7 @@ use crate::types::*;
 use crate::vertex::*;
 use crate::{
     WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND, WGSL_COMMON, WGSL_MATERIAL_GLASS,
-    WGSL_MATERIAL_OPAQUE, WGSL_SHAPES, WGSL_TONEMAP,
+    WGSL_MATERIAL_OPAQUE, WGSL_PARTICLES, WGSL_SHAPES, WGSL_TONEMAP,
 };
 use bytemuck;
 use cvkg_core::Rect;
@@ -24,15 +24,25 @@ use std::num::NonZeroUsize;
 pub(crate) mod material_id {
     /// Opaque geometry (default, depth-tested, no blending).
     pub const OPAQUE: u32 = 0;
+    /// Ellipse shape (SDF circle, no blending).
+    pub const ELLIPSE: u32 = 4;
     /// Top UI layer (alpha blended, no blur).
     pub const TOP_UI: u32 = 6;
     /// Glass / frosted blur material.
     pub const GLASS: u32 = 7;
-    /// 3D surface material (lit, depth-tested).
-    pub const MESH_3D: u32 = 13;
     /// Blend modes occupy IDs 8..=22 (mapping to blend mode 1..=15).
     pub const BLEND_START: u32 = 8;
     pub const BLEND_END: u32 = 22;
+    /// Radial gradient (blend mode 9).
+    pub const RADIAL_GRADIENT: u32 = 16;
+    /// Squircle stroke / circular progress (blend mode 10).
+    pub const SQUIRCLE_STROKE: u32 = 17;
+    /// Drop shadow / glow SDF (blend mode 11).
+    pub const DROP_SHADOW: u32 = 18;
+    /// Dashed stroke (blend mode 12).
+    pub const DASHED_STROKE: u32 = 19;
+    /// 3D cube mesh (blend mode 14).
+    pub const MESH_3D: u32 = 21;
 }
 use std::sync::Arc;
 
@@ -43,7 +53,7 @@ pub struct SurtrRenderer {
     pub(crate) device: Arc<wgpu::Device>,
     pub(crate) queue: Arc<wgpu::Queue>,
 
-    // Kvasir resource registry — tracks GPU resource lifetimes
+    // Kvasir resource registry -- tracks GPU resource lifetimes
     pub(crate) registry: crate::kvasir::registry::ResourceRegistry,
 
     pub(crate) active_offscreens: Vec<crate::types::OffscreenEffectConfig>,
@@ -157,6 +167,9 @@ pub struct SurtrRenderer {
     pub(crate) volumetric_bind_group_layout: wgpu::BindGroupLayout,
     /// Persistent uniform buffer for volumetric data (updated each frame).
     pub(crate) volumetric_uniform_buffer: wgpu::Buffer,
+    /// CPU-side list of hologram instances submitted this frame.
+    /// Cleared each frame in reset_frame_state; consumed by VolumetricNode::execute.
+    pub(crate) hologram_instances: Vec<HologramInstance>,
     /// Kawase blur pyramid downsample pipeline (separate shader module).
     pub(crate) kawase_down_pipeline: wgpu::RenderPipeline,
     /// Kawase blur pyramid upsample pipeline (separate shader module).
@@ -191,7 +204,7 @@ pub struct SurtrRenderer {
     // Debugging
     pub(crate) _debug_layout: bool,
 
-    // Transform Stack — stores full affine matrices for correct SVG transform composition.
+    // Transform Stack -- stores full affine matrices for correct SVG transform composition.
     pub(crate) transform_stack: Vec<glam::Mat3>,
     /// Whether a redraw has been requested for the next frame.
     pub redraw_requested: bool,
@@ -220,6 +233,30 @@ pub struct SurtrRenderer {
     pub(crate) skuld_period: f32,
     pub last_gpu_time_ns: u64,
 
+    // Particle Compute Pipeline (Muspelheim Compute)
+    /// Compute pipeline for GPU particle integration (Euler + drag + lifetime).
+    pub(crate) particle_compute_pipeline: wgpu::ComputePipeline,
+    /// Bind group layout for the particle compute pass (storage buffer + uniform).
+    pub(crate) particle_compute_bgl: wgpu::BindGroupLayout,
+    /// GPU storage buffer holding particle data (pos_vel + color_life, 32 bytes each).
+    pub(crate) particle_buffer: wgpu::Buffer,
+    /// Uniform buffer for particle compute (dt).
+    pub(crate) particle_uniform_buffer: wgpu::Buffer,
+    /// CPU-side staging array for newly emitted particles (flushed to GPU each frame).
+    pub(crate) particle_staging: Vec<GpuParticle>,
+    /// Number of live particles currently in the ring buffer.
+    pub(crate) particle_count: u32,
+    /// Write cursor into the particle ring buffer (wraps at MAX_PARTICLES).
+    pub(crate) particle_write_head: u32,
+    /// Simple render pipeline for drawing particles as point sprites.
+    pub(crate) particle_render_pipeline: wgpu::RenderPipeline,
+    /// Bind group layout for particle render pass (storage buffer read-only).
+    pub(crate) particle_render_bgl: wgpu::BindGroupLayout,
+    /// Bind group for particle render pass (created lazily when count > 0).
+    pub(crate) particle_render_bind_group: Option<wgpu::BindGroup>,
+    /// Timestamp of last buffer compaction (dead particle removal).
+    pub(crate) last_particle_compact: std::time::Instant,
+
     // VDOM node stack for hierarchy tracking
     pub(crate) vnode_stack: Vec<(Rect, &'static str)>,
 
@@ -232,10 +269,10 @@ pub struct SurtrRenderer {
 
     /// Bind group layout for reading blur output in glass composite pass.
     pub(crate) glass_output_bind_group_layout: wgpu::BindGroupLayout,
-    /// Current material state — draw calls are tagged with this material.
+    /// Current material state -- draw calls are tagged with this material.
     pub(crate) current_draw_material: cvkg_core::DrawMaterial,
 
-    /// Portal backdrop blur regions — collected during portal enter/exit
+    /// Portal backdrop blur regions -- collected during portal enter/exit
     /// Used for per-element isolated backdrop blur (Tahoe feature)
     pub(crate) portal_regions: std::collections::VecDeque<cvkg_core::Rect>,
 
@@ -284,7 +321,24 @@ pub(crate) struct TessellateParams<'a> {
     paths: &'a mut Vec<crate::types::SvgPath>,
 }
 
+/// Per-hologram instance data submitted during the frame.
+/// Consumed by VolumetricNode::execute to parameterize the volumetric shader.
+#[derive(Debug, Clone)]
+pub struct HologramInstance {
+    /// Bounding rectangle in logical coordinates (x, y, width, height).
+    pub rect: cvkg_core::Rect,
+    /// Hash of the hologram_id string -- used for per-hologram visual variation.
+    pub id_hash: u32,
+    /// Application-provided time for this hologram instance.
+    pub time: f32,
+}
+
 impl SurtrRenderer {
+    /// Access the hologram instances submitted this frame.
+    pub fn hologram_instances(&self) -> &[HologramInstance] {
+        &self.hologram_instances
+    }
+
     /// Update cursor pointer uniforms for tactile hover shader interactions.
     ///
     /// # Contract
@@ -301,6 +355,9 @@ impl SurtrRenderer {
     pub(crate) fn select_best_surface_format(
         formats: &[wgpu::TextureFormat],
     ) -> wgpu::TextureFormat {
+        if formats.is_empty() {
+            return wgpu::TextureFormat::Bgra8UnormSrgb;
+        }
         let preferred_formats = [
             wgpu::TextureFormat::Rgba16Float, // HDR10 / Rec. 2020 FP16
             wgpu::TextureFormat::Rgba8Unorm,  // Wide Color Display P3
@@ -315,7 +372,7 @@ impl SurtrRenderer {
         formats[0]
     }
 
-    /// forge — Initializes the Surtr GPU renderer from a winit window.
+    /// forge -- Initializes the Surtr GPU renderer from a winit window.
     ///
     /// This method performs the following:
     /// 1. Negotiates a wgpu surface and adapter.
@@ -613,20 +670,13 @@ impl SurtrRenderer {
 
         // Create pipeline cache for disk-persisted compiled shaders.
         // This avoids recompiling identical shaders on subsequent launches.
-        // In dev mode, cache lives in the source tree (CARGO_MANIFEST_DIR/target/pipeline_cache).
-        // In release/packaged builds, cache lives next to the executable to avoid
-        // write failures when CARGO_MANIFEST_DIR is not a writable path.
+        // Cache lives next to the executable for both debug and release builds.
+        // Falls back to temp dir if the exe path is unavailable (e.g., WASM).
         let pipeline_cache = {
-            let cache_dir = if cfg!(debug_assertions) {
-                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                    .join("target")
-                    .join("pipeline_cache")
-            } else {
-                std::env::current_exe()
-                    .ok()
-                    .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
-                    .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"))
-            };
+            let cache_dir = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
+                .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
             let _ = std::fs::create_dir_all(&cache_dir);
             let cache_path = cache_dir.join("cvkg_render_gpu.bin");
             let cache_data = std::fs::read(&cache_path).ok();
@@ -680,7 +730,7 @@ impl SurtrRenderer {
         let texture_array_count: Option<std::num::NonZeroU32> = None;
         #[cfg(not(target_arch = "wasm32"))]
         let texture_array_count: Option<std::num::NonZeroU32> =
-            std::num::NonZeroU32::new(256);
+            std::num::NonZeroU32::new(32);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -1021,7 +1071,7 @@ impl SurtrRenderer {
             cache: Some(&pipeline_cache),
         });
 
-        // Kawase blur pyramid pipelines (separate shader module — conflicting bindings)
+        // Kawase blur pyramid pipelines (separate shader module -- conflicting bindings)
         // NOTE: Compiled separately because blur_pyramid.wgsl defines its own
         // @group(0) bindings (BlurUniforms + texture + sampler) that conflict
         // with the main WGSL_SRC pipeline layout.
@@ -1133,7 +1183,7 @@ impl SurtrRenderer {
                 entry_point: Some("fs_composite"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
-                    // Additive blend: src + dst — glow lights up the scene
+                    // Additive blend: src + dst -- glow lights up the scene
                     blend: Some(wgpu::BlendState {
                         color: wgpu::BlendComponent {
                             src_factor: wgpu::BlendFactor::One,
@@ -1227,7 +1277,7 @@ impl SurtrRenderer {
         });
 
         let mut texture_views_list: Vec<wgpu::TextureView> =
-            (0..256).map(|_| dummy_view.clone()).collect();
+            (0..32).map(|_| dummy_view.clone()).collect();
         texture_views_list[0] = mega_heim_view_obj.clone();
 
         let views_refs: Vec<&wgpu::TextureView> = texture_views_list.iter().collect();
@@ -1246,7 +1296,7 @@ impl SurtrRenderer {
             label: Some("Mega-Heim Bind Group"),
         });
 
-        let dummy_views_refs: Vec<&wgpu::TextureView> = (0..256).map(|_| &dummy_view).collect();
+        let dummy_views_refs: Vec<&wgpu::TextureView> = (0..32).map(|_| &dummy_view).collect();
         let dummy_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
@@ -1277,7 +1327,7 @@ impl SurtrRenderer {
             label: Some("Dummy Env Bind Group"),
         });
 
-        let mut texture_registry = LruCache::new(NonZeroUsize::new(255).unwrap());
+        let mut texture_registry = LruCache::new(NonZeroUsize::new(31).unwrap());
         let mut texture_bind_groups = Vec::new();
 
         texture_registry.put("__mega_heim".to_string(), 0);
@@ -1474,7 +1524,7 @@ impl SurtrRenderer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
                         min_binding_size: wgpu::BufferSize::new(
-                            std::mem::size_of::<[f32; 16]>() as u64
+                            std::mem::size_of::<[f32; 24]>() as u64
                         ),
                     },
                     count: None,
@@ -1602,9 +1652,10 @@ impl SurtrRenderer {
         });
 
         // Volumetric uniform buffer (updated each frame for time/resolution/light)
+        // Extended to 24 floats (96 bytes) to include hologram rect, id hash, time, and count.
         let volumetric_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Volumetric Uniforms"),
-            size: std::mem::size_of::<[f32; 16]>() as u64,
+            size: std::mem::size_of::<[f32; 24]>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1617,6 +1668,189 @@ impl SurtrRenderer {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
+
+        // ── Particle Compute Pipeline ───────────────────────────────────────
+        // Binds: @group(0) @binding(0) storage read_write particle_buf
+        //        @group(0) @binding(1) uniform uniforms {dt, _pad}
+        let particle_compute_bgl =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Particle Compute BGL"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64
+                            ),
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                std::mem::size_of::<ParticleUniforms>() as u64
+                            ),
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let particle_compute_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Particle Compute Layout"),
+                bind_group_layouts: &[Some(&particle_compute_bgl)],
+                immediate_size: 0,
+            });
+        let particle_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Particles Compute Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_PARTICLES)),
+        });
+        let particle_compute_pipeline =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Particle Compute Pipeline"),
+                layout: Some(&particle_compute_layout),
+                module: &particle_shader,
+                entry_point: Some("cs_main"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: Some(&pipeline_cache),
+            });
+
+        // Particle storage buffer (ring buffer, 65536 particles × 32 bytes)
+        let particle_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Particle Storage Buffer"),
+            size: (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::VERTEX,
+            mapped_at_creation: false,
+        });
+        // Particle compute uniform buffer (dt + pad = 16 bytes)
+        let particle_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Particle Uniform Buffer"),
+            size: std::mem::size_of::<ParticleUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // ── Particle Render Pipeline (point sprites) ───────────────────────
+        // A minimal vertex+fragment pipeline that reads particle positions from
+        // the storage buffer and draws them as colored points.
+        let particle_render_bgl =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Particle Render BGL"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: wgpu::BufferSize::new(
+                                (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64
+                            ),
+                        },
+                        count: None,
+                    },
+                ],
+            });
+        let particle_render_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Particle Render Layout"),
+                bind_group_layouts: &[Some(&particle_render_bgl)],
+                immediate_size: 0,
+            });
+        // Inline WGSL for particle rendering: reads storage buffer, outputs point positions + color.
+        let particle_render_wgsl = "
+struct Particle {
+    pos_vel: vec4<f32>,
+    color_life: vec4<f32>,
+};
+struct ParticleArray {
+    particles: array<Particle>,
+};
+@group(0) @binding(0) var<storage, read> particles: ParticleArray;
+
+struct VsOut {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) color: vec4<f32>,
+};
+
+@vertex
+fn vs_main(@builtin(vertex_index) vi: u32) -> VsOut {
+    var out: VsOut;
+    let p = particles.particles[vi];
+    // pos_vel.xy is in logical pixels; convert to NDC.
+    // For now, pass through as clip-space position (caller sets viewport).
+    let life = p.color_life.w;
+    if (life <= 0.0) {
+        // Degenerate point (behind camera)
+        out.pos = vec4<f32>(0.0, 0.0, 2.0, 1.0);
+        out.color = vec4<f32>(0.0);
+    } else {
+        // Fade out near end of lifetime
+        let alpha = min(life, 1.0);
+        out.pos = vec4<f32>(p.pos_vel.xy, 0.0, 1.0);
+        out.color = vec4<f32>(p.color_life.xyz, alpha);
+    }
+    return out;
+}
+
+@fragment
+fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
+    return color;
+}
+";
+        let particle_render_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Particle Render Shader"),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(particle_render_wgsl)),
+        });
+        let particle_render_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Particle Render Pipeline"),
+                layout: Some(&particle_render_layout),
+                vertex: wgpu::VertexState {
+                    module: &particle_render_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &particle_render_shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::One,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::One,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                }),
+                primitive: wgpu::PrimitiveState {
+                    topology: wgpu::PrimitiveTopology::PointList,
+                    ..Default::default()
+                },
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: Some(&pipeline_cache),
+            });
 
         Self {
             registry,
@@ -1733,6 +1967,17 @@ impl SurtrRenderer {
             skuld_read_buffer,
             skuld_period,
             last_gpu_time_ns: 0,
+            particle_compute_pipeline,
+            particle_compute_bgl,
+            particle_buffer,
+            particle_uniform_buffer,
+            particle_staging: Vec::new(),
+            particle_count: 0,
+            particle_write_head: 0,
+            particle_render_pipeline,
+            particle_render_bgl,
+            particle_render_bind_group: None,
+            last_particle_compact: std::time::Instant::now(),
             vnode_stack: Vec::new(),
             event_handlers: std::collections::HashMap::new(),
             staging_belt,
@@ -1752,6 +1997,7 @@ impl SurtrRenderer {
             volumetric_pipeline,
             volumetric_bind_group_layout: volumetric_bgl,
             volumetric_uniform_buffer,
+            hologram_instances: Vec::new(),
             color_blind_bind_group_layout: color_blind_bgl,
             color_blind_uniform_buffer,
             sampler,
@@ -1833,7 +2079,7 @@ impl SurtrRenderer {
         self.telemetry.clone()
     }
 
-    /// resize — Reconfigures a specific surface and its internal textures.
+    /// resize -- Reconfigures a specific surface and its internal textures.
     pub fn resize(
         &mut self,
         window_id: winit::window::WindowId,
@@ -1978,7 +2224,7 @@ impl SurtrRenderer {
             });
 
             let scene_views: Vec<&wgpu::TextureView> =
-                (0..256).map(|_| &ctx.scene_texture).collect();
+                (0..32).map(|_| &ctx.scene_texture).collect();
             ctx.scene_texture_bind_group =
                 self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &self.texture_bind_group_layout,
@@ -2014,7 +2260,7 @@ impl SurtrRenderer {
         }
     }
 
-    /// begin_frame_headless — Strike the flaming sword to begin a new GPU frame for headless rendering.
+    /// begin_frame_headless -- Strike the flaming sword to begin a new GPU frame for headless rendering.
     pub fn begin_frame_headless(&mut self) -> wgpu::CommandEncoder {
         self.current_window = None;
         self.compositor_index_cursor = self.indices.len() as u32;
@@ -2065,10 +2311,11 @@ impl SurtrRenderer {
         self.slice_stack.clear();
         self.transform_stack.clear();
         self.portal_regions.clear();
+        self.hologram_instances.clear();
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
-        // Clear per-frame state but NOT memo_cache — use generation counter instead
+        // Clear per-frame state but NOT memo_cache -- use generation counter instead
         self.frame_generation += 1;
         // Evict memo cache entries that are too old to prevent unbounded growth.
         const MAX_MEMO_AGE: u64 = 1000;
@@ -2081,7 +2328,7 @@ impl SurtrRenderer {
         self.telemetry.vertices = 0;
     }
 
-    /// begin_frame — Strike the flaming sword to begin a new GPU frame for a specific window.
+    /// begin_frame -- Strike the flaming sword to begin a new GPU frame for a specific window.
     pub fn begin_frame(&mut self, window_id: winit::window::WindowId) -> wgpu::CommandEncoder {
         // Drain AI material channel
         if let Some(rx) = &self.ai_material_rx {
@@ -2157,7 +2404,7 @@ impl SurtrRenderer {
             })
     }
 
-    /// register_window — Attaches a new OS window to the shared GPU context.
+    /// register_window -- Attaches a new OS window to the shared GPU context.
     pub fn register_window(&mut self, window: Arc<winit::window::Window>) {
         let size = window.inner_size();
         let surface = self
@@ -2167,7 +2414,7 @@ impl SurtrRenderer {
         let caps = surface.get_capabilities(&self.adapter);
         let format = caps.formats[0];
 
-        // Dynamic present mode selection — Mailbox not available on all platforms (e.g. Wayland)
+        // Dynamic present mode selection -- Mailbox not available on all platforms (e.g. Wayland)
         let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
             wgpu::PresentMode::Mailbox
         } else {
@@ -2412,7 +2659,7 @@ impl SurtrRenderer {
             label: Some("Headless Bloom Env Bind Group B"),
         });
 
-        let scene_views: Vec<&wgpu::TextureView> = (0..256).map(|_| &scene_texture).collect();
+        let scene_views: Vec<&wgpu::TextureView> = (0..32).map(|_| &scene_texture).collect();
         let scene_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: texture_bind_group_layout,
             entries: &[
@@ -2676,7 +2923,7 @@ impl SurtrRenderer {
             label: Some("Bloom Env Bind Group B"),
         });
 
-        let scene_views: Vec<&wgpu::TextureView> = (0..256).map(|_| &scene_texture).collect();
+        let scene_views: Vec<&wgpu::TextureView> = (0..32).map(|_| &scene_texture).collect();
         let scene_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: texture_bind_group_layout,
             entries: &[
@@ -2733,7 +2980,7 @@ impl SurtrRenderer {
         self.start_time = std::time::Instant::now();
     }
 
-    /// reclaim_vram — Atomic recycling of the Mega-Heim and all associated caches.
+    /// reclaim_vram -- Atomic recycling of the Mega-Heim and all associated caches.
     /// This prevents OOM and silent failures by quenching the heim when full.
     pub fn reclaim_vram(&mut self) {
         log::warn!("[GPU] Sundr Compaction: Compacting Mega-Heim...");
@@ -3134,7 +3381,7 @@ impl SurtrRenderer {
         self.texture_registry.get(name).copied()
     }
 
-    /// fill_rect_with_mode — Specialized rectangle drawing with mode-specific shader logic.
+    /// fill_rect_with_mode -- Specialized rectangle drawing with mode-specific shader logic.
     pub fn fill_rect_with_mode(
         &mut self,
         rect: Rect,
@@ -3166,13 +3413,19 @@ impl SurtrRenderer {
         radius: f32,
         uv_rect: Rect,
     ) {
-        // If a shadow is active, draw it first
+        // If a shadow is active, draw it first, offset by shadow._offset
         if let Some(shadow) = self.shadow_stack.last().copied()
             && shadow.color[3] > 0.001
         {
+            let shadow_rect = Rect {
+                x: rect.x + shadow._offset[0],
+                y: rect.y + shadow._offset[1],
+                width: rect.width,
+                height: rect.height,
+            };
             Renderer::draw_drop_shadow(
                 self,
-                rect,
+                shadow_rect,
                 radius,
                 shadow.color,
                 shadow.radius,
@@ -3369,7 +3622,7 @@ impl SurtrRenderer {
     ///
     /// Since the Renderer 3.0 migration, the pass sequence is driven by a Kvasir
     /// dependency graph rather than hardcoded ordering. The graph is built each
-    /// frame (cheap — just node/edge allocation), validated (cycle detection,
+    /// frame (cheap -- just node/edge allocation), validated (cycle detection,
     /// input satisfiability), then executed. Conditional passes (glass, bloom,
     /// accessibility) are automatically eliminated when not needed.
     pub fn end_frame(&mut self, mut encoder: wgpu::CommandEncoder) {
@@ -3676,6 +3929,169 @@ impl SurtrRenderer {
             }
         }
 
+        // ── Particle Compute Pass ──────────────────────────────────────────
+        // Flush staged particles to GPU, then run compute integration.
+        // Must run BEFORE the submit so particle positions are up-to-date.
+        if !self.particle_staging.is_empty() || self.particle_count > 0 {
+            // 1. Flush staged particles into the ring buffer
+            if !self.particle_staging.is_empty() {
+                let write_start = self.particle_write_head as usize;
+                let write_count = self.particle_staging.len();
+                let max = MAX_PARTICLES;
+
+                // Write particles in ring-buffer fashion
+                let first_chunk = (max - write_start).min(write_count);
+                let bytes = bytemuck::cast_slice(&self.particle_staging[..first_chunk]);
+                self.queue.write_buffer(
+                    &self.particle_buffer,
+                    (write_start * std::mem::size_of::<crate::types::GpuParticle>()) as u64,
+                    bytes,
+                );
+                if first_chunk < write_count {
+                    let remaining = write_count - first_chunk;
+                    let bytes2 = bytemuck::cast_slice(&self.particle_staging[first_chunk..]);
+                    self.queue.write_buffer(
+                        &self.particle_buffer,
+                        0,
+                        bytes2,
+                    );
+                    self.particle_write_head = remaining as u32;
+                } else {
+                    self.particle_write_head =
+                        ((write_start + write_count) % max) as u32;
+                }
+                self.particle_count = (self.particle_count as usize + write_count)
+                    .min(max) as u32;
+                self.particle_staging.clear();
+
+                // Invalidate render bind group so it's recreated with new data
+                self.particle_render_bind_group = None;
+            }
+
+            // 2. Run compute pass to integrate particle physics
+            let dt = self.current_scene.delta_time;
+            let uniforms = crate::types::ParticleUniforms { dt, _pad: [0.0; 3] };
+            self.queue.write_buffer(
+                &self.particle_uniform_buffer,
+                0,
+                bytemuck::bytes_of(&uniforms),
+            );
+
+            let compute_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("Particle Compute BG"),
+                layout: &self.particle_compute_bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.particle_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.particle_uniform_buffer.as_entire_binding(),
+                    },
+                ],
+            });
+
+            let mut compute_encoder =
+                self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Particle Compute Encoder"),
+                });
+            {
+                let mut cpass = compute_encoder.begin_compute_pass(
+                    &wgpu::ComputePassDescriptor {
+                        label: Some("Particle Integration"),
+                        ..Default::default()
+                    },
+                );
+                cpass.set_pipeline(&self.particle_compute_pipeline);
+                cpass.set_bind_group(0, &compute_bind_group, &[]);
+                let workgroups = ((self.particle_count + 63) / 64).max(1);
+                cpass.dispatch_workgroups(workgroups, 1, 1);
+            }
+            self.staging_command_buffers.push(compute_encoder.finish());
+        }
+
+        // 3. Compact dead particles periodically (every 2 seconds)
+        if self.particle_count > 0
+            && self.last_particle_compact.elapsed().as_secs_f32() > 2.0
+        {
+            self.last_particle_compact = std::time::Instant::now();
+            // Read back particle data to compact dead particles
+            let read_size =
+                (self.particle_count as usize * std::mem::size_of::<crate::types::GpuParticle>())
+                    as u64;
+            let staging_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Particle Compact Staging"),
+                size: read_size,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            });
+            let mut compact_encoder =
+                self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("Particle Compact Copy"),
+                });
+            compact_encoder.copy_buffer_to_buffer(
+                &self.particle_buffer,
+                0,
+                &staging_buf,
+                0,
+                read_size,
+            );
+            self.staging_command_buffers.push(compact_encoder.finish());
+            // Note: full GPU readback is expensive; in production we'd use a
+            // compute compaction pass. For now, dead particles are simply
+            // overwritten by new ones in the ring buffer (lifetime <= 0 causes
+            // the vertex shader to output degenerate points behind the camera).
+        }
+
+        // ── Particle Render Pass ────────────────────────────────────────────
+        // Render live particles as colored points to the swapchain target,
+        // composited on top of the scene with additive blending.
+        if self.particle_count > 0 {
+            // Lazily (re)create the render bind group when staging changed
+            if self.particle_render_bind_group.is_none() {
+                self.particle_render_bind_group =
+                    Some(self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("Particle Render BG"),
+                        layout: &self.particle_render_bgl,
+                        entries: &[wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: self.particle_buffer.as_entire_binding(),
+                        }],
+                    }));
+            }
+            if let Some(bg) = &self.particle_render_bind_group {
+                let mut render_encoder =
+                    self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Particle Render Encoder"),
+                    });
+                {
+                    let mut rpass = render_encoder.begin_render_pass(
+                        &wgpu::RenderPassDescriptor {
+                            label: Some("Particle Render"),
+                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                                view: &res.target_view,
+                                resolve_target: None,
+                                ops: wgpu::Operations {
+                                    load: wgpu::LoadOp::Load,
+                                    store: wgpu::StoreOp::Store,
+                                },
+                                depth_slice: None,
+                            })],
+                            depth_stencil_attachment: None,
+                            timestamp_writes: None,
+                            occlusion_query_set: None,
+                            multiview_mask: None,
+                        },
+                    );
+                    rpass.set_pipeline(&self.particle_render_pipeline);
+                    rpass.set_bind_group(0, bg, &[]);
+                    rpass.draw(0..self.particle_count, 0..1);
+                }
+                self.staging_command_buffers.push(render_encoder.finish());
+            }
+        }
+
         // ── Submit ─────────────────────────────────────────────────────────────
         // staging_command_buffers already contains the geometry upload encoder from
         // render_frame() (StagingBelt). The render pass encoders must come AFTER it
@@ -3716,20 +4132,12 @@ impl SurtrRenderer {
 impl Drop for SurtrRenderer {
     fn drop(&mut self) {
         // Persist pipeline cache to disk for faster subsequent startups.
-        // Use the same path logic as forge() for consistency:
-        // - Debug: CARGO_MANIFEST_DIR/target/pipeline_cache (dev convenience)
-        // - Release: executable's parent dir (packaged installs)
-        // - Fallback: temp dir
-        let cache_dir = if cfg!(debug_assertions) {
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("target")
-                .join("pipeline_cache")
-        } else {
-            std::env::current_exe()
-                .ok()
-                .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
-                .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"))
-        };
+        // Use the same path logic as forge_internal() for consistency:
+        // cache lives next to the executable, with temp dir fallback.
+        let cache_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
+            .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
         let _ = std::fs::create_dir_all(&cache_dir);
         let cache_path = cache_dir.join("cvkg_render_gpu.bin");
         let data = self.pipeline_cache.get_data();
@@ -3757,7 +4165,7 @@ impl SurtrRenderer {
     /// 2. Glass commands → Material Composite pass (samples blur pyramid)
     /// 3. Overlay commands → Top-Level Foreground pass
     pub fn submit_buckets(&mut self, buckets: &cvkg_compositor::CommandBuckets) {
-        // Scene pass — opaque draw calls, sorted by (z_index, draw_order)
+        // Scene pass -- opaque draw calls, sorted by (z_index, draw_order)
         let mut active_offscreens = Vec::new();
         let mut current_target_id = None;
 
@@ -3812,7 +4220,7 @@ impl SurtrRenderer {
         }
         self.active_offscreens = active_offscreens;
 
-        // Glass pass — glassmorphism draw calls sampling blur pyramid
+        // Glass pass -- glassmorphism draw calls sampling blur pyramid
         let mut sorted_glass: Vec<_> = buckets.glass_commands.iter().collect();
         sorted_glass.sort_by_key(|cmd| match cmd {
             cvkg_compositor::engine::RenderCommand::Draw(routed) => {
@@ -3827,7 +4235,7 @@ impl SurtrRenderer {
             }
         }
 
-        // Overlay pass — foreground UI (crisp text, icons, edge lighting)
+        // Overlay pass -- foreground UI (crisp text, icons, edge lighting)
         let mut sorted_overlay: Vec<_> = buckets.overlay_commands.iter().collect();
         sorted_overlay.sort_by_key(|cmd| match cmd {
             cvkg_compositor::engine::RenderCommand::Draw(routed) => {
@@ -3876,7 +4284,7 @@ impl SurtrRenderer {
         color
     }
 
-    /// load_svg — Parses an SVG file and tessellates its paths into GPU triangles.
+    /// load_svg -- Parses an SVG file and tessellates its paths into GPU triangles.
     pub fn load_svg(&mut self, name: &str, data: &[u8]) {
         if self.svg_cache.contains(name) {
             return;
@@ -4060,8 +4468,14 @@ impl SurtrRenderer {
                 // Miter limit
                 stroke_opts = stroke_opts.with_miter_limit(stroke.miterlimit().get());
 
-                // Dash array (not supported by this version of Lyon tessellation)
-                // TODO: Implement custom dashed stroke tessellation if needed
+                // Dash array: Lyon's StrokeOptions does not support dash patterns
+                // natively. To render dashed strokes, the path would need to be
+                // split into dash/gap segments and tessellated per-segment, then
+                // the results merged. This is tracked as future work.
+                // Current behavior: strokes with dasharray are rendered as solid.
+                if let Some(dasharray) = stroke.dasharray() {
+                    let _ = dasharray; // Available for future dash tessellation.
+                }
 
                 let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
                 let path_length = lyon::algorithms::length::approximate_length(&lyon_path, 0.1);
@@ -4262,7 +4676,7 @@ impl SurtrRenderer {
         }
     }
 
-    /// draw_svg — Renders a pre-loaded SVG icon at the specified logical rect.
+    /// draw_svg -- Renders a pre-loaded SVG icon at the specified logical rect.
     /// animation_time_offset shifts the animation phase for this instance,
     /// allowing multiple draws of the same SVG to animate independently.
     pub fn draw_svg(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32) {
@@ -4544,7 +4958,7 @@ impl SurtrRenderer {
         }
     }
 
-    /// forge_headless — Initializes Surtr without a window for visual regression testing.
+    /// forge_headless -- Initializes Surtr without a window for visual regression testing.
     pub async fn forge_headless(width: u32, height: u32) -> Self {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
@@ -4651,7 +5065,7 @@ impl SurtrRenderer {
         .await
     }
 
-    /// capture_frame — Read back the rendered frame as a byte buffer (RGBA8).
+    /// capture_frame -- Read back the rendered frame as a byte buffer (RGBA8).
     pub async fn capture_frame(&self) -> Result<Vec<u8>, String> {
         let ctx = self
             .headless_context

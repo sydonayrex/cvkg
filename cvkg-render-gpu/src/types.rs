@@ -2,7 +2,7 @@
 use crate::vertex::Vertex;
 use cvkg_core::Rect;
 
-/// SvgModel — A collection of tessellated triangles representing a vector icon.
+/// SvgModel -- A collection of tessellated triangles representing a vector icon.
 /// Paths are stored as independent sub-models, each with its own vertex range
 /// and local transform, enabling per-path manipulation (e.g. in an SVG editor).
 #[derive(Clone, Debug)]
@@ -113,7 +113,7 @@ pub(crate) struct DrawCall {
     pub scissor_rect: Option<Rect>,
     pub index_start: u32,
     pub index_count: u32,
-    /// Material routing tag — determines which pass this draw call is routed to
+    /// Material routing tag -- determines which pass this draw call is routed to
     /// in the multi-pass Backdrop Capture pipeline.
     pub material: cvkg_core::DrawMaterial,
     pub target_id: Option<u64>,
@@ -157,7 +157,7 @@ pub(crate) struct SurfaceContext {
     pub(crate) sampler: wgpu::Sampler,
 }
 
-/// HeadlessContext — A rendering target for surface-less execution.
+/// HeadlessContext -- A rendering target for surface-less execution.
 pub struct HeadlessContext {
     pub scene_texture: wgpu::TextureView,
     pub scene_msaa_texture: wgpu::TextureView,
@@ -182,6 +182,27 @@ pub struct HeadlessContext {
 
 pub(crate) const MAX_VERTICES: usize = 100_000;
 pub(crate) const MAX_INDICES: usize = 150_000;
+
+/// Maximum number of GPU particles (ring-buffer capacity).
+pub(crate) const MAX_PARTICLES: usize = 65536;
+
+/// A single GPU particle: 32 bytes matching the WGSL Particle struct layout.
+/// pos_vel: xy = position, zw = velocity.
+/// color_life: xyz = RGB color, w = remaining lifetime in seconds.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct GpuParticle {
+    pub pos_vel: [f32; 4],
+    pub color_life: [f32; 4],
+}
+
+/// Per-frame uniforms for the particle compute shader.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ParticleUniforms {
+    pub dt: f32,
+    pub _pad: [f32; 3],
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]

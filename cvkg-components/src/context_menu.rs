@@ -261,7 +261,7 @@ impl View for ContextMenu {
                 if let Event::PointerDown { x, y, .. } = event
                     && !menu_rect.contains(x, y)
                 {
-                    // Close the menu — in a real app this would toggle state
+                    // Close the menu -- in a real app this would toggle state
                 }
             }),
         );

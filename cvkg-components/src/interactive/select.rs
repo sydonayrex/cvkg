@@ -610,7 +610,7 @@ impl View for ColorPicker {
         renderer.fill_rounded_rect(preview_rect, 2.0, self.color.as_array());
         renderer.stroke_rect(preview_rect, theme::border(), 1.0);
 
-        // Color grid (4 demo colors — user-facing swatches, not themed UI chrome)
+        // Color grid (4 demo colors -- user-facing swatches, not themed UI chrome)
         let colors = [
             Color::new(0.0, 0.0, 0.0, 1.0),    // Black
             Color::new(1.0, 1.0, 1.0, 1.0),    // White

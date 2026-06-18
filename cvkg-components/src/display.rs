@@ -1,9 +1,9 @@
 //! Display and typography components.
 //!
-//! ScrollArea — scrollable area with custom scrollbar.
-//! Typography — text style component (H1-H4/Body/Caption/Overline).
-//! Icon — centered glyph component.
-//! BackgroundPattern — decorative background pattern (dots/grid/lines/hexagons).
+//! ScrollArea -- scrollable area with custom scrollbar.
+//! Typography -- text style component (H1-H4/Body/Caption/Overline).
+//! Icon -- centered glyph component.
+//! BackgroundPattern -- decorative background pattern (dots/grid/lines/hexagons).
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
@@ -11,7 +11,7 @@ use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // ----------------------------------------------------------------------------
-// ScrollArea — scrollable area with custom scrollbar
+// ScrollArea -- scrollable area with custom scrollbar
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -129,7 +129,7 @@ impl View for ScrollArea {
 }
 
 // ----------------------------------------------------------------------------
-// Typography — text style component
+// Typography -- text style component
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,7 +220,7 @@ impl View for Typography {
 }
 
 // ----------------------------------------------------------------------------
-// Icon — centered glyph component
+// Icon -- centered glyph component
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -282,7 +282,7 @@ impl View for Icon {
 }
 
 // ----------------------------------------------------------------------------
-// BackgroundPattern — decorative background pattern
+// BackgroundPattern -- decorative background pattern
 // ----------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

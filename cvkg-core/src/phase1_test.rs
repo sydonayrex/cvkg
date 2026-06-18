@@ -135,7 +135,7 @@ mod phase2_tests {
         let barrier = Arc::new(Barrier::new(READERS + 1));
         let mut handles = Vec::with_capacity(READERS);
 
-        // Spawn reader threads — each reads load_system_state() in a tight loop
+        // Spawn reader threads -- each reads load_system_state() in a tight loop
         for _ in 0..READERS {
             let b = Arc::clone(&barrier);
             handles.push(thread::spawn(move || {
@@ -261,7 +261,7 @@ mod phase3_tests {
                 thread::spawn(move || {
                     b.wait(); // all threads start simultaneously
                     s.set(i);
-                    // Immediately read back — must be a valid u32, never garbage
+                    // Immediately read back -- must be a valid u32, never garbage
                     let _ = s.get();
                 })
             })
@@ -296,7 +296,7 @@ mod phase6_tests {
     use crate::{KnowledgeFragment, State, transact_pair, transact_system_state};
 
     /// Sequential correctness: both `fragments` and `last_query_results` land in the same
-    /// committed snapshot — transact_system_state is not split across two separate stores.
+    /// committed snapshot -- transact_system_state is not split across two separate stores.
     #[test]
     fn test_transact_system_state_multi_field_coherence() {
         transact_system_state(|s| {
@@ -326,7 +326,7 @@ mod phase6_tests {
 
     /// Concurrent lost-update prevention: 10 threads each insert a unique fragment via
     /// `transact_system_state`. With STM retry semantics, every insert must be visible in
-    /// the final snapshot — none may be silently overwritten by a racing clone-and-swap.
+    /// the final snapshot -- none may be silently overwritten by a racing clone-and-swap.
     ///
     /// Uses a per-run unique prefix so this test is safe to run in parallel with other
     /// tests that share the same global SYSTEM_STATE / KNOWLEDGE_TVAR.
@@ -384,7 +384,7 @@ mod phase6_tests {
 
     /// Atomic pair swap: exchanging two State<u32> values leaves both at their swapped
     /// values, the version counter advances on each cell, and no intermediate state is
-    /// observable (sequential test — concurrent variant would require a spin-read thread).
+    /// observable (sequential test -- concurrent variant would require a spin-read thread).
     #[test]
     fn test_transact_pair_atomic_swap() {
         let state_a = State::new(10u32);

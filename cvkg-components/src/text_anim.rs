@@ -20,7 +20,7 @@ pub enum TextAnimEffect {
     Blur,
 }
 
-/// TextAnimate — animate text with various effects (fade, slide, scale, blur).
+/// TextAnimate -- animate text with various effects (fade, slide, scale, blur).
 #[derive(Clone)]
 pub struct TextAnimate {
     /// Text content.
@@ -116,7 +116,7 @@ impl View for TextAnimate {
 }
 
 // ----------------------------------------------------------------------------
-// TypewriterEffect — typewriter-style character-by-character reveal
+// TypewriterEffect -- typewriter-style character-by-character reveal
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -222,7 +222,7 @@ impl View for TypewriterEffect {
 }
 
 // ----------------------------------------------------------------------------
-// NumberTicker — animated number counter with rolling digits
+// NumberTicker -- animated number counter with rolling digits
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -336,7 +336,7 @@ impl View for NumberTicker {
 // CARD EFFECTS
 // =============================================================================
 
-/// CardStack — stacked cards with depth and parallax.
+/// CardStack -- stacked cards with depth and parallax.
 #[derive(Clone)]
 pub struct CardStack {
     /// Number of cards to stack.
@@ -425,7 +425,7 @@ impl View for CardStack {
 }
 
 // ----------------------------------------------------------------------------
-// CardHoverEffect — card with 3D tilt on hover
+// CardHoverEffect -- card with 3D tilt on hover
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -541,7 +541,7 @@ impl View for CardHoverEffect {
 }
 
 // ----------------------------------------------------------------------------
-// ExpandableCard — card that expands to reveal more content
+// ExpandableCard -- card that expands to reveal more content
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -688,7 +688,7 @@ impl View for ExpandableCard {
 }
 
 // ----------------------------------------------------------------------------
-// DraggableCard — card that can be dragged and dropped
+// DraggableCard -- card that can be dragged and dropped
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -820,7 +820,7 @@ impl View for DraggableCard {
 // =============================================================================
 
 // ----------------------------------------------------------------------------
-// ShimmerButton — button with shimmer/sweep animation
+// ShimmerButton -- button with shimmer/sweep animation
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -937,7 +937,7 @@ impl View for ShimmerButton {
 }
 
 // ----------------------------------------------------------------------------
-// RippleButton — button with material ripple effect
+// RippleButton -- button with material ripple effect
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -1073,7 +1073,7 @@ impl View for RippleButton {
 }
 
 // ----------------------------------------------------------------------------
-// StatefulButton — button with loading/success/error states
+// StatefulButton -- button with loading/success/error states
 // ----------------------------------------------------------------------------
 
 /// Button state for StatefulButton.

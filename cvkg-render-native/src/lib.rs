@@ -3,21 +3,21 @@
 //! All AI agents contributing to this crate MUST follow ALL eight rules:
 //!
 //! ── Karpathy Guidelines (1–4) ────────────────────────────────────────────
-//! 1. THINK FIRST     — State assumptions. Surface ambiguity. Push back on complexity.
-//! 2. STAY SIMPLE     — Minimum code. No speculative features. No unasked-for abstractions.
-//! 3. BE SURGICAL     — Touch only what's required. Own your orphans. Don't improve neighbors.
-//! 4. VERIFY GOALS    — Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
+//! 1. THINK FIRST     -- State assumptions. Surface ambiguity. Push back on complexity.
+//! 2. STAY SIMPLE     -- Minimum code. No speculative features. No unasked-for abstractions.
+//! 3. BE SURGICAL     -- Touch only what's required. Own your orphans. Don't improve neighbors.
+//! 4. VERIFY GOALS    -- Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
 //!
 //! ── CVKG Extended Protocols (5–8) ────────────────────────────────────────
-//! 5. TRIPLE-PASS     — Read the target, its surrounding context, and its full call graph
+//! 5. TRIPLE-PASS     -- Read the target, its surrounding context, and its full call graph
 //!                      at least THREE TIMES before making any edit or revision.
-//! 6. COMMENT ALL     — Every major pub fn, unsafe block, and non-trivial algorithm in
+//! 6. COMMENT ALL     -- Every major pub fn, unsafe block, and non-trivial algorithm in
 //!                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
 //!                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
-//! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
+//! 7. MONITOR LOOPS   -- Check every tool call / command for progress every 30 seconds.
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
-//! 8. HARDWARE VERIFIED — NEVER declare success based on mock data/rendering for native crates.
+//! 8. HARDWARE VERIFIED -- NEVER declare success based on mock data/rendering for native crates.
 //!                      Any change to input, rendering, or lifecycle MUST be verified via physical
 //!                      loopback (e.g., cargo run -p berserker) and signal path tracing.
 //!
@@ -41,7 +41,7 @@
 
 use cvkg_core::{FrameRenderer, Renderer};
 use image;
-// FIX #10: Wayland import gated to Linux only — was unconditional, broke macOS/Windows builds.
+// FIX #10: Wayland import gated to Linux only -- was unconditional, broke macOS/Windows builds.
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -223,9 +223,9 @@ impl ResizeHitTest {
     ///
     /// # Arguments
     ///
-    /// * `window_size` — the current window size in physical pixels.
-    /// * `corner_radius` — the corner radius in points (e.g., 26.0 for Tahoe).
-    /// * `expansion` — extra pixels to expand beyond the visual edge (e.g., 8.0).
+    /// * `window_size` -- the current window size in physical pixels.
+    /// * `corner_radius` -- the corner radius in points (e.g., 26.0 for Tahoe).
+    /// * `expansion` -- extra pixels to expand beyond the visual edge (e.g., 8.0).
     pub fn new(
         window_size: winit::dpi::PhysicalSize<u32>,
         corner_radius: f32,
@@ -305,9 +305,9 @@ impl SafeAreaInsets {
     ///
     /// # Platform behavior
     ///
-    /// * **Fullscreen** — zero insets (window owns the entire screen).
-    /// * **Normal** — 24pt top on macOS for the menu bar, 0 on other platforms.
-    /// * **All other states** — same as Normal.
+    /// * **Fullscreen** -- zero insets (window owns the entire screen).
+    /// * **Normal** -- 24pt top on macOS for the menu bar, 0 on other platforms.
+    /// * **All other states** -- same as Normal.
     pub fn for_window_state(state: WindowState) -> Self {
         if state == WindowState::Fullscreen {
             return Self::zero();
@@ -858,7 +858,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
         let mut close_window = false;
         let mut bring_to_front = false;
         let mut create_new_window = false;
-        // Cmd+Q was pressed — close all windows after the state block ends.
+        // Cmd+Q was pressed -- close all windows after the state block ends.
         let mut quit_all = false;
 
         {
@@ -1050,7 +1050,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         self.berserker_mode,
                         self.rage,
                     );
-                    // Release the gpu lock before calling render — the render methods each
+                    // Release the gpu lock before calling render -- the render methods each
                     // re-acquire it per-call, allowing the view tree to interleave with other
                     // work without holding one giant critical section across the whole draw.
                     drop(gpu);
@@ -1126,7 +1126,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // FIX #8: hardware_stall_detected is now reset each frame based on current
                     // jitter rather than being set once and never cleared. A single jittery frame
                     // no longer permanently flags the session. Jitter > 20ms is a heuristic for
-                    // scheduling disruption (GC, OS preemption, slow layout) — not a confirmed
+                    // scheduling disruption (GC, OS preemption, slow layout) -- not a confirmed
                     // hardware stall, but the field name is defined in cvkg_core::TelemetryData.
                     telemetry.hardware_stall_detected = telemetry.frame_jitter_ms > 20.0;
 
@@ -1167,7 +1167,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         }
                     }
                     state.needs_cursor_update = true;
-                    // Don't request_redraw here — the redraw will process the cursor update.
+                    // Don't request_redraw here -- the redraw will process the cursor update.
                     // Only request a redraw if we're not already in a redraw cycle.
                     if state.frame_count == 0 {
                         state.window.request_redraw();
@@ -2197,7 +2197,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// Captures the current frame as a PNG-encoded byte buffer via GPU readback.
     ///
     /// FIX #4: capture_frame() returns a Future that borrows the SurtrRenderer, so the
-    /// MutexGuard must remain alive until block_on completes — the guard cannot be dropped
+    /// MutexGuard must remain alive until block_on completes -- the guard cannot be dropped
     /// before the future is driven to completion. The lock is held for the duration of the
     /// GPU readback. This is acceptable because capture_png is an infrequent, explicit
     /// user-triggered operation (not called on the hot render path), so blocking other
@@ -2210,7 +2210,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         let gpu = self.gpu.lock().unwrap_or_else(|p| p.into_inner());
         pollster::block_on(gpu.capture_frame()).unwrap_or_else(|e| {
             log::error!("GPU frame capture failed: {}", e);
-            Vec::new() // Return empty buffer on failure — do not panic the render loop
+            Vec::new() // Return empty buffer on failure -- do not panic the render loop
         })
     }
 
@@ -2357,7 +2357,7 @@ impl cvkg_core::AssetManager for NativeAssetManager {
     ///
     /// FIX #5: The previous implementation set `already_tracked` inside the `rcu`
     /// closure body, which is incorrect because `rcu` retries the closure on
-    /// contention — the bool would reflect only the last execution. The fix uses
+    /// contention -- the bool would reflect only the last execution. The fix uses
     /// the fast-path check result plus the atomic `rcu` insertion to determine
     /// whether a thread must be spawned, making the logic correct under concurrency.
     fn load_image(&self, url: &str) -> cvkg_core::AssetState<std::sync::Arc<Vec<u8>>> {
@@ -2376,7 +2376,7 @@ impl cvkg_core::AssetManager for NativeAssetManager {
         let mut we_inserted = false;
         self.cache.rcu(|map| {
             if map.contains_key(&key) {
-                // Another caller already claimed this URL — do not insert.
+                // Another caller already claimed this URL -- do not insert.
                 (**map).clone()
             } else {
                 we_inserted = true;
@@ -2519,7 +2519,7 @@ mod tests {
         }
 
         if let cvkg_core::AssetState::Error(_) = state {
-            // Expected — non-existent file must produce an Error state
+            // Expected -- non-existent file must produce an Error state
         } else {
             panic!("Expected Error state, got {:?}", state);
         }
@@ -2547,9 +2547,9 @@ mod tests {
     }
 }
 
-/// load_icon — Searches known asset directories for 'icon.png'.
+/// load_icon -- Searches known asset directories for 'icon.png'.
 /// Returns a winit Icon if found and decodable, None otherwise.
-/// All failures are logged at warn level — missing icons are non-fatal.
+/// All failures are logged at warn level -- missing icons are non-fatal.
 fn load_icon() -> Option<winit::window::Icon> {
     // FIX #13: Replaced unwrap_or_default() with unwrap_or_else that logs the failure.
     // unwrap_or_default() produced an empty PathBuf silently, making all subsequent
@@ -2619,7 +2619,7 @@ fn load_icon() -> Option<winit::window::Icon> {
 }
 
 // =============================================================================
-// AUDIO / HAPTIC ENGINES — Cross-platform micro-feedback
+// AUDIO / HAPTIC ENGINES -- Cross-platform micro-feedback
 // =============================================================================
 
 /// Cross-platform audio engine using rodio for spatialized sound cues.

@@ -1,4 +1,4 @@
-//! Design Token Export — Item 13
+//! Design Token Export -- Item 13
 //!
 //! Exports CVKG design tokens to various formats: Figma JSON, CSS variables,
 //! Swift constants, and plain JSON.

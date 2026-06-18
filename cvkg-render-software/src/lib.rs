@@ -271,7 +271,7 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32) {
-        // No GPU blur — degrade to semi-transparent solid with slight alpha boost
+        // No GPU blur -- degrade to semi-transparent solid with slight alpha boost
         let alpha = (0.3 + blur_radius * 0.01).min(0.8);
         let tint = [1.0, 1.0, 1.0, alpha];
         self.fill_rounded_rect_internal(rect, radius, tint);
@@ -454,7 +454,7 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        // Software renderer has no geometry cache — just call the render function
+        // Software renderer has no geometry cache -- just call the render function
         render_fn(self);
     }
 }

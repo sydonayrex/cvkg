@@ -1,4 +1,4 @@
-//! HeimdallDock — macOS-style dock with magnification and auto-hide.
+//! HeimdallDock -- macOS-style dock with magnification and auto-hide.
 //! Named after Heimdall, guardian of the Bifrost bridge.
 
 use crate::theme;

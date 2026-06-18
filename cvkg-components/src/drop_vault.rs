@@ -1,4 +1,4 @@
-//! DropVault — File Upload Component with drag-and-drop support.
+//! DropVault -- File Upload Component with drag-and-drop support.
 //!
 //! Provides a file upload zone that accepts files via drag-and-drop from
 //! the OS file manager or via a click-to-browse file picker. Shows file
@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 /// - Supports multiple files.
 ///
 /// # Architecture:
-/// The component does NOT implement file reading or network upload — it exposes
+/// The component does NOT implement file reading or network upload -- it exposes
 /// events (`on_files_selected`, `on_upload_progress`) that the APP handles.
 /// The component is purely visual + interaction.
 #[derive(Clone)]
@@ -39,7 +39,7 @@ pub struct DropVault {
 /// Information about a selected file.
 #[derive(Debug, Clone)]
 pub struct VaultFile {
-    /// File name only (NO path — security).
+    /// File name only (NO path -- security).
     pub name: String,
     /// File size in bytes.
     pub size: u64,

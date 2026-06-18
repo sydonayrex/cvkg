@@ -1,4 +1,4 @@
-//! ÆttiFrame — Runic ornamental border system.
+//! ÆttiFrame -- Runic ornamental border system.
 //!
 //! Named after the Ættir, the three groups of eight runes in the Elder Futhark.
 //! Each `RunicStyle` renders a distinct decorative border pattern using the

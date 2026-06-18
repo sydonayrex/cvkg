@@ -2,7 +2,7 @@ use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 use cvkg_vdom::VDom;
 
-/// Accessibility Inspector — live a11y tree viewer.
+/// Accessibility Inspector -- live a11y tree viewer.
 ///
 /// Displays the current accessibility tree structure, showing each
 /// node's role, label, value, and state.
@@ -199,7 +199,7 @@ impl View for A11yInspector {
         );
         y += 24.0;
 
-        // Stats — use actual counts from the real tree
+        // Stats -- use actual counts from the real tree
         renderer.draw_text(
             &format!("{} nodes | {} roles", self.node_count(), self.role_count()),
             panel_rect.x + pad,

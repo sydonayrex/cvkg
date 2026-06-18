@@ -1,4 +1,4 @@
-//! OutlineView — Hierarchical tree view with disclosure triangles.
+//! OutlineView -- Hierarchical tree view with disclosure triangles.
 //!
 //! Displays a collapsible tree structure with disclosure triangles,
 //! supporting keyboard navigation and selection.
@@ -87,7 +87,7 @@ impl OutlineNode {
     }
 }
 
-/// OutlineView — hierarchical tree view component.
+/// OutlineView -- hierarchical tree view component.
 #[derive(Clone)]
 pub struct OutlineView {
     /// Root nodes of the tree.
@@ -291,7 +291,7 @@ impl View for OutlineView {
 
             // Get label from the node at this index
             if i < flat.len() {
-                // We need to get the actual label — for now use a placeholder
+                // We need to get the actual label -- for now use a placeholder
                 // In a real implementation, we'd store labels in the flat list
                 renderer.draw_text(&format!("Item {}", i), label_x, y + 4.0, 12.0, label_color);
             }

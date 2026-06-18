@@ -36,8 +36,8 @@ impl Default for WebKitConfig {
 /// Start the WebKit preview server.
 ///
 /// # Arguments
-/// * `addr` — Socket address to bind to.
-/// * `config` — Server configuration with paths to WASM, JS, assets, and static files.
+/// * `addr` -- Socket address to bind to.
+/// * `config` -- Server configuration with paths to WASM, JS, assets, and static files.
 pub async fn start_server_with_config(
     addr: SocketAddr,
     config: WebKitConfig,

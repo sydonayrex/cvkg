@@ -5,7 +5,7 @@
 
 use glam::{Quat, Vec2, Vec3};
 
-/// Collision shape kinds — 2D and 3D.
+/// Collision shape kinds -- 2D and 3D.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShapeKind {
     // ── 2D shapes ─────────────────────────────────────────────────────────

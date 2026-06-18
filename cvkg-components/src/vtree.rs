@@ -1,4 +1,4 @@
-//! VTree — Virtualized Tree with expand/collapse and O(visible) rendering.
+//! VTree -- Virtualized Tree with expand/collapse and O(visible) rendering.
 //!
 //! Renders hierarchical tree data with virtualization: only visible nodes
 //! (including expanded subtrees) are rendered. Supports 100,000+ nodes.

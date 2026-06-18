@@ -47,7 +47,7 @@ pub enum RuntimePatch {
 }
 
 /// Patch Engine implementation
-/// PatchEngine — Responsible for generating atomic updates between build artifacts.
+/// PatchEngine -- Responsible for generating atomic updates between build artifacts.
 ///
 /// The PatchEngine diffs serialized view trees from the Muspelheim build pipeline
 /// to produce minimal patches for runtime hot-reloading.

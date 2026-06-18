@@ -1,18 +1,18 @@
 //! # CVKG Agentic Development Guidelines (v1.2)
 //!
 //! ── Karpathy Guidelines (1–4) ────────────────────────────────────────────
-//! 1. THINK FIRST     — State assumptions. Surface ambiguity. Push back on complexity.
-//! 2. STAY SIMPLE     — Minimum code. No speculative features. No unasked-for abstractions.
-//! 3. BE SURGICAL     — Touch only what's required. Own your orphans. Don't improve neighbors.
-//! 4. VERIFY GOALS    — Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
+//! 1. THINK FIRST     -- State assumptions. Surface ambiguity. Push back on complexity.
+//! 2. STAY SIMPLE     -- Minimum code. No speculative features. No unasked-for abstractions.
+//! 3. BE SURGICAL     -- Touch only what's required. Own your orphans. Don't improve neighbors.
+//! 4. VERIFY GOALS    -- Turn tasks into checkable criteria. Loop until they pass. Never commit broken.
 //!
 //! ── CVKG Extended Protocols (5–7) ────────────────────────────────────────
-//! 5. TRIPLE-PASS     — Read the target, its surrounding context, and its full call graph
+//! 5. TRIPLE-PASS     -- Read the target, its surrounding context, and its full call graph
 //!                      at least THREE TIMES before making any edit or revision.
-//! 6. COMMENT ALL     — Every major pub fn, unsafe block, and non-trivial algorithm in
+//! 6. COMMENT ALL     -- Every major pub fn, unsafe block, and non-trivial algorithm in
 //!                      every .rs/.ts/.h/.wgsl file MUST have a descriptive doc comment.
 //!                      Comments describe WHY and WHAT CONTRACT, not HOW mechanically.
-//! 7. MONITOR LOOPS   — Check every tool call / command for progress every 30 seconds.
+//! 7. MONITOR LOOPS   -- Check every tool call / command for progress every 30 seconds.
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
 //!
@@ -49,7 +49,7 @@ pub enum FontWeight {
 pub use cvkg_core::Color;
 
 // =============================================================================
-// TYPOGRAPHY SYSTEM — Centralized design tokens for text sizing
+// TYPOGRAPHY SYSTEM -- Centralized design tokens for text sizing
 // =============================================================================
 
 /// Typography scale providing consistent font sizes across all components.
@@ -74,7 +74,7 @@ pub const LINE_HEIGHT_2XL: f32 = 1.3;
 pub const LINE_HEIGHT_3XL: f32 = 1.2;
 
 // =============================================================================
-// SPACING SCALE — Consistent spacing tokens
+// SPACING SCALE -- Consistent spacing tokens
 // =============================================================================
 
 /// Spacing scale for layout consistency.
@@ -85,7 +85,7 @@ pub const SPACE_LG: f32 = 24.0;
 pub const SPACE_XL: f32 = 32.0;
 
 // =============================================================================
-// BORDER RADIUS SCALE — Consistent corner radii
+// BORDER RADIUS SCALE -- Consistent corner radii
 // =============================================================================
 
 /// Border radius scale for consistent corner rounding.
@@ -98,7 +98,7 @@ pub const RADIUS_2XL: f32 = 16.0;
 pub const RADIUS_FULL: f32 = 9999.0;
 
 // =============================================================================
-// FOCUS RING SYSTEM — WCAG 2.4.7 compliant focus indicators
+// FOCUS RING SYSTEM -- WCAG 2.4.7 compliant focus indicators
 // =============================================================================
 
 /// Focus ring width in logical pixels.
@@ -148,7 +148,7 @@ pub fn draw_focus_ring_color(
 }
 
 // =============================================================================
-// BUTTON VARIANTS — Standard button styles
+// BUTTON VARIANTS -- Standard button styles
 // =============================================================================
 
 /// Button visual variants.
@@ -495,7 +495,7 @@ pub trait ViewExt: cvkg_core::View + Sized {
 impl<T: cvkg_core::View + Sized> ViewExt for T {}
 
 // =============================================================================
-// MICRO-FEEDBACK — Wrapper view that provides haptic/audio feedback hooks
+// MICRO-FEEDBACK -- Wrapper view that provides haptic/audio feedback hooks
 // =============================================================================
 
 /// A wrapper view that provides haptic and audio feedback for any content.

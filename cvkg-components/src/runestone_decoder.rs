@@ -3,7 +3,7 @@ use cvkg_core::{Never, Rect, Renderer, View};
 use std::time::Duration;
 
 /// RunestoneDecoder - A text component that "deciphers" ancient runes into digital text.
-/// Section 4.12: "Reading the Runes — Temporal data reconstruction."
+/// Section 4.12: "Reading the Runes -- Temporal data reconstruction."
 pub struct RunestoneDecoder {
     pub text: String,
     pub duration: Duration,

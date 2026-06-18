@@ -1,4 +1,4 @@
-//! FlexiScope — Container Query Layout System.
+//! FlexiScope -- Container Query Layout System.
 //!
 //! Allows components to respond to their own container width rather than
 //! the viewport width. This enables truly responsive components that

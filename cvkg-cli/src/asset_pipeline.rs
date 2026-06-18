@@ -121,7 +121,7 @@ impl AssetPipeline {
         Ok(())
     }
 
-    /// Optimize an image file — verify it can be decoded and warn if large.
+    /// Optimize an image file -- verify it can be decoded and warn if large.
     fn optimize_image(path: &Path) -> Result<()> {
         let metadata = fs::metadata(path)
             .with_context(|| format!("Failed to read image metadata: {:?}", path))?;

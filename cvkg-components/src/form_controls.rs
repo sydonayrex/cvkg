@@ -1,11 +1,11 @@
 //! Form control components.
 //!
-//! Label — form label with required indicator.
-//! DateTimePicker — combined date and time picker.
-//! Link — tappable link with underline.
-//! SearchField — search input with icon.
-//! SearchSuggestions — search suggestion dropdown.
-//! Tag — small dismissible tag/label.
+//! Label -- form label with required indicator.
+//! DateTimePicker -- combined date and time picker.
+//! Link -- tappable link with underline.
+//! SearchField -- search input with icon.
+//! SearchSuggestions -- search suggestion dropdown.
+//! Tag -- small dismissible tag/label.
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
@@ -13,7 +13,7 @@ use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // ----------------------------------------------------------------------------
-// Label — form label with required indicator
+// Label -- form label with required indicator
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -89,7 +89,7 @@ impl View for Label {
 }
 
 // ----------------------------------------------------------------------------
-// DateTimePicker — combined date and time picker
+// DateTimePicker -- combined date and time picker
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -183,7 +183,7 @@ impl View for DateTimePicker {
 }
 
 // ----------------------------------------------------------------------------
-// Link — tappable link with underline
+// Link -- tappable link with underline
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -259,7 +259,7 @@ impl View for Link {
 }
 
 // ----------------------------------------------------------------------------
-// SearchField — search input with icon
+// SearchField -- search input with icon
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -372,7 +372,7 @@ impl View for SearchField {
 }
 
 // ----------------------------------------------------------------------------
-// SearchSuggestions — search suggestion dropdown
+// SearchSuggestions -- search suggestion dropdown
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -476,7 +476,7 @@ impl View for SearchSuggestions {
 }
 
 // ----------------------------------------------------------------------------
-// Tag — small dismissible tag/label
+// Tag -- small dismissible tag/label
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]

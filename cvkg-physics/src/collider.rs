@@ -23,7 +23,7 @@ pub struct Collider {
     pub collides_with: u32,
     /// Optional user data pointer (for application callbacks).
     pub user_data: u64,
-    /// If true, this collider is a trigger/sensor — it generates collision
+    /// If true, this collider is a trigger/sensor -- it generates collision
     /// events but does not produce contact forces (no physical response).
     /// Use for: pickup zones, kill zones, proximity detection, area triggers.
     pub is_sensor: bool,

@@ -2,7 +2,7 @@ use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// MjolnirFrame - A geometric, non-rectangular UI frame with chromatic aberration.
-/// Section 4.5: "Mjolnir's Edge — Geometric slicing and destructive visual feedback."
+/// Section 4.5: "Mjolnir's Edge -- Geometric slicing and destructive visual feedback."
 pub struct MjolnirFrame {
     /// Color of the main geometric border.
     pub border_color: [f32; 4],

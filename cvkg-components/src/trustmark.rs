@@ -21,7 +21,7 @@ const INDICATOR_RADIUS: f32 = 4.0;
 /// Confidence bands for AI-generated content.
 ///
 /// Discrete bands are used instead of continuous percentages because
-/// fine-grained precision is misleading — models cannot self-assess
+/// fine-grained precision is misleading -- models cannot self-assess
 /// their own accuracy with that resolution. The bands map to qualitative
 /// judgments that are more actionable for end users.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,11 +75,11 @@ impl TrustLevel {
 /// Visual style of the top-right indicator icon.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IndicatorStyle {
-    /// Filled circle — signals presence of information.
+    /// Filled circle -- signals presence of information.
     Filled,
-    /// Hollow (stroked) circle — signals partial or degraded confidence.
+    /// Hollow (stroked) circle -- signals partial or degraded confidence.
     Hollow,
-    /// Question mark — signals that confidence is not available.
+    /// Question mark -- signals that confidence is not available.
     QuestionMark,
 }
 

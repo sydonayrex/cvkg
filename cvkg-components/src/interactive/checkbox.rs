@@ -161,7 +161,7 @@ impl View for Checkbox {
 
         renderer.pop_vnode();
 
-        // Focus ring — WCAG 2.4.7
+        // Focus ring -- WCAG 2.4.7
         if is_focused {
             crate::draw_focus_ring(renderer, rect);
         }

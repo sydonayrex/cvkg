@@ -18,8 +18,8 @@ pub fn load_agent_trace(path: &str) -> anyhow::Result<Vec<AgentEvent>> {
 /// Replay an agent trace by sending events to the runtime.
 ///
 /// # Arguments
-/// * `events` — The agent events to replay.
-/// * `inject_event` — Callback invoked for each event.
+/// * `events` -- The agent events to replay.
+/// * `inject_event` -- Callback invoked for each event.
 pub fn replay_agent_trace<F>(events: Vec<AgentEvent>, mut inject_event: F)
 where
     F: FnMut(AgentEvent),

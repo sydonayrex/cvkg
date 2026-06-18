@@ -1,4 +1,4 @@
-//! Kvasir — Unified Visual Computation Graph.
+//! Kvasir -- Unified Visual Computation Graph.
 //!
 //! See IMPLEMENTATION-PLAN.md for the full architecture. In short:
 //! - Every render operation is a `KvasirNode` with typed resource I/O.

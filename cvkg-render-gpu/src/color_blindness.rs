@@ -1,9 +1,9 @@
 //! Color blindness simulation post-process pass.
 //!
 //! Implements Brettel/Viénot simulation for:
-//! - **Protanopia** (no red cones) — ~1.3% of males
-//! - **Deuteranopia** (no green cones) — ~5.9% of males
-//! - **Tritanopia** (no blue cones) — ~0.003% of general population
+//! - **Protanopia** (no red cones) -- ~1.3% of males
+//! - **Deuteranopia** (no green cones) -- ~5.9% of males
+//! - **Tritanopia** (no blue cones) -- ~0.003% of general population
 //!
 //! The simulation transforms colors using a Daltonization matrix applied
 //! in linear RGB space. The module provides the transformation matrices,
@@ -21,7 +21,7 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum ColorBlindMode {
-    /// Normal vision (identity transform — no-op, useful for A/B comparison).
+    /// Normal vision (identity transform -- no-op, useful for A/B comparison).
     Normal,
     /// Protanopia: absence of L (red) cones.
     Protanopia,
@@ -42,7 +42,7 @@ impl ColorBlindMode {
     /// Values are based on the Brettel, Viénot & Mollon (1997) model.
     pub fn matrix(&self) -> [f32; 9] {
         match self {
-            // Identity — no transformation
+            // Identity -- no transformation
             ColorBlindMode::Normal => [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
             // Protanopia: L cone absent
             // Based on Brettel et al. projection plane for protanopes

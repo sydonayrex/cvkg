@@ -189,7 +189,7 @@ impl View for Physics3DDemo {
             r.draw_line(-500.0, 0.0, 500.0, 0.0, [0.2, 0.3, 0.4, alpha], 1.0);
         }
 
-        // Render 3D cubes — this is the critical path:
+        // Render 3D cubes -- this is the critical path:
         // VNode 3D fields → render_scene_node_3d → draw_mesh_3d → GPU mode 13
         let cubes = self.cubes.borrow();
         let scene = self.scene_graph.borrow();
@@ -201,7 +201,7 @@ impl View for Physics3DDemo {
                     node.rotation_3d,
                     node.scale_3d,
                     cubes.get(idx).map(|c| c.color).unwrap_or([0.5; 4]),
-                    &[], // empty meshes — renderer should generate a default cube
+                    &[], // empty meshes -- renderer should generate a default cube
                 );
             }
         }
@@ -278,7 +278,7 @@ fn main() {
     println!("  [PASS] Scene bridge 3D sync architecture (tested in cvkg-physics)");
 
     // 4. Validate Renderer trait has render_scene_node_3d
-    // (compile-time check — if this compiles, the trait is properly defined)
+    // (compile-time check -- if this compiles, the trait is properly defined)
     fn _check_renderer<R: Renderer>(r: &mut R) {
         r.render_scene_node_3d([0.0; 3], [0.0, 0.0, 0.0, 1.0], [1.0; 3], [1.0; 4], &[]);
     }

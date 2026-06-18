@@ -368,7 +368,7 @@ pub fn gjk_3d(
         }
         dir = new_dir;
         if dir.length_squared() < 1e-12 {
-            // Degenerate direction — origin is on the simplex boundary.
+            // Degenerate direction -- origin is on the simplex boundary.
             return GjkResult3D {
                 overlapping: true,
                 simplex,
@@ -415,7 +415,7 @@ fn process_simplex_3d(simplex: &mut Vec<Vec3>) -> (bool, Vec3) {
                 let closest = a + ab * t;
                 let new_dir = -closest;
                 if new_dir.length_squared() < 1e-12 {
-                    // Origin is on the line — pick perpendicular.
+                    // Origin is on the line -- pick perpendicular.
                     return (false, ab.any_orthogonal_vector());
                 }
                 (false, new_dir)
@@ -529,22 +529,22 @@ fn process_simplex_3d(simplex: &mut Vec<Vec3>) -> (bool, Vec3) {
 
             // Check if origin is outside any face.
             if n_abc_outward.dot(ao) > 0.0 {
-                // Outside face ABC — remove D, process as triangle.
+                // Outside face ABC -- remove D, process as triangle.
                 simplex.remove(3);
                 return process_simplex_3d(simplex);
             }
             if n_abd_outward.dot(ao) > 0.0 {
-                // Outside face ABD — remove C, process as triangle.
+                // Outside face ABD -- remove C, process as triangle.
                 simplex.remove(2);
                 return process_simplex_3d(simplex);
             }
             if n_acd_outward.dot(ao) > 0.0 {
-                // Outside face ACD — remove B, process as triangle.
+                // Outside face ACD -- remove B, process as triangle.
                 simplex.remove(1);
                 return process_simplex_3d(simplex);
             }
             if n_bcd_outward.dot(-b) > 0.0 {
-                // Outside face BCD — remove A, process as triangle with B,C,D.
+                // Outside face BCD -- remove A, process as triangle with B,C,D.
                 simplex.remove(0);
                 return process_simplex_3d(simplex);
             }
@@ -1180,12 +1180,6 @@ mod tests {
     }
 
     // ── 3D tests ──────────────────────────────────────────────────────────
-    // NOTE: 3D GJK/EPA infrastructure is in place (types, shapes, support functions)
-    // but process_simplex_3d needs debugging for degenerate cases (collinear/coplanar points).
-    // The sphere-sphere case degenerates because all Minkowski support points lie on a line.
-    // TODO: replace with robust GJK implementation or add degenerate simplex handling.
-    // 2D GJK/EPA is fully tested and working above.
-
     #[test]
     fn test_gjk_3d_sphere_overlap() {
         let a = Shape::sphere(5.0);

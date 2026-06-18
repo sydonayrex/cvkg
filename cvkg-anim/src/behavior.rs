@@ -38,7 +38,7 @@ impl FastRng {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BOIDS — Flocking Simulation
+// BOIDS -- Flocking Simulation
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A single flocking agent with position and velocity.
@@ -316,7 +316,7 @@ impl Boids {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CROWD SIMULATION — ORCA Velocity Obstacles
+// CROWD SIMULATION -- ORCA Velocity Obstacles
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// A circular obstacle in the crowd simulation.

@@ -87,7 +87,7 @@ impl View for BifrostTabs {
                 [1.0, 1.0, 1.0, alpha],
             );
 
-            // Close button (×) — min 24x24px hit target
+            // Close button (×) -- min 24x24px hit target
             if self.closable {
                 let close_size = 24.0_f32;
                 let close_x = x + tab_width - close_size - 4.0;

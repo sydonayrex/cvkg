@@ -39,7 +39,7 @@ fn fuzzy_match(label: &str, query: &str) -> u32 {
     let label_lower = label.to_lowercase();
     let query_lower = query.to_lowercase();
 
-    // Simple substring match first — always works and is predictable.
+    // Simple substring match first -- always works and is predictable.
     if label_lower.contains(&query_lower) {
         // Bonus for matching at start
         if label_lower.starts_with(&query_lower) {
@@ -63,7 +63,7 @@ fn fuzzy_match(label: &str, query: &str) -> u32 {
         }
     }
     if qi == query_chars.len() {
-        // All characters found in order — scored lower than substring
+        // All characters found in order -- scored lower than substring
         return 25;
     }
     0

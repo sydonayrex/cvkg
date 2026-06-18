@@ -1,4 +1,4 @@
-//! ValkyrieToolbar — Floating glass toolbar with flexible layout.
+//! ValkyrieToolbar -- Floating glass toolbar with flexible layout.
 //! Named after the Valkyries, choosers of the slain.
 
 use crate::theme;
@@ -344,10 +344,10 @@ fn render_toolbar_item(
             );
         }
         ToolbarItem::Spacer => {
-            // Empty space — nothing to render
+            // Empty space -- nothing to render
         }
         ToolbarItem::FlexSpace => {
-            // Handled by layout — nothing to render
+            // Handled by layout -- nothing to render
         }
     }
 }

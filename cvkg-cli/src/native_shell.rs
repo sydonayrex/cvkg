@@ -10,7 +10,7 @@ use std::fmt;
 /// The rendering backend used for the native shell window.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ShellBackend {
-    /// Headless mode — no actual window, useful for testing and CI.
+    /// Headless mode -- no actual window, useful for testing and CI.
     Headless,
 }
 
@@ -36,7 +36,7 @@ impl NativeShell {
     ///
     /// # Arguments
     ///
-    /// * `title` — The initial window title.
+    /// * `title` -- The initial window title.
     ///
     /// # Examples
     ///
@@ -61,8 +61,8 @@ impl NativeShell {
     ///
     /// # Arguments
     ///
-    /// * `w` — Width in pixels.
-    /// * `h` — Height in pixels.
+    /// * `w` -- Width in pixels.
+    /// * `h` -- Height in pixels.
     pub fn with_size(mut self, w: u32, h: u32) -> Self {
         self.width = w;
         self.height = h;
@@ -73,7 +73,7 @@ impl NativeShell {
     ///
     /// # Arguments
     ///
-    /// * `backend` — The [`ShellBackend`] to use.
+    /// * `backend` -- The [`ShellBackend`] to use.
     pub fn backend(mut self, backend: ShellBackend) -> Self {
         self.backend = backend;
         self
@@ -100,7 +100,7 @@ impl ShellWindow {
     ///
     /// # Arguments
     ///
-    /// * `title` — The new title string.
+    /// * `title` -- The new title string.
     pub fn set_title(&mut self, title: &str) {
         self.title = title.to_string();
     }
@@ -109,8 +109,8 @@ impl ShellWindow {
     ///
     /// # Arguments
     ///
-    /// * `w` — New width in pixels.
-    /// * `h` — New height in pixels.
+    /// * `w` -- New width in pixels.
+    /// * `h` -- New height in pixels.
     pub fn resize(&mut self, w: u32, h: u32) {
         self.width = w;
         self.height = h;
@@ -188,7 +188,7 @@ pub fn create_window(shell: &NativeShell) -> Result<ShellWindow, ShellError> {
 ///
 /// # Arguments
 ///
-/// * `window` — The [`ShellWindow`] to poll events for.
+/// * `window` -- The [`ShellWindow`] to poll events for.
 ///
 /// # Examples
 ///

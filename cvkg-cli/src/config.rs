@@ -68,7 +68,7 @@ impl CliConfig {
         if port.is_some() {
             self.port = port;
         }
-        // Inspector and reduced_motion are boolean flags — CLI always overrides
+        // Inspector and reduced_motion are boolean flags -- CLI always overrides
         self.inspector = Some(inspector);
         self.reduced_motion = Some(reduced_motion);
     }

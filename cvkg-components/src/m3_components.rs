@@ -13,7 +13,7 @@ use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 // MATERIAL 3 COMPONENTS
 // =============================================================================
 
-/// FAB (Floating Action Button) — circular, fixed-position primary action button.
+/// FAB (Floating Action Button) -- circular, fixed-position primary action button.
 #[derive(Clone)]
 pub struct FAB {
     /// Icon text or label.
@@ -108,7 +108,7 @@ impl View for FAB {
 }
 
 // ----------------------------------------------------------------------------
-// ExtendedFAB — FAB with label text for clarity
+// ExtendedFAB -- FAB with label text for clarity
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -215,7 +215,7 @@ impl View for ExtendedFAB {
 }
 
 // ----------------------------------------------------------------------------
-// TimePicker — clock face time input
+// TimePicker -- clock face time input
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -349,7 +349,7 @@ impl View for TimePicker {
 }
 
 // ----------------------------------------------------------------------------
-// DateRangePicker — calendar for selecting date ranges
+// DateRangePicker -- calendar for selecting date ranges
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -531,7 +531,7 @@ impl View for DateRangePicker {
 // CULT UI COMPONENTS
 // =============================================================================
 
-/// HeroColorPanels — hero with animated color panel grid.
+/// HeroColorPanels -- hero with animated color panel grid.
 #[derive(Clone)]
 pub struct HeroColorPanels {
     /// Number of columns.
@@ -632,7 +632,7 @@ impl View for HeroColorPanels {
 }
 
 // ----------------------------------------------------------------------------
-// BgMediaHero — hero with video/image background
+// BgMediaHero -- hero with video/image background
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -732,7 +732,7 @@ impl View for BgMediaHero {
 }
 
 // ----------------------------------------------------------------------------
-// LogoCarousel — animated logo carousel (marquee)
+// LogoCarousel -- animated logo carousel (marquee)
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -849,7 +849,7 @@ impl View for LogoCarousel {
 // JOY UI COMPONENTS
 // =============================================================================
 
-/// DynamicIsland — iOS Dynamic Island-style expandable.
+/// DynamicIsland -- iOS Dynamic Island-style expandable.
 #[derive(Clone)]
 pub struct DynamicIsland {
     /// Primary content label.
@@ -942,7 +942,7 @@ impl View for DynamicIsland {
 }
 
 // ----------------------------------------------------------------------------
-// SidePanel — side panel that slides in
+// SidePanel -- side panel that slides in
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -1057,7 +1057,7 @@ impl View for SidePanel {
 // DATA COMPONENTS
 // =============================================================================
 
-/// Codeblock — syntax-highlighted code block with copy button.
+/// Codeblock -- syntax-highlighted code block with copy button.
 #[derive(Clone)]
 pub struct Codeblock {
     /// Code content.
@@ -1165,7 +1165,7 @@ impl View for Codeblock {
 }
 
 // ----------------------------------------------------------------------------
-// Kanban — kanban board with drag-and-drop columns
+// Kanban -- kanban board with drag-and-drop columns
 // ----------------------------------------------------------------------------
 
 /// A single kanban card.
@@ -1218,7 +1218,7 @@ impl KanbanColumn {
     }
 }
 
-/// Kanban — kanban board with columns.
+/// Kanban -- kanban board with columns.
 #[derive(Clone)]
 pub struct Kanban {
     /// Columns.

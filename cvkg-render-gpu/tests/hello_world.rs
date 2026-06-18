@@ -510,7 +510,7 @@ fn test_many_draw_calls() {
     );
 }
 
-/// Test: Full pipeline integration — opaque + bloom together.
+/// Test: Full pipeline integration -- opaque + bloom together.
 /// NOTE: Glass is excluded until the glass pipeline bug is fixed.
 #[test]
 fn test_full_pipeline_integration() {

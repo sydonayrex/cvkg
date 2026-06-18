@@ -1,4 +1,4 @@
-//! Material graph — composable shader generation.
+//! Material graph -- composable shader generation.
 //!
 //! Replaces the mode-based `if/else` dispatch in shapes.wgsl with
 //! composable material graphs that compile to WGSL at startup.
@@ -308,7 +308,7 @@ impl std::fmt::Display for MaterialError {
     }
 }
 
-/// Compiled material — a WGSL function that can be included in the main shader.
+/// Compiled material -- a WGSL function that can be included in the main shader.
 #[derive(Debug, Clone)]
 pub struct CompiledMaterial {
     /// The WGSL function body (everything between the `{` and `}` of the fragment function).
@@ -377,7 +377,7 @@ impl MaterialCompiler {
                 MaterialOp::PremultipliedBlend => {
                     let color_var = Self::find_input(&var_names, node_id, MaterialSocket::Color, graph)
                         .unwrap_or_else(|| "col".to_string());
-                    // Read alpha from a separate texture sample — for fonts this is the single channel
+                    // Read alpha from a separate texture sample -- for fonts this is the single channel
                     let alpha_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
                         .unwrap_or_else(|| "1.0".to_string());
                     format!(

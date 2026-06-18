@@ -1,4 +1,4 @@
-//! NiflheimSidebar — Glass chrome wrapper for sidebar panels.
+//! NiflheimSidebar -- Glass chrome wrapper for sidebar panels.
 //! Named after Niflheim, the realm of ice and mist.
 
 use crate::theme;

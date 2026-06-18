@@ -9,7 +9,7 @@ use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // ----------------------------------------------------------------------------
-// TextShimmer — animated shimmer loading placeholder for streaming text
+// TextShimmer -- animated shimmer loading placeholder for streaming text
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -86,7 +86,7 @@ impl View for TextShimmer {
 }
 
 // ----------------------------------------------------------------------------
-// UserMessage — styled user message bubble with avatar
+// UserMessage -- styled user message bubble with avatar
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -161,7 +161,7 @@ impl View for UserMessage {
 }
 
 // ----------------------------------------------------------------------------
-// AssistantMessage — styled assistant message with avatar and actions
+// AssistantMessage -- styled assistant message with avatar and actions
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -265,7 +265,7 @@ impl View for AssistantMessage {
 }
 
 // ----------------------------------------------------------------------------
-// MessageList — scrollable list of chat messages
+// MessageList -- scrollable list of chat messages
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -342,7 +342,7 @@ impl View for MessageList {
 }
 
 // ----------------------------------------------------------------------------
-// InputBar — text input with send/stop button and character count
+// InputBar -- text input with send/stop button and character count
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -459,7 +459,7 @@ impl View for InputBar {
 }
 
 // ----------------------------------------------------------------------------
-// SuggestionChips — quick-action suggestion chips below input
+// SuggestionChips -- quick-action suggestion chips below input
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -553,7 +553,7 @@ impl View for SuggestionChips {
 }
 
 // ----------------------------------------------------------------------------
-// ModelPicker — dropdown to select AI model
+// ModelPicker -- dropdown to select AI model
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -673,7 +673,7 @@ impl View for ModelPicker {
 }
 
 // ----------------------------------------------------------------------------
-// CopyToolbar — floating toolbar with copy, share, export actions
+// CopyToolbar -- floating toolbar with copy, share, export actions
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -753,7 +753,7 @@ impl View for CopyToolbar {
 }
 
 // ----------------------------------------------------------------------------
-// ToolCard — display tool call with name, args, status, result
+// ToolCard -- display tool call with name, args, status, result
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -878,7 +878,7 @@ impl View for ToolCard {
 }
 
 // ----------------------------------------------------------------------------
-// Markdown — render markdown with code highlighting, tables, links
+// Markdown -- render markdown with code highlighting, tables, links
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -954,7 +954,7 @@ impl View for Markdown {
 }
 
 // ----------------------------------------------------------------------------
-// AgentChat — full chat surface composing MessageList + InputBar + Suggestions
+// AgentChat -- full chat surface composing MessageList + InputBar + Suggestions
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]

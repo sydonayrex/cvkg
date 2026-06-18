@@ -1,4 +1,4 @@
-//! AutoComplete component — text input with a filtered dropdown list.
+//! AutoComplete component -- text input with a filtered dropdown list.
 //!
 //! Renders an Input-like text field that filters a list of options as the user
 //! types. A glassmorphic dropdown shows up to 6 matching items. Supports
@@ -33,7 +33,7 @@ impl AutoCompleteState {
     }
 }
 
-/// AutoComplete — a text input with a filtered, glassmorphic dropdown.
+/// AutoComplete -- a text input with a filtered, glassmorphic dropdown.
 ///
 /// # Examples
 /// ```
@@ -63,10 +63,10 @@ impl AutoComplete {
     /// Create a new AutoComplete component.
     ///
     /// # Arguments
-    /// * `placeholder` — hint text shown when the field is empty.
-    /// * `options` — the full list of completable strings.
-    /// * `on_change` — called with the current text on every keystroke.
-    /// * `on_select` — called with the selected option string.
+    /// * `placeholder` -- hint text shown when the field is empty.
+    /// * `options` -- the full list of completable strings.
+    /// * `on_change` -- called with the current text on every keystroke.
+    /// * `on_select` -- called with the selected option string.
     pub fn new(
         placeholder: impl Into<String>,
         options: Vec<String>,

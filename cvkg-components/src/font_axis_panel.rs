@@ -33,7 +33,7 @@ fn color_toggle_knob() -> [f32; 4] { theme::text() }
 ///
 /// # Performance
 ///
-/// Axis values are `Copy` — no allocations on change. The panel is designed
+/// Axis values are `Copy` -- no allocations on change. The panel is designed
 /// to be rendered once per frame and kept in application state.
 #[derive(Clone)]
 pub struct FontAxisPanel {

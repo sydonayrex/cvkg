@@ -1,4 +1,4 @@
-//! FluxLayout — Layout Animation for Sibling Repositioning.
+//! FluxLayout -- Layout Animation for Sibling Repositioning.
 //!
 //! When an item in a list grows or shrinks, FluxLayout smoothly animates
 //! the siblings below it to their new positions instead of snapping.

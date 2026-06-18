@@ -1,4 +1,4 @@
-//! MorphBridge — Shared Element Transition System.
+//! MorphBridge -- Shared Element Transition System.
 //!
 //! Provides shared element transitions where a view "morphs" from one
 //! position to another when the component tree changes, creating spatial

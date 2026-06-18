@@ -10,9 +10,9 @@ use crate::RigidBody;
 /// It's more stable than explicit Euler for oscillatory systems.
 ///
 /// # Arguments
-/// * `body` — The body to integrate (modified in-place).
-/// * `dt` — Time step in seconds.
-/// * `gravity` — Global gravity vector (pixels/s²).
+/// * `body` -- The body to integrate (modified in-place).
+/// * `dt` -- Time step in seconds.
+/// * `gravity` -- Global gravity vector (pixels/s²).
 pub fn semi_implicit_euler(body: &mut RigidBody, dt: f32, gravity: Vec2) {
     if body.is_static || body.is_sleeping {
         return;

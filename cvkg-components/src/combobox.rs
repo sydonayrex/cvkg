@@ -8,7 +8,7 @@ const COMBO_SELECTED_HASH: u64 = 0xC00_0002;
 const COMBO_SEARCH_HASH: u64 = 0xC00_0003;
 
 // =============================================================================
-// COMBOBOX — Searchable select with keyboard navigation
+// COMBOBOX -- Searchable select with keyboard navigation
 // =============================================================================
 
 /// A searchable dropdown select component.

@@ -179,7 +179,7 @@ impl KvasirNode for EffectCompositeNode {
             &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&input_view; 256]),
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&input_view; 32]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

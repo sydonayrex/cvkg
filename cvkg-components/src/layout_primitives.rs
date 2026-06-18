@@ -1,12 +1,12 @@
 //! Layout primitive components.
 //!
-//! AspectRatio — fixed ratio container.
-//! ZStack — overlapping stack layout.
-//! LazyVGrid / LazyHGrid — lazy grid layouts.
-//! LazyHStack — lazy horizontal stack.
-//! Resizable — draggable resizable panel.
-//! Group / GroupBox — labeled grouping containers.
-//! Separator — visual divider.
+//! AspectRatio -- fixed ratio container.
+//! ZStack -- overlapping stack layout.
+//! LazyVGrid / LazyHGrid -- lazy grid layouts.
+//! LazyHStack -- lazy horizontal stack.
+//! Resizable -- draggable resizable panel.
+//! Group / GroupBox -- labeled grouping containers.
+//! Separator -- visual divider.
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
@@ -85,7 +85,7 @@ impl View for AspectRatio {
 }
 
 // ----------------------------------------------------------------------------
-// Drawer — slide-in drawer panel
+// Drawer -- slide-in drawer panel
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -153,7 +153,7 @@ impl View for ZStack {
 }
 
 // ----------------------------------------------------------------------------
-// LazyVGrid — lazy vertical grid
+// LazyVGrid -- lazy vertical grid
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -250,7 +250,7 @@ impl View for LazyVGrid {
 }
 
 // ----------------------------------------------------------------------------
-// LazyHGrid — lazy horizontal grid
+// LazyHGrid -- lazy horizontal grid
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -347,7 +347,7 @@ impl View for LazyHGrid {
 }
 
 // ----------------------------------------------------------------------------
-// LazyHStack — lazy horizontal stack
+// LazyHStack -- lazy horizontal stack
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -449,7 +449,7 @@ impl View for LazyHStack {
 }
 
 // ----------------------------------------------------------------------------
-// FullScreenCover — full screen overlay
+// FullScreenCover -- full screen overlay
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -551,7 +551,7 @@ impl View for Resizable {
 }
 
 // ----------------------------------------------------------------------------
-// Label — form label component
+// Label -- form label component
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -641,7 +641,7 @@ impl View for Group {
 }
 
 // ----------------------------------------------------------------------------
-// GroupBox — labeled group box
+// GroupBox -- labeled group box
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
@@ -714,7 +714,7 @@ impl View for GroupBox {
 }
 
 // ----------------------------------------------------------------------------
-// DisclosureGroup — expandable/collapsible group
+// DisclosureGroup -- expandable/collapsible group
 // ----------------------------------------------------------------------------
 
 #[derive(Clone)]
