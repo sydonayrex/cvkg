@@ -9,7 +9,7 @@ use cvkg_core::Rect;
 use std::collections::HashMap;
 
 /// Unique identifier for a layer in the tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
 pub struct LayerId(pub u64);
 
 /// Material type that determines which GPU pass a layer's draw calls are routed to
@@ -23,7 +23,7 @@ pub struct LayerId(pub u64);
 /// `Isolated` triggers off-screen buffer rendering: the layer and all its
 /// children are rendered to a separate texture, then composited back into the
 /// main scene. This matches the SVG `isolation` property.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub enum Material {
     /// Opaque or standard UI. Rendered in the initial Scene Capture pass
     /// with standard alpha compositing (src-over).

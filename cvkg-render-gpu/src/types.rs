@@ -50,10 +50,59 @@ pub struct SvgTransform {
 pub struct SvgAnimation {
     pub target_id: String,
     pub attribute_name: String,
-    pub from_val: f32,
-    pub to_val: f32,
+    /// Keyframe values. For 2-value animations, this is [from, to].
+    /// For multi-keyframe animations (values="v0;v1;..."), this stores all values.
+    pub keyframe_values: Vec<f32>,
+    /// Optional keyTimes (normalized 0..1). If empty, uniform spacing is assumed.
+    pub key_times: Vec<f32>,
     pub duration: f32,
     pub vertex_range: std::ops::Range<usize>,
+}
+
+impl SvgAnimation {
+    /// Get the interpolated value at normalized time t (0..1).
+    pub fn evaluate(&self, t: f32) -> f32 {
+        let vals = &self.keyframe_values;
+        if vals.is_empty() {
+            return 0.0;
+        }
+        if vals.len() == 1 {
+            return vals[0];
+        }
+        if vals.len() == 2 {
+            return vals[0] + (vals[1] - vals[0]) * t;
+        }
+        // Multi-keyframe: find the active segment
+        let times = if self.key_times.len() == vals.len() {
+            &self.key_times
+        } else {
+            // Uniform spacing
+            return self.evaluate_uniform(t);
+        };
+        // Find the segment containing t
+        let t = t.clamp(0.0, 1.0);
+        for i in 0..times.len() - 1 {
+            if t >= times[i] && t <= times[i + 1] {
+                let seg_t = (t - times[i]) / (times[i + 1] - times[i]);
+                return vals[i] + (vals[i + 1] - vals[i]) * seg_t;
+            }
+        }
+        vals[vals.len() - 1]
+    }
+
+    fn evaluate_uniform(&self, t: f32) -> f32 {
+        let vals = &self.keyframe_values;
+        let n = vals.len() - 1;
+        let t = t.clamp(0.0, 1.0);
+        let idx_f = t * n as f32;
+        let idx = idx_f.floor() as usize;
+        let frac = idx_f - idx as f32;
+        if idx >= n {
+            vals[n]
+        } else {
+            vals[idx] + (vals[idx + 1] - vals[idx]) * frac
+        }
+    }
 }
 
 /// Represents a single batched GPU draw call.

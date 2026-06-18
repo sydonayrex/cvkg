@@ -1,587 +1,313 @@
-# CVKG Rendering System Audit Report
+# CVKG Rendering System -- Formal Audit
 
 **Date:** 2026-06-17
-**Scope:** Full rendering pipeline audit across 10 use cases
-**Auditor:** OWL (automated code review with subagent parallelism)
-**Status:** All P0 and P1 issues addressed (see fixes below)
+**Scope:** cvkg-render-gpu (SurtrRenderer), cvkg-compositor (CompositorEngine), cvkg-core (Renderer trait), all passes (glass, bloom, tonemap, accessibility, composite, backdrop_region, volumetric, effects, ui, geometry)
+**Method:** Function-by-function review across the full pipeline, traced through 11 simulated use cases, evaluated under three lenses: code correctness/SE, Rust idioms, and UI/UX.
 
 ---
 
-## Executive Summary
+## Architecture Summary (for reference)
 
-The CVKG rendering system is a GPU-accelerated 2D rendering engine built on wgpu with a Kvasir render graph, supporting opaque, glass, UI, bloom, and composite material passes. The system implements a `Renderer` trait with 50+ methods, a `View` trait for retained-mode UI, and a compositor for layer-based rendering.
+Frame lifecycle: `begin_frame()` -> user draw calls -> `render_frame()` (staging belt upload) -> `end_frame()` (Kvasir graph execution: Scene -> BackdropCopy -> KawaseDown -> KawaseUp -> Glass -> BloomExtract -> BloomBlur -> BloomComposite -> Volumetric -> Tonemap -> ColorBlindness -> UIOverlay).
 
-**Overall Assessment:** The core rendering pipeline is functional for basic use cases (simple desktop UI, light glassmorphism). However, significant gaps exist for advanced use cases (SVG editing, photo editing, web browser, complex glassmorphism). The most critical issues are: (1) glass_intensity not propagated to the GPU shader, (2) SVG filter engine has undefined behavior via unsafe transmute, (3) BiDi text rendering is fundamentally broken, (4) no active WASM rendering path, and (5) AT-SPI accessibility not connected on Linux.
-
-### Issue Summary
-
-| Category | Total | Critical | High | Medium | Low |
-|----------|-------|----------|------|--------|-----|
-| Bugs | 42 | 2 | 12 | 18 | 10 |
-| Missing Features | 38 | 1 | 12 | 16 | 9 |
-| Performance Issues | 24 | 0 | 6 | 12 | 6 |
-| API Gaps | 18 | 1 | 4 | 9 | 4 |
-| Visual Quality | 8 | 0 | 1 | 4 | 3 |
-| **TOTAL** | **130** | **4** | **35** | **59** | **32** |
+Two entry paths: (A) Direct API via `Renderer` trait impl on `api.rs`, (B) Compositor path via `submit_buckets()` which feeds routed commands from `CompositorEngine::flatten_and_route()`.
 
 ---
 
-## 1. SVG Editor Desktop App
+## P0 -- CRITICAL (correctness / crash / data loss)
 
-### Critical Issues
+### 1. Texture Index Out-of-Bounds Panic in load_image
+- **Function:** `api.rs` load_image(), lines 914-927
+- **Lens:** Code correctness
+- **Description:** When `texture_registry.len() >= 255`, the code pops the LRU entry and reuses its index. However, `texture_views` is never resized beyond the initial allocation. If the LRU pop returns an index >= texture_views.len(), line 927 (`self.texture_views[index as usize] = view`) will panic. Additionally, after popping the LRU, the corresponding bind group in `texture_bind_groups` is not invalidated, leaving stale references.
+- **Use cases affected:** Photo editing web app, SVG editor, general web browser -- any app loading many images.
+- **Recommendation:** Guard the index against texture_views.len(). Invalidate bind groups when evicting. Consider returning Result instead of silently evicting.
 
-**BUG-SVG-1: Missing FillRule handling** (`renderer.rs:3856`)
-SVG paths with `fill-rule="evenodd"` render incorrectly. `FillOptions::default()` uses NonZero rule exclusively.
+### 2. Surface Texture Acquisition Failure Submits Without Presenting
+- **Function:** `renderer.rs` end_frame(), lines 3397-3405
+- **Lens:** Code correctness
+- **Description:** When `get_current_texture()` returns a failure state (not Suboptimal), the encoder is submitted but no surface texture is presented. The frame's scene/blur/bloom textures are consumed by the render graph passes but the user sees nothing. On repeated failures this becomes a silent blank screen with no recovery path other than reconfiguration. The function returns early without calling `present()`.
+- **Use cases affected:** Linux desktop GUI, general web browser -- any context where the surface can become unavailable (window resize, Wayland reconfigure).
+- **Recommendation:** After reconfiguration, attempt a second `get_current_texture()`. Log a visible warning. Consider a fallback to headless rendering.
 
-**BUG-SVG-2: Gradient coordinates not transformed** (`renderer.rs:4044-4086`)
-Gradient coordinates ignore `gradient_units` and `gradient_transform`. SVGs with non-default units or transforms render gradients incorrectly.
+### 3. Mutex Poisoning Panic in ExecutionContext::get_or_create_bind_group
+- **Function:** `node.rs` get_or_create_bind_group(), line 46
+- **Lens:** Code correctness / robustness
+- **Description:** Uses `.lock().unwrap()` which panics if the mutex is poisoned (any prior thread panic while holding the lock). Other call sites in glass.rs and backdrop_region.rs correctly use `.lock().unwrap_or_else(|p| p.into_inner())`. This is inconsistent and can cascade panics.
+- **Use cases affected:** All -- any panic in a render pass poisons the bind group cache, making all subsequent frames panic.
+- **Recommendation:** Replace with `.unwrap_or_else(|p| p.into_inner())` to match the established pattern.
 
-**BUG-SVG-3: Duplicate draw call emission** (`renderer.rs:4184-4190`)
-Empty-path SVGs emit the draw call twice, causing overdraw and inflated telemetry.
-
-**BUG-SVG-4: SVG text elements not rendered** (`renderer.rs:3820`)
-`usvg::Node::Text` is silently ignored. No text rendering support in SVG pipeline.
-
-**BUG-SVG-5: SVG `<use>` elements not supported** (`renderer.rs:3820`)
-`usvg::Node::Use` references are not resolved. SVGs with symbol reuse render incompletely.
-
-**BUG-SVG-6: SVG `<image>` elements not supported** (`renderer.rs:3820`)
-`usvg::Node::Image` is silently dropped. Embedded images in SVGs are lost.
-
-**BUG-SVG-7: No stroke dash array support** (`renderer.rs:3896-3941`)
-SVG `stroke-dasharray` and `stroke-dashoffset` are ignored. Only solid strokes are tessellated.
-
-**BUG-SVG-8: No stroke linecap/linejoin support** (`renderer.rs:3896`)
-SVG `stroke-linecap` and `stroke-linejoin` properties are ignored. Always renders butt caps and miter joins.
-
-**BUG-SVG-9: viewBox not properly handled** (`renderer.rs:3778`)
-The viewBox attribute is ignored; always uses `[0, 0, width, height]`. SVGs with non-zero viewBox origins position incorrectly.
-
-**BUG-SVG-10: No preserveAspectRatio support**
-SVG `preserveAspectRatio` is completely ignored. SVGs always stretch to fill the target rect.
-
-**BUG-SVG-11: Memoization cache never hits** (`api.rs:957-973`)
-The memoization check `*cached_gen == self.frame_generation` always fails because `frame_generation` increments each frame. The cache is effectively dead code.
-
-**PERF-SVG-1: Per-vertex CPU transform every frame** (`renderer.rs:4273-4291`)
-SVG vertices are repositioned on the CPU for every frame. Should be done in the vertex shader via a transform matrix.
-
-**PERF-SVG-2: SvgModel cloned every draw call** (`renderer.rs:4154-4155`)
-The entire `SvgModel` (all vertices and indices) is cloned for every draw call.
-
-**PERF-SVG-3: Per-path draw calls without batching** (`renderer.rs:4193-4256`)
-Each SVG path gets its own draw call. SVGs with hundreds of paths create hundreds of draw calls.
-
-**MISSING-SVG-1: No hit-testing API**
-No `pick_element(x, y)` method. SVG editors need element selection.
-
-**MISSING-SVG-2: No incremental SVG update API**
-Cannot modify individual path properties without re-tessellating the entire SVG.
-
-**MISSING-SVG-3: No path-level clip regions**
-Only rectangular clip regions supported. SVG `<clipPath>` with arbitrary paths is not supported.
-
-### Recommendations
-1. Implement proper SVG fill-rule, dash array, linecap/linejoin support
-2. Add text, use, and image element handling to the SVG tessellation pipeline
-3. Move per-vertex transforms to the GPU vertex shader
-4. Add hit-testing and incremental update APIs for editor use cases
+### 4. Graph Planner Cycle Panic
+- **Function:** `renderer.rs` end_frame(), line 3578
+- **Lens:** Code correctness
+- **Description:** `planner.compile().expect("RenderGraph cycle detected!")` panics if the Kvasir graph has a cycle. While cycles should not occur in the current graph topology, a bug in the conditional graph construction (e.g., adding a portal node that references itself) would crash the application instead of degrading gracefully.
+- **Use cases affected:** Composable/nested render trees, highly complex glassmorphic UI -- any scenario with many conditional passes.
+- **Recommendation:** Replace `expect()` with a match that logs the cycle and skips frame graph execution, returning the encoder without render passes.
 
 ---
 
-## 2. Photo Editing Web App (WASM)
+## P1 -- HIGH (incorrect behavior / significant degradation)
 
-### Critical Issues
+### 5. Debug Log Spam in Glyph Rasterization
+- **Function:** `api.rs` draw_shaped_text(), line 770
+- **Lens:** Code correctness / performance
+- **Description:** `log::info!` prints the first 20 bytes of every newly rasterized glyph. In a text-heavy app (browser, editor), this fires hundreds of times per frame during text layout. The INFO level is not filtered by default in most log configs, causing massive terminal output and measurable CPU overhead from string formatting.
+- **Use cases affected:** All text-rendering use cases: browser, editor, photo editing.
+- **Recommendation:** Remove or gate behind `log::debug!` or a compile-time feature flag.
 
-**BUG-WASM-1: SVG filter engine unsafe transmute** (`cvkg-svg-filters/src/lib.rs:950-962`)
-Uses `std::mem::transmute` to extend lifetimes of local HashMap references. This is outright undefined behavior — use-after-free when the caller uses returned `FilterResult` after `evaluate` returns.
+### 6. Memoize Cross-Frame Skipping is Broken
+- **Function:** `api.rs` memoize(), lines 958-974
+- **Lens:** Code correctness
+- **Description:** The comment says "cross-frame memoization via generation counter" but the logic checks `*cached_gen == self.frame_generation`. Since `frame_generation` increments every frame, the condition `cached_gen == frame_generation` is never true for content cached in a previous frame. This means memoize never actually skips rendering across frames -- it only deduplicates within the same frame (multiple calls with the same id in one frame). The MAX_MEMO_AGE eviction further confirms the intent was cross-frame, but the check is backwards.
+- **Use cases affected:** Animation creation tool, any app with static content that should be memoized across frames.
+- **Recommendation:** Change the skip condition to `*cached_hash == data_hash` (drop the frame_generation equality check, or change to `>=` for staleness check). Update the eviction to use a separate "last used frame" counter.
 
-**BUG-WASM-2: No active WASM rendering path** (`old/cvkg-render-web/`)
-The only WASM renderer is in the `old/` directory. The active codebase has no WASM surface initialization, no `request_animation_frame` loop, and no `HtmlCanvasElement` integration.
+### 7. Duplicated Offscreen/Portal Hash Computation
+- **Function:** `renderer.rs` end_frame(), lines 3530-3545 and 3580-3596
+- **Lens:** Code correctness / maintenance
+- **Description:** The offscreen_hash and portal_hash are computed twice: once before the cache check (for validation) and once inside the cache-miss branch (for populating the cache). The two computations are identical but independent, meaning they could diverge if one is modified and the other is not.
+- **Use cases affected:** All -- maintenance hazard.
+- **Recommendation:** Compute once before the cache check and reuse the result in both branches.
 
-**BUG-WASM-3: PNG capture broken on WASM** (`renderer.rs:161`)
-`capture_staging_buffer` is never initialized for WASM. PNG export returns empty bytes.
+### 8. Dispatch Particles is a Stub
+- **Function:** `api.rs` dispatch_particles(), lines 1080-1094
+- **Lens:** Code correctness
+- **Description:** The function only logs and returns. Any application calling dispatch_particles gets no visual output. The function signature promises particle effects but delivers nothing.
+- **Use cases affected:** Animation creation tool, any interactive effect app.
+- **Recommendation: Either implement compute-particle dispatch or remove the API surface and document it as planned. A stub that silently does nothing is worse than a compile error.
 
-**BUG-WASM-4: unsafe impl Send/Sync on wasm32** (`renderer.rs:246-249`)
-WebGPU types are not Send/Sync on WASM. Marking them as such is unsound.
+### 9. Draw Hologram is a Stub
+- **Function:** `api.rs` draw_hologram(), lines 1096-1106
+- **Lens:** Code correctness
+- **Description:** Renders a single stroke rectangle as a placeholder for what should be a volumetric hologram effect. The wireframe box has no relationship to the `hologram_id` parameter.
+- **Use cases affected:** Any app using hologram feature.
+- **Recommendation: Either wire through to the volumetric pass or remove the API.
 
-**BUG-WASM-5: Undo coalesce order incorrect** (`cvkg-core/src/lib.rs:613-621`)
-When coalescing undo actions, the new undo executes before the old undo, reversing the expected order.
+### 10. No Frame Budget Enforcement
+- **Function:** `renderer.rs` (struct field `frame_budget` is declared but never read)
+- **Lens:** UI/UX / performance
+- **Description:** The `FrameBudget` struct exists in telemetry but is never consulted during rendering. There is no mechanism to skip expensive passes (bloom, volumetric, Kawase blur pyramid) when the frame is running long. On constrained hardware, the renderer always runs the full pipeline.
+- **Use cases affected:** Light/minimal glassmorphic UI, Linux desktop GUI, photo editing web app via WASM -- any resource-constrained context.
+- **Recommendation:** In end_frame(), measure cumulative pass time and skip bloom/volumetric when exceeding budget. The Skuld timestamp queries are already wired for this purpose.
 
-**MISSING-WASM-1: No pixel-level read/write API**
-No `read_pixel(x, y)` or `write_pixel(x, y, color)`. Photo editors need color picker and per-pixel operations.
-
-**MISSING-WASM-2: No image filter pipeline**
-No Gaussian blur, unsharp mask, brightness/contrast, HSL adjustment. The effects shader only has artistic effects (emboss, holographic, glitch).
-
-**MISSING-WASM-3: No layer compositing controls**
-No `set_layer_opacity`, `set_layer_blend_mode`, `set_layer_visibility`, `reorder_layers`, or `merge_layers`.
-
-**MISSING-WASM-4: No zoom/pan viewport API**
-No dedicated viewport transform API. Photo editors need viewport transforms that affect all subsequent drawing.
-
-**MISSING-WASM-5: No selection/masking API**
-No rectangular selection, lasso, or mask operations. Only rectangular clip regions.
-
-**MISSING-WASM-6: No brush/stroke API**
-No brush engine with pressure sensitivity, brush size, hardness, or stroke interpolation.
-
-**MISSING-WASM-7: No tiled/large image support**
-Images larger than GPU max texture size (4096-8192) will fail to load. No tiling mechanism.
-
-**MISSING-WASM-8: No color management**
-No ICC profile support, no color space conversion (sRGB, Adobe RGB, Display P3).
-
-**PERF-WASM-1: Per-glyph GPU upload** (`api.rs:607-627`)
-Each glyph is uploaded to the GPU individually. Should be batched.
-
-**PERF-WASM-2: Glass portal matching is O(n^2)** (`passes/glass.rs:461-471`)
-For each glass draw call, all portal regions are scanned linearly.
-
-### Recommendations
-1. Revive or create a new WASM rendering backend with proper surface initialization
-2. Fix the SVG filter engine to use owned textures instead of unsafe transmute
-3. Add pixel read/write API and image filter pipeline
-4. Add layer compositing controls and zoom/pan viewport API
-5. Implement tiled image support for large photos
+### 11. BackdropCopy Bind Group Allocates 256-element TextureViewArray
+- **Function:** `backdrop_region.rs` BackdropCopyNode::execute(), lines 98-101
+- **Lens:** Performance / GPU resources
+- **Description:** `TextureViewArray(&vec![&scene_view; 256])` creates a 256-element vector of the same view reference. This is allocated on every frame (or cached, but the cache key may not match across frames). The 256-element array is the maximum texture array size but a single texture copy only needs 1 element.
+- **Use cases affected:** All -- every glassmorphic UI triggers this path.
+- **Recommendation:** Use a fixed-size array `[&scene_view; 1]` or the appropriate bind group layout that accepts a single texture.
 
 ---
 
-## 3. Linux Desktop GUI System
+## P2 -- MEDIUM (correctness edge cases / performance / API ergonomics)
 
-### Critical Issues
+### 12. Magic Material ID Constants
+- **Function:** `renderer.rs` fill_rect_with_full_params_and_slice(), push_oriented_quad(); `api.rs` draw_shaped_text(), draw_texture()
+- **Lens:** Rust idioms / maintainability
+- **Description:** Material IDs are scattered as raw integers: 0=Opaque, 2=Image, 6=TopUI, 7=Glass, 8-22=Blend(modes), 13=3D, 9=Volumetric. These appear in at least 6 different functions with no central definition. Changing the material scheme requires a codebase-wide search.
+- **Use cases affected:** All -- any future material changes.
+- **Recommendation:** Define a `material_id()` associated const or enum with `as u32()` conversion. Centralize in types.rs or a new materials.rs.
 
-**BUG-LINUX-1: Keyboard modifiers discarded** (`lib.rs:2167-2178`)
-`KeyDown` and `KeyUp` events are created with `KeyModifiers::default()`. Ctrl+C, Shift+Tab, etc. never work.
+### 13. Duplicated Material Routing Logic
+- **Function:** `renderer.rs` submit_buckets() lines 3773-3799, submit_routed() lines 3831-3856
+- **Lens:** Rust idioms / maintenance
+- **Description:** The match from cvkg_compositor::Material to cvkg_core::DrawMaterial is duplicated in two methods. Any new material variant must be added in both places.
+- **Use cases affected:** All -- maintenance hazard for material system changes.
+- **Recommendation:** Extract into a `fn route_material(cvkg_compositor::Material) -> cvkg_core::DrawMaterial` function.
 
-**BUG-LINUX-2: No mouse PointerClick dispatched** (`lib.rs:1179-1208`)
-Mouse `PointerUp` events are dispatched, but `PointerClick` is never sent for mouse input. Click handlers in VDOM won't fire for mouse clicks.
+### 14. Unsafe Send/Sync for WASM Target
+- **Function:** `renderer.rs` lines 250-253
+- **Lens:** Rust idioms / safety
+- **Description:** `unsafe impl Send for SurtrRenderer {}` and `unsafe impl Sync for SurtrRenderer {}` are implemented for WASM. While WASM is single-threaded (making this pragmatically safe), the Mutex-wrapped bind_group_cache and texture_view_cache would be unsound if WASM ever gains shared-memory threading (shared ArrayBuffer). wgpu types are Send+Sync on native but the safety contract on WASM is informal.
+- **Use cases affected:** Photo editing web app via WASM, general web browser.
+- **Recommendation:** Add a comment documenting the safety argument. Consider cfg-gating behind `target_arch = "wasm32"` with `target_feature` annotations if/when WASM threading lands.
 
-**BUG-LINUX-3: ScaleFactorChanged not handled** (`lib.rs`)
-Moving a window to a monitor with different DPI doesn't update the scale factor. Surface remains at old DPI.
+### 15. Kawase Blur Bind Group Cache Inconsistency
+- **Function:** `glass.rs` BackdropBlurNode::execute() lines 231-256 (down) vs lines 301-323 (up)
+- **Lens:** Code correctness
+- **Description:** The downsample path accesses the cache via `ctx.renderer.bind_group_cache.lock().unwrap_or_else(...)` directly, while the upsample path uses `ctx.get_or_create_bind_group()` which has the Mutex unwrap inconsistency (P0 #3). The two paths also use different cache key formats (direct tuple vs method parameter). This inconsistency means downsample bind groups and upsample bind groups may not share cache entries even when they could.
+- **Use cases affected:** All glassmorphic UI.
+- **Recommendation:** Unify both paths to use `ctx.get_or_create_bind_group()` after fixing the unwrap. Use consistent cache key format.
 
-**BUG-LINUX-4: is_key_focused defaults to true** (`lib.rs:581`)
-New windows incorrectly report having keyboard focus until the first `Focused` event.
+### 16. VRAM Tracking Lags Behind Actual Usage
+- **Function:** `renderer.rs` update_vram_telemetry() (called in end_frame)
+- **Lens:** Code correctness / telemetry
+- **Description:** `vram_textures_bytes` and `vram_buffers_bytes` are only updated at the end of each frame. During the frame, load_image creates GPU textures without updating the counter. A rapid sequence of load_image calls could exceed VRAM before the counter reflects actual usage, causing the reclaim_vram logic to trigger too late.
+- **Use cases affected:** Photo editing web app, SVG editor -- apps that load many assets.
+- **Recommendation:** Update vram counters at the point of allocation (load_image, create_buffer).
 
-**BUG-LINUX-5: begin_frame panics on unregistered window** (`renderer.rs:2074`)
-`self.surfaces.get(&window_id).expect("Window not registered")` panics instead of returning a Result.
+### 17. Pixel Snapping Only Applied in fill_rect_with_full_params_and_slice
+- **Function:** `renderer.rs` fill_rect_with_full_params_and_slice() line 3272
+- **Lens:** UI/UX
+- **Description:** Pixel snapping (`snap = |v: (v * scale).round() / scale`) is applied to rectangle corners in the core fill method, but NOT in `push_oriented_quad()`, `stroke_path()`, or `draw_mesh()`. SVG content, custom paths, and 3D meshes will have sub-pixel positioning, causing text or UI elements rendered via those paths to appear blurry on non-retina displays.
+- **Use cases affected:** SVG editor, Linux desktop GUI, light glassmorphic UI.
+- **Recommendation:** Apply snapping consistently, or make it configurable per-draw-call.
 
-**BUG-LINUX-6: Glass pipeline uses wrong vertex shader** (`renderer.rs:882`)
-Glass pipeline uses `&opaque_shader` for vertex state instead of `&glass_shader`.
+### 18. Upload Data Texture Waste
+- **Function:** `api.rs` upload_data_texture(), lines 1108-1163
+- **Lens:** Performance / GPU resources
+- **Description:** Creates a 256-element TextureViewArray for a single data texture, and creates a new sampler for each upload. The sampler configuration (ClampToEdge, Linear) is always the same. The bind group is appended to `texture_bind_groups` without bounds checking.
+- **Use cases affected:** Data visualization, any app uploading data textures.
+- **Recommendation:** Cache and reuse the sampler. Use a 1-element view array or a single-texture bind group layout. Bounds-check texture_bind_groups.
 
-**BUG-LINUX-7: Glass pipeline has no depth testing** (`renderer.rs:898`)
-Glass objects draw without depth testing. Glass panels always draw on top regardless of Z-order.
-
-**BUG-LINUX-8: announce() is a no-op** (`lib.rs:2040-2044`)
-`NativeRenderer::announce` just logs. Screen readers never hear announcements.
-
-**BUG-LINUX-9: AccessibilityInitialTreeRequested only sends root node** (`lib.rs:1607-1225`)
-Screen readers see a single window with no children until the first VDOM diff.
-
-**BUG-LINUX-10: Blend modes not applied to GPU pipeline** (`engine.rs:206-222`)
-All SVG blend modes (Multiply, Screen, etc.) are routed to scene_commands but the GPU pipeline only uses alpha blending.
-
-**MISSING-LINUX-1: AT-SPI not connected**
-`accesskit_unix` is an optional dependency never enabled. The accessibility tree is built but never exposed to the system.
-
-**MISSING-LINUX-2: No D-Bus integration**
-No desktop notifications, no system tray, no screen saver inhibition, no portal support.
-
-**MISSING-LINUX-3: No fractional scaling support**
-Wayland fractional scaling not handled. `ScaleFactorChanged` event not processed.
-
-**MISSING-LINUX-4: No window icon support**
-`load_icon()` exists but is never called during window creation.
-
-**MISSING-LINUX-5: No file dialog integration**
-No `rfd` or `xdg-desktop-portal` file picker.
-
-**MISSING-LINUX-6: No cursor shape change support**
-`winit::window::Cursor` is never set.
-
-**MISSING-LINUX-7: No runtime window control**
-No minimize/maximize, no always-on-top, no window position query/set.
-
-**PERF-LINUX-1: Per-frame mutex contention** (`lib.rs`)
-Every Renderer method acquires the GPU mutex. ~40 mutex lock/unlock cycles per frame.
-
-**PERF-LINUX-2: P99 calculation sorts every frame** (`lib.rs:1102-1116`)
-A 100-element vector is sorted every frame for P99. A running histogram would be more efficient.
-
-**PERF-LINUX-3: No dirty region tracking**
-The entire window is redrawn every frame. No mechanism to track changed regions.
-
-### Recommendations
-1. Fix keyboard modifier propagation and mouse click event dispatch
-2. Enable `accesskit_unix` and connect AT-SPI on Linux
-3. Handle `ScaleFactorChanged` for multi-monitor DPI changes
-4. Add D-Bus integration for desktop notifications and system tray
-5. Fix glass pipeline to use correct vertex shader and add depth testing
-6. Implement dirty region tracking for power efficiency
+### 19. Drop for SurtrRenderer Pipeline Cache Path is Hardcoded
+- **Function:** `renderer.rs` Drop impl, lines 3674-3695
+- **Lens:** Portability / correctness
+- **Description:** `env!("CARGO_MANIFEST_DIR")` is used to compute the cache directory path. In a packaged/bundled binary (flatpak, npm wasm, appimage), CARGO_MANIFEST_DIR points to the build-time source directory, which may not exist at runtime. The `_ = std::fs::create_dir_all(...)` silently fails. This means pipeline caching silently doesn't work in production builds.
+- **Use cases affected:** All -- production deployments.
+- **Recommendation:** Use a platform-appropriate cache directory (e.g., `$XDG_CACHE_HOME`, `dirs::cache_dir()`).
 
 ---
 
-## 4. Web Browser
+## P3 -- LOW (code quality / minor / future risk)
 
-### Critical Issues
+### 20. Unused Variables in draw_mesh / draw_mesh_3d
+- **Function:** `api.rs` draw_mesh() line 1172, draw_mesh_3d() line 1232
+- **Lens:** Code quality
+- **Description:** `screen` variable is computed (`[self.current_width() as f32, self.current_height() as f32]`) but never used in either function.
+- **Recommendation:** Remove dead code.
 
-**BUG-BROWSER-1: BiDi analysis only checks first character** (`cvkg-runic-text/src/lib.rs:1583-1596`)
-Mixed LTR/RTL text is shaped entirely as LTR if the first character is LTR.
+### 21. texture_views Index 0 Reserved for Atlas but Load_image Skips It
+- **Function:** `api.rs` load_image(), lines 914-927
+- **Lens:** Code correctness / maintenance
+- **Description:** Index 0 of texture_views is the mega_heim atlas. load_image starts allocating from index 1 (`texture_registry.len() + 1`). But if texture_registry has 0 entries initially, the first image gets index 1. If texture_registry grows to 254 entries (index 255), the LRU eviction reuses the popped index, which could collide with the atlas at index 0 if the LRU happened to be index 0 (which it cannot since load_image never inserts index 0). The invariant is maintained but fragile and undocumented.
+- **Recommendation:** Document the index-0 reservation invariant. Consider a dedicated atlas_index constant.
 
-**BUG-BROWSER-2: BiDi reordering just reverses whole lines** (`cvkg-runic-text/src/lib.rs:2495-2500`)
-Proper BiDi requires reversing only runs at odd embedding levels, not the entire line.
+### 22. push_oriented_quad Material ID Mapping Inconsistency
+- **Function:** `renderer.rs` push_oriented_quad(), lines 3046-3071
+- **Lens:** Code correctness
+- **Description:** The material routing in push_oriented_quad uses `material_id` as a u32 to determine the DrawMaterial. Material ID 9 is mapped to the volumetric path via the `(8..=22).contains(&material_id)` range, which means material_id=9 becomes `Blend { mode: 2 }` (Screen blend). But the lightning segment calls `push_oriented_quad(..., 9, ...)` intending volumetric glow. This appears to be a semantic mismatch.
+- **Use cases affected:** Any app using lightning/glow effects.
+- **Recommendation:** Verify the intended mapping. If material 9 is meant for volumetric glow, it should not fall through to Blend mode 2.
 
-**BUG-BROWSER-3: stroke_rect draws overlapping corners** (`api.rs:286-334`)
-Four edge bars overlap at corners, causing double-darkening with semi-transparent strokes.
+### 23. Frame Resource Clone Overhead in ActiveFrameResources
+- **Function:** `renderer.rs` end_frame(), lines 3411-3421
+- **Lens:** Performance
+- **Description:** ActiveFrameResources clones all scene, blur, bloom texture views and bind groups (8 Arc clones) from the surface context. These are used as references by the Kvasir nodes. The clones are necessary for the borrow-split pattern but the struct could hold references instead to avoid the Arc overhead (though wgpu types may not support this easily).
+- **Recommendation:** Low priority. The Arc clone cost is negligible relative to GPU work. Document why the clone pattern is used.
 
-**BUG-BROWSER-4: draw_line creates closed path** (`api.rs:519-528`)
-`builder.close()` on a two-point path creates a degenerate shape.
+### 24. Select Best Surface Format Falls Back to formats[0] Without Bounds Check
+- **Function:** `renderer.rs` select_best_surface_format(), line 294
+- **Lens:** Robustness
+- **Description:** If `formats` is empty, `formats[0]` panics. In practice, wgpu never returns empty formats, but the function should defend against it.
+- **Recommendation:** Add `if formats.is_empty() { return wgpu::TextureFormat::Bgra8UnormSrgb; }` or handle at call site.
 
-**BUG-BROWSER-5: register_window doesn't check for existing ID** (`renderer.rs:2098-2161`)
-Calling register_window twice for the same window silently drops the old surface context.
-
-**BUG-BROWSER-6: wgpu::PollType::Wait can deadlock** (`renderer.rs:2022-2027`)
-`poll(Wait { timeout: None })` blocks indefinitely if the GPU is hung.
-
-**MISSING-BROWSER-1: No CSS layout engine**
-No flexbox, grid, or block layout. Cannot render HTML/CSS.
-
-**MISSING-BROWSER-2: No scrolling/viewport management**
-No scrollable viewport with overscroll, scrollbars, or scroll anchoring.
-
-**MISSING-BROWSER-3: No video/animation frame decoding**
-No video decoder or `requestAnimationFrame` equivalent.
-
-**MISSING-BROWSER-4: No multi-tab isolation**
-All tabs share the same texture atlas and GPU resources.
-
-**MISSING-BROWSER-5: No text selection/copy-paste API**
-No clipboard integration, no IME support for CJK input.
-
-**MISSING-BROWSER-6: No CSS filter effects**
-No `blur()`, `brightness()`, `drop-shadow()` as CSS values.
-
-**MISSING-BROWSER-7: No color management**
-No ICC profile support, no wide-gamut/HDR color space handling.
-
-**MISSING-BROWSER-8: No compositor layers**
-No `will-change` or `transform: translateZ(0)` equivalent for layer promotion.
-
-**MISSING-BROWSER-9: No hit testing API**
-No way to determine which element is at a given screen position.
-
-**MISSING-BROWSER-10: No resource deallocation API**
-No `unload_image`, `unload_svg`, or `evict_texture` methods.
-
-**SECURITY-BROWSER-1: No render-level sandboxing**
-`SecurityPolicy` and `SandboxLimits` are never checked in the rendering path.
-
-**SECURITY-BROWSER-2: No shader validation**
-WGSL shaders compiled at runtime with no validation of injected code.
-
-**SECURITY-BROWSER-3: SVG filter resource limits missing**
-No limit on filter primitives, texture allocations, or render passes.
-
-**SECURITY-BROWSER-4: Image decoding without size limits**
-`load_image` uses `image::load_from_memory` with no size limits.
-
-**SECURITY-BROWSER-5: No cross-origin resource isolation**
-All resources share the same texture atlas and GPU context.
-
-### Recommendations
-1. Fix BiDi text rendering (critical for international content)
-2. Add CSS layout engine integration
-3. Implement scrolling, viewport management, and text selection
-4. Add security sandboxing at the render level
-5. Implement resource limits for images and SVG filters
+### 25. Shadow _offset Field is Unused
+- **Function:** `types.rs` ShadowState, line 137
+- **Lens:** Code quality
+- **Description:** The `_offset` field stores shadow offset but is never read. The shadow rendering in `draw_drop_shadow` uses a hardcoded offset of 0.0.
+- **Recommendation:** Wire the offset into the shadow rendering, or remove the field.
 
 ---
 
-## 5. Glassmorphic Interfaces
+## Use Case Traces
 
-### Light Complexity (1-3 panels)
+### SVG Editor (Desktop App)
+Trace: `load_svg()` -> `tessellate_node()` (recursive SVG tree walk) -> `draw_svg()` / `draw_svg_with_order()` -> `draw_svg_with_offset()` (animation).
 
-**BUG-GLASS-1: glass_intensity not propagated to InstanceData** (`renderer.rs:3210-3217`)
-The per-instance `glass_intensity` field is hardcoded to `1.0`. The shader always renders full glass regardless of the API-level intensity parameter. This is the most critical glass bug.
+- **P0 #1:** Loading many SVG icons as textures can trigger the texture index panic.
+- **P2 #17:** SVG content is drawn via `push_oriented_quad` which does NOT apply pixel snapping, causing blurry edges.
+- **P2 #22:** SVG paths using material_id=9 (volumetric glow) get Screen blend instead of volumetric.
+- **P3 #20:** Unused `screen` variable in mesh drawing paths.
+- **OK:** SVG tessellation via lyon is solid. Gradient fills, strokes, pattern fallbacks, and path animations are handled. Cache keys are content-based.
 
-**BUG-GLASS-2: bifrost() blur parameter semantics** (`api.rs:210-223`)
-The `blur` parameter controls corner radius, not blur intensity. Misleading API.
+### Animation Creation Tool
+Trace: `draw_svg_with_offset()` -> animation evaluation -> `SvgAnimation::evaluate()` -> vertex update per frame.
 
-**VIS-GLASS-1: Chromatic aberration is uniform** (`material_glass.wgsl:244-248`)
-Same offset for all color channels regardless of distance from optical center.
+- **P1 #6:** Memoize cross-frame broken, so unchanged animation frames are re-rendered every frame.
+- **P1 #8:** dispatch_particles is a stub, breaking particle animation effects.
+- **P1 #9:** draw_hologram is a stub.
+- **OK:** SVG animation interpolation (linear, multi-keyframe, uniform) is correctly implemented in types.rs.
 
-**API-GLASS-1: No per-panel IOR control**
-IOR is only settable via the global `ColorTheme.glass_ior`. Per-panel IOR control is impossible.
+### Photo Editing Web App (WASM)
+Trace: `load_image()` -> `draw_texture()` -> glass/blend effects.
 
-### Moderate Complexity (10-20 overlapping panels)
+- **P0 #1:** Heavy image loading triggers texture index panic.
+- **P1 #4:** No frame budget enforcement on WASM (CPU-constrained).
+- **P2 #14:** Unsafe Send/Sync on WASM is pragmatically safe but undocumented.
+- **P2 #16:** VRAM tracking lags, could OOM before reclaim triggers.
+- **P3 #19:** Pipeline cache path is wrong for packaged WASM apps.
 
-**BUG-GLASS-3: Portal region matching broken** (`passes/glass.rs:462-478`)
-Scissor rect (scaled pixels) compared with portal rect (logical pixels). Portal-based isolated blur almost never matches.
+### Linux Desktop GUI Application
+Trace: Window registration -> `begin_frame(window_id)` -> draw calls -> `render_frame()` -> `end_frame()`.
 
-**BUG-GLASS-4: BackdropRegionNode mip chain incorrect** (`passes/backdrop_region.rs:92`)
-Upsample pass clears destination before accumulating, producing subtly wrong blur.
+- **P0 #2:** Surface texture failures on Wayland cause blank frames with no recovery.
+- **P2 #17:** Pixel snapping inconsistency causes blurry UI elements.
+- **P3 #19:** Pipeline cache path hardcoded to CARGO_MANIFEST_DIR.
 
-**BUG-GLASS-5: Bind group cache grows unboundedly** (`passes/backdrop_region.rs:144-166`)
-New bind groups inserted every frame, never pruned. ~200 bind groups leaked per frame with 50 glass panels.
+### General Web Browser Context
+Trace: Full pipeline with glass, bloom, text rendering.
 
-**PERF-GLASS-1: O(n^2) portal matching** (`passes/glass.rs:461-471`)
-For each glass draw call, all portal regions are scanned linearly.
+- **P1 #5:** Debug log spam from glyph rasterization floods console.
+- **P1 #10:** No frame budget enforcement causes jank on lower-end hardware.
+- **P2 #14:** WASM Send/Sync safety.
+- **OK:** Text rendering (Mega-Heim atlas, glyph rasterization, shaping) is well-implemented. The subpixel mask reconstruction in glyph_image_to_rgba handles the swash A=0 edge case.
 
-**PERF-GLASS-2: 25-30 texture samples per fragment** (`material_glass.wgsl`)
-9 for dominant color, 9 for variance, 3 for chromatic aberration, 3 for displacement, 1 for smear, 1 for base blur.
+### Light/Minimal Glassmorphic UI
+Trace: A few glass panels -> BackdropCopy -> Kawase blur (2-3 mips) -> Glass composite.
 
-**VIS-GLASS-2: Overlapping glass doesn't composite correctly** (`material_glass.wgsl`)
-Glass panels sample the global blur chain, not the actual pixel content behind them. Overlapping glass doesn't refract through each other.
+- **P1 #10:** No frame budget enforcement, but the pipeline correctly short-circuits: Kawase skips if effective_mips < 2, glass node filters draw_calls by Glass material.
+- **P2 #15:** Kawase bind group cache inconsistency between down/up paths.
+- **OK:** The glass pipeline correctly handles: portal region matching, per-element blur isolation, scissor rect scaling.
 
-**VIS-GLASS-3: Flicker noise causes temporal instability** (`material_glass.wgsl:251,288`)
-Time-varying noise with screen-space UVs creates shimmering during animation.
+### Moderately Complex Glassmorphic UI
+Trace: Multiple glass layers, offscreen effects, portal regions.
 
-**VIS-GLASS-4: Adaptive tint always uses mip 4** (`material_glass.wgsl:105,122`)
-Adaptive tint computed from heavily blurred version regardless of actual blur level.
+- **P0 #3:** Mutex poisoning in bind group cache would cascade failures.
+- **P1 #7:** Duplicated hash computation is a maintenance hazard.
+- **P2 #13:** Duplicated material routing adds risk when adding new materials.
+- **OK:** Portal region matching via rounded integer scissor keys is clever and efficient (O(1) hash lookup with linear fallback).
 
-### Very Complex (50+ panels)
+### Highly Complex, Layered Glassmorphic UI
+Trace: Deep glass nesting, many offscreen textures, bloom + volumetric + accessibility.
 
-**BUG-GLASS-6: No depth sorting** (`passes/glass.rs:422-435`)
-Glass pass has no depth/stencil testing. Draw order determines occlusion, not Z-order.
+- **P0 #4:** Graph planner panic on cycle would crash the app.
+- **P1 #11:** BackdropCopy 256-element texture array wastes GPU binding space.
+- **P1 #16:** VRAM tracking lag could cause OOM with many offscreen textures.
+- **OK:** The Kvasir render graph correctly eliminates unused passes. The CachedGraphPlan avoids rebuilding when configuration is unchanged.
 
-**PERF-GLASS-3: 450+ draw calls for portal blur** (`passes/backdrop_region.rs`)
-Each portal region gets its own copy + blur pass. 50 panels = ~450 draw calls.
+### Composable/Nested Render Trees
+Trace: `submit_buckets()` -> sorted scene/glass/overlay commands -> `submit_routed()`.
 
-**PERF-GLASS-4: Full computation for intensity=0** (`material_glass.wgsl:345`)
-The only early-exit is at the very end. All expensive computation happens before the discard.
+- **P2 #13:** Duplicated material routing in submit_buckets and submit_routed.
+- **P3 #22:** Material ID mapping inconsistency in push_oriented_quad.
+- **OK:** The compositor's flatten_tree correctly implements painter's algorithm (back-to-front, reverse children). Z-ordering within passes is consistent.
 
-**PERF-GLASS-5: Large instance buffer upload latency** (`renderer.rs:3444-3456`)
-Instance data uploaded via staging belt synchronously.
+### Pre-compiled "Convenience" Renders (Startup Acceleration)
+Trace: Pipeline cache loading on startup, ReclaimVRAM for texture reuse.
 
-**API-GLASS-2: No glass border/stroke API**
-No way to add a visible border to a glass panel through the API.
+- **P3 #19:** Pipeline cache path is CARGO_MANIFEST_DIR, broken in packaged builds.
+- **OK:** Pipeline cache is persisted on Drop and loaded on forge(). The wgpu PipelineCache API is used correctly.
 
-**API-GLASS-3: No nested glass support**
-Inner glass samples the global blur chain, not the blurred result of outer glass.
+### Touch-Interface Application
+Trace: Mouse/touch input via `update_mouse()` -> scene uniforms -> shader interaction.
 
-**API-GLASS-4: No animation/transition state parameter**
-No way to smoothly transition glass parameters.
-
-**API-GLASS-5: fill_glass_rect_with_pressure not in Renderer trait**
-Only available on the concrete SurtrRenderer, not through the trait object.
-
-### Recommendations
-1. **Fix glass_intensity propagation** — connect the API-level intensity to InstanceData
-2. **Fix portal region matching** — use consistent coordinate spaces
-3. **Add depth sorting** for glass panels
-4. **Optimize portal blur** — use a hash map for O(1) lookup instead of O(n) scan
-5. **Add early-exit** in the glass shader for intensity=0
-6. **Add per-panel IOR and border APIs**
-
----
-
-## 6. Composable Renders
-
-### Critical Issues
-
-**BUG-COMP-1: remove_layer leaks dangling references** (`layer.rs:210-213`)
-Removing a layer doesn't clean up parent children lists. Dangling references cause log spam and wasted traversal.
-
-**BUG-COMP-2: Blend modes not applied to GPU pipeline** (`engine.rs:206-222`)
-14 blend mode variants defined but all render as standard alpha blending.
-
-**BUG-COMP-3: flatten_and_route clones defeat buffer reuse** (`engine.rs:203`)
-Commands are cloned into buckets despite the reusable buffer design.
-
-**MISSING-COMP-1: No backend mixing API**
-No mechanism to route different view subtrees to different render backends.
-
-**MISSING-COMP-2: No nested render target API in Renderer trait**
-No `push_render_target`/`pop_render_target` methods in the trait.
-
-**MISSING-COMP-3: No cross-pass z-index ordering**
-Pass order (scene -> glass -> overlay) takes precedence over z-index.
-
-**PERF-COMP-1: New CommandBuckets allocated every frame**
-Despite buffer reuse, buckets are freshly allocated.
-
-**PERF-COMP-2: Redundant sort in submit_buckets** (`renderer.rs:3627-3628`)
-Commands are sorted even though the compositor already produces correctly ordered output.
-
-### Recommendations
-1. Fix layer tree cleanup on remove_layer
-2. Implement actual blend mode pipelines (Multiply, Screen, etc.)
-3. Add backend mixing and nested render target APIs
-4. Implement cross-pass z-index ordering
+- **OK:** `update_mouse()` correctly writes to scene uniforms. The cursor velocity is passed through. No touch-specific issues found (the renderer is input-agnostic; touch handling is at the application layer).
+- **P2 #17:** Pixel snapping inconsistency could cause touch target visual misalignment.
 
 ---
 
-## 7. Pre-compiled Convenience Renders
+## Summary Statistics
 
-### Critical Issues
-
-**BUG-PRECOMP-1: memo_cache grows unboundedly** (`renderer.rs:227`)
-`HashMap<u64, (u64, u64)>` with no eviction policy. Memory leak for long-running apps.
-
-**BUG-PRECOMP-2: GPU caches not invalidated on surface reconfig** (`renderer.rs:1781-1782`)
-`resize()` clears caches, but surface reconfiguration after error recovery doesn't.
-
-**MISSING-PRECOMP-1: No pre-baked UI template system**
-No serialization/deserialization for LayerTree or KvasirGraph.
-
-**MISSING-PRECOMP-2: No progressive asset loading**
-`prewarm_vram` is a one-shot drain. Large asset sets cause frame hitches.
-
-**MISSING-PRECOMP-3: No shader pipeline disk cache**
-`cache: None` on every `RenderPipelineDescriptor`. wgpu's pipeline caching is disabled.
-
-**MISSING-PRECOMP-4: memoize always executes on software backend** (`cvkg-render-software/src/lib.rs:456-458`)
-Ignores `id` and `data_hash`, always calls `render_fn`.
-
-**PERF-PRECOMP-1: Box::new for every node every frame** (`renderer.rs:3518`)
-14+ heap allocations per frame for graph nodes.
-
-**PERF-PRECOMP-2: Duplicate bind group layout creation** (`renderer.rs:648-670`)
-`env_bind_group_layout` created twice.
-
-### Recommendations
-1. Add eviction policy to memo_cache
-2. Implement pre-baked UI template serialization
-3. Add progressive asset loading with priority system
-4. Enable wgpu pipeline caching
-5. Fix memoize on software backend
+| Severity | Count |
+|----------|-------|
+| P0 Critical | 4 |
+| P1 High | 7 |
+| P2 Medium | 8 |
+| P3 Low | 6 |
+| **Total** | **25** |
 
 ---
 
-## 8. Touch Interface
+## Positive Findings
 
-### Critical Issues
-
-**BUG-TOUCH-1: Touch pressure defaults to 1.0** (`lib.rs:1253`)
-When no force data is available, pressure defaults to 1.0 (full press). Should be 0.5 or 0.0.
-
-**BUG-TOUCH-2: RotationGesture dispatched as GestureSwipe** (`lib.rs:1334-1343`)
-Rotation information is lost. No `GestureRotation` variant in Event enum.
-
-**BUG-TOUCH-3: PinchGesture phase always Moved** (`lib.rs:1323`)
-Pinch gestures have distinct began/ended phases but these are not mapped.
-
-**MISSING-TOUCH-1: No multi-touch tracking**
-All touches map to button 0. Two-finger tap and multi-finger gestures cannot be distinguished.
-
-**MISSING-TOUCH-2: No gesture recognition beyond pinch/rotation**
-No long-press, no swipe velocity tracking, no double-tap.
-
-**MISSING-TOUCH-3: No low-latency input path**
-Touch events go through full VDOM cycle. No immediate visual feedback path.
-
-**MISSING-TOUCH-4: No haptic feedback for touch down/up**
-Haptic engine only provides `visual_tick()` for pinch gestures.
-
-**PERF-TOUCH-1: Hit testing is recursive with no spatial indexing** (`vdom.rs:1651`)
-Full tree traversal for every touch event.
-
-**PERF-TOUCH-2: Hit testing runs even with no handlers** (`vdom.rs:1720-1735`)
-Tree traversed regardless of whether any node has event handlers.
-
-### Recommendations
-1. Fix touch pressure default to 0.5
-2. Add multi-touch tracking with touch_id
-3. Implement gesture recognition (long-press, double-tap, swipe)
-4. Add low-latency input path for immediate visual feedback
-5. Add spatial indexing for hit testing
-
----
-
-## 9. Cross-Cutting Concerns
-
-### Memory Safety
-- **SVG filter engine unsafe transmute** — use-after-free, potential security vulnerability
-- **unsafe impl Send/Sync on wasm32** — unsound, potential data races
-- **memo_cache unbounded growth** — memory leak
-- **bind_group_cache unbounded growth** — memory leak
-
-### Performance
-- **Per-frame GPU mutex contention** — ~40 lock/unlock cycles per frame
-- **Per-frame VDOM rebuild** — O(n) for complex UIs
-- **No dirty region tracking** — full-frame redraw every frame
-- **Per-glyph GPU upload** — should be batched
-- **O(n^2) portal matching** — should use hash map
-
-### API Design
-- **Renderer trait too large** — 50+ methods, difficult to implement alternative backends
-- **No error propagation** — most methods return `()`, failures only logged
-- **No async image loading** — synchronous only
-- **No resource deallocation API** — can only evict through LRU overflow
-
-### Security
-- **No render-level sandboxing** — SecurityPolicy never checked
-- **No shader validation** — WGSL compiled at runtime without validation
-- **No SVG filter resource limits** — DoS via complex filters
-- **No image size limits** — memory exhaustion via large images
-- **No cross-origin isolation** — all resources share same GPU context
-
----
-
-## 10. Priority Action Items
-
-### P0 — Critical (Fix Immediately)
-1. Fix `glass_intensity` not propagated to InstanceData (BUG-GLASS-1)
-2. Fix SVG filter engine unsafe transmute (BUG-WASM-1)
-3. Fix keyboard modifiers discarded (BUG-LINUX-1)
-4. Fix mouse PointerClick not dispatched (BUG-LINUX-2)
-
-### P1 — High (Fix This Sprint)
-5. Fix BiDi text rendering (BUG-BROWSER-1, BUG-BROWSER-2)
-6. Fix portal region matching (BUG-GLASS-3)
-7. Fix remove_layer dangling references (BUG-COMP-1)
-8. Fix blend modes not applied (BUG-COMP-2, BUG-LINUX-10)
-9. Fix ScaleFactorChanged not handled (BUG-LINUX-3)
-10. Enable AT-SPI on Linux (MISSING-LINUX-1)
-11. Fix touch pressure default (BUG-TOUCH-1)
-12. Add memo_cache eviction (BUG-PRECOMP-1)
-
-### P2 — Medium (Fix Next Sprint)
-13. Add depth sorting for glass panels (BUG-GLASS-6)
-14. Fix SVG fill-rule, dash array, linecap/linejoin (BUG-SVG-1, BUG-SVG-7, BUG-SVG-8)
-15. Add SVG text/use/image support (BUG-SVG-4, BUG-SVG-5, BUG-SVG-6)
-16. Fix viewBox and preserveAspectRatio (BUG-SVG-9, BUG-SVG-10)
-17. Optimize portal matching to O(1) (PERF-GLASS-1)
-18. Add early-exit in glass shader for intensity=0 (PERF-GLASS-4)
-19. Fix nested render target API (MISSING-COMP-2)
-20. Add multi-touch tracking (MISSING-TOUCH-1)
-
-### P3 — Low (Backlog)
-21. Add pre-baked UI template system (MISSING-PRECOMP-1)
-22. Add shader pipeline disk cache (MISSING-PRECOMP-3)
-23. Implement backend mixing (MISSING-COMP-1)
-24. Add CSS layout engine integration (MISSING-BROWSER-1)
-25. Add color management (MISSING-WASM-8, MISSING-BROWSER-7)
-
----
-
-## Appendix: Files Audited
-
-| File | Lines | Use Cases |
-|------|-------|-----------|
-| `cvkg-core/src/lib.rs` | 8201 | All |
-| `cvkg-core/src/renderer/mod.rs` | 420 | All |
-| `cvkg-render-gpu/src/api.rs` | 1891 | All |
-| `cvkg-render-gpu/src/renderer.rs` | 4596 | All |
-| `cvkg-render-gpu/src/surtr_util.rs` | 151 | Images, text |
-| `cvkg-render-gpu/src/vertex.rs` | 139 | All |
-| `cvkg-render-gpu/src/types.rs` | 182 | All |
-| `cvkg-render-gpu/src/draw.rs` | 116 | SVG |
-| `cvkg-render-gpu/src/material.rs` | 1091 | Materials |
-| `cvkg-render-gpu/src/kvasir/*` | ~2000 | Composable, pre-compiled |
-| `cvkg-render-gpu/src/passes/glass.rs` | ~600 | Glass |
-| `cvkg-render-gpu/src/passes/backdrop_region.rs` | ~300 | Glass |
-| `cvkg-render-gpu/src/shaders/material_glass.wgsl` | 347 | Glass |
-| `cvkg-render-gpu/src/shaders/common.wgsl` | 351 | All |
-| `cvkg-render-native/src/lib.rs` | 2656 | Linux, touch |
-| `cvkg-compositor/src/lib.rs` | ~500 | Composable |
-| `cvkg-compositor/src/engine.rs` | ~400 | Composable |
-| `cvkg-compositor/src/layer.rs` | ~300 | Composable |
-| `cvkg-runic-text/src/lib.rs` | 3066 | Text, browser |
-| `cvkg-svg-filters/src/lib.rs` | 2360 | SVG, browser |
-| `cvkg-render-software/src/lib.rs` | 599 | Fallback |
-| `cvkg-vdom/src/lib.rs` | ~2000 | Touch, hit testing |
-
----
-
-*End of audit report.*
+1. **Kvasir render graph** is well-designed: conditional pass elimination, cycle detection, cached execution plans, and content-hash-based invalidation.
+2. **Kawase blur pyramid** is correctly implemented with dynamic mip count, proper downsample/upsample ordering, and persistent uniform buffers.
+3. **Multi-window support** via SurfaceContext HashMap is clean and correctly manages per-window GPU resources.
+4. **Adapter negotiation** has robust 4-stage fallback (WGPU_ADAPTER_NAME -> HighPerformance -> LowPower -> Software).
+5. **Glass pipeline** correctly handles portal regions, per-element blur isolation, and MSAA-disabled rendering to avoid edge shimmering.
+6. **SVG tessellation** via lyon handles fills (solid, linear gradient, radial gradient), strokes, fill rules, and animation keyframes.
+7. **Text rendering** with Mega-Heim atlas, glyph rasterization (1/3/4 bpp), subpixel mask reconstruction, and LRU eviction is production-quality.
+8. **GPU buffer growth** is correctly implemented with doubling strategy and 4x max cap.
+9. **StagingBelt** usage for geometry upload is correct, with proper encoder ordering (staging before render passes).
+10. **Drop implementation** correctly persists pipeline cache, polls GPU idle, and prevents semaphore panics.

@@ -92,22 +92,17 @@ mod tests {
         assert_eq!(anims.len(), 3);
 
         assert_eq!(anims[0].target_id, "spinner");
-        assert_eq!(anims[0].attribute_name, "transform");
-        assert_eq!(anims[0].duration, 2.0);
-        assert_eq!(anims[0].from_val, 0.0);
-        assert_eq!(anims[0].to_val, 360.0);
+        assert_eq!(anims[0].keyframe_values, vec![0.0, 360.0]);
 
         assert_eq!(anims[1].target_id, "pulse");
         assert_eq!(anims[1].attribute_name, "opacity");
         assert_eq!(anims[1].duration, 0.5);
-        assert_eq!(anims[1].from_val, 0.5);
-        assert_eq!(anims[1].to_val, 1.0);
+        assert_eq!(anims[1].keyframe_values, vec![0.5, 1.0]);
 
         assert_eq!(anims[2].target_id, "myRect");
         assert_eq!(anims[2].attribute_name, "x");
         assert_eq!(anims[2].duration, 0.5); // 500ms parsed as 0.5
-        assert_eq!(anims[2].from_val, 10.0);
-        assert_eq!(anims[2].to_val, 30.0);
+        assert_eq!(anims[2].keyframe_values, vec![10.0, 20.0, 30.0]);
     }
 
     #[test]

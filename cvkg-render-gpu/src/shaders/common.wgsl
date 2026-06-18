@@ -18,6 +18,7 @@ struct ColorTheme {
     rune_opacity:         f32,
     glass_tint_adapt:     f32,
     glass_ior:            f32,
+    color_space:          u32,
     _pad0: f32, _pad1: f32,
 };
 
@@ -348,4 +349,23 @@ fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> f32 {
 fn calc_normal(p: vec3<f32>) -> vec3<f32> {
     let e = vec2<f32>(0.001, 0.0);
     return normalize(vec3<f32>(scene_sdf(p + e.xyy) - scene_sdf(p - e.xyy), scene_sdf(p + e.yxy) - scene_sdf(p - e.yxy), scene_sdf(p + e.yyx) - scene_sdf(p - e.yyx)));
+}
+
+// ─── Color Space Conversion ─────────────────────────────────────────────────
+
+fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
+    return mix(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, 12.92 * c, c <= vec3<f32>(0.0031308));
+}
+
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+    return mix(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
+}
+
+/// Apply output color space conversion. 0=sRGB(no-op), 1=Display P3, 2=AdobeRGB
+fn apply_output_color_space(c: vec3<f32>, color_space: u32) -> vec3<f32> {
+    if (color_space == 0u) { return c; }
+    // For now, pass through. The actual conversion depends on the display's
+    // native color space and should be handled by the swapchain or OS.
+    // This hook allows future ICC profile-based transforms.
+    return c;
 }

@@ -109,9 +109,8 @@ fn sample_backdrop_dominant(uv: vec2<f32>) -> vec3<f32> {
 
 /// Compute backdrop variance across the 9 sample positions.
 /// Returns 0.0 (uniform) to 1.0 (high variance / busy backdrop).
-/// Used to dynamically reduce tint adaptation on complex backgrounds.
-fn sample_backdrop_variance(uv: vec2<f32>) -> f32 {
-    let mean = sample_backdrop_dominant(uv);
+/// `mean` is the pre-computed dominant color from sample_backdrop_dominant().
+fn sample_backdrop_variance(uv: vec2<f32>, mean: vec3<f32>) -> f32 {
     let offsets = array<vec2<f32>, 9>(
         vec2<f32>(-0.15, -0.15), vec2<f32>(0.0, -0.15), vec2<f32>(0.15, -0.15),
         vec2<f32>(-0.15,  0.0),  vec2<f32>(0.0,  0.0),  vec2<f32>(0.15,  0.0),
@@ -123,8 +122,6 @@ fn sample_backdrop_variance(uv: vec2<f32>) -> f32 {
         let diff = s - mean;
         var_sum += dot(diff, diff);
     }
-    // Normalize: variance ranges from 0 to ~0.33 (max for RGB in [0,1])
-    // We scale to [0, 1] range for use as a blend factor.
     return clamp(var_sum / 9.0 * 3.0, 0.0, 1.0);
 }
 
@@ -141,6 +138,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var clip_alpha = 1.0 - smoothstep(-1.0, 1.0, clip_d);
     if (in.clip.z > 15000.0) { clip_alpha = 1.0; }
     color.a *= clip_alpha;
+    // Early exit for zero intensity: skip all expensive glass computation
+    let gi = in.glass_intensity;
+    if gi < 0.01 {
+        let alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
+        if alpha <= 0.0 { discard; }
+        return vec4<f32>(color.rgb, alpha);
+    }
+
 
     // Geometric Slice (Mjolnir Slice)
     if (in.slice.z > 0.5) {
@@ -257,7 +262,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Sample backdrop dominant color and variance for adaptive tinting
     let backdrop_dominant = sample_backdrop_dominant(screen_uv);
-    let backdrop_var = sample_backdrop_variance(screen_uv);
+    let backdrop_var = sample_backdrop_variance(screen_uv, backdrop_dominant);
 
     // Adaptive tint: mix static theme tint with backdrop-derived tint.
     // High variance (busy backdrop) reduces adaptation to prevent legibility issues.
@@ -331,14 +336,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Add GGX specular highlight
     final_rgb += specular_contribution * smoothstep(0.0, 0.4, 1.0 - lens_dist);
 
-    // Early exit for zero intensity: skip all expensive glass computation
-    let gi = in.glass_intensity;
-    if gi < 0.01 {
-        // Simple transparent fill with SDF anti-aliasing only
-        let alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
-        if alpha <= 0.0 { discard; }
-        return vec4<f32>(color.rgb, alpha);
-    }
 
     // Apply SDF anti-aliasing to glass alpha
     let glass_alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));

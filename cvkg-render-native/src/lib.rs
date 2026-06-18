@@ -244,12 +244,12 @@ impl ResizeHitTest {
     /// The hit region for each corner is a square of side `corner_radius + expansion`,
     /// anchored at the corner. A point is considered a hit if it falls within
     /// any of the four corner squares.
-    pub fn hit_test(&self, pos: winit::dpi::PhysicalSize<u32>, corner_radius: f32) -> bool {
+    pub fn hit_test(&self, pos: winit::dpi::PhysicalPosition<f32>, corner_radius: f32) -> bool {
         let r = corner_radius + self.expansion;
         let w = self.window_size.width as f32;
         let h = self.window_size.height as f32;
-        let px = pos.width as f32;
-        let py = pos.height as f32;
+        let px = pos.x as f32;
+        let py = pos.y as f32;
 
         // Top-left corner: square [0, r) x [0, r)
         if px <= r && py <= r {
@@ -638,7 +638,7 @@ impl WindowManager {
         self.core_to_winit.insert(core_id, winit_id);
 
         if let Some(gpu_mutex) = gpu {
-            gpu_mutex.lock().unwrap().register_window(window.clone());
+            gpu_mutex.lock().unwrap_or_else(|p| p.into_inner()).register_window(window.clone());
         }
 
         handle
@@ -1157,6 +1157,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let dy = logical.y - state.cursor_pos[1];
                     state.cursor_velocity = [dx / elapsed, dy / elapsed];
                     state.cursor_pos = [logical.x, logical.y];
+                    // Check if we've moved past the drag threshold
+                    if !state.is_dragging {
+                        let ddx = state.cursor_pos[0] - state.drag_start_pos[0];
+                        let ddy = state.cursor_pos[1] - state.drag_start_pos[1];
+                        let dist_sq = ddx * ddx + ddy * ddy;
+                        if dist_sq > state.drag_threshold * state.drag_threshold {
+                            state.is_dragging = true;
+                        }
+                    }
                     state.needs_cursor_update = true;
                     // Don't request_redraw here — the redraw will process the cursor update.
                     // Only request a redraw if we're not already in a redraw cycle.
@@ -1187,6 +1196,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                         match mouse_state {
                             winit::event::ElementState::Pressed => {
+                                // Record drag start position for click/drag disambiguation
+                                state.drag_start_pos = state.cursor_pos;
+                                state.is_dragging = false;
+                                state.drag_button = btn_id;
                                 log::info!("[Native] Dispatching PointerDown to VDOM");
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x: state.cursor_pos[0],
@@ -1212,17 +1225,21 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     barrel_rotation: None,
                                     pointer_precision: 0.0,
                                 });
-                                // Dispatch PointerClick after PointerUp for mouse clicks
-                                vdom.dispatch_event(cvkg_core::Event::PointerClick {
-                                    x: state.cursor_pos[0],
-                                    y: state.cursor_pos[1],
-                                    button: btn_id,
-                                    tilt: None,
-                                    azimuth: None,
-                                    pressure: Some(0.0),
-                                    barrel_rotation: None,
-                                    pointer_precision: 0.0,
-                                });
+                                // Only dispatch PointerClick if we didn't drag
+                                if !state.is_dragging {
+                                    vdom.dispatch_event(cvkg_core::Event::PointerClick {
+                                        x: state.cursor_pos[0],
+                                        y: state.cursor_pos[1],
+                                        button: btn_id,
+                                        tilt: None,
+                                        azimuth: None,
+                                        pressure: Some(0.0),
+                                        barrel_rotation: None,
+                                        pointer_precision: 0.0,
+                                    });
+                                }
+                                // Reset drag state
+                                state.is_dragging = false;
                             }
                         }
                         state.window.request_redraw();
@@ -1261,6 +1278,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         match touch.phase {
                             winit::event::TouchPhase::Started => {
                                 log::info!("[Native] Dispatching PointerDown (Touch) to VDOM");
+                                // Record drag start position for click/drag disambiguation
+                                state.drag_start_pos = [x, y];
+                                state.is_dragging = false;
+                                state.drag_button = touch_btn as u32;
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x,
                                     y,
@@ -1276,6 +1297,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 });
                             }
                             winit::event::TouchPhase::Moved => {
+                                // Check if we've moved past the drag threshold
+                                if !state.is_dragging {
+                                    let ddx = x - state.drag_start_pos[0];
+                                    let ddy = y - state.drag_start_pos[1];
+                                    let dist_sq = ddx * ddx + ddy * ddy;
+                                    if dist_sq > state.drag_threshold * state.drag_threshold {
+                                        state.is_dragging = true;
+                                    }
+                                }
                                 vdom.dispatch_event(cvkg_core::Event::PointerMove {
                                     x,
                                     y,
@@ -1300,17 +1330,21 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
                                 });
-                                // Dispatch PointerClick immediately following TouchEnd on the same location
-                                vdom.dispatch_event(cvkg_core::Event::PointerClick {
-                                    x,
-                                    y,
-                                    button: touch_btn,
-                                    tilt: None,
-                                    azimuth: None,
-                                    pressure: Some(0.0),
-                                    barrel_rotation: None,
-                                    pointer_precision: 150.0,
-                                });
+                                // Only dispatch PointerClick if we didn't drag
+                                if !state.is_dragging {
+                                    vdom.dispatch_event(cvkg_core::Event::PointerClick {
+                                        x,
+                                        y,
+                                        button: touch_btn,
+                                        tilt: None,
+                                        azimuth: None,
+                                        pressure: Some(0.0),
+                                        barrel_rotation: None,
+                                        pointer_precision: 150.0,
+                                    });
+                                }
+                                // Reset drag state
+                                state.is_dragging = false;
                             }
                             winit::event::TouchPhase::Cancelled => {
                                 vdom.dispatch_event(cvkg_core::Event::PointerUp {
@@ -2173,7 +2207,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         // INVARIANT: The MutexGuard `gpu` must outlive the future returned by capture_frame()
         // because the future borrows from the SurtrRenderer. We therefore lock, block_on the
         // future (driving it to completion), and only then allow the guard to drop.
-        let gpu = self.gpu.lock().expect("GPU mutex poisoned: capture_png");
+        let gpu = self.gpu.lock().unwrap_or_else(|p| p.into_inner());
         pollster::block_on(gpu.capture_frame()).unwrap_or_else(|e| {
             log::error!("GPU frame capture failed: {}", e);
             Vec::new() // Return empty buffer on failure — do not panic the render loop
@@ -2670,7 +2704,7 @@ impl VisualHapticEngine {
 impl cvkg_core::HapticEngine for VisualHapticEngine {
     fn impact(&self, intensity: cvkg_core::HapticIntensity) {
         let _ = intensity;
-        *self.last_impact.lock().unwrap() = std::time::Instant::now();
+        *self.last_impact.lock().unwrap_or_else(|p| p.into_inner()) = std::time::Instant::now();
     }
     fn selection(&self) {
         self.impact(cvkg_core::HapticIntensity::Light);
@@ -2685,6 +2719,6 @@ impl cvkg_core::HapticEngine for VisualHapticEngine {
         self.impact(cvkg_core::HapticIntensity::Heavy);
     }
     fn visual_tick(&self, _intensity: f32) {
-        *self.last_impact.lock().unwrap() = std::time::Instant::now();
+        *self.last_impact.lock().unwrap_or_else(|p| p.into_inner()) = std::time::Instant::now();
     }
 }

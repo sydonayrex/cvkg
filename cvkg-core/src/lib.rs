@@ -3472,6 +3472,8 @@ pub struct ColorTheme {
     pub glass_tint_adapt: f32,
     /// Per-frame glass IOR override. 0.0 = use shader default (1.45).
     pub glass_ior: f32,
+    /// Color space for framebuffer output. 0 = sRGB (default), 1 = Display P3, 2 = Adobe RGB.
+    pub color_space: u32,
     // Padding to match WGSL uniform buffer 16-byte alignment (total = 160 bytes)
     pub _pad0: f32,
     pub _pad1: f32,
@@ -3494,6 +3496,7 @@ impl ColorTheme {
             rune_opacity: 0.55,
             glass_tint_adapt: 0.35,
             glass_ior: 1.45,
+            color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
         }
@@ -3516,6 +3519,7 @@ impl ColorTheme {
             rune_opacity: 0.0,
             glass_tint_adapt: 0.0,
             glass_ior: 1.0,
+            color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
         }
@@ -3540,6 +3544,7 @@ impl ColorTheme {
             rune_opacity: 0.55,
             glass_tint_adapt: 0.65,
             glass_ior: 1.45,
+            color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
         }
@@ -3562,6 +3567,7 @@ impl ColorTheme {
             rune_opacity: 0.85,
             glass_tint_adapt: 0.15,
             glass_ior: 1.85,
+            color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
         }

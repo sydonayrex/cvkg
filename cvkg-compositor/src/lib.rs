@@ -25,9 +25,11 @@
 
 pub mod engine;
 pub mod layer;
+pub mod template;
 
 // Re-export primary types for convenience.
 pub use engine::{CommandBuckets, CompositorEngine, DamageInfo, RoutedDrawCommand};
+pub use template::{RenderTemplate, TemplateError};
 pub use layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 
 /// Current version of the cvkg-compositor crate.

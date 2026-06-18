@@ -104,6 +104,7 @@ struct ColorBlindUniforms {
     matrix_2: vec3<f32>,
     mode: u32,
     intensity: f32,  // 0.0 = no effect, 1.0 = full simulation
+    color_space: 0,
     _pad0: f32,
     _pad1: f32,
 };
@@ -166,6 +167,7 @@ pub struct ColorBlindUniforms {
     pub mode: u32,
     /// Effect intensity (0.0–1.0).
     pub intensity: f32,
+    color_space: u32,
     _pad0: f32,
     _pad1: f32,
 }
@@ -175,14 +177,15 @@ impl ColorBlindUniforms {
     pub fn new(mode: ColorBlindMode, intensity: f32) -> Self {
         let m = mode.matrix();
         Self {
-            matrix_0: [m[0], m[3], m[6]],
+            matrix_0: [m[0], m[1], m[2]],
             _pad_m0: 0.0,
-            matrix_1: [m[1], m[4], m[7]],
+            matrix_1: [m[3], m[4], m[5]],
             _pad_m1: 0.0,
-            matrix_2: [m[2], m[5], m[8]],
+            matrix_2: [m[6], m[7], m[8]],
             _pad_m2: 0.0,
             mode: mode as u32,
             intensity: intensity.clamp(0.0, 1.0),
+            color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
         }

@@ -18,6 +18,22 @@ use lyon::tessellation::{
 };
 use std::collections::VecDeque;
 use std::num::NonZeroUsize;
+
+/// Material ID constants used in vertex `material_id` and DrawMaterial routing.
+/// These map to shader material indices and control per-draw-call pipeline selection.
+pub(crate) mod material_id {
+    /// Opaque geometry (default, depth-tested, no blending).
+    pub const OPAQUE: u32 = 0;
+    /// Top UI layer (alpha blended, no blur).
+    pub const TOP_UI: u32 = 6;
+    /// Glass / frosted blur material.
+    pub const GLASS: u32 = 7;
+    /// 3D surface material (lit, depth-tested).
+    pub const MESH_3D: u32 = 13;
+    /// Blend modes occupy IDs 8..=22 (mapping to blend mode 1..=15).
+    pub const BLEND_START: u32 = 8;
+    pub const BLEND_END: u32 = 22;
+}
 use std::sync::Arc;
 
 /// SurtrRenderer implements the high-performance GPU backend.
@@ -155,6 +171,10 @@ pub struct SurtrRenderer {
     // Telemetry
     pub telemetry: cvkg_core::TelemetryData,
 
+    /// Pipeline cache for disk-persisted compiled shaders.
+    /// Speeds up cold startup by avoiding recompilation of identical pipelines.
+    pub(crate) pipeline_cache: wgpu::PipelineCache,
+
     /// Configuration for render-loop frame timing and degradation strategies.
     pub frame_budget: cvkg_core::FrameBudget,
     /// Staging buffer for windowed frame capture.
@@ -243,6 +263,11 @@ pub struct SurtrRenderer {
     >,
 }
 
+// SAFETY: On WASM, wgpu's Device and Queue are !Send + !Sync because WASM is
+// single-threaded. However, SurtrRenderer needs to be Send so it can be held
+// across async .await points in winit's event loop. On a single-threaded target
+// this is sound: no actual concurrent access occurs, and there are no other
+// threads that could observe or mutate the renderer's internals.
 #[cfg(target_arch = "wasm32")]
 unsafe impl Send for SurtrRenderer {}
 #[cfg(target_arch = "wasm32")]
@@ -585,6 +610,34 @@ impl SurtrRenderer {
         };
 
         // Dynamically compile material WGSL
+
+        // Create pipeline cache for disk-persisted compiled shaders.
+        // This avoids recompiling identical shaders on subsequent launches.
+        // In dev mode, cache lives in the source tree (CARGO_MANIFEST_DIR/target/pipeline_cache).
+        // In release/packaged builds, cache lives next to the executable to avoid
+        // write failures when CARGO_MANIFEST_DIR is not a writable path.
+        let pipeline_cache = {
+            let cache_dir = if cfg!(debug_assertions) {
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("target")
+                    .join("pipeline_cache")
+            } else {
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
+                    .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"))
+            };
+            let _ = std::fs::create_dir_all(&cache_dir);
+            let cache_path = cache_dir.join("cvkg_render_gpu.bin");
+            let cache_data = std::fs::read(&cache_path).ok();
+            unsafe {
+                device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
+                    label: Some("CVKG Pipeline Cache"),
+                    data: cache_data.as_deref(),
+                    fallback: true,
+                })
+            }
+        };
         let materials_generated = crate::material::generate_builtins_wgsl();
 
         let wgsl_src = format!(
@@ -621,6 +674,14 @@ impl SurtrRenderer {
         });
 
         // Niflheim Bind Group Layout (for textures/samplers)
+        // On wasm32/WebGL2, texture binding arrays are not supported, so we use
+        // a small fixed count instead of a large array.
+        #[cfg(target_arch = "wasm32")]
+        let texture_array_count: Option<std::num::NonZeroU32> = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let texture_array_count: Option<std::num::NonZeroU32> =
+            std::num::NonZeroU32::new(256);
+
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -632,7 +693,7 @@ impl SurtrRenderer {
                             view_dimension: wgpu::TextureViewDimension::D2,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
                         },
-                        count: std::num::NonZeroU32::new(256),
+                        count: texture_array_count,
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
@@ -762,7 +823,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         let background_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -798,7 +859,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // ── Specialized Material Pipelines ─────────────────────────────────────
@@ -844,7 +905,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
         let ui_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim UI"),
@@ -873,7 +934,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
         let glass_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim Glass"),
@@ -902,7 +963,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // Muspelheim Bloom Extract Pipeline
@@ -930,7 +991,7 @@ impl SurtrRenderer {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
-                cache: None,
+                cache: Some(&pipeline_cache),
             });
 
         // Muspelheim Copy Pipeline (identity copy for backdrop blur Pass 2)
@@ -957,7 +1018,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // Kawase blur pyramid pipelines (separate shader module — conflicting bindings)
@@ -1029,7 +1090,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
         let kawase_up_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Kawase Upsample"),
@@ -1054,7 +1115,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // Muspelheim Composite Pipeline (additive blend onto screen)
@@ -1093,7 +1154,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // Forge the Mega-Heim (4096x4096 RGBA for production batching)
@@ -1390,7 +1451,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // Volumetric raymarching pipeline (fullscreen triangle with SDF raymarch).
@@ -1459,7 +1520,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // HDR tone mapping pipeline (ACES filmic tone mapping).
@@ -1529,7 +1590,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: None,
+            cache: Some(&pipeline_cache),
         });
 
         // Tone map uniform buffer (exposure, gamma)
@@ -1682,6 +1743,7 @@ impl SurtrRenderer {
             cached_graph_plan: None,
             memo_cache: std::collections::HashMap::new(),
             frame_generation: 0,
+            pipeline_cache,
             bloom_enabled: true,
             volumetric_enabled: false,
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
@@ -1726,6 +1788,10 @@ impl SurtrRenderer {
     }
 
     /// Update VRAM telemetry based on currently allocated resources.
+    /// Called once per frame at the end of end_frame(). Buffer sizes are fixed
+    /// (pre-allocated vertex/index buffers). Texture estimate includes the
+    /// Mega-Heim atlas, surface buffers, and user-loaded textures tracked by
+    /// the texture registry.
     pub(crate) fn update_vram_telemetry(&mut self) {
         // Calculate Buffer VRAM
         let mut buffer_bytes = 0;
@@ -1736,15 +1802,22 @@ impl SurtrRenderer {
         self.vram_buffers_bytes = buffer_bytes;
 
         // Calculate Texture VRAM
-        let mut texture_bytes = 0;
+        let mut texture_bytes = 0u64;
         texture_bytes += 4096 * 4096 * 4; // Mega Heim (RGBA8)
         texture_bytes += 4; // Dummy (RGBA8)
 
         for ctx in self.surfaces.values() {
             let bpp = 4;
             let surface_bytes = (ctx.config.width * ctx.config.height * bpp) as u64;
-            texture_bytes += surface_bytes * 3; // scene (1x), depth (1x), blur a/b (0.5x), bloom a/b (0.5x)
+            // scene (1x), depth (1x), blur a/b (~1x), bloom a/b (~1x)
+            texture_bytes += surface_bytes * 3;
         }
+
+        // Account for user-loaded textures. Each entry in the texture registry
+        // represents one RGBA8 texture. Average 512x512 is a reasonable estimate
+        // when actual dimensions are unknown.
+        let loaded_count = self.texture_registry.len() as u64;
+        texture_bytes += loaded_count * 512 * 512 * 4;
 
         self.vram_textures_bytes = texture_bytes;
 
@@ -1778,8 +1851,8 @@ impl SurtrRenderer {
             }
 
             log::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
-            self.bind_group_cache.lock().unwrap().clear();
-            self.texture_view_cache.lock().unwrap().clear();
+            self.bind_group_cache.lock().unwrap_or_else(|p| p.into_inner()).clear();
+            self.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner()).clear();
             self.shaped_text_cache.clear();
             ctx.config.width = width;
             ctx.config.height = height;
@@ -1944,29 +2017,8 @@ impl SurtrRenderer {
     /// begin_frame_headless — Strike the flaming sword to begin a new GPU frame for headless rendering.
     pub fn begin_frame_headless(&mut self) -> wgpu::CommandEncoder {
         self.current_window = None;
-        self.vertices.clear();
-        self.indices.clear();
-        self.instance_data.clear();
-        self.draw_calls.clear();
-        self.filter_batches.clear();
-        self.shared_elements.clear();
-        self.current_texture_id = None;
-        self.opacity_stack = vec![1.0];
-        self.clip_stack.clear();
-        self.slice_stack.clear();
-        self.transform_stack.clear();
-        self.portal_regions.clear(); // Clear portal regions for fresh frame
-        self.current_z = 0.0;
         self.compositor_index_cursor = self.indices.len() as u32;
-        self.vnode_stack.clear();
-        self.event_handlers.clear();
-
-        // Clear per-frame state but NOT memo_cache — use generation counter instead
-        self.frame_generation += 1;
-
-        self.last_frame_start = std::time::Instant::now();
-        self.telemetry.draw_calls = 0;
-        self.telemetry.vertices = 0;
+        self.reset_frame_state();
 
         // Recall staging belt buffers so they can be reused for vertex upload
         self.staging_belt.recall();
@@ -1996,6 +2048,37 @@ impl SurtrRenderer {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Surtr Headless Command Encoder"),
             })
+    }
+
+    /// Reset per-frame state shared by both `begin_frame` and `begin_frame_headless`.
+    /// Factored out to avoid the copy-paste duplication hazard identified in the audit.
+    fn reset_frame_state(&mut self) {
+        self.vertices.clear();
+        self.indices.clear();
+        self.instance_data.clear();
+        self.draw_calls.clear();
+        self.filter_batches.clear();
+        self.shared_elements.clear();
+        self.current_texture_id = None;
+        self.opacity_stack = vec![1.0];
+        self.clip_stack.clear();
+        self.slice_stack.clear();
+        self.transform_stack.clear();
+        self.portal_regions.clear();
+        self.current_z = 0.0;
+        self.vnode_stack.clear();
+        self.event_handlers.clear();
+        // Clear per-frame state but NOT memo_cache — use generation counter instead
+        self.frame_generation += 1;
+        // Evict memo cache entries that are too old to prevent unbounded growth.
+        const MAX_MEMO_AGE: u64 = 1000;
+        if self.frame_generation > MAX_MEMO_AGE {
+            let cutoff = self.frame_generation - MAX_MEMO_AGE;
+            self.memo_cache.retain(|_, (_, frame_gen)| { *frame_gen >= cutoff });
+        }
+        self.last_frame_start = std::time::Instant::now();
+        self.telemetry.draw_calls = 0;
+        self.telemetry.vertices = 0;
     }
 
     /// begin_frame — Strike the flaming sword to begin a new GPU frame for a specific window.
@@ -2045,35 +2128,7 @@ impl SurtrRenderer {
 
         self.staging_belt.recall();
         self.current_window = Some(window_id);
-        self.vertices.clear();
-        self.indices.clear();
-        self.instance_data.clear();
-        self.draw_calls.clear();
-        self.filter_batches.clear();
-        self.shared_elements.clear();
-        self.current_texture_id = None;
-        self.opacity_stack = vec![1.0];
-        self.clip_stack.clear();
-        self.slice_stack.clear();
-        self.transform_stack.clear();
-        self.portal_regions.clear(); // Clear portal regions for fresh frame
-        self.current_z = 0.0;
-        self.vnode_stack.clear();
-        self.event_handlers.clear();
-
-        // Clear per-frame state but NOT memo_cache — use generation counter instead
-        self.frame_generation += 1;
-
-        // Evict memo cache entries that are too old to prevent unbounded growth.
-        const MAX_MEMO_AGE: u64 = 1000;
-        if self.frame_generation > MAX_MEMO_AGE {
-            let cutoff = self.frame_generation - MAX_MEMO_AGE;
-            self.memo_cache.retain(|_, (_, frame_gen)| { *frame_gen >= cutoff });
-        }
-
-        self.last_frame_start = std::time::Instant::now();
-        self.telemetry.draw_calls = 0;
-        self.telemetry.vertices = 0;
+        self.reset_frame_state();
 
         let ctx = self
             .surfaces
@@ -3030,32 +3085,7 @@ impl SurtrRenderer {
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
                 index_count: 0,
-                material: if material_id == 7 {
-                    if let cvkg_core::DrawMaterial::Glass {
-                        blur_radius,
-                        ior_override,
-                        glass_intensity,
-                    } = self.current_draw_material
-                    {
-                        cvkg_core::DrawMaterial::Glass {
-                            blur_radius,
-                            ior_override,
-                            glass_intensity,
-                        }
-                    } else {
-                        cvkg_core::DrawMaterial::Glass {
-                            blur_radius: 20.0,
-                            ior_override: 0.0,
-                            glass_intensity: 1.0,
-                        }
-                    }
-                } else if material_id == 6 {
-                    cvkg_core::DrawMaterial::TopUI
-                } else if (8..=22).contains(&material_id) {
-                    cvkg_core::DrawMaterial::Blend { mode: (material_id - 7) as u32 }
-                } else {
-                    cvkg_core::DrawMaterial::Opaque
-                },
+                material: Self::resolve_material_with_context(material_id, &self.current_draw_material),
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
@@ -3171,7 +3201,7 @@ impl SurtrRenderer {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn fill_rect_with_full_params_and_slice(
         &mut self,
-        rect: Rect,
+        mut rect: Rect,
         color: [f32; 4],
         material_id: u32,
         texture_id: Option<u32>,
@@ -3180,35 +3210,20 @@ impl SurtrRenderer {
         slice: [f32; 4],
         glyph_time: [f32; 2],
     ) {
+        // Pixel-snap rect coordinates to prevent sub-pixel blurring on high-DPI displays.
+        // Only snap for non-glass materials where visual crispness matters.
+        if material_id != material_id::GLASS {
+            let scale = self.current_scale_factor();
+            let snap = |v: f32| (v * scale).round() / scale;
+            rect.x = snap(rect.x);
+            rect.y = snap(rect.y);
+            rect.width = snap(rect.width);
+            rect.height = snap(rect.height);
+        }
+
         let scissor = self.clip_stack.last().copied();
 
-        let material = if material_id == 7 {
-            if let cvkg_core::DrawMaterial::Glass {
-                blur_radius,
-                ior_override,
-                glass_intensity,
-            } = self.current_draw_material
-            {
-                cvkg_core::DrawMaterial::Glass {
-                    blur_radius,
-                    ior_override,
-                    glass_intensity,
-                }
-            } else {
-                cvkg_core::DrawMaterial::Glass {
-                    blur_radius: 20.0,
-                    ior_override: 0.0,
-                    glass_intensity: 1.0,
-                }
-            }
-        } else if material_id == 6 {
-            cvkg_core::DrawMaterial::TopUI
-        } else if (8..=22).contains(&material_id) {
-            // Blend modes: material_id 8-22 map to blend modes 1-15
-            cvkg_core::DrawMaterial::Blend { mode: (material_id - 7) as u32 }
-        } else {
-            cvkg_core::DrawMaterial::Opaque
-        };
+        let material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
         let (blur_radius, ior_override, glass_intensity) = if let cvkg_core::DrawMaterial::Glass {
@@ -3387,8 +3402,22 @@ impl SurtrRenderer {
                         other
                     );
                     ctx.surface.configure(&self.device, &ctx.config);
-                    self.queue.submit(std::iter::once(encoder.finish()));
-                    return;
+                    // Retry once after reconfiguration; if it fails again, skip the frame.
+                    match ctx.surface.get_current_texture() {
+                        wgpu::CurrentSurfaceTexture::Success(t) => t,
+                        wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                            ctx.surface.configure(&self.device, &ctx.config);
+                            t
+                        }
+                        retry_failed => {
+                            log::error!(
+                                "[GPU] Surface texture retry also failed ({:?}), skipping frame",
+                                retry_failed
+                            );
+                            self.queue.submit(std::iter::once(encoder.finish()));
+                            return;
+                        }
+                    }
                 }
             };
             let view = frame
@@ -3513,6 +3542,24 @@ impl SurtrRenderer {
         let height = self.current_height();
         let has_volumetric = self.volumetric_enabled;
 
+        // Compute content hashes for cache key (must match construction site)
+        let mut offscreen_hash: u64 = 0;
+        for offscreen in &self.active_offscreens {
+            offscreen_hash = offscreen_hash.wrapping_add(
+                offscreen.target_id.wrapping_mul(31)
+                    ^ (offscreen.blend_mode as u64).wrapping_mul(17)
+            );
+        }
+        let mut portal_hash: u64 = 0;
+        for region in &self.portal_regions {
+            portal_hash = portal_hash.wrapping_add(
+                (region.x.to_bits() as u64).wrapping_mul(7)
+                    .wrapping_add((region.y.to_bits() as u64).wrapping_mul(13))
+                    .wrapping_add((region.width.to_bits() as u64).wrapping_mul(19))
+                    .wrapping_add((region.height.to_bits() as u64).wrapping_mul(23))
+            );
+        }
+
         let use_cache = if let Some(ref cached) = self.cached_graph_plan {
             cached.matches(
                 has_glass,
@@ -3520,7 +3567,9 @@ impl SurtrRenderer {
                 has_accessibility,
                 has_volumetric,
                 active_offscreens_count,
+                offscreen_hash,
                 portal_regions_count,
+                portal_hash,
                 width,
                 height,
                 scale_bits,
@@ -3542,15 +3591,31 @@ impl SurtrRenderer {
                 scale,
             });
             let planner = kvasir::planner::ExecutionPlanner::new(&render_graph);
-            let compiled_plan = planner.compile().expect("RenderGraph cycle detected!");
+            let compiled_plan = match planner.compile() {
+                Ok(plan) => plan,
+                Err(e) => {
+                    log::error!(
+                        "[Kvasir] Render graph compilation failed ({}), skipping render passes",
+                        e
+                    );
+                    // Present the frame with whatever was rendered (stale scene or blank).
+                    if let Some(surface_texture) = res.surface_texture {
+                        surface_texture.present();
+                    }
+                    return;
+                }
+            };
             
+            // Reuse the already-computed hashes (computed above for cache matching)
             self.cached_graph_plan = Some(kvasir::graph_cache::CachedGraphPlan {
                 has_glass,
                 has_bloom,
                 has_accessibility,
                 has_volumetric,
                 active_offscreens_count,
+                offscreen_content_hash: offscreen_hash,
                 portal_regions_count,
+                portal_content_hash: portal_hash,
                 width,
                 height,
                 scale_bits,
@@ -3560,8 +3625,38 @@ impl SurtrRenderer {
         }
 
         let cached = self.cached_graph_plan.as_ref().unwrap();
-        for &pass_id in &cached.plan {
-            if let Some(node) = cached.graph.node(pass_id) {
+        let frame_start = self.last_frame_start;
+        let budget_ms = self.frame_budget.target_ms;
+        let allow_degradation = self.frame_budget.allow_degradation;
+
+        for &node_key in &cached.plan {
+            // Frame budget enforcement: if we're already over budget and degradation
+            // is allowed, skip expensive non-essential passes (bloom, volumetric, etc).
+            if allow_degradation && budget_ms > 0.0 {
+                let elapsed_ms = frame_start.elapsed().as_secs_f32() * 1000.0;
+                if elapsed_ms > budget_ms {
+                    if let Some(node) = cached.graph.node(node_key) {
+                        match node.pass_id() {
+                            kvasir::nodes::PassId::BloomExtract
+                            | kvasir::nodes::PassId::BloomBlur
+                            | kvasir::nodes::PassId::Volumetric
+                            | kvasir::nodes::PassId::Accessibility
+                            | kvasir::nodes::PassId::BackdropBlur
+                            | kvasir::nodes::PassId::BackdropRegion => {
+                                log::trace!(
+                                    "[Kvasir] Skipping {} (over budget: {:.1}ms > {:.1}ms)",
+                                    node.label(),
+                                    elapsed_ms,
+                                    budget_ms
+                                );
+                                continue;
+                            }
+                            _ => {} // Always run: Geometry, Glass, UI, Composite, Present, etc.
+                        }
+                    }
+                }
+            }
+            if let Some(node) = cached.graph.node(node_key) {
                 log::trace!("[Kvasir] Executing node: {}", node.label());
                 let mut ctx = kvasir::node::ExecutionContext {
                     device: &self.device,
@@ -3608,6 +3703,10 @@ impl SurtrRenderer {
         self.telemetry.frame_time_ms = self.last_frame_start.elapsed().as_secs_f32() * 1000.0;
         self.update_vram_telemetry();
 
+        // Evict transient frame resources (portal regions, offscreen effects) back into
+        // the texture pool instead of leaking GPU memory when panels are closed.
+        self.registry.evict_frame_resources();
+
         if let Some(f) = res.surface_texture {
             f.present();
         }
@@ -3616,6 +3715,30 @@ impl SurtrRenderer {
 
 impl Drop for SurtrRenderer {
     fn drop(&mut self) {
+        // Persist pipeline cache to disk for faster subsequent startups.
+        // Use the same path logic as forge() for consistency:
+        // - Debug: CARGO_MANIFEST_DIR/target/pipeline_cache (dev convenience)
+        // - Release: executable's parent dir (packaged installs)
+        // - Fallback: temp dir
+        let cache_dir = if cfg!(debug_assertions) {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("target")
+                .join("pipeline_cache")
+        } else {
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
+                .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"))
+        };
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let cache_path = cache_dir.join("cvkg_render_gpu.bin");
+        let data = self.pipeline_cache.get_data();
+        if let Some(data) = data {
+            if let Err(e) = std::fs::write(&cache_path, data) {
+                log::warn!("Failed to persist pipeline cache: {}", e);
+            }
+        }
+
         // Ensure GPU is idle before dropping to avoid Swapchain semaphore panics
         let _ = self.device.poll(wgpu::PollType::Wait {
             submission_index: None,
@@ -3699,35 +3822,7 @@ impl SurtrRenderer {
         });
         for cmd in sorted_glass {
             if let cvkg_compositor::engine::RenderCommand::Draw(routed) = cmd {
-                let core_material = match routed.material {
-                    cvkg_compositor::Material::Opaque => cvkg_core::DrawMaterial::Opaque,
-                    cvkg_compositor::Material::Glass {
-                        blur_radius,
-                        depth_index: _,
-                    } => cvkg_core::DrawMaterial::Glass {
-                        blur_radius,
-                        ior_override: 0.0,
-                        glass_intensity: 1.0,
-                    },
-                    cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
-                    cvkg_compositor::Material::Multiply => cvkg_core::DrawMaterial::Blend { mode: 1 },
-                    cvkg_compositor::Material::Screen => cvkg_core::DrawMaterial::Blend { mode: 2 },
-                    cvkg_compositor::Material::BlendOverlay => cvkg_core::DrawMaterial::Blend { mode: 3 },
-                    cvkg_compositor::Material::Darken => cvkg_core::DrawMaterial::Blend { mode: 4 },
-                    cvkg_compositor::Material::Lighten => cvkg_core::DrawMaterial::Blend { mode: 5 },
-                    cvkg_compositor::Material::ColorDodge => cvkg_core::DrawMaterial::Blend { mode: 6 },
-                    cvkg_compositor::Material::ColorBurn => cvkg_core::DrawMaterial::Blend { mode: 7 },
-                    cvkg_compositor::Material::HardLight => cvkg_core::DrawMaterial::Blend { mode: 8 },
-                    cvkg_compositor::Material::SoftLight => cvkg_core::DrawMaterial::Blend { mode: 9 },
-                    cvkg_compositor::Material::Difference => cvkg_core::DrawMaterial::Blend { mode: 10 },
-                    cvkg_compositor::Material::Exclusion => cvkg_core::DrawMaterial::Blend { mode: 11 },
-                    cvkg_compositor::Material::Hue => cvkg_core::DrawMaterial::Blend { mode: 12 },
-                    cvkg_compositor::Material::Saturation => cvkg_core::DrawMaterial::Blend { mode: 13 },
-                    cvkg_compositor::Material::Color => cvkg_core::DrawMaterial::Blend { mode: 14 },
-                    cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
-                    _ => cvkg_core::DrawMaterial::Opaque,
-                };
-                self.set_material(core_material);
+                self.set_material(Self::convert_compositor_material(&routed.material));
                 self.submit_routed(routed, None);
             }
         }
@@ -3758,32 +3853,7 @@ impl SurtrRenderer {
         if cmd.index_count == 0 {
             return;
         }
-        let material = match &routed.material {
-            cvkg_compositor::Material::Glass { blur_radius, .. } => {
-                cvkg_core::DrawMaterial::Glass {
-                    blur_radius: *blur_radius,
-                    ior_override: 0.0,
-                    glass_intensity: 1.0,
-                }
-            }
-            cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
-            cvkg_compositor::Material::Multiply => cvkg_core::DrawMaterial::Blend { mode: 1 },
-            cvkg_compositor::Material::Screen => cvkg_core::DrawMaterial::Blend { mode: 2 },
-            cvkg_compositor::Material::BlendOverlay => cvkg_core::DrawMaterial::Blend { mode: 3 },
-            cvkg_compositor::Material::Darken => cvkg_core::DrawMaterial::Blend { mode: 4 },
-            cvkg_compositor::Material::Lighten => cvkg_core::DrawMaterial::Blend { mode: 5 },
-            cvkg_compositor::Material::ColorDodge => cvkg_core::DrawMaterial::Blend { mode: 6 },
-            cvkg_compositor::Material::ColorBurn => cvkg_core::DrawMaterial::Blend { mode: 7 },
-            cvkg_compositor::Material::HardLight => cvkg_core::DrawMaterial::Blend { mode: 8 },
-            cvkg_compositor::Material::SoftLight => cvkg_core::DrawMaterial::Blend { mode: 9 },
-            cvkg_compositor::Material::Difference => cvkg_core::DrawMaterial::Blend { mode: 10 },
-            cvkg_compositor::Material::Exclusion => cvkg_core::DrawMaterial::Blend { mode: 11 },
-            cvkg_compositor::Material::Hue => cvkg_core::DrawMaterial::Blend { mode: 12 },
-            cvkg_compositor::Material::Saturation => cvkg_core::DrawMaterial::Blend { mode: 13 },
-            cvkg_compositor::Material::Color => cvkg_core::DrawMaterial::Blend { mode: 14 },
-            cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
-            _ => cvkg_core::DrawMaterial::Opaque,
-        };
+        let material = Self::convert_compositor_material(&routed.material);
         self.draw_calls.push(DrawCall {
             texture_id: cmd.texture_id,
             scissor_rect: cmd.scissor_rect,
@@ -3984,7 +4054,7 @@ impl SurtrRenderer {
                     usvg::LineJoin::Miter => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Miter),
                     usvg::LineJoin::Round => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Round),
                     usvg::LineJoin::Bevel => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Bevel),
-                    usvg::LineJoin::MiterClip => stroke_opts.with_line_join(lyon::tessellation::LineJoin::MiterClip),
+                    _ => stroke_opts,
                 };
 
                 // Miter limit
@@ -4265,10 +4335,6 @@ impl SurtrRenderer {
             let material = Self::resolve_material(material_id);
             let tid = self.get_texture_id("__mega_heim");
             Self::emit_draw_call(self, material, tid, clip_rect, index_count as u32, base_vertex);
-            // Emit single draw call for all vertices
-            let material = Self::resolve_material(material_id);
-            let tid = self.get_texture_id("__mega_heim");
-            Self::emit_draw_call(self, material, tid, clip_rect, index_count as u32, base_vertex);
         } else {
             // Per-path rendering: each path gets its own transform and draw call.
             for path in &model.paths {
@@ -4293,7 +4359,7 @@ impl SurtrRenderer {
                     if anim.target_id == path.id {
                         let effective_time = self.current_scene.time + animation_time_offset;
                         let t = (effective_time % anim.duration) / anim.duration;
-                        let val = anim.from_val + (anim.to_val - anim.from_val) * t;
+                        let val = anim.evaluate(t);
                         if anim.attribute_name == "transform" {
                             let mut min_x = f32::MAX; let mut min_y = f32::MAX;
                             let mut max_x = f32::MIN; let mut max_y = f32::MIN;
@@ -4338,16 +4404,78 @@ impl SurtrRenderer {
         }
     }
 
-    /// Helper: resolve material_id to DrawMaterial.
+    /// Resolve a material_id to DrawMaterial with default parameters.
+    /// Used by draw_svg which doesn't have a current_draw_material context.
     fn resolve_material(material_id: u32) -> cvkg_core::DrawMaterial {
+        Self::resolve_material_with_context(material_id, &cvkg_core::DrawMaterial::Opaque)
+    }
+
+    /// Resolve a material_id to DrawMaterial, using current_draw_material as context
+    /// for glass parameters. Centralizes the material routing logic used by both
+    /// fill_rect_with_full_params_and_slice and emit_draw_call.
+    fn resolve_material_with_context(
+        material_id: u32,
+        current: &cvkg_core::DrawMaterial,
+    ) -> cvkg_core::DrawMaterial {
+        use material_id::*;
         match material_id {
-            7 => cvkg_core::DrawMaterial::Glass {
-                blur_radius: 20.0,
-                ior_override: 0.0,
-                glass_intensity: 1.0,
+            GLASS => {
+                if let cvkg_core::DrawMaterial::Glass {
+                    blur_radius,
+                    ior_override,
+                    glass_intensity,
+                } = current
+                {
+                    cvkg_core::DrawMaterial::Glass {
+                        blur_radius: *blur_radius,
+                        ior_override: *ior_override,
+                        glass_intensity: *glass_intensity,
+                    }
+                } else {
+                    cvkg_core::DrawMaterial::Glass {
+                        blur_radius: 20.0,
+                        ior_override: 0.0,
+                        glass_intensity: 1.0,
+                    }
+                }
+            }
+            TOP_UI => cvkg_core::DrawMaterial::TopUI,
+            BLEND_START..=BLEND_END => cvkg_core::DrawMaterial::Blend {
+                mode: (material_id - 7) as u32,
             },
-            0 => cvkg_core::DrawMaterial::Opaque,
-            _ => cvkg_core::DrawMaterial::TopUI,
+            _ => cvkg_core::DrawMaterial::Opaque,
+        }
+    }
+
+    /// Convert a compositor Material to a core DrawMaterial.
+    /// Centralizes the mapping used by submit_buckets and submit_routed.
+    fn convert_compositor_material(mat: &cvkg_compositor::Material) -> cvkg_core::DrawMaterial {
+        match mat {
+            cvkg_compositor::Material::Glass { blur_radius, .. } => {
+                cvkg_core::DrawMaterial::Glass {
+                    blur_radius: *blur_radius,
+                    ior_override: 0.0,
+                    glass_intensity: 1.0,
+                }
+            }
+            cvkg_compositor::Material::Overlay => cvkg_core::DrawMaterial::TopUI,
+            cvkg_compositor::Material::Multiply => cvkg_core::DrawMaterial::Blend { mode: 1 },
+            cvkg_compositor::Material::Screen => cvkg_core::DrawMaterial::Blend { mode: 2 },
+            cvkg_compositor::Material::BlendOverlay => cvkg_core::DrawMaterial::Blend { mode: 3 },
+            cvkg_compositor::Material::Darken => cvkg_core::DrawMaterial::Blend { mode: 4 },
+            cvkg_compositor::Material::Lighten => cvkg_core::DrawMaterial::Blend { mode: 5 },
+            cvkg_compositor::Material::ColorDodge => cvkg_core::DrawMaterial::Blend { mode: 6 },
+            cvkg_compositor::Material::ColorBurn => cvkg_core::DrawMaterial::Blend { mode: 7 },
+            cvkg_compositor::Material::HardLight => cvkg_core::DrawMaterial::Blend { mode: 8 },
+            cvkg_compositor::Material::SoftLight => cvkg_core::DrawMaterial::Blend { mode: 9 },
+            cvkg_compositor::Material::Difference => cvkg_core::DrawMaterial::Blend { mode: 10 },
+            cvkg_compositor::Material::Exclusion => cvkg_core::DrawMaterial::Blend { mode: 11 },
+            cvkg_compositor::Material::Hue => cvkg_core::DrawMaterial::Blend { mode: 12 },
+            cvkg_compositor::Material::Saturation => cvkg_core::DrawMaterial::Blend { mode: 13 },
+            cvkg_compositor::Material::Color => cvkg_core::DrawMaterial::Blend { mode: 14 },
+            cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
+            cvkg_compositor::Material::Opaque => cvkg_core::DrawMaterial::Opaque,
+            _ => cvkg_core::DrawMaterial::Opaque,
         }
     }
 

@@ -270,6 +270,7 @@ pub fn oklch_to_color_theme(seed: OklchColor) -> cvkg_core::ColorTheme {
         rune_opacity: 0.7,
         glass_tint_adapt: 0.35,
         glass_ior: 1.45,
+        color_space: 0,
         _pad0: 0.0,
         _pad1: 0.0,
     }

@@ -83,7 +83,7 @@ impl MaterialRegistry {
 }
 
 /// Material type for draw call routing in the multi-pass pipeline.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub enum DrawMaterial {
     /// Standard opaque shape (default).
     #[default]

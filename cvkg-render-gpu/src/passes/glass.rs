@@ -42,7 +42,7 @@ impl KvasirNode for BackdropCopyNode {
             }
         };
         let target_view = {
-            let mut cache = ctx.renderer.texture_view_cache.lock().unwrap();
+            let mut cache = ctx.renderer.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner());
             cache
                 .entry((RES_BLUR_A, 0))
                 .or_insert_with(|| {
@@ -85,7 +85,7 @@ impl KvasirNode for BackdropCopyNode {
             }
         };
         let source_bind_group = {
-            let mut cache = ctx.renderer.bind_group_cache.lock().unwrap();
+            let mut cache = ctx.renderer.bind_group_cache.lock().unwrap_or_else(|p| p.into_inner());
             cache
                 .entry((RES_SCENE, 0, false))
                 .or_insert_with(|| {
@@ -179,7 +179,7 @@ impl KvasirNode for BackdropBlurNode {
 
         let mip_views: Vec<wgpu::TextureView> = (0..effective_mips)
             .map(|mip| {
-                let mut cache = ctx.renderer.texture_view_cache.lock().unwrap();
+                let mut cache = ctx.renderer.texture_view_cache.lock().unwrap_or_else(|p| p.into_inner());
                 cache
                     .entry((RES_BLUR_A, mip as u32))
                     .or_insert_with(|| {
@@ -228,32 +228,29 @@ impl KvasirNode for BackdropBlurNode {
             let h = mip_scales[mip].1.max(1.0) as u32;
 
             // Retrieve or create bind group for this mip level from cache
-            let cache_key = (RES_BLUR_A, mip as u32, false);
-            let mut cache = ctx.renderer.bind_group_cache.lock().unwrap();
-            let bg = cache.entry(cache_key).or_insert_with(|| {
-                ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some(&format!("kawase_bg_{}", mip)),
-                    layout: &ctx.renderer.kawase_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                                buffer: kawase_uniform,
-                                offset: 0,
-                                size: wgpu::BufferSize::new(32),
-                            }),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(&mip_views[(mip - 1)]),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
-                        },
-                    ],
-                })
-            });
+            let bg = ctx.get_or_create_bind_group(
+                (RES_BLUR_A, mip as u32, false),
+                &ctx.renderer.kawase_bind_group_layout,
+                &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: kawase_uniform,
+                            offset: 0,
+                            size: wgpu::BufferSize::new(32),
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&mip_views[(mip - 1)]),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                    },
+                ],
+                Some("kawase_down"),
+            );
 
             let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(&format!("Kawase Down {}", mip)),
@@ -275,7 +272,7 @@ impl KvasirNode for BackdropBlurNode {
             });
             p.set_viewport(0.0, 0.0, w as f32, h as f32, 0.0, 1.0);
             p.set_pipeline(&ctx.renderer.kawase_down_pipeline);
-            p.set_bind_group(0, Some(&*bg), &[]);
+            p.set_bind_group(0, Some(&bg), &[]);
             p.draw(0..3, 0..1);
         }
 
@@ -482,7 +479,7 @@ impl KvasirNode for GlassNode {
                 let portal_res_id = ResourceId(2000 + portal_idx as u32);
                 if let Some(portal_view) = ctx.registry.get_texture_view(portal_res_id) {
                     let cache_key = (portal_res_id, 0, false);
-                    let mut cache = ctx.renderer.bind_group_cache.lock().unwrap();
+                    let mut cache = ctx.renderer.bind_group_cache.lock().unwrap_or_else(|p| p.into_inner());
                     let bg = cache.entry(cache_key).or_insert_with(|| {
                         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some(&format!("portal_blur_env_bg_{}", portal_idx)),

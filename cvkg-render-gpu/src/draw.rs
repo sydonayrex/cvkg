@@ -32,15 +32,18 @@ pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
                         .unwrap_or("transform")
                         .to_string();
 
-                    let (from_val, to_val) = if let Some(values) = node.attribute("values") {
+                    let (keyframe_values, key_times) = if let Some(values) = node.attribute("values") {
                         let parts: Vec<&str> = values.split(';').collect();
-                        if parts.len() >= 2 {
-                            let f = parts[0].trim().parse::<f32>().unwrap_or(0.0);
-                            let t = parts[parts.len() - 1].trim().parse::<f32>().unwrap_or(0.0);
-                            (f, t)
+                        let vals: Vec<f32> = parts.iter()
+                            .map(|p| p.trim().parse::<f32>().unwrap_or(0.0))
+                            .collect();
+                        // Parse keyTimes if present
+                        let kt: Vec<f32> = if let Some(kt_str) = node.attribute("keyTimes") {
+                            kt_str.split(';').map(|p| p.trim().parse::<f32>().unwrap_or(0.0)).collect()
                         } else {
-                            (0.0, 360.0) // Fallback defaults
-                        }
+                            Vec::new()
+                        };
+                        (vals, kt)
                     } else {
                         let f = node
                             .attribute("from")
@@ -52,14 +55,14 @@ pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
                             .unwrap_or(if attr == "stroke-dashoffset" { "0" } else { "360" })
                             .parse::<f32>()
                             .unwrap_or(if attr == "stroke-dashoffset" { 0.0 } else { 360.0 });
-                        (f, t)
+                        (vec![f, t], Vec::new())
                     };
 
                     parsed_animations.push(SvgAnimation {
                         target_id,
                         attribute_name: attr,
-                        from_val,
-                        to_val,
+                        keyframe_values,
+                        key_times,
                         duration,
                         vertex_range: 0..0, // Will be filled during tessellation
                     });

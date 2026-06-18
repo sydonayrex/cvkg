@@ -605,8 +605,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
                         }
                     };
 
-                    log::info!("Rasterized glyph {}, gw: {}, gh: {}, data len: {}, first 20 bytes: {:?}", glyph_id, gw, gh, rgba_data.len(), &rgba_data[0..std::cmp::min(rgba_data.len(), 20)]);
-
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
                             texture: &self.mega_heim_tex,
@@ -765,9 +763,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
                             }
                         }
                     };
-                    // DEBUG: print first few bytes to see if they are white
-                    let sample = &rgba_data[0..std::cmp::min(rgba_data.len(), 20)];
-                    log::info!("Rasterized glyph {}, gw: {}, gh: {}, data len: {}, first 20 bytes: {:?}", glyph_id, gw, gh, rgba_data.len(), sample);
                     
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
@@ -912,17 +907,26 @@ impl cvkg_core::Renderer for SurtrRenderer {
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Slot allocation (Skip index 0 which is the dummy/atlas)
+        // texture_views is a fixed 256-element Vec; indices 1..=255 are usable.
         let index = if self.texture_registry.len() < 255 {
             (self.texture_registry.len() + 1) as u32
         } else {
-            // Evict the least recently used texture
+            // Evict the least recently used texture and reuse its slot.
+            // The bind group cache is invalidated below by rebuilding.
             if let Some((old_name, old_index)) = self.texture_registry.pop_lru() {
                 self.image_uv_registry.pop(&old_name);
                 old_index
             } else {
-                1 // Fallback
+                log::warn!("[GPU] texture registry full and no LRU entry to evict");
+                return;
             }
         };
+
+        // Bounds guard: index must be in 1..256 (index 0 is the atlas).
+        if index == 0 || index as usize >= self.texture_views.len() {
+            log::error!("[GPU] load_image: invalid texture index {} (registry has {} entries)", index, self.texture_registry.len());
+            return;
+        }
 
         self.texture_views[index as usize] = view;
         self.image_uv_registry.put(
@@ -956,21 +960,18 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        // Check if we've already rendered this content with the same hash this frame
-        // or a previous frame (cross-frame memoization via generation counter).
+        // Cross-frame memoization: skip rendering if the content hash is unchanged
+        // from any previous frame. The generation counter tracks staleness for eviction.
         let should_skip = self
             .memo_cache
             .get(&id)
-            .map_or(false, |(cached_hash, cached_gen)| {
-                *cached_hash == data_hash && *cached_gen == self.frame_generation
-            });
+            .map_or(false, |(cached_hash, _)| *cached_hash == data_hash);
 
         if !should_skip {
-            // Update cache with current hash and generation
-            self.memo_cache.insert(id, (data_hash, self.frame_generation));
+            self.memo_cache
+                .insert(id, (data_hash, self.frame_generation));
             render_fn(self);
         }
-        // If should_skip is true, we skip rendering as the content hasn't changed
     }
 
     fn push_opacity(&mut self, opacity: f32) {
@@ -1084,24 +1085,24 @@ impl cvkg_core::Renderer for SurtrRenderer {
         effect_type: &str,
         _color: [f32; 4],
     ) {
-        log::info!(
-            "[Surtr] Dispatching {} {} particles at {:?}",
+        // Stub: particle dispatch requires a compute pass pipeline that is not yet wired.
+        log::debug!(
+            "[Surtr] dispatch_particles: {} {} particles at {:?} (stub, no-op)",
             count,
             effect_type,
             origin
         );
-        // Stub: A full implementation would push to a compute pass command queue
     }
 
     fn draw_hologram(&mut self, rect: Rect, hologram_id: &str, time: f32) {
-        log::info!(
-            "[Surtr] Drawing hologram {} at {:?} (t={})",
+        // Stub: volumetric hologram rendering is not yet implemented.
+        // Fallback: render a glowing wireframe rectangle as a placeholder.
+        log::debug!(
+            "[Surtr] draw_hologram: {} at {:?} t={} (stub, wireframe fallback)",
             hologram_id,
             rect,
             time
         );
-        // Stub: In the future, this will push a DrawCall into the volumetric pass queue.
-        // For now, render a glowing wireframe box
         self.stroke_rect(rect, [0.0, 1.0, 1.0, 0.5], 2.0);
     }
 
@@ -1148,6 +1149,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
+                    // The layout requires 256 entries; only index 0 is the actual texture.
                     resource: wgpu::BindingResource::TextureViewArray(&vec![&view; 256]),
                 },
                 wgpu::BindGroupEntry {
