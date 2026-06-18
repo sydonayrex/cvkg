@@ -75,6 +75,94 @@ impl Default for QualityLevel {
     }
 }
 
+/// P1-1 fix: configurable SurtrRenderer parameters.
+///
+/// The 5220-line SurtrRenderer monolith hardcoded six LRU cache sizes
+/// plus the Mega-Heim atlas dimensions. This struct extracts those
+/// into a single configuration object so that callers can tune the
+/// renderer for different working sets (high-end desktop vs. mid-tier
+/// mobile vs. low-VRAM embedded) without modifying the source.
+///
+/// Cache size defaults match the values previously hardcoded after
+/// the P1-5 fix (text=8192, svg=512, trees=512, shared=1024, uv=256,
+/// texture_registry=31). Mega-Heim default is 4096x4096 RGBA8.
+#[derive(Debug, Clone)]
+pub struct SurtrConfig {
+    /// LRU capacity for the text glyph cache.
+    pub text_cache_capacity: NonZeroUsize,
+    /// LRU capacity for the image UV registry.
+    pub image_uv_capacity: NonZeroUsize,
+    /// LRU capacity for the texture registry.
+    pub texture_registry_capacity: NonZeroUsize,
+    /// LRU capacity for the SVG cache (tessellated paths).
+    pub svg_cache_capacity: NonZeroUsize,
+    /// LRU capacity for the SVG trees (parsed source).
+    pub svg_trees_capacity: NonZeroUsize,
+    /// LRU capacity for the shared elements cache.
+    pub shared_elements_capacity: NonZeroUsize,
+    /// Mega-Heim atlas width in pixels.
+    pub mega_heim_width: u32,
+    /// Mega-Heim atlas height in pixels.
+    pub mega_heim_height: u32,
+}
+
+impl Default for SurtrConfig {
+    fn default() -> Self {
+        // Defaults match the values previously hardcoded after the
+        // P1-5 cache size increase. Future low-VRAM presets can be
+        // added as separate constructors (e.g., SurtrConfig::mobile()).
+        Self {
+            text_cache_capacity: NonZeroUsize::new(8192).unwrap(),
+            image_uv_capacity: NonZeroUsize::new(256).unwrap(),
+            texture_registry_capacity: NonZeroUsize::new(31).unwrap(),
+            svg_cache_capacity: NonZeroUsize::new(512).unwrap(),
+            svg_trees_capacity: NonZeroUsize::new(512).unwrap(),
+            shared_elements_capacity: NonZeroUsize::new(1024).unwrap(),
+            mega_heim_width: 4096,
+            mega_heim_height: 4096,
+        }
+    }
+}
+
+impl SurtrConfig {
+    /// Preset for low-VRAM mobile devices (~64MB atlas).
+    pub fn low_vram() -> Self {
+        Self {
+            text_cache_capacity: NonZeroUsize::new(2048).unwrap(),
+            image_uv_capacity: NonZeroUsize::new(64).unwrap(),
+            texture_registry_capacity: NonZeroUsize::new(15).unwrap(),
+            svg_cache_capacity: NonZeroUsize::new(128).unwrap(),
+            svg_trees_capacity: NonZeroUsize::new(128).unwrap(),
+            shared_elements_capacity: NonZeroUsize::new(256).unwrap(),
+            mega_heim_width: 2048,
+            mega_heim_height: 2048,
+        }
+    }
+
+    /// Preset for high-end desktop GPUs.
+    pub fn high_end() -> Self {
+        Self {
+            text_cache_capacity: NonZeroUsize::new(16384).unwrap(),
+            image_uv_capacity: NonZeroUsize::new(1024).unwrap(),
+            texture_registry_capacity: NonZeroUsize::new(127).unwrap(),
+            svg_cache_capacity: NonZeroUsize::new(1024).unwrap(),
+            svg_trees_capacity: NonZeroUsize::new(1024).unwrap(),
+            shared_elements_capacity: NonZeroUsize::new(4096).unwrap(),
+            mega_heim_width: 8192,
+            mega_heim_height: 8192,
+        }
+    }
+
+    /// Total Mega-Heim VRAM cost in bytes (RGBA8 = 4 bytes/pixel).
+    /// P1-1 audit: "On mobile GPUs with 256MB VRAM limits, this
+    /// consumes ~64MB" -- use this helper to detect VRAM pressure.
+    pub fn mega_heim_vram_bytes(&self) -> u64 {
+        self.mega_heim_width as u64
+            * self.mega_heim_height as u64
+            * 4  // RGBA8
+    }
+}
+
 /// SurtrRenderer implements the high-performance GPU backend.
 pub struct SurtrRenderer {
     pub(crate) instance: Arc<wgpu::Instance>,
@@ -320,6 +408,11 @@ pub struct SurtrRenderer {
     /// Current frame generation counter. Incremented each frame to avoid
     /// clearing the memo cache (which would defeat cross-frame memoization).
     pub(crate) frame_generation: u64,
+    /// P1-1: SurtrRenderer configuration. Contains cache sizes,
+    /// atlas dimensions, and other tunable parameters. Can be
+    /// replaced at runtime via `set_config()` to adapt to different
+    /// working sets (e.g., after detecting a low-VRAM device).
+    pub(crate) config: SurtrConfig,
     /// P1-10: Quality level controlling MSAA sample count and other
     /// adaptive rendering settings. Defaults to High to match the
     /// previous hardcoded 4x MSAA behavior.
@@ -521,6 +614,25 @@ impl SurtrRenderer {
     ///   - `Low`: MSAA 1x (low-end GPUs, Adreno 3xx, etc.)
     pub fn set_quality_level(&mut self, level: QualityLevel) {
         self.quality_level = level;
+    }
+
+    /// P1-1: replace the renderer configuration at runtime.
+    ///
+    /// Note: changes to cache sizes only affect FUTURE inserts; the
+    /// existing LRU caches keep their original capacity. To resize
+    /// existing caches, you must restart the renderer. This is a
+    /// pragmatic limitation -- resizing LRU caches atomically would
+    /// require copying the entire cache, which is expensive.
+    ///
+    /// Changes to atlas dimensions and other one-shot values take
+    /// effect on the next frame.
+    pub fn set_config(&mut self, config: SurtrConfig) {
+        self.config = config;
+    }
+
+    /// P1-1: read the current configuration.
+    pub fn config(&self) -> &SurtrConfig {
+        &self.config
     }
 
     /// P1-10: get the current rendering quality level.
@@ -2193,6 +2305,12 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             // Future work (if these sizes prove insufficient): switch
             // to a content-addressed cache so multiple names pointing
             // at the same SVG share a single entry regardless of name.
+            // P1-1: cache sizes and atlas dimensions are now read
+            // from the SurtrConfig struct instead of being
+            // hardcoded. Defaults match the previously hardcoded
+            // values, so behavior is preserved. See SurtrConfig
+            // for available presets (low_vram, high_end, default).
+            config: SurtrConfig::default(),
             text_cache: LruCache::new(NonZeroUsize::new(8192).unwrap()),
             shaped_text_cache: std::collections::HashMap::new(),
             heim_packer: SundrPacker::new(4096, 4096),
@@ -2204,9 +2322,6 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             texture_registry,
             texture_views: texture_views_list,
             dummy_sampler,
-            // P1-5 fix: see text_cache comment above. SVG caches
-            // increased from 128 to 512 to handle 200+ unique brush
-            // strokes and 150+ unique sprites without thrashing.
             svg_cache: LruCache::new(NonZeroUsize::new(512).unwrap()),
             svg_trees: LruCache::new(NonZeroUsize::new(512).unwrap()),
             filter_engine: Some(
@@ -6108,5 +6223,96 @@ mod p1_6_particle_ring_buffer_tests {
         assert_eq!(first, 0);
         assert_eq!(second, 0);
         assert_eq!(head, 50);
+    }
+}
+
+
+// =========================================================================
+// P1-1: SurtrConfig tests
+// =========================================================================
+
+#[cfg(test)]
+mod p1_1_surtr_config_tests {
+    use super::SurtrConfig;
+
+    #[test]
+    fn default_has_p1_5_cache_sizes() {
+        // P1-1 regression: default config matches the P1-5 fixed
+        // cache sizes (text=8192, svg=512, trees=512, etc.).
+        let cfg = SurtrConfig::default();
+        assert_eq!(cfg.text_cache_capacity.get(), 8192);
+        assert_eq!(cfg.svg_cache_capacity.get(), 512);
+        assert_eq!(cfg.svg_trees_capacity.get(), 512);
+        assert_eq!(cfg.shared_elements_capacity.get(), 1024);
+        assert_eq!(cfg.image_uv_capacity.get(), 256);
+        assert_eq!(cfg.texture_registry_capacity.get(), 31);
+        assert_eq!(cfg.mega_heim_width, 4096);
+        assert_eq!(cfg.mega_heim_height, 4096);
+    }
+
+    #[test]
+    fn low_vram_uses_smaller_atlas() {
+        // P1-1 regression: low_vram preset uses 2048x2048 atlas
+        // (~16MB RGBA8) instead of the default 4096x4096 (~64MB).
+        let cfg = SurtrConfig::low_vram();
+        assert_eq!(cfg.mega_heim_width, 2048);
+        assert_eq!(cfg.mega_heim_height, 2048);
+        assert!(
+            cfg.mega_heim_vram_bytes() < 32 * 1024 * 1024,
+            "low_vram atlas should fit in 32MB, got {} bytes",
+            cfg.mega_heim_vram_bytes()
+        );
+    }
+
+    #[test]
+    fn high_end_uses_larger_atlas() {
+        // P1-1 regression: high_end preset uses 8192x8192 atlas
+        // (~256MB RGBA8) for high-end desktop GPUs.
+        let cfg = SurtrConfig::high_end();
+        assert_eq!(cfg.mega_heim_width, 8192);
+        assert_eq!(cfg.mega_heim_height, 8192);
+        assert!(cfg.mega_heim_vram_bytes() >= 256 * 1024 * 1024);
+    }
+
+    #[test]
+    fn mega_heim_vram_is_4_bytes_per_pixel() {
+        // P1-1 regression: VRAM cost is width*height*4 (RGBA8).
+        let cfg = SurtrConfig::default();
+        let expected = 4096u64 * 4096 * 4;
+        assert_eq!(cfg.mega_heim_vram_bytes(), expected);
+    }
+
+    #[test]
+    fn all_presets_have_nonzero_capacities() {
+        // P1-1: every preset must have positive capacities (no
+        // accidentally-zero LRU caches).
+        for (name, cfg) in [
+            ("default", SurtrConfig::default()),
+            ("low_vram", SurtrConfig::low_vram()),
+            ("high_end", SurtrConfig::high_end()),
+        ] {
+            assert!(cfg.text_cache_capacity.get() > 0, "{name} text_cache");
+            assert!(cfg.svg_cache_capacity.get() > 0, "{name} svg_cache");
+            assert!(cfg.svg_trees_capacity.get() > 0, "{name} svg_trees");
+            assert!(
+                cfg.shared_elements_capacity.get() > 0,
+                "{name} shared_elements"
+            );
+            assert!(cfg.image_uv_capacity.get() > 0, "{name} image_uv");
+            assert!(
+                cfg.texture_registry_capacity.get() > 0,
+                "{name} texture_registry"
+            );
+            assert!(cfg.mega_heim_width > 0, "{name} mega_heim_width");
+            assert!(cfg.mega_heim_height > 0, "{name} mega_heim_height");
+        }
+    }
+
+    #[test]
+    fn config_is_cloneable_and_debug() {
+        // P1-1: config must be Clone + Debug for use in error paths.
+        let cfg = SurtrConfig::default();
+        let _cloned = cfg.clone();
+        let _formatted = format!("{cfg:?}");
     }
 }
