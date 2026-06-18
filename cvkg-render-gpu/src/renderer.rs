@@ -46,6 +46,35 @@ pub(crate) mod material_id {
 }
 use std::sync::Arc;
 
+/// P1-10: Quality level for adaptive rendering on different GPU tiers.
+///
+/// `High` matches the previous hardcoded behavior (MSAA 4x).
+/// `Medium` reduces MSAA to 2x for moderate savings on mobile.
+/// `Low` disables MSAA entirely for low-end GPUs (Adreno 3xx, etc.).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QualityLevel {
+    High,
+    Medium,
+    Low,
+}
+
+impl QualityLevel {
+    /// Returns the MSAA sample count for this quality level.
+    pub fn msaa_sample_count(self) -> u32 {
+        match self {
+            QualityLevel::High => 4,
+            QualityLevel::Medium => 2,
+            QualityLevel::Low => 1,
+        }
+    }
+}
+
+impl Default for QualityLevel {
+    fn default() -> Self {
+        QualityLevel::High
+    }
+}
+
 /// SurtrRenderer implements the high-performance GPU backend.
 pub struct SurtrRenderer {
     pub(crate) instance: Arc<wgpu::Instance>,
@@ -291,6 +320,10 @@ pub struct SurtrRenderer {
     /// Current frame generation counter. Incremented each frame to avoid
     /// clearing the memo cache (which would defeat cross-frame memoization).
     pub(crate) frame_generation: u64,
+    /// P1-10: Quality level controlling MSAA sample count and other
+    /// adaptive rendering settings. Defaults to High to match the
+    /// previous hardcoded 4x MSAA behavior.
+    pub(crate) quality_level: QualityLevel,
     /// Thread-safe bind group cache to avoid per-frame allocations during render passes.
     /// Maps a cache key representing texture/pass metadata to the pre-created wgpu::BindGroup.
     pub(crate) bind_group_cache: std::sync::Mutex<
@@ -474,6 +507,25 @@ impl SurtrRenderer {
     /// Access the hologram instances submitted this frame.
     pub fn hologram_instances(&self) -> &[HologramInstance] {
         &self.hologram_instances
+    }
+
+    /// P1-10: set the rendering quality level. Affects MSAA sample
+    /// count and (in the future) other adaptive rendering settings
+    /// like blur mip levels and effect complexity. Must be called
+    /// before the next frame's render pass setup; mid-frame changes
+    /// will only take effect on subsequent frames.
+    ///
+    /// Quality levels:
+    ///   - `High`: MSAA 4x (default, matches previous behavior)
+    ///   - `Medium`: MSAA 2x (mobile, mid-tier GPUs)
+    ///   - `Low`: MSAA 1x (low-end GPUs, Adreno 3xx, etc.)
+    pub fn set_quality_level(&mut self, level: QualityLevel) {
+        self.quality_level = level;
+    }
+
+    /// P1-10: get the current rendering quality level.
+    pub fn quality_level(&self) -> QualityLevel {
+        self.quality_level
     }
 
     /// Acquire a poisoned-mutex guard and CLEAR the underlying data on recovery.
@@ -1570,6 +1622,12 @@ impl SurtrRenderer {
         let mut current_scene =
             SceneUniforms::new(width as f32 / scale_factor, height as f32 / scale_factor);
         current_scene.scale_factor = scale_factor;
+        // P1-10: capture MSAA sample count. forge_internal is an
+        // associated function (no `&self`), so we use the default
+        // QualityLevel here. The QualityLevel on the resulting
+        // SurtrRenderer is initialized to the same default below,
+        // and can be changed later via set_quality_level().
+        let msaa_sample_count = QualityLevel::default().msaa_sample_count();
         let scene_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Surtr Scene Buffer"),
             contents: bytemuck::bytes_of(&current_scene),
@@ -1605,6 +1663,7 @@ impl SurtrRenderer {
                 &env_bind_group_layout,
                 &texture_bind_group_layout,
                 scale_factor,
+                msaa_sample_count,
                 &mut registry,
             );
             surfaces.insert(window_id, ctx);
@@ -1618,6 +1677,7 @@ impl SurtrRenderer {
                 &env_bind_group_layout,
                 &texture_bind_group_layout,
                 &mut registry,
+                msaa_sample_count,
             ));
         }
 
@@ -2200,6 +2260,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             material_compilation_hash: 0,
             memo_cache: std::collections::HashMap::new(),
             frame_generation: 0,
+            quality_level: QualityLevel::default(),
             pipeline_cache,
             bloom_enabled: true,
             volumetric_enabled: false,
@@ -2340,7 +2401,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 label: Some("Scene MSAA"),
                 size: texture_desc.size,
                 mip_level_count: 1,
-                sample_count: 4,
+                sample_count: self.quality_level.msaa_sample_count(),
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Rgba16Float,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -2461,7 +2522,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     depth_or_array_layers: 1,
                 },
                 mip_level_count: 1,
-                sample_count: 4,
+                sample_count: self.quality_level.msaa_sample_count(),
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Depth32Float,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -2676,6 +2737,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             &self.env_bind_group_layout,
             &self.texture_bind_group_layout,
             window.scale_factor() as f32,
+            self.quality_level.msaa_sample_count(),
             &mut self.registry,
         );
 
@@ -2690,6 +2752,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         env_bind_group_layout: &wgpu::BindGroupLayout,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
         registry: &mut crate::kvasir::registry::ResourceRegistry,
+        msaa_sample_count: u32,
     ) -> HeadlessContext {
         let texture_desc = wgpu::TextureDescriptor {
             label: Some("Surtr Headless Scene Texture"),
@@ -2714,7 +2777,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             label: Some("Scene MSAA"),
             size: texture_desc.size,
             mip_level_count: 1,
-            sample_count: 4,
+            sample_count: msaa_sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -2952,6 +3015,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         env_bind_group_layout: &wgpu::BindGroupLayout,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
         scale_factor: f32,
+        msaa_sample_count: u32,
         registry: &mut crate::kvasir::registry::ResourceRegistry,
     ) -> SurfaceContext {
         let width = config.width;
@@ -2978,7 +3042,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             label: Some("Scene MSAA"),
             size: texture_desc.size,
             mip_level_count: 1,
-            sample_count: 4,
+            sample_count: msaa_sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba16Float,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -5803,5 +5867,46 @@ mod p1_5_cache_size_tests {
             MIN_TEXT_CAPACITY >= 8192,
             "Text cache must be >= 8192 for typical text-heavy UIs"
         );
+    }
+}
+
+// =========================================================================
+// P1-10: QualityLevel for configurable MSAA sample count
+// =========================================================================
+
+#[cfg(test)]
+mod p1_10_quality_level_tests {
+    use super::QualityLevel;
+
+    #[test]
+    fn high_quality_uses_msaa_4x() {
+        assert_eq!(QualityLevel::High.msaa_sample_count(), 4);
+    }
+
+    #[test]
+    fn medium_quality_uses_msaa_2x() {
+        assert_eq!(QualityLevel::Medium.msaa_sample_count(), 2);
+    }
+
+    #[test]
+    fn low_quality_disables_msaa() {
+        assert_eq!(QualityLevel::Low.msaa_sample_count(), 1);
+    }
+
+    #[test]
+    fn default_is_high() {
+        assert_eq!(QualityLevel::default(), QualityLevel::High);
+    }
+
+    #[test]
+    fn all_levels_produce_valid_sample_counts() {
+        // wgpu requires sample_count to be 1, 2, 4, 8, or 16.
+        for level in [QualityLevel::High, QualityLevel::Medium, QualityLevel::Low] {
+            let n = level.msaa_sample_count();
+            assert!(
+                [1, 2, 4, 8, 16].contains(&n),
+                "QualityLevel {level:?} produced invalid sample count {n}"
+            );
+        }
     }
 }
