@@ -4,7 +4,7 @@ use crate::renderer::material_id;
 use crate::types::*;
 use crate::vertex::*;
 use cvkg_core::LAYOUT_DIRTY;
-use cvkg_core::{ColorTheme, Mesh, Rect, Renderer};
+use cvkg_core::{ColorTheme, Mesh, Rect, RenderStateSnapshot, Renderer};
 use lyon::math::point;
 use lyon::tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers};
 use std::sync::atomic::Ordering;
@@ -972,6 +972,39 @@ impl cvkg_core::Renderer for SurtrRenderer {
             self.memo_cache
                 .insert(id, (data_hash, self.frame_generation));
             render_fn(self);
+        }
+    }
+
+    fn snapshot_render_state(&self) -> RenderStateSnapshot {
+        RenderStateSnapshot {
+            clip_depth: self.clip_stack.len() as u32,
+            opacity_depth: self.opacity_stack.len() as u32,
+            slice_depth: self.slice_stack.len() as u32,
+            shadow_depth: self.shadow_stack.len() as u32,
+            transform_depth: self.transform_stack.len() as u32,
+            vnode_depth: self.vnode_stack.len() as u32,
+        }
+    }
+
+    fn restore_render_state(&mut self, snap: RenderStateSnapshot) {
+        // Idempotent: pop only items pushed beyond the snapshot point.
+        while self.clip_stack.len() as u32 > snap.clip_depth {
+            self.clip_stack.pop();
+        }
+        while self.opacity_stack.len() as u32 > snap.opacity_depth {
+            self.opacity_stack.pop();
+        }
+        while self.slice_stack.len() as u32 > snap.slice_depth {
+            self.slice_stack.pop();
+        }
+        while self.shadow_stack.len() as u32 > snap.shadow_depth {
+            self.shadow_stack.pop();
+        }
+        while self.transform_stack.len() as u32 > snap.transform_depth {
+            self.transform_stack.pop();
+        }
+        while self.vnode_stack.len() as u32 > snap.vnode_depth {
+            self.vnode_stack.pop();
         }
     }
 

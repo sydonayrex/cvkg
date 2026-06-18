@@ -1,6 +1,7 @@
 use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
 use cvkg_core::KvasirId;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 fn create_node(id: u64, key: Option<&str>, c_type: &str, children: Vec<NodeId>) -> VNode {
     VNode {
@@ -141,4 +142,203 @@ fn test_signal_cross_thread() {
 
     // Verify the effect captured the final mutation from the background thread
     assert_eq!(*latest_val.lock().unwrap(), 100);
+}
+
+// =========================================================================
+// P0-6: VDOM handler removal must be possible
+// =========================================================================
+//
+// Regression tests for the audit finding: "VDOM Handler Removal Is
+// Structurally Impossible". The previous `Update.handlers = None` semantics
+// could not remove a handler once attached. The fix adds a `ClearHandlers`
+// patch variant that explicitly removes all handlers for a node.
+
+fn handler_closure(_event: cvkg_core::Event) {
+    // Marker closure used to compare handler identity between old/new VDOMs.
+}
+
+fn empty_props() -> HashMap<String, serde_json::Value> {
+    HashMap::new()
+}
+
+#[test]
+fn p0_6_diff_emits_clear_handlers_when_handler_removed() {
+    // Build old VDom with a handler attached to a node.
+    let mut old = VDom::new();
+    let node_id = KvasirId(1);
+    let node = create_node(1, None, "Button", vec![]);
+    old.nodes.insert(node_id, node);
+    old.event_handlers.insert(
+        node_id,
+        vec![("click".to_string(), Arc::new(handler_closure) as _)]
+            .into_iter()
+            .collect(),
+    );
+    old.root = Some(node_id);
+
+    // Build new VDom with no handlers.
+    let mut new = VDom::new();
+    new.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    new.root = Some(node_id);
+
+    let patches = old.diff(&new);
+
+    // Must contain a ClearHandlers patch for the node.
+    assert!(
+        patches
+            .iter()
+            .any(|p| matches!(p, VDomPatch::ClearHandlers { id } if *id == node_id)),
+        "expected ClearHandlers patch, got: {patches:?}"
+    );
+}
+
+#[test]
+fn p0_6_apply_clear_handlers_removes_handler_from_event_handlers() {
+    let mut vdom = VDom::new();
+    let node_id = KvasirId(1);
+    vdom.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    vdom.event_handlers.insert(
+        node_id,
+        vec![("click".to_string(), Arc::new(handler_closure) as _)]
+            .into_iter()
+            .collect(),
+    );
+
+    // Apply a ClearHandlers patch.
+    vdom.apply_patches(vec![VDomPatch::ClearHandlers { id: node_id }]);
+
+    assert!(
+        !vdom.event_handlers.contains_key(&node_id),
+        "handler should be removed after ClearHandlers"
+    );
+}
+
+#[test]
+fn p0_6_remove_handler_then_dispatch_does_not_invoke() {
+    // End-to-end: diff removes handler, apply clears it, dispatch doesn't fire.
+    let mut old = VDom::new();
+    let node_id = KvasirId(1);
+    let fired = Arc::new(std::sync::Mutex::new(false));
+    let fired_clone = Arc::clone(&fired);
+    old.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    old.event_handlers.insert(
+        node_id,
+        vec![(
+            "click".to_string(),
+            Arc::new(move |_| {
+                *fired_clone.lock().unwrap() = true;
+            }) as _,
+        )]
+        .into_iter()
+        .collect(),
+    );
+    old.root = Some(node_id);
+
+    // New tree drops the handler.
+    let mut new = VDom::new();
+    new.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    new.root = Some(node_id);
+
+    let patches = old.diff(&new);
+    new.apply_patches(patches);
+
+    // The new VDom should have no handlers for this node.
+    assert!(
+        !new.event_handlers.contains_key(&node_id),
+        "handler should be cleared after apply"
+    );
+
+    assert!(!*fired.lock().unwrap(), "no firing should have occurred yet");
+}
+
+// =========================================================================
+// P0-7: VDOM diff_node handlers-changed detection must be correct
+// =========================================================================
+//
+// Regression tests for: "VDOM diff_node Handlers-Changed Detection Logic
+// Is Wrong". The previous check `other.event_handlers.contains_key(&id)`
+// always returned true when the new tree had a handler (even if identical),
+// causing spurious Update patches every frame.
+
+#[test]
+fn p0_7_identical_handlers_do_not_emit_update_patch() {
+    // Same handler attached in both old and new trees -> no Update patch
+    // for handlers change (handlers_changed should be false).
+    let closure: Arc<dyn Fn(cvkg_core::Event) + Send + Sync> = Arc::new(handler_closure);
+
+    let mut old = VDom::new();
+    let node_id = KvasirId(1);
+    old.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    let mut handlers = HashMap::new();
+    handlers.insert("click".to_string(), Arc::clone(&closure));
+    old.event_handlers.insert(node_id, handlers);
+    old.root = Some(node_id);
+
+    let mut new = VDom::new();
+    new.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    let mut handlers = HashMap::new();
+    handlers.insert("click".to_string(), Arc::clone(&closure));
+    new.event_handlers.insert(node_id, handlers);
+    new.root = Some(node_id);
+
+    let patches = old.diff(&new);
+
+    // No Update patch should be emitted (no field changed), and no
+    // ClearHandlers should be emitted (no removal).
+    for p in &patches {
+        match p {
+            VDomPatch::Update { handlers, .. } => {
+                assert!(
+                    handlers.is_none(),
+                    "identical handlers should not appear as a changed field, got: {patches:?}"
+                );
+            }
+            VDomPatch::ClearHandlers { .. } => {
+                panic!("identical handlers should not trigger ClearHandlers: {patches:?}");
+            }
+            _ => {}
+        }
+    }
+}
+
+#[test]
+fn p0_7_handler_swap_emits_update_patch() {
+    // Different closures attached to the same key -> handlers_changed.
+    let closure_a: Arc<dyn Fn(cvkg_core::Event) + Send + Sync> = Arc::new(handler_closure);
+    let closure_b: Arc<dyn Fn(cvkg_core::Event) + Send + Sync> =
+        Arc::new(|_| log::debug!("other handler"));
+
+    let mut old = VDom::new();
+    let node_id = KvasirId(1);
+    old.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    let mut handlers = HashMap::new();
+    handlers.insert("click".to_string(), Arc::clone(&closure_a));
+    old.event_handlers.insert(node_id, handlers);
+    old.root = Some(node_id);
+
+    let mut new = VDom::new();
+    new.nodes
+        .insert(node_id, create_node(1, None, "Button", vec![]));
+    let mut handlers = HashMap::new();
+    handlers.insert("click".to_string(), Arc::clone(&closure_b));
+    new.event_handlers.insert(node_id, handlers);
+    new.root = Some(node_id);
+
+    let patches = old.diff(&new);
+
+    // Must contain an Update patch with handlers populated.
+    assert!(
+        patches.iter().any(|p| matches!(
+            p,
+            VDomPatch::Update { handlers: Some(_), .. }
+        )),
+        "different closures should trigger an Update patch with handlers, got: {patches:?}"
+    );
 }

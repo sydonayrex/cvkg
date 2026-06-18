@@ -39,8 +39,7 @@
 //! This crate provides platform-specific rendering backends for native desktop targets
 //  using winit for window/event handling and AccessKit for accessibility tree integration.
 
-use cvkg_core::{FrameRenderer, Renderer};
-use cvkg_core::KvasirId;
+use cvkg_core::{FrameRenderer, KvasirId, RenderStateSnapshot, Renderer};
 use image;
 // FIX #10: Wayland import gated to Linux only -- was unconditional, broke macOS/Windows builds.
 use std::sync::Arc;
@@ -2189,6 +2188,20 @@ impl cvkg_core::Renderer for NativeRenderer {
             .lock()
             .expect("GPU mutex poisoned: memoize")
             .memoize(id, data_hash, render_fn);
+    }
+
+    fn snapshot_render_state(&self) -> RenderStateSnapshot {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: snapshot_render_state")
+            .snapshot_render_state()
+    }
+
+    fn restore_render_state(&mut self, snap: RenderStateSnapshot) {
+        self.gpu
+            .lock()
+            .expect("GPU mutex poisoned: restore_render_state")
+            .restore_render_state(snap);
     }
     fn request_redraw(&mut self) {
         self.window.request_redraw();

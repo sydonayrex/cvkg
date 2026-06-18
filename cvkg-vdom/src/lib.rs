@@ -335,6 +335,16 @@ pub enum VDomPatch {
     },
     /// Update the root node ID
     SetRoot(Option<NodeId>),
+    /// Clear all event handlers attached to a node.
+    ///
+    /// Without this variant, `Update { handlers: None }` cannot remove
+    /// handlers -- the apply step interprets `None` as "leave handlers
+    /// unchanged". Emitted when the new tree has no handlers for a node
+    /// but the old tree did.
+    ClearHandlers {
+        /// ID of the node whose handlers should be cleared.
+        id: NodeId,
+    },
 }
 
 impl std::fmt::Debug for VDomPatch {
@@ -373,6 +383,10 @@ impl std::fmt::Debug for VDomPatch {
                 .field("new_index", new_index)
                 .finish(),
             Self::SetRoot(id) => f.debug_tuple("SetRoot").field(id).finish(),
+            Self::ClearHandlers { id } => f
+                .debug_struct("ClearHandlers")
+                .field("id", id)
+                .finish(),
         }
     }
 }
@@ -429,6 +443,9 @@ impl serde::Serialize for VDomPatch {
             }
             Self::SetRoot(id) => {
                 serializer.serialize_newtype_variant("VDomPatch", 5, "SetRoot", id)
+            }
+            Self::ClearHandlers { id } => {
+                serializer.serialize_newtype_variant("VDomPatch", 6, "ClearHandlers", id)
             }
         }
     }
@@ -563,6 +580,9 @@ impl VDom {
                 VDomPatch::Replace { id, .. } => log::debug!("ShieldWall: Replace node {}", id.0),
                 VDomPatch::Move { id, .. } => log::debug!("ShieldWall: Move node {}", id.0),
                 VDomPatch::SetRoot(id) => log::debug!("ShieldWall: SetRoot {:?}", id),
+                VDomPatch::ClearHandlers { id } => {
+                    log::debug!("ShieldWall: ClearHandlers for node {}", id.0)
+                }
             }
         }
     }
@@ -1350,6 +1370,13 @@ impl VDom {
                 VDomPatch::SetRoot(id) => {
                     self.root = id;
                 }
+                VDomPatch::ClearHandlers { id } => {
+                    // P0-6 fix: explicitly clear handlers for this node so a
+                    // removed `on_click` doesn't ghost-fire later. Without
+                    // this variant, the Update.handlers=None path leaves
+                    // the old handler attached forever.
+                    self.event_handlers.remove(&id);
+                }
             }
         }
     }
@@ -1427,7 +1454,32 @@ impl VDom {
         let children_changed = old_node.children != new_node.children;
         let sdf_shape_changed = old_node.sdf_shape != new_node.sdf_shape;
 
-        let handlers_changed = other.event_handlers.contains_key(&new_id);
+        // P0-7 fix: compare old vs new handler maps directly. The previous
+        // check `other.event_handlers.contains_key(&new_id)` always returned
+        // true when the new tree had a handler (even if identical), causing
+        // spurious Update patches every frame, AND it returned false when
+        // the new tree had no handler (preventing handler removal, see P0-6).
+        let old_handlers = self.event_handlers.get(&new_id);
+        let new_handlers = other.event_handlers.get(&new_id);
+        // `Arc<dyn Fn>` doesn't implement PartialEq, so we compare by:
+        //   1) presence/absence (Option layer)
+        //   2) key set equality
+        //   3) Arc pointer identity per key (same Arc instance => same closure)
+        let handlers_changed = match (old_handlers, new_handlers) {
+            (None, None) => false,
+            (Some(_), None) | (None, Some(_)) => true,
+            (Some(a), Some(b)) => {
+                a.len() != b.len()
+                    || a.keys().any(|k| {
+                        b.get(k)
+                            .map_or(true, |bv| !std::sync::Arc::ptr_eq(a.get(k).unwrap(), bv))
+                    })
+            }
+        };
+        // P0-6 fix: detect handler removal explicitly. Without this, a button
+        // whose `on_click` is dropped retains the old handler forever (ghost
+        // click bug + memory leak).
+        let handlers_removed = old_handlers.is_some() && new_handlers.is_none();
 
         if props_changed
             || layout_changed
@@ -1471,6 +1523,14 @@ impl VDom {
                     None
                 },
             });
+        }
+
+        // P0-6 fix: emit ClearHandlers when handlers were removed. The
+        // Update patch above is skipped if no other field changed, so a
+        // pure handler removal would otherwise produce no patch at all,
+        // leaving the old handler attached forever.
+        if handlers_removed {
+            patches.push(VDomPatch::ClearHandlers { id: old_id });
         }
 
         // High-fidelity Keyed Child Diffing

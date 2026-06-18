@@ -176,7 +176,14 @@ impl<V: View> View for ErrorBoundary<V> {
 
     /// Render the child inside a `catch_unwind` boundary. If the child panics,
     /// the error state is set and the fallback UI is rendered instead.
+    ///
+    /// Stack-safety: snapshots renderer stack state (clip/opacity/transform/etc.)
+    /// before invoking the child and restores it on panic so siblings drawn
+    /// afterward don't inherit leaked state. Without this, a mid-render panic
+    /// in a sidebar would leave the main editor area clipped/transformed for
+    /// the rest of that frame.
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let snap = renderer.snapshot_render_state();
         let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
             self.child.render(renderer, rect);
         }));
@@ -188,6 +195,10 @@ impl<V: View> View for ErrorBoundary<V> {
                     .store(false, std::sync::atomic::Ordering::Relaxed);
             }
             Err(panic) => {
+                // Pop any items pushed beyond the snapshot point so sibling
+                // views drawn later in this frame start from a clean slate.
+                renderer.restore_render_state(snap);
+
                 // Child panicked -- capture the error and render fallback.
                 self.has_error
                     .store(true, std::sync::atomic::Ordering::Relaxed);
@@ -2847,6 +2858,26 @@ pub trait ViewModifier: Send + Clone {
     }
 }
 
+/// Captures the depth of every stack-pushing operation on the `Renderer`.
+///
+/// Created via `Renderer::snapshot_render_state()` and consumed by
+/// `Renderer::restore_render_state()`. The renderer uses this to recover
+/// from mid-render panics -- any items pushed beyond the snapshot point
+/// are popped so sibling views drawn afterward don't inherit leaked
+/// clip / opacity / transform / shadow / vnode / mjolnir-slice state.
+///
+/// Frame-scoped: the renderer resets all stacks in `begin_frame()` so a
+/// snapshot taken in one frame is meaningless in another.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RenderStateSnapshot {
+    pub clip_depth: u32,
+    pub opacity_depth: u32,
+    pub slice_depth: u32,
+    pub shadow_depth: u32,
+    pub transform_depth: u32,
+    pub vnode_depth: u32,
+}
+
 /// TelemetryData tracks real-time performance metrics for the GPU renderer.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryData {
@@ -3211,6 +3242,20 @@ pub trait Renderer: ElapsedTime + Send {
     /// If the renderer supports caching and the `id` + `data_hash` match a previous run,
     /// it may replay cached commands instead of executing the function.
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer));
+    /// Capture current renderer stack depths for later panic recovery.
+    /// The default implementation returns `RenderStateSnapshot::default()`,
+    /// which is safe but does nothing useful -- backends with stack state
+    /// must override this to record their actual depths.
+    fn snapshot_render_state(&self) -> RenderStateSnapshot {
+        RenderStateSnapshot::default()
+    }
+    /// Restore renderer stack state by popping items pushed beyond the
+    /// snapshot point. Used by `ErrorBoundary` to recover from mid-render
+    /// panics so sibling views don't inherit leaked clip/opacity/transform
+    /// state. Idempotent: a no-op if stacks are already at or below the
+    /// snapshot depths. Default implementation is a no-op for backends
+    /// that have no stack state.
+    fn restore_render_state(&mut self, _snap: RenderStateSnapshot) {}
     /// Apply a Mjolnir Shatter effect (fragmentation) to the specified rect.
     fn mjolnir_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
     fn mjolnir_fluid_shatter(&mut self, _rect: Rect, _pieces: u32, _force: f32, _color: [f32; 4]) {}
@@ -6525,6 +6570,173 @@ mod error_boundary_tests {
         // We test this indirectly -- if it compiles and the Never type is correct,
         // the body() call would diverge. We just verify the type compiles.
         let _boundary_type = std::any::type_name::<ErrorBoundary<SuccessView>>();
+    }
+
+    /// Renderer that tracks stack-pushing operations so tests can verify
+    /// ErrorBoundary restores renderer state on panic.
+    struct TrackingRenderer {
+        clip_depth: u32,
+        opacity_depth: u32,
+        shadow_depth: u32,
+    }
+
+    impl TrackingRenderer {
+        fn new() -> Self {
+            Self {
+                clip_depth: 0,
+                opacity_depth: 0,
+                shadow_depth: 0,
+            }
+        }
+    }
+
+    impl Renderer for TrackingRenderer {
+        fn fill_rect(&mut self, _rect: Rect, _color: [f32; 4]) {}
+        fn fill_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4]) {}
+        fn fill_ellipse(&mut self, _rect: Rect, _color: [f32; 4]) {}
+        fn stroke_rect(&mut self, _rect: Rect, _color: [f32; 4], _w: f32) {}
+        fn stroke_rounded_rect(
+            &mut self,
+            _rect: Rect,
+            _radius: f32,
+            _color: [f32; 4],
+            _stroke_width: f32,
+        ) {
+        }
+        fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {}
+        fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
+        fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
+        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) {
+            (0.0, 0.0)
+        }
+        fn push_clip_rect(&mut self, _rect: Rect) {
+            self.clip_depth += 1;
+        }
+        fn pop_clip_rect(&mut self) {
+            self.clip_depth = self.clip_depth.saturating_sub(1);
+        }
+        fn push_opacity(&mut self, _opacity: f32) {
+            self.opacity_depth += 1;
+        }
+        fn pop_opacity(&mut self) {
+            self.opacity_depth = self.opacity_depth.saturating_sub(1);
+        }
+        fn push_shadow(&mut self, _r: f32, _c: [f32; 4], _o: [f32; 2]) {
+            self.shadow_depth += 1;
+        }
+        fn pop_shadow(&mut self) {
+            self.shadow_depth = self.shadow_depth.saturating_sub(1);
+        }
+        fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
+        fn snapshot_render_state(&self) -> RenderStateSnapshot {
+            // Note: cannot mutate self in &self method; we record that it was
+            // called via a different channel (the test counts calls on a Cell).
+            RenderStateSnapshot {
+                clip_depth: self.clip_depth,
+                opacity_depth: self.opacity_depth,
+                slice_depth: 0,
+                shadow_depth: self.shadow_depth,
+                transform_depth: 0,
+                vnode_depth: 0,
+            }
+        }
+        fn restore_render_state(&mut self, snap: RenderStateSnapshot) {
+            self.clip_depth = snap.clip_depth;
+            self.opacity_depth = snap.opacity_depth;
+            self.shadow_depth = snap.shadow_depth;
+        }
+        fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {}
+        fn set_camera_3d(&mut self, _camera: &Camera3D) {}
+        fn push_transform_3d(&mut self, _transform: &Transform3D) {}
+        fn pop_transform_3d(&mut self) {}
+    }
+
+    impl ElapsedTime for TrackingRenderer {
+        fn elapsed_time(&self) -> f32 {
+            0.0
+        }
+        fn delta_time(&self) -> f32 {
+            0.0
+        }
+    }
+
+    /// View that pushes clip/opacity/shadow stacks and then panics.
+    /// After ErrorBoundary restores state, the renderer should have no leftover
+    /// pushed items.
+    struct StackPushingPanicView;
+
+    impl View for StackPushingPanicView {
+        type Body = Never;
+        fn body(self) -> Never {
+            unreachable!()
+        }
+        fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
+            renderer.push_clip_rect(Rect::new(0.0, 0.0, 50.0, 50.0));
+            renderer.push_opacity(0.5);
+            renderer.push_shadow(2.0, [0.0, 0.0, 0.0, 0.5], [0.0, 0.0]);
+            panic!("intentional stack-pushing panic");
+        }
+    }
+
+    #[test]
+    fn error_boundary_restores_renderer_state_on_panic() {
+        // Regression test for P0-5: ErrorBoundary must restore renderer
+        // stack state after a mid-render panic so siblings drawn afterward
+        // don't inherit leaked clip/opacity/transform/etc. state.
+        let boundary = ErrorBoundary::new(StackPushingPanicView);
+        let mut renderer = TrackingRenderer::new();
+
+        // Pre-snapshot: empty stacks.
+        let snap_before = renderer.snapshot_render_state();
+        assert_eq!(snap_before.clip_depth, 0);
+        assert_eq!(snap_before.opacity_depth, 0);
+        assert_eq!(snap_before.shadow_depth, 0);
+
+        // Render -- child panics, boundary must catch and restore.
+        boundary.render(&mut renderer, TEST_RECT);
+
+        // Verify the panic was caught and state was restored.
+        assert!(boundary.has_error(), "should have caught the panic");
+        let snap_after = renderer.snapshot_render_state();
+        assert_eq!(
+            snap_after.clip_depth, 0,
+            "clip stack should be restored to empty after panic"
+        );
+        assert_eq!(
+            snap_after.opacity_depth, 0,
+            "opacity stack should be restored to empty after panic"
+        );
+        assert_eq!(
+            snap_after.shadow_depth, 0,
+            "shadow stack should be restored to empty after panic"
+        );
+    }
+
+    #[test]
+    fn render_state_snapshot_default_is_zeroed() {
+        // The default snapshot must be all-zero so backends without
+        // stack state can use it as a sentinel.
+        let snap = RenderStateSnapshot::default();
+        assert_eq!(snap.clip_depth, 0);
+        assert_eq!(snap.opacity_depth, 0);
+        assert_eq!(snap.slice_depth, 0);
+        assert_eq!(snap.shadow_depth, 0);
+        assert_eq!(snap.transform_depth, 0);
+        assert_eq!(snap.vnode_depth, 0);
+    }
+
+    #[test]
+    fn render_state_snapshot_round_trip() {
+        let snap = RenderStateSnapshot {
+            clip_depth: 3,
+            opacity_depth: 2,
+            slice_depth: 1,
+            shadow_depth: 0,
+            transform_depth: 4,
+            vnode_depth: 5,
+        };
+        let copied = snap;
+        assert_eq!(copied, snap);
     }
 }
 
