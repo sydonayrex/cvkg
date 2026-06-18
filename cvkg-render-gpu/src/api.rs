@@ -1780,50 +1780,36 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         }
 
         // Dynamic Buffer Growth (Up to 4x capacity)
-        let req_v_size = (self.vertices.len() * std::mem::size_of::<Vertex>()) as u64;
-        let mut cur_v_size = self.vertex_buffer.size();
-        let max_v_size = (MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64 * 4;
-
-        if req_v_size > cur_v_size {
-            while cur_v_size < req_v_size && cur_v_size < max_v_size {
-                cur_v_size *= 2;
-            }
-            if req_v_size > max_v_size {
-                log::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
-                self.vertices
-                    .truncate((max_v_size / std::mem::size_of::<Vertex>() as u64) as usize);
-                cur_v_size = max_v_size;
-            }
-            log::info!("Growing vertex buffer to {} bytes", cur_v_size);
-            self.vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Vertex Buffer (Grown)"),
-                size: cur_v_size,
-                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+        // P1-1: growth logic moved into GeometryBuffers methods.
+        // The old code reallocated the buffer here, which is
+        // expensive on mobile. The new methods return false if
+        // no growth is needed, avoiding the create_buffer call.
+        let max_v_capacity = MAX_VERTICES * 4;
+        let grown = self.geometry_buffers.grow_vertex_buffer(
+            &self.device,
+            self.vertices.len(),
+            max_v_capacity,
+        );
+        if grown {
+            log::info!("Grew vertex buffer to fit {} vertices", self.vertices.len());
+        }
+        if self.vertices.len() > max_v_capacity {
+            log::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
+            self.vertices.truncate(max_v_capacity);
         }
 
-        let req_i_size = (self.indices.len() * std::mem::size_of::<u32>()) as u64;
-        let mut cur_i_size = self.index_buffer.size();
-        let max_i_size = (MAX_INDICES * std::mem::size_of::<u32>()) as u64 * 4;
-
-        if req_i_size > cur_i_size {
-            while cur_i_size < req_i_size && cur_i_size < max_i_size {
-                cur_i_size *= 2;
-            }
-            if req_i_size > max_i_size {
-                log::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
-                self.indices
-                    .truncate((max_i_size / std::mem::size_of::<u32>() as u64) as usize);
-                cur_i_size = max_i_size;
-            }
-            log::info!("Growing index buffer to {} bytes", cur_i_size);
-            self.index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Index Buffer (Grown)"),
-                size: cur_i_size,
-                usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            });
+        let max_i_capacity = MAX_INDICES * 4;
+        let grown = self.geometry_buffers.grow_index_buffer(
+            &self.device,
+            self.indices.len(),
+            max_i_capacity,
+        );
+        if grown {
+            log::info!("Grew index buffer to fit {} indices", self.indices.len());
+        }
+        if self.indices.len() > max_i_capacity {
+            log::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
+            self.indices.truncate(max_i_capacity);
         }
 
         // Forge Submission: Sync all geometry to GPU using StagingBelt with a dedicated encoder
@@ -1840,7 +1826,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
             self.staging_belt
                 .write_buffer(
                     &mut staging_encoder,
-                    &self.vertex_buffer,
+                    &self.geometry_buffers.vertex_buffer,
                     0,
                     wgpu::BufferSize::new(v_bytes.len() as u64).unwrap(),
                 )
@@ -1853,7 +1839,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
             self.staging_belt
                 .write_buffer(
                     &mut staging_encoder,
-                    &self.index_buffer,
+                    &self.geometry_buffers.index_buffer,
                     0,
                     wgpu::BufferSize::new(i_bytes.len() as u64).unwrap(),
                 )
@@ -1866,7 +1852,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
             self.staging_belt
                 .write_buffer(
                     &mut staging_encoder,
-                    &self.instance_buffer,
+                    &self.geometry_buffers.instance_buffer,
                     0,
                     wgpu::BufferSize::new(inst_bytes.len() as u64).unwrap(),
                 )

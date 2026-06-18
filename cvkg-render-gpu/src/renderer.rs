@@ -218,9 +218,11 @@ pub struct SurtrRenderer {
     pub(crate) shared_elements: LruCache<String, cvkg_core::Rect>,
 
     // The Forge's Anvil (GPU Buffers)
-    pub(crate) vertex_buffer: wgpu::Buffer,
-    pub(crate) index_buffer: wgpu::Buffer,
-    pub(crate) instance_buffer: wgpu::Buffer,
+    /// P1-1: the three GPU draw buffers (vertex, index, instance) are
+    /// now grouped in a single GeometryBuffers struct. This is the
+    /// first step toward moving buffer management into its own
+    /// module.
+    pub(crate) geometry_buffers: crate::types::GeometryBuffers,
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) indices: Vec<u32>,
     pub(crate) instance_data: Vec<InstanceData>,
@@ -1718,25 +1720,11 @@ impl SurtrRenderer {
         texture_bind_groups.push(mega_heim_bind_group.clone());
 
         // Forge the Anvil (Buffers)
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Surtr Vertex Anvil"),
-            size: (MAX_VERTICES * std::mem::size_of::<Vertex>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Surtr Index Anvil"),
-            size: (MAX_INDICES * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Surtr Instance Anvil"),
-            size: (MAX_VERTICES / 4 * std::mem::size_of::<InstanceData>()) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // P1-1: buffer creation moved into GeometryBuffers::forge()
+        // so the buffer management subsystem can be moved into its
+        // own module in a follow-up refactor.
+        let geometry_buffers =
+            crate::types::GeometryBuffers::forge(&device, MAX_VERTICES, MAX_INDICES);
 
         // Forge the Heart (Berserker Uniforms)
         let current_theme = ColorTheme::default();
@@ -2337,9 +2325,10 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             texture_bind_group_layout,
             texture_bind_groups,
             shared_elements: LruCache::new(NonZeroUsize::new(1024).unwrap()),
-            vertex_buffer,
-            index_buffer,
-            instance_buffer,
+            // P1-1: vertex/index/instance buffers grouped into
+            // GeometryBuffers struct. See the struct definition
+            // for the rationale.
+            geometry_buffers,
             vertices: Vec::with_capacity(MAX_VERTICES),
             indices: Vec::with_capacity(MAX_INDICES),
             instance_data: Vec::with_capacity(MAX_VERTICES / 4),
@@ -4138,7 +4127,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 self.staging_belt
                     .write_buffer(
                         &mut staging_encoder,
-                        &self.vertex_buffer,
+                        &self.geometry_buffers.vertex_buffer,
                         0,
                         wgpu::BufferSize::new(v_bytes.len() as u64).unwrap(),
                     )
@@ -4149,7 +4138,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 self.staging_belt
                     .write_buffer(
                         &mut staging_encoder,
-                        &self.index_buffer,
+                        &self.geometry_buffers.index_buffer,
                         0,
                         wgpu::BufferSize::new(i_bytes.len() as u64).unwrap(),
                     )
@@ -4160,7 +4149,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 self.staging_belt
                     .write_buffer(
                         &mut staging_encoder,
-                        &self.instance_buffer,
+                        &self.geometry_buffers.instance_buffer,
                         0,
                         wgpu::BufferSize::new(inst_bytes.len() as u64).unwrap(),
                     )

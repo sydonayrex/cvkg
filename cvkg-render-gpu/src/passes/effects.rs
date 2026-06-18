@@ -66,10 +66,10 @@ impl KvasirNode for OffscreenGeometryNode {
         });
 
         if !ctx.renderer.draw_calls.is_empty() {
-            p.set_vertex_buffer(0, ctx.renderer.vertex_buffer.slice(..));
-            p.set_vertex_buffer(1, ctx.renderer.instance_buffer.slice(..));
+            p.set_vertex_buffer(0, ctx.renderer.geometry_buffers.vertex_buffer.slice(..));
+            p.set_vertex_buffer(1, ctx.renderer.geometry_buffers.instance_buffer.slice(..));
             p.set_index_buffer(
-                ctx.renderer.index_buffer.slice(..),
+                ctx.renderer.geometry_buffers.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint32,
             );
             p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
