@@ -1200,7 +1200,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             _ => (30.0..120.0, 1.0..2.0, std::f32::consts::TAU),
         };
 
-        let count = count.min((MAX_PARTICLES - self.particle_count as usize) as u32);
+        let count = count.min((MAX_PARTICLES - self.particles.count as usize) as u32);
         if count == 0 {
             return;
         }
@@ -1223,7 +1223,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 pos_vel: [origin[0], origin[1], vx, vy],
                 color_life: [color[0], color[1], color[2], life],
             };
-            self.particle_staging.push(particle);
+            self.particles.staging.push(particle);
         }
 
         log::debug!(
@@ -1231,7 +1231,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             count,
             effect_type,
             origin,
-            self.particle_staging.len()
+            self.particles.staging.len()
         );
     }
 

@@ -358,20 +358,17 @@ pub struct SurtrRenderer {
     pub(crate) particle_buffer: wgpu::Buffer,
     /// Uniform buffer for particle compute (dt).
     pub(crate) particle_uniform_buffer: wgpu::Buffer,
-    /// CPU-side staging array for newly emitted particles (flushed to GPU each frame).
-    pub(crate) particle_staging: Vec<GpuParticle>,
-    /// Number of live particles currently in the ring buffer.
-    pub(crate) particle_count: u32,
-    /// Write cursor into the particle ring buffer (wraps at MAX_PARTICLES).
-    pub(crate) particle_write_head: u32,
+    /// P1-1: particle CPU-side state (staging, count, write_head,
+    /// last_compact) grouped into a single ParticleSubsystem struct.
+    /// The GPU-side buffer and pipelines remain in the renderer
+    /// because they're tightly coupled to the wgpu device lifecycle.
+    pub(crate) particles: crate::types::ParticleSubsystem,
     /// Simple render pipeline for drawing particles as point sprites.
     pub(crate) particle_render_pipeline: wgpu::RenderPipeline,
     /// Bind group layout for particle render pass (storage buffer read-only).
     pub(crate) particle_render_bgl: wgpu::BindGroupLayout,
     /// Bind group for particle render pass (created lazily when count > 0).
     pub(crate) particle_render_bind_group: Option<wgpu::BindGroup>,
-    /// Timestamp of last buffer compaction (dead particle removal).
-    pub(crate) last_particle_compact: std::time::Instant,
 
     // VDOM node stack for hierarchy tracking
     pub(crate) vnode_stack: Vec<(Rect, &'static str)>,
@@ -2367,13 +2364,11 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             particle_compute_bgl,
             particle_buffer,
             particle_uniform_buffer,
-            particle_staging: Vec::new(),
-            particle_count: 0,
-            particle_write_head: 0,
+            // P1-1: particle CPU state grouped into ParticleSubsystem.
+            particles: crate::types::ParticleSubsystem::forge(),
             particle_render_pipeline,
             particle_render_bgl,
             particle_render_bind_group: None,
-            last_particle_compact: std::time::Instant::now(),
             vnode_stack: Vec::new(),
             event_handlers: std::collections::HashMap::new(),
             staging_belt,
@@ -4345,11 +4340,11 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         // ── Particle Compute Pass ──────────────────────────────────────────
         // Flush staged particles to GPU, then run compute integration.
         // Must run BEFORE the submit so particle positions are up-to-date.
-        if !self.particle_staging.is_empty() || self.particle_count > 0 {
+        if !self.particles.staging.is_empty() || self.particles.count > 0 {
             // 1. Flush staged particles into the ring buffer
-            if !self.particle_staging.is_empty() {
-                let write_start = self.particle_write_head as usize;
-                let write_count = self.particle_staging.len();
+            if !self.particles.staging.is_empty() {
+                let write_start = self.particles.write_head as usize;
+                let write_count = self.particles.staging.len();
                 let max = MAX_PARTICLES;
 
                 // P1-6 fix: cap the write to max particles to prevent
@@ -4365,7 +4360,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
 
                 // Write particles in ring-buffer fashion
                 let first_chunk = (max - write_start).min(effective_count);
-                let bytes = bytemuck::cast_slice(&self.particle_staging[drop_count..drop_count + first_chunk]);
+                let bytes = bytemuck::cast_slice(&self.particles.staging[drop_count..drop_count + first_chunk]);
                 self.queue.write_buffer(
                     &self.particle_buffer,
                     (write_start * std::mem::size_of::<crate::types::GpuParticle>()) as u64,
@@ -4373,20 +4368,20 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 );
                 if first_chunk < effective_count {
                     let remaining = effective_count - first_chunk;
-                    let bytes2 = bytemuck::cast_slice(&self.particle_staging[drop_count + first_chunk..drop_count + first_chunk + remaining]);
+                    let bytes2 = bytemuck::cast_slice(&self.particles.staging[drop_count + first_chunk..drop_count + first_chunk + remaining]);
                     self.queue.write_buffer(
                         &self.particle_buffer,
                         0,
                         bytes2,
                     );
-                    self.particle_write_head = remaining as u32;
+                    self.particles.write_head = remaining as u32;
                 } else {
-                    self.particle_write_head =
+                    self.particles.write_head =
                         ((write_start + effective_count) % max) as u32;
                 }
-                self.particle_count = (self.particle_count as usize + effective_count)
+                self.particles.count = (self.particles.count as usize + effective_count)
                     .min(max) as u32;
-                self.particle_staging.clear();
+                self.particles.staging.clear();
 
                 // Invalidate render bind group so it's recreated with new data
                 self.particle_render_bind_group = None;
@@ -4429,20 +4424,20 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 );
                 cpass.set_pipeline(&self.particle_compute_pipeline);
                 cpass.set_bind_group(0, &compute_bind_group, &[]);
-                let workgroups = ((self.particle_count + 63) / 64).max(1);
+                let workgroups = ((self.particles.count + 63) / 64).max(1);
                 cpass.dispatch_workgroups(workgroups, 1, 1);
             }
             self.staging_command_buffers.push(compute_encoder.finish());
         }
 
         // 3. Compact dead particles periodically (every 2 seconds)
-        if self.particle_count > 0
-            && self.last_particle_compact.elapsed().as_secs_f32() > 2.0
+        if self.particles.count > 0
+            && self.particles.last_compact.elapsed().as_secs_f32() > 2.0
         {
-            self.last_particle_compact = std::time::Instant::now();
+            self.particles.last_compact = std::time::Instant::now();
             // Read back particle data to compact dead particles
             let read_size =
-                (self.particle_count as usize * std::mem::size_of::<crate::types::GpuParticle>())
+                (self.particles.count as usize * std::mem::size_of::<crate::types::GpuParticle>())
                     as u64;
             let staging_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Particle Compact Staging"),
@@ -4471,7 +4466,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         // ── Particle Render Pass ────────────────────────────────────────────
         // Render live particles as colored points to the swapchain target,
         // composited on top of the scene with additive blending.
-        if self.particle_count > 0 {
+        if self.particles.count > 0 {
             // Lazily (re)create the render bind group when staging changed
             if self.particle_render_bind_group.is_none() {
                 self.particle_render_bind_group =
@@ -4510,7 +4505,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     );
                     rpass.set_pipeline(&self.particle_render_pipeline);
                     rpass.set_bind_group(0, bg, &[]);
-                    rpass.draw(0..self.particle_count, 0..1);
+                    rpass.draw(0..self.particles.count, 0..1);
                 }
                 self.staging_command_buffers.push(render_encoder.finish());
             }

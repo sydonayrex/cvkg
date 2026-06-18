@@ -487,6 +487,43 @@ impl SvgSubsystem {
     }
 }
 
+// =========================================================================
+// P1-1: ParticleSubsystem - encapsulates particle system state
+// =========================================================================
+//
+// The SurtrRenderer struct had particle_staging, particle_count, and
+// particle_write_head as separate fields. This struct groups the
+// CPU-side state of the particle system so it can be moved into its
+// own module in a follow-up refactor. The GPU-side buffers and
+// pipelines are kept in the renderer because they're tightly coupled
+// to the wgpu device lifecycle.
+
+/// Group of CPU-side state for the particle system.
+pub struct ParticleSubsystem {
+    /// CPU-side staging array for newly emitted particles
+    /// (flushed to GPU each frame).
+    pub staging: Vec<GpuParticle>,
+    /// Number of live particles currently in the ring buffer.
+    pub count: u32,
+    /// Write cursor into the particle ring buffer (wraps at
+    /// MAX_PARTICLES).
+    pub write_head: u32,
+    /// Timestamp of last buffer compaction (dead particle removal).
+    pub last_compact: std::time::Instant,
+}
+
+impl ParticleSubsystem {
+    /// Create a new particle subsystem with empty state.
+    pub fn forge() -> Self {
+        Self {
+            staging: Vec::new(),
+            count: 0,
+            write_head: 0,
+            last_compact: std::time::Instant::now(),
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod p1_1_geometry_buffers_tests {
@@ -577,5 +614,34 @@ mod p1_1_text_subsystem_tests {
         let cap = NonZeroUsize::new(8192).unwrap();
         let subsystem = TextSubsystem::forge(cap);
         assert_eq!(subsystem.glyph_cache.cap().get(), 8192);
+    }
+}
+
+#[cfg(test)]
+mod p1_1_particle_subsystem_tests {
+    use super::ParticleSubsystem;
+
+    #[test]
+    fn forge_creates_empty_state() {
+        // P1-1 regression: forge() should produce a clean state
+        // with no particles, count=0, write_head=0.
+        let p = ParticleSubsystem::forge();
+        assert!(p.staging.is_empty());
+        assert_eq!(p.count, 0);
+        assert_eq!(p.write_head, 0);
+    }
+
+    #[test]
+    fn fields_are_publicly_mutable() {
+        // P1-1 regression: the subsystem fields are pub so the
+        // renderer can update them directly. The struct is a
+        // thin data wrapper, not an encapsulated API.
+        let mut p = ParticleSubsystem::forge();
+        p.staging.push(Default::default());
+        p.count = 1;
+        p.write_head = 1;
+        assert_eq!(p.staging.len(), 1);
+        assert_eq!(p.count, 1);
+        assert_eq!(p.write_head, 1);
     }
 }
