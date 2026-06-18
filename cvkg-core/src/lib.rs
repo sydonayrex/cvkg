@@ -3906,6 +3906,60 @@ pub trait FrameRenderer<E = ()>: Renderer {
 }
 use std::sync::Arc;
 type SubscriberList<T> = Arc<std::sync::Mutex<Vec<Box<dyn Fn(&T) + Send + Sync>>>>;
+
+/// P1-15 fix: invoke all subscribers in a list, isolating panics so that a
+/// single faulty callback does not poison the Mutex and break all future
+/// state updates forever. Returns the number of subscribers invoked
+/// successfully. Each callback is wrapped in `catch_unwind`; panics are
+/// logged but do not propagate.
+fn invoke_subscribers_safely<T>(subs: &SubscriberList<T>, val: &T) -> usize
+where
+    // No UnwindSafe bound on T: subscriber callbacks receive &T and the
+    // user is responsible for the panic-safety contract. We use
+    // AssertUnwindSafe internally to opt out of the check.
+{
+    // Acquire the lock with poison recovery: if a previous panic poisoned
+    // the mutex, recover and continue (the previous subscriber may have
+    // left the list in an inconsistent state, but the best we can do is
+    // log and try again). On recovery, the existing subscriber list is
+    // preserved so we do not silently drop user subscriptions.
+    let guard = match subs.lock() {
+        Ok(g) => g,
+        Err(poisoned) => {
+            log::warn!(
+                "[State] subscriber list mutex was poisoned; recovering"
+            );
+            poisoned.into_inner()
+        }
+    };
+    let mut invoked = 0usize;
+    for cb in guard.iter() {
+        // Wrap each callback in catch_unwind so a panicking subscriber
+        // does not poison the mutex and break subsequent state updates.
+        // The catch_unwind returns Err if the closure panicked.
+        let cb_ref: &(dyn Fn(&T) + Send + Sync) = &**cb;
+        // Use AssertUnwindSafe because subscriber callbacks are Fn (not
+        // UnwindSafe by default due to &T parameter), but the actual
+        // panic-safety contract is the subscriber author's responsibility.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            cb_ref(val);
+        }));
+        if let Err(payload) = result {
+            let msg = if let Some(s) = payload.downcast_ref::<&'static str>() {
+                (*s).to_string()
+            } else if let Some(s) = payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "unknown panic payload".to_string()
+            };
+            log::error!("[State] subscriber callback panicked: {msg}");
+            // Do NOT re-raise; continue invoking remaining subscribers.
+        } else {
+            invoked += 1;
+        }
+    }
+    invoked
+}
 /// State wrapper that owns a value and notifies subscribers when changed
 #[derive(Clone)]
 pub struct State<T: Clone + Send + Sync + 'static> {
@@ -3992,16 +4046,10 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
         let subs = Arc::clone(&self.subscribers);
         if crate::is_batching() {
             crate::enqueue_batch_task(Box::new(move || {
-                let s = subs.lock().unwrap();
-                for cb in s.iter() {
-                    cb(&final_val);
-                }
+                let _ = invoke_subscribers_safely(&subs, &final_val);
             }));
         } else {
-            let s = subs.lock().unwrap();
-            for cb in s.iter() {
-                cb(&final_val);
-            }
+            let _ = invoke_subscribers_safely(&subs, &final_val);
         }
     }
     pub fn mutate<F: Fn(&T) -> T>(&self, f: F) {
@@ -4048,16 +4096,10 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             let subs = Arc::clone(&self.subscribers);
             if crate::is_batching() {
                 crate::enqueue_batch_task(Box::new(move || {
-                    let s = subs.lock().unwrap();
-                    for cb in s.iter() {
-                        cb(&final_val);
-                    }
+                    let _ = invoke_subscribers_safely(&subs, &final_val);
                 }));
             } else {
-                let s = subs.lock().unwrap();
-                for cb in s.iter() {
-                    cb(&final_val);
-                }
+                let _ = invoke_subscribers_safely(&subs, &final_val);
             }
         }
         #[cfg(target_arch = "wasm32")]
@@ -8719,5 +8761,110 @@ mod kvasir_identity_tests {
         assert_eq!(rec.id, id);
         assert!(rec.flags.needs_state());
         assert!(rec.flags.needs_layout());
+    }
+}
+
+// =========================================================================
+// P1-15: Subscriber List Mutex Poisoning
+// =========================================================================
+//
+// Regression tests for the audit finding: a single panicking subscriber
+// would poison the Mutex and break all future state updates forever.
+// The fix wraps each callback in catch_unwind, so panics are isolated
+// and logged without affecting other subscribers or future updates.
+
+#[cfg(test)]
+mod subscriber_panic_isolation_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn panicking_subscriber_does_not_poison_mutex() {
+        let state = State::new(0i32);
+        let fired = Arc::new(AtomicUsize::new(0));
+
+        // First subscriber: panics.
+        let _ = state.subscribe(|_| -> () {
+            panic!("subscriber 1 explodes");
+        });
+
+        // Second subscriber: should still fire.
+        let fired_clone = Arc::clone(&fired);
+        let _ = state.subscribe(move |v| {
+            fired_clone.store(*v as usize + 1, Ordering::SeqCst);
+        });
+
+        // Trigger the state change. Subscriber 1 panics; subscriber 2 runs.
+        state.set(42);
+
+        assert_eq!(
+            fired.load(Ordering::SeqCst),
+            43,
+            "second subscriber must fire even though first panicked"
+        );
+
+        // Critical: future state updates must still work.
+        let fired2 = Arc::new(AtomicUsize::new(0));
+        let fired2_clone = Arc::clone(&fired2);
+        let _ = state.subscribe(move |v| {
+            fired2_clone.store(*v as usize, Ordering::SeqCst);
+        });
+        state.set(100);
+        assert_eq!(
+            fired2.load(Ordering::SeqCst),
+            100,
+            "future updates must work after subscriber panic"
+        );
+    }
+
+    #[test]
+    fn all_subscribers_fire_even_if_one_panics() {
+        let state = State::new(0u32);
+        let count = Arc::new(AtomicUsize::new(0));
+
+        // Mix of panicking and counting subscribers.
+        let _ = state.subscribe(|_| panic!("boom 1"));
+        let c1 = Arc::clone(&count);
+        let _ = state.subscribe(move |_| {
+            c1.fetch_add(1, Ordering::SeqCst);
+        });
+        let _ = state.subscribe(|_| panic!("boom 2"));
+        let c2 = Arc::clone(&count);
+        let _ = state.subscribe(move |_| {
+            c2.fetch_add(1, Ordering::SeqCst);
+        });
+
+        state.set(1);
+
+        // Both non-panicking subscribers must have fired.
+        assert_eq!(
+            count.load(Ordering::SeqCst),
+            2,
+            "both non-panicking subscribers should fire"
+        );
+    }
+
+    #[test]
+    fn invoke_subscribers_safely_returns_count() {
+        // Direct unit test of the helper function.
+        use std::sync::Mutex;
+        let subs: SubscriberList<u32> = Arc::new(Mutex::new(Vec::new()));
+
+        let count1 = Arc::new(AtomicUsize::new(0));
+        let count1_clone = Arc::clone(&count1);
+        subs.lock().unwrap().push(Box::new(move |v| {
+            count1_clone.store(*v as usize, Ordering::SeqCst);
+        }));
+
+        let count2 = Arc::new(AtomicUsize::new(0));
+        let count2_clone = Arc::clone(&count2);
+        subs.lock().unwrap().push(Box::new(move |v| {
+            count2_clone.store(*v as usize + 100, Ordering::SeqCst);
+        }));
+
+        let invoked = invoke_subscribers_safely(&subs, &7);
+        assert_eq!(invoked, 2, "both subscribers should be invoked");
+        assert_eq!(count1.load(Ordering::SeqCst), 7);
+        assert_eq!(count2.load(Ordering::SeqCst), 107);
     }
 }
