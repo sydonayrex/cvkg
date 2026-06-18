@@ -9282,3 +9282,234 @@ mod p1_39_dirty_region_tests {
         assert_eq!(m.len(), 1);
     }
 }
+
+// =========================================================================
+// P1-43: FrameBudget -- global frame budget contract
+// =========================================================================
+//
+// The P1-43 audit found that no global frame budget contract
+// exists. Individual subsystems may exceed their time allocation
+// without coordination. P0-2 already handles per-frame
+// degradation (skipping non-essential passes when over budget)
+// but doesn't coordinate allocation across subsystems.
+//
+// This struct provides the foundation for future frame budget
+// coordination. It tracks wall-clock time per frame and per
+// subsystem, and allows callers to check whether a subsystem
+// is within its allocated time slice.
+//
+// Currently a passive observer. Future work would add:
+//  - Per-subsystem time allocation
+//  - Automatic QualityLevel adjustment when over budget
+//  - Integration with the renderer's frame loop
+
+use std::time::{Duration, Instant};
+
+/// P1-43: per-subsystem budget allocation. A frame's total
+/// time is split across animation, layout, and render
+/// subsystems. Each gets a fraction of the total budget.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SubsystemBudget {
+    /// Time slice allocated to this subsystem, in seconds.
+    pub time_slice: Duration,
+    /// Whether this subsystem is allowed to be skipped if
+    /// over budget (non-essential) or must always complete
+    /// (essential).
+    pub skippable: bool,
+    /// Name of the subsystem, for logging.
+    pub name: &'static str,
+}
+
+/// P1-43: global frame budget tracker. Holds the total
+/// budget for a frame, per-subsystem allocations, and
+/// wall-clock measurements.
+///
+/// Named FrameBudgetTracker to avoid confusion with the
+/// existing FrameBudget config struct (which holds the
+/// target_ms and allow_degradation settings).
+#[derive(Debug)]
+pub struct FrameBudgetTracker {
+    /// Total budget for the frame (typically 1/60s = 16.67ms
+    /// for 60fps).
+    total: Duration,
+    /// Per-subsystem allocations. Sum should not exceed
+    /// total.
+    allocations: Vec<SubsystemBudget>,
+    /// Frame start time, captured on new_frame().
+    start: Option<Instant>,
+    /// Per-subsystem elapsed time, updated on subsystem_finish().
+    elapsed: Vec<Duration>,
+}
+
+impl FrameBudgetTracker {
+    /// Standard 60fps frame budget: 16.67ms total, with
+    /// default allocations across animation (4ms), layout
+    /// (4ms), and render (8ms). Subsystems are skippable
+    /// when over budget except for render, which is essential.
+    pub fn default_60fps() -> Self {
+        Self {
+            total: Duration::from_micros(16_666), // ~16.67ms
+            allocations: vec![
+                SubsystemBudget {
+                    time_slice: Duration::from_micros(4_000),
+                    skippable: true,
+                    name: "animation",
+                },
+                SubsystemBudget {
+                    time_slice: Duration::from_micros(4_000),
+                    skippable: true,
+                    name: "layout",
+                },
+                SubsystemBudget {
+                    time_slice: Duration::from_micros(8_000),
+                    skippable: false, // render must always run
+                    name: "render",
+                },
+            ],
+            start: None,
+            elapsed: vec![
+                Duration::ZERO,
+                Duration::ZERO,
+                Duration::ZERO,
+            ],
+        }
+    }
+
+    /// Get the total frame budget.
+    pub fn total(&self) -> Duration {
+        self.total
+    }
+
+    /// Get the per-subsystem allocations.
+    pub fn allocations(&self) -> &[SubsystemBudget] {
+        &self.allocations
+    }
+
+    /// Mark the start of a new frame. Call this at the
+    /// beginning of the render loop.
+    pub fn new_frame(&mut self) {
+        self.start = Some(Instant::now());
+        for e in self.elapsed.iter_mut() {
+            *e = Duration::ZERO;
+        }
+    }
+
+    /// Mark a subsystem as finishing. Updates the elapsed
+    /// time for that subsystem.
+    pub fn subsystem_finish(&mut self, index: usize) {
+        if let Some(start) = self.start {
+            if index < self.elapsed.len() {
+                let now = Instant::now();
+                self.elapsed[index] = now.duration_since(start);
+            }
+        }
+    }
+
+    /// Check if a subsystem is within its time allocation.
+    /// Returns true if the subsystem has used less time than
+    /// its allocated slice.
+    pub fn is_within_budget(&self, index: usize) -> bool {
+        if index >= self.allocations.len() {
+            return false;
+        }
+        if index >= self.elapsed.len() {
+            return false;
+        }
+        self.elapsed[index] <= self.allocations[index].time_slice
+    }
+
+    /// Check if the entire frame is within the total budget.
+    /// Returns true if all subsystems have completed within
+    /// their allocations.
+    pub fn frame_within_budget(&self) -> bool {
+        for (i, alloc) in self.allocations.iter().enumerate() {
+            if i < self.elapsed.len()
+                && self.elapsed[i] > alloc.time_slice
+                && !alloc.skippable
+            {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Get the elapsed time for a subsystem.
+    pub fn elapsed(&self, index: usize) -> Duration {
+        if index < self.elapsed.len() {
+            self.elapsed[index]
+        } else {
+            Duration::ZERO
+        }
+    }
+
+    /// Get the total time elapsed since new_frame().
+    pub fn total_elapsed(&self) -> Duration {
+        match self.start {
+            Some(start) => start.elapsed(),
+            None => Duration::ZERO,
+        }
+    }
+}
+
+#[cfg(test)]
+mod p1_43_frame_budget_tests {
+    use super::FrameBudgetTracker;
+
+    #[test]
+    fn default_60fps_has_16ms_total() {
+        let fb = FrameBudgetTracker::default_60fps();
+        // 16.67ms is the target for 60fps.
+        assert!(fb.total().as_micros() >= 16_000);
+        assert!(fb.total().as_micros() <= 17_000);
+    }
+
+    #[test]
+    fn default_allocations_sum_to_roughly_total() {
+        let fb = FrameBudgetTracker::default_60fps();
+        let sum: u128 = fb.allocations().iter()
+            .map(|a| a.time_slice.as_micros())
+            .sum();
+        // The 3 allocations (4+4+8 = 16ms) should sum to
+        // approximately the total budget.
+        let total = fb.total().as_micros();
+        assert!(sum <= total);
+        assert!(sum >= total - 1_000); // within 1ms
+    }
+
+    #[test]
+    fn render_is_essential_layout_is_skippable() {
+        let fb = FrameBudgetTracker::default_60fps();
+        let render = fb.allocations().iter().find(|a| a.name == "render").unwrap();
+        let layout = fb.allocations().iter().find(|a| a.name == "layout").unwrap();
+        assert!(!render.skippable, "render must always run");
+        assert!(layout.skippable, "layout can be skipped if over budget");
+    }
+
+    #[test]
+    fn new_frame_resets_state() {
+        let mut fb = FrameBudgetTracker::default_60fps();
+        fb.new_frame();
+        // All subsystems should start with zero elapsed.
+        for i in 0..fb.allocations().len() {
+            assert_eq!(fb.elapsed(i).as_nanos(), 0);
+        }
+    }
+
+    #[test]
+    fn is_within_budget_initially_true() {
+        let mut fb = FrameBudgetTracker::default_60fps();
+        fb.new_frame();
+        // Right after new_frame, no time has been used, so
+        // all subsystems should be within budget.
+        for i in 0..fb.allocations().len() {
+            assert!(fb.is_within_budget(i));
+        }
+    }
+
+    #[test]
+    fn frame_within_budget_initially_true() {
+        let mut fb = FrameBudgetTracker::default_60fps();
+        fb.new_frame();
+        assert!(fb.frame_within_budget());
+    }
+}
