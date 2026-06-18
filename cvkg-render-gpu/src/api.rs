@@ -1606,7 +1606,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
         let tree = self
-            .svg_trees
+            .svg
+            .tree_cache
             .get(name)
             .ok_or_else(|| format!("SVG '{}' not found", name))?;
         let config = cvkg_svg_serialize::SerializerConfig::default();
@@ -1623,7 +1624,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
         _region: Rect,
     ) -> Result<String, String> {
         let tree = self
-            .svg_trees
+            .svg
+            .tree_cache
             .get(name)
             .ok_or_else(|| format!("SVG '{}' not found", name))?;
         let _filter = Self::find_filter(tree, filter_id)

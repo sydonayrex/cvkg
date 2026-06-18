@@ -202,13 +202,10 @@ pub struct SurtrRenderer {
     pub(crate) texture_registry: LruCache<String, u32>,
     pub(crate) texture_views: Vec<wgpu::TextureView>,
     pub(crate) dummy_sampler: wgpu::Sampler,
-    pub(crate) svg_cache: LruCache<String, SvgModel>,
-    /// Parsed SVG trees for serialization and filter application.
-    pub(crate) svg_trees: LruCache<String, usvg::Tree>,
-    /// SVG filter evaluation engine.
-    pub(crate) filter_engine: Option<cvkg_svg_filters::FilterEngine>,
-    /// Pending filter batches accumulated during tessellation.
-    pub(crate) filter_batches: Vec<cvkg_svg_filters::FilterNode>,
+    /// P1-1: SVG caches and engine grouped into a single
+    /// SvgSubsystem struct. Fourth step toward subsystem
+    /// extraction.
+    pub(crate) svg: crate::types::SvgSubsystem,
 
     // Niflheim Resources (Shared)
     pub(crate) dummy_texture_bind_group: wgpu::BindGroup,
@@ -2313,16 +2310,12 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             texture_registry,
             texture_views: texture_views_list,
             dummy_sampler,
-            svg_cache: LruCache::new(NonZeroUsize::new(512).unwrap()),
-            svg_trees: LruCache::new(NonZeroUsize::new(512).unwrap()),
-            filter_engine: Some(
-                cvkg_svg_filters::FilterEngine::new(cvkg_svg_filters::GpuContext {
-                    device: device.clone(),
-                    queue: queue.clone(),
-                })
-                .expect("Failed to create SVG filter engine"),
+            svg: crate::types::SvgSubsystem::forge(
+                &device,
+                &queue,
+                NonZeroUsize::new(512).unwrap(),
+                NonZeroUsize::new(512).unwrap(),
             ),
-            filter_batches: Vec::new(),
             dummy_texture_bind_group,
             dummy_env_bind_group,
             texture_bind_group_layout,
@@ -2708,7 +2701,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         self.indices.clear();
         self.instance_data.clear();
         self.draw_calls.clear();
-        self.filter_batches.clear();
+        self.svg.clear_filter_batches();
         self.shared_elements.clear();
         self.current_texture_id = None;
         self.opacity_stack = vec![1.0];
@@ -4717,7 +4710,7 @@ impl SurtrRenderer {
 
     /// load_svg -- Parses an SVG file and tessellates its paths into GPU triangles.
     pub fn load_svg(&mut self, name: &str, data: &[u8]) {
-        if self.svg_cache.contains(name) {
+        if self.svg.model_cache.contains(name) {
             return;
         }
 
@@ -4762,7 +4755,7 @@ impl SurtrRenderer {
             self.tessellate_node(child, &mut tess_params);
         }
 
-        self.svg_cache.put(
+        self.svg.model_cache.put(
             name.to_string(),
             SvgModel {
                 vertices,
@@ -4772,7 +4765,7 @@ impl SurtrRenderer {
                 animations: finalized_animations,
             },
         );
-        self.svg_trees.put(name.to_string(), tree);
+        self.svg.tree_cache.put(name.to_string(), tree);
     }
 
     pub(crate) fn tessellate_node(&self, node: &usvg::Node, params: &mut TessellateParams<'_>) {
@@ -5137,7 +5130,7 @@ impl SurtrRenderer {
             return;
         }
 
-        log::info!("DRAW_SVG '{}' called with rect: {:?}, model_view_box: {:?}", name, rect, self.svg_cache.get(name).map(|m| m.view_box));
+        log::info!("DRAW_SVG '{}' called with rect: {:?}, model_view_box: {:?}", name, rect, self.svg.model_cache.get(name).map(|m| m.view_box));
         
         if rect.x > screen_w
             || rect.x + rect.width < 0.0
@@ -5147,7 +5140,7 @@ impl SurtrRenderer {
             return;
         }
 
-        let model = if let Some(m) = self.svg_cache.get(name) {
+        let model = if let Some(m) = self.svg.model_cache.get(name) {
             m.clone()
         } else {
             return;

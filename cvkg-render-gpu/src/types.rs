@@ -3,6 +3,7 @@ use crate::vertex::{InstanceData, Vertex};
 use cvkg_core::Rect;
 use lru::LruCache;
 use std::num::NonZeroUsize;
+use std::sync::Arc;
 
 /// SvgModel -- A collection of tessellated triangles representing a vector icon.
 /// Paths are stored as independent sub-models, each with its own vertex range
@@ -432,6 +433,57 @@ impl TextSubsystem {
         // Note: glyph_cache is not cleared because glyphs are
         // theme-independent. Only the shaped text cache holds
         // theme-dependent metrics.
+    }
+}
+
+// =========================================================================
+// P1-1: SvgSubsystem - encapsulates SVG rendering caches and engine
+// =========================================================================
+//
+// The SurtrRenderer struct had svg_cache, svg_trees, filter_engine,
+// and filter_batches as separate fields. This struct groups them
+// together so the SVG rendering subsystem can be moved into its
+// own module in a follow-up refactor.
+
+/// Group of caches and engines used for SVG rendering.
+pub struct SvgSubsystem {
+    /// LRU cache for tessellated SVG models.
+    pub model_cache: LruCache<String, SvgModel>,
+    /// LRU cache for parsed usvg::Tree (source representation).
+    pub tree_cache: LruCache<String, usvg::Tree>,
+    /// SVG filter engine. Optional because it may fail to create.
+    pub filter_engine: Option<cvkg_svg_filters::FilterEngine>,
+    /// Pending filter operations for the current frame.
+    pub filter_batches: Vec<cvkg_svg_filters::FilterNode>,
+}
+
+impl SvgSubsystem {
+    /// Create an SVG subsystem with the given LRU capacities.
+    /// The filter engine is created from the device/queue pair
+    /// and may fail (returning None) on unsupported devices.
+    pub fn forge(
+        device: &Arc<wgpu::Device>,
+        queue: &Arc<wgpu::Queue>,
+        model_cache_capacity: NonZeroUsize,
+        tree_cache_capacity: NonZeroUsize,
+    ) -> Self {
+        let filter_engine = cvkg_svg_filters::FilterEngine::new(cvkg_svg_filters::GpuContext {
+            device: device.clone(),
+            queue: queue.clone(),
+        })
+        .ok();
+        Self {
+            model_cache: LruCache::new(model_cache_capacity),
+            tree_cache: LruCache::new(tree_cache_capacity),
+            filter_engine,
+            filter_batches: Vec::new(),
+        }
+    }
+
+    /// Clear the filter batches for the current frame. Called at
+    /// the start of each frame.
+    pub fn clear_filter_batches(&mut self) {
+        self.filter_batches.clear();
     }
 }
 
