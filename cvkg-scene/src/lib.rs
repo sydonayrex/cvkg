@@ -322,12 +322,18 @@ impl SceneGraph {
             }
         }
         // Sort nodes within each layer by z_index for correct draw order
+        //
+        // P1-18 fix: the previous sort key was `(n.z_index * 1000.0) as i64`,
+        // which truncates z_indices differing by less than 0.001 to the same
+        // integer. `sort_by_key` is stable, so ties preserved insertion order
+        // rather than z_index order -- correct in practice but fragile.
+        // `total_cmp` gives exact IEEE-754 total ordering for floats, which
+        // handles NaN consistently and avoids the truncation hazard.
         for nodes in layers.values_mut() {
-            nodes.sort_by_key(|id| {
-                self.nodes
-                    .get(id)
-                    .map(|n| (n.z_index * 1000.0) as i64)
-                    .unwrap_or(0)
+            nodes.sort_by(|a, b| {
+                let za = self.nodes.get(a).map(|n| n.z_index).unwrap_or(0.0);
+                let zb = self.nodes.get(b).map(|n| n.z_index).unwrap_or(0.0);
+                za.total_cmp(&zb)
             });
         }
         layers
@@ -615,5 +621,60 @@ mod tests {
 
         scene.clear_dirty();
         assert_eq!(scene.dirty_regions().len(), 0);
+    }
+
+    // P1-18 regression: z_index values differing by less than 0.001 must
+    // still sort in correct order, not be truncated to the same int key.
+    #[test]
+    fn test_batch_z_index_preserves_sub_milli_ordering() {
+        let mut scene = SceneGraph::new();
+        let a = scene.next_id();
+        let b = scene.next_id();
+        let c = scene.next_id();
+        let rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 1.0,
+            height: 1.0,
+        };
+
+        // z values differ by 0.0001, well below the old (z * 1000.0) as i64
+        // truncation threshold of 0.001.
+        let mut na = VNode::new(a, "R", rect);
+        na.z_index = 0.5;
+        scene.add_node(na, None);
+
+        let mut nb = VNode::new(b, "R", rect);
+        nb.z_index = 0.5001; // between a and c
+        scene.add_node(nb, None);
+
+        let mut nc = VNode::new(c, "R", rect);
+        nc.z_index = 0.5002;
+        scene.add_node(nc, None);
+
+        let layers = scene.batch(&[a, b, c]);
+        let layer0 = layers.get(&0).expect("layer 0 should exist");
+        assert_eq!(layer0.len(), 3, "all 3 nodes should be in layer 0");
+        // Must be sorted in ascending z_index order: a (0.5), b (0.5001), c (0.5002).
+        assert_eq!(
+            layer0,
+            &vec![a, b, c],
+            "z_index sub-milli ordering must be preserved: got {:?}",
+            layer0
+        );
+
+        // Also test the reverse order: insert in descending z, expect ascending after sort.
+        let mut scene2 = SceneGraph::new();
+        let x = scene2.next_id();
+        let y = scene2.next_id();
+        let mut nx = VNode::new(x, "R", rect);
+        nx.z_index = 1.0;
+        scene2.add_node(nx, None);
+        let mut ny = VNode::new(y, "R", rect);
+        ny.z_index = -1.0;
+        scene2.add_node(ny, None);
+        let layers2 = scene2.batch(&[x, y]);
+        let l0 = layers2.get(&0).unwrap();
+        assert_eq!(l0, &vec![y, x], "negative z must sort before positive z");
     }
 }
