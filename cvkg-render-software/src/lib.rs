@@ -23,7 +23,7 @@
 //! - No 3D (all 3D methods are no-ops)
 //! - No MSAA (uses 4x supersampling for rounded shapes/ellipses)
 
-use cvkg_core::{ElapsedTime, Rect, Renderer};
+use cvkg_core::{ElapsedTime, Material3D, Mesh, Rect, Renderer, Transform3D};
 use std::time::Instant;
 
 // --- Framebuffer ---
@@ -453,6 +453,78 @@ impl Renderer for SoftwareRenderer {
         }
     }
 
+    // ==========================================
+    // P1-8: SoftwareRenderer missing core methods
+    // ==========================================
+    // The SoftwareRenderer only implements basic shapes, text,
+    // and linear gradients. The following methods are NOT
+    // implemented in software and would be silent no-ops if
+    // inherited from the default trait impls. We override them
+    // with explicit stubs that log a warning so callers know
+    // the operation is unsupported on this backend.
+
+    fn draw_texture(&mut self, texture_id: u32, _rect: Rect) {
+        log::warn!(
+            "[SoftwareRenderer] draw_texture({}) is not implemented in software. \
+             The texture will not appear in the output.",
+            texture_id
+        );
+    }
+
+    fn draw_image(&mut self, image_name: &str, _rect: Rect) {
+        log::warn!(
+            "[SoftwareRenderer] draw_image('{}') is not implemented in software. \
+             The image will not appear in the output.",
+            image_name
+        );
+    }
+
+    fn draw_svg(&mut self, name: &str, _rect: Rect) {
+        log::warn!(
+            "[SoftwareRenderer] draw_svg('{}') is not implemented in software. \
+             The SVG will not appear in the output.",
+            name
+        );
+    }
+
+    fn draw_mesh(&mut self, _mesh: &Mesh, _color: [f32; 4], _transform: glam::Mat4) {
+        log::warn!(
+            "[SoftwareRenderer] draw_mesh() is not implemented in software. \
+             The mesh will not appear in the output."
+        );
+    }
+
+    fn draw_mesh_3d(
+        &mut self,
+        _mesh: &Mesh,
+        _material: &Material3D,
+        _transform: &Transform3D,
+    ) {
+        log::warn!(
+            "[SoftwareRenderer] draw_mesh_3d() is not implemented in software. \
+             The 3D mesh will not appear in the output."
+        );
+    }
+
+    fn fill_glass_rect_with_pressure(
+        &mut self,
+        _rect: Rect,
+        _radius: f32,
+        _blur_radius: f32,
+        _pressure: f32,
+    ) {
+        // No pressure-based falloff in software -- degrade to standard glass.
+        self.fill_glass_rect(_rect, _radius, _blur_radius);
+    }
+
+    fn draw_hologram(&mut self, _rect: Rect, hologram_id: &str, _time: f32) {
+        log::warn!(
+            "[SoftwareRenderer] draw_hologram('{}') is not implemented in software. \
+             Holograms require GPU compute shaders.",
+            hologram_id
+        );
+    }
+
     fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
         // Software renderer has no geometry cache -- just call the render function
         render_fn(self);
@@ -595,5 +667,39 @@ mod tests {
         let right = unpack_rgba(fb.pixels()[99]);
         assert!((left[0] - 1.0).abs() < 0.02); // Red on left
         assert!((right[2] - 1.0).abs() < 0.02); // Blue on right
+    }
+
+    // ==========================================
+    // P1-8: SoftwareRenderer explicit stub warnings
+    // ==========================================
+    // Verify that the unimplemented methods at least exist
+    // (don't panic at the trait level) and return without
+    // modifying the framebuffer. The log::warn! calls are
+    // not asserted (would require log capture infrastructure),
+    // but the tests prove the methods don't crash the renderer.
+
+    #[test]
+    fn p1_8_draw_image_does_not_panic() {
+        let mut r = SoftwareRenderer::new(100, 100);
+        r.draw_image("test.png", cvkg_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        // Framebuffer should be unmodified (all transparent).
+        let fb = r.framebuffer();
+        for pixel in fb.pixels() {
+            assert_eq!(*pixel, 0, "draw_image should not modify the framebuffer");
+        }
+    }
+
+    #[test]
+    fn p1_8_draw_svg_does_not_panic() {
+        let mut r = SoftwareRenderer::new(100, 100);
+        r.draw_svg("icon", cvkg_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        // Should not panic.
+    }
+
+    #[test]
+    fn p1_8_draw_texture_does_not_panic() {
+        let mut r = SoftwareRenderer::new(100, 100);
+        r.draw_texture(1, cvkg_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        // Should not panic.
     }
 }
