@@ -215,6 +215,15 @@ impl MaterialGraph {
                 config.max_nodes,
             ));
         }
+        // P1-4 fix: also bound the edge count. Without this, a graph
+        // with 1024 nodes but 100K edges (very dense) could cause
+        // memory pressure and slow validation. The check is O(1).
+        if self.edges.len() > config.max_edges {
+            return Err(MaterialError::TooManyEdges(
+                self.edges.len(),
+                config.max_edges,
+            ));
+        }
         // Cycle detection via DFS
         let mut visited = vec![false; self.nodes.len()];
         let mut in_stack = vec![false; self.nodes.len()];
@@ -276,15 +285,28 @@ pub enum MaterialError {
     CompileError(String),
     TooManyNodes(usize, usize),
     UnsupportedNodeType(String),
+    /// P1-4 fix: graph has more edges than the configured limit.
+    TooManyEdges(usize, usize),
 }
 
 pub struct MaterialValidationConfig {
     pub max_nodes: usize,
+    /// P1-4 fix: max number of edges in the material graph. Limits
+    /// the complexity of the graph and prevents memory pressure from
+    /// graphs with very high node-to-edge ratios. The default of
+    /// 4096 corresponds to a max_nodes of 1024 with an average
+    /// degree of 4, which is a reasonable upper bound for typical
+    /// authoring tools.
+    pub max_edges: usize,
 }
 
 impl Default for MaterialValidationConfig {
     fn default() -> Self {
-        Self { max_nodes: 1024 } // arbitrary large number for internal graphs
+        // P1-4: default to 4 edges per node as a reasonable upper
+        // bound for typical material graphs. AI-generated or
+        // untrusted graphs should use a stricter config (e.g.,
+        // 512 nodes, 1024 edges) via validate_with_config.
+        Self { max_nodes: 1024, max_edges: 4096 }
     }
 }
 
@@ -304,6 +326,7 @@ impl std::fmt::Display for MaterialError {
             Self::CompileError(msg) => write!(f, "WGSL compilation error: {}", msg),
             Self::TooManyNodes(count, max) => write!(f, "too many nodes: {} (max {})", count, max),
             Self::UnsupportedNodeType(kind) => write!(f, "unsupported node type: {}", kind),
+            Self::TooManyEdges(count, max) => write!(f, "too many edges: {} (max {})", count, max),
         }
     }
 }
@@ -1086,6 +1109,57 @@ mod tests {
                     panic!("graph {} failed to compile: {}", i, e);
                 }
             }
+        }
+    }
+
+    // =====================================================================
+    // P1-4: Material graph complexity bounds (max edges)
+    // =====================================================================
+
+    #[test]
+    fn p1_4_validate_rejects_too_many_edges() {
+        // P1-4 regression: max_edges is enforced.
+        let mut graph = MaterialGraph::new();
+        // Set output
+        graph.output = Some(0);
+        // Add 3 nodes so we can add 2 edges.
+        graph.add_node(MaterialOp::InputColor);
+        graph.add_node(MaterialOp::InputColor);
+        graph.add_node(MaterialOp::InputColor);
+        // Add 2 edges.
+        graph.connect(0, MaterialSocket::Color, 1, MaterialSocket::Color);
+        graph.connect(1, MaterialSocket::Color, 2, MaterialSocket::Color);
+        assert_eq!(graph.edges.len(), 2, "test setup: need 2 edges");
+        // Configure max_edges=1, so 2 edges should be rejected.
+        let config = MaterialValidationConfig { max_nodes: 1024, max_edges: 1 };
+        let result = graph.validate_with_config(&config);
+        assert!(matches!(result, Err(MaterialError::TooManyEdges(2, 1))),
+                "expected TooManyEdges(2, 1), got {result:?}");
+    }
+
+    #[test]
+    fn p1_4_default_config_has_max_edges() {
+        // P1-4 regression: default config must have a non-zero
+        // max_edges so the limit is actually enforced.
+        let config = MaterialValidationConfig::default();
+        assert!(config.max_edges > 0,
+                "default max_edges must be > 0, got {}", config.max_edges);
+    }
+
+    #[test]
+    fn p1_4_validate_accepts_graph_within_edge_limit() {
+        // Small graph with edges under the default max_edges.
+        let mut graph = MaterialGraph::new();
+        graph.output = Some(0);
+        graph.add_node(MaterialOp::InputColor);
+        graph.add_node(MaterialOp::InputColor);
+        graph.connect(0, MaterialSocket::Color, 1, MaterialSocket::Color);
+        let result = graph.validate_with_config(&MaterialValidationConfig::default());
+        // Should pass edge check (may fail other checks like NoOutput
+        // if not all required connections are present, but should
+        // not fail with TooManyEdges).
+        if let Err(MaterialError::TooManyEdges(_, _)) = result {
+            panic!("default config should accept 1 edge, got {result:?}");
         }
     }
 }
