@@ -279,6 +279,12 @@ pub struct SurtrRenderer {
     /// Cache of the compiled Kvasir render graph execution plan.
     /// Used to bypass graph rebuilding and topological sorting when configuration is unchanged.
     pub(crate) cached_graph_plan: Option<kvasir::graph_cache::CachedGraphPlan>,
+    /// Hash of the active material set, used to invalidate the graph plan
+    /// cache when materials change. Updated whenever a material is added,
+    /// removed, or its WGSL output is recompiled. P1-9 fix: the previous
+    /// cache key did not include material compilation, so a material
+    /// change would silently produce stale shader bindings.
+    pub(crate) material_compilation_hash: u64,
     /// Memoization cache for frame-level render skipping.
     /// Tracks (id) -> (data_hash, frame_generation) for deduplication.
     pub(crate) memo_cache: std::collections::HashMap<u64, crate::types::MemoEntry>,
@@ -442,6 +448,20 @@ impl SurtrRenderer {
     pub fn update_mouse(&mut self, mouse: [f32; 2], velocity: [f32; 2]) {
         self.current_scene.mouse = mouse;
         self.current_scene.mouse_velocity = velocity;
+    }
+
+    /// P1-9 fix: notify the renderer that the material set has changed
+    /// (e.g. a material was added, removed, or its WGSL output was
+    /// recompiled). Increments the material_compilation_hash so the
+    /// graph plan cache will be invalidated on the next frame.
+    ///
+    /// Without this hook, a material change would silently reuse a stale
+    /// cached plan with mismatched shader bindings.
+    pub fn invalidate_material_cache(&mut self) {
+        // Simple incrementing counter: any change invalidates. For
+        // larger apps, this could be replaced with a content hash that
+        // changes only when materials actually differ.
+        self.material_compilation_hash = self.material_compilation_hash.wrapping_add(1);
     }
 
     /// select_best_surface_format selects the highest precision/HDR texture format
@@ -2081,6 +2101,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             current_draw_material: cvkg_core::DrawMaterial::Opaque,
             portal_regions: VecDeque::new(),
             cached_graph_plan: None,
+            material_compilation_hash: 0,
             memo_cache: std::collections::HashMap::new(),
             frame_generation: 0,
             pipeline_cache,
@@ -3922,6 +3943,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 width,
                 height,
                 scale_bits,
+                self.material_compilation_hash,
             )
         } else {
             false
@@ -3968,6 +3990,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 width,
                 height,
                 scale_bits,
+                material_compilation_hash: self.material_compilation_hash,
                 graph: render_graph,
                 plan: compiled_plan,
             });

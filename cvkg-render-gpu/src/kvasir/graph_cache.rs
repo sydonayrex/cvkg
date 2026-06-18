@@ -31,6 +31,14 @@ pub struct CachedGraphPlan {
     pub height: u32,
     /// Bits representation of scale factor float to allow exact comparison.
     pub scale_bits: u32,
+    /// Content hash for material graph compilation results.
+    /// Changes when a material's WGSL output changes (e.g., a Custom
+    /// material node is modified) so the cached plan is invalidated
+    /// rather than reused with stale shader bindings.
+    /// P1-9 fix: previously the cache key did not include material
+    /// compilation, so a material change would silently produce stale
+    /// shader bindings on the next frame.
+    pub material_compilation_hash: u64,
     /// The cached render graph DAG structure.
     pub graph: KvasirGraph,
     /// The compiled execution order of graph node keys.
@@ -52,6 +60,7 @@ impl CachedGraphPlan {
         width: u32,
         height: u32,
         scale_bits: u32,
+        material_compilation_hash: u64,
     ) -> bool {
         self.has_glass == has_glass
             && self.has_bloom == has_bloom
@@ -64,5 +73,73 @@ impl CachedGraphPlan {
             && self.width == width
             && self.height == height
             && self.scale_bits == scale_bits
+            && self.material_compilation_hash == material_compilation_hash
+    }
+}
+
+#[cfg(test)]
+mod p1_9_tests {
+    use super::*;
+
+    fn make_plan(material_hash: u64) -> CachedGraphPlan {
+        // We can't easily construct a KvasirGraph here, but matches() only
+        // looks at the simple fields. Provide a default KvasirGraph and
+        // empty plan -- matches() never reads graph/plan fields.
+        CachedGraphPlan {
+            has_glass: true,
+            has_bloom: false,
+            has_accessibility: false,
+            has_volumetric: false,
+            active_offscreens_count: 0,
+            offscreen_content_hash: 0,
+            portal_regions_count: 0,
+            portal_content_hash: 0,
+            width: 1280,
+            height: 720,
+            scale_bits: 1.0f32.to_bits(),
+            material_compilation_hash: material_hash,
+            graph: crate::kvasir::graph::KvasirGraph::new(),
+            plan: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn matches_returns_true_when_material_hash_matches() {
+        let plan = make_plan(42);
+        assert!(plan.matches(
+            true,
+            false,
+            false,
+            false,
+            0,
+            0,
+            0,
+            0,
+            1280,
+            720,
+            1.0f32.to_bits(),
+            42,
+        ));
+    }
+
+    #[test]
+    fn matches_returns_false_when_material_hash_changes() {
+        // P1-9 regression: a material change must invalidate the cache,
+        // even if all other fields are identical.
+        let plan = make_plan(42);
+        assert!(!plan.matches(
+            true,
+            false,
+            false,
+            false,
+            0,
+            0,
+            0,
+            0,
+            1280,
+            720,
+            1.0f32.to_bits(),
+            43, // different material hash
+        ));
     }
 }
