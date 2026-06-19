@@ -1,8 +1,8 @@
 [package]
 publish = false
 name = "adele-web-demo"
-version = "0.2.12"
-edition = "2021"
+version = "0.2.13"
+edition = "2024"
 
 [features]
 webgpu = []

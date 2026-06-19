@@ -126,12 +126,13 @@ impl View for InputOTP {
             } else {
                 theme::surface()
             };
-            let border_color = if i == self.value.len() as u32 {
+            let char_count = self.value.chars().count();
+            let border_color = if i == char_count as u32 {
                 theme::accent()
             } else {
                 theme::border()
             };
-            let border_width = if i == self.value.len() as u32 {
+            let border_width = if i == char_count as u32 {
                 2.0
             } else {
                 1.0
@@ -142,7 +143,7 @@ impl View for InputOTP {
             renderer.stroke_rounded_rect(box_rect, RADIUS_MD, border_color, border_width);
 
             // Character content
-            if (i as usize) < self.value.len() {
+            if i < char_count as u32 {
                 let ch = self.value.chars().nth(i as usize).unwrap();
                 let display = if self.masked { "•" } else { &ch.to_string() };
                 let (tw, _) = renderer.measure_text(display, FONT_LG);
