@@ -2969,3 +2969,159 @@ mod p1_31_32_filter_validation_tests {
         }
     }
 }
+
+// =============================================================================
+// P1-36: Large Document Scaling (Filters)
+// =============================================================================
+
+/// Filter LOD (Level of Detail) for large document scaling.
+/// Reduces filter complexity for distant/off-screen elements.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FilterLod {
+    /// Full quality filtering.
+    Full,
+    /// Reduced quality (fewer samples, smaller regions).
+    Reduced,
+    /// Skip filtering entirely for distant elements.
+    Skip,
+}
+
+impl FilterLod {
+    /// Determine LOD based on element distance from viewport.
+    pub fn from_distance(distance_pixels: f32) -> Self {
+        if distance_pixels < 500.0 {
+            FilterLod::Full
+        } else if distance_pixels < 2000.0 {
+            FilterLod::Reduced
+        } else {
+            FilterLod::Skip
+        }
+    }
+
+    /// Whether filtering should be applied at this LOD.
+    pub fn should_filter(&self) -> bool {
+        !matches!(self, FilterLod::Skip)
+    }
+}
+
+// =============================================================================
+// P1-37: Glass Effects Compatibility
+// =============================================================================
+
+/// Reference values for glass/acrylic material compatibility testing.
+/// These values can be used to validate filter output against platform
+/// reference implementations (Tahoe, Mica, KDE blur).
+pub struct GlassCompatReference;
+
+impl GlassCompatReference {
+    /// Expected blur radius range for glass materials (in pixels).
+    pub const BLUR_RADIUS_RANGE: (f32, f32) = (5.0, 40.0);
+
+    /// Expected opacity range for glass materials.
+    pub const OPACITY_RANGE: (f32, f32) = (0.3, 0.85);
+
+    /// Expected noise intensity for acrylic materials.
+    pub const NOISE_INTENSITY_RANGE: (f32, f32) = (0.01, 0.05);
+
+    /// Validate that a glass material's parameters are within expected ranges.
+    pub fn validate_glass_params(blur_radius: f32, opacity: f32) -> Result<(), FilterError> {
+        if !(Self::BLUR_RADIUS_RANGE.0..=Self::BLUR_RADIUS_RANGE.1).contains(&blur_radius) {
+            return Err(FilterError::InvalidRegion(blur_radius, Self::BLUR_RADIUS_RANGE.0));
+        }
+        if !(Self::OPACITY_RANGE.0..=Self::OPACITY_RANGE.1).contains(&opacity) {
+            return Err(FilterError::InvalidRegion(opacity, Self::OPACITY_RANGE.0));
+        }
+        Ok(())
+    }
+}
+
+// =============================================================================
+// P1-58: Kerning Validation
+// =============================================================================
+
+/// Known kerning pairs for validation against platform rendering.
+pub struct KerningValidator;
+
+impl KerningValidator {
+    /// Common kerning pairs with expected negative values (tightening).
+    /// Values are approximate and font-specific.
+    pub const KNOWN_PAIRS: &[(&str, &str, f32)] = &[
+        ("A", "V", -0.05),
+        ("A", "W", -0.04),
+        ("T", "o", -0.04),
+        ("T", "a", -0.03),
+        ("V", "A", -0.05),
+        ("W", "A", -0.04),
+        ("L", "T", -0.03),
+        ("P", "a", -0.02),
+    ];
+
+    /// Validate that a kerning pair produces a negative (tightening) value.
+    pub fn validate_kern_pair(left: &str, right: &str, kern_value: f32) -> bool {
+        for (l, r, expected) in Self::KNOWN_PAIRS {
+            if *l == left && *r == right {
+                // Allow 50% tolerance for font differences
+                return kern_value <= 0.0 && kern_value >= *expected * 1.5;
+            }
+        }
+        // Unknown pairs are valid (may not need kerning)
+        true
+    }
+}
+
+#[cfg(test)]
+mod p1_36_37_58_tests {
+    use super::*;
+
+    // P1-36: Filter LOD
+    #[test]
+    fn filter_lod_full_for_nearby() {
+        assert_eq!(FilterLod::from_distance(100.0), FilterLod::Full);
+        assert!(FilterLod::Full.should_filter());
+    }
+
+    #[test]
+    fn filter_lod_reduced_for_medium() {
+        assert_eq!(FilterLod::from_distance(1000.0), FilterLod::Reduced);
+        assert!(FilterLod::Reduced.should_filter());
+    }
+
+    #[test]
+    fn filter_lod_skip_for_distant() {
+        assert_eq!(FilterLod::from_distance(3000.0), FilterLod::Skip);
+        assert!(!FilterLod::Skip.should_filter());
+    }
+
+    // P1-37: Glass compatibility
+    #[test]
+    fn glass_params_valid() {
+        assert!(GlassCompatReference::validate_glass_params(20.0, 0.5).is_ok());
+    }
+
+    #[test]
+    fn glass_params_rejects_bad_blur() {
+        assert!(GlassCompatReference::validate_glass_params(100.0, 0.5).is_err());
+    }
+
+    #[test]
+    fn glass_params_rejects_bad_opacity() {
+        assert!(GlassCompatReference::validate_glass_params(20.0, 0.1).is_err());
+    }
+
+    // P1-58: Kerning validation
+    #[test]
+    fn kern_pair_av_is_negative() {
+        assert!(KerningValidator::validate_kern_pair("A", "V", -0.05));
+        assert!(KerningValidator::validate_kern_pair("A", "V", -0.03));
+    }
+
+    #[test]
+    fn kern_pair_rejects_positive() {
+        assert!(!KerningValidator::validate_kern_pair("A", "V", 0.01));
+    }
+
+    #[test]
+    fn kern_pair_unknown_is_ok() {
+        assert!(KerningValidator::validate_kern_pair("X", "Y", 0.0));
+    }
+}
