@@ -1,30 +1,49 @@
 # CVKG: Cyber Viking Kvasir Graph
 
-[Screencast_20260613_191715.webm](https://github.com/user-attachments/assets/9ed913d6-1cc5-4af0-ad43-b4cc1ad43303)
+CVKG is a graphical user interface framework for Rust that enables building hardware-accelerated desktop and web applications.
 
 ```mermaid
 graph TD
-    cvkg-core["cvkg-core"]
-    cvkg-vdom["cvkg-vdom"]
-    cvkg-scene["cvkg-scene"]
-    cvkg-layout["cvkg-layout"]
-    cvkg-render-gpu["cvkg-render-gpu"]
-    cvkg-render-native["cvkg-render-native"]
-    cvkg-compositor["cvkg-compositor"]
-    cvkg-themes["cvkg-themes"]
-    cvkg-anim["cvkg-anim"]
-    cvkg-flow["cvkg-flow"]
-    cvkg-runic-text["cvkg-runic-text"]
-    cvkg-svg-filters["cvkg-svg-filters"]
-    cvkg-svg-serialize["cvkg-svg-serialize"]
-    cvkg-components["cvkg-components"]
-    cvkg-macros["cvkg-macros"]
-    cvkg-cli["cvkg-cli"]
-    cvkg-webkit-server["cvkg-webkit-server"]
-    cvkg-test["cvkg-test"]
-    cvkg-physics["cvkg-physics"]
-    cvkg["cvkg (umbrella)"]
+    %% Subgraphs for visual structure and tiering
+    subgraph Core ["Core Foundations"]
+        cvkg-core["cvkg-core<br/>(Core traits, state, telemetry)"]
+        cvkg-vdom["cvkg-vdom<br/>(Virtual DOM & diffing)"]
+        cvkg-scene["cvkg-scene<br/>(Scene graph & spatial partitioning)"]
+        cvkg-layout["cvkg-layout<br/>(Constraint layout & Taffy wrapper)"]
+    end
 
+    subgraph Graphics ["Graphics & Shaping Layer"]
+        cvkg-render-gpu["cvkg-render-gpu<br/>(wgpu rendering engine)"]
+        cvkg-compositor["cvkg-compositor<br/>(Compositor, layers, damage)"]
+        cvkg-runic-text["cvkg-runic-text<br/>(Text shaping & BiDi engine)"]
+        cvkg-svg-filters["cvkg-svg-filters<br/>(SVG filter effects)"]
+        cvkg-svg-serialize["cvkg-svg-serialize<br/>(SVG serialization)"]
+    end
+
+    subgraph Platform ["Platform Integration"]
+        cvkg-render-native["cvkg-render-native<br/>(Native backend, windowing)"]
+    end
+
+    subgraph Presentation ["UI & Interaction Layer"]
+        cvkg-themes["cvkg-themes<br/>(OKLCH color, premium materials)"]
+        cvkg-anim["cvkg-anim<br/>(Spring dynamics, particles)"]
+        cvkg-flow["cvkg-flow<br/>(Visual node graph engine)"]
+        cvkg-components["cvkg-components<br/>(Tahoe component library)"]
+    end
+
+    subgraph Infra ["Infrastructure & Tooling"]
+        cvkg-physics["cvkg-physics<br/>(XPBD physics solver)"]
+        cvkg-macros["cvkg-macros<br/>(hamr! DSL macro)"]
+        cvkg-cli["cvkg-cli<br/>(Dev Server & asset pipeline)"]
+        cvkg-webkit-server["cvkg-webkit-server<br/>(axum HTTP/WS server)"]
+        cvkg-test["cvkg-test<br/>(Visual regression comparator)"]
+    end
+
+    subgraph Entry ["Umbrella Crate"]
+        cvkg["cvkg<br/>(Top-level umbrella)"]
+    end
+
+    %% Dependency Connections
     cvkg-vdom --> cvkg-core
     cvkg-vdom --> cvkg-scene
     cvkg-layout --> cvkg-core
@@ -80,9 +99,22 @@ graph TD
     cvkg --> cvkg-components
     cvkg --> cvkg-render-gpu
     cvkg --> cvkg-render-native
-```
 
-CVKG is a high-fidelity graphic user interface framework for Rust, enabling developers to build visually intense, hardware-accelerated desktop and web applications.
+    %% Visual Styling Classes for Premium Design (High-Contrast, Harmonious)
+    classDef core fill:#1a1a2e,stroke:#1e293b,color:#e2e8f0,stroke-width:1px
+    classDef render fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:1.5px
+    classDef ui fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
+    classDef infra fill:#1c1917,stroke:#78716c,color:#d6d3d1,stroke-width:1px
+    classDef platform fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-width:1.5px
+    classDef umbrella fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:2px
+
+    class cvkg-core,cvkg-vdom,cvkg-scene,cvkg-layout core
+    class cvkg-render-gpu,cvkg-compositor,cvkg-runic-text,cvkg-svg-filters,cvkg-svg-serialize render
+    class cvkg-render-native platform
+    class cvkg-components,cvkg-themes,cvkg-anim,cvkg-flow ui
+    class cvkg-macros,cvkg-cli,cvkg-webkit-server,cvkg-test,cvkg-physics infra
+    class cvkg umbrella
+```
 
 ## Problem and Target Audience
 
@@ -100,7 +132,6 @@ Furthermore, CVKG includes a high-performance **GPU Vector Graphics Engine** cap
 - **New Atomic Components**: Equipped the base widget library (`cvkg-components`) with additional primitives: `PhoneInput` (formatted dialing), `MentionInput` (trigger dropdown lists), `Editable` (inline toggles), `Popconfirm` (action bubbles), and `QRCode` (vector barcode matrices).
 
 ---
-
 
 ## Prerequisites
 
@@ -146,7 +177,7 @@ cargo run -p berserker
 | cvkg-physics | Tyr rigid body physics engine: collision detection, constraint solving, scene graph bridge. |
 | cvkg-render-gpu | Surtr graphics pipeline rendering custom GPU shader pipelines. |
 | cvkg-render-native | Desktop platform windowing and event loops wrapping `winit`. |
-| cvkg-render-web | Browser canvas drawing wrapper executing on WebGPU or WebGL2. |
+| cvkg-render-software | CPU-based software rendering fallback using standard text layouts. |
 | cvkg-components | Base widget library housing inputs, sliders, and advanced AI workflow components. |
 | cvkg-themes | OKLCH-based system token catalog managing semantic color and typography mappings. |
 | cvkg-macros | Procedural compiler macros scaffolding DSL views and reactive bindings. |
@@ -155,11 +186,17 @@ cargo run -p berserker
 | cvkg-webkit-server | Headless WebSocket dev server handling local bundle reloading. |
 | cvkg-flow | Interactive node and flow-chart visual editor component. |
 | cvkg-test | Pixel comparison engine executing visual regression testing. |
+| cvkg-accessibility | Mappings and adapters linking core views to platform accessibility protocols. |
+| cvkg-reflect | Type introspection system tracking component configuration properties. |
+| cvkg-materials | Configuration files defining Mica, Acrylic, and Glass material profiles. |
+| cvkg-scheduler | Frame update sequencing, layout timing, and render synchronization. |
+| cvkg-spatial | Space-partitioning algorithms and hit-testing data structures. |
+| cvkg-certification | Automated pipeline and runtime specification conformance audits. |
 | berserker | Native tactical HUD application showcasing layout and graphics. |
 | demos/adele-web | Web design system explorer and matrix comparison layout. |
 | demos/niflheim-web | WebAssembly showcase executing the standard components suite. |
 | demos/niflheim-wasi | Headless server-side WASI target checking view validation. |
-| demos/berserker-fire-web | Highly visual web stress-test drawing procedural fires and lightning. |
+| demos/berserker-fire-web | Web stress-test drawing procedural fires and lightning. |
 
 ---
 

@@ -107,7 +107,7 @@ kurbo = "0.11"
 # Native file open/save dialogs
 rfd = "0.17"
 # System clipboard read/write
-arboard = "3.4"
+arboard = "=3.4.0"
 # Audio playback backend for native targets
 rodio = { version = "0.21", default-features = false, features = ["wav", "mp3"] }
 # SVG serializer (write path) -- usvg is read-only

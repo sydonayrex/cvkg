@@ -1,85 +1,35 @@
 # cvkg-svg-filters
 
-WGPU-based SVG filter primitives for CVKG (Cyber Viking Kvasir Graph).
+## Purpose
+Implements SVG filter primitives (blur, morphology, displacement) for visual effects.
 
-Part of the CVKG high-fidelity agentic UI framework.
+## Boundaries
+- It does not compute layout margins or compile final rendering buffers.
+- It does not contain testing frameworks; quality checks are managed by `cvkg-test`.
 
+## Dependency Graph
 ```mermaid
 graph TD
-    cvkg-core["cvkg-core"]
-    cvkg-vdom["cvkg-vdom"]
-    cvkg-scene["cvkg-scene"]
-    cvkg-layout["cvkg-layout"]
-    cvkg-render-gpu["cvkg-render-gpu"]
-    cvkg-render-native["cvkg-render-native"]
-    cvkg-compositor["cvkg-compositor"]
-    cvkg-themes["cvkg-themes"]
-    cvkg-anim["cvkg-anim"]
-    cvkg-flow["cvkg-flow"]
-    cvkg-runic-text["cvkg-runic-text"]
-    cvkg-svg-filters["cvkg-svg-filters"]
-    cvkg-svg-serialize["cvkg-svg-serialize"]
-    cvkg-components["cvkg-components"]
-    cvkg-macros["cvkg-macros"]
-    cvkg-cli["cvkg-cli"]
-    cvkg-webkit-server["cvkg-webkit-server"]
-    cvkg-test["cvkg-test"]
-    cvkg-physics["cvkg-physics"]
-    cvkg["cvkg (umbrella)"]
-
-    cvkg-vdom --> cvkg-core
-    cvkg-vdom --> cvkg-scene
-    cvkg-layout --> cvkg-core
-    cvkg-layout --> cvkg-anim
-    cvkg-scene --> cvkg-core
-
-    cvkg-render-gpu --> cvkg-core
-    cvkg-render-gpu --> cvkg-compositor
-    cvkg-render-gpu --> cvkg-svg-filters
-    cvkg-render-gpu --> cvkg-svg-serialize
-    cvkg-render-gpu --> cvkg-runic-text
-
-    cvkg-render-native --> cvkg-core
-    cvkg-render-native --> cvkg-render-gpu
-    cvkg-render-native --> cvkg-vdom
-    cvkg-render-native --> cvkg-themes
-
-    cvkg-compositor --> cvkg-core
-
-    cvkg-themes --> cvkg-core
-    cvkg-themes --> cvkg-anim
-    cvkg-anim --> cvkg-core
-    cvkg-flow --> cvkg-core
-    cvkg-flow --> cvkg-scene
-    cvkg-flow --> cvkg-themes
-
-    cvkg-runic-text --> cvkg-core
-    cvkg-svg-filters --> cvkg-core
-
-    cvkg-components --> cvkg-core
-    cvkg-components --> cvkg-vdom
-    cvkg-components --> cvkg-layout
-    cvkg-components --> cvkg-themes
-    cvkg-components --> cvkg-anim
-    cvkg-components --> cvkg-runic-text
-
-    cvkg-macros --> cvkg-core
-    cvkg-cli --> cvkg-core
-    cvkg-cli --> cvkg-physics
-    cvkg-cli --> cvkg-anim
-    cvkg-cli --> cvkg-macros
-    cvkg-webkit-server --> cvkg-cli
-    cvkg-physics --> cvkg-core
-    cvkg-physics --> cvkg-scene
-
-    cvkg --> cvkg-core
-    cvkg --> cvkg-vdom
-    cvkg --> cvkg-scene
-    cvkg --> cvkg-layout
-    cvkg --> cvkg-themes
-    cvkg --> cvkg-anim
-    cvkg --> cvkg-macros
-    cvkg --> cvkg-components
-    cvkg --> cvkg-render-gpu
-    cvkg --> cvkg-render-native
+    cvkg-svg-filters["cvkg-svg-filters (Focal Crate)"]
+    classDef focal fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:2px
+    classDef sibling fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
+    class cvkg-svg-filters focal
 ```
+
+## Public API Overview
+- `FilterPrimitive` — Base effect definition.
+- `BlurEffect` — Box/Gaussian blur parameters.
+
+## Usage Example
+```rust
+use cvkg_svg_filters::FilterPrimitive;
+```
+
+## Use Cases
+- Mapped as a core component inside the standard framework dependency tree.
+
+## Edge Cases and Limitations
+- Under extreme scale or thread contention, ensure the host runtime balances cycles appropriately.
+
+## Crate-Specific Build Flags
+This crate has no custom feature flags or compile-time options. It compiles under standard cargo parameters.

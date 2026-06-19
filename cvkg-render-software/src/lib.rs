@@ -391,26 +391,6 @@ impl Renderer for SoftwareRenderer {
         }
     }
 
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        // Software text: render each glyph as a simple filled rect placeholder.
-        // Full text shaping requires cvkg-runic-text integration.
-        let char_w = size * 0.6;
-        let char_h = size;
-        for (i, _ch) in text.chars().enumerate() {
-            let cx = x + i as f32 * char_w;
-            self.fill_rect_internal(
-                Rect { x: cx, y: y, width: char_w - 1.0, height: char_h },
-                color,
-            );
-        }
-    }
-
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        let char_w = size * 0.6;
-        let w = text.chars().count() as f32 * char_w;
-        (w, size)
-    }
-
     fn draw_focus_ring(
         &mut self,
         rect: Rect,
@@ -462,6 +442,36 @@ impl Renderer for SoftwareRenderer {
     // inherited from the default trait impls. We override them
     // with explicit stubs that log a warning so callers know
     // the operation is unsupported on this backend.
+
+    /// Measures text dimensions using a fast, deterministic monospace estimation.
+    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
+        (text.len() as f32 * size * 0.6, size)
+    }
+
+    /// Shapes rich text spans using the Runic text layout engine.
+    /// Returns None if the "text" feature is disabled.
+    fn shape_rich_text(
+        &mut self,
+        spans: &[cvkg_runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: cvkg_runic_text::TextAlign,
+        overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        #[cfg(feature = "text")]
+        {
+            let mut engine = cvkg_runic_text::RunicTextEngine::new();
+            engine.shape_layout(spans, max_width, align, overflow).ok()
+        }
+        #[cfg(not(feature = "text"))]
+        {
+            None
+        }
+    }
+
+    /// Renders pre-shaped text layout. (Stubbed out for software renderer fallback).
+    fn draw_shaped_text(&mut self, _text: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {
+        // Simple stub: software rendering of layout glyphs is not implemented
+    }
 
     fn draw_texture(&mut self, texture_id: u32, _rect: Rect) {
         log::warn!(

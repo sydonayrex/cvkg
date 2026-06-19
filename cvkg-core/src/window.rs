@@ -2,7 +2,6 @@
 //!
 //! Extracted from lib.rs (P1-13).
 
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// Unique identifier for a window instance.

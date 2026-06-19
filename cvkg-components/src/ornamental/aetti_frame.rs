@@ -654,9 +654,15 @@ mod tests {
             self.commands
                 .push(format!("StrokePolygon(verts={})", vertices.len()));
         }
-        fn draw_text(&mut self, _text: &str, _x: f32, _y: f32, _size: f32, _color: [f32; 4]) {}
-        fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-            (text.len() as f32 * size * 0.6, size)
+        fn shape_rich_text(
+            &mut self,
+            spans: &[cvkg_runic_text::TextSpan],
+            max_width: Option<f32>,
+            align: cvkg_runic_text::TextAlign,
+            overflow: cvkg_runic_text::TextOverflow,
+        ) -> Option<cvkg_runic_text::ShapedText> {
+            let mut engine = cvkg_runic_text::RunicTextEngine::new();
+            engine.shape_layout(spans, max_width, align, overflow).ok()
         }
         fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
         fn pop_vnode(&mut self) {}

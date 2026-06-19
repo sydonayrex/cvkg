@@ -41,6 +41,9 @@ path = "tests/functional_render_tests.rs"
 name = "journey_tests"
 path = "tests/journey_tests.rs"
 
+[dependencies]
+cvkg-runic-text = { version = "0.2.13", path = "../cvkg-runic-text" }
+
 [dependencies.bincode]
 version = "1.3"
 

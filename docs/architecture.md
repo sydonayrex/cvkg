@@ -10,83 +10,118 @@ The CVKG framework is divided into independent crates to separate compositional 
 
 ```mermaid
 graph TD
-    %% Crate Nodes
-    cvkg["cvkg (Facade)"]
-    berserker["berserker (App)"]
-    cvkg_core["cvkg-core (Traits & Types)"]
-    cvkg_macros["cvkg-macros (DSL & State)"]
-    cvkg_vdom["cvkg-vdom (Stateless VDOM)"]
-    cvkg_compositor["cvkg-compositor (Layer Orchestration)"]
-    cvkg_scene["cvkg-scene (Retained Scene)"]
-    cvkg_layout["cvkg-layout (Flexbox Space)"]
-    cvkg_anim["cvkg-anim (RK4 Springs)"]
-    cvkg_render_gpu["cvkg-render-gpu (WGPU Renderer)"]
-    cvkg_render_native["cvkg-render-native (Winit Desktop)"]
-    cvkg_render_web["cvkg-render-web (WASM Web)"]
-    cvkg_components["cvkg-components (Widgets)"]
-    cvkg_themes["cvkg-themes (Design Tokens)"]
-    cvkg_runic_text["cvkg-runic-text (Shaper)"]
-    cvkg_flow["cvkg-flow (Node Graphs)"]
-    cvkg_test["cvkg-test (Regression & Bench)"]
-    cvkg_cli["cvkg-cli (Tooling)"]
-    cvkg_webkit_server["cvkg-webkit-server (Hot-Reload)"]
+    %% Subgraphs for visual structure and tiering
+    subgraph Core ["Core Foundations"]
+        cvkg-core["cvkg-core<br/>(Core traits, state, telemetry)"]
+        cvkg-vdom["cvkg-vdom<br/>(Virtual DOM & diffing)"]
+        cvkg-scene["cvkg-scene<br/>(Scene graph & spatial partitioning)"]
+        cvkg-layout["cvkg-layout<br/>(Constraint layout & Taffy wrapper)"]
+    end
 
-    %% Dependencies
-    berserker --> cvkg
-    cvkg --> cvkg_core
-    cvkg --> cvkg_components
-    cvkg --> cvkg_layout
-    cvkg --> cvkg_anim
-    cvkg --> cvkg_scene
-    cvkg --> cvkg_themes
+    subgraph Graphics ["Graphics & Shaping Layer"]
+        cvkg-render-gpu["cvkg-render-gpu<br/>(wgpu rendering engine)"]
+        cvkg-compositor["cvkg-compositor<br/>(Compositor, layers, damage)"]
+        cvkg-runic-text["cvkg-runic-text<br/>(Text shaping & BiDi engine)"]
+        cvkg-svg-filters["cvkg-svg-filters<br/>(SVG filter effects)"]
+        cvkg-svg-serialize["cvkg-svg-serialize<br/>(SVG serialization)"]
+    end
 
-    cvkg_layout --> cvkg_core
-    cvkg_anim --> cvkg_core
-    cvkg_scene --> cvkg_core
-    cvkg_vdom --> cvkg_core
-    cvkg_vdom --> cvkg_compositor
-    cvkg_compositor --> cvkg_scene
-    cvkg_compositor --> cvkg_core
+    subgraph Platform ["Platform Integration"]
+        cvkg-render-native["cvkg-render-native<br/>(Native backend, windowing)"]
+    end
 
-    cvkg_themes --> cvkg_core
-    cvkg_themes --> cvkg_anim
+    subgraph Presentation ["UI & Interaction Layer"]
+        cvkg-themes["cvkg-themes<br/>(OKLCH color, premium materials)"]
+        cvkg-anim["cvkg-anim<br/>(Spring dynamics, particles)"]
+        cvkg-flow["cvkg-flow<br/>(Visual node graph engine)"]
+        cvkg-components["cvkg-components<br/>(Tahoe component library)"]
+    end
 
-    cvkg_components --> cvkg_core
-    cvkg_components --> cvkg_layout
-    cvkg_components --> cvkg_anim
-    cvkg_components --> cvkg_themes
-    cvkg_components --> cvkg_vdom
+    subgraph Infra ["Infrastructure & Tooling"]
+        cvkg-physics["cvkg-physics<br/>(XPBD physics solver)"]
+        cvkg-macros["cvkg-macros<br/>(hamr! DSL macro)"]
+        cvkg-cli["cvkg-cli<br/>(Dev Server & asset pipeline)"]
+        cvkg-webkit-server["cvkg-webkit-server<br/>(axum HTTP/WS server)"]
+        cvkg-test["cvkg-test<br/>(Visual regression comparator)"]
+    end
 
-    cvkg_render_gpu --> cvkg_core
-    cvkg_render_gpu --> cvkg_runic_text
+    subgraph Entry ["Umbrella Crate"]
+        cvkg["cvkg<br/>(Top-level umbrella)"]
+    end
 
-    cvkg_render_native --> cvkg_core
-    cvkg_render_native --> cvkg_render_gpu
+    %% Dependency Connections
+    cvkg-vdom --> cvkg-core
+    cvkg-vdom --> cvkg-scene
+    cvkg-layout --> cvkg-core
+    cvkg-layout --> cvkg-anim
+    cvkg-scene --> cvkg-core
 
-    cvkg_render_web --> cvkg_core
-    cvkg_render_web --> cvkg_render_gpu
+    cvkg-render-gpu --> cvkg-core
+    cvkg-render-gpu --> cvkg-compositor
+    cvkg-render-gpu --> cvkg-svg-filters
+    cvkg-render-gpu --> cvkg-svg-serialize
+    cvkg-render-gpu --> cvkg-runic-text
 
-    cvkg_flow --> cvkg_core
-    cvkg_flow --> cvkg_components
-    cvkg_flow --> cvkg_layout
-    cvkg_flow --> cvkg_themes
-    cvkg_flow --> cvkg_vdom
+    cvkg-render-native --> cvkg-core
+    cvkg-render-native --> cvkg-render-gpu
+    cvkg-render-native --> cvkg-vdom
+    cvkg-render-native --> cvkg-themes
 
-    cvkg_test --> cvkg_core
-    cvkg_test --> cvkg_render_gpu
-    cvkg_test --> cvkg_macros
-    cvkg_test --> cvkg_components
-    cvkg_test --> cvkg_layout
-    cvkg_test --> cvkg_vdom
-    cvkg_test --> cvkg_render_web
-    cvkg_test --> cvkg_scene
-    cvkg_test --> cvkg_anim
-    cvkg_test --> cvkg_flow
+    cvkg-compositor --> cvkg-core
 
-    cvkg_cli --> cvkg_core
-    cvkg_cli --> cvkg_macros
-    cvkg_webkit_server --> cvkg_cli
+    cvkg-themes --> cvkg-core
+    cvkg-themes --> cvkg-anim
+    cvkg-anim --> cvkg-core
+    cvkg-flow --> cvkg-core
+    cvkg-flow --> cvkg-scene
+    cvkg-flow --> cvkg-themes
+
+    cvkg-runic-text --> cvkg-core
+    cvkg-svg-filters --> cvkg-core
+
+    cvkg-components --> cvkg-core
+    cvkg-components --> cvkg-vdom
+    cvkg-components --> cvkg-layout
+    cvkg-components --> cvkg-themes
+    cvkg-components --> cvkg-anim
+    cvkg-components --> cvkg-runic-text
+
+    cvkg-macros --> cvkg-core
+    cvkg-cli --> cvkg-core
+    cvkg-cli --> cvkg-physics
+    cvkg-cli --> cvkg-anim
+    cvkg-cli --> cvkg-macros
+    cvkg-webkit-server --> cvkg-cli
+    cvkg-physics --> cvkg-core
+    cvkg-physics --> cvkg-scene
+
+    cvkg --> cvkg-core
+    cvkg --> cvkg-vdom
+    cvkg --> cvkg-scene
+    cvkg --> cvkg-layout
+    cvkg --> cvkg-themes
+    cvkg --> cvkg-anim
+    cvkg --> cvkg-macros
+    cvkg --> cvkg-components
+    cvkg --> cvkg-render-gpu
+    cvkg --> cvkg-render-native
+
+    %% Visual Styling Classes for Premium Design (High-Contrast, Harmonious)
+    classDef core fill:#1a1a2e,stroke:#1e293b,color:#e2e8f0,stroke-width:1px
+    classDef render fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:1.5px
+    classDef ui fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
+    classDef infra fill:#1c1917,stroke:#78716c,color:#d6d3d1,stroke-width:1px
+    classDef platform fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-width:1.5px
+    classDef umbrella fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:2px
+
+    class cvkg-core,cvkg-vdom,cvkg-scene,cvkg-layout core
+    class cvkg-render-gpu,cvkg-compositor,cvkg-runic-text,cvkg-svg-filters,cvkg-svg-serialize render
+    class cvkg-render-native platform
+    class cvkg-components,cvkg-themes,cvkg-anim,cvkg-flow ui
+    class cvkg-macros,cvkg-cli,cvkg-webkit-server,cvkg-test,cvkg-physics infra
+    class cvkg umbrella
 ```
+
 
 ---
 

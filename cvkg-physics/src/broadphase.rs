@@ -63,8 +63,8 @@ impl SpatialHash {
     /// Query all body IDs that might overlap the given 2D AABB.
     pub fn query(&self, min: Vec2, max: Vec2) -> Vec<BodyId> {
         let mut result = Vec::new();
-        let min_cell = Self::world_to_cell_2d(min);
-        let max_cell = Self::world_to_cell_2d(max);
+        let min_cell = Self::world_to_cell_2d(min, self.cell_size);
+        let max_cell = Self::world_to_cell_2d(max, self.cell_size);
 
         for x in min_cell.0..=max_cell.0 {
             for y in min_cell.1..=max_cell.1 {
@@ -96,10 +96,10 @@ impl SpatialHash {
         pairs
     }
 
-    fn world_to_cell_2d(pos: Vec2) -> (i32, i32) {
+    fn world_to_cell_2d(pos: Vec2, cell_size: f32) -> (i32, i32) {
         (
-            (pos.x / DEFAULT_CELL_SIZE).floor() as i32,
-            (pos.y / DEFAULT_CELL_SIZE).floor() as i32,
+            (pos.x / cell_size).floor() as i32,
+            (pos.y / cell_size).floor() as i32,
         )
     }
 

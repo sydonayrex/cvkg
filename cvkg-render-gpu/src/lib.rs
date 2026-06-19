@@ -158,7 +158,7 @@ pub use color_blindness::ColorBlindMode;
 // ShieldWall -- re-export AccessKit types so callers can build tree updates
 // without depending on accesskit directly.
 pub use accesskit::{
-    ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role, Tree,
+    ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, Role, Tree,
     TreeId, TreeUpdate,
 };
 pub use accesskit_winit::Adapter as ShieldWallAdapter;

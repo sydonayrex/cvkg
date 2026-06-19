@@ -48,13 +48,12 @@ impl Default for InstanceData {
 }
 
 impl InstanceData {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
         11 => Float32x2, // translation
         12 => Float32x2, // scale
         13 => Float32,   // rotation
         14 => Float32,   // blur_radius
-        15 => Float32,   // ior_override
-        16 => Float32,   // glass_intensity
+        15 => Float32x2, // ior_override + glass_intensity
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {

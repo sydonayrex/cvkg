@@ -73,8 +73,7 @@ struct VertexInput {
     @location(12) scale:       vec2<f32>,
     @location(13) rotation:    f32,
     @location(14) blur_radius: f32,
-    @location(15) ior_override: f32,
-    @location(16) glass_intensity: f32,
+    @location(15) glass_params: vec2<f32>, // x = ior_override, y = glass_intensity
 };
 
 struct VertexOutput {
@@ -115,6 +114,7 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.blur_radius = 0.0;
     out.ior_override = 0.0;
     out.glass_intensity = 0.0;
+    return out;
 }
 
 /// Main vertex shader — transforms 2D quads with rotation/scale/translation.
@@ -161,8 +161,8 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     out.clip = in.clip;
     out.tex_index = in.tex_index;
     out.blur_radius = in.blur_radius;
-    out.ior_override = in.ior_override;
-    out.glass_intensity = in.glass_intensity;
+    out.ior_override = in.glass_params.x;
+    out.glass_intensity = in.glass_params.y;
 
     return out;
 }
@@ -303,7 +303,7 @@ fn oklch_to_srgb(lch: vec3<f32>) -> vec3<f32> {
     let g_lin = -1.268438 * l_cubed + 2.6097574 * m_cubed - 0.34131938 * s_cubed;
     let b_lin = -0.0041960863 * l_cubed - 0.7034186 * m_cubed + 1.7076147 * s_cubed;
 
-    return vec3<f32>(linear_to_srgb(r_lin), linear_to_srgb(g_lin), linear_to_srgb(b_lin));
+    return vec3<f32>(linear_to_srgb_vec3(vec3<f32>(r_lin, g_lin, b_lin)));
 }
 
 fn heatmap_palette(t: f32) -> vec3<f32> {
@@ -353,12 +353,12 @@ fn calc_normal(p: vec3<f32>) -> vec3<f32> {
 
 // ─── Color Space Conversion ─────────────────────────────────────────────────
 
-fn linear_to_srgb(c: vec3<f32>) -> vec3<f32> {
-    return mix(1.055 * pow(c, vec3<f32>(1.0 / 2.4)) - 0.055, 12.92 * c, c <= vec3<f32>(0.0031308));
+fn linear_to_srgb_vec3(c: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(linear_to_srgb(c.r), linear_to_srgb(c.g), linear_to_srgb(c.b));
 }
 
-fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
-    return mix(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
+fn srgb_to_linear_vec3(c: vec3<f32>) -> vec3<f32> {
+    return select(pow((c + 0.055) / 1.055, vec3<f32>(2.4)), c / 12.92, c <= vec3<f32>(0.04045));
 }
 
 /// Apply output color space conversion. 0=sRGB(no-op), 1=Display P3, 2=AdobeRGB

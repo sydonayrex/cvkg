@@ -215,6 +215,7 @@ impl Renderer for TestRenderer {
         });
     }
 
+    /// Records a text drawing operation as a DrawText command.
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         self.commands.push(Command::DrawText {
             text: text.to_string(),
@@ -225,8 +226,43 @@ impl Renderer for TestRenderer {
         });
     }
 
+    /// Measures text dimensions using a fast monospace estimation.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         (text.len() as f32 * size * 0.6, size)
+    }
+
+    /// Shapes rich text spans using the Runic text engine.
+    fn shape_rich_text(
+        &mut self,
+        spans: &[cvkg_runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: cvkg_runic_text::TextAlign,
+        overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        let mut engine = cvkg_runic_text::RunicTextEngine::new();
+        engine.shape_layout(spans, max_width, align, overflow).ok()
+    }
+
+    /// Records a pre-shaped rich text drawing operation as a DrawText command.
+    fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
+        let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
+        let size = shaped.spans.first().map(|s| s.style.font_size).unwrap_or(14.0);
+        let color = shaped.spans.first().map(|s| {
+            [
+                s.style.color[0] as f32 / 255.0,
+                s.style.color[1] as f32 / 255.0,
+                s.style.color[2] as f32 / 255.0,
+                s.style.color[3] as f32 / 255.0,
+            ]
+        }).unwrap_or([1.0, 1.0, 1.0, 1.0]);
+
+        self.commands.push(Command::DrawText {
+            text,
+            x,
+            y,
+            size,
+            color,
+        });
     }
 
     fn draw_texture(&mut self, texture_id: u32, rect: Rect) {

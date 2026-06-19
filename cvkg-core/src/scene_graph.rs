@@ -4,7 +4,6 @@
 //! advanced features like shared-element transitions (Bifrost Bridge).
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Global registry for tracking shared elements across views.
@@ -18,18 +17,10 @@ pub fn bifrost_registry() -> Arc<Mutex<BifrostRegistry>> {
 }
 
 /// Unique identifier for a view node in the scene graph.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[allow(dead_code)]
-pub struct NodeId(u64);
-
-static NEXT_NODE_ID: AtomicU64 = AtomicU64::new(1);
-
-impl NodeId {
-    /// Generate a new, unique node ID.
-    pub fn generate() -> Self {
-        Self(NEXT_NODE_ID.fetch_add(1, Ordering::SeqCst))
-    }
-}
+///
+/// This is a type alias for [`super::KvasirId`] to unify identity
+/// across all layers of the framework.
+pub type NodeId = super::KvasirId;
 
 /// Registry for mapping Bifrost Bridge IDs to persistent scene nodes.
 #[allow(dead_code)]
@@ -59,7 +50,7 @@ impl BifrostRegistry {
         *self
             .bridges
             .entry(bridge_id.to_string())
-            .or_insert_with(NodeId::generate)
+            .or_insert_with(super::KvasirId::new)
     }
 
     /// Store the geometry of a node for interpolation in the next frame.

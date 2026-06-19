@@ -197,27 +197,34 @@ impl View for DropVault {
                     && prompt_rect.contains(x, y)
                     && let Some(ref cb) = on_select
                 {
-                    let cb = cb.clone();
-                    std::thread::spawn(move || {
-                        if let Some(files) = rfd::FileDialog::new().pick_files() {
-                            let vault_files: Vec<VaultFile> = files
-                                .into_iter()
-                                .map(|path| {
-                                    let meta = std::fs::metadata(&path).ok();
-                                    VaultFile {
-                                        name: path
-                                            .file_name()
-                                            .unwrap_or_default()
-                                            .to_string_lossy()
-                                            .to_string(),
-                                        size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
-                                        mime_type: "application/octet-stream".to_string(),
-                                    }
-                                })
-                                .collect();
-                            cb(vault_files);
-                        }
-                    });
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let cb = cb.clone();
+                        std::thread::spawn(move || {
+                            if let Some(files) = rfd::FileDialog::new().pick_files() {
+                                let vault_files: Vec<VaultFile> = files
+                                    .into_iter()
+                                    .map(|path| {
+                                        let meta = std::fs::metadata(&path).ok();
+                                        VaultFile {
+                                            name: path
+                                                .file_name()
+                                                .unwrap_or_default()
+                                                .to_string_lossy()
+                                                .to_string(),
+                                            size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+                                            mime_type: "application/octet-stream".to_string(),
+                                        }
+                                    })
+                                    .collect();
+                                cb(vault_files);
+                            }
+                        });
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        log::warn!("rfd::FileDialog is not supported on WebAssembly target.");
+                    }
                 }
             }),
         );

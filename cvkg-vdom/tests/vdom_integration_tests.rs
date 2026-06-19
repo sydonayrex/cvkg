@@ -157,8 +157,38 @@ fn handler_closure(_event: cvkg_core::Event) {
     // Marker closure used to compare handler identity between old/new VDOMs.
 }
 
-fn empty_props() -> HashMap<String, serde_json::Value> {
-    HashMap::new()
+fn interactive_node(
+    id: u64,
+    component_type: &str,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    aria_role: &str,
+) -> VNode {
+    VNode {
+        id: KvasirId(id),
+        key: None,
+        component_type: component_type.to_string(),
+        props: HashMap::new(),
+        state: None,
+        layout: LayoutRect {
+            x,
+            y,
+            width,
+            height,
+        },
+        children: Vec::new(),
+        aria_role: aria_role.to_string(),
+        aria_props: AriaProps::default(),
+        portal_target: None,
+        sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(cvkg_core::Rect {
+            x,
+            y,
+            width,
+            height,
+        })),
+    }
 }
 
 #[test]
@@ -341,4 +371,232 @@ fn p0_7_handler_swap_emits_update_patch() {
         )),
         "different closures should trigger an Update patch with handlers, got: {patches:?}"
     );
+}
+
+// =========================================================================
+// Phase 6: Click-box regressions
+// =========================================================================
+
+#[test]
+fn phase6_presentation_overlay_does_not_steal_child_hit_target() {
+    let mut vdom = VDom::new();
+    let root_id = KvasirId(1);
+    let overlay_id = KvasirId(2);
+    let button_id = KvasirId(3);
+    let fired = Arc::new(std::sync::Mutex::new(Vec::<u64>::new()));
+
+    let mut root = interactive_node(1, "Root", 0.0, 0.0, 200.0, 200.0, "group");
+    root.children = vec![overlay_id];
+    let mut overlay = interactive_node(2, "Overlay", 0.0, 0.0, 200.0, 200.0, "presentation");
+    overlay.children = vec![button_id];
+    let button = interactive_node(3, "Button", 40.0, 40.0, 60.0, 40.0, "button");
+
+    let fired_button = Arc::clone(&fired);
+    vdom.event_handlers.insert(
+        button_id,
+        vec![(
+            "pointerdown".to_string(),
+            Arc::new(move |_| {
+                fired_button.lock().unwrap().push(button_id.0);
+            }) as _,
+        )]
+        .into_iter()
+        .collect(),
+    );
+
+    vdom.root = Some(root_id);
+    vdom.nodes.insert(root_id, root);
+    vdom.nodes.insert(overlay_id, overlay);
+    vdom.nodes.insert(button_id, button);
+    vdom.parents.insert(overlay_id, root_id);
+    vdom.parents.insert(button_id, overlay_id);
+
+    let response = vdom.dispatch_event(cvkg_core::Event::PointerDown {
+        x: 50.0,
+        y: 50.0,
+        button: 0,
+        proximity_field: 0.0,
+        tilt: None,
+        azimuth: None,
+        pressure: None,
+        barrel_rotation: None,
+        pointer_precision: 0.0,
+    });
+
+    assert_eq!(response, cvkg_core::EventResponse::Handled);
+    assert_eq!(*fired.lock().unwrap(), vec![button_id.0]);
+}
+
+#[test]
+fn phase6_repeated_rebuilds_keep_click_boxes_and_handlers_stable() {
+    let fired = Arc::new(std::sync::Mutex::new(0u32));
+    let mut previous: Option<VDom> = None;
+
+    for _ in 0..100 {
+        let mut vdom = VDom::new();
+        let root_id = KvasirId(1);
+        let button_id = KvasirId(2);
+        let overlay_id = KvasirId(3);
+
+        let mut root = interactive_node(1, "Root", 0.0, 0.0, 320.0, 240.0, "group");
+        root.children = vec![overlay_id];
+
+        let mut overlay = interactive_node(3, "Overlay", 0.0, 0.0, 320.0, 240.0, "presentation");
+        overlay.children = vec![button_id];
+
+        let button = interactive_node(2, "MenuButton", 16.0, 16.0, 96.0, 40.0, "button");
+
+        let fired_clone = Arc::clone(&fired);
+        vdom.event_handlers.insert(
+            button_id,
+            vec![(
+                "pointerdown".to_string(),
+                Arc::new(move |_| {
+                    *fired_clone.lock().unwrap() += 1;
+                }) as _,
+            )]
+            .into_iter()
+            .collect(),
+        );
+
+        vdom.root = Some(root_id);
+        vdom.nodes.insert(root_id, root);
+        vdom.nodes.insert(overlay_id, overlay);
+        vdom.nodes.insert(button_id, button);
+        vdom.parents.insert(overlay_id, root_id);
+        vdom.parents.insert(button_id, overlay_id);
+
+        if let Some(prev) = previous.take() {
+            let patches = prev.diff(&vdom);
+            assert!(
+                patches.len() <= 4,
+                "expected an incremental diff, got {patches:?}"
+            );
+        }
+
+        let hit = vdom.hit_test(32.0, 32.0, 0.0).map(|(id, _)| id);
+        assert_eq!(hit, Some(button_id));
+
+        let response = vdom.dispatch_event(cvkg_core::Event::PointerDown {
+            x: 32.0,
+            y: 32.0,
+            button: 0,
+            proximity_field: 0.0,
+            tilt: None,
+            azimuth: None,
+            pressure: None,
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        });
+        assert_eq!(response, cvkg_core::EventResponse::Handled);
+
+        previous = Some(vdom);
+    }
+
+    assert_eq!(*fired.lock().unwrap(), 100);
+}
+
+#[test]
+fn phase6_pointer_capture_survives_rebuild_before_release() {
+    let fired = Arc::new(std::sync::Mutex::new(Vec::<&'static str>::new()));
+
+    let mut pressed = VDom::new();
+    let root_id = KvasirId(1);
+    let button_id = KvasirId(2);
+    let mut root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+    root.children = vec![button_id];
+    let button = interactive_node(2, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+    let fired_press = Arc::clone(&fired);
+    pressed.event_handlers.insert(
+        button_id,
+        vec![
+            (
+                "pointerdown".to_string(),
+                Arc::new(move |_| {
+                    fired_press.lock().unwrap().push("down");
+                }) as _,
+            ),
+            (
+                "pointerup".to_string(),
+                Arc::new({
+                    let fired = Arc::clone(&fired);
+                    move |_| {
+                        fired.lock().unwrap().push("up");
+                    }
+                }) as _,
+            ),
+            (
+                "pointerclick".to_string(),
+                Arc::new({
+                    let fired = Arc::clone(&fired);
+                    move |_| {
+                        fired.lock().unwrap().push("click");
+                    }
+                }) as _,
+            ),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    pressed.root = Some(root_id);
+    pressed.nodes.insert(root_id, root);
+    pressed.nodes.insert(button_id, button);
+    pressed.parents.insert(button_id, root_id);
+
+    assert_eq!(
+        pressed.dispatch_event(cvkg_core::Event::PointerDown {
+            x: 30.0,
+            y: 30.0,
+            button: 0,
+            proximity_field: 0.0,
+            tilt: None,
+            azimuth: None,
+            pressure: None,
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        }),
+        cvkg_core::EventResponse::Handled
+    );
+
+    let mut rebuilt = VDom::new();
+    let mut rebuilt_root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+    rebuilt_root.children = vec![button_id];
+    let rebuilt_button = interactive_node(2, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+    rebuilt.event_handlers = pressed.event_handlers.clone();
+    rebuilt.root = Some(root_id);
+    rebuilt.nodes.insert(root_id, rebuilt_root);
+    rebuilt.nodes.insert(button_id, rebuilt_button);
+    rebuilt.parents.insert(button_id, root_id);
+
+    let patches = pressed.diff(&rebuilt);
+    pressed.apply_patches(patches);
+
+    assert_eq!(
+        pressed.dispatch_event(cvkg_core::Event::PointerUp {
+            x: 30.0,
+            y: 30.0,
+            button: 0,
+            tilt: None,
+            azimuth: None,
+            pressure: None,
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        }),
+        cvkg_core::EventResponse::Handled
+    );
+    assert_eq!(
+        pressed.dispatch_event(cvkg_core::Event::PointerClick {
+            x: 30.0,
+            y: 30.0,
+            button: 0,
+            tilt: None,
+            azimuth: None,
+            pressure: None,
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        }),
+        cvkg_core::EventResponse::Handled
+    );
+
+    assert_eq!(*fired.lock().unwrap(), vec!["down", "up", "click"]);
 }

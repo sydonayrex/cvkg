@@ -283,10 +283,15 @@ impl Renderer for DummyRenderer {
     fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _width: f32) {}
     fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _color: [f32; 4], _width: f32) {
     }
-    fn draw_text(&mut self, _text: &str, _x: f32, _y: f32, _size: f32, _color: [f32; 4]) {}
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        // Rough estimation: width is length * fontSize * 0.6
-        (text.len() as f32 * size * 0.6, size * 1.2)
+    fn shape_rich_text(
+        &mut self,
+        spans: &[cvkg_runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: cvkg_runic_text::TextAlign,
+        overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        let mut engine = cvkg_runic_text::RunicTextEngine::new();
+        engine.shape_layout(spans, max_width, align, overflow).ok()
     }
     fn draw_image(&mut self, _path: &str, _rect: Rect) {}
     fn bifrost(&mut self, _rect: Rect, _radius: f32, _sigma: f32, _alpha: f32) {}

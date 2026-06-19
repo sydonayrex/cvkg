@@ -899,6 +899,7 @@ impl View for TextEditor {
                             if let Some((start, end)) = selection_range(&st) {
                                 let selected = &st.text[start..end];
                                 if !selected.is_empty() {
+                                    #[cfg(not(target_arch = "wasm32"))]
                                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                                         let _ = clipboard.set_text(selected);
                                         info!("[TextEditor] Copied {} bytes to clipboard", selected.len());
@@ -926,6 +927,7 @@ impl View for TextEditor {
                                 let selected = &st.text[start..end];
                                 if !selected.is_empty() {
                                     // Copy to clipboard
+                                    #[cfg(not(target_arch = "wasm32"))]
                                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                                         let _ = clipboard.set_text(selected);
                                         info!("[TextEditor] Cut {} bytes to clipboard", selected.len());

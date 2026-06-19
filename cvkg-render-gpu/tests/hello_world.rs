@@ -596,8 +596,8 @@ fn test_color_theme_struct_layout() {
     let rust_size = size_of::<cvkg_core::ColorTheme>();
 
     assert_eq!(
-        rust_size, 160,
-        "ColorTheme Rust struct size is {} bytes, expected 160. \
+        rust_size, 176,
+        "ColorTheme Rust struct size is {} bytes, expected 176. \
          If you add/remove fields, you MUST update the WGSL struct in common.wgsl \
          to match exactly, including field order and padding.",
         rust_size

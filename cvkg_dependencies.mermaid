@@ -1,25 +1,44 @@
 graph TD
-    cvkg-core["cvkg-core"]
-    cvkg-vdom["cvkg-vdom"]
-    cvkg-scene["cvkg-scene"]
-    cvkg-layout["cvkg-layout"]
-    cvkg-render-gpu["cvkg-render-gpu"]
-    cvkg-render-native["cvkg-render-native"]
-    cvkg-compositor["cvkg-compositor"]
-    cvkg-themes["cvkg-themes"]
-    cvkg-anim["cvkg-anim"]
-    cvkg-flow["cvkg-flow"]
-    cvkg-runic-text["cvkg-runic-text"]
-    cvkg-svg-filters["cvkg-svg-filters"]
-    cvkg-svg-serialize["cvkg-svg-serialize"]
-    cvkg-components["cvkg-components"]
-    cvkg-macros["cvkg-macros"]
-    cvkg-cli["cvkg-cli"]
-    cvkg-webkit-server["cvkg-webkit-server"]
-    cvkg-test["cvkg-test"]
-    cvkg-physics["cvkg-physics"]
-    cvkg["cvkg (umbrella)"]
+    %% Subgraphs for visual structure and tiering
+    subgraph Core ["Core Foundations"]
+        cvkg-core["cvkg-core<br/>(Core traits, state, telemetry)"]
+        cvkg-vdom["cvkg-vdom<br/>(Virtual DOM & diffing)"]
+        cvkg-scene["cvkg-scene<br/>(Scene graph & spatial partitioning)"]
+        cvkg-layout["cvkg-layout<br/>(Constraint layout & Taffy wrapper)"]
+    end
 
+    subgraph Graphics ["Graphics & Shaping Layer"]
+        cvkg-render-gpu["cvkg-render-gpu<br/>(wgpu rendering engine)"]
+        cvkg-compositor["cvkg-compositor<br/>(Compositor, layers, damage)"]
+        cvkg-runic-text["cvkg-runic-text<br/>(Text shaping & BiDi engine)"]
+        cvkg-svg-filters["cvkg-svg-filters<br/>(SVG filter effects)"]
+        cvkg-svg-serialize["cvkg-svg-serialize<br/>(SVG serialization)"]
+    end
+
+    subgraph Platform ["Platform Integration"]
+        cvkg-render-native["cvkg-render-native<br/>(Native backend, windowing)"]
+    end
+
+    subgraph Presentation ["UI & Interaction Layer"]
+        cvkg-themes["cvkg-themes<br/>(OKLCH color, premium materials)"]
+        cvkg-anim["cvkg-anim<br/>(Spring dynamics, particles)"]
+        cvkg-flow["cvkg-flow<br/>(Visual node graph engine)"]
+        cvkg-components["cvkg-components<br/>(Tahoe component library)"]
+    end
+
+    subgraph Infra ["Infrastructure & Tooling"]
+        cvkg-physics["cvkg-physics<br/>(XPBD physics solver)"]
+        cvkg-macros["cvkg-macros<br/>(hamr! DSL macro)"]
+        cvkg-cli["cvkg-cli<br/>(Dev Server & asset pipeline)"]
+        cvkg-webkit-server["cvkg-webkit-server<br/>(axum HTTP/WS server)"]
+        cvkg-test["cvkg-test<br/>(Visual regression comparator)"]
+    end
+
+    subgraph Entry ["Umbrella Crate"]
+        cvkg["cvkg<br/>(Top-level umbrella)"]
+    end
+
+    %% Dependency Connections
     cvkg-vdom --> cvkg-core
     cvkg-vdom --> cvkg-scene
     cvkg-layout --> cvkg-core
@@ -75,3 +94,18 @@ graph TD
     cvkg --> cvkg-components
     cvkg --> cvkg-render-gpu
     cvkg --> cvkg-render-native
+
+    %% Visual Styling Classes for Premium Design (High-Contrast, Harmonious)
+    classDef core fill:#1a1a2e,stroke:#1e293b,color:#e2e8f0,stroke-width:1px
+    classDef render fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:1.5px
+    classDef ui fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
+    classDef infra fill:#1c1917,stroke:#78716c,color:#d6d3d1,stroke-width:1px
+    classDef platform fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-width:1.5px
+    classDef umbrella fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:2px
+
+    class cvkg-core,cvkg-vdom,cvkg-scene,cvkg-layout core
+    class cvkg-render-gpu,cvkg-compositor,cvkg-runic-text,cvkg-svg-filters,cvkg-svg-serialize render
+    class cvkg-render-native platform
+    class cvkg-components,cvkg-themes,cvkg-anim,cvkg-flow ui
+    class cvkg-macros,cvkg-cli,cvkg-webkit-server,cvkg-test,cvkg-physics infra
+    class cvkg umbrella

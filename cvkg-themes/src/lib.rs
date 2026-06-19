@@ -273,6 +273,9 @@ pub fn oklch_to_color_theme(seed: OklchColor) -> cvkg_core::ColorTheme {
         color_space: 0,
         _pad0: 0.0,
         _pad1: 0.0,
+        _pad2: 0.0,
+        _pad3: 0.0,
+        _pad4: 0.0,
     }
 }
 

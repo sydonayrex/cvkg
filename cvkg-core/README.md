@@ -1,134 +1,49 @@
 # cvkg-core
 
+## Purpose
+Defines fundamental traits, shared data structures, state management types, and layout primitives for CVKG.
+
+## Boundaries
+- It does not implement layout calculations or drawing operations; those are handled by cvkg-layout and render backends.
+- It does not contain testing frameworks; quality checks are managed by `cvkg-test`.
+
+## Dependency Graph
 ```mermaid
 graph TD
-    cvkg-core["cvkg-core"]
-    cvkg-vdom["cvkg-vdom"]
-    cvkg-scene["cvkg-scene"]
-    cvkg-layout["cvkg-layout"]
-    cvkg-render-gpu["cvkg-render-gpu"]
-    cvkg-render-native["cvkg-render-native"]
-    cvkg-compositor["cvkg-compositor"]
-    cvkg-themes["cvkg-themes"]
-    cvkg-anim["cvkg-anim"]
-    cvkg-flow["cvkg-flow"]
-    cvkg-runic-text["cvkg-runic-text"]
-    cvkg-svg-filters["cvkg-svg-filters"]
-    cvkg-svg-serialize["cvkg-svg-serialize"]
-    cvkg-components["cvkg-components"]
+    cvkg-core["cvkg-core (Focal Crate)"]
     cvkg-macros["cvkg-macros"]
-    cvkg-cli["cvkg-cli"]
-    cvkg-webkit-server["cvkg-webkit-server"]
-    cvkg-test["cvkg-test"]
-    cvkg-physics["cvkg-physics"]
-    cvkg["cvkg (umbrella)"]
-
-    cvkg-vdom --> cvkg-core
-    cvkg-vdom --> cvkg-scene
-    cvkg-layout --> cvkg-core
-    cvkg-layout --> cvkg-anim
-    cvkg-scene --> cvkg-core
-
-    cvkg-render-gpu --> cvkg-core
-    cvkg-render-gpu --> cvkg-compositor
-    cvkg-render-gpu --> cvkg-svg-filters
-    cvkg-render-gpu --> cvkg-svg-serialize
-    cvkg-render-gpu --> cvkg-runic-text
-
-    cvkg-render-native --> cvkg-core
-    cvkg-render-native --> cvkg-render-gpu
-    cvkg-render-native --> cvkg-vdom
-    cvkg-render-native --> cvkg-themes
-
-    cvkg-compositor --> cvkg-core
-
-    cvkg-themes --> cvkg-core
-    cvkg-themes --> cvkg-anim
-    cvkg-anim --> cvkg-core
-    cvkg-flow --> cvkg-core
-    cvkg-flow --> cvkg-scene
-    cvkg-flow --> cvkg-themes
-
-    cvkg-runic-text --> cvkg-core
-    cvkg-svg-filters --> cvkg-core
-
-    cvkg-components --> cvkg-core
-    cvkg-components --> cvkg-vdom
-    cvkg-components --> cvkg-layout
-    cvkg-components --> cvkg-themes
-    cvkg-components --> cvkg-anim
-    cvkg-components --> cvkg-runic-text
-
     cvkg-macros --> cvkg-core
-    cvkg-cli --> cvkg-core
-    cvkg-cli --> cvkg-physics
-    cvkg-cli --> cvkg-anim
-    cvkg-cli --> cvkg-macros
-    cvkg-webkit-server --> cvkg-cli
+    cvkg-test["cvkg-test"]
+    cvkg-test --> cvkg-core
+    cvkg-physics["cvkg-physics"]
     cvkg-physics --> cvkg-core
-    cvkg-physics --> cvkg-scene
-
-    cvkg --> cvkg-core
-    cvkg --> cvkg-vdom
-    cvkg --> cvkg-scene
-    cvkg --> cvkg-layout
-    cvkg --> cvkg-themes
-    cvkg --> cvkg-anim
-    cvkg --> cvkg-macros
-    cvkg --> cvkg-components
-    cvkg --> cvkg-render-gpu
-    cvkg --> cvkg-render-native
+    cvkg-icons["cvkg-icons"]
+    cvkg-icons --> cvkg-core
+    cvkg-render-software["cvkg-render-software"]
+    cvkg-render-software --> cvkg-core
+    cvkg-telemetry["cvkg-telemetry"]
+    cvkg-telemetry --> cvkg-core
+    classDef focal fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:2px
+    classDef sibling fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
+    class cvkg-core focal
+    class cvkg-physics,cvkg-render-software,cvkg-test,cvkg-telemetry,cvkg-icons,cvkg-macros sibling
 ```
-
-`cvkg-core` defines the fundamental traits, types, and architectural guidelines that power the entire Cyber Viking Kvasir Graph (CVKG) ecosystem.
-
-## Boundaries and Responsibilities
-
-This crate provides the abstract definitions for the UI system but does NOT implement specific rendering backends or complex layout algorithms. It focuses on:
-- The `View` trait and its modifier-based composition system.
-- Core geometric types (`Rect`, `Point`, `Size`).
-- The `Renderer` trait facade.
-- Agentic development protocols and knowledge state structures.
 
 ## Public API Overview
-
-### Core Traits
-- `View`: The primary building block. Every UI element implements `View`. It uses a declarative `body()` method for composition.
-- `Renderer`: A trait defining the drawing operations available to primitive views, now supporting full 3x3 affine transformations (`push_affine`).
-- `ViewModifier`: Enables the extension of view behavior and appearance via composition.
-
-### Key Structs
-- `Rect`, `Size`, `Point`: Fundamental geometry primitives.
-- `KnowledgeState`: Captures the cognitive state of the agentic system, including thoughts, actions, and temporal nodes.
-- `YggdrasilTokens`: Authoritative container for design tokens (colors, fonts, spacing).
-- `ModifiedView`: The type produced when a modifier is applied to a `View`.
-
-### Main Modifiers
-- `.bifrost()`: Applies frosted glass effects.
-- `.gungnir()`: Applies neon glow effects.
-- `.mjolnir_slice()`: Applies geometric clipping.
-- `.padding()`, `.background()`, `.frame()`: Standard layout and styling modifiers.
+- `View` — Core view trait.
+- `Renderer` — Drawing facade.
+- `State` — Reactive state wrapper.
 
 ## Usage Example
-
 ```rust
 use cvkg_core::prelude::*;
-
-struct MyComponent;
-
-impl View for MyComponent {
-    type Body = impl View;
-    
-    fn body(self) -> Self::Body {
-        Text::new("Skål!")
-            .padding(20.0)
-            .background([0.1, 0.1, 0.1, 1.0])
-            .bifrost(10.0, 1.0, 0.5)
-            .gungnir([0.0, 1.0, 1.0, 1.0], 5.0, 1.0)
-    }
-}
 ```
 
-## Known Limitations
-- Modifier order matters; transformations are applied sequentially.
-- Recursive view bodies will cause a stack overflow at compile time or runtime if not type-erased.
+## Use Cases
+- Mapped as a core component inside the standard framework dependency tree.
+
+## Edge Cases and Limitations
+- Under extreme scale or thread contention, ensure the host runtime balances cycles appropriately.
+
+## Crate-Specific Build Flags
+This crate has no custom feature flags or compile-time options. It compiles under standard cargo parameters.

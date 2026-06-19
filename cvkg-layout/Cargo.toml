@@ -48,3 +48,15 @@ optional = true
 
 [dependencies.taffy]
 version = "0.6"
+
+[dependencies.log]
+version = "0.4"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "layout_benches"
+path = "benches/layout_benches.rs"
+harness = false
+

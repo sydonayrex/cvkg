@@ -852,10 +852,10 @@ fn convex_hull_graham(points: &[Vec2]) -> Vec<Vec2> {
         .collect();
 
     sorted.sort_by(|a, b| {
-        a.0.partial_cmp(&b.0).unwrap().then_with(|| {
+        a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal).then_with(|| {
             let da = (a.1 - pivot).length_squared();
             let db = (b.1 - pivot).length_squared();
-            da.partial_cmp(&db).unwrap()
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
         })
     });
 

@@ -104,7 +104,7 @@ struct ColorBlindUniforms {
     matrix_2: vec3<f32>,
     mode: u32,
     intensity: f32,  // 0.0 = no effect, 1.0 = full simulation
-    color_space: 0,
+    color_space: u32,
     _pad0: f32,
     _pad1: f32,
 };

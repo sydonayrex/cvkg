@@ -33,6 +33,9 @@ path = "src/lib.rs"
 name = "vdom_integration_tests"
 path = "tests/vdom_integration_tests.rs"
 
+[dependencies]
+cvkg-runic-text.workspace = true
+
 [dependencies.accesskit]
 version = "0.24"
 

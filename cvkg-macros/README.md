@@ -1,129 +1,42 @@
 # cvkg-macros
 
+## Purpose
+Procedural macros scaffolding DSL view bodies and reactive state bindings.
+
+## Boundaries
+- It does not process dynamic runtime layout constraints.
+- It does not contain testing frameworks; quality checks are managed by `cvkg-test`.
+
+## Dependency Graph
 ```mermaid
 graph TD
+    cvkg-macros["cvkg-macros (Focal Crate)"]
     cvkg-core["cvkg-core"]
-    cvkg-vdom["cvkg-vdom"]
-    cvkg-scene["cvkg-scene"]
-    cvkg-layout["cvkg-layout"]
-    cvkg-render-gpu["cvkg-render-gpu"]
-    cvkg-render-native["cvkg-render-native"]
-    cvkg-compositor["cvkg-compositor"]
-    cvkg-themes["cvkg-themes"]
-    cvkg-anim["cvkg-anim"]
-    cvkg-flow["cvkg-flow"]
-    cvkg-runic-text["cvkg-runic-text"]
-    cvkg-svg-filters["cvkg-svg-filters"]
-    cvkg-svg-serialize["cvkg-svg-serialize"]
-    cvkg-components["cvkg-components"]
-    cvkg-macros["cvkg-macros"]
-    cvkg-cli["cvkg-cli"]
-    cvkg-webkit-server["cvkg-webkit-server"]
-    cvkg-test["cvkg-test"]
-    cvkg-physics["cvkg-physics"]
-    cvkg["cvkg (umbrella)"]
-
-    cvkg-vdom --> cvkg-core
-    cvkg-vdom --> cvkg-scene
-    cvkg-layout --> cvkg-core
-    cvkg-layout --> cvkg-anim
-    cvkg-scene --> cvkg-core
-
-    cvkg-render-gpu --> cvkg-core
-    cvkg-render-gpu --> cvkg-compositor
-    cvkg-render-gpu --> cvkg-svg-filters
-    cvkg-render-gpu --> cvkg-svg-serialize
-    cvkg-render-gpu --> cvkg-runic-text
-
-    cvkg-render-native --> cvkg-core
-    cvkg-render-native --> cvkg-render-gpu
-    cvkg-render-native --> cvkg-vdom
-    cvkg-render-native --> cvkg-themes
-
-    cvkg-compositor --> cvkg-core
-
-    cvkg-themes --> cvkg-core
-    cvkg-themes --> cvkg-anim
-    cvkg-anim --> cvkg-core
-    cvkg-flow --> cvkg-core
-    cvkg-flow --> cvkg-scene
-    cvkg-flow --> cvkg-themes
-
-    cvkg-runic-text --> cvkg-core
-    cvkg-svg-filters --> cvkg-core
-
-    cvkg-components --> cvkg-core
-    cvkg-components --> cvkg-vdom
-    cvkg-components --> cvkg-layout
-    cvkg-components --> cvkg-themes
-    cvkg-components --> cvkg-anim
-    cvkg-components --> cvkg-runic-text
-
     cvkg-macros --> cvkg-core
-    cvkg-cli --> cvkg-core
-    cvkg-cli --> cvkg-physics
-    cvkg-cli --> cvkg-anim
-    cvkg-cli --> cvkg-macros
-    cvkg-webkit-server --> cvkg-cli
-    cvkg-physics --> cvkg-core
-    cvkg-physics --> cvkg-scene
-
-    cvkg --> cvkg-core
-    cvkg --> cvkg-vdom
-    cvkg --> cvkg-scene
-    cvkg --> cvkg-layout
-    cvkg --> cvkg-themes
-    cvkg --> cvkg-anim
-    cvkg --> cvkg-macros
-    cvkg --> cvkg-components
-    cvkg --> cvkg-render-gpu
-    cvkg --> cvkg-render-native
+    cvkg-components["cvkg-components"]
+    cvkg-macros --> cvkg-components
+    cvkg-test["cvkg-test"]
+    cvkg-test --> cvkg-macros
+    classDef focal fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:2px
+    classDef sibling fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
+    class cvkg-macros focal
+    class cvkg-test,cvkg-core,cvkg-components sibling
 ```
-
-`cvkg-macros` provides the procedural macros that power the CVKG developer experience, automating boilerplate and enabling a declarative, SwiftUI-like syntax in Rust.
-
-## Boundaries and Responsibilities
-
-This crate provides compile-time transformations. It does NOT contain runtime logic. Its responsibilities include:
-- Transforming functions into `View` structs via `#[view_component]`.
-- Automating state management boilerplate with `#[state]` and `#[binding]`.
-- Providing the `view! { ... }` DSL for hierarchical UI definition.
-- Deriving the `View` trait for structs to enable modifier-based composition.
-- Generating VDOM metadata and serialization logic for data models.
 
 ## Public API Overview
-
-### Attribute Macros
-- `#[view_component]`: The primary macro for creating UI components. It generates a struct and implements the `View` trait for the decorated function.
-- `#[state]`: Automatically derives `Clone`, `Debug`, `Default`, and `Serde` traits for state containers.
-- `#[binding]`: Marks a struct as a reactive read/write reference to parent state.
-
-### Derive Macros
-- `#[derive(View)]`: Implements `cvkg_core::View` for a struct, defaulting to a primitive view unless a `body` method is present.
-
-### Function-like Macros
-- `view! { ... }`: A DSL for nesting components and applying modifiers in a readable hierarchy.
-- `cvkg_model! { ... }`: Generates data models with unique VDOM identifiers for efficient reconciliation.
+- `#[derive(View)]` — Macro macro derivation.
+- `hamr!` — View composition DSL.
 
 ## Usage Example
-
 ```rust
-use cvkg::prelude::*;
-
-#[view_component]
-fn Profile(name: String, rank: u32) {
-    HStack::new(8.0) {
-        Image::new("avatar_placeholder")
-            .frame(40.0, 40.0);
-            
-        VStack::new(2.0, Alignment::Leading) {
-            Text::new(name).bold();
-            Text::new(format!("Rank: {}", rank)).caption();
-        }
-    }
-}
+use cvkg_macros::View;
 ```
 
-## Known Limitations
-- Macro expansion can significantly increase compile times for extremely large view trees; use `view_component` to break down complex UIs.
-- Error messages from inside macros can sometimes be opaque; always check the generated code if debugging complex transformations.
+## Use Cases
+- Mapped as a core component inside the standard framework dependency tree.
+
+## Edge Cases and Limitations
+- Under extreme scale or thread contention, ensure the host runtime balances cycles appropriately.
+
+## Crate-Specific Build Flags
+This crate has no custom feature flags or compile-time options. It compiles under standard cargo parameters.

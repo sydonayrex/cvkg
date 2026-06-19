@@ -114,18 +114,16 @@ name = "theming_test"
 path = "tests/theming_test.rs"
 
 [dependencies]
+cvkg-runic-text= { version = "0.2.13", path = "../cvkg-runic-text" }
 rfd.workspace = true
 
-[dependencies.arboard]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.arboard]
 workspace = true
 
 [dependencies.cvkg-anim]
 version = "0.2.13"
 
 [dependencies.cvkg-core]
-version = "0.2.13"
-
-[dependencies.cvkg-runic-text]
 version = "0.2.13"
 
 [dependencies.cvkg-layout]

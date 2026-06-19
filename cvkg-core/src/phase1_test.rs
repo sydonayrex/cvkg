@@ -4,6 +4,14 @@
 //! can be assembled into a minimal app that compiles, runs, and toggles state.
 
 #[cfg(test)]
+static TEST_MUTEX: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+
+#[cfg(test)]
+fn lock_test() -> std::sync::MutexGuard<'static, ()> {
+    TEST_MUTEX.get_or_init(|| std::sync::Mutex::new(())).lock().unwrap()
+}
+
+#[cfg(test)]
 mod tests {
     use crate::{Never, State, View};
 
@@ -98,6 +106,7 @@ mod phase2_tests {
     /// Sequential read-after-write: update is immediately visible to load.
     #[test]
     fn test_update_then_load_is_consistent() {
+        let _lock = super::lock_test();
         // Write a known fragment into global state
         update_system_state(|s| {
             let mut s = s.clone();
@@ -126,6 +135,7 @@ mod phase2_tests {
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
     fn test_concurrent_readers_no_deadlock() {
+        let _lock = super::lock_test();
         use std::sync::{Arc, Barrier};
         use std::thread;
 
@@ -299,6 +309,7 @@ mod phase6_tests {
     /// committed snapshot -- transact_system_state is not split across two separate stores.
     #[test]
     fn test_transact_system_state_multi_field_coherence() {
+        let _lock = super::lock_test();
         transact_system_state(|s| {
             let mut s = s.clone();
             s.remember(KnowledgeFragment {
@@ -332,6 +343,7 @@ mod phase6_tests {
     /// tests that share the same global SYSTEM_STATE / KNOWLEDGE_TVAR.
     #[test]
     fn test_transact_system_state_no_lost_updates() {
+        let _lock = super::lock_test();
         use std::sync::{Arc, Barrier};
         use std::thread;
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -387,6 +399,7 @@ mod phase6_tests {
     /// observable (sequential test -- concurrent variant would require a spin-read thread).
     #[test]
     fn test_transact_pair_atomic_swap() {
+        let _lock = super::lock_test();
         let state_a = State::new(10u32);
         let state_b = State::new(20u32);
 
@@ -444,6 +457,7 @@ mod phase7_tests {
 
     #[test]
     fn test_batch_defers_notifications() {
+        let _lock = crate::phase1_test::lock_test();
         let state_a = State::new(10);
         let state_b = State::new(20);
 

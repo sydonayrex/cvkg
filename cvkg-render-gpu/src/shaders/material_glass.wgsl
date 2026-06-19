@@ -140,12 +140,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     color.a *= clip_alpha;
     // Early exit for zero intensity: skip all expensive glass computation
     let gi = in.glass_intensity;
-    if gi < 0.01 {
-        let alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
-        if alpha <= 0.0 { discard; }
-        return vec4<f32>(color.rgb, alpha);
-    }
-
 
     // Geometric Slice (Mjolnir Slice)
     if (in.slice.z > 0.5) {
@@ -211,6 +205,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         d_sdf = sd_squircle(in.logical - half_size, half_size, squircle_n);
     } else {
         d_sdf = sd_round_rect(in.logical - half_size, half_size - in.radius, in.radius);
+    }
+
+    if gi < 0.01 {
+        let alpha = color.a * (1.0 - smoothstep(-fw, fw, d_sdf));
+        if alpha <= 0.0 { discard; }
+        return vec4<f32>(color.rgb, alpha);
     }
 
     // ─── Section 4: Backdrop Sampling with Chromatic Aberration ──────────────
