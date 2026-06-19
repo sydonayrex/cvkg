@@ -1956,9 +1956,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
         if now.duration_since(self.last_frame_time) >= target_interval {
             self.last_frame_time = now;
-            // Only request redraw if the view has changed or rage is still decaying.
-            // This avoids unnecessary GPU work for static frames.
-            let needs_redraw = self.view.changed() || self.rage > 0.0;
+            // Only request redraw if the view has actually changed.
+            // changed() returns true when rage, menu, or counters differ from last frame.
+            // This avoids unnecessary GPU work for static frames (rage == 0, no interaction).
+            let needs_redraw = self.view.changed();
             if needs_redraw {
                 for window_state in self.window_manager.windows.values() {
                     window_state.window.request_redraw();
