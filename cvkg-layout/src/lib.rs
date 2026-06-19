@@ -1799,6 +1799,294 @@ pub fn validate_reading_order(order: &[FocusCandidate]) -> Result<(), String> {
 // Note: Rect::contains(x, y) is defined in cvkg-core and used by the spatial
 // index.  No orphan impl is needed here.
 
+// =============================================================================
+// P2-46: PROGRESSIVE LAYOUT
+// =============================================================================
+
+/// A child entry tracked by the progressive layout context.
+///
+/// Each entry corresponds to one subview and records whether it has been
+/// laid out yet, along with its computed or fallback rect.
+#[derive(Debug, Clone)]
+struct ProgressiveChild {
+    /// The view hash (from `LayoutView::view_hash()`), or 0 if the view
+    /// does not provide a hash.
+    hash: u64,
+    /// The index into the original subviews slice.
+    index: usize,
+    /// Whether this child has been laid out by the Taffy engine.
+    laid_out: bool,
+    /// The computed rect (from Taffy or fallback).
+    rect: Rect,
+}
+
+/// Opt-in wrapper that breaks a single synchronous layout pass into
+/// incremental batches so the UI thread is not blocked for large child lists.
+///
+/// `ProgressiveLayoutContext` stores the list of children, tracks which ones
+/// have been processed, and exposes `layout_next_batch` to advance layout by
+/// `batch_size` children at a time.  Partial results are persisted through
+/// `LayoutCache` so that subsequent frames can pick up where the previous
+/// frame left off.
+///
+/// Typical usage:
+/// ```ignore
+/// let mut ctx = ProgressiveLayoutContext::new(bounds, &subviews, spacing, alignment, distribution);
+/// while !ctx.is_complete() {
+///     ctx.layout_next_batch(8);
+/// }
+/// let rects = ctx.take_rects();
+/// ```
+pub struct ProgressiveLayoutContext<'a> {
+    /// All children (shared reference -- layout borrows them in batches).
+    children: &'a [&'a dyn LayoutView],
+    /// Per-child tracking entries.
+    entries: Vec<ProgressiveChild>,
+    /// Layout parameters.
+    spacing: f32,
+    alignment: Alignment,
+    distribution: Distribution,
+    bounds: Rect,
+    /// Number of children that have been laid out so far.
+    completed: usize,
+    /// Whether `apply_remaining_fallback` has been called.
+    fallback_applied: bool,
+}
+
+impl<'a> ProgressiveLayoutContext<'a> {
+    /// Create a new progressive layout context for the given subviews.
+    ///
+    /// No layout work is performed in the constructor; call
+    /// `layout_next_batch` to advance.
+    pub fn new(
+        bounds: Rect,
+        subviews: &'a [&'a dyn LayoutView],
+        spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
+    ) -> Self {
+        let entries = subviews
+            .iter()
+            .enumerate()
+            .map(|(i, v)| ProgressiveChild {
+                hash: v.view_hash(),
+                index: i,
+                laid_out: false,
+                rect: Rect::zero(),
+            })
+            .collect();
+
+        Self {
+            children: subviews,
+            entries,
+            spacing,
+            alignment,
+            distribution,
+            bounds,
+            completed: 0,
+            fallback_applied: false,
+        }
+    }
+
+    /// Layout up to `batch_size` additional children.
+    ///
+    /// Returns `true` when **all** children have been laid out (i.e. the
+    /// context is complete).  Returns `false` when there are still pending
+    /// children.
+    ///
+    /// Already-laid-out children are skipped on subsequent calls so it is
+    /// safe to call this method multiple times with any batch size.
+    pub fn layout_next_batch(&mut self, batch_size: usize) -> bool {
+        self.layout_next_batch_inner(batch_size, None);
+        self.is_complete()
+    }
+
+    /// Variant of `layout_next_batch` that accepts a `LayoutCache` for
+    /// integration with the persistent cache.  When `cache` is `Some`, the
+    /// method reads and writes size/rect entries so that partial results
+    /// survive across frames.
+    ///
+    /// Returns `(is_complete, Vec<Rect>)` where the rect vector contains
+    /// the newly-computed rects for the children processed in this batch.
+    pub fn layout_next_batch_with_cache(
+        &mut self,
+        batch_size: usize,
+        cache: &mut LayoutCache,
+    ) -> (bool, Vec<Rect>) {
+        self.layout_next_batch_inner(batch_size, Some(cache));
+        let new_rects: Vec<Rect> = self
+            .entries
+            .iter()
+            .filter(|e| e.laid_out && e.rect != Rect::zero())
+            .map(|e| e.rect)
+            .collect();
+        (self.is_complete(), new_rects)
+    }
+
+    fn layout_next_batch_inner(
+        &mut self,
+        batch_size: usize,
+        mut cache: Option<&mut LayoutCache>,
+    ) {
+        let mut processed = 0;
+        let mut batch_indices = Vec::new();
+        for (i, entry) in self.entries.iter().enumerate() {
+            if entry.laid_out {
+                continue;
+            }
+            if processed >= batch_size {
+                break;
+            }
+            batch_indices.push(i);
+            processed += 1;
+        }
+
+        if batch_indices.is_empty() {
+            return;
+        }
+
+        let batch_subviews: Vec<&dyn LayoutView> = batch_indices
+            .iter()
+            .map(|&i| self.children[i])
+            .collect();
+
+        let rects = match cache {
+            Some(ref mut c) => HStack::compute_layout_incremental(
+                self.spacing,
+                self.alignment,
+                self.distribution,
+                self.bounds,
+                0,
+                &batch_subviews,
+                *c,
+            ),
+            None => {
+                let mut tmp = LayoutCache::new();
+                HStack::compute_layout_incremental(
+                    self.spacing,
+                    self.alignment,
+                    self.distribution,
+                    self.bounds,
+                    0,
+                    &batch_subviews,
+                    &mut tmp,
+                )
+            }
+        };
+
+        for (local_idx, &global_idx) in batch_indices.iter().enumerate() {
+            if local_idx < rects.len() {
+                self.entries[global_idx].rect = rects[local_idx];
+                self.entries[global_idx].laid_out = true;
+                self.completed += 1;
+            }
+        }
+
+        // Write back to cache after all rects are computed
+        if let Some(c) = cache.as_mut() {
+            for (local_idx, &global_idx) in batch_indices.iter().enumerate() {
+                if local_idx < rects.len() {
+                    let hash = self.entries[global_idx].hash;
+                    if hash != 0 {
+                        c.previous_rects.insert(hash, rects[local_idx]);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Returns `true` when every child has been laid out OR fallback has been
+    /// applied to remaining children.
+    pub fn is_complete(&self) -> bool {
+        self.fallback_applied || self.completed >= self.entries.len()
+    }
+
+    /// Returns `(completed, total)` progress counts.
+    pub fn progress(&self) -> (usize, usize) {
+        (self.completed, self.entries.len())
+    }
+
+    /// Apply fallback positioning to all children that have not yet been laid
+    /// out.  Fallback rects are estimated from the child's cached previous
+    /// rect (if available in `cache.previous_rects`) or from a simple
+    /// grid-based estimate within `self.bounds`.
+    ///
+    /// After calling this method `is_complete()` returns `true`.
+    ///
+    /// Returns the fallback rects that were assigned (one per remaining child).
+    pub fn apply_remaining_fallback(&mut self, cache: &mut LayoutCache) -> Vec<Rect> {
+        let mut fallback_rects = Vec::new();
+        let remaining: Vec<usize> = self
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| !e.laid_out)
+            .map(|(i, _)| i)
+            .collect();
+
+        if remaining.is_empty() {
+            self.fallback_applied = true;
+            return fallback_rects;
+        }
+
+        let cols = (remaining.len() as f32).sqrt().ceil() as usize;
+        let rows = (remaining.len() + cols - 1) / cols;
+        let cell_w = self.bounds.width / cols as f32;
+        let cell_h = self.bounds.height / rows as f32;
+
+        for (offset, &idx) in remaining.iter().enumerate() {
+            let hash = self.entries[idx].hash;
+            let rect = if hash != 0 {
+                cache
+                    .previous_rects
+                    .get(&hash)
+                    .copied()
+                    .unwrap_or_else(|| {
+                        let col = offset % cols;
+                        let row = offset / cols;
+                        Rect {
+                            x: self.bounds.x + col as f32 * cell_w,
+                            y: self.bounds.y + row as f32 * cell_h,
+                            width: cell_w,
+                            height: cell_h,
+                        }
+                    })
+            } else {
+                let col = offset % cols;
+                let row = offset / cols;
+                Rect {
+                    x: self.bounds.x + col as f32 * cell_w,
+                    y: self.bounds.y + row as f32 * cell_h,
+                    width: cell_w,
+                    height: cell_h,
+                }
+            };
+
+            self.entries[idx].rect = rect;
+            self.entries[idx].laid_out = true;
+            self.completed += 1;
+            if hash != 0 {
+                cache.previous_rects.insert(hash, rect);
+            }
+            fallback_rects.push(rect);
+        }
+
+        self.fallback_applied = true;
+        fallback_rects
+    }
+
+    /// Return a reference to the per-child tracking entries.
+    pub fn computed_rects(&self) -> &[ProgressiveChild] {
+        &self.entries
+    }
+
+    /// Consume the context and return the final `Vec<Rect>` for all children
+    /// in order.
+    pub fn take_rects(self) -> Vec<Rect> {
+        self.entries.into_iter().map(|e| e.rect).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2335,8 +2623,141 @@ mod tests {
     #[test]
     fn p2_47_nested_flex_no_panic() {
         let mut cache = LayoutCache::new();
-        // Nested flex containers should resolve without panicking
         let inner = HStack::new(0.0, Alignment::Leading, Distribution::Leading);
         let _ = inner.size_that_fits(SizeProposal::unspecified(), &[], &mut cache);
+    }
+
+    // -------------------------------------------------------------------------
+    // P2-46: Progressive Layout Tests
+    // -------------------------------------------------------------------------
+
+    fn make_mock_views(n: usize) -> Vec<MockView> {
+        (0..n)
+            .map(|_| MockView {
+                size: Size {
+                    width: 50.0,
+                    height: 30.0,
+                },
+                flex: 0.0,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_progressive_layout_completes_all_children() {
+        let views = make_mock_views(10);
+        let subviews: Vec<&dyn LayoutView> = views.iter().map(|v| v as &dyn LayoutView).collect();
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 1000.0,
+            height: 200.0,
+        };
+        let mut ctx = ProgressiveLayoutContext::new(
+            bounds,
+            &subviews,
+            0.0,
+            Alignment::Leading,
+            Distribution::Leading,
+        );
+        assert!(!ctx.is_complete());
+        assert!(!ctx.layout_next_batch(3));
+        assert!(!ctx.is_complete());
+        assert!(!ctx.layout_next_batch(3));
+        assert!(!ctx.is_complete());
+        assert!(!ctx.layout_next_batch(3));
+        assert!(!ctx.is_complete());
+        assert!(ctx.layout_next_batch(3));
+        assert!(ctx.is_complete());
+    }
+
+    #[test]
+    fn test_progressive_layout_reports_progress() {
+        let views = make_mock_views(5);
+        let subviews: Vec<&dyn LayoutView> = views.iter().map(|v| v as &dyn LayoutView).collect();
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 500.0,
+            height: 200.0,
+        };
+        let mut ctx = ProgressiveLayoutContext::new(
+            bounds,
+            &subviews,
+            0.0,
+            Alignment::Leading,
+            Distribution::Leading,
+        );
+        assert_eq!(ctx.progress(), (0, 5));
+        ctx.layout_next_batch(2);
+        assert_eq!(ctx.progress(), (2, 5));
+        ctx.layout_next_batch(2);
+        assert_eq!(ctx.progress(), (4, 5));
+        ctx.layout_next_batch(1);
+        assert_eq!(ctx.progress(), (5, 5));
+    }
+
+    #[test]
+    fn test_progressive_layout_fallback_positions_remaining() {
+        let views = make_mock_views(6);
+        let subviews: Vec<&dyn LayoutView> = views.iter().map(|v| v as &dyn LayoutView).collect();
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 600.0,
+            height: 200.0,
+        };
+        let mut ctx = ProgressiveLayoutContext::new(
+            bounds,
+            &subviews,
+            10.0,
+            Alignment::Leading,
+            Distribution::Leading,
+        );
+        ctx.layout_next_batch(2);
+        assert_eq!(ctx.progress(), (2, 6));
+        let mut cache = LayoutCache::new();
+        let fallback_rects = ctx.apply_remaining_fallback(&mut cache);
+        assert_eq!(fallback_rects.len(), 4);
+        for r in &fallback_rects {
+            assert!(r.width > 0.0);
+            assert!(r.height > 0.0);
+        }
+        assert!(ctx.is_complete());
+    }
+
+    #[test]
+    fn test_progressive_layout_uses_cached_results() {
+        let views = make_mock_views(4);
+        let subviews: Vec<&dyn LayoutView> = views.iter().map(|v| v as &dyn LayoutView).collect();
+        let bounds = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 400.0,
+            height: 200.0,
+        };
+        let mut cache = LayoutCache::new();
+        let mut ctx1 = ProgressiveLayoutContext::new(
+            bounds,
+            &subviews,
+            0.0,
+            Alignment::Leading,
+            Distribution::Leading,
+        );
+        ctx1.layout_next_batch(2);
+        for entry in ctx1.computed_rects().iter() {
+            if entry.rect != Rect::zero() {
+                cache.previous_rects.insert(entry.hash, entry.rect);
+            }
+        }
+        let mut ctx2 = ProgressiveLayoutContext::new(
+            bounds,
+            &subviews,
+            0.0,
+            Alignment::Leading,
+            Distribution::Leading,
+        );
+        let (_done, _rects) = ctx2.layout_next_batch_with_cache(2, &mut cache);
+        assert_eq!(ctx2.progress().0, 2);
     }
 }

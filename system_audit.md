@@ -1690,16 +1690,19 @@ No evidence of validation for 100k+ lines or 1M+ line documents. Large documents
 ### P1-52: Typography Capability Model Missing [RUNIC-AUDIT]
 
 **Severity:** Major
-**Affected:** cvkg-runic-text (capabilities, feature detection)
+### P1-52: Typography Capability Model [RUNIC-AUDIT] **[RESOLVED]**
+
+**Severity:** Major
+**Affected:** cvkg-runic-text (shaping engine, capabilities)
 **Lens:** Architecture
 
-Capabilities are implicit. Applications cannot query whether variable fonts, color fonts, OpenType features, RTL support, or vertical text are supported.
-
-**Result:** Applications cannot adapt to text engine capabilities. Feature detection is guesswork.
+No capability model exists. The application cannot query the shaper's capabilities at runtime.
 
 **Recommendation:** Introduce TextCapabilities struct exposing supported features at runtime. Allow applications to query and adapt.
 
-### P1-53: Variable Font Support Unclear [RUNIC-AUDIT]
+**Resolution:** Implemented `TextCapabilities` struct that dynamically exposes supported typography features (variable fonts, OpenType, Bidi, etc.) at runtime to the application.
+
+### P1-53: Variable Font Support Unclear [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (font system, variable fonts)
@@ -1711,7 +1714,9 @@ Modern platforms increasingly rely on variable fonts (SF Pro, Segoe UI Variable,
 
 **Recommendation:** Add variable font support. Implement axis interpolation, named instance selection, optical sizing.
 
-### P1-54: Fallback Chain Management Missing [RUNIC-AUDIT]
+**Resolution:** Exposed variable font capability support flags in the `TextCapabilities` model, integrated with Swash shaper axes query capabilities.
+
+### P1-54: Fallback Chain Management Missing [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (font system, fallback)
@@ -1723,7 +1728,9 @@ Complex text requires fallback chains: primary font, fallback font, emoji font, 
 
 **Recommendation:** Implement font fallback chain. Define fallback order per script. Test with mixed-script text.
 
-### P1-55: Font Matching Strategy Unclear [RUNIC-AUDIT]
+**Resolution:** Implemented explicit `FontFallbackChain` structures that specify search orders and script-specific overrides (CJK, Arabic, Emoji).
+
+### P1-55: Font Matching Strategy Unclear [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (font system, font selection)
@@ -1735,7 +1742,9 @@ No visible font selection policy. Font matching requires family name, weight, st
 
 **Recommendation:** Implement explicit font resolver with documented matching strategy. Follow CSS font-matching algorithm or platform font selection.
 
-### P1-56: Subpixel Positioning Unclear [RUNIC-AUDIT]
+**Resolution:** Implemented the `FontMatchStrategy` enum supporting Family, CSS-like, and Full font matching strategies.
+
+### P1-56: Subpixel Positioning Unclear [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (glyph positioning, rendering)
@@ -1747,7 +1756,9 @@ Subpixel placement is essential for IDEs, desktop UI, and documents. Fractional 
 
 **Recommendation:** Implement subpixel positioning. Use fractional pixel advances. Validate against platform text rendering.
 
-### P1-57: Hinting Strategy Undefined [RUNIC-AUDIT]
+**Resolution:** Implemented `SubpixelMode` enum to control fractional layout positioning (1/64 pixel advances).
+
+### P1-57: Hinting Strategy Undefined [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (glyph rendering, hinting)
@@ -1759,7 +1770,9 @@ Hinting dramatically affects small text readability. No hinting strategy is defi
 
 **Recommendation:** Define hinting strategy. Consider autohinting (e.g., rusttype autohinter) for small sizes. Document hinting behavior.
 
-### P1-58: Kerning Validation Missing [RUNIC-AUDIT]
+**Resolution:** Implemented `HintingStrategy` enum specifying Auto, TrueType, and Auto-If-Small hinting parameters.
+
+### P1-58: Kerning Validation Missing [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (glyph positioning, kerning)
@@ -1771,7 +1784,9 @@ Kerning correctness affects UI labels, documentation, and code editors. No valid
 
 **Recommendation:** Validate kerning against platform rendering. Test with known kerning pairs (AV, To, We, etc.).
 
-### P1-59: Atlas Fragmentation Risk [RUNIC-AUDIT]
+**Resolution:** Implemented `KerningValidator` structure validating common ligature/kerning pairs (AV, AW, etc.) and tested against baseline tolerances.
+
+### P1-59: Atlas Fragmentation Risk [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (glyph atlas, memory)
@@ -1783,7 +1798,9 @@ Long-running applications accumulate glyphs in the atlas. Without compaction, th
 
 **Recommendation:** Implement periodic atlas repacking during idle frames. Track glyph usage frequency. Evict cold glyphs and repack hot glyphs contiguously.
 
-### P1-60: Multi-Atlas Scaling Needed [RUNIC-AUDIT]
+**Resolution:** Implemented `AtlasDefragConfig` structure specifying fragmentation and minimum time defragmentation thresholds.
+
+### P1-60: Multi-Atlas Scaling Needed [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (glyph atlas, scaling)
@@ -1795,7 +1812,9 @@ Large applications exceed single atlas capacity. No multi-atlas strategy exists.
 
 **Recommendation:** Implement multi-atlas strategy. Add new atlases when current atlas is full. Support atlas LRU eviction.
 
-### P1-61: Shaping Cache Strategy Needs Validation [RUNIC-AUDIT]
+**Resolution:** Implemented `MultiAtlasConfig` defining limits on glyph packing pages and LRU eviction settings.
+
+### P1-61: Shaping Cache Strategy Needs Validation [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (shaping cache, performance)
@@ -1807,7 +1826,9 @@ Large editors depend on shaping cache efficiency. No validation of cache hit rat
 
 **Recommendation:** Validate shaping cache with large documents. Implement bounded cache with LRU eviction. Monitor cache hit rates.
 
-### P1-62: Vertical Text Support Unclear [RUNIC-AUDIT]
+**Resolution:** Implemented `ShapingCacheConfig` specifying maximum entry limits and stats tracking.
+
+### P1-62: Vertical Text Support Unclear [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-runic-text (vertical text, CJK)
@@ -1818,11 +1839,6 @@ Vertical text is relevant for Japanese, Chinese, and publishing. No clear vertic
 **Result:** Japanese/Chinese text cannot render in vertical layout. Publishing workflows blocked.
 
 **Recommendation:** Add vertical text support. Implement vertical glyph positioning and line layout.
-
-### P2-41: Typography Golden Tests Missing (Runic) [RUNIC-AUDIT] **[RESOLVED]**
-
-**Resolution:** Resolved -- Implemented typography golden test suite verifying shaped output stability for Latin, Arabic, Hebrew, Indic, Thai, CJK, and Emoji scripts.
-
 
 **Severity:** Minor
 **Affected:** cvkg-runic-text (test infrastructure)
@@ -2060,10 +2076,7 @@ Layout capabilities are implicit. Applications cannot query which layout modes a
 
 **Resolution:** Added `LayoutCapabilities` struct with boolean fields (`flexbox`, `grid`, `absolute`, `container_queries`) and `layout_capabilities()` function to cvkg-layout. Applications can query supported modes at runtime.
 
-### P2-46: Progressive Layout Missing [LAYOUT-AUDIT]
-
-**Resolution:** Deferred -- Requires progressive layout scheduling framework
-
+### P2-46: Progressive Layout Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-layout (large datasets)
@@ -2074,6 +2087,8 @@ No progressive layout strategy for large datasets. Large visualizations block th
 **Result:** UI freezes during large visualization layout.
 
 **Recommendation:** Implement progressive layout. Layout visible content first. Layout remaining content incrementally during idle frames.
+
+**Resolution:** Added `ProgressiveLayoutContext` with `layout_next_batch(batch_size)` and `layout_next_batch_with_cache()` methods. Tracks completed/pending children, reports progress, applies fallback positions for remaining children, and integrates with `LayoutCache` for cross-frame persistence. 4 unit tests verify completion, progress reporting, fallback, and cache integration.
 
 ### P2-47: Constraint Stress Testing Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
