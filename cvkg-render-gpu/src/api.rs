@@ -1526,7 +1526,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     /// Phase 2.1: text shaping cache lookup.
-    /// Uses text.shaped_cache which stores full ShapedText objects.
+    /// Uses text.shaped_cache which stores Arc<ShapedText>.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
         let cache_key = (text.to_string(), (size * 100.0) as u32);
         if let Some(shaped) = self.text.shaped_cache.get(&cache_key) {
@@ -1541,6 +1541,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
             cvkg_runic_text::TextAlign::Start,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
+            let shaped = std::sync::Arc::new(shaped);
             let result = (shaped.width, shaped.height);
             self.text.shaped_cache.insert(cache_key, shaped);
             result
@@ -1552,22 +1553,29 @@ impl cvkg_core::Renderer for SurtrRenderer {
     /// Phase 2.2: Override draw_text to use the shaped text cache.
     /// The default trait implementation calls shape_rich_text every frame.
     /// This override checks the shaped_cache first, avoiding redundant HarfBuzz shaping.
+    /// Uses Arc<ShapedText> to avoid cloning glyph data on cache hit.
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         let cache_key = (text.to_string(), (size * 100.0) as u32);
         let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
         let g = (color[1] * 255.0).clamp(0.0, 255.0) as u8;
         let b = (color[2] * 255.0).clamp(0.0, 255.0) as u8;
         let a = (color[3] * 255.0).clamp(0.0, 255.0) as u8;
-        // Clone out of cache first to avoid borrow conflict with draw_shaped_text.
+        // Get Arc clone (atomic increment, no heap allocation) to avoid borrow conflict.
         let cached = self.text.shaped_cache.get(&cache_key).cloned();
-        if let Some(mut shaped) = cached {
+        if let Some(shaped) = cached {
+            // Check if the cached color matches -- if so, draw directly without modification.
             let color_matches = shaped.spans.first()
                 .map(|s| s.style.color == [r, g, b, a])
                 .unwrap_or(false);
-            if !color_matches {
-                for span in &mut shaped.spans {
-                    span.style.color = [r, g, b, a];
-                }
+            if color_matches {
+                self.draw_shaped_text(&shaped, x, y);
+                return;
+            }
+            // Color differs -- we need to clone just the spans to update color.
+            // The glyphs are shared via Arc, so this is much cheaper than cloning everything.
+            let mut shaped = (*shaped).clone();
+            for span in &mut shaped.spans {
+                span.style.color = [r, g, b, a];
             }
             self.draw_shaped_text(&shaped, x, y);
             return;
@@ -1582,8 +1590,9 @@ impl cvkg_core::Renderer for SurtrRenderer {
             cvkg_runic_text::TextAlign::Start,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
-            self.text.shaped_cache.insert(cache_key, shaped.clone());
+            let shaped = std::sync::Arc::new(shaped);
             self.draw_shaped_text(&shaped, x, y);
+            self.text.shaped_cache.insert(cache_key, shaped);
         }
     }
 }

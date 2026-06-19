@@ -730,7 +730,7 @@ impl SurtrRenderer {
                 cvkg_runic_text::TextAlign::Start,
                 cvkg_runic_text::TextOverflow::Visible,
             ).ok() {
-                self.text.shaped_cache.insert(cache_key, shaped);
+                self.text.shaped_cache.insert(cache_key, std::sync::Arc::new(shaped));
                 count += 1;
             }
         }

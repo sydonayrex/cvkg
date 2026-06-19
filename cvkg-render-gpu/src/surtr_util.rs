@@ -98,7 +98,7 @@ impl SurtrRenderer {
         &mut self,
         text: &str,
         size: f32,
-    ) -> cvkg_runic_text::ShapedText {
+    ) -> std::sync::Arc<cvkg_runic_text::ShapedText> {
         let cache_key = (text.to_string(), (size * 100.0) as u32);
         if let Some(shaped) = self.text.shaped_cache.get(&cache_key) {
             return shaped.clone();
@@ -107,13 +107,11 @@ impl SurtrRenderer {
         let mut style = cvkg_runic_text::TextStyle::new("Jupiteroid", size);
         style.fallback_families = vec![
             "sans-serif".to_string(),
-            // Linux-native (fontconfig standard aliases + common packages)
             "DejaVu Sans".to_string(),
             "Cantarell".to_string(),
             "Liberation Sans".to_string(),
             "Noto Sans".to_string(),
             "Adwaita Sans".to_string(),
-            // macOS / Windows
             "SF Pro".to_string(),
             "SF Pro Text".to_string(),
             "Inter".to_string(),
@@ -146,7 +144,8 @@ impl SurtrRenderer {
                 grapheme_boundaries: vec![],
             });
 
-        self.text.shaped_cache.insert(cache_key, shaped.clone());
-        shaped
+        let arc = std::sync::Arc::new(shaped);
+        self.text.shaped_cache.insert(cache_key, arc.clone());
+        arc
     }
 }
