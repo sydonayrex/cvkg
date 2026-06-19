@@ -568,6 +568,15 @@ impl WindowManager {
                 .with_has_shadow(true);
         }
 
+        #[cfg(target_os = "windows")]
+        {
+            // Windows-specific window attributes:
+            // WHY: Restores window shadow for undecorated windows to maintain Tahoe design aesthetics.
+            // CONTRACT: with_undecorated_shadow requires the winit platform-specific extension for Windows.
+            use winit::platform::windows::WindowAttributesExtWindows;
+            window_attrs = window_attrs.with_undecorated_shadow(true);
+        }
+
         let window = Arc::new(
             event_loop
                 .create_window(window_attrs)
@@ -950,7 +959,21 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     // Build new vdom and diff (layout pass)
                     let layout_start = std::time::Instant::now();
-                    let new_vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                    let view_changed = self.view.changed();
+
+                    // Phase 1.2: Skip VDom rebuild when view hasn't changed.
+                    // When changed() returns false, we skip the expensive VDom::build
+                    // call (127+ nodes rebuilt from scratch) and the diff pass.
+                    // We still dispatch events and render the GPU frame using the
+                    // previous VDom state.
+                    let new_vdom: Option<cvkg_vdom::VDom> = if view_changed {
+                        Some(cvkg_vdom::VDom::build(&self.view, rect))
+                    } else {
+                        // VDom has not changed -- skip build entirely.
+                        // We set new_vdom to None as a signal to skip the diff below.
+                        // The GPU renderer will reuse the previous frame's draw calls.
+                        None
+                    };
 
                     // Dispatch cursor events if the mouse moved since last frame
                     if state.needs_cursor_update {
@@ -970,50 +993,53 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     }
                     let layout_end = std::time::Instant::now();
 
-                    // Apply patches to the accessibility tree and the previous VDOM
+                    // Apply patches to the accessibility tree and the previous VDOM.
+                    // When new_vdom is None (view unchanged), skip diff entirely.
                     let state_flush_start = std::time::Instant::now();
-                    if let Some(prev_vdom) = &mut state.vdom {
-                        let patches = prev_vdom.diff(&new_vdom);
-                        let mut nodes = Vec::new();
-                        for patch in &patches {
-                            if let cvkg_vdom::VDomPatch::Create(node)
-                            | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
-                            {
-                                nodes
-                                    .push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
-                            } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
-                                && let Some(node) = new_vdom.nodes.get(id)
-                            {
-                                nodes
-                                    .push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
-                            }
-                        }
-                        // Determine focused node for AccessKit
-                        let focused_id = state.focused_node_id.map(|id| accesskit::NodeId(id.0)).unwrap_or(accesskit::NodeId(1));
-                        
-                        // Register new/updated nodes with FocusManager for Tab navigation
-                        for patch in &patches {
-                            if let cvkg_vdom::VDomPatch::Create(node)
-                            | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
-                            {
-                                if node.is_focusable() {
-                                    state.focus_manager.register(node.id.0.to_string());
+                    match (new_vdom, &mut state.vdom) {
+                        (Some(new_vdom), Some(prev_vdom)) => {
+                            let patches = prev_vdom.diff(&new_vdom);
+                            let mut nodes = Vec::new();
+                            for patch in &patches {
+                                if let cvkg_vdom::VDomPatch::Create(node)
+                                | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
+                                {
+                                    nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                                } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
+                                    && let Some(node) = new_vdom.nodes.get(id)
+                                {
+                                    nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
                                 }
                             }
-                        }
-                        if !nodes.is_empty() {
-                            if let Some(adapter) = &mut state.accesskit_adapter {
-                                adapter.update_if_active(|| accesskit::TreeUpdate {
-                                    nodes,
-                                    tree: None,
-                                    focus: focused_id,
-                                    tree_id: accesskit::TreeId::ROOT,
-                                });
+                            let focused_id = state.focused_node_id.map(|id| accesskit::NodeId(id.0)).unwrap_or(accesskit::NodeId(1));
+                            for patch in &patches {
+                                if let cvkg_vdom::VDomPatch::Create(node)
+                                | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
+                                {
+                                    if node.is_focusable() {
+                                        state.focus_manager.register(node.id.0.to_string());
+                                    }
+                                }
                             }
+                            if !nodes.is_empty() {
+                                if let Some(adapter) = &mut state.accesskit_adapter {
+                                    adapter.update_if_active(|| accesskit::TreeUpdate {
+                                        nodes,
+                                        tree: None,
+                                        focus: focused_id,
+                                        tree_id: accesskit::TreeId::ROOT,
+                                    });
+                                }
+                            }
+                            prev_vdom.apply_patches(patches);
+                            state.vdom = Some(new_vdom);
                         }
-                        prev_vdom.apply_patches(patches);
-                    } else {
-                        state.vdom = Some(new_vdom);
+                        (Some(new_vdom), None) => {
+                            state.vdom = Some(new_vdom);
+                        }
+                        (None, _) => {
+                            // View unchanged -- keep existing state.vdom as-is.
+                        }
                     }
                     let state_flush_end = std::time::Instant::now();
 

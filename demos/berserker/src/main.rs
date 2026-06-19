@@ -349,6 +349,42 @@ impl View for BerserkerFireView {
         unreachable!()
     }
 
+    /// Track last-known signal values to detect actual state changes.
+    /// Returns true only when a signal's value has actually changed since last check.
+    fn changed(&self) -> bool {
+        // Snapshot current values and compare against previous frame.
+        let rage_val = self.rage.get();
+        let menu_val = self.active_menu.get();
+        let counter_vals: [u32; 4] = [
+            self.counters[0].get(),
+            self.counters[1].get(),
+            self.counters[2].get(),
+            self.counters[3].get(),
+        ];
+
+        thread_local! {
+            static LAST_RAGE: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
+            static LAST_MENU: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+            static LAST_COUNTERS: std::cell::Cell<[u32; 4]> = const { std::cell::Cell::new([0; 4]) };
+        }
+
+        let changed = LAST_RAGE.with(|l| {
+            let prev = l.get();
+            l.set(rage_val);
+            prev != rage_val
+        }) || LAST_MENU.with(|l| {
+            let prev = l.get();
+            l.set(menu_val);
+            prev != menu_val
+        }) || LAST_COUNTERS.with(|l| {
+            let prev = l.get();
+            l.set(counter_vals);
+            prev != counter_vals
+        });
+
+        changed
+    }
+
     /// Render is the main entry point to draw the Berserker view frame.
     /// CONTRACT: This function is called once per frame. It simulates physics,
     /// decays the Berserker rage over time, updates the GPU uniforms, and renders elements.

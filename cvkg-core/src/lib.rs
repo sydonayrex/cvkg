@@ -389,6 +389,16 @@ pub trait View: Sized + Send {
     fn key_shortcuts(&self) -> Vec<KeyShortcut> {
         vec![]
     }
+
+    /// Return true when this view's render output has changed since last build.
+    /// Default true for backward compatibility. Override for incremental skip.
+    /// When returns false, VDom::build skips this subtree entirely.
+    fn changed(&self) -> bool { true }
+
+    /// Stable identity for diff keying. Return None for anonymous views.
+    /// When Some(id), the VDOM layer uses this to match nodes across rebuilds,
+    /// enabling handler survival and incremental patch generation.
+    fn view_id(&self) -> Option<u64> { None }
 }
 
 // =============================================================================

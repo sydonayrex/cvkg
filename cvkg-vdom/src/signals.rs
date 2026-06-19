@@ -24,6 +24,10 @@ pub struct Signal<T> {
     pub id: u64,
     value: Arc<RwLock<T>>,
     subscribers: Arc<RwLock<Vec<Arc<dyn EffectRunner>>>>,
+    /// Monotonically increasing version counter. Incremented on every `set()`.
+    /// Used by the VDOM layer to detect when a signal's value has changed since
+    /// the last frame, enabling incremental VDOM rebuilds.
+    version: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl<T: Clone> Signal<T> {
@@ -32,6 +36,7 @@ impl<T: Clone> Signal<T> {
             id: NEXT_SIGNAL_ID.fetch_add(1, Ordering::Relaxed),
             value: Arc::new(RwLock::new(initial)),
             subscribers: Arc::new(RwLock::new(Vec::new())),
+            version: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -43,16 +48,22 @@ impl<T: Clone> Signal<T> {
                 let mut subs = self.subscribers.write().unwrap();
                 // In a production-grade implementation, we would deduplicate subscriptions
                 // and handle dynamic branching cleanup here.
-                // For simplicity, we just push it (assuming effects don't repeatedly get).
-                subs.push(Arc::clone(effect));
+                subs.push(effect.clone());
             }
         });
         self.value.read().unwrap().clone()
     }
 
+    /// Returns the current version counter. Incremented on every `set()`.
+    /// The VDOM layer snapshots this at build time to detect changes.
+    pub fn version(&self) -> u64 {
+        self.version.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
     /// Updates the value of the signal and synchronously triggers all subscribed effects.
     pub fn set(&self, new_value: T) {
         *self.value.write().unwrap() = new_value;
+        self.version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let subs = self.subscribers.read().unwrap().clone();
         for sub in subs {
             sub.run();
@@ -66,6 +77,7 @@ impl<T> Clone for Signal<T> {
             id: self.id,
             value: Arc::clone(&self.value),
             subscribers: Arc::clone(&self.subscribers),
+            version: Arc::clone(&self.version),
         }
     }
 }
