@@ -761,40 +761,37 @@ impl cvkg_core::Renderer for VNodeRenderer {
         });
     }
 
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, _color: [f32; 4]) {
+
+
+    fn shape_rich_text(
+        &mut self,
+        spans: &[cvkg_runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: cvkg_runic_text::TextAlign,
+        overflow: cvkg_runic_text::TextOverflow,
+    ) -> Option<cvkg_runic_text::ShapedText> {
+        let mut engine = cvkg_runic_text::RunicTextEngine::new();
+        engine.shape_layout(spans, max_width, align, overflow).ok()
+    }
+
+    fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
         let id = self.next_id();
         let mut props = HashMap::new();
-        props.insert(
-            "text".to_string(),
-            serde_json::Value::String(text.to_string()),
-        );
-        let (w, h) = self.measure_text(text, size);
+        let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
+        props.insert("text".to_string(), serde_json::Value::String(text.clone()));
         self.add_node(VNode {
             id,
             key: None,
             component_type: "Primitive::Text".to_string(),
             props,
             state: None,
-            layout: LayoutRect {
-                x,
-                y,
-                width: w,
-                height: h,
-            },
+            layout: LayoutRect { x, y, width: shaped.width, height: shaped.height },
             children: Vec::new(),
             aria_role: "text".to_string(),
-            aria_props: AriaProps {
-                label: Some(text.to_string()),
-                ..Default::default()
-            },
+            aria_props: AriaProps { label: Some(text), ..Default::default() },
             portal_target: None,
             sdf_shape: None,
         });
-    }
-
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        // VDOM capture only needs rough bounds for layout
-        (text.len() as f32 * size * 0.6, size)
     }
 
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
@@ -1782,6 +1779,7 @@ impl VDom {
 
         log::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
 
+        let captured_target = self.captured_node.lock().ok().and_then(|captured| *captured);
         let target_id = match event {
             cvkg_core::Event::PointerDown { x, y, .. }
             | cvkg_core::Event::PointerUp { x, y, .. }
@@ -1793,17 +1791,32 @@ impl VDom {
             | cvkg_core::Event::DragMove { x, y, .. }
             | cvkg_core::Event::DragEnd { x, y, .. }
             | cvkg_core::Event::FileDrop { x, y, .. } => {
-                log::trace!(
-                    "[VDOM] Hit testing at ({}, {}) with precision {}",
-                    x,
-                    y,
-                    event.pointer_precision()
-                );
-                let (id, proximity) = match self.hit_test(x, y, event.pointer_precision()) {
-                    Some((i, p)) => (Some(i), p),
-                    None => (None, 0.0),
+                let use_capture = matches!(
+                    event,
+                    cvkg_core::Event::PointerUp { .. }
+                        | cvkg_core::Event::PointerClick { .. }
+                        | cvkg_core::Event::DragMove { .. }
+                        | cvkg_core::Event::DragEnd { .. }
+                ) && captured_target.is_some();
+
+                let (id, proximity) = if use_capture {
+                    let captured = captured_target;
+                    log::trace!("[VDOM] Using captured target for {}: {:?}", event_name, captured);
+                    (captured, 1.0)
+                } else {
+                    log::trace!(
+                        "[VDOM] Hit testing at ({}, {}) with precision {}",
+                        x,
+                        y,
+                        event.pointer_precision()
+                    );
+                    let (id, proximity) = match self.hit_test(x, y, event.pointer_precision()) {
+                        Some((i, p)) => (Some(i), p),
+                        None => (None, 0.0),
+                    };
+                    log::trace!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
+                    (id, proximity)
                 };
-                log::trace!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
 
                 if let cvkg_core::Event::PointerMove {
                     ref mut proximity_field,
@@ -1880,6 +1893,24 @@ impl VDom {
             self.bubble_event_response(id, event)
         } else {
             log::trace!("[VDOM] No hit for event {} at {:?}", event_name, event);
+            cvkg_core::EventResponse::Ignored
+        }
+    }
+
+    /// Dispatch an event directly to a specific node and bubble upward from there.
+    ///
+    /// WHY: Native pointer sequences can preserve the original press target across
+    /// rebuilds, preventing click-box drift when the tree changes mid-interaction.
+    /// CONTRACT: The target must refer to a live node in this VDOM; otherwise the
+    /// event is ignored.
+    pub fn dispatch_event_to_target(
+        &self,
+        target: NodeId,
+        event: cvkg_core::Event,
+    ) -> cvkg_core::EventResponse {
+        if self.nodes.contains_key(&target) {
+            self.bubble_event_response(target, event)
+        } else {
             cvkg_core::EventResponse::Ignored
         }
     }

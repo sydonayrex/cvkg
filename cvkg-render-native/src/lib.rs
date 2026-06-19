@@ -633,6 +633,7 @@ impl WindowManager {
             drag_start_pos: [0.0, 0.0],
             drag_button: 0,
             drag_threshold: 5.0,
+            active_pointer_target: None,
             is_key_focused,
             is_main,
             core_id,
@@ -713,6 +714,8 @@ pub struct WindowData {
     drag_button: u32,
     /// Drag threshold in logical pixels (pointer must move this far to start drag).
     drag_threshold: f32,
+    /// Pointer target captured on press so release/click stay stable through rebuilds.
+    active_pointer_target: Option<cvkg_vdom::NodeId>,
 
     // ── Multi-window tracking ──────────────────────────────────────────────
     is_key_focused: Arc<std::sync::atomic::AtomicBool>,
@@ -1226,6 +1229,9 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.drag_start_pos = state.cursor_pos;
                                 state.is_dragging = false;
                                 state.drag_button = btn_id;
+                                state.active_pointer_target = vdom
+                                    .hit_test(state.cursor_pos[0], state.cursor_pos[1], 0.0)
+                                    .map(|(id, _)| id);
                                 log::info!("[Native] Dispatching PointerDown to VDOM");
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x: state.cursor_pos[0],
@@ -1241,7 +1247,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             }
                             winit::event::ElementState::Released => {
                                 log::info!("[Native] Dispatching PointerUp to VDOM");
-                                vdom.dispatch_event(cvkg_core::Event::PointerUp {
+                                let pointer_up = cvkg_core::Event::PointerUp {
                                     x: state.cursor_pos[0],
                                     y: state.cursor_pos[1],
                                     button: btn_id,
@@ -1250,22 +1256,33 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pressure: Some(0.0),
                                     barrel_rotation: None,
                                     pointer_precision: 0.0,
-                                });
+                                };
+                                let pointer_click = cvkg_core::Event::PointerClick {
+                                    x: state.cursor_pos[0],
+                                    y: state.cursor_pos[1],
+                                    button: btn_id,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(0.0),
+                                    barrel_rotation: None,
+                                    pointer_precision: 0.0,
+                                };
+                                if let Some(target) = state.active_pointer_target {
+                                    vdom.dispatch_event_to_target(target, pointer_up);
+                                } else {
+                                    vdom.dispatch_event(pointer_up);
+                                }
                                 // Only dispatch PointerClick if we didn't drag
                                 if !state.is_dragging {
-                                    vdom.dispatch_event(cvkg_core::Event::PointerClick {
-                                        x: state.cursor_pos[0],
-                                        y: state.cursor_pos[1],
-                                        button: btn_id,
-                                        tilt: None,
-                                        azimuth: None,
-                                        pressure: Some(0.0),
-                                        barrel_rotation: None,
-                                        pointer_precision: 0.0,
-                                    });
+                                    if let Some(target) = state.active_pointer_target {
+                                        vdom.dispatch_event_to_target(target, pointer_click);
+                                    } else {
+                                        vdom.dispatch_event(pointer_click);
+                                    }
                                 }
                                 // Reset drag state
                                 state.is_dragging = false;
+                                state.active_pointer_target = None;
                             }
                         }
                         state.window.request_redraw();
@@ -1308,6 +1325,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.drag_start_pos = [x, y];
                                 state.is_dragging = false;
                                 state.drag_button = touch_btn as u32;
+                                state.active_pointer_target = vdom.hit_test(x, y, 150.0).map(|(id, _)| id);
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x,
                                     y,
@@ -1346,7 +1364,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 });
                             }
                             winit::event::TouchPhase::Ended => {
-                                vdom.dispatch_event(cvkg_core::Event::PointerUp {
+                                let pointer_up = cvkg_core::Event::PointerUp {
                                     x,
                                     y,
                                     button: touch_btn,
@@ -1355,22 +1373,33 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pressure: Some(0.0),
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
-                                });
+                                };
+                                let pointer_click = cvkg_core::Event::PointerClick {
+                                    x,
+                                    y,
+                                    button: touch_btn,
+                                    tilt: None,
+                                    azimuth: None,
+                                    pressure: Some(0.0),
+                                    barrel_rotation: None,
+                                    pointer_precision: 150.0,
+                                };
+                                if let Some(target) = state.active_pointer_target {
+                                    vdom.dispatch_event_to_target(target, pointer_up);
+                                } else {
+                                    vdom.dispatch_event(pointer_up);
+                                }
                                 // Only dispatch PointerClick if we didn't drag
                                 if !state.is_dragging {
-                                    vdom.dispatch_event(cvkg_core::Event::PointerClick {
-                                        x,
-                                        y,
-                                        button: touch_btn,
-                                        tilt: None,
-                                        azimuth: None,
-                                        pressure: Some(0.0),
-                                        barrel_rotation: None,
-                                        pointer_precision: 150.0,
-                                    });
+                                    if let Some(target) = state.active_pointer_target {
+                                        vdom.dispatch_event_to_target(target, pointer_click);
+                                    } else {
+                                        vdom.dispatch_event(pointer_click);
+                                    }
                                 }
                                 // Reset drag state
                                 state.is_dragging = false;
+                                state.active_pointer_target = None;
                             }
                             winit::event::TouchPhase::Cancelled => {
                                 vdom.dispatch_event(cvkg_core::Event::PointerUp {
@@ -1383,6 +1412,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
                                 });
+                                state.active_pointer_target = None;
                             }
                         }
                         state.window.request_redraw();
