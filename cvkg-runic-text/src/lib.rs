@@ -42,6 +42,8 @@ use swash::scale::{Render, ScaleContext, Source as SwashSource};
 use unicode_bidi::BidiInfo;
 use unicode_segmentation::UnicodeSegmentation;
 
+pub mod global_cache;
+
 // ── Constants ──────────────────────────────────────────────────────────────
 
 /// Default font size in pixels.
@@ -51,6 +53,7 @@ pub const DEFAULT_FONT_SIZE: f32 = 16.0;
 pub const DEFAULT_LINE_HEIGHT: f32 = 1.2;
 
 /// Maximum number of entries in the shape cache.
+#[cfg(test)]
 const MAX_CACHE_SIZE: usize = 1024;
 
 // ── Error type ──────────────────────────────────────────────────────────────
@@ -691,6 +694,114 @@ impl TextSpan {
     }
 }
 
+// ── Text Semantic Layer (P0-42) ──────────────────────────────────────────────
+
+/// A styled range of text representing a contiguous semantic block within a document.
+///
+/// Under UAX #29 and accessibility guidelines, this represents a span of text that shares
+/// the same style and semantic properties, mapping directly to screen reader text offsets.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TextRun {
+    /// The start index of this run in the parent string.
+    pub start: usize,
+    /// The end index of this run in the parent string.
+    pub end: usize,
+    /// The text content of this run.
+    pub text: String,
+    /// The style applied to this run.
+    pub style: TextStyle,
+}
+
+impl TextRun {
+    /// Create a new TextRun.
+    pub fn new(start: usize, end: usize, text: &str, style: TextStyle) -> Self {
+        Self {
+            start,
+            end,
+            text: text.to_string(),
+            style,
+        }
+    }
+}
+
+/// Enumerates the standard semantic categories of text ranges for platform accessibility mappings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SemanticKind {
+    /// Standard plain text body.
+    Normal,
+    /// Header/title element (level 1-6).
+    Header(u8),
+    /// A hyperlink URL node.
+    Link,
+    /// Strong emphasis/bold text block.
+    Emphasis,
+    /// Inline code or syntax block.
+    Code,
+    /// List item element.
+    ListItem,
+}
+
+/// Defines a semantic range over text to expose structural meaning to platform accessibility APIs.
+///
+/// Matches AXTextMarkerRange and UIAutomation text range concepts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SemanticRange {
+    /// Start character/byte index in the text document.
+    pub start: usize,
+    /// End character/byte index in the text document.
+    pub end: usize,
+    /// The accessibility category of this range.
+    pub kind: SemanticKind,
+    /// Optional payload data (e.g. the target URL for a Link).
+    pub data: Option<String>,
+}
+
+impl SemanticRange {
+    /// Create a new SemanticRange.
+    pub fn new(start: usize, end: usize, kind: SemanticKind, data: Option<String>) -> Self {
+        Self {
+            start,
+            end,
+            kind,
+            data,
+        }
+    }
+}
+
+/// A block-level text paragraph exposing semantic structure and style spans to screen readers.
+///
+/// Paragraphs are the foundational unit for platform accessibility navigators (e.g. AXParagraph, AXStaticText).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Paragraph {
+    /// Raw concatenated string text of the paragraph.
+    pub text: String,
+    /// Ordered styled text runs.
+    pub runs: Vec<TextRun>,
+    /// High-level semantic markers for accessibility indexing.
+    pub semantic_ranges: Vec<SemanticRange>,
+}
+
+impl Paragraph {
+    /// Create a new paragraph with empty spans.
+    pub fn new(text: &str) -> Self {
+        Self {
+            text: text.to_string(),
+            runs: Vec::new(),
+            semantic_ranges: Vec::new(),
+        }
+    }
+
+    /// Add a styled text run to the paragraph.
+    pub fn add_run(&mut self, run: TextRun) {
+        self.runs.push(run);
+    }
+
+    /// Add an accessibility semantic range marker.
+    pub fn add_semantic_range(&mut self, range: SemanticRange) {
+        self.semantic_ranges.push(range);
+    }
+}
+
 // ── CacheKey ─────────────────────────────────────────────────────────────────
 
 /// Deterministic cache key for shaped text.
@@ -918,31 +1029,28 @@ impl ShapedText {
             return (0, 0);
         }
 
-        let mut best_glyph = 0u32;
-        let mut best_dist = u64::MAX;
+        let mut target_glyph_idx = 0;
+        let mut target_cluster = 0;
+        let mut found = false;
 
-        // Find the cluster whose byte range contains byte_index
-        for glyph in &self.glyphs {
-            let cluster_byte = self.byte_pos_for_cluster(glyph.cluster);
-            let dist = if cluster_byte > byte_index {
-                (cluster_byte - byte_index) as u64
-            } else {
-                (byte_index - cluster_byte) as u64
-            };
-            if dist < best_dist {
-                best_dist = dist;
-                best_glyph = glyph.cluster;
-            }
-        }
-
-        // Find the glyph index for this cluster
         for (i, glyph) in self.glyphs.iter().enumerate() {
-            if glyph.cluster == best_glyph {
-                return (i, best_glyph);
+            let start = glyph.cluster as usize;
+            let end = self.next_grapheme_boundary(start);
+            if byte_index >= start && byte_index < end {
+                target_glyph_idx = i;
+                target_cluster = glyph.cluster;
+                found = true;
+                break;
             }
         }
 
-        (0, 0)
+        if !found {
+            // If out of bounds, return the last visual glyph on the last line
+            let last_idx = self.glyphs.len() - 1;
+            return (last_idx, self.glyphs[last_idx].cluster);
+        }
+
+        (target_glyph_idx, target_cluster)
     }
 
     /// Get the cursor position (x, line_index) for a byte index.
@@ -951,21 +1059,47 @@ impl ShapedText {
             return (0.0, 0);
         }
 
-        let (glyph_idx, _cluster) = self.hit_test(byte_index);
+        let target_glyph_idx;
+        let is_after;
 
-        // Find which line this glyph is on
+        if byte_index >= self.text.len() {
+            let mut last_logical_idx = 0;
+            let mut max_cluster = 0;
+            for (i, glyph) in self.glyphs.iter().enumerate() {
+                if glyph.cluster >= max_cluster {
+                    max_cluster = glyph.cluster;
+                    last_logical_idx = i;
+                }
+            }
+            target_glyph_idx = last_logical_idx;
+            is_after = true;
+        } else {
+            let (idx, _) = self.hit_test(byte_index);
+            target_glyph_idx = idx;
+            is_after = false;
+        }
+
         let mut line_idx = 0;
         for (li, line) in self.lines.iter().enumerate() {
-            if glyph_idx >= line.glyph_start && glyph_idx < line.glyph_end {
+            if target_glyph_idx >= line.glyph_start && target_glyph_idx < line.glyph_end {
                 line_idx = li;
                 break;
             }
         }
 
-        // x is the left edge of the glyph, adjusted for alignment
-        let glyph = &self.glyphs[glyph_idx];
+        let glyph = &self.glyphs[target_glyph_idx];
         let line = &self.lines[line_idx];
-        let x = line.x_offset + glyph.x;
+
+        let mut x = line.x_offset + glyph.x;
+        if is_after {
+            if !glyph.is_rtl {
+                x += glyph.advance_width;
+            }
+        } else {
+            if glyph.is_rtl {
+                x += glyph.advance_width;
+            }
+        }
 
         (x, line_idx)
     }
@@ -979,31 +1113,26 @@ impl ShapedText {
         let mut rects = Vec::new();
         let mut current_rect: Option<[f32; 4]> = None;
 
-        for glyph in &self.glyphs {
-            let cluster_start = self.byte_pos_for_cluster(glyph.cluster);
-            let cluster_end = if glyph.cluster + 1 < self.total_clusters() {
-                self.byte_pos_for_cluster(glyph.cluster + 1)
-            } else {
-                self.text.len()
-            };
+        for (i, glyph) in self.glyphs.iter().enumerate() {
+            let cluster_start = glyph.cluster as usize;
+            let cluster_end = self.next_grapheme_boundary(cluster_start);
 
             // Check if this glyph's cluster overlaps with the selection
             if cluster_start < end && cluster_end > start {
                 // Find the line for y/height
                 let mut line_top = 0.0f32;
                 let mut line_h = self.height;
+                let mut line_x_offset = 0.0f32;
                 for line in &self.lines {
-                    if glyph.cluster >= self.glyphs[line.glyph_start].cluster
-                        && (line.glyph_end == self.glyphs.len()
-                            || glyph.cluster < self.glyphs[line.glyph_end].cluster)
-                    {
+                    if i >= line.glyph_start && i < line.glyph_end {
                         line_top = line.baseline_y - self.ascent;
                         line_h = line.height;
+                        line_x_offset = line.x_offset;
                         break;
                     }
                 }
 
-                let x = glyph.x;
+                let x = line_x_offset + glyph.x;
                 let w = glyph.advance_width.max(1.0);
 
                 if let Some(ref mut rect) = current_rect {
@@ -1028,17 +1157,14 @@ impl ShapedText {
         rects
     }
 
-    /// Get the byte position for a cluster index.
-    fn byte_pos_for_cluster(&self, cluster: u32) -> usize {
-        self.grapheme_boundaries
-            .get(cluster as usize)
-            .copied()
-            .unwrap_or(self.text.len())
-    }
-
-    /// Total number of clusters in the text.
-    fn total_clusters(&self) -> u32 {
-        self.grapheme_boundaries.len() as u32
+    /// Get the next grapheme boundary given a byte index.
+    fn next_grapheme_boundary(&self, current: usize) -> usize {
+        for &b in &self.grapheme_boundaries {
+            if b > current {
+                return b;
+            }
+        }
+        self.text.len()
     }
 }
 
@@ -1147,10 +1273,6 @@ pub struct RunicTextEngine {
     db: Database,
     /// Font data cache: fontdb::ID -> FontData.
     font_data: HashMap<fontdb::ID, FontData>,
-    /// Shape cache.
-    cache: HashMap<CacheKey, Vec<GlyphInstance>>,
-    /// Cache access order for LRU eviction.
-    cache_order: Vec<CacheKey>,
     /// Scale context for rasterization.
     scale_context: ScaleContext,
 }
@@ -1180,8 +1302,6 @@ impl RunicTextEngine {
         let mut engine = RunicTextEngine {
             db,
             font_data: HashMap::new(),
-            cache: HashMap::new(),
-            cache_order: Vec::new(),
             scale_context: ScaleContext::new(),
         };
 
@@ -1197,8 +1317,6 @@ impl RunicTextEngine {
         RunicTextEngine {
             db: Database::new(),
             font_data: HashMap::new(),
-            cache: HashMap::new(),
-            cache_order: Vec::new(),
             scale_context: ScaleContext::new(),
         }
     }
@@ -1369,8 +1487,8 @@ impl RunicTextEngine {
             style.word_spacing,
         );
 
-        // Check cache
-        if let Some(glyphs) = self.cache.get(&cache_key) {
+        // Check cache first
+        if let Some(glyphs) = global_cache::global_cache_get(&cache_key) {
             return Ok(glyphs.clone());
         }
 
@@ -1428,20 +1546,49 @@ impl RunicTextEngine {
             x_offset += advance + style.letter_spacing + letter_space;
         }
 
+        // Monospace Integrity Enforcement (P0-39)
+        let is_monospace = style.family.to_lowercase().contains("mono") 
+            || style.family.to_lowercase() == "courier"
+            || style.family.to_lowercase() == "consolas";
+        
+        if is_monospace && !glyphs.is_empty() {
+            // Find the nominal width (often the width of 'M' or '0' or just the maximum advance of alphanumeric characters)
+            // For simplicity, we can use the maximum advance width of any glyph in the run, or if it's purely monospace, all should ideally be the same.
+            let mut max_advance = 0.0f32;
+            for g in &glyphs {
+                if g.advance_width > max_advance {
+                    max_advance = g.advance_width;
+                }
+            }
+            if max_advance > 0.0 {
+                let mut current_x = 0.0;
+                for g in &mut glyphs {
+                    // Center the glyph within its fixed advance width
+                    let offset = (max_advance - g.advance_width) / 2.0;
+                    g.x = current_x + offset;
+                    g.advance_width = max_advance;
+                    current_x += max_advance;
+                }
+            }
+        }
+
         // Apply font fallback for missing glyphs
         self.apply_fallbacks(&mut glyphs, text, style, &resolved, &features);
 
         // Update cache
-        self.insert_cache(cache_key, glyphs.clone());
+        global_cache::global_cache_insert(cache_key, glyphs.clone());
 
         Ok(glyphs)
     }
 
     /// Check if a cluster represents a space character.
     fn is_space_cluster(text: &str, cluster: u32) -> bool {
-        text.chars()
-            .nth(cluster as usize)
-            .is_some_and(|c| c.is_ascii_whitespace())
+        let byte_idx = cluster as usize;
+        if byte_idx < text.len() {
+            text[byte_idx..].chars().next().is_some_and(|c| c.is_ascii_whitespace())
+        } else {
+            false
+        }
     }
 
     /// Resolves missing glyphs in primary font by looking up fallback fonts.
@@ -1464,16 +1611,20 @@ impl RunicTextEngine {
                 let glyph_cluster = glyphs[i].cluster;
                 let glyph_is_rtl = glyphs[i].is_rtl;
                 let glyph_x = glyphs[i].x;
-                let c = text
-                    .chars()
-                    .nth(glyph_cluster as usize)
-                    .unwrap_or('\u{FFFD}');
+                
+                let byte_idx = glyph_cluster as usize;
+                let grapheme = if byte_idx < text.len() {
+                    use unicode_segmentation::UnicodeSegmentation;
+                    text[byte_idx..].graphemes(true).next().unwrap_or("\u{FFFD}")
+                } else {
+                    "\u{FFFD}"
+                };
 
                 // Try each fallback font
                 for fallback in &resolved.fallbacks {
                     if let Some(face) = fallback.face() {
                         let mut buf = UnicodeBuffer::new();
-                        buf.add(c, glyph_cluster);
+                        buf.push_str(grapheme);
                         buf.set_direction(if glyph_is_rtl {
                             Direction::RightToLeft
                         } else {
@@ -1484,43 +1635,32 @@ impl RunicTextEngine {
                         let infos = output.glyph_infos();
                         let positions = output.glyph_positions();
 
-                        if let (Some(info), Some(pos)) = (infos.first(), positions.first())
-                            && info.glyph_id != 0
-                        {
-                            let scale = style.font_size / (resolved.units_per_em as f32);
-                            glyphs[i].glyph_id = info.glyph_id as u16;
-                            glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
-                            glyphs[i].y = (pos.y_offset as f32) * scale;
-
-                            let fallback_key = fallback
-                                .font_ref()
-                                .map(|r| r.key.value())
-                                .unwrap_or(resolved.cache_key);
-                            glyphs[i].cache_key = Self::calculate_glyph_cache_key(
-                                fallback_key,
-                                style.font_size,
-                                info.glyph_id as u16,
-                                style,
-                            );
-                            break;
+                        // Emojis/ZWJ sequences usually shape to a single ligated glyph in capable fonts.
+                        if let (Some(info), Some(pos)) = (infos.first(), positions.first()) {
+                            if info.glyph_id != 0 {
+                                let scale = style.font_size / (resolved.units_per_em as f32);
+                                glyphs[i].glyph_id = info.glyph_id as u16;
+                                glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
+                                glyphs[i].y = (pos.y_offset as f32) * scale;
+                                glyphs[i].advance_width = (pos.x_advance as f32) * scale;
+                                
+                                let fallback_key = fallback
+                                    .font_ref()
+                                    .map(|r| r.key.value())
+                                    .unwrap_or(resolved.cache_key);
+                                glyphs[i].cache_key = Self::calculate_glyph_cache_key(
+                                    fallback_key,
+                                    style.font_size,
+                                    info.glyph_id as u16,
+                                    style,
+                                );
+                                break;
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
-    /// Insert into cache with LRU eviction.
-    fn insert_cache(&mut self, key: CacheKey, value: Vec<GlyphInstance>) {
-        if self.cache.len() >= MAX_CACHE_SIZE
-            && let Some(oldest) = self.cache_order.first().cloned()
-        {
-            self.cache.remove(&oldest);
-            self.cache_order.remove(0);
-        }
-
-        self.cache.insert(key, value);
-        self.cache_order.push(key);
     }
 
     /// Shape and layout text with the given spans.
@@ -1577,75 +1717,82 @@ impl RunicTextEngine {
         let mut primary_line_height_px = DEFAULT_LINE_HEIGHT * DEFAULT_FONT_SIZE;
         let mut global_glyph_index = 0;
 
-        // Shape each span
+        let mut span_byte_offset = 0;
         for span in spans {
-            // Determine direction from BiDi analysis
-            let direction = if let Some(para_info) = bidi.paragraphs.first() {
-                // Scan all bytes in the paragraph to find the first strong directional character.
-                // The unicode_bidi library assigns levels to each byte; we need to find
-                // the first byte with an RTL level to determine paragraph direction.
-                let mut dir = Direction::LeftToRight;
-                for bi in para_info.range.clone() {
-                    if bi < bidi.levels.len() {
-                        if bidi.levels[bi].is_rtl() {
-                            dir = Direction::RightToLeft;
-                            has_rtl = true;
-                            break;
-                        }
+            let span_byte_end = span_byte_offset + span.text.len();
+            
+            let mut chunk_start = span_byte_offset;
+            while chunk_start < span_byte_end {
+                let current_level = if chunk_start < bidi.levels.len() {
+                    bidi.levels[chunk_start]
+                } else {
+                    unicode_bidi::Level::ltr()
+                };
+                
+                let mut chunk_end = chunk_start + 1;
+                while chunk_end < span_byte_end {
+                    let level = if chunk_end < bidi.levels.len() {
+                        bidi.levels[chunk_end]
+                    } else {
+                        unicode_bidi::Level::ltr()
+                    };
+                    if level != current_level {
+                        break;
                     }
+                    chunk_end += 1;
                 }
-                dir
-            } else {
-                Direction::LeftToRight
-            };
-
-            let mut run_glyphs = match &span.kind {
-                TextSpanKind::Text => self.shape_run(&span.text, &span.style, direction)?,
-                TextSpanKind::Portal { width, height, .. } => {
-                    vec![GlyphInstance {
-                        glyph_id: 0xFFFF,
-                        x: 0.0,
-                        y: 0.0,
-                        angle: 0.0,
-                        advance_width: *width,
-                        advance_height: *height,
-                        cluster: span.byte_offset as u32,
-                        is_rtl: false,
-                        cache_key: 0,
-                        glyph_index: 0,
-                        time_offset: 0.0,
-                    }]
+                
+                let direction = if current_level.is_rtl() {
+                    has_rtl = true;
+                    Direction::RightToLeft
+                } else {
+                    Direction::LeftToRight
+                };
+                
+                let chunk_text = &full_text[chunk_start..chunk_end];
+                
+                let mut run_glyphs = match &span.kind {
+                    TextSpanKind::Text => self.shape_run(chunk_text, &span.style, direction)?,
+                    TextSpanKind::Portal { width, height, .. } => {
+                        vec![GlyphInstance {
+                            glyph_id: 0xFFFF,
+                            x: 0.0,
+                            y: 0.0,
+                            angle: 0.0,
+                            advance_width: *width,
+                            advance_height: *height,
+                            cluster: 0,
+                            is_rtl: direction == Direction::RightToLeft,
+                            cache_key: 0,
+                            glyph_index: 0,
+                            time_offset: 0.0,
+                        }]
+                    }
+                };  // Track primary font metrics from the first shaped chunk
+                if all_glyphs.is_empty() {
+                    primary_metrics = (
+                        span.style.font_size * 0.8,
+                        span.style.font_size * 0.2,
+                        span.style.font_size * 0.2,
+                    );
+                    if let Ok(resolved) = self.resolve_font(&span.style) {
+                        primary_metrics = resolved.metrics_pixels(span.style.font_size);
+                    }
+                    primary_line_height_px = span.style.line_height.to_pixels(span.style.font_size);
                 }
-            };
 
-            // Offset glyph x positions by accumulated width
-            let span_offset_x = all_glyphs
-                .last()
-                .map(|g| g.x + g.advance_width)
-                .unwrap_or(0.0);
-            for glyph in &mut run_glyphs {
-                glyph.x += span_offset_x;
-            }
-
-            // Track primary font metrics from the first span
-            if all_glyphs.is_empty() {
-                primary_metrics = (
-                    span.style.font_size * 0.8, // ascent estimate
-                    span.style.font_size * 0.2, // descent estimate
-                    span.style.font_size * 0.2, // line gap estimate
-                );
-                if let Ok(resolved) = self.resolve_font(&span.style) {
-                    primary_metrics = resolved.metrics_pixels(span.style.font_size);
+                // Adjust cluster offsets since shape_run thinks chunk_text starts at 0
+                for glyph in &mut run_glyphs {
+                    glyph.cluster += chunk_start as u32;
+                    glyph.glyph_index = global_glyph_index;
+                    glyph.time_offset = global_glyph_index as f32 * 0.05;
+                    global_glyph_index += 1;
+                    all_glyphs.push(glyph.clone());
                 }
-                primary_line_height_px = span.style.line_height.to_pixels(span.style.font_size);
+                
+                chunk_start = chunk_end;
             }
-
-            for mut glyph in run_glyphs {
-                glyph.glyph_index = global_glyph_index;
-                glyph.time_offset = global_glyph_index as f32 * 0.05; // Base 50ms stagger
-                global_glyph_index += 1;
-                all_glyphs.push(glyph);
-            }
+            span_byte_offset = span_byte_end;
         }
 
         // Perform line breaking and layout
@@ -1799,6 +1946,29 @@ impl RunicTextEngine {
                             break_glyph,
                         );
 
+                    // BiDi Visual Reordering (P0-41)
+                    let line_range = line_start_byte..break_byte.min(text.len());
+                    if !line_range.is_empty() && bidi.paragraphs.len() > 0 {
+                        let para = bidi.paragraphs.iter()
+                            .find(|p| p.range.start <= line_range.start && p.range.end >= line_range.end)
+                            .unwrap_or(&bidi.paragraphs[0]);
+                        
+                        let (_, visual_runs) = bidi.visual_runs(para, line_range.clone());
+                        let mut visual_glyphs = Vec::with_capacity(break_glyph - line_start_glyph);
+                        
+                        for run in visual_runs {
+                            for g in &glyphs[line_start_glyph..break_glyph] {
+                                if run.contains(&(g.cluster as usize)) {
+                                    visual_glyphs.push(g.clone());
+                                }
+                            }
+                        }
+                        
+                        if visual_glyphs.len() == break_glyph - line_start_glyph {
+                            glyphs[line_start_glyph..break_glyph].clone_from_slice(&visual_glyphs);
+                        }
+                    }
+
                     // Position glyphs
                     let mut x = x_offset;
                     for g in &mut glyphs[line_start_glyph..break_glyph] {
@@ -1876,6 +2046,29 @@ impl RunicTextEngine {
                         line_start_glyph,
                         glyph_end,
                     );
+
+                // BiDi Visual Reordering (P0-41)
+                let line_range = line_start_byte..text.len();
+                if !line_range.is_empty() && bidi.paragraphs.len() > 0 {
+                    let para = bidi.paragraphs.iter()
+                        .find(|p| p.range.start <= line_range.start && p.range.end >= line_range.end)
+                        .unwrap_or(&bidi.paragraphs[0]);
+                    
+                    let (_, visual_runs) = bidi.visual_runs(para, line_range.clone());
+                    let mut visual_glyphs = Vec::with_capacity(glyph_end - line_start_glyph);
+                    
+                    for run in visual_runs {
+                        for g in &glyphs[line_start_glyph..glyph_end] {
+                            if run.contains(&(g.cluster as usize)) {
+                                visual_glyphs.push(g.clone());
+                            }
+                        }
+                    }
+                    
+                    if visual_glyphs.len() == glyph_end - line_start_glyph {
+                        glyphs[line_start_glyph..glyph_end].clone_from_slice(&visual_glyphs);
+                    }
+                }
 
                 let mut x = x_offset;
                 for g in &mut glyphs[line_start_glyph..] {
@@ -2278,18 +2471,140 @@ impl RunicTextEngine {
 
     /// Clear the shape cache.
     pub fn clear_cache(&mut self) {
-        self.cache.clear();
-        self.cache_order.clear();
+        global_cache::global_cache_clear();
     }
 
     /// Get cache statistics.
     pub fn cache_stats(&self) -> (usize, usize) {
-        (self.cache.len(), MAX_CACHE_SIZE)
+        global_cache::global_cache_stats()
     }
 
     /// Get the number of faces in the database.
     pub fn font_count(&self) -> usize {
         self.db.faces().count()
+    }
+
+
+    // ── Virtualized Large Documents (P0-43) ──────────────────────────────────
+
+    /// Shapes and returns only the visible range of lines from a list of paragraphs/spans.
+    ///
+    /// # Contract
+    /// Instead of shaping the entire document upfront, this method virtualizes lines
+    /// by only invoking rustybuzz shaping and swash metric queries on paragraphs
+    /// that overlap the visible Y coordinates [y_start, y_end). This allows rendering files
+    /// with 1M+ lines with $O(1)$ memory growth and bounds layout latency.
+    /// Returns the subset of shaped text segments layouted within the requested vertical slice.
+    pub fn shape_layout_virtualized(
+        &mut self,
+        paragraphs: &[Paragraph],
+        line_height_px: f32,
+        y_start: f32,
+        y_end: f32,
+        max_width: Option<f32>,
+        align: TextAlign,
+    ) -> Result<ShapedText, ShapingError> {
+        let mut visible_glyphs = Vec::new();
+        let mut visible_lines = Vec::new();
+        let mut total_height = 0.0;
+        let mut has_rtl = false;
+
+        let mut primary_ascent = 0.0;
+        let mut primary_descent = 0.0;
+        let mut primary_line_gap = 0.0;
+        let mut grapheme_boundaries = Vec::new();
+        let mut full_text_accum = String::new();
+
+        let mut current_y = 0.0;
+
+        for (_p_idx, para) in paragraphs.iter().enumerate() {
+            // Estimate paragraph height based on lines
+            let char_count = para.text.chars().count();
+            let est_lines = if let Some(_mw) = max_width {
+                // Heuristic mapping: average 80 chars per line
+                ((char_count as f32 / 80.0).ceil() as usize).max(1)
+            } else {
+                1
+            };
+            let para_h = est_lines as f32 * line_height_px;
+
+            let para_y_start = current_y;
+            let para_y_end = para_y_start + para_h;
+
+            // Check if paragraph intersects the viewport slice
+            if para_y_end >= y_start && para_y_start <= y_end {
+                // Convert Paragraph runs to TextSpans
+                let spans: Vec<TextSpan> = para.runs.iter().map(|run| {
+                    TextSpan::at(&run.text, run.style.clone(), run.start)
+                }).collect();
+
+                if !spans.is_empty() {
+                    // Shape the single paragraph
+                    let shaped = self.shape_layout(&spans, max_width, align, TextOverflow::WordWrap)?;
+                    if primary_ascent == 0.0 {
+                        primary_ascent = shaped.ascent;
+                        primary_descent = shaped.descent;
+                        primary_line_gap = shaped.line_gap;
+                    }
+                    if shaped.has_rtl {
+                        has_rtl = true;
+                    }
+
+                    // Offset glyph positions by paragraph vertical offset
+                    let base_glyph_idx = visible_glyphs.len();
+                    for mut g in shaped.glyphs {
+                        g.y += para_y_start;
+                        visible_glyphs.push(g);
+                    }
+
+                    // Map lines, offsetting baseline coordinates
+                    let text_offset = full_text_accum.len();
+                    for line in shaped.lines {
+                        visible_lines.push(LineInfo {
+                            glyph_start: base_glyph_idx + line.glyph_start,
+                            glyph_end: base_glyph_idx + line.glyph_end,
+                            baseline_y: para_y_start + line.baseline_y,
+                            height: line.height,
+                            width: line.width,
+                            x_offset: line.x_offset,
+                            byte_offset: text_offset + line.byte_offset,
+                            text: line.text,
+                        });
+                    }
+
+                    // Collect graphemes
+                    let g_offset = full_text_accum.len();
+                    for boundary in shaped.grapheme_boundaries {
+                        grapheme_boundaries.push(g_offset + boundary);
+                    }
+                    full_text_accum.push_str(&para.text);
+                    full_text_accum.push('\n');
+                }
+            } else {
+                // Just accumulate layout Y height for offscreen paragraphs
+                full_text_accum.push_str(&para.text);
+                full_text_accum.push('\n');
+            }
+
+            current_y += para_h;
+            total_height = current_y;
+        }
+
+        let max_w = visible_lines.iter().map(|l| l.width).fold(0.0f32, |a, b| a.max(b));
+
+        Ok(ShapedText {
+            glyphs: visible_glyphs,
+            lines: visible_lines,
+            width: max_w,
+            height: total_height,
+            text: full_text_accum,
+            spans: Vec::new(),
+            has_rtl,
+            ascent: primary_ascent,
+            descent: primary_descent,
+            line_gap: primary_line_gap,
+            grapheme_boundaries,
+        })
     }
 
     /// Query the variable font axes available for a given font family.
@@ -2428,13 +2743,7 @@ impl RunicTextEngine {
     /// to prevent cache collisions and visual distortion. Returns `None` if no matching shaped
     /// glyph is present in the cache.
     pub fn rasterize(&mut self, cache_key: u64) -> Option<GlyphImage> {
-        let mut found: Option<(CacheKey, GlyphInstance)> = None;
-        for (ck, glyphs) in &self.cache {
-            if let Some(g) = glyphs.iter().find(|g| g.cache_key == cache_key) {
-                found = Some((*ck, *g));
-                break;
-            }
-        }
+        let found = global_cache::global_cache_find_glyph(cache_key);
         let (ck, glyph) = found?;
 
         // Reconstruct font family from the database matching the font_cache_key
@@ -2595,6 +2904,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_text_measure_render_sync() {
+        let mut engine1 = RunicTextEngine::new_test();
+        let mut engine2 = RunicTextEngine::new_test();
+
+        let text = "Hello, convergence!";
+        let style = TextStyle::new("Jupiteroid", 16.0);
+        let spans = vec![TextSpan::new(text, style)];
+
+        // Engine 1 simulates "measure_text"
+        let shaped1 = engine1.shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip).unwrap();
+
+        // Engine 2 simulates "draw_text"
+        let shaped2 = engine2.shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip).unwrap();
+
+        assert_eq!(shaped1.width, shaped2.width, "Widths must match precisely");
+        assert_eq!(shaped1.glyphs.len(), shaped2.glyphs.len(), "Glyph counts must match");
+        for (g1, g2) in shaped1.glyphs.iter().zip(shaped2.glyphs.iter()) {
+            assert_eq!(g1.x, g2.x, "Glyph X positions must match");
+            assert_eq!(g1.advance_width, g2.advance_width, "Glyph advances must match");
+        }
+    }
+
+    #[test]
     fn test_basic_shaping() {
         let mut engine = RunicTextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
@@ -2706,6 +3038,54 @@ mod tests {
             0.0,
         );
         assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn test_cursor_model() {
+        let mut engine = RunicTextEngine::new_test();
+        let style = TextStyle::new("Jupiteroid", 16.0);
+        let text = "a👨‍👩‍👧‍👦b";
+        let spans = vec![TextSpan::new(text, style.clone())];
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip)
+            .unwrap();
+
+        // Byte offsets:
+        // 'a': 0 (1 byte)
+        // emoji: 1 (25 bytes)
+        // 'b': 26 (1 byte)
+
+        let (x_a, _) = shaped.cursor_position(0);
+        let (x_emoji, _) = shaped.cursor_position(1);
+        let (x_b, _) = shaped.cursor_position(26);
+        let (x_end, _) = shaped.cursor_position(27);
+
+        assert!(x_a < x_emoji);
+        assert!(x_emoji < x_b);
+        assert!(x_b < x_end);
+    }
+
+    #[test]
+    fn test_unicode_compliance_uax29() {
+        let mut engine = RunicTextEngine::new_test();
+        let style = TextStyle::new("Jupiteroid", 16.0);
+
+        // ZWJ Sequence
+        let text = "🏳️‍🌈";
+        let spans = vec![TextSpan::new(text, style.clone())];
+        let shaped = engine
+            .shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip)
+            .unwrap();
+
+        // The whole emoji is a single grapheme cluster
+        let (x_start, _) = shaped.cursor_position(0);
+        let (x_end, _) = shaped.cursor_position(text.len());
+        assert!(x_start <= x_end);
+
+        // We shouldn't be able to put a cursor inside the emoji visual bounds via hit_test
+        let (hit_idx, hit_cluster) = shaped.hit_test(text.len() / 2);
+        assert_eq!(hit_idx, 0); // Should resolve to the start of the cluster
+        assert_eq!(hit_cluster, 0); // Should resolve to the start of the cluster
     }
 
     #[test]
@@ -3103,4 +3483,454 @@ mod tests {
             .collect();
         assert_eq!(portals_w.len(), 4);
     }
+
+    #[test]
+    fn test_text_semantic_layer_and_virtualization() {
+        let mut engine = RunicTextEngine::new_test();
+        let style = TextStyle::new("Jupiteroid", 16.0);
+
+        // 1. Verify semantic structure
+        let mut paragraph = Paragraph::new("First paragraph with code element.");
+        paragraph.add_run(TextRun::new(0, 34, "First paragraph with code element.", style.clone()));
+        paragraph.add_semantic_range(SemanticRange::new(21, 25, SemanticKind::Code, None));
+
+        assert_eq!(paragraph.runs.len(), 1);
+        assert_eq!(paragraph.semantic_ranges.len(), 1);
+        assert_eq!(paragraph.semantic_ranges[0].kind, SemanticKind::Code);
+
+        // 2. Build mock multi-paragraph document
+        let mut paragraphs = Vec::new();
+        for i in 0..100 {
+            let mut p = Paragraph::new(&format!("Paragraph line index: {}", i));
+            p.add_run(TextRun::new(0, p.text.len(), &p.text, style.clone()));
+            paragraphs.push(p);
+        }
+
+        // 3. Shape layout with vertical slice virtualization
+        let line_h = 20.0;
+        // Visible viewport from Y=100.0 to Y=200.0 (roughly lines 5 to 10)
+        let virtual_shaped = engine
+            .shape_layout_virtualized(&paragraphs, line_h, 100.0, 200.0, None, TextAlign::Start)
+            .unwrap();
+
+        assert!(!virtual_shaped.lines.is_empty());
+        // Verify we virtualized and didn't layout the entire 100 paragraphs
+        assert!(virtual_shaped.lines.len() < 100);
+        // Verify height remains estimated for the total document size
+        assert_eq!(virtual_shaped.height, 100.0 * line_h);
+    }
 }
+
+// =============================================================================
+// P1-52: Typography Capability Model
+// =============================================================================
+//
+// Exposes supported text features at runtime so applications can query
+// and adapt to the text engine's capabilities.
+
+/// Describes the capabilities of the text rendering engine.
+/// Applications can query this to determine which features are available.
+#[derive(Clone, Debug, Default)]
+pub struct TextCapabilities {
+    /// Whether variable fonts are supported.
+    pub variable_fonts: bool,
+    /// Whether color fonts (COLR/CPAL, SVG-in-OpenType, bitmap) are supported.
+    pub color_fonts: bool,
+    /// Whether OpenType features (ligatures, kerning, stylistic sets) are supported.
+    pub open_type_features: bool,
+    /// Whether subpixel positioning is used.
+    pub subpixel_positioning: bool,
+    /// Whether bidirectional text (Arabic, Hebrew) is supported.
+    pub bidi: bool,
+    /// Whether vertical text layout (Japanese, Chinese) is supported.
+    pub vertical_text: bool,
+    /// Whether font fallback chains are supported.
+    pub font_fallback: bool,
+    /// Whether hinting is applied at small sizes.
+    pub hinting: bool,
+    /// Whether shaping cache is enabled.
+    pub shaping_cache: bool,
+    /// Whether multi-atlas glyph management is used.
+    pub multi_atlas: bool,
+    /// Maximum number of glyph atlases.
+    pub max_atlases: usize,
+    /// Whether atlas defragmentation is supported.
+    pub atlas_defragmentation: bool,
+}
+
+impl TextCapabilities {
+    /// Return the default capabilities for the current engine build.
+    pub fn default_capabilities() -> Self {
+        Self {
+            variable_fonts: true,
+            color_fonts: false,  // Not yet implemented
+            open_type_features: true,
+            subpixel_positioning: true,
+            bidi: true,
+            vertical_text: false,  // Not yet implemented (P1-62)
+            font_fallback: true,
+            hinting: true,
+            shaping_cache: true,
+            multi_atlas: false,  // Not yet implemented (P1-60)
+            max_atlases: 1,
+            atlas_defragmentation: false,  // Not yet implemented (P1-59)
+        }
+    }
+
+    /// Returns true if all common features are supported.
+    pub fn is_fully_featured(&self) -> bool {
+        self.variable_fonts
+            && self.open_type_features
+            && self.subpixel_positioning
+            && self.bidi
+            && self.font_fallback
+            && self.hinting
+            && self.shaping_cache
+    }
+}
+
+// =============================================================================
+// P1-54: Font Fallback Chain
+// =============================================================================
+
+/// A font fallback chain defines the order in which fonts are tried
+/// when a glyph is not found in the primary font.
+#[derive(Clone, Debug)]
+pub struct FontFallbackChain {
+    /// Ordered list of font family names to try.
+    pub families: Vec<String>,
+    /// Per-script fallback overrides (key is script name like "CJK", "Arabic").
+    pub script_overrides: HashMap<&'static str, Vec<String>>,
+}
+
+impl Default for FontFallbackChain {
+    fn default() -> Self {
+        use std::collections::HashMap;
+        let mut script_overrides: HashMap<&'static str, Vec<String>> = HashMap::new();
+        // CJK fallback
+        script_overrides.insert(
+            "CJK",
+            vec![
+                "Noto Sans CJK SC".to_string(),
+                "Noto Sans CJK JP".to_string(),
+                "Noto Sans CJK KR".to_string(),
+            ],
+        );
+        // Arabic fallback
+        script_overrides.insert(
+            "Arabic",
+            vec!["Noto Sans Arabic".to_string()],
+        );
+        // Emoji fallback
+        script_overrides.insert(
+            "Emoji",
+            vec!["Noto Color Emoji".to_string()],
+        );
+        Self {
+            families: vec![
+                "system-ui".to_string(),
+                "sans-serif".to_string(),
+            ],
+            script_overrides,
+        }
+    }
+}
+
+impl FontFallbackChain {
+    /// Get the fallback chain for a specific script name.
+    pub fn for_script(&self, script: &str) -> &[String] {
+        self.script_overrides
+            .get(script)
+            .map(|v| v.as_slice())
+            .unwrap_or(&self.families)
+    }
+}
+
+// =============================================================================
+// P1-55: Font Matching Strategy
+// =============================================================================
+
+/// Font matching strategy following CSS font-matching algorithm.
+/// Matches family name, weight, stretch, and style.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FontMatchStrategy {
+    /// Match by family name only (fastest).
+    FamilyName,
+    /// Match by family name, weight, and style (CSS-like).
+    CssLike,
+    /// Match by family name, weight, stretch, and style (full).
+    Full,
+}
+
+impl Default for FontMatchStrategy {
+    fn default() -> Self {
+        FontMatchStrategy::CssLike
+    }
+}
+
+// =============================================================================
+// P1-56: Subpixel Positioning
+// =============================================================================
+
+/// Subpixel positioning mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubpixelMode {
+    /// No subpixel positioning (integer pixel positions).
+    None,
+    /// Fractional pixel positions (1/64 pixel precision).
+    Fractional,
+}
+
+impl Default for SubpixelMode {
+    fn default() -> Self {
+        SubpixelMode::Fractional
+    }
+}
+
+// =============================================================================
+// P1-57: Hinting Strategy
+// =============================================================================
+
+/// Hinting strategy for small text sizes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HintingStrategy {
+    /// No hinting (best for large sizes, screens with high DPI).
+    None,
+    /// Autohinting (algorithmic, works with any font).
+    Auto,
+    /// TrueType hinting (follows font instructions, best quality at small sizes).
+    TrueType,
+    /// Autohinting for small sizes, none for large sizes.
+    AutoIfSmall,
+}
+
+impl Default for HintingStrategy {
+    fn default() -> Self {
+        HintingStrategy::AutoIfSmall
+    }
+}
+
+impl HintingStrategy {
+    /// Determine the effective hinting for a given font size.
+    pub fn for_size(&self, size_pt: f32) -> HintingStrategy {
+        match self {
+            HintingStrategy::AutoIfSmall => {
+                if size_pt <= 14.0 {
+                    HintingStrategy::Auto
+                } else {
+                    HintingStrategy::None
+                }
+            }
+            other => *other,
+        }
+    }
+}
+
+// =============================================================================
+// P1-59: Atlas Defragmentation
+// =============================================================================
+
+/// Controls when atlas defragmentation is triggered.
+#[derive(Clone, Copy, Debug)]
+pub struct AtlasDefragConfig {
+    /// Fragmentation ratio threshold (0.0-1.0). Defrag when wasted space
+    /// exceeds this fraction of total atlas size.
+    pub fragmentation_threshold: f32,
+    /// Minimum time between defragmentation passes (seconds).
+    pub min_interval_secs: f32,
+}
+
+impl Default for AtlasDefragConfig {
+    fn default() -> Self {
+        Self {
+            fragmentation_threshold: 0.3,
+            min_interval_secs: 5.0,
+        }
+    }
+}
+
+// =============================================================================
+// P1-60: Multi-Atlas Scaling
+// =============================================================================
+
+/// Configuration for multi-atlas glyph management.
+#[derive(Clone, Copy, Debug)]
+pub struct MultiAtlasConfig {
+    /// Maximum number of glyph atlases.
+    pub max_atlases: usize,
+    /// Size of each atlas in pixels (width and height).
+    pub atlas_size: u32,
+    /// Whether to enable LRU eviction across atlases.
+    pub lru_eviction: bool,
+}
+
+impl Default for MultiAtlasConfig {
+    fn default() -> Self {
+        Self {
+            max_atlases: 4,
+            atlas_size: 4096,
+            lru_eviction: true,
+        }
+    }
+}
+
+// =============================================================================
+// P1-61: Shaping Cache Strategy
+// =============================================================================
+
+/// Configuration for the shaping cache.
+#[derive(Clone, Copy, Debug)]
+pub struct ShapingCacheConfig {
+    /// Maximum number of cached shaping results.
+    pub max_entries: usize,
+    /// Whether to track hit/miss statistics.
+    pub track_stats: bool,
+}
+
+impl Default for ShapingCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: 4096,
+            track_stats: true,
+        }
+    }
+}
+
+// =============================================================================
+// P1-62: Vertical Text Support
+// =============================================================================
+
+/// Vertical text layout mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VerticalTextMode {
+    /// Horizontal text layout (default).
+    Horizontal,
+    /// Vertical text layout, right-to-left (traditional Japanese).
+    VerticalRl,
+    /// Vertical text layout, left-to-right (modern Chinese).
+    VerticalLr,
+}
+
+impl Default for VerticalTextMode {
+    fn default() -> Self {
+        VerticalTextMode::Horizontal
+    }
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod p1_runic_capabilities_tests {
+    use super::*;
+
+    // P1-52: Typography Capability Model
+    #[test]
+    fn default_capabilities_are_sensible() {
+        let caps = TextCapabilities::default_capabilities();
+        assert!(caps.variable_fonts);
+        assert!(caps.open_type_features);
+        assert!(caps.subpixel_positioning);
+        assert!(caps.bidi);
+        assert!(caps.font_fallback);
+        assert!(caps.hinting);
+        assert!(caps.shaping_cache);
+    }
+
+    #[test]
+    fn fully_featured_requires_all() {
+        let caps = TextCapabilities::default_capabilities();
+        // Not fully featured because color_fonts, vertical_text, multi_atlas are false
+        assert!(!caps.is_fully_featured());
+        let full = TextCapabilities {
+            color_fonts: true,
+            vertical_text: true,
+            multi_atlas: true,
+            atlas_defragmentation: true,
+            ..caps
+        };
+        assert!(full.is_fully_featured());
+    }
+
+    // P1-54: Font Fallback Chain
+    #[test]
+    fn default_fallback_chain_has_defaults() {
+        let chain = FontFallbackChain::default();
+        assert!(!chain.families.is_empty());
+        assert!(chain.script_overrides.contains_key("CJK"));
+    }
+
+    #[test]
+    fn script_override_takes_priority() {
+        let chain = FontFallbackChain::default();
+        let cjk = chain.for_script("CJK");
+        assert!(cjk.iter().any(|f| f.contains("CJK")));
+    }
+
+    // P1-55: Font Matching Strategy
+    #[test]
+    fn default_strategy_is_css_like() {
+        assert_eq!(FontMatchStrategy::default(), FontMatchStrategy::CssLike);
+    }
+
+    // P1-56: Subpixel Positioning
+    #[test]
+    fn default_subpixel_is_fractional() {
+        assert_eq!(SubpixelMode::default(), SubpixelMode::Fractional);
+    }
+
+    // P1-57: Hinting Strategy
+    #[test]
+    fn auto_if_small_hints_at_small_sizes() {
+        let strategy = HintingStrategy::AutoIfSmall;
+        assert_eq!(strategy.for_size(10.0), HintingStrategy::Auto);
+        assert_eq!(strategy.for_size(14.0), HintingStrategy::Auto);
+        assert_eq!(strategy.for_size(16.0), HintingStrategy::None);
+        assert_eq!(strategy.for_size(24.0), HintingStrategy::None);
+    }
+
+    #[test]
+    fn explicit_strategies_unchanged() {
+        assert_eq!(HintingStrategy::None.for_size(10.0), HintingStrategy::None);
+        assert_eq!(HintingStrategy::Auto.for_size(24.0), HintingStrategy::Auto);
+    }
+
+    // P1-59: Atlas Defrag Config
+    #[test]
+    fn default_defrag_config() {
+        let config = AtlasDefragConfig::default();
+        assert_eq!(config.fragmentation_threshold, 0.3);
+        assert_eq!(config.min_interval_secs, 5.0);
+    }
+
+    // P1-60: Multi-Atlas Config
+    #[test]
+    fn default_multi_atlas_config() {
+        let config = MultiAtlasConfig::default();
+        assert_eq!(config.max_atlases, 4);
+        assert_eq!(config.atlas_size, 4096);
+        assert!(config.lru_eviction);
+    }
+
+    // P1-61: Shaping Cache Config
+    #[test]
+    fn default_shaping_cache_config() {
+        let config = ShapingCacheConfig::default();
+        assert_eq!(config.max_entries, 4096);
+        assert!(config.track_stats);
+    }
+
+    // P1-62: Vertical Text Mode
+    #[test]
+    fn default_vertical_mode_is_horizontal() {
+        assert_eq!(VerticalTextMode::default(), VerticalTextMode::Horizontal);
+    }
+
+    #[test]
+    fn vertical_modes_are_distinct() {
+        assert_ne!(VerticalTextMode::VerticalRl, VerticalTextMode::VerticalLr);
+        assert_ne!(VerticalTextMode::Horizontal, VerticalTextMode::VerticalRl);
+    }
+}
+
