@@ -1302,8 +1302,9 @@ impl RunicTextEngine {
     ///
     /// # Contract
     /// Guaranteed to successfully instantiate a usable text engine. Loads Jupiteroid.ttf
-    /// synchronously so there's always a font ready immediately, and spawns a background thread
-    /// to load all standard system and user fonts so winit startup is not blocked.
+    /// synchronously so there's always a font ready immediately.
+    /// Only bundled fonts (Jupiteroid) are loaded by default.
+    /// Call `load_system_fonts()` explicitly if system font discovery is needed.
     pub fn new() -> Self {
         let mut db = Database::new();
         // Load Jupiteroid.ttf synchronously so there's always a font ready.
@@ -1313,22 +1314,11 @@ impl RunicTextEngine {
         let bg_db_arc = std::sync::Arc::new(std::sync::Mutex::new(None));
         let bg_db_clone = bg_db_arc.clone();
 
+        // Spawn background thread to build the font database with bundled fonts only.
+        // System fonts are NOT loaded by default -- call load_system_fonts() explicitly.
         std::thread::spawn(move || {
             let mut bg_db = Database::new();
-            bg_db.load_system_fonts();
-
-            // Load user fonts from standard directories
-            let home = std::env::var("HOME").unwrap_or_default();
-            for dir in &[
-                format!("{}/.local/share/fonts", home),
-                format!("{}/.fonts", home),
-                "/usr/share/fonts".to_string(),
-                "/usr/local/share/fonts".to_string(),
-            ] {
-                bg_db.load_fonts_dir(dir);
-            }
-            
-            // Also load Jupiteroid.ttf in the background db to keep it consistent
+            // Load Jupiteroid in the background db to keep it consistent
             bg_db.load_font_data(jupiteroid_data);
 
             if let Ok(mut guard) = bg_db_clone.lock() {
@@ -1411,6 +1401,47 @@ impl RunicTextEngine {
             });
         }
     }
+
+    /// Load system fonts from standard directories.
+    /// NOT called by default -- applications must call this explicitly if they
+    /// need system font discovery beyond the bundled Jupiteroid font.
+    ///
+    /// Scans: ~/.local/share/fonts, ~/.fonts, /usr/share/fonts, /usr/local/share/fonts
+    pub fn load_system_fonts(&mut self) {
+        self.check_bg_db();
+        self.db.load_system_fonts();
+        let home = std::env::var("HOME").unwrap_or_default();
+        for dir in &[
+            format!("{}/.local/share/fonts", home),
+            format!("{}/.fonts", home),
+            "/usr/share/fonts".to_string(),
+            "/usr/local/share/fonts".to_string(),
+        ] {
+            self.db.load_fonts_dir(dir);
+        }
+        // Re-index font_data for any newly loaded faces
+        for face in self.db.faces() {
+            let id = face.id;
+            if !self.font_data.contains_key(&id) {
+                if let Some((source, face_index)) = self.db.face_source(id) {
+                    let bytes = match source {
+                        Source::Binary(arc_data) => {
+                            arc_data.as_ref().as_ref().to_vec()
+                        }
+                        Source::File(path) | Source::SharedFile(path, _) => {
+                            if let Ok(data) = std::fs::read(&path) {
+                                data
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                    self.font_data.insert(id, FontData::new(bytes, face_index));
+                }
+            }
+        }
+    }
+
     /// Get or load FontData for a fontdb ID.
     fn get_font_data(&mut self, id: fontdb::ID) -> Option<FontData> {
         self.check_bg_db();
