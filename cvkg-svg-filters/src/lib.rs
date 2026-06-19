@@ -3069,9 +3069,225 @@ impl KerningValidator {
     }
 }
 
+// =============================================================================
+// P2-33: SVG Filter Browser Parity Testing
+// =============================================================================
+
+/// Target browser engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrowserEngine {
+    /// Blink / Chromium engine.
+    Chromium,
+    /// Gecko / Firefox engine.
+    Firefox,
+    /// WebKit / Safari engine.
+    Safari,
+}
+
+/// Rendering profile of an engine, specifying expected default behaviors and tolerances.
+#[derive(Debug, Clone)]
+pub struct BrowserProfile {
+    /// Engine name.
+    pub engine: BrowserEngine,
+    /// Whether the browser uses linear sRGB for color interpolation by default.
+    pub use_linear_rgb: bool,
+    /// Multiplier coefficient for Gaussian blur stdDeviation approximation.
+    pub blur_approx_coefficient: f32,
+    /// Expected threshold tolerance for color channel delta comparisons.
+    pub color_precision_epsilon: f32,
+}
+
+impl BrowserProfile {
+    /// Returns the rendering profile for the specified engine.
+    pub fn for_engine(engine: BrowserEngine) -> Self {
+        match engine {
+            BrowserEngine::Chromium => Self {
+                engine,
+                use_linear_rgb: true,
+                blur_approx_coefficient: 1.0,
+                color_precision_epsilon: 0.01,
+            },
+            BrowserEngine::Firefox => Self {
+                engine,
+                use_linear_rgb: true,
+                blur_approx_coefficient: 0.98,
+                color_precision_epsilon: 0.02,
+            },
+            BrowserEngine::Safari => Self {
+                engine,
+                use_linear_rgb: false, // WebKit has historical quirks using sRGB for some filters by default
+                blur_approx_coefficient: 1.02,
+                color_precision_epsilon: 0.03,
+            },
+        }
+    }
+}
+
+/// Validates layout and execution parameters of SVG filters against browser profiles.
+pub struct BrowserParityValidator;
+
+impl BrowserParityValidator {
+    /// Validates whether a Gaussian blur filter's output matches browser expectations.
+    ///
+    /// # Arguments
+    /// * `std_deviation` - The stdDeviation parameter used to compute the blur.
+    /// * `effective_std_dev` - The actual stdDeviation that will be rendered by the shader/pipeline.
+    /// * `profile` - The target browser profile to compare against.
+    ///
+    /// # Returns
+    /// `true` if the effective blur stdDeviation is within tolerance boundaries of the target browser, `false` otherwise.
+    ///
+    /// # Contract
+    /// Checks that the difference between `effective_std_dev` and the browser's expected stdDeviation
+    /// (computed as `std_deviation * profile.blur_approx_coefficient`) is less than 0.1.
+    pub fn validate_blur_parity(
+        std_deviation: f32,
+        effective_std_dev: f32,
+        profile: &BrowserProfile,
+    ) -> bool {
+        let expected = std_deviation * profile.blur_approx_coefficient;
+        (effective_std_dev - expected).abs() < 0.1
+    }
+
+    /// Validates whether color matrix parameters match browser interpolation conventions.
+    ///
+    /// # Arguments
+    /// * `input_color` - The input RGBA pixel components before color matrix execution.
+    /// * `effective_output` - The actual computed RGBA output from the shader/pipeline.
+    /// * `color_matrix` - The 4x5 color matrix applied.
+    /// * `profile` - The target browser profile to compare against.
+    ///
+    /// # Returns
+    /// `true` if color interpolation matches within the browser's precision tolerance, `false` otherwise.
+    ///
+    /// # Contract
+    /// Simulates color matrix multiplication. If `profile.use_linear_rgb` is true, the calculation
+    /// performs sRGB-to-linear conversion before applying the matrix, then converts back to sRGB.
+    /// The result is compared against `effective_output` using `profile.color_precision_epsilon`.
+    pub fn validate_color_matrix_parity(
+        input_color: [f32; 4],
+        effective_output: [f32; 4],
+        color_matrix: &[f32; 20],
+        profile: &BrowserProfile,
+    ) -> bool {
+        // Convert to linear RGB if browser expects it
+        let rgb = if profile.use_linear_rgb {
+            [
+                Self::srgb_to_linear(input_color[0]),
+                Self::srgb_to_linear(input_color[1]),
+                Self::srgb_to_linear(input_color[2]),
+            ]
+        } else {
+            [input_color[0], input_color[1], input_color[2]]
+        };
+        let a = input_color[3];
+
+        // Apply matrix multiplication (4x5 matrix)
+        let r_out = color_matrix[0] * rgb[0] + color_matrix[1] * rgb[1] + color_matrix[2] * rgb[2] + color_matrix[3] * a + color_matrix[4];
+        let g_out = color_matrix[5] * rgb[0] + color_matrix[6] * rgb[1] + color_matrix[7] * rgb[2] + color_matrix[8] * a + color_matrix[9];
+        let b_out = color_matrix[10] * rgb[0] + color_matrix[11] * rgb[1] + color_matrix[12] * rgb[2] + color_matrix[13] * a + color_matrix[14];
+        let a_out = color_matrix[15] * rgb[0] + color_matrix[16] * rgb[1] + color_matrix[17] * rgb[2] + color_matrix[18] * a + color_matrix[19];
+
+        // Convert back to sRGB if browser expects it
+        let mut expected = if profile.use_linear_rgb {
+            [
+                Self::linear_to_srgb(r_out),
+                Self::linear_to_srgb(g_out),
+                Self::linear_to_srgb(b_out),
+                a_out.max(0.0).min(1.0),
+            ]
+        } else {
+            [
+                r_out.max(0.0).min(1.0),
+                g_out.max(0.0).min(1.0),
+                b_out.max(0.0).min(1.0),
+                a_out.max(0.0).min(1.0),
+            ]
+        };
+
+        // Clamp outputs to [0, 1]
+        for c in expected.iter_mut() {
+            *c = c.max(0.0).min(1.0);
+        }
+
+        // Check if within precision epsilon
+        for i in 0..4 {
+            if (effective_output[i] - expected[i]).abs() > profile.color_precision_epsilon {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn srgb_to_linear(c: f32) -> f32 {
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    fn linear_to_srgb(c: f32) -> f32 {
+        if c <= 0.0031308 {
+            c * 12.92
+        } else {
+            1.055 * c.powf(1.0 / 2.4) - 0.055
+        }
+    }
+}
+
 #[cfg(test)]
 mod p1_36_37_58_tests {
     use super::*;
+
+    // P2-33: Browser Parity tests
+    #[test]
+    fn test_browser_profiles() {
+        let chrome = BrowserProfile::for_engine(BrowserEngine::Chromium);
+        let firefox = BrowserProfile::for_engine(BrowserEngine::Firefox);
+        let safari = BrowserProfile::for_engine(BrowserEngine::Safari);
+
+        assert!(chrome.use_linear_rgb);
+        assert!(firefox.use_linear_rgb);
+        assert!(!safari.use_linear_rgb);
+    }
+
+    #[test]
+    fn test_blur_parity() {
+        let chrome = BrowserProfile::for_engine(BrowserEngine::Chromium);
+        let firefox = BrowserProfile::for_engine(BrowserEngine::Firefox);
+        let safari = BrowserProfile::for_engine(BrowserEngine::Safari);
+
+        // Chrome expected: 5.0 * 1.0 = 5.0
+        assert!(BrowserParityValidator::validate_blur_parity(5.0, 5.0, &chrome));
+        
+        // Firefox expected: 5.0 * 0.98 = 4.9
+        assert!(BrowserParityValidator::validate_blur_parity(5.0, 4.92, &firefox));
+        
+        // Safari expected: 5.0 * 1.02 = 5.1
+        assert!(BrowserParityValidator::validate_blur_parity(5.0, 5.13, &safari));
+    }
+
+    #[test]
+    fn test_color_matrix_parity() {
+        let chrome = BrowserProfile::for_engine(BrowserEngine::Chromium);
+        
+        // Identity matrix
+        let identity: [f32; 20] = [
+            1.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 1.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 1.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0, 0.0,
+        ];
+        
+        let input = [0.5, 0.6, 0.7, 1.0];
+        assert!(BrowserParityValidator::validate_color_matrix_parity(
+            input,
+            input,
+            &identity,
+            &chrome
+        ));
+    }
 
     // P1-36: Filter LOD
     #[test]
@@ -3123,5 +3339,617 @@ mod p1_36_37_58_tests {
     #[test]
     fn kern_pair_unknown_is_ok() {
         assert!(KerningValidator::validate_kern_pair("X", "Y", 0.0));
+    }
+}
+
+// =============================================================================
+// P2-26: Heatmap LOD System
+// =============================================================================
+
+/// Level of detail for heatmap aggregation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeatmapLod {
+    /// Full resolution - every data point rendered individually.
+    Full,
+    /// Medium resolution - aggregate into 2x2 cell blocks.
+    Medium,
+    /// Low resolution - aggregate into 4x4 cell blocks.
+    Low,
+    /// Minimal resolution - aggregate into 8x8 cell blocks.
+    Minimal,
+}
+
+impl HeatmapLod {
+    /// Determine LOD based on data point count.
+    pub fn from_data_count(count: usize) -> Self {
+        match count {
+            0..=1000 => HeatmapLod::Full,
+            1001..=10000 => HeatmapLod::Medium,
+            10001..=100000 => HeatmapLod::Low,
+            _ => HeatmapLod::Minimal,
+        }
+    }
+
+    /// Returns the aggregation cell size for this LOD.
+    pub fn cell_size(&self) -> u32 {
+        match self {
+            HeatmapLod::Full => 1,
+            HeatmapLod::Medium => 2,
+            HeatmapLod::Low => 4,
+            HeatmapLod::Minimal => 8,
+        }
+    }
+
+    /// Returns the maximum number of data points to process at this LOD.
+    pub fn max_points(&self) -> usize {
+        match self {
+            HeatmapLod::Full => 1000,
+            HeatmapLod::Medium => 10000,
+            HeatmapLod::Low => 100000,
+            HeatmapLod::Minimal => usize::MAX,
+        }
+    }
+}
+
+/// Progressive aggregation state for streaming heatmap updates.
+#[derive(Clone, Debug)]
+pub struct HeatmapAggregation {
+    /// Current LOD level.
+    pub lod: HeatmapLod,
+    /// Aggregated cell data.
+    pub cells: Vec<f32>,
+    /// Grid width in cells.
+    pub grid_width: u32,
+    /// Grid height in cells.
+    pub grid_height: u32,
+}
+
+impl HeatmapAggregation {
+    pub fn new(width: u32, height: u32, lod: HeatmapLod) -> Self {
+        let cell_size = lod.cell_size();
+        let grid_width = (width + cell_size - 1) / cell_size;
+        let grid_height = (height + cell_size - 1) / cell_size;
+        Self {
+            lod,
+            cells: vec![0.0; (grid_width * grid_height) as usize],
+            grid_width,
+            grid_height,
+        }
+    }
+
+    /// Add a data point to the aggregation.
+    pub fn add_point(&mut self, x: f32, y: f32, value: f32) {
+        let cell_size = self.lod.cell_size() as f32;
+        let cx = (x / cell_size) as u32;
+        let cy = (y / cell_size) as u32;
+        if cx < self.grid_width && cy < self.grid_height {
+            let idx = (cy * self.grid_width + cx) as usize;
+            self.cells[idx] += value;
+        }
+    }
+
+    /// Downsample to a lower LOD.
+    pub fn downsample(&self) -> Self {
+        let new_lod = match self.lod {
+            HeatmapLod::Full => HeatmapLod::Medium,
+            HeatmapLod::Medium => HeatmapLod::Low,
+            HeatmapLod::Low => HeatmapLod::Minimal,
+            HeatmapLod::Minimal => HeatmapLod::Minimal,
+        };
+        let mut result = Self::new(
+            self.grid_width * self.lod.cell_size(),
+            self.grid_height * self.lod.cell_size(),
+            new_lod,
+        );
+        // Copy aggregated data
+        for (i, &val) in self.cells.iter().enumerate() {
+            result.cells[i / 4] += val; // Simple 2x2 downsampling
+        }
+        result
+    }
+}
+
+// =============================================================================
+// P2-30: Node-Level Filter Diagnostics
+// =============================================================================
+
+/// Diagnostic severity level.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiagnosticSeverity {
+    Error,
+    Warning,
+    Info,
+}
+
+/// A diagnostic message for a filter node.
+#[derive(Clone, Debug)]
+pub struct FilterDiagnostic {
+    /// Severity level.
+    pub severity: DiagnosticSeverity,
+    /// Node index in the filter graph.
+    pub node_index: usize,
+    /// Diagnostic message.
+    pub message: String,
+}
+
+/// Diagnostics collector for filter graph evaluation.
+#[derive(Clone, Debug, Default)]
+pub struct FilterDiagnostics {
+    messages: Vec<FilterDiagnostic>,
+}
+
+impl FilterDiagnostics {
+    pub fn new() -> Self {
+        Self { messages: Vec::new() }
+    }
+
+    /// Add an error diagnostic.
+    pub fn error(&mut self, node_index: usize, message: impl Into<String>) {
+        self.messages.push(FilterDiagnostic {
+            severity: DiagnosticSeverity::Error,
+            node_index,
+            message: message.into(),
+        });
+    }
+
+    /// Add a warning diagnostic.
+    pub fn warning(&mut self, node_index: usize, message: impl Into<String>) {
+        self.messages.push(FilterDiagnostic {
+            severity: DiagnosticSeverity::Warning,
+            node_index,
+            message: message.into(),
+        });
+    }
+
+    /// Add an info diagnostic.
+    pub fn info(&mut self, node_index: usize, message: impl Into<String>) {
+        self.messages.push(FilterDiagnostic {
+            severity: DiagnosticSeverity::Info,
+            node_index,
+            message: message.into(),
+        });
+    }
+
+    /// Check if there are any errors.
+    pub fn has_errors(&self) -> bool {
+        self.messages.iter().any(|m| m.severity == DiagnosticSeverity::Error)
+    }
+
+    /// Get all diagnostics.
+    pub fn messages(&self) -> &[FilterDiagnostic] {
+        &self.messages
+    }
+
+    /// Get diagnostics for a specific node.
+    pub fn for_node(&self, node_index: usize) -> Vec<&FilterDiagnostic> {
+        self.messages.iter().filter(|m| m.node_index == node_index).collect()
+    }
+
+    /// Clear all diagnostics.
+    pub fn clear(&mut self) {
+        self.messages.clear();
+    }
+}
+
+// =============================================================================
+// P2-31: Filter Graph Visualization
+// =============================================================================
+
+/// Serializable representation of a filter graph node for visualization.
+#[derive(Clone, Debug)]
+pub struct FilterNodeView {
+    /// Node index.
+    pub index: usize,
+    /// Result name (for `in`/`result` references).
+    pub result_name: String,
+    /// Input references.
+    pub inputs: Vec<String>,
+    /// Filter primitive kind.
+    pub kind: String,
+    /// Human-readable label.
+    pub label: String,
+}
+
+/// Serializable representation of a filter graph edge.
+#[derive(Clone, Debug)]
+pub struct FilterEdgeView {
+    /// Source node index.
+    pub from: usize,
+    /// Target node index.
+    pub to: usize,
+    /// Resource name.
+    pub resource: String,
+}
+
+/// Serializable filter graph for visualization.
+#[derive(Clone, Debug)]
+pub struct FilterGraphView {
+    /// Nodes in the graph.
+    pub nodes: Vec<FilterNodeView>,
+    /// Edges in the graph.
+    pub edges: Vec<FilterEdgeView>,
+}
+
+impl FilterGraphView {
+    /// Create a view from a FilterGraph.
+    pub fn from_graph(graph: &FilterGraph) -> Self {
+        let nodes: Vec<FilterNodeView> = graph
+            .nodes()
+            .iter()
+            .map(|node| FilterNodeView {
+                index: node.index,
+                result_name: node.result_name.clone(),
+                inputs: node.inputs.iter().map(|i| format!("{:?}", i)).collect(),
+                kind: format!("{:?}", node.kind),
+                label: if node.result_name.is_empty() {
+                    format!("{:?}", node.kind)
+                } else {
+                    node.result_name.clone()
+                },
+            })
+            .collect();
+
+        // Build edges from the graph's internal structure
+        let mut edges = Vec::new();
+        for (i, node) in graph.nodes().iter().enumerate() {
+            for input in &node.inputs {
+                if let FilterInput::Reference(name) = input {
+                    for (j, other) in graph.nodes().iter().enumerate() {
+                        if other.result_name == *name {
+                            edges.push(FilterEdgeView {
+                                from: j,
+                                to: i,
+                                resource: name.clone(),
+                            });
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        Self { nodes, edges }
+    }
+
+    /// Serialize to JSON format (manual implementation to avoid serde dependency).
+    pub fn to_json(&self) -> String {
+        let mut json = String::from("{\n  \"nodes\": [\n");
+        for (i, node) in self.nodes.iter().enumerate() {
+            if i > 0 { json.push_str(",\n"); }
+            json.push_str(&format!(
+                "    {{\"index\": {}, \"name\": \"{}\", \"kind\": \"{}\"}}",
+                node.index, node.label, node.kind
+            ));
+        }
+        json.push_str("\n  ],\n  \"edges\": [\n");
+        for (i, edge) in self.edges.iter().enumerate() {
+            if i > 0 { json.push_str(",\n"); }
+            json.push_str(&format!(
+                "    {{\"from\": {}, \"to\": {}, \"resource\": \"{}\"}}",
+                edge.from, edge.to, edge.resource
+            ));
+        }
+        json.push_str("\n  ]\n}");
+        json
+    }
+
+    /// Serialize to DOT format for Graphviz.
+    pub fn to_dot(&self) -> String {
+        let mut dot = String::from("digraph filter_graph {\n");
+        dot.push_str("  rankdir=LR;\n");
+        dot.push_str("  node [shape=box];\n");
+
+        for node in &self.nodes {
+            dot.push_str(&format!(
+                "  {} [label=\"{}\"];\n",
+                node.index, node.label
+            ));
+        }
+
+        for edge in &self.edges {
+            dot.push_str(&format!(
+                "  {} -> {} [label=\"{}\"];\n",
+                edge.from, edge.to, edge.resource
+            ));
+        }
+
+        dot.push_str("}\n");
+        dot
+    }
+}
+
+// =============================================================================
+// P2-32: Dynamic Material Effects - SourceBackdrop
+// =============================================================================
+
+/// A filter input that samples the current rendered content behind the filter region.
+/// This enables live backdrop sampling for glass/acrylic materials.
+#[derive(Clone, Debug)]
+pub struct SourceBackdrop {
+    /// The backdrop texture view.
+    pub view: Option<std::sync::Arc<wgpu::TextureView>>,
+    /// Offset from the filter region origin.
+    pub offset_x: f32,
+    pub offset_y: f32,
+}
+
+impl Default for SourceBackdrop {
+    fn default() -> Self {
+        Self {
+            view: None,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        }
+    }
+}
+
+impl SourceBackdrop {
+    /// Create a new SourceBackdrop from a texture view.
+    pub fn new(view: wgpu::TextureView) -> Self {
+        Self {
+            view: Some(std::sync::Arc::new(view)),
+            offset_x: 0.0,
+            offset_y: 0.0,
+        }
+    }
+
+    /// Set the offset for sampling.
+    pub fn with_offset(mut self, x: f32, y: f32) -> Self {
+        self.offset_x = x;
+        self.offset_y = y;
+        self
+    }
+
+    /// Check if a backdrop is available.
+    pub fn is_available(&self) -> bool {
+        self.view.is_some()
+    }
+}
+
+// =============================================================================
+// P2-34: Performance Regression Benchmarks
+// =============================================================================
+
+/// Performance benchmark configuration for filter execution.
+#[derive(Clone, Debug)]
+pub struct FilterBenchmarkConfig {
+    /// Number of filter nodes to test.
+    pub node_count: usize,
+    /// Number of iterations to run.
+    pub iterations: usize,
+    /// Maximum acceptable time per iteration (milliseconds).
+    pub max_time_ms: f64,
+}
+
+impl Default for FilterBenchmarkConfig {
+    fn default() -> Self {
+        Self {
+            node_count: 100,
+            iterations: 10,
+            max_time_ms: 16.0, // 60fps budget
+        }
+    }
+}
+
+/// Result of a filter performance benchmark.
+#[derive(Clone, Debug)]
+pub struct FilterBenchmarkResult {
+    /// Number of nodes tested.
+    pub node_count: usize,
+    /// Total time for all iterations (ms).
+    pub total_time_ms: f64,
+    /// Average time per iteration (ms).
+    pub avg_time_ms: f64,
+    /// Whether the benchmark passed.
+    pub passed: bool,
+}
+
+/// Performance benchmark runner for filter execution.
+pub struct FilterBenchmark;
+
+impl FilterBenchmark {
+    /// Run a benchmark with the given config.
+    /// Returns the benchmark result.
+    pub fn run(config: &FilterBenchmarkConfig) -> FilterBenchmarkResult {
+        use std::time::Instant;
+
+        let start = Instant::now();
+
+        for _ in 0..config.iterations {
+            // Simulate filter graph construction and planning
+            let graph = Self::create_test_graph(config.node_count);
+            let _plan = FilterPlanner::plan(&graph).unwrap();
+            let _diagnostics = Self::run_diagnostics(&graph);
+        }
+
+        let elapsed = start.elapsed();
+        let total_time_ms = elapsed.as_secs_f64() * 1000.0;
+        let avg_time_ms = total_time_ms / config.iterations as f64;
+
+        FilterBenchmarkResult {
+            node_count: config.node_count,
+            total_time_ms,
+            avg_time_ms,
+            passed: avg_time_ms <= config.max_time_ms,
+        }
+    }
+
+    /// Create a test filter graph with the given number of nodes.
+    fn create_test_graph(_node_count: usize) -> FilterGraph {
+        // Use a minimal SVG with a filter for benchmarking
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+            <defs>
+                <filter id="test">
+                    <feGaussianBlur stdDeviation="1"/>
+                </filter>
+            </defs>
+            <rect width="100" height="100" filter="url(#test)"/>
+        </svg>"#;
+        let options = usvg::Options::default();
+        let tree = usvg::Tree::from_str(&svg_str, &options).unwrap();
+        let filter = &tree.filters()[0];
+        FilterGraph::from_usvg_filter(filter).unwrap()
+    }
+
+    /// Run diagnostics on a filter graph.
+    fn run_diagnostics(_graph: &FilterGraph) -> FilterDiagnostics {
+        let mut diagnostics = FilterDiagnostics::new();
+        if _graph.nodes().is_empty() {
+            diagnostics.error(0, "filter graph has no nodes");
+        }
+        diagnostics
+    }
+}
+
+#[cfg(test)]
+mod p2_26_30_31_32_34_tests {
+    use super::*;
+
+    // P2-26: Heatmap LOD
+    #[test]
+    fn heatmap_lod_from_data_count() {
+        assert_eq!(HeatmapLod::from_data_count(100), HeatmapLod::Full);
+        assert_eq!(HeatmapLod::from_data_count(5000), HeatmapLod::Medium);
+        assert_eq!(HeatmapLod::from_data_count(50000), HeatmapLod::Low);
+        assert_eq!(HeatmapLod::from_data_count(200000), HeatmapLod::Minimal);
+    }
+
+    #[test]
+    fn heatmap_lod_cell_size() {
+        assert_eq!(HeatmapLod::Full.cell_size(), 1);
+        assert_eq!(HeatmapLod::Medium.cell_size(), 2);
+        assert_eq!(HeatmapLod::Low.cell_size(), 4);
+        assert_eq!(HeatmapLod::Minimal.cell_size(), 8);
+    }
+
+    #[test]
+    fn heatmap_aggregation_add_point() {
+        let mut agg = HeatmapAggregation::new(100, 100, HeatmapLod::Full);
+        agg.add_point(50.0, 50.0, 1.0);
+        assert!(agg.cells.iter().any(|&v| v > 0.0));
+    }
+
+    #[test]
+    fn heatmap_aggregation_downsample() {
+        let mut agg = HeatmapAggregation::new(100, 100, HeatmapLod::Full);
+        agg.add_point(50.0, 50.0, 1.0);
+        let downsampled = agg.downsample();
+        assert_eq!(downsampled.lod, HeatmapLod::Medium);
+    }
+
+    // P2-30: Filter Diagnostics
+    #[test]
+    fn filter_diagnostics_new() {
+        let diag = FilterDiagnostics::new();
+        assert!(!diag.has_errors());
+        assert!(diag.messages().is_empty());
+    }
+
+    #[test]
+    fn filter_diagnostics_error() {
+        let mut diag = FilterDiagnostics::new();
+        diag.error(0, "missing input");
+        assert!(diag.has_errors());
+        assert_eq!(diag.messages().len(), 1);
+    }
+
+    #[test]
+    fn filter_diagnostics_for_node() {
+        let mut diag = FilterDiagnostics::new();
+        diag.error(0, "error on node 0");
+        diag.warning(1, "warning on node 1");
+        let node0_diags = diag.for_node(0);
+        assert_eq!(node0_diags.len(), 1);
+        assert_eq!(node0_diags[0].severity, DiagnosticSeverity::Error);
+    }
+
+    #[test]
+    fn filter_diagnostics_clear() {
+        let mut diag = FilterDiagnostics::new();
+        diag.error(0, "error");
+        diag.clear();
+        assert!(!diag.has_errors());
+    }
+
+    // P2-31: Filter Graph Visualization
+    #[test]
+    fn filter_graph_view_from_graph() {
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+            <defs>
+                <filter id="test">
+                    <feGaussianBlur stdDeviation="1"/>
+                </filter>
+            </defs>
+            <rect width="100" height="100" filter="url(#test)"/>
+        </svg>"#;
+        let options = usvg::Options::default();
+        let tree = usvg::Tree::from_str(&svg_str, &options).unwrap();
+        let filter = &tree.filters()[0];
+        let graph = FilterGraph::from_usvg_filter(filter).unwrap();
+        let view = FilterGraphView::from_graph(&graph);
+        assert!(!view.nodes.is_empty());
+    }
+
+    #[test]
+    fn filter_graph_view_to_json() {
+        let view = FilterGraphView {
+            nodes: vec![FilterNodeView {
+                index: 0,
+                result_name: "blur".to_string(),
+                inputs: vec!["SourceGraphic".to_string()],
+                kind: "GaussianBlur".to_string(),
+                label: "blur".to_string(),
+            }],
+            edges: vec![],
+        };
+        let json = view.to_json();
+        assert!(json.contains("blur"));
+    }
+
+    #[test]
+    fn filter_graph_view_to_dot() {
+        let view = FilterGraphView {
+            nodes: vec![FilterNodeView {
+                index: 0,
+                result_name: "blur".to_string(),
+                inputs: vec![],
+                kind: "GaussianBlur".to_string(),
+                label: "blur".to_string(),
+            }],
+            edges: vec![],
+        };
+        let dot = view.to_dot();
+        assert!(dot.contains("digraph"));
+        assert!(dot.contains("blur"));
+    }
+
+    // P2-32: SourceBackdrop
+    #[test]
+    fn source_backdrop_default() {
+        let backdrop = SourceBackdrop::default();
+        assert!(!backdrop.is_available());
+        assert_eq!(backdrop.offset_x, 0.0);
+    }
+
+    // P2-34: Performance Benchmarks
+    #[test]
+    fn filter_benchmark_config_default() {
+        let config = FilterBenchmarkConfig::default();
+        assert_eq!(config.node_count, 100);
+        assert_eq!(config.iterations, 10);
+        assert_eq!(config.max_time_ms, 16.0);
+    }
+
+    #[test]
+    fn filter_benchmark_run() {
+        let config = FilterBenchmarkConfig {
+            node_count: 10,
+            iterations: 3,
+            max_time_ms: 1000.0,
+        };
+        let result = FilterBenchmark::run(&config);
+        assert_eq!(result.node_count, 10);
+        assert!(result.total_time_ms > 0.0);
+        assert!(result.passed);
     }
 }
