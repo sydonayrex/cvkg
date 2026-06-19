@@ -166,6 +166,34 @@ impl FilterGraph {
             let kind = prim.kind().clone();
             let rect = prim.rect();
 
+            // P1-31/32: Validate lighting and turbulence parameters
+            match &kind {
+                usvg::filter::Kind::DiffuseLighting(dl) => {
+                    LightingValidator::validate_diffuse_lighting(
+                        dl.surface_scale(),
+                        dl.diffuse_constant(),
+                        None,
+                    )?;
+                }
+                usvg::filter::Kind::SpecularLighting(sl) => {
+                    LightingValidator::validate_specular_lighting(
+                        sl.surface_scale(),
+                        sl.specular_constant(),
+                        sl.specular_exponent(),
+                    )?;
+                }
+                usvg::filter::Kind::Turbulence(t) => {
+                    TurbulenceValidator::validate_turbulence(
+                        t.base_frequency_x().get(),
+                        t.base_frequency_y().get(),
+                        t.num_octaves() as i32,
+                        t.seed(),
+                        t.stitch_tiles(),
+                    )?;
+                }
+                _ => {}
+            }
+
             if !result_name.is_empty() {
                 name_to_index.insert(result_name.clone(), i);
             }
@@ -3951,5 +3979,42 @@ mod p2_26_30_31_32_34_tests {
         assert_eq!(result.node_count, 10);
         assert!(result.total_time_ms > 0.0);
         assert!(result.passed);
+    }
+
+    // P1-31/32: from_usvg_filter validation tests
+    #[test]
+    fn test_from_usvg_filter_validation_diffuse() {
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+            <defs>
+                <filter id="test">
+                    <feDiffuseLighting surfaceScale="-5" diffuseConstant="1">
+                        <feDistantLight azimuth="45" elevation="45"/>
+                    </feDiffuseLighting>
+                </filter>
+            </defs>
+            <rect width="100" height="100" filter="url(#test)"/>
+        </svg>"#;
+        let options = usvg::Options::default();
+        let tree = usvg::Tree::from_str(&svg_str, &options).unwrap();
+        let filter = &tree.filters()[0];
+        let result = FilterGraph::from_usvg_filter(filter);
+        assert!(result.is_err(), "should reject negative surfaceScale");
+    }
+
+    #[test]
+    fn test_from_usvg_filter_validation_turbulence() {
+        let svg_str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+            <defs>
+                <filter id="test">
+                    <feTurbulence numOctaves="12" baseFrequency="0.05"/>
+                </filter>
+            </defs>
+            <rect width="100" height="100" filter="url(#test)"/>
+        </svg>"#;
+        let options = usvg::Options::default();
+        let tree = usvg::Tree::from_str(&svg_str, &options).unwrap();
+        let filter = &tree.filters()[0];
+        let result = FilterGraph::from_usvg_filter(filter);
+        assert!(result.is_err(), "should reject out-of-bounds numOctaves");
     }
 }

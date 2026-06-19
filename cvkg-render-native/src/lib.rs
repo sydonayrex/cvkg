@@ -3000,9 +3000,422 @@ impl Default for WidgetVirtualizationConfig {
     }
 }
 
+// =============================================================================
+// P1-50: Semantic Role Mapping
+// =============================================================================
+
+/// Explicit mapping from AccessKit/CVKG role to platform accessibility concepts:
+/// macOS (AXRole), Windows (UIA ControlType), and Linux (ATK Role).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SemanticRoleMapping {
+    /// The input AccessKit role.
+    pub role: accesskit::Role,
+    /// macOS AXRole string.
+    pub mac_ax_role: &'static str,
+    /// Windows UI Automation ControlType constant name or ID string.
+    pub win_uia_control_type: &'static str,
+    /// Linux ATK Role constant name or ID string.
+    pub linux_atk_role: &'static str,
+}
+
+/// Registry of semantic accessibility mappings.
+pub struct SemanticRoleRegistry {
+    mappings: Vec<SemanticRoleMapping>,
+}
+
+impl SemanticRoleRegistry {
+    pub fn new() -> Self {
+        Self {
+            mappings: vec![
+                SemanticRoleMapping {
+                    role: accesskit::Role::Button,
+                    mac_ax_role: "AXButton",
+                    win_uia_control_type: "UIA_ButtonControlTypeId",
+                    linux_atk_role: "ATK_ROLE_PUSH_BUTTON",
+                },
+                SemanticRoleMapping {
+                    role: accesskit::Role::TextInput,
+                    mac_ax_role: "AXTextField",
+                    win_uia_control_type: "UIA_EditControlTypeId",
+                    linux_atk_role: "ATK_ROLE_ENTRY",
+                },
+                SemanticRoleMapping {
+                    role: accesskit::Role::CheckBox,
+                    mac_ax_role: "AXCheckBox",
+                    win_uia_control_type: "UIA_CheckBoxControlTypeId",
+                    linux_atk_role: "ATK_ROLE_CHECK_BOX",
+                },
+                SemanticRoleMapping {
+                    role: accesskit::Role::Slider,
+                    mac_ax_role: "AXSlider",
+                    win_uia_control_type: "UIA_SliderControlTypeId",
+                    linux_atk_role: "ATK_ROLE_SLIDER",
+                },
+                SemanticRoleMapping {
+                    role: accesskit::Role::Label,
+                    mac_ax_role: "AXStaticText",
+                    win_uia_control_type: "UIA_TextControlTypeId",
+                    linux_atk_role: "ATK_ROLE_LABEL",
+                },
+            ],
+        }
+    }
+
+    /// Look up the platform mappings for a given role.
+    pub fn find(&self, role: accesskit::Role) -> Option<&SemanticRoleMapping> {
+        self.mappings.iter().find(|m| m.role == role)
+    }
+}
+
+impl Default for SemanticRoleRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+
+// =============================================================================
+// P2-39: Multi-Monitor Support
+// =============================================================================
+
+/// P2-39: Multi-monitor support contract config for mixed DPI and refresh rates.
+#[derive(Debug, Clone)]
+pub struct MonitorConfig {
+    /// Friendly name of the monitor (e.g. "Primary", "External").
+    pub name: String,
+    /// Spatial origin position in physical coordinates.
+    pub position: (i32, i32),
+    /// Size in physical pixels.
+    pub size: (u32, u32),
+    /// DPI scaling factor.
+    pub scale_factor: f64,
+    /// Refresh rate in Hz.
+    pub refresh_rate: u32,
+}
+
+/// P2-39: Manages multi-monitor layouts, tracking scale factor updates
+/// and DPI changes during transitions.
+#[derive(Debug, Clone)]
+pub struct MultiMonitorManager {
+    monitors: Vec<MonitorConfig>,
+    current_monitor_index: usize,
+}
+
+impl MultiMonitorManager {
+    /// Creates a new `MultiMonitorManager` with a set of displays.
+    ///
+    /// # Arguments
+    /// * `monitors` - The list of active monitors. Must contain at least one monitor.
+    ///
+    /// # Contract
+    /// If the list of monitors is empty, a default 1080p, 60Hz, 1.0x scale monitor is added.
+    pub fn new(mut monitors: Vec<MonitorConfig>) -> Self {
+        if monitors.is_empty() {
+            monitors.push(MonitorConfig {
+                name: "Default".to_string(),
+                position: (0, 0),
+                size: (1920, 1080),
+                scale_factor: 1.0,
+                refresh_rate: 60,
+            });
+        }
+        Self {
+            monitors,
+            current_monitor_index: 0,
+        }
+    }
+
+    /// Returns the currently active monitor configuration.
+    pub fn current_monitor(&self) -> &MonitorConfig {
+        &self.monitors[self.current_monitor_index]
+    }
+
+    /// Returns all registered monitor configurations.
+    pub fn monitors(&self) -> &[MonitorConfig] {
+        &self.monitors
+    }
+
+    /// Determines which monitor a window is on based on its center coordinate.
+    ///
+    /// # Arguments
+    /// * `window_rect` - The spatial bounds of the window represented as `(x, y, width, height)` in physical coordinates.
+    ///
+    /// # Contract
+    /// Selects the monitor that contains the center point of the window. If the center point
+    /// is outside all monitors, defaults to the closest monitor or the current one.
+    pub fn update_window_position(&mut self, window_rect: (i32, i32, u32, u32)) -> Option<usize> {
+        let center_x = window_rect.0 + (window_rect.2 as i32 / 2);
+        let center_y = window_rect.1 + (window_rect.3 as i32 / 2);
+
+        let mut best_index = None;
+        let mut min_distance = f64::MAX;
+
+        for (i, m) in self.monitors.iter().enumerate() {
+            let left = m.position.0;
+            let right = m.position.0 + m.size.0 as i32;
+            let top = m.position.1;
+            let bottom = m.position.1 + m.size.1 as i32;
+
+            if center_x >= left && center_x < right && center_y >= top && center_y < bottom {
+                self.current_monitor_index = i;
+                return Some(i);
+            }
+
+            // Calculate distance to center of monitor
+            let m_center_x = m.position.0 + (m.size.0 as i32 / 2);
+            let m_center_y = m.position.1 + (m.size.1 as i32 / 2);
+            let dx = (center_x - m_center_x) as f64;
+            let dy = (center_y - m_center_y) as f64;
+            let dist = (dx * dx + dy * dy).sqrt();
+            if dist < min_distance {
+                min_distance = dist;
+                best_index = Some(i);
+            }
+        }
+
+        if let Some(i) = best_index {
+            self.current_monitor_index = i;
+            Some(i)
+        } else {
+            None
+        }
+    }
+
+    /// Dynamically scales logical dimensions to physical dimensions using the active monitor's scale factor.
+    ///
+    /// # Arguments
+    /// * `logical_width` - The logical width to scale.
+    /// * `logical_height` - The logical height to scale.
+    ///
+    /// # Returns
+    /// The physical dimensions as `(u32, u32)`.
+    pub fn scale_dimensions(&self, logical_width: f64, logical_height: f64) -> (u32, u32) {
+        let sf = self.current_monitor().scale_factor;
+        (
+            (logical_width * sf).round() as u32,
+            (logical_height * sf).round() as u32,
+        )
+    }
+
+    /// Checks if moving between monitors requires a DPI scaling recalculation.
+    ///
+    /// # Arguments
+    /// * `from_index` - The source monitor index.
+    /// * `to_index` - The target monitor index.
+    pub fn requires_dpi_adaptation(&self, from_index: usize, to_index: usize) -> bool {
+        if from_index < self.monitors.len() && to_index < self.monitors.len() {
+            (self.monitors[from_index].scale_factor - self.monitors[to_index].scale_factor).abs() > f64::EPSILON
+        } else {
+            false
+        }
+    }
+}
+
+// =============================================================================
+// P2-40: Visual Regression Tracker
+// =============================================================================
+
+/// P2-40: Native Visual Regression Testing infrastructure.
+/// Captures and compares frames to detect platform-specific visual differences.
+#[derive(Debug, Clone)]
+pub struct VisualRegressionTracker {
+    /// Path to directory where reference "golden" images are located.
+    reference_dir: std::path::PathBuf,
+    /// Absolute threshold difference tolerance per pixel component (0 to 255).
+    pixel_tolerance: u8,
+    /// Percentage threshold of allowed mismatched pixels (0.0 to 100.0).
+    max_mismatched_percentage: f64,
+}
+
+impl VisualRegressionTracker {
+    /// Creates a new `VisualRegressionTracker` with specified reference folder and tolerances.
+    pub fn new(reference_dir: std::path::PathBuf, pixel_tolerance: u8, max_mismatched_percentage: f64) -> Self {
+        Self {
+            reference_dir,
+            pixel_tolerance,
+            max_mismatched_percentage,
+        }
+    }
+
+    /// Compares a captured PNG byte buffer against a named golden reference file.
+    ///
+    /// # Arguments
+    /// * `test_name` - The identifier of the visual test (e.g. "primary_window_layout").
+    /// * `captured_png` - The raw bytes of the PNG-encoded frame capture.
+    ///
+    /// # Returns
+    /// `true` if the captured image matches the reference image within tolerances,
+    /// `false` if they mismatch or if the reference image cannot be found/decoded.
+    ///
+    /// # Contract
+    /// If the reference image file does not exist, this function writes the captured PNG
+    /// as the new reference (acting in recording mode) and returns `true`.
+    pub fn verify_frame(&self, test_name: &str, captured_png: &[u8]) -> bool {
+        let reference_path = self.reference_dir.join(format!("{}.png", test_name));
+        if !reference_path.exists() {
+            log::info!("Golden reference for '{}' not found. Recording current capture as reference.", test_name);
+            if let Some(parent) = reference_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            if let Err(e) = std::fs::write(&reference_path, captured_png) {
+                log::error!("Failed to write golden image: {}", e);
+                return false;
+            }
+            return true;
+        }
+
+        // Load reference image
+        let ref_img = match image::load_from_memory(&std::fs::read(&reference_path).unwrap_or_default()) {
+            Ok(img) => img.to_rgba8(),
+            Err(e) => {
+                log::error!("Failed to decode reference image: {}", e);
+                return false;
+            }
+        };
+
+        // Load captured image
+        let cap_img = match image::load_from_memory(captured_png) {
+            Ok(img) => img.to_rgba8(),
+            Err(e) => {
+                log::error!("Failed to decode captured image: {}", e);
+                return false;
+            }
+        };
+
+        if ref_img.dimensions() != cap_img.dimensions() {
+            log::warn!("Dimensions mismatch for test '{}': ref {:?}, cap {:?}", test_name, ref_img.dimensions(), cap_img.dimensions());
+            return false;
+        }
+
+        let (width, height) = ref_img.dimensions();
+        let total_pixels = width as f64 * height as f64;
+        let mut mismatched_pixels = 0;
+
+        for (x, y, ref_pixel) in ref_img.enumerate_pixels() {
+            let cap_pixel = cap_img.get_pixel(x, y);
+            let mut pixel_differs = false;
+            for c in 0..4 {
+                let diff = (ref_pixel[c] as i16 - cap_pixel[c] as i16).abs();
+                if diff > self.pixel_tolerance as i16 {
+                    pixel_differs = true;
+                    break;
+                }
+            }
+            if pixel_differs {
+                mismatched_pixels += 1;
+            }
+        }
+
+        let mismatch_pct = (mismatched_pixels as f64 / total_pixels) * 100.0;
+        if mismatch_pct > self.max_mismatched_percentage {
+            log::warn!("Visual regression detected in test '{}': {:.2}% mismatched pixels (max allowed {:.2}%)",
+                test_name, mismatch_pct, self.max_mismatched_percentage);
+            false
+        } else {
+            true
+        }
+    }
+}
+
 #[cfg(test)]
 mod p1_46_47_49_51_tests {
     use super::*;
+
+    // P2-39: Multi-monitor tests
+    #[test]
+    fn test_multi_monitor_manager_basics() {
+        let m1 = MonitorConfig {
+            name: "Display 1".to_string(),
+            position: (0, 0),
+            size: (1920, 1080),
+            scale_factor: 1.0,
+            refresh_rate: 60,
+        };
+        let m2 = MonitorConfig {
+            name: "Display 2".to_string(),
+            position: (1920, 0),
+            size: (3840, 2160),
+            scale_factor: 2.0,
+            refresh_rate: 120,
+        };
+
+        let mut manager = MultiMonitorManager::new(vec![m1, m2]);
+        assert_eq!(manager.monitors().len(), 2);
+        assert_eq!(manager.current_monitor().name, "Display 1");
+
+        // Scale dimensions logical to physical
+        let scaled = manager.scale_dimensions(100.0, 200.0);
+        assert_eq!(scaled, (100, 200));
+
+        // Shift window to second monitor (centered on second monitor)
+        let idx = manager.update_window_position((1920 + 100, 100, 1000, 1000));
+        assert_eq!(idx, Some(1));
+        assert_eq!(manager.current_monitor().name, "Display 2");
+
+        let scaled_m2 = manager.scale_dimensions(100.0, 200.0);
+        assert_eq!(scaled_m2, (200, 400));
+
+        // Check DPI adaptation trigger
+        assert!(manager.requires_dpi_adaptation(0, 1));
+        assert!(!manager.requires_dpi_adaptation(0, 0));
+    }
+
+    // P2-40: Visual regression tests
+    #[test]
+    fn test_visual_regression_tracker_comparison() {
+        // Create simple mock raw images using image crate
+        use image::{RgbaImage, ImageFormat};
+        use std::io::Cursor;
+
+        let mut img1 = RgbaImage::new(10, 10);
+        for p in img1.pixels_mut() {
+            *p = image::Rgba([255, 0, 0, 255]);
+        }
+        let mut png1 = Vec::new();
+        img1.write_to(&mut Cursor::new(&mut png1), ImageFormat::Png).unwrap();
+
+        // Exact match
+        let temp_dir = std::env::temp_dir().join("cvkg_visual_regression_tests");
+        let tracker = VisualRegressionTracker::new(temp_dir.clone(), 5, 1.0);
+
+        // Recording mode: first call records png1 as the golden reference
+        let matched = tracker.verify_frame("test_red_rect", &png1);
+        assert!(matched);
+
+        // Second call matches against recorded reference
+        let matched_again = tracker.verify_frame("test_red_rect", &png1);
+        assert!(matched_again);
+
+        // Slightly different image (within tolerances)
+        let mut img2 = RgbaImage::new(10, 10);
+        for (i, p) in img2.pixels_mut().enumerate() {
+            if i == 0 {
+                // One pixel slightly off, but within tolerance
+                *p = image::Rgba([253, 0, 0, 255]);
+            } else {
+                *p = image::Rgba([255, 0, 0, 255]);
+            }
+        }
+        let mut png2 = Vec::new();
+        img2.write_to(&mut Cursor::new(&mut png2), ImageFormat::Png).unwrap();
+
+        let matched_tolerated = tracker.verify_frame("test_red_rect", &png2);
+        assert!(matched_tolerated);
+
+        // Very different image (out of tolerances)
+        let mut img3 = RgbaImage::new(10, 10);
+        for p in img3.pixels_mut() {
+            *p = image::Rgba([0, 255, 0, 255]); // Green instead of Red
+        }
+        let mut png3 = Vec::new();
+        img3.write_to(&mut Cursor::new(&mut png3), ImageFormat::Png).unwrap();
+
+        let matched_fail = tracker.verify_frame("test_red_rect", &png3);
+        assert!(!matched_fail);
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_dir.join("test_red_rect.png"));
+    }
 
     // P1-46: Translation contracts
     #[test]
@@ -3077,6 +3490,20 @@ mod p1_46_47_49_51_tests {
         assert!(config.recycle_handles);
         assert_eq!(config.max_active_handles, 100);
     }
+
+    // P1-50: Semantic Role Mapping
+    #[test]
+    fn semantic_role_registry_has_button_and_text() {
+        let reg = SemanticRoleRegistry::new();
+        let button = reg.find(accesskit::Role::Button).unwrap();
+        assert_eq!(button.mac_ax_role, "AXButton");
+        assert_eq!(button.win_uia_control_type, "UIA_ButtonControlTypeId");
+        assert_eq!(button.linux_atk_role, "ATK_ROLE_PUSH_BUTTON");
+
+        let text = reg.find(accesskit::Role::TextInput).unwrap();
+        assert_eq!(text.mac_ax_role, "AXTextField");
+    }
+
 
     // =========================================================================
     // P2-3: Mutex Poison Recovery Tests
