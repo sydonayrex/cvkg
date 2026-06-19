@@ -144,3 +144,11 @@ mod conformance;
 pub use conformance::{
     ConformanceResult, ConformanceSuite, ConformanceTest, pixels_approx_match, pixels_match,
 };
+
+// ── Accessibility Conformance (P1-44/P1-45) ──────────────────────────────────
+
+mod a11y_conformance;
+pub use a11y_conformance::{
+    A11yConformanceSuite, A11yConformanceTest, A11yProtocol, A11yRole, A11yValidator,
+    RoleMapping,
+};
