@@ -497,15 +497,15 @@ All are on taffy tree operations (`new_leaf`, `new_with_children`, `compute_layo
 
 **Resolution:** All 46 unwraps are on infallible taffy operations. No code change needed -- these are safe by design.
 
-### P2-3: 188 expect() Calls in cvkg-render-native **[DEFERRED]**
+### P2-3: 188 expect() Calls in cvkg-render-native **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-render-native/src/lib.rs
 **Lens:** Error Handling
 
-Most are `GPU mutex poisoned: <method_name>` -- descriptive but panic-on-poison. On a production mobile app, a poisoned mutex should degrade gracefully, not crash.
+Most were `GPU mutex poisoned: <method_name>` -- descriptive but panic-on-poison. On a production mobile app, a poisoned mutex should degrade gracefully, not crash.
 
-**Resolution:** Deferred -- requires broader error handling design for NativeRenderer. Changing from panic-on-poison to graceful degradation needs Renderer trait modifications to support error returns across all 50+ methods.
+**Resolution:** Replaced all 59 `expect("GPU mutex poisoned: ...")` calls with `unwrap_or_else(|p| p.into_inner())` for graceful mutex poison recovery. The `into_inner()` method extracts the data from a poisoned mutex, allowing the application to continue operating even after a thread panic. Also improved error messages for 5 non-mutex expect() calls. Added 4 unit tests verifying poison recovery behavior.
 
 ### P2-4: 62+ clone() Calls in SurtrRenderer **[RESOLVED]**
 
