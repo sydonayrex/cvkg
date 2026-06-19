@@ -1087,16 +1087,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let view_changed = self.view.changed();
 
                     // Phase 1.2: Skip VDom rebuild when view hasn't changed.
-                    // When changed() returns false, we skip the expensive VDom::build
-                    // call (127+ nodes rebuilt from scratch) and the diff pass.
-                    // We still dispatch events and render the GPU frame using the
-                    // previous VDom state.
                     let new_vdom: Option<cvkg_vdom::VDom> = if view_changed {
-                        Some(cvkg_vdom::VDom::build(&self.view, rect))
+                        let vdom_start = std::time::Instant::now();
+                        let vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                        let vdom_elapsed = vdom_start.elapsed();
+                        if vdom_elapsed > std::time::Duration::from_millis(1) {
+                            log::warn!("[Native] VDom::build took {:?} ({} nodes)", vdom_elapsed, vdom.nodes.len());
+                        }
+                        Some(vdom)
                     } else {
-                        // VDom has not changed -- skip build entirely.
-                        // We set new_vdom to None as a signal to skip the diff below.
-                        // The GPU renderer will reuse the previous frame's draw calls.
                         None
                     };
 
@@ -1240,14 +1239,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     gpu.end_frame(encoder);
                     let gpu_submit_end = std::time::Instant::now();
 
-                    if state.frame_count < 10 || state.frame_count % 60 == 0 {
-                        log::info!(
-                            "[Native] GPU profile: cpu_draw={:?} gpu_render={:?} gpu_submit={:?}",
-                            cpu_draw_end.duration_since(cpu_draw_start),
-                            gpu_render_end.duration_since(gpu_render_start),
-                            gpu_submit_end.duration_since(gpu_render_end),
-                        );
-                    }
+                    // Always log GPU profile for performance monitoring
+                    log::info!(
+                        "[Native] GPU profile: cpu_draw={:?} gpu_render={:?} gpu_submit={:?}",
+                        cpu_draw_end.duration_since(cpu_draw_start),
+                        gpu_render_end.duration_since(gpu_render_start),
+                        gpu_submit_end.duration_since(gpu_render_end),
+                    );
 
                     // Build telemetry from this frame's timing measurements.
                     // NOTE: input_time_ms measures the inter-frame gap (time from end of last frame
