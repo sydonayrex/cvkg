@@ -129,6 +129,280 @@ struct AnimState {
     bridge: RagdollBridge,
 }
 
+/// Grid resolution for the Navier-Stokes velocity field.
+/// 24x24 keeps per-frame cost under 1ms while still producing fluid motion.
+const FLUID_GRID_SIZE: usize = 24;
+
+/// A 2D velocity-based Navier-Stokes grid approximation.
+/// This simulates stable advection, projection, and diffusion to drive organic fluid flow for the flame.
+struct FluidGrid {
+    u: Vec<f32>,
+    v: Vec<f32>,
+    u_prev: Vec<f32>,
+    v_prev: Vec<f32>,
+    d: Vec<f32>,
+    d_prev: Vec<f32>,
+}
+
+impl FluidGrid {
+    /// Creates a new FluidGrid with zeroed velocity fields.
+    fn new() -> Self {
+        let size = FLUID_GRID_SIZE * FLUID_GRID_SIZE;
+        Self {
+            u: vec![0.0; size],
+            v: vec![0.0; size],
+            u_prev: vec![0.0; size],
+            v_prev: vec![0.0; size],
+            d: vec![0.0; size],
+            d_prev: vec![0.0; size],
+        }
+    }
+
+    /// Steps the fluid simulation using stable advection and projection.
+    ///
+    /// # Arguments
+    /// * `dt` - Time step duration.
+    /// * `viscosity` - Viscosity factor for diffusion.
+    /// * `diffusion` - Diffusion factor for density/temperature.
+    fn step(&mut self, dt: f32, viscosity: f32, diffusion: f32) {
+        // Add sources
+        for i in 0..self.u.len() {
+            self.u[i] += dt * self.u_prev[i];
+            self.v[i] += dt * self.v_prev[i];
+            self.d[i] += dt * self.d_prev[i];
+        }
+        
+        // Swap velocity fields for diffusion
+        std::mem::swap(&mut self.u, &mut self.u_prev);
+        diffuse(1, &mut self.u, &self.u_prev, viscosity, dt);
+        
+        std::mem::swap(&mut self.v, &mut self.v_prev);
+        diffuse(2, &mut self.v, &self.v_prev, viscosity, dt);
+        
+        project(&mut self.u, &mut self.v, &mut self.u_prev, &mut self.v_prev);
+        
+        // Swap velocity fields for advection
+        std::mem::swap(&mut self.u, &mut self.u_prev);
+        std::mem::swap(&mut self.v, &mut self.v_prev);
+        advect(1, &mut self.u, &self.u_prev, &self.u_prev, &self.v_prev, dt);
+        advect(2, &mut self.v, &self.v_prev, &self.u_prev, &self.v_prev, dt);
+        
+        project(&mut self.u, &mut self.v, &mut self.u_prev, &mut self.v_prev);
+        
+        // Density step
+        std::mem::swap(&mut self.d, &mut self.d_prev);
+        diffuse(0, &mut self.d, &self.d_prev, diffusion, dt);
+        std::mem::swap(&mut self.d, &mut self.d_prev);
+        advect(0, &mut self.d, &self.d_prev, &self.u_prev, &self.v_prev, dt);
+        
+        // Decay velocity/density over time to prevent build-up
+        for i in 0..self.u.len() {
+            self.u[i] *= 0.95;
+            self.v[i] *= 0.95;
+            self.d[i] *= 0.95;
+            // Clear source accumulators
+            self.u_prev[i] = 0.0;
+            self.v_prev[i] = 0.0;
+            self.d_prev[i] = 0.0;
+        }
+    }
+
+    /// Samples the velocity field at an arbitrary screen position using bilinear interpolation.
+    ///
+    /// # Arguments
+    /// * `px` - Screen space X coordinate.
+    /// * `py` - Screen space Y coordinate.
+    /// * `w` - Total screen width.
+    /// * `h` - Total screen height.
+    fn get_velocity(&self, px: f32, py: f32, w: f32, h: f32) -> [f32; 2] {
+        let n = FLUID_GRID_SIZE;
+        let gx = (px / w * n as f32).clamp(0.5, n as f32 - 1.5);
+        let gy = (py / h * n as f32).clamp(0.5, n as f32 - 1.5);
+        
+        let i0 = gx.floor() as usize;
+        let i1 = i0 + 1;
+        let j0 = gy.floor() as usize;
+        let j1 = j0 + 1;
+        
+        let tx = gx - i0 as f32;
+        let ty = gy - j0 as f32;
+        
+        let lerp_u = (1.0 - tx) * ((1.0 - ty) * self.u[i0 + j0 * n] + ty * self.u[i0 + j1 * n])
+                   + tx * ((1.0 - ty) * self.u[i1 + j0 * n] + ty * self.u[i1 + j1 * n]);
+                   
+        let lerp_v = (1.0 - tx) * ((1.0 - ty) * self.v[i0 + j0 * n] + ty * self.v[i0 + j1 * n])
+                   + tx * ((1.0 - ty) * self.v[i1 + j0 * n] + ty * self.v[i1 + j1 * n]);
+                   
+        [lerp_u, lerp_v]
+    }
+}
+
+/// Applies boundary constraints to the fluid grid edges.
+/// 
+/// # Arguments
+/// * `b` - Boundary type (0 for scalar, 1 for horizontal velocity, 2 for vertical velocity).
+/// * `x` - Grid values to clamp/reflect.
+fn set_bnd(b: i32, x: &mut [f32]) {
+    let n = FLUID_GRID_SIZE;
+    for i in 1..n - 1 {
+        // Left and right edges
+        x[0 * n + i] = if b == 1 { -x[1 * n + i] } else { x[1 * n + i] };
+        x[(n - 1) * n + i] = if b == 1 { -x[(n - 2) * n + i] } else { x[(n - 2) * n + i] };
+        // Top and bottom edges
+        x[i * n + 0] = if b == 2 { -x[i * n + 1] } else { x[i * n + 1] };
+        x[i * n + n - 1] = if b == 2 { -x[i * n + n - 2] } else { x[i * n + n - 2] };
+    }
+    // Corners
+    x[0] = 0.5 * (x[1] + x[n]);
+    x[n - 1] = 0.5 * (x[n - 2] + x[2 * n - 1]);
+    x[(n - 1) * n] = 0.5 * (x[(n - 2) * n] + x[(n - 1) * n + 1]);
+    x[(n - 1) * n + n - 1] = 0.5 * (x[(n - 2) * n + n - 1] + x[(n - 1) * n + n - 2]);
+}
+
+/// Diffuses a grid field using Jacobi relaxation.
+///
+/// # Arguments
+/// * `b` - Boundary type.
+/// * `x` - Output field.
+/// * `x0` - Input field.
+/// * `diff` - Diffusion rate.
+/// * `dt` - Time step.
+fn diffuse(b: i32, x: &mut [f32], x0: &[f32], diff: f32, dt: f32) {
+    let n = FLUID_GRID_SIZE;
+    let a = dt * diff * (n * n) as f32;
+    // 3 Jacobi iterations: enough for visual stability at 120fps without budget overrun.
+    for _ in 0..3 {
+        for j in 1..n - 1 {
+            for i in 1..n - 1 {
+                let idx = i + j * n;
+                x[idx] = (x0[idx] + a * (x[idx - 1] + x[idx + 1] + x[idx - n] + x[idx + n])) / (1.0 + 4.0 * a);
+            }
+        }
+        set_bnd(b, x);
+    }
+}
+
+/// Advects a quantity along the velocity fields using semi-Lagrangian back-tracing.
+///
+/// # Arguments
+/// * `b` - Boundary type.
+/// * `d` - Output field.
+/// * `d0` - Input field.
+/// * `u` - Horizontal velocity field.
+/// * `v` - Vertical velocity field.
+/// * `dt` - Time step.
+fn advect(b: i32, d: &mut [f32], d0: &[f32], u: &[f32], v: &[f32], dt: f32) {
+    let n = FLUID_GRID_SIZE;
+    let dt0 = dt * n as f32;
+    for j in 1..n - 1 {
+        for i in 1..n - 1 {
+            let idx = i + j * n;
+            let mut x = i as f32 - dt0 * u[idx];
+            let mut y = j as f32 - dt0 * v[idx];
+            
+            if x < 0.5 { x = 0.5; }
+            if x > n as f32 - 1.5 { x = n as f32 - 1.5; }
+            let i0 = x.floor() as usize;
+            let i1 = i0 + 1;
+            
+            if y < 0.5 { y = 0.5; }
+            if y > n as f32 - 1.5 { y = n as f32 - 1.5; }
+            let j0 = y.floor() as usize;
+            let j1 = j0 + 1;
+            
+            let s1 = x - i0 as f32;
+            let s0 = 1.0 - s1;
+            let t1 = y - j0 as f32;
+            let t0 = 1.0 - t1;
+            
+            d[idx] = s0 * (t0 * d0[i0 + j0 * n] + t1 * d0[i0 + j1 * n])
+                   + s1 * (t0 * d0[i1 + j0 * n] + t1 * d0[i1 + j1 * n]);
+        }
+    }
+    set_bnd(b, d);
+}
+
+/// Projects the velocity fields to enforce mass conservation and incompressibility.
+///
+/// # Arguments
+/// * `u` - Horizontal velocity field.
+/// * `v` - Vertical velocity field.
+/// * `p` - Pressure field scratch space.
+/// * `div` - Divergence field scratch space.
+fn project(u: &mut [f32], v: &mut [f32], p: &mut [f32], div: &mut [f32]) {
+    let n = FLUID_GRID_SIZE;
+    for j in 1..n - 1 {
+        for i in 1..n - 1 {
+            let idx = i + j * n;
+            div[idx] = -0.5 * (u[idx + 1] - u[idx - 1] + v[idx + n] - v[idx - n]) / n as f32;
+            p[idx] = 0.0;
+        }
+    }
+    set_bnd(0, div);
+    set_bnd(0, p);
+    
+    // 3 Jacobi iterations for the pressure projection pass.
+    for _ in 0..3 {
+        for j in 1..n - 1 {
+            for i in 1..n - 1 {
+                let idx = i + j * n;
+                p[idx] = (div[idx] + p[idx - 1] + p[idx + 1] + p[idx - n] + p[idx + n]) / 4.0;
+            }
+        }
+        set_bnd(0, p);
+    }
+    
+    for j in 1..n - 1 {
+        for i in 1..n - 1 {
+            let idx = i + j * n;
+            u[idx] -= 0.5 * n as f32 * (p[idx + 1] - p[idx - 1]);
+            v[idx] -= 0.5 * n as f32 * (p[idx + n] - p[idx - n]);
+        }
+    }
+    set_bnd(1, u);
+    set_bnd(2, v);
+}
+
+/// Integrates a spring-damper state using Runge-Kutta 4th order.
+/// This calculates a lagging trailing position that springs around when changing directions.
+///
+/// # Arguments
+/// * `x` - Current position reference.
+/// * `y` - Current position reference.
+/// * `vx` - Current velocity reference.
+/// * `vy` - Current velocity reference.
+/// * `cx` - Target position X.
+/// * `cy` - Target position Y.
+/// * `dt` - Time step.
+fn step_rk4(
+    x: &mut f32,
+    y: &mut f32,
+    vx: &mut f32,
+    vy: &mut f32,
+    cx: f32,
+    cy: f32,
+    dt: f32,
+) {
+    let k = 150.0;
+    let c = 8.0;
+
+    let f = |pos_x: f32, pos_y: f32, vel_x: f32, vel_y: f32| -> (f32, f32, f32, f32) {
+        let ax = -k * (pos_x - cx) - c * vel_x;
+        let ay = -k * (pos_y - cy) - c * vel_y;
+        (vel_x, vel_y, ax, ay)
+    };
+
+    let (dx1, dy1, dvx1, dvy1) = f(*x, *y, *vx, *vy);
+    let (dx2, dy2, dvx2, dvy2) = f(*x + 0.5 * dt * dx1, *y + 0.5 * dt * dy1, *vx + 0.5 * dt * dvx1, *vy + 0.5 * dt * dvy1);
+    let (dx3, dy3, dvx3, dvy3) = f(*x + 0.5 * dt * dx2, *y + 0.5 * dt * dy2, *vx + 0.5 * dt * dvx2, *vy + 0.5 * dt * dvy2);
+    let (dx4, dy4, dvx4, dvy4) = f(*x + dt * dx3, *y + dt * dy3, *vx + dt * dvx3, *vy + dt * dvy3);
+
+    *x += (dt / 6.0) * (dx1 + 2.0 * dx2 + 2.0 * dx3 + dx4);
+    *y += (dt / 6.0) * (dy1 + 2.0 * dy2 + 2.0 * dy3 + dy4);
+    *vx += (dt / 6.0) * (dvx1 + 2.0 * dvx2 + 2.0 * dvx3 + dvx4);
+    *vy += (dt / 6.0) * (dvy1 + 2.0 * dvy2 + 2.0 * dvy3 + dvy4);
+}
+
 struct BerserkerState {
     particles: Vec<Particle>,
     rng: Lcg,
@@ -136,6 +410,13 @@ struct BerserkerState {
     physics: PhysicsState,
     anim: AnimState,
     loaded_svgs: bool,
+    fluid: FluidGrid,
+    flame_x: f32,
+    flame_y: f32,
+    flame_vx: f32,
+    flame_vy: f32,
+    last_cx: f32,
+    last_cy: f32,
 }
 
 // --- Valknut Triangle Geometry ---
@@ -298,6 +579,9 @@ impl BerserkerState {
             card_bodies.len()
         );
 
+        let cx = w * 0.5;
+        let cy = h * 0.5;
+
         Self {
             particles: Vec::new(),
             rng,
@@ -311,6 +595,13 @@ impl BerserkerState {
             },
             anim: AnimState { blender, bridge },
             loaded_svgs: false,
+            fluid: FluidGrid::new(),
+            flame_x: cx,
+            flame_y: cy,
+            flame_vx: 0.0,
+            flame_vy: 0.0,
+            last_cx: cx,
+            last_cy: cy,
         }
     }
 }
@@ -362,11 +653,17 @@ impl View for BerserkerFireView {
             self.counters[2].get(),
             self.counters[3].get(),
         ];
+        // Also check fireball position -- it changes every frame during animation
+        let (flame_x, flame_y) = self.state.lock()
+            .map(|s| (s.flame_x, s.flame_y))
+            .unwrap_or((f32::NAN, f32::NAN));
 
         thread_local! {
             static LAST_RAGE: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
             static LAST_MENU: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
             static LAST_COUNTERS: std::cell::Cell<[u32; 4]> = const { std::cell::Cell::new([0; 4]) };
+            static LAST_FLAME_X: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
+            static LAST_FLAME_Y: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
         }
 
         let changed = LAST_RAGE.with(|l| {
@@ -381,6 +678,14 @@ impl View for BerserkerFireView {
             let prev = l.get();
             l.set(counter_vals);
             prev != counter_vals
+        }) || LAST_FLAME_X.with(|l| {
+            let prev = l.get();
+            l.set(flame_x);
+            prev != flame_x
+        }) || LAST_FLAME_Y.with(|l| {
+            let prev = l.get();
+            l.set(flame_y);
+            prev != flame_y
         });
 
         changed
@@ -528,11 +833,7 @@ fn draw_nornir_bar(
         r.push_vnode(item_rect, "NornirBarItem");
         let (lw, lh) = r.measure_text(label, 13.0);
         let tx = x + (*width - lw) / 2.0;
-        // The draw_text y parameter is the text origin (top of cell).
-        // Glyphs are baseline-relative, with the baseline roughly 75% down the cell.
-        // To visually center: shift up so the baseline lands at bar_height/2 + descent/2.
-        // Approximation: y = (bar_height - lh) / 2 - lh * 0.5
-        let ty = (28.0 - lh) * 0.5 - lh * 0.5;
+        let ty = (28.0 - lh) * 0.5;
         r.draw_text(label, tx + 1.0, ty + 1.0, 13.0, [0.0, 0.0, 0.0, 0.45]);
         r.draw_text(label, tx, ty, 13.0, [0.9, 0.9, 0.92, 1.0]);
         let active_menu_clone = active_menu.clone();
@@ -554,7 +855,7 @@ fn draw_nornir_bar(
     let title_str = format!("BERSERKER v{}", env!("CARGO_PKG_VERSION"));
     let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
-    let title_y = (28.0 - tlh) * 0.5 - tlh * 0.5;
+    let title_y = (28.0 - tlh) * 0.5;
     r.draw_text(&title_str, title_x + 1.0, title_y + 1.0, 14.0, [0.0, 0.0, 0.0, 0.45]);
     r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.3, 0.1, 1.0]);
 
@@ -562,7 +863,7 @@ fn draw_nornir_bar(
     let rage_str = format!("Rage: {:.0}%", _rage.get());
     let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
-    let rage_y = (28.0 - rlh) * 0.5 - rlh * 0.5;
+    let rage_y = (28.0 - rlh) * 0.5;
     r.draw_text(&rage_str, rage_x + 1.0, rage_y + 1.0, 12.0, [0.0, 0.0, 0.0, 0.45]);
     r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.5, 1.0]);
 
@@ -776,7 +1077,7 @@ fn draw_dock(
         let text_size = 18.0;
         let (tw, th) = r.measure_text(icon, text_size);
         let tx = ix + (icon_size - tw) / 2.0;
-        let ty = dock_rect.y + (dock_rect.height - th) / 2.0 - th * 0.25;
+        let ty = dock_rect.y + (dock_rect.height - th) / 2.0;
         r.draw_text(icon, tx + 1.0, ty + 1.0, text_size, [0.0, 0.0, 0.0, 0.45]);
         r.draw_text(icon, tx, ty, text_size, [0.95, 0.95, 0.98, 1.0]);
 
@@ -817,14 +1118,14 @@ fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32
 
     for &(id, size) in &s.physics.cube_ids {
         if let Some(body) = s.physics.world.body(id) {
-            let rect = cvkg_core::Rect {
-                x: body.position.x - size * 0.5,
-                y: body.position.y - size * 0.5,
-                width: size,
-                height: size,
-            };
             let rot = [body.angle, body.angle * 0.5, body.angle * 0.2];
-            r.draw_3d_cube(rect, [0.1, 0.6, 0.9, 0.6], rot);
+            r.render_scene_node_3d(
+                [body.position.x, body.position.y, 0.0],
+                [rot[0], rot[1], rot[2], 1.0],
+                [size, size, size],
+                [0.1, 0.6, 0.9, 0.78],
+                &[],
+            );
         }
     }
 }
@@ -941,6 +1242,53 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
+    // Update RK4 physics for spring-mass tail anchor
+    step_rk4(&mut s.flame_x, &mut s.flame_y, &mut s.flame_vx, &mut s.flame_vy, cx, cy, dt);
+    let d_x = s.flame_x - cx;
+    let d_y = s.flame_y - cy;
+
+    // Fireball velocity
+    let f_vx = if dt > 0.0 { (cx - s.last_cx) / dt } else { 0.0 };
+    let f_vy = if dt > 0.0 { (cy - s.last_cy) / dt } else { 0.0 };
+    s.last_cx = cx;
+    s.last_cy = cy;
+
+    // Inject velocity/force impulses into fluid grid around the fireball position
+    let n = FLUID_GRID_SIZE;
+    let cell_x = (cx / w * n as f32) as i32;
+    let cell_y = (cy / h * n as f32) as i32;
+    for dy in -2..=2 {
+        for dx in -2..=2 {
+            let gx = cell_x + dx;
+            let gy = cell_y + dy;
+            if gx >= 1 && gx < n as i32 - 1 && gy >= 1 && gy < n as i32 - 1 {
+                let idx = (gx + gy * n as i32) as usize;
+                // Accumulate velocity based on fireball movement, RK4 tail lag, and thermal buoyancy
+                s.fluid.u_prev[idx] += f_vx * 0.08 + d_x * 0.6;
+                s.fluid.v_prev[idx] += f_vy * 0.08 + d_y * 0.6 - 300.0;
+            }
+        }
+    }
+
+    // Add turbulence/curl to make the flame lick and swirl.
+    // Increased speed and frequency so the flame churns visibly at 120fps.
+    for _ in 0..6 {
+        let turb_angle = s.rng.next_f32() * 6.28;
+        let turb_speed = 600.0 * (0.5 + 0.5 * (t * 7.0).cos().abs());
+        let turb_x = cx + (s.rng.next_f32() - 0.5) * 90.0;
+        let turb_y = cy + (s.rng.next_f32() - 0.5) * 90.0;
+        let gx = (turb_x / w * n as f32) as i32;
+        let gy = (turb_y / h * n as f32) as i32;
+        if gx >= 1 && gx < n as i32 - 1 && gy >= 1 && gy < n as i32 - 1 {
+            let idx = (gx + gy * n as i32) as usize;
+            s.fluid.u_prev[idx] += turb_angle.cos() * turb_speed;
+            s.fluid.v_prev[idx] += turb_angle.sin() * turb_speed;
+        }
+    }
+
+    // Step Navier-Stokes simulation
+    s.fluid.step(dt, 0.0001, 0.0001);
+
     if rage > 0.0 {
         let force_mag = rage * 50000.0;
         for &(id, _) in &s.physics.cube_ids {
@@ -964,28 +1312,39 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
 
     s.physics.world.step(dt);
 
-    // Cap particle count to prevent unbounded growth (max 80 particles)
-    if s.particles.len() < 80 {
+    // Spawn new flame particles/embers
+    if s.particles.len() < 120 {
         for _ in 0..3 {
             let angle = s.rng.next_f32() * 6.28;
-            let speed = 50.0 + s.rng.next_f32() * 100.0;
+            let speed = 30.0 + s.rng.next_f32() * 70.0;
+            // Shift spawning slightly in direction of spring tail
+            let spawn_x = cx + d_x * (0.1 + s.rng.next_f32() * 0.4);
+            let spawn_y = cy + d_y * (0.1 + s.rng.next_f32() * 0.4);
             s.particles.push(Particle {
-                pos: [cx, cy],
-                vel: [angle.cos() * speed, angle.sin() * speed - 50.0],
+                pos: [spawn_x, spawn_y],
+                vel: [
+                    s.flame_vx * 0.15 + angle.cos() * speed,
+                    s.flame_vy * 0.15 + angle.sin() * speed - 30.0,
+                ],
                 color: [1.0, 0.3 + s.rng.next_f32() * 0.5, 0.0, 1.0],
-                life: 0.5 + s.rng.next_f32() * 1.0,
-                size: 2.0 + s.rng.next_f32() * 4.0,
-                is_ember: s.rng.next_f32() > 0.9,
+                life: 0.6 + s.rng.next_f32() * 0.8,
+                size: 2.0 + s.rng.next_f32() * 5.0,
+                is_ember: s.rng.next_f32() > 0.88,
             });
         }
     }
 
-    // Fast particle update: inline, no retain_mut (swap_remove is faster)
+    // Fast particle update and advection along the fluid grid flow
     let mut i = s.particles.len();
     while i > 0 {
         i -= 1;
         let p = &mut s.particles[i];
         p.life -= dt;
+        
+        let f_vel = s.fluid.get_velocity(p.pos[0], p.pos[1], w, h);
+        p.vel[0] = p.vel[0] * 0.82 + f_vel[0] * 0.18;
+        p.vel[1] = p.vel[1] * 0.82 + f_vel[1] * 0.18;
+
         p.pos[0] += p.vel[0] * dt;
         p.pos[1] += p.vel[1] * dt;
         if p.life <= 0.0 {
@@ -994,6 +1353,11 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     }
 }
 
+/// Draw the fireball with directional Navier-Stokes influenced flame tongues.
+///
+/// CONTRACT: `s.flame_x/y` must be pre-updated by `update_berserker_simulation` before calling.
+/// The flame is shaped as a teardrop/tongue pointing opposite the movement direction,
+/// driven by the RK4 spring tail displacement vector (d_x, d_y).
 fn draw_berserker_fire(
     r: &mut dyn cvkg_core::Renderer,
     s: &BerserkerState,
@@ -1004,71 +1368,123 @@ fn draw_berserker_fire(
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
-    // Update fireball position for glass specular highlights
+    // Notify the renderer so glass cards get correct specular highlights.
     r.set_fireball_pos([cx, cy]);
 
+    // RK4 spring tail displacement: points opposite to direction of travel.
+    // Larger displacement = faster movement = bigger flame trail.
+    let d_x = s.flame_x - cx;
+    let d_y = s.flame_y - cy;
+    let tail_len = (d_x * d_x + d_y * d_y).sqrt().max(1.0);
+
+    // Normalized tail direction (unit vector pointing "behind" the fireball)
+    let tail_nx = d_x / tail_len;
+    let tail_ny = d_y / tail_len;
+
+    // Primary flame direction: opposite to movement (tail) + thermal buoyancy (upward)
+    let flame_dir_x = tail_nx * 0.7;
+    let flame_dir_y = tail_ny * 0.7 - 0.7;
+    let flame_len = (flame_dir_x * flame_dir_x + flame_dir_y * flame_dir_y).sqrt().max(0.01);
+    let flame_nx = flame_dir_x / flame_len;
+    let flame_ny = flame_dir_y / flame_len;
+
+
+    // High-frequency phase for rapid oscillations visible at 120fps.
+    let phase = t * 11.0;
+
+    // --- Outer heat haze glow ---
+    // Wide ellipse elongated in the flame direction.
+    let haze_rx = 80.0 + tail_len * 0.3;
+    let haze_ry = 130.0 + tail_len * 0.6;
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx - 100.0,
-            y: cy - 100.0,
-            width: 200.0,
-            height: 200.0,
+            x: cx + flame_nx * 20.0 - haze_rx,
+            y: cy + flame_ny * 20.0 - haze_ry,
+            width: haze_rx * 2.0,
+            height: haze_ry * 2.0,
         },
-        [1.0, 0.55, 0.05, 0.85],
-        [0.15, 0.0, 0.0, 0.0],
+        [1.0, 0.40, 0.02, 0.55],
+        [0.18, 0.0, 0.0, 0.0],
     );
+
+    // --- Middle flame corona ---
+    let corona_rx = 50.0 + tail_len * 0.2;
+    let corona_ry = 85.0 + tail_len * 0.4;
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx - 60.0,
-            y: cy - 60.0,
-            width: 120.0,
-            height: 120.0,
+            x: cx + flame_nx * 15.0 - corona_rx,
+            y: cy + flame_ny * 15.0 - corona_ry,
+            width: corona_rx * 2.0,
+            height: corona_ry * 2.0,
         },
-        [1.0, 0.85, 0.3, 0.95],
-        [1.0, 0.35, 0.05, 0.0],
+        [1.0, 0.78, 0.18, 0.90],
+        [1.0, 0.30, 0.03, 0.0],
     );
-    r.draw_radial_gradient(
-        cvkg_core::Rect {
-            x: cx - 30.0,
-            y: cy - 30.0,
-            width: 60.0,
-            height: 60.0,
-        },
-        [1.0, 1.0, 0.95, 1.0],
-        [1.0, 0.75, 0.15, 0.0],
-    );
-    let phase = t * 4.0;
-    let drift_x = (t * 1.2).cos() * 120.0;
-    let drift_y = (t * 0.8).sin() * 90.0;
-    let flame_tongues = [
-        (0.0_f32, 34.0_f32, [0.55, -0.15], [1.0, 1.0, 1.0, 0.60]),
-        (1.4, 30.0, [-0.35, 0.25], [0.65, 0.95, 1.0, 0.50]),
-        (2.7, 38.0, [0.25, 0.55], [1.0, 0.60, 0.12, 0.48]),
-        (4.1, 32.0, [-0.55, 0.10], [1.0, 0.25, 0.08, 0.40]),
-        (5.2, 28.0, [0.10, 0.75], [0.60, 0.82, 1.0, 0.34]),
+
+
+    // Angle of the flame direction vector relative to screen-up (Y-axis).
+    // flame_nx/flame_ny is the normalized direction the flame points.
+    // atan2(flame_nx, -flame_ny) gives the clockwise rotation from screen-up.
+    let flame_angle = flame_nx.atan2(-flame_ny);
+
+    // --- Flame tongues: 7 tongues drawn in local flame-aligned space ---
+    // push_transform rotates the canvas so that screen-Y becomes flame_n.
+    // Each tongue is then a simple axis-aligned ellipse in local coords with
+    // the center at (perp_offset, -reach/2) relative to the fireball pivot.
+    // This means tongues naturally lean in the direction of travel.
+    struct TongueDef {
+        perp_off: f32,   // lateral offset in local X (perpendicular to flame)
+        reach:    f32,   // length of the tongue in local Y (along flame)
+        half_w:   f32,   // half-width of the tongue base
+        phase_off: f32,  // per-tongue phase offset for independent wobble
+        color:    [f32; 4],
+    }
+    let tongues = [
+        TongueDef { perp_off:  0.0, reach: 95.0, half_w: 22.0, phase_off: 0.0, color: [1.0, 0.96, 0.85, 0.95] },
+        TongueDef { perp_off: -18.0, reach: 78.0, half_w: 15.0, phase_off: 1.3, color: [1.0, 0.85, 0.25, 0.85] },
+        TongueDef { perp_off:  18.0, reach: 78.0, half_w: 15.0, phase_off: 2.6, color: [1.0, 0.85, 0.25, 0.85] },
+        TongueDef { perp_off: -32.0, reach: 55.0, half_w: 11.0, phase_off: 0.7, color: [1.0, 0.55, 0.08, 0.72] },
+        TongueDef { perp_off:  32.0, reach: 55.0, half_w: 11.0, phase_off: 3.9, color: [1.0, 0.55, 0.08, 0.72] },
+        TongueDef { perp_off: -44.0, reach: 34.0, half_w:  8.0, phase_off: 2.1, color: [1.0, 0.28, 0.04, 0.52] },
+        TongueDef { perp_off:  44.0, reach: 34.0, half_w:  8.0, phase_off: 4.7, color: [1.0, 0.28, 0.04, 0.52] },
     ];
-    for (offset, radius, drift, color) in flame_tongues {
-        let wobble = (phase + offset).sin();
-        let stretch = 1.0 + (phase * 0.8 + offset).cos() * 0.18;
-        let flame_x = cx + drift[0] * 8.0 + wobble * 6.0;
-        let flame_y = cy + drift[1] * 10.0 - radius * 0.35;
+
+    for tongue in &tongues {
+        // Independent high-freq wobble per tongue in local X (side lick)
+        let wobble = (phase + tongue.phase_off).sin() * tongue.half_w * 0.40
+                   + (phase * 1.61 + tongue.phase_off).sin() * tongue.half_w * 0.18;
+        // Stretch pulse along Y
+        let stretch = 1.0 + (phase * 0.55 + tongue.phase_off).sin() * 0.13;
+
+        // Local X center of this tongue (with wobble), local Y center = -reach/2 (tip toward flame)
+        let local_x = tongue.perp_off + wobble;
+        let local_y = -(tongue.reach * 0.5);
+
+        // Push a transform: translate to fireball center, rotate to flame angle.
+        // fill_ellipse will then be drawn in flame-aligned local space.
+        r.push_transform([cx, cy], [1.0, 1.0], flame_angle);
         r.fill_ellipse(
             cvkg_core::Rect {
-                x: flame_x - radius * 0.5 * stretch,
-                y: flame_y - radius * 0.8,
-                width: radius * stretch,
-                height: radius * 1.6,
+                x: local_x - tongue.half_w,
+                y: local_y - tongue.reach * 0.5 * stretch,
+                width: tongue.half_w * 2.0,
+                height: tongue.reach * stretch,
             },
-            color,
+            tongue.color,
         );
+        r.pop_transform();
     }
-    for i in 1..6 {
-        let trail_t = i as f32 / 6.0;
-        let trail_x = cx - drift_x * 0.02 * trail_t;
-        let trail_y = cy - drift_y * 0.02 * trail_t + trail_t * 18.0;
-        let trail_w = 26.0 + trail_t * 12.0;
-        let trail_h = 12.0 + trail_t * 28.0;
-        let alpha = (0.25 * (1.0 - trail_t)).max(0.0);
+
+    // --- Trail smear ellipses along the RK4 displacement vector ---
+    // These smear backward from the fireball center to show inertia.
+    for i in 1..7 {
+        let trail_t = i as f32 / 7.0;
+        let trail_x = cx + d_x * trail_t;
+        let trail_y = cy + d_y * trail_t;
+        // Trail narrows and fades towards the tail tip.
+        let trail_w = 30.0 * (1.0 - trail_t * 0.7);
+        let trail_h = 30.0 * (1.0 - trail_t * 0.7);
+        let alpha = 0.30 * (1.0 - trail_t);
         r.fill_ellipse(
             cvkg_core::Rect {
                 x: trail_x - trail_w * 0.5,
@@ -1076,47 +1492,32 @@ fn draw_berserker_fire(
                 width: trail_w,
                 height: trail_h,
             },
-            [1.0, 0.45 + trail_t * 0.3, 0.08, alpha],
+            [1.0, 0.40 + trail_t * 0.35, 0.06, alpha],
         );
     }
+
+    // --- Fireball core: one cohesive flaming ellipse ---
     r.fill_ellipse(
         cvkg_core::Rect {
             x: cx - 18.0,
-            y: cy - 18.0,
+            y: cy - 22.0,
             width: 36.0,
-            height: 36.0,
+            height: 44.0,
         },
-        [0.85, 0.98, 1.0, 0.95],
-    );
-    r.fill_ellipse(
-        cvkg_core::Rect {
-            x: cx - 14.0,
-            y: cy - 14.0,
-            width: 28.0,
-            height: 28.0,
-        },
-        [1.0, 0.72, 0.18, 0.92],
-    );
-    r.fill_ellipse(
-        cvkg_core::Rect {
-            x: cx - 9.0,
-            y: cy - 9.0,
-            width: 18.0,
-            height: 18.0,
-        },
-        [0.95, 0.18, 0.05, 0.82],
+        [1.0, 0.72, 0.20, 0.95],
     );
 
+    // --- Particles (embers and sparks) ---
     for p in &s.particles {
-        let heat = ((p.pos[0] + p.pos[1]) * 0.03 + t * 3.5).sin() * 0.5 + 0.5;
+        let heat = ((p.pos[0] + p.pos[1]) * 0.03 + t * 7.0).sin() * 0.5 + 0.5;
         let p_color = if p.is_ember {
-            [1.0, 0.50 + heat * 0.3, 0.08, p.life.min(1.0)]
+            [1.0, 0.55 + heat * 0.3, 0.10, p.life.min(1.0)]
         } else if heat > 0.66 {
             [0.55, 0.82, 1.0, p.life.min(1.0)]
         } else if heat > 0.33 {
             [1.0, 0.88, 0.45, p.life.min(1.0)]
         } else {
-            [1.0, 0.30, 0.05, p.life.min(1.0)]
+            [1.0, 0.28, 0.04, p.life.min(1.0)]
         };
         let rect = cvkg_core::Rect {
             x: p.pos[0],
@@ -1131,9 +1532,10 @@ fn draw_berserker_fire(
         }
     }
 
+    // --- Mjolnir lightning bolt: fires every ~20ms ---
     if ((t * 1000.0) as u32).is_multiple_of(20) {
         let angle = (t * 5.0) % 6.28;
-        let dist = 100.0 + 200.0;
+        let dist = 300.0;
         r.draw_mjolnir_bolt(
             [cx, cy],
             [cx + angle.cos() * dist, cy + angle.sin() * dist],
@@ -1169,7 +1571,7 @@ fn draw_corner_buttons(
         r.fill_rounded_rect(rect, 12.0, [0.2, 0.2, 0.3, 0.8]);
         let (cw, ch) = r.measure_text(corner.2, 32.0);
         let text_x = corner.0 + (btn_size - cw) / 2.0;
-        let text_y = corner.1 + (btn_size - ch) / 2.0 - ch * 0.25;
+        let text_y = corner.1 + (btn_size - ch) / 2.0;
         r.draw_text(corner.2, text_x + 1.0, text_y + 1.0, 32.0, [0.0, 0.0, 0.0, 0.45]);
         r.draw_text(corner.2, text_x, text_y, 32.0, [1.0, 1.0, 1.0, 1.0]);
 
@@ -1177,7 +1579,7 @@ fn draw_corner_buttons(
         let val_str = format!("{}", val);
         let (_vw, vh) = r.measure_text(&val_str, 24.0);
         let value_x = corner.0 + btn_size + 10.0;
-        let value_y = corner.1 + (btn_size - vh) / 2.0 - vh * 0.25;
+        let value_y = corner.1 + (btn_size - vh) / 2.0;
         r.draw_text(&val_str, value_x + 1.0, value_y + 1.0, 24.0, [0.0, 0.0, 0.0, 0.45]);
         r.draw_text(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.5, 1.0]);
 
@@ -1225,7 +1627,7 @@ fn find_cvkg_asset_path(name: &str) -> Option<PathBuf> {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,cvkg=debug,berserker=debug")).init();
     log::info!("═══════════════════════════════════════════════════");
     log::info!(
         "  BERSERKER FIRE v{} — Cyberpunk Viking UI Demo",
