@@ -5143,8 +5143,6 @@ impl SurtrRenderer {
             return;
         };
 
-        let _scale_x = rect.width / model.view_box.width;
-        let _scale_y = rect.height / model.view_box.height;
         let base_idx = self.vertices.len() as u32;
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
