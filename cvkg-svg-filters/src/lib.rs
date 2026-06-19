@@ -2616,3 +2616,167 @@ mod p1_33_alpha_mode_tests {
         assert!(!AlphaMode::Straight.is_premultiplied());
     }
 }
+
+// =============================================================================
+// P1-29: Filter Resources as First-Class Graph Resources
+// =============================================================================
+//
+// Intermediate filter results can be referenced by multiple downstream filters
+// via the `result` attribute. These must be first-class resources with
+// reference counting to avoid recomputation.
+
+/// A first-class filter resource that can be shared across filter nodes.
+#[derive(Debug, Clone)]
+pub struct FilterResource {
+    /// Unique name of this resource (from the `result` attribute).
+    pub name: String,
+    /// Pixel data (RGBA8).
+    pub pixels: Vec<u8>,
+    /// Width of the resource.
+    pub width: u32,
+    /// Height of the resource.
+    pub height: u32,
+    /// Reference count: how many downstream nodes reference this.
+    pub ref_count: usize,
+    /// Whether this resource has been computed this frame.
+    pub computed: bool,
+}
+
+impl FilterResource {
+    pub fn new(name: &str, width: u32, height: u32) -> Self {
+        Self {
+            name: name.to_string(),
+            pixels: vec![0; (width * height * 4) as usize],
+            width,
+            height,
+            ref_count: 0,
+            computed: false,
+        }
+    }
+
+    pub fn increment_ref(&mut self) {
+        self.ref_count += 1;
+    }
+
+    pub fn decrement_ref(&mut self) {
+        self.ref_count = self.ref_count.saturating_sub(1);
+    }
+
+    pub fn is_shared(&self) -> bool {
+        self.ref_count > 1
+    }
+}
+
+// =============================================================================
+// P1-30: Filter Planner
+// =============================================================================
+//
+// Dedicated planner layer for filter execution: topological sorting,
+// dependency resolution, resource allocation, execution scheduling.
+
+/// Resource allocation plan for a filter graph execution.
+#[derive(Debug, Clone)]
+pub struct FilterResourcePlan {
+    /// Named intermediate results and their allocation status.
+    pub resources: HashMap<String, FilterResource>,
+    /// Execution order (node indices).
+    pub execution_order: Vec<usize>,
+}
+
+/// Planner for filter graph execution.
+pub struct FilterPlanner;
+
+impl FilterPlanner {
+    /// Plan the execution of a filter graph, allocating resources for
+    /// intermediate results and determining execution order.
+    pub fn plan(graph: &FilterGraph) -> Result<FilterResourcePlan, FilterError> {
+        // Collect named intermediate results and count references.
+        let mut resources: HashMap<String, FilterResource> = HashMap::new();
+        let mut ref_counts: HashMap<String, usize> = HashMap::new();
+
+        for node in graph.nodes() {
+            for input in &node.inputs {
+                if let FilterInput::Reference(name) = input {
+                    *ref_counts.entry(name.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        // Create resources for named intermediates that are referenced.
+        // (We don't know dimensions without the source graphic, so use
+        //  a placeholder that gets resolved during execution.)
+        for node in graph.nodes() {
+            if !node.result_name.is_empty() {
+                let count = ref_counts.get(&node.result_name).copied().unwrap_or(0);
+                let mut resource = FilterResource::new(&node.result_name, 0, 0);
+                resource.ref_count = count;
+                resources.insert(node.result_name.clone(), resource);
+            }
+        }
+
+        // Execution order is already topological from FilterGraph.
+        let execution_order: Vec<usize> = (0..graph.nodes().len()).collect();
+
+        Ok(FilterResourcePlan {
+            resources,
+            execution_order,
+        })
+    }
+
+    /// Returns the number of shared intermediate results (referenced by >1 node).
+    pub fn shared_resource_count(plan: &FilterResourcePlan) -> usize {
+        plan.resources.values().filter(|r| r.is_shared()).count()
+    }
+}
+
+#[cfg(test)]
+mod p1_29_30_filter_resource_tests {
+    use super::*;
+
+    #[test]
+    fn filter_resource_new() {
+        let r = FilterResource::new("blur", 100, 100);
+        assert_eq!(r.name, "blur");
+        assert_eq!(r.width, 100);
+        assert_eq!(r.height, 100);
+        assert_eq!(r.ref_count, 0);
+        assert!(!r.computed);
+    }
+
+    #[test]
+    fn ref_counting() {
+        let mut r = FilterResource::new("blur", 100, 100);
+        r.increment_ref();
+        r.increment_ref();
+        assert_eq!(r.ref_count, 2);
+        assert!(r.is_shared());
+        r.decrement_ref();
+        assert_eq!(r.ref_count, 1);
+        assert!(!r.is_shared());
+    }
+
+    #[test]
+    fn decrement_saturates_at_zero() {
+        let mut r = FilterResource::new("blur", 100, 100);
+        r.decrement_ref();
+        assert_eq!(r.ref_count, 0);
+    }
+
+    #[test]
+    fn shared_resource_count() {
+        let plan = FilterResourcePlan {
+            resources: {
+                let mut m = HashMap::new();
+                let mut r1 = FilterResource::new("blur", 100, 100);
+                r1.ref_count = 3;
+                m.insert("blur".to_string(), r1);
+                let mut r2 = FilterResource::new("composite", 100, 100);
+                r2.ref_count = 1;
+                m.insert("composite".to_string(), r2);
+                m
+            },
+            execution_order: vec![0, 1],
+        };
+        assert_eq!(FilterPlanner::shared_resource_count(&plan), 1);
+    }
+}
