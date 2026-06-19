@@ -340,6 +340,10 @@ impl View for TelemetryView {
             return;
         }
 
+        if renderer.get_telemetry().layout_over_budget {
+            return;
+        }
+
         let stats = renderer.get_telemetry();
 
         // Bifrost Glassmorphism

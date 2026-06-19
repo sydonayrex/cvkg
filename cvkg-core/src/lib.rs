@@ -2058,6 +2058,16 @@ pub struct RenderStateSnapshot {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryData {
     pub frame_time_ms: f32,
+    /// Total frame budget in milliseconds for the active policy.
+    pub frame_budget_ms: f32,
+    /// Remaining frame budget after the frame completed; negative means over budget.
+    pub frame_budget_remaining_ms: f32,
+    /// Remaining layout budget after layout completed; negative means the layout slice was exceeded.
+    pub layout_budget_remaining_ms: f32,
+    /// Whether the frame exceeded the total budget.
+    pub frame_over_budget: bool,
+    /// Whether the layout phase exceeded its budget slice.
+    pub layout_over_budget: bool,
     /// 99th percentile frame time over the last window, used to detect tail latency.
     pub p99_frame_time_ms: f32,
     /// Statistical jitter (variance in frame timing).
@@ -4865,6 +4875,11 @@ pub mod layout {
         pub previous_rects: HashMap<u64, Rect>,
     }
 
+    thread_local! {
+        static LAYOUT_BUDGET_DEADLINE: std::cell::RefCell<Option<std::time::Instant>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
     impl Default for LayoutCache {
         fn default() -> Self {
             Self::new()
@@ -4896,11 +4911,31 @@ pub mod layout {
 
         /// Checks if the layout pass is currently running over its allocated time budget.
         pub fn is_over_budget(&self) -> bool {
+            let deadline_red = LAYOUT_BUDGET_DEADLINE.with(|deadline| {
+                deadline.borrow().as_ref().is_some_and(|deadline| std::time::Instant::now() >= *deadline)
+            });
+            if deadline_red {
+                return true;
+            }
             if let Some(start) = self.layout_start_time {
                 start.elapsed() > self.layout_time_budget
             } else {
                 false
             }
+        }
+
+        /// Set a process-local deadline for layout cache consumers.
+        /// When this deadline is exceeded, caches should reuse previous
+        /// rects instead of recomputing expensive layout work.
+        pub fn set_layout_budget_deadline(deadline: Option<std::time::Instant>) {
+            LAYOUT_BUDGET_DEADLINE.with(|slot| {
+                *slot.borrow_mut() = deadline;
+            });
+        }
+
+        /// Clear any process-local layout budget deadline.
+        pub fn clear_layout_budget_deadline() {
+            Self::set_layout_budget_deadline(None);
         }
 
         /// Bump the generation counter, logically invalidating all cached entries

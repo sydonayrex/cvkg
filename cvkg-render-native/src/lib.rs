@@ -415,6 +415,7 @@ impl NativeRenderer {
             berserker_mode: cvkg_core::BerserkerMode::Normal,
             rage: 0.0,
             state_detector: WindowStateDetector::new(),
+            frame_budget: cvkg_core::FrameBudgetTracker::default_60fps(),
             modifiers: winit::keyboard::ModifiersState::default(),
             audio_engine: None,
             haptic_engine: Arc::new(VisualHapticEngine::new()),
@@ -741,6 +742,8 @@ struct App<V: cvkg_core::View> {
     rage: f32,
     /// Tracks the current window state for render-loop decisions.
     state_detector: WindowStateDetector,
+    /// Global frame budget used for explicit per-phase telemetry.
+    frame_budget: cvkg_core::FrameBudgetTracker,
     /// Tracks active modifier key states (Ctrl, Shift, Command, etc.).
     modifiers: winit::keyboard::ModifiersState,
     /// Cross-platform audio engine for spatialized sound cues.
@@ -959,6 +962,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // Update last_redraw_start immediately so the next frame measures correctly
                     // even if this frame returns early.
                     state.last_redraw_start = redraw_start;
+                    self.frame_budget.new_frame();
 
                     // Build new vdom and diff (layout pass)
                     let layout_start = std::time::Instant::now();
@@ -995,6 +999,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         state.needs_cursor_update = false;
                     }
                     let layout_end = std::time::Instant::now();
+                    self.frame_budget.subsystem_finish(1);
 
                     // Apply patches to the accessibility tree and the previous VDOM.
                     // When new_vdom is None (view unchanged), skip diff entirely.
@@ -1045,6 +1050,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         }
                     }
                     let state_flush_end = std::time::Instant::now();
+                    self.frame_budget.subsystem_finish(0);
 
                     // GPU rendering
                     let draw_start = std::time::Instant::now();
@@ -1071,6 +1077,9 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         width: rect.width - safe_area.left - safe_area.right,
                         height: rect.height - safe_area.top - safe_area.bottom,
                     };
+                    let layout_deadline = std::time::Instant::now()
+                        + self.frame_budget.allocations()[1].time_slice;
+                    cvkg_core::LayoutCache::set_layout_budget_deadline(Some(layout_deadline));
                     let mut renderer = NativeRenderer::new(
                         state.window.clone(),
                         gpu_arc.clone(),
@@ -1083,17 +1092,34 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // re-acquire it per-call, allowing the view tree to interleave with other
                     // work without holding one giant critical section across the whole draw.
                     drop(gpu);
+
+                    // Phase 2 profiling: measure CPU draw call recording separately from GPU submit.
+                    let cpu_draw_start = std::time::Instant::now();
                     self.view.render(&mut renderer, content_rect);
-                    let draw_end = std::time::Instant::now();
+                    let cpu_draw_end = std::time::Instant::now();
+                    cvkg_core::LayoutCache::clear_layout_budget_deadline();
+
+                    self.frame_budget.subsystem_finish(2);
 
                     // Re-acquire to submit the frame
                     let gpu_submit_start = std::time::Instant::now();
                     let mut gpu = gpu_arc
                         .lock()
                         .unwrap_or_else(|p| p.into_inner());
+                    let gpu_render_start = std::time::Instant::now();
                     gpu.render_frame();
+                    let gpu_render_end = std::time::Instant::now();
                     gpu.end_frame(encoder);
                     let gpu_submit_end = std::time::Instant::now();
+
+                    if state.frame_count < 10 || state.frame_count % 60 == 0 {
+                        log::info!(
+                            "[Native] GPU profile: cpu_draw={:?} gpu_render={:?} gpu_submit={:?}",
+                            cpu_draw_end.duration_since(cpu_draw_start),
+                            gpu_render_end.duration_since(gpu_render_start),
+                            gpu_submit_end.duration_since(gpu_render_end),
+                        );
+                    }
 
                     // Build telemetry from this frame's timing measurements.
                     // NOTE: input_time_ms measures the inter-frame gap (time from end of last frame
@@ -1109,7 +1135,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         .as_secs_f32()
                         * 1000.0;
                     telemetry.draw_time_ms =
-                        draw_end.duration_since(draw_start).as_secs_f32() * 1000.0;
+                        cpu_draw_end.duration_since(cpu_draw_start).as_secs_f32() * 1000.0;
                     telemetry.gpu_submit_time_ms = gpu_submit_end
                         .duration_since(gpu_submit_start)
                         .as_secs_f32()
@@ -1119,6 +1145,19 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let frame_time_ms =
                         gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
                     telemetry.frame_time_ms = frame_time_ms;
+                    telemetry.frame_budget_ms = self.frame_budget.total().as_secs_f32() * 1000.0;
+                    telemetry.frame_budget_remaining_ms =
+                        telemetry.frame_budget_ms - telemetry.frame_time_ms;
+                    telemetry.layout_budget_remaining_ms = self
+                        .frame_budget
+                        .allocations()
+                        .get(1)
+                        .map(|alloc| alloc.time_slice.as_secs_f32() * 1000.0 - telemetry.layout_time_ms)
+                        .unwrap_or(0.0);
+                    telemetry.frame_over_budget = !self.frame_budget.frame_within_budget()
+                        || telemetry.frame_budget_remaining_ms < 0.0;
+                    telemetry.layout_over_budget = !self.frame_budget.is_within_budget(1)
+                        || telemetry.layout_budget_remaining_ms < 0.0;
 
                     // Log detailed frame time breakdown for performance diagnostics
                     log::info!(
@@ -1158,6 +1197,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // scheduling disruption (GC, OS preemption, slow layout) -- not a confirmed
                     // hardware stall, but the field name is defined in cvkg_core::TelemetryData.
                     telemetry.hardware_stall_detected = telemetry.frame_jitter_ms > 20.0;
+                    if telemetry.frame_over_budget {
+                        log::warn!(
+                            "[Native] Frame budget exceeded by {:.2}ms (layout remaining {:.2}ms)",
+                            -telemetry.frame_budget_remaining_ms,
+                            telemetry.layout_budget_remaining_ms
+                        );
+                    }
 
                     state.frame_count += 1;
 
@@ -2518,7 +2564,125 @@ impl cvkg_core::AssetManager for NativeAssetManager {
 mod tests {
     use super::*;
     use cvkg_core::AssetManager;
+    use cvkg_vdom::{AriaProps, LayoutRect, VDom, VNode};
+    use std::collections::HashMap;
     use std::io::Write;
+    use std::sync::{Arc, Mutex};
+
+    fn interactive_node(
+        id: u64,
+        component_type: &str,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        aria_role: &str,
+    ) -> VNode {
+        VNode {
+            id: cvkg_core::KvasirId(id),
+            key: None,
+            component_type: component_type.to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect {
+                x,
+                y,
+                width,
+                height,
+            },
+            children: Vec::new(),
+            aria_role: aria_role.to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(cvkg_core::Rect {
+                x,
+                y,
+                width,
+                height,
+            })),
+        }
+    }
+
+    fn route_pointer_sequence_through_native_capture(
+        pressed_vdom: &VDom,
+        rebuilt_vdom: &VDom,
+        x: f32,
+        y: f32,
+        button: u32,
+    ) -> (
+        cvkg_core::EventResponse,
+        cvkg_core::EventResponse,
+        cvkg_core::EventResponse,
+    ) {
+        let active_target = pressed_vdom.hit_test(x, y, 0.0).map(|(id, _)| id);
+        let mut applied_vdom = VDom::new();
+        applied_vdom.root = pressed_vdom.root;
+        applied_vdom.nodes = pressed_vdom.nodes.clone();
+        applied_vdom.parents = pressed_vdom.parents.clone();
+        applied_vdom.event_handlers = pressed_vdom.event_handlers.clone();
+        let down = active_target
+            .map(|target| {
+                applied_vdom.dispatch_event_to_target(
+                    target,
+                    cvkg_core::Event::PointerDown {
+                        x,
+                        y,
+                        button,
+                        proximity_field: 0.0,
+                        tilt: None,
+                        azimuth: None,
+                        pressure: Some(1.0),
+                        barrel_rotation: None,
+                        pointer_precision: 0.0,
+                    },
+                )
+            })
+            .unwrap_or_else(|| {
+                applied_vdom.dispatch_event(cvkg_core::Event::PointerDown {
+                    x,
+                    y,
+                    button,
+                    proximity_field: 0.0,
+                    tilt: None,
+                    azimuth: None,
+                    pressure: Some(1.0),
+                    barrel_rotation: None,
+                    pointer_precision: 0.0,
+                })
+            });
+
+        applied_vdom.apply_patches(pressed_vdom.diff(rebuilt_vdom));
+
+        let pointer_up = cvkg_core::Event::PointerUp {
+            x,
+            y,
+            button,
+            tilt: None,
+            azimuth: None,
+            pressure: Some(0.0),
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        };
+        let pointer_click = cvkg_core::Event::PointerClick {
+            x,
+            y,
+            button,
+            tilt: None,
+            azimuth: None,
+            pressure: Some(0.0),
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        };
+
+        let up = active_target
+            .map(|target| applied_vdom.dispatch_event_to_target(target, pointer_up.clone()))
+            .unwrap_or_else(|| applied_vdom.dispatch_event(pointer_up));
+        let click = active_target
+            .map(|target| applied_vdom.dispatch_event_to_target(target, pointer_click.clone()))
+            .unwrap_or_else(|| applied_vdom.dispatch_event(pointer_click));
+
+        (down, up, click)
+    }
 
     /// FIX #12: Replaced hardcoded relative path "test_asset.png" with a temp-dir path
     /// constructed from a unique per-test name. The previous path was written to the
@@ -2603,6 +2767,69 @@ mod tests {
         } else {
             panic!("Expected Ime event");
         }
+    }
+
+    #[test]
+    fn native_pointer_capture_survives_rebuild_sequence() {
+        let fired = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+
+        let mut pressed = VDom::new();
+        let root_id = cvkg_core::KvasirId(1);
+        let button_id = cvkg_core::KvasirId(2);
+        let mut root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+        root.children = vec![button_id];
+        let button = interactive_node(2, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+
+        let fired_down = Arc::clone(&fired);
+        let fired_up = Arc::clone(&fired);
+        let fired_click = Arc::clone(&fired);
+        pressed.event_handlers.insert(
+            button_id,
+            vec![
+                (
+                    "pointerdown".to_string(),
+                    Arc::new(move |_| {
+                        fired_down.lock().unwrap().push("down");
+                    }) as _,
+                ),
+                (
+                    "pointerup".to_string(),
+                    Arc::new(move |_| {
+                        fired_up.lock().unwrap().push("up");
+                    }) as _,
+                ),
+                (
+                    "pointerclick".to_string(),
+                    Arc::new(move |_| {
+                        fired_click.lock().unwrap().push("click");
+                    }) as _,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        pressed.root = Some(root_id);
+        pressed.nodes.insert(root_id, root);
+        pressed.nodes.insert(button_id, button);
+        pressed.parents.insert(button_id, root_id);
+
+        let mut rebuilt = VDom::new();
+        let mut rebuilt_root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+        rebuilt_root.children = vec![button_id];
+        let rebuilt_button = interactive_node(2, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+        rebuilt.event_handlers = pressed.event_handlers.clone();
+        rebuilt.root = Some(root_id);
+        rebuilt.nodes.insert(root_id, rebuilt_root);
+        rebuilt.nodes.insert(button_id, rebuilt_button);
+        rebuilt.parents.insert(button_id, root_id);
+
+        let (down, up, click) =
+            route_pointer_sequence_through_native_capture(&pressed, &rebuilt, 30.0, 30.0, 0);
+
+        assert_eq!(down, cvkg_core::EventResponse::Handled);
+        assert_eq!(up, cvkg_core::EventResponse::Handled);
+        assert_eq!(click, cvkg_core::EventResponse::Handled);
+        assert_eq!(*fired.lock().unwrap(), vec!["down", "up", "click"]);
     }
 }
 

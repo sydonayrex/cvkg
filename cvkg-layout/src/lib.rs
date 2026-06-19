@@ -2440,9 +2440,10 @@ mod tests {
         };
 
         let mut cache = LayoutCache::new();
-        // Setup budget to be exceeded
-        cache.layout_time_budget = std::time::Duration::from_nanos(1);
-        cache.layout_start_time = Some(std::time::Instant::now() - std::time::Duration::from_millis(50));
+        // Setup budget to be exceeded via the shared process-local layout deadline.
+        cvkg_core::LayoutCache::set_layout_budget_deadline(Some(
+            std::time::Instant::now() - std::time::Duration::from_millis(50),
+        ));
         
         // Cache a previous rect for the view
         cache.previous_rects.insert(2001, Rect::new(10.0, 10.0, 100.0, 100.0));
@@ -2461,6 +2462,8 @@ mod tests {
         // Let's verify that Taffy node map does not contain the view, meaning Taffy was skipped!
         let engine = TaffyLayoutEngine::get_or_insert_engine(&mut cache);
         assert!(!engine.node_map.contains_key(&2001));
+
+        cvkg_core::LayoutCache::clear_layout_budget_deadline();
     }
 
     // -------------------------------------------------------------------------

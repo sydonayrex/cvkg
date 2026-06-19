@@ -22,6 +22,9 @@ impl View for VdomInspector {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if renderer.get_telemetry().layout_over_budget {
+            return;
+        }
         // Render a semi-transparent panel on the right
         let panel_width = 300.0;
         let panel_rect = Rect {
@@ -99,6 +102,9 @@ impl View for TelemetryOverlay {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        if renderer.get_telemetry().layout_over_budget {
+            return;
+        }
         let telemetry = renderer.get_telemetry();
 
         let panel_width = 240.0;
@@ -256,6 +262,9 @@ impl View for ConstraintOverlay {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.enabled {
+            return;
+        }
+        if renderer.get_telemetry().layout_over_budget {
             return;
         }
 

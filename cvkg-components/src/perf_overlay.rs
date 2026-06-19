@@ -123,6 +123,9 @@ impl View for PerfOverlay {
         if !self.visible {
             return;
         }
+        if renderer.get_telemetry().layout_over_budget {
+            return;
+        }
 
         let pad = 12.0;
         let overlay_w: f32 = 280.0;
