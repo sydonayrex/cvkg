@@ -59,7 +59,6 @@ impl KvasirNode for VolumetricNode {
         let light_color = [0.8_f32, 0.85, 1.0]; // Cool white light
 
         // Pack hologram instance data into extended uniform buffer.
-        // If no hologram instances are active, zeros are written (shader renders nothing).
         let instances = ctx.renderer.hologram_instances();
         let holo = instances.first(); // Primary hologram (single-instance fast path)
         let holo_rect_x = holo.map_or(0.0, |h| h.rect.x);
@@ -70,11 +69,14 @@ impl KvasirNode for VolumetricNode {
         let holo_time = holo.map_or(0.0f32, |h| h.time);
         let holo_count = instances.len() as f32;
 
+        // Get MSAA count for depth texture selection
+        let msaa_count = ctx.renderer.quality_level.msaa_sample_count() as f32;
+
         let uniform_data: [f32; 24] = [
             current_time,         // 0: time
             resolution[0],        // 1: resolution.x
             resolution[1],        // 2: resolution.y
-            0.0,                  // 3: _pad
+            msaa_count,           // 3: msaa_count (was _pad)
             light_pos[0],         // 4: light_pos.x
             light_pos[1],         // 5: light_pos.y
             light_pos[2],         // 6: light_pos.z
@@ -103,18 +105,37 @@ impl KvasirNode for VolumetricNode {
             bytemuck::cast_slice(&uniform_data),
         );
 
-        // Retrieve or create bind group from cache
+        // Get depth texture view for volumetric occlusion testing
+        let depth_view = ctx.depth_view;
+
+        // Create bind group with uniform buffer + depth textures + comparison sampler
         let bind_group = ctx.get_or_create_bind_group(
             (crate::kvasir::resource::ResourceId(99999), 0, false),
             &ctx.renderer.volumetric_bind_group_layout,
-            &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: wgpu::BindingResource::Buffer(
-                    ctx.renderer
-                        .volumetric_uniform_buffer
-                        .as_entire_buffer_binding(),
-                ),
-            }],
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(
+                        ctx.renderer
+                            .volumetric_uniform_buffer
+                            .as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(depth_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(depth_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(
+                        &ctx.renderer.volumetric_depth_sampler,
+                    ),
+                },
+            ],
             Some("Volumetric Bind Group"),
         );
 

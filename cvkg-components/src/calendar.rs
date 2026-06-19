@@ -291,7 +291,7 @@ impl DatePicker {
                 month: 0,
                 day: 0,
             },
-            placeholder: "Select date".into(),
+            placeholder: lingua_tong::t("datepicker.placeholder"),
             on_date_change: Arc::new(on_date_change),
         }
     }

@@ -17,7 +17,7 @@ struct VolumetricUniforms {
     light_color: vec3<f32>,
     density: f32,
     falloff: f32,
-    _pad0: f32,
+    msaa_count: f32,
     _pad1: f32,
     // -- Hologram extension --
     holo_rect: vec4<f32>,   // x, y, width, height in logical pixels
@@ -28,6 +28,9 @@ struct VolumetricUniforms {
 };
 
 @group(0) @binding(0) var<uniform> uniforms: VolumetricUniforms;
+@group(0) @binding(1) var depth_texture: texture_depth_2d;
+@group(0) @binding(2) var depth_texture_msaa: texture_depth_multisampled_2d;
+@group(0) @binding(3) var depth_sampler: sampler_comparison;
 
 @vertex
 fn vs_fullscreen(@builtin(vertex_index) vid: u32) -> VertexOutput {
@@ -52,11 +55,26 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Convert UV from [0,1] to logical pixel coordinates.
-    // The hologram rect is in logical pixels, so we compare against that.
     let logical_uv = in.uv * uniforms.resolution;
 
+    // Read scene depth at this fragment to occlude volumetric effects behind geometry.
+    var scene_depth: f32 = 1.0;
+    if (uniforms.msaa_count > 1.5) {
+        // MSAA depth: manually resolve sample 0 via textureLoad
+        let coord = vec2<i32>(floor(in.uv * uniforms.resolution));
+        scene_depth = textureLoad(depth_texture_msaa, coord, 0);
+    } else {
+        // Single-sample depth
+        scene_depth = textureSampleCompare(depth_texture, depth_sampler, in.uv, 0.5);
+    }
+
+    // If scene geometry is in front of the volumetric plane, discard.
+    // Volumetric renders at depth 0.5 (mid-range); if scene is closer, skip.
+    if (scene_depth < 0.5) {
+        return vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    }
+
     // Rect-constrained rendering: discard fragments outside the hologram bounding box.
-    // Use a small feathering margin (1.0 pixel) for smooth edges.
     let rect_min = uniforms.holo_rect.xy;
     let rect_max = uniforms.holo_rect.xy + uniforms.holo_rect.zw;
     let margin = 1.0;
