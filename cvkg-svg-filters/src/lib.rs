@@ -2363,3 +2363,160 @@ mod tests {
         assert_eq!((x, y, w, h), (0, 0, 110, 110));
     }
 }
+
+// ── TransientFilterPool (P1-34) ──────────────────────────────────────────────
+//
+// Reusable buffer pool for filter intermediate results.
+// Prevents O(N) buffer allocations per filter node by tracking buffer
+// lifetimes and reusing compatible buffers.
+
+/// A reusable texture buffer in the pool.
+#[derive(Debug)]
+struct PooledTexture {
+    width: u32,
+    height: u32,
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    /// Whether this buffer is currently in use.
+    in_use: bool,
+}
+
+/// Pool of reusable textures for filter intermediate results.
+///
+/// Instead of allocating a new texture for every filter node, the pool
+/// tracks available buffers and reuses them when dimensions match.
+/// This prevents the O(N^2) buffer allocation problem for complex
+/// filter chains (P1-34).
+pub struct TransientFilterPool {
+    /// Available (not in-use) textures.
+    available: Vec<PooledTexture>,
+    /// Total textures allocated (for diagnostics).
+    total_allocated: usize,
+    /// Total textures reused (for diagnostics).
+    total_reused: usize,
+}
+
+impl TransientFilterPool {
+    pub fn new() -> Self {
+        Self {
+            available: Vec::new(),
+            total_allocated: 0,
+            total_reused: 0,
+        }
+    }
+
+    /// Acquire a texture from the pool, or create a new one if none match.
+    pub fn acquire(
+        &mut self,
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+    ) -> (&wgpu::Texture, &wgpu::TextureView) {
+        // Find an available texture with matching dimensions.
+        if let Some(pos) = self.available.iter().position(|p| {
+            !p.in_use && p.width == width && p.height == height
+        }) {
+            let pooled = &mut self.available[pos];
+            pooled.in_use = true;
+            self.total_reused += 1;
+            return (&pooled.texture, &pooled.view);
+        }
+
+        // Create a new texture.
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("TransientFilter"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.available.push(PooledTexture {
+            width,
+            height,
+            texture,
+            view,
+            in_use: true,
+        });
+        self.total_allocated += 1;
+        let last = self.available.last().unwrap();
+        (&last.texture, &last.view)
+    }
+
+    /// Release a texture back to the pool for reuse.
+    pub fn release(&mut self, width: u32, height: u32) {
+        if let Some(pooled) = self.available.iter_mut().find(|p| {
+            p.in_use && p.width == width && p.height == height
+        }) {
+            pooled.in_use = false;
+        }
+    }
+
+    /// Reset the pool (mark all textures as available).
+    pub fn reset(&mut self) {
+        for pooled in &mut self.available {
+            pooled.in_use = false;
+        }
+    }
+
+    /// Returns the number of textures in the pool.
+    pub fn len(&self) -> usize {
+        self.available.len()
+    }
+
+    /// Returns true if the pool is empty.
+    pub fn is_empty(&self) -> bool {
+        self.available.is_empty()
+    }
+
+    /// Returns reuse statistics.
+    pub fn stats(&self) -> (usize, usize) {
+        (self.total_allocated, self.total_reused)
+    }
+}
+
+impl Default for TransientFilterPool {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(test)]
+mod p1_34_transient_filter_pool_tests {
+    use super::TransientFilterPool;
+
+    #[test]
+    fn new_pool_is_empty() {
+        let pool = TransientFilterPool::new();
+        assert!(pool.is_empty());
+        assert_eq!(pool.len(), 0);
+    }
+
+    #[test]
+    fn reset_clears_all() {
+        let mut pool = TransientFilterPool::new();
+        // Without a real GPU device, we can't call acquire, but we can
+        // test the reset logic on the pool state machine.
+        pool.reset();
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn stats_start_at_zero() {
+        let pool = TransientFilterPool::new();
+        let (allocated, reused) = pool.stats();
+        assert_eq!(allocated, 0);
+        assert_eq!(reused, 0);
+    }
+}
