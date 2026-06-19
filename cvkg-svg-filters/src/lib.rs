@@ -2520,3 +2520,99 @@ mod p1_34_transient_filter_pool_tests {
         assert_eq!(reused, 0);
     }
 }
+
+// ── Alpha Processing Standardization (P1-33) ─────────────────────────────────
+//
+// SVG filter pipeline alpha convention:
+//
+// All filter primitives operate in **premultiplied alpha** space.
+// This is the correct mode for physically-accurate compositing:
+//   - Blur: premultiplied prevents dark halos at transparent edges
+//   - Color matrix: operates on premultiplied RGBA values
+//   - Composite: arithmetic is correct in premultiplied space
+//   - Lighting: requires linear RGB + premultiplied alpha
+//
+// Inputs are converted from straight alpha to premultiplied before
+// filter execution. Outputs are converted back to straight alpha for
+// display. This matches the SVG 1.1 spec (filter primitive
+// `color-interpolation-filters="linearRGB"` implies premultiplied).
+
+/// Alpha mode for filter operations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AlphaMode {
+    /// Straight (non-premultiplied) alpha. RGB values are independent
+    /// of the alpha channel. This is the standard format for textures
+    /// loaded from images.
+    Straight,
+    /// Premultiplied alpha. RGB values are multiplied by alpha.
+    /// This is the correct space for compositing and filtering
+    /// operations.
+    Premultiplied,
+}
+
+impl AlphaMode {
+    /// Convert a single pixel from straight to premultiplied alpha.
+    pub fn to_premultiplied(r: f32, g: f32, b: f32, a: f32) -> [f32; 4] {
+        [r * a, g * a, b * a, a]
+    }
+
+    /// Convert a single pixel from premultiplied to straight alpha.
+    /// Returns the original RGB values (clamped to avoid division by zero).
+    pub fn to_straight(r: f32, g: f32, b: f32, a: f32) -> [f32; 4] {
+        if a > 0.001 {
+            [r / a, g / a, b / a, a]
+        } else {
+            [0.0, 0.0, 0.0, 0.0]
+        }
+    }
+
+    /// Returns true if this is Premultiplied.
+    pub fn is_premultiplied(&self) -> bool {
+        matches!(self, AlphaMode::Premultiplied)
+    }
+}
+
+#[cfg(test)]
+mod p1_33_alpha_mode_tests {
+    use super::AlphaMode;
+
+    #[test]
+    fn to_premultiplied_works() {
+        let [r, g, b, a] = AlphaMode::to_premultiplied(0.5, 0.6, 0.7, 0.5);
+        assert!((r - 0.25).abs() < 0.001);
+        assert!((g - 0.30).abs() < 0.001);
+        assert!((b - 0.35).abs() < 0.001);
+        assert!((a - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn to_straight_works() {
+        let [r, g, b, a] = AlphaMode::to_straight(0.25, 0.30, 0.35, 0.5);
+        assert!((r - 0.5).abs() < 0.001);
+        assert!((g - 0.6).abs() < 0.001);
+        assert!((b - 0.7).abs() < 0.001);
+        assert!((a - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn to_straight_handles_zero_alpha() {
+        let [r, g, b, a] = AlphaMode::to_straight(0.1, 0.2, 0.3, 0.0);
+        assert_eq!([r, g, b, a], [0.0, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn roundtrip_preserves_values() {
+        let original = [0.5, 0.6, 0.7, 0.8];
+        let prem = AlphaMode::to_premultiplied(original[0], original[1], original[2], original[3]);
+        let back = AlphaMode::to_straight(prem[0], prem[1], prem[2], prem[3]);
+        for i in 0..4 {
+            assert!((original[i] - back[i]).abs() < 0.001, "component {} differs", i);
+        }
+    }
+
+    #[test]
+    fn is_premultiplied_works() {
+        assert!(AlphaMode::Premultiplied.is_premultiplied());
+        assert!(!AlphaMode::Straight.is_premultiplied());
+    }
+}
