@@ -1169,25 +1169,32 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let state_flush_end = std::time::Instant::now();
                     self.frame_budget.subsystem_finish(0);
 
-                    // GPU rendering
                     let _draw_start = std::time::Instant::now();
                     let delta_time = redraw_start.duration_since(last_redraw_start).as_secs_f32();
                     let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
+
+                    // Dispatch cursor events if the mouse moved since last frame
                     let mut gpu = gpu_arc
                         .lock()
                         .unwrap_or_else(|p| p.into_inner());
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
-                    let encoder = gpu.begin_frame(id);
+
                     // One-time prewarm: drain any pending assets into the GPU texture atlas
-                    // on the first frame. This must happen after begin_frame (which clears
-                    // per-frame state) but while we still hold the GPU mutex.
                     if let Some(assets) = self.pending_prewarm.take() {
                         log::info!("[Native] Pre-warming {} assets on first frame", assets.len());
                         gpu.prewarm_vram(assets);
                     }
+
+                    // Begin frame -- use begin_frame_reuse when view unchanged to preserve
+                    // previous frame's vertices/indices/draw_calls
+                    let encoder = if view_changed {
+                        gpu.begin_frame(id)
+                    } else {
+                        gpu.begin_frame_reuse(id)
+                    };
+
                     // Compute safe area insets based on current window state
                     let safe_area = crate::SafeAreaInsets::for_window_state(self.state_detector.state());
-                    // Adjust content rect to respect safe areas (e.g., macOS menu bar)
                     let content_rect = cvkg_core::Rect {
                         x: safe_area.left,
                         y: safe_area.top,
@@ -1197,6 +1204,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let layout_deadline = std::time::Instant::now()
                         + self.frame_budget.allocations()[1].time_slice;
                     cvkg_core::LayoutCache::set_layout_budget_deadline(Some(layout_deadline));
+
                     let mut renderer = NativeRenderer::new(
                         state.window.clone(),
                         gpu_arc.clone(),
@@ -1205,23 +1213,20 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         self.berserker_mode,
                         self.rage,
                     );
-                    // Release the per-frame setup lock. We re-acquire it once below for the
-                    // entire render pass, storing the raw pointer in GPU_FRAME_PTR so individual
-                    // draw calls skip mutex acquisition entirely. This reduces lock overhead from
-                    // O(draw_calls) per frame to O(1).
                     drop(gpu);
 
-                    // Phase 2 profiling: lock once, render entire frame, unlock once.
+                    // Render pass: lock GPU, publish pointer, draw, unlock
                     let cpu_draw_start = std::time::Instant::now();
                     {
-                        // Lock the GPU for the entire render pass and publish pointer.
                         let mut gpu_guard = gpu_arc.lock().unwrap_or_else(|p| p.into_inner());
                         let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu_guard;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
-                        self.view.render(&mut renderer, content_rect);
-                        // Clear the pointer before the guard drops to prevent dangling access.
+                        if view_changed {
+                            self.view.render(&mut renderer, content_rect);
+                        }
+                        // When view unchanged, skip draw phase entirely.
+                        // Previous frame's vertices/indices/draw_calls are preserved.
                         GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
-                        // gpu_guard drops here, releasing the lock.
                     }
                     let cpu_draw_end = std::time::Instant::now();
                     cvkg_core::LayoutCache::clear_layout_budget_deadline();

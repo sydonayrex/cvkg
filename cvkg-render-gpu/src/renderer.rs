@@ -719,7 +719,7 @@ impl SurtrRenderer {
         let mut count = 0;
         for (text, size) in labels {
             let cache_key = (text.to_string(), (size * 100.0) as u32);
-            if self.text.shaped_cache.contains_key(&cache_key) {
+            if self.text.shaped_cache.contains(&cache_key) {
                 continue;
             }
             let style = cvkg_runic_text::TextStyle::new("Inter", *size);
@@ -730,7 +730,7 @@ impl SurtrRenderer {
                 cvkg_runic_text::TextAlign::Start,
                 cvkg_runic_text::TextOverflow::Visible,
             ).ok() {
-                self.text.shaped_cache.insert(cache_key, std::sync::Arc::new(shaped));
+                self.text.shaped_cache.put(cache_key, std::sync::Arc::new(shaped));
                 count += 1;
             }
         }
@@ -2869,6 +2869,16 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
 
     /// begin_frame -- Strike the flaming sword to begin a new GPU frame for a specific window.
     pub fn begin_frame(&mut self, window_id: winit::window::WindowId) -> wgpu::CommandEncoder {
+        self.begin_frame_internal(window_id, true)
+    }
+
+    /// Begin a frame without resetting per-frame state.
+    /// Used when reusing the previous frame's draw calls (view unchanged).
+    pub fn begin_frame_reuse(&mut self, window_id: winit::window::WindowId) -> wgpu::CommandEncoder {
+        self.begin_frame_internal(window_id, false)
+    }
+
+    fn begin_frame_internal(&mut self, window_id: winit::window::WindowId, reset_state: bool) -> wgpu::CommandEncoder {
         // Drain AI material channel
         if let Some(rx) = &self.ai_material_rx {
             while let Ok(res) = rx.try_recv() {
@@ -2914,7 +2924,9 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
 
         self.staging_belt.recall();
         self.current_window = Some(window_id);
-        self.reset_frame_state();
+        if reset_state {
+            self.reset_frame_state();
+        }
 
         let ctx = self
             .surfaces
