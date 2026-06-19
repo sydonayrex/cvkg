@@ -233,6 +233,19 @@ impl MaterialGraph {
                 self.dfs_check(id, &mut visited, &mut in_stack)?;
             }
         }
+
+        // P2-10: Reachability check -- ensure every node is reachable from the output.
+        // A node that is connected via an edge but whose input chain never reaches
+        // the output would produce incomplete WGSL.
+        if let Some(output_id) = self.output {
+            let mut reachable = vec![false; self.nodes.len()];
+            self.dfs_reachable(output_id, &mut reachable);
+            for &(id, _) in &self.nodes {
+                if !reachable[id as usize] {
+                    return Err(MaterialError::UnreachableNode(id));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -262,6 +275,23 @@ impl MaterialGraph {
         in_stack[idx] = false;
         Ok(())
     }
+
+    /// P2-10: DFS backwards from the output node to find all reachable nodes.
+    /// Edges go from producer (from_node) to consumer (to_node), so we walk
+    /// backwards from to_node to from_node.
+    fn dfs_reachable(&self, node: MatNodeId, reachable: &mut [bool]) {
+        let idx = node as usize;
+        if reachable[idx] {
+            return;
+        }
+        reachable[idx] = true;
+        // Find all edges where this node is the consumer (to_node)
+        for edge in &self.edges {
+            if edge.to_node == node {
+                self.dfs_reachable(edge.from_node, reachable);
+            }
+        }
+    }
 }
 
 impl Default for MaterialGraph {
@@ -287,6 +317,8 @@ pub enum MaterialError {
     UnsupportedNodeType(String),
     /// P1-4 fix: graph has more edges than the configured limit.
     TooManyEdges(usize, usize),
+    /// P2-10: node is not reachable from the output (dead subgraph).
+    UnreachableNode(MatNodeId),
 }
 
 pub struct MaterialValidationConfig {
@@ -327,6 +359,7 @@ impl std::fmt::Display for MaterialError {
             Self::TooManyNodes(count, max) => write!(f, "too many nodes: {} (max {})", count, max),
             Self::UnsupportedNodeType(kind) => write!(f, "unsupported node type: {}", kind),
             Self::TooManyEdges(count, max) => write!(f, "too many edges: {} (max {})", count, max),
+            Self::UnreachableNode(id) => write!(f, "unreachable node: {:?}", id),
         }
     }
 }
@@ -1161,5 +1194,33 @@ mod tests {
         if let Err(MaterialError::TooManyEdges(_, _)) = result {
             panic!("default config should accept 1 edge, got {result:?}");
         }
+    }
+
+    // P2-10: Test unreachable node detection
+    #[test]
+    fn p2_10_unreachable_node_detected() {
+        let mut graph = MaterialGraph::new();
+        let n0 = graph.add_node(MaterialOp::InputColor);
+        let n1 = graph.add_node(MaterialOp::Solid);
+        let n2 = graph.add_node(MaterialOp::Solid); // unreachable
+        graph.connect(n0, MaterialSocket::Color, n1, MaterialSocket::Color);
+        graph.set_output(n1);
+        // n2 is not connected to the output path
+        let result = graph.validate();
+        assert!(
+            matches!(result, Err(MaterialError::UnreachableNode(id)) if id == n2),
+            "expected UnreachableNode({n2}), got {result:?}"
+        );
+    }
+
+    #[test]
+    fn p2_10_all_reachable_passes() {
+        let mut graph = MaterialGraph::new();
+        let n0 = graph.add_node(MaterialOp::InputColor);
+        let n1 = graph.add_node(MaterialOp::Solid);
+        graph.connect(n0, MaterialSocket::Color, n1, MaterialSocket::Color);
+        graph.set_output(n1);
+        // Both nodes reachable from output
+        assert!(graph.validate().is_ok(), "valid graph should pass");
     }
 }
