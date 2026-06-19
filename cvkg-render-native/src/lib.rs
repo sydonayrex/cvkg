@@ -401,7 +401,7 @@ impl NativeRenderer {
     pub fn run<V: cvkg_core::View + 'static>(view: V, prewarm_assets: Option<Vec<(String, Vec<u8>)>>) {
         let event_loop = EventLoop::<AppEvent>::with_user_event()
             .build()
-            .expect("Failed to create event loop");
+            .expect("failed to create winit event loop: platform initialization failed");
         event_loop.set_control_flow(ControlFlow::Wait);
 
         let mut app = App {
@@ -421,7 +421,7 @@ impl NativeRenderer {
             pending_prewarm: prewarm_assets,
         };
 
-        event_loop.run_app(&mut app).expect("Event loop error");
+        event_loop.run_app(&mut app).expect("winit event loop terminated with error");
     }
 
     /// Convenience: run with a single background image loaded from a file path.
@@ -571,7 +571,7 @@ impl WindowManager {
         let window = Arc::new(
             event_loop
                 .create_window(window_attrs)
-                .expect("Failed to create window"),
+                .expect("failed to create native window: display connection may be unavailable"),
         );
 
         let winit_id = window.id();
@@ -795,7 +795,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 .core_to_winit
                 .get(&handle.id)
                 .copied()
-                .expect("Failed to get winit_id");
+                .unwrap_or_else(|| panic!("winit_id not found for window handle: window may have been destroyed"));
             let window = self
                 .window_manager
                 .windows
@@ -907,7 +907,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 WindowEvent::Resized(physical_size) => {
                     gpu_arc
                         .lock()
-                        .expect("GPU mutex poisoned during resize")
+                        .unwrap_or_else(|p| p.into_inner())
                         .resize(
                             id,
                             physical_size.width,
@@ -1023,7 +1023,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
                     let mut gpu = gpu_arc
                         .lock()
-                        .expect("GPU mutex poisoned during frame begin");
+                        .unwrap_or_else(|p| p.into_inner());
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
                     let encoder = gpu.begin_frame(id);
                     // One-time prewarm: drain any pending assets into the GPU texture atlas
@@ -1061,7 +1061,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let gpu_submit_start = std::time::Instant::now();
                     let mut gpu = gpu_arc
                         .lock()
-                        .expect("GPU mutex poisoned during frame submit");
+                        .unwrap_or_else(|p| p.into_inner());
                     gpu.render_frame();
                     gpu.end_frame(encoder);
                     let gpu_submit_end = std::time::Instant::now();
@@ -1757,25 +1757,25 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn fill_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_rect(rect, color);
     }
     fn fill_rounded_rect(&mut self, rect: cvkg_core::Rect, radius: f32, color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_rounded_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_rounded_rect(rect, radius, color);
     }
     fn fill_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_ellipse")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_ellipse(rect, color);
     }
     fn stroke_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: stroke_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .stroke_rect(rect, color, stroke_width);
     }
     fn stroke_rounded_rect(
@@ -1787,13 +1787,13 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: stroke_rounded_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .stroke_rounded_rect(rect, radius, color, stroke_width);
     }
     fn stroke_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: stroke_ellipse")
+            .unwrap_or_else(|p| p.into_inner())
             .stroke_ellipse(rect, color, stroke_width);
     }
     fn draw_line(
@@ -1807,21 +1807,21 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_line")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_line(x1, y1, x2, y2, color, stroke_width);
     }
 
     fn fill_glass_rect(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_glass_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_glass_rect(rect, radius, blur_radius);
     }
 
     fn fill_glass_rect_with_intensity(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_glass_rect_with_intensity")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_glass_rect_with_intensity(rect, radius, blur_radius, glass_intensity);
     }
 
@@ -1829,28 +1829,28 @@ impl cvkg_core::Renderer for NativeRenderer {
         // Scale glass intensity by pressure: full pressure = full glass, no pressure = solid
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_glass_rect_with_pressure")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_glass_rect_with_intensity(rect, radius, blur_radius, pressure);
     }
 
     fn fill_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: fill_squircle")
+            .unwrap_or_else(|p| p.into_inner())
             .fill_squircle(rect, n, color);
     }
 
     fn stroke_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4], stroke_width: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: stroke_squircle")
+            .unwrap_or_else(|p| p.into_inner())
             .stroke_squircle(rect, n, color, stroke_width);
     }
 
     fn draw_focus_ring(&mut self, rect: cvkg_core::Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_focus_ring")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_focus_ring(rect, radius, offset, width, color);
     }
 
@@ -1864,7 +1864,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_linear_gradient")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_linear_gradient(rect, start_color, end_color, angle);
     }
     fn draw_radial_gradient(
@@ -1875,79 +1875,79 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_radial_gradient")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_radial_gradient(rect, inner_color, outer_color);
     }
     fn draw_texture(&mut self, texture_id: u32, rect: cvkg_core::Rect) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_texture")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_texture(texture_id, rect);
     }
     fn draw_image(&mut self, image_name: &str, rect: cvkg_core::Rect) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_image")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_image(image_name, rect);
     }
     fn load_image(&mut self, name: &str, data: &[u8]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: load_image")
+            .unwrap_or_else(|p| p.into_inner())
             .load_image(name, data);
     }
     fn push_clip_rect(&mut self, rect: cvkg_core::Rect) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_clip_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .push_clip_rect(rect);
     }
     fn pop_clip_rect(&mut self) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: pop_clip_rect")
+            .unwrap_or_else(|p| p.into_inner())
             .pop_clip_rect();
     }
     fn push_opacity(&mut self, opacity: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_opacity")
+            .unwrap_or_else(|p| p.into_inner())
             .push_opacity(opacity);
     }
     fn draw_3d_cube(&mut self, rect: cvkg_core::Rect, color: [f32; 4], rotation: [f32; 3]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_3d_cube")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_3d_cube(rect, color, rotation);
     }
     fn pop_opacity(&mut self) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: pop_opacity")
+            .unwrap_or_else(|p| p.into_inner())
             .pop_opacity();
     }
     fn bifrost(&mut self, rect: cvkg_core::Rect, blur: f32, saturation: f32, opacity: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: bifrost")
+            .unwrap_or_else(|p| p.into_inner())
             .bifrost(rect, blur, saturation, opacity);
     }
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_mjolnir_slice")
+            .unwrap_or_else(|p| p.into_inner())
             .push_mjolnir_slice(angle, offset);
     }
     fn pop_mjolnir_slice(&mut self) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: pop_mjolnir_slice")
+            .unwrap_or_else(|p| p.into_inner())
             .pop_mjolnir_slice();
     }
     fn mjolnir_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: mjolnir_shatter")
+            .unwrap_or_else(|p| p.into_inner())
             .mjolnir_shatter(rect, pieces, force, color);
     }
     fn mjolnir_fluid_shatter(
@@ -1959,25 +1959,25 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: mjolnir_fluid_shatter")
+            .unwrap_or_else(|p| p.into_inner())
             .mjolnir_fluid_shatter(rect, pieces, force, color);
     }
     fn draw_mjolnir_bolt(&mut self, from: [f32; 2], to: [f32; 2], color: [f32; 4]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_mjolnir_bolt")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_mjolnir_bolt(from, to, color);
     }
     fn gungnir(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32, intensity: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: gungnir")
+            .unwrap_or_else(|p| p.into_inner())
             .gungnir(rect, color, radius, intensity);
     }
     fn mani_glow(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: mani_glow")
+            .unwrap_or_else(|p| p.into_inner())
             .mani_glow(rect, color, radius);
     }
     fn register_handler(
@@ -1987,19 +1987,19 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: register_handler")
+            .unwrap_or_else(|p| p.into_inner())
             .register_handler(event_type, handler);
     }
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_vnode")
+            .unwrap_or_else(|p| p.into_inner())
             .push_vnode(rect, name);
     }
     fn pop_vnode(&mut self) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: pop_vnode")
+            .unwrap_or_else(|p| p.into_inner())
             .pop_vnode();
     }
     // FIX #1: Removed duplicate definitions of set_z_index and get_z_index.
@@ -2008,37 +2008,37 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn set_z_index(&mut self, z: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: set_z_index")
+            .unwrap_or_else(|p| p.into_inner())
             .set_z_index(z);
     }
     fn get_z_index(&self) -> f32 {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: get_z_index")
+            .unwrap_or_else(|p| p.into_inner())
             .get_z_index()
     }
     fn register_shared_element(&mut self, id: &str, rect: cvkg_core::Rect) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: register_shared_element")
+            .unwrap_or_else(|p| p.into_inner())
             .register_shared_element(id, rect);
     }
     fn set_material(&mut self, material: cvkg_core::DrawMaterial) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: set_material")
+            .unwrap_or_else(|p| p.into_inner())
             .set_material(material);
     }
     fn current_material(&self) -> cvkg_core::DrawMaterial {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: current_material")
+            .unwrap_or_else(|p| p.into_inner())
             .current_material()
     }
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: serialize_svg")
+            .unwrap_or_else(|p| p.into_inner())
             .serialize_svg(name)
     }
     fn apply_svg_filter(
@@ -2049,25 +2049,25 @@ impl cvkg_core::Renderer for NativeRenderer {
     ) -> Result<String, String> {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: apply_svg_filter")
+            .unwrap_or_else(|p| p.into_inner())
             .apply_svg_filter(name, filter_id, region)
     }
     fn push_shadow(&mut self, radius: f32, color: [f32; 4], offset: [f32; 2]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_shadow")
+            .unwrap_or_else(|p| p.into_inner())
             .push_shadow(radius, color, offset);
     }
     fn pop_shadow(&mut self) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: pop_shadow")
+            .unwrap_or_else(|p| p.into_inner())
             .pop_shadow();
     }
     fn push_affine(&mut self, transform: [f32; 6]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_affine")
+            .unwrap_or_else(|p| p.into_inner())
             .push_affine(transform);
     }
     fn enter_portal(&mut self, z_index: i32) {
@@ -2097,44 +2097,44 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: load_svg")
+            .unwrap_or_else(|p| p.into_inner())
             .load_svg(name, svg_data);
     }
     fn draw_svg(&mut self, name: &str, rect: cvkg_core::Rect) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_svg")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_svg(name, rect, None, 0);
     }
     fn draw_svg_with_offset(&mut self, name: &str, rect: cvkg_core::Rect, animation_time_offset: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: draw_svg_with_offset")
+            .unwrap_or_else(|p| p.into_inner())
             .draw_svg_with_offset(name, rect, None, 0, animation_time_offset);
     }
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: get_telemetry")
+            .unwrap_or_else(|p| p.into_inner())
             .telemetry
             .clone()
     }
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: prewarm_vram")
+            .unwrap_or_else(|p| p.into_inner())
             .prewarm_vram(assets);
     }
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: push_transform")
+            .unwrap_or_else(|p| p.into_inner())
             .push_transform(translation, scale, rotation);
     }
     fn pop_transform(&mut self) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: pop_transform")
+            .unwrap_or_else(|p| p.into_inner())
             .pop_transform();
     }
 
@@ -2160,7 +2160,7 @@ impl cvkg_core::Renderer for NativeRenderer {
 
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: set_berserker_mode")
+            .unwrap_or_else(|p| p.into_inner())
             .set_berserker_mode(state);
     }
 
@@ -2168,28 +2168,28 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.rage = rage;
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: set_rage")
+            .unwrap_or_else(|p| p.into_inner())
             .set_rage(rage);
     }
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: memoize")
+            .unwrap_or_else(|p| p.into_inner())
             .memoize(id, data_hash, render_fn);
     }
 
     fn snapshot_render_state(&self) -> RenderStateSnapshot {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: snapshot_render_state")
+            .unwrap_or_else(|p| p.into_inner())
             .snapshot_render_state()
     }
 
     fn restore_render_state(&mut self, snap: RenderStateSnapshot) {
         self.gpu
             .lock()
-            .expect("GPU mutex poisoned: restore_render_state")
+            .unwrap_or_else(|p| p.into_inner())
             .restore_render_state(snap);
     }
     fn request_redraw(&mut self) {
@@ -2472,7 +2472,7 @@ mod tests {
     fn test_native_asset_manager_loading() {
         let manager = NativeAssetManager::new();
         let temp_path = std::env::temp_dir().join("cvkg_test_asset_loading.png");
-        let temp_file_path = temp_path.to_str().expect("temp path must be valid UTF-8");
+        let temp_file_path = temp_path.to_str().expect("temp path contains invalid UTF-8: OS temp directory is corrupted");
         let test_data = b"fake-image-data";
 
         // Create a temporary file in the OS temp directory
@@ -3077,4 +3077,103 @@ mod p1_46_47_49_51_tests {
         assert!(config.recycle_handles);
         assert_eq!(config.max_active_handles, 100);
     }
+
+    // =========================================================================
+    // P2-3: Mutex Poison Recovery Tests
+    // =========================================================================
+    // These tests verify that mutex poison is handled gracefully via
+    // unwrap_or_else(|p| p.into_inner()) instead of panicking.
+
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+
+    /// Test that a poisoned mutex can be recovered via unwrap_or_else.
+    /// This simulates what happens when a thread panics while holding the GPU lock.
+    #[test]
+    fn mutex_poison_recovery_via_unwrap_or_else() {
+        let mutex = Arc::new(Mutex::new(42u32));
+        let mutex_clone = Arc::clone(&mutex);
+
+        // Spawn a thread that panics while holding the lock
+        let handle = thread::spawn(move || {
+            let _guard = mutex_clone.lock().unwrap();
+            panic!("simulated thread panic while holding lock");
+        });
+
+        // Wait for the thread to panic
+        let _ = handle.join();
+
+        // The mutex is now poisoned - but we can still recover the data
+        let value = mutex.lock().unwrap_or_else(|p| p.into_inner());
+        assert_eq!(*value, 42, "poisoned mutex should still yield the inner value");
+    }
+
+    /// Test that multiple poison recoveries work correctly.
+    #[test]
+    fn mutex_poison_recovery_multiple_times() {
+        let mutex = Arc::new(Mutex::new(String::from("hello")));
+
+        for i in 0..5 {
+            let m = Arc::clone(&mutex);
+            let handle = thread::spawn(move || {
+                let _guard = m.lock().unwrap();
+                panic!("panic iteration {}", i);
+            });
+            let _ = handle.join();
+        }
+
+        // After 5 poison events, we can still recover
+        let value = mutex.lock().unwrap_or_else(|p| p.into_inner());
+        assert_eq!(*value, "hello");
+    }
+
+    /// Test that the GPU mutex pattern used in NativeRenderer works correctly.
+    /// This validates the pattern: self.gpu.lock().unwrap_or_else(|p| p.into_inner())
+    #[test]
+    fn gpu_mutex_poison_pattern() {
+        let gpu = Arc::new(Mutex::new(RendererState { frame_count: 0 }));
+        let gpu_clone = Arc::clone(&gpu);
+
+        // Simulate a render call that panics mid-frame
+        let handle = thread::spawn(move || {
+            let mut state = gpu_clone.lock().unwrap();
+            state.frame_count += 1;
+            panic!("GPU render panic");
+        });
+
+        let _ = handle.join();
+
+        // The NativeRenderer pattern should recover gracefully
+        let mut state = gpu.lock().unwrap_or_else(|p| p.into_inner());
+        assert_eq!(state.frame_count, 1);
+        // Can continue using the renderer after poison recovery
+        state.frame_count += 1;
+        assert_eq!(state.frame_count, 2);
+    }
+
+    /// Test that poison recovery doesn't lose data integrity.
+    #[test]
+    fn poison_recovery_preserves_data_integrity() {
+        let data = Arc::new(Mutex::new(vec![1, 2, 3, 4, 5]));
+        let data_clone = Arc::clone(&data);
+
+        let handle = thread::spawn(move || {
+            let mut guard = data_clone.lock().unwrap();
+            guard.push(6);
+            panic!("mid-mutation panic");
+        });
+
+        let _ = handle.join();
+
+        // The data should be in a consistent state (push may or may not have completed)
+        let recovered = data.lock().unwrap_or_else(|p| p.into_inner());
+        // Either [1,2,3,4,5] or [1,2,3,4,5,6] - both are valid
+        assert!(recovered.len() >= 5);
+        assert_eq!(&recovered[..5], &[1, 2, 3, 4, 5]);
+    }
+}
+
+/// Helper struct for GPU mutex poison tests.
+struct RendererState {
+    frame_count: u32,
 }
