@@ -1185,13 +1185,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         gpu.prewarm_vram(assets);
                     }
 
-                    // Begin frame -- use begin_frame_reuse when view unchanged to preserve
-                    // previous frame's vertices/indices/draw_calls
-                    let encoder = if view_changed {
-                        gpu.begin_frame(id)
-                    } else {
-                        gpu.begin_frame_reuse(id)
-                    };
+                    // Begin frame
+                    let encoder = gpu.begin_frame(id);
 
                     // Compute safe area insets based on current window state
                     let safe_area = crate::SafeAreaInsets::for_window_state(self.state_detector.state());
@@ -1221,11 +1216,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         let mut gpu_guard = gpu_arc.lock().unwrap_or_else(|p| p.into_inner());
                         let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu_guard;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
-                        if view_changed {
-                            self.view.render(&mut renderer, content_rect);
-                        }
-                        // When view unchanged, skip draw phase entirely.
-                        // Previous frame's vertices/indices/draw_calls are preserved.
+                        self.view.render(&mut renderer, content_rect);
                         GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
                     }
                     let cpu_draw_end = std::time::Instant::now();
@@ -1965,8 +1956,13 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
         if now.duration_since(self.last_frame_time) >= target_interval {
             self.last_frame_time = now;
-            for window_state in self.window_manager.windows.values() {
-                window_state.window.request_redraw();
+            // Only request redraw if the view has changed or rage is still decaying.
+            // This avoids unnecessary GPU work for static frames.
+            let needs_redraw = self.view.changed() || self.rage > 0.0;
+            if needs_redraw {
+                for window_state in self.window_manager.windows.values() {
+                    window_state.window.request_redraw();
+                }
             }
             event_loop.set_control_flow(winit::event_loop::ControlFlow::WaitUntil(
                 now + target_interval,
