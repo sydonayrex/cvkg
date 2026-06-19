@@ -2227,6 +2227,140 @@ impl cvkg_core::Renderer for NativeRenderer {
             .unwrap_or_else(|p| p.into_inner())
             .prewarm_vram(assets);
     }
+
+    /// Return the text scale factor of the GPU renderer.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to retrieve the correct scale factor.
+    fn text_scale_factor(&self) -> f32 {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .text_scale_factor()
+    }
+
+    /// Return whether the current frame is over its time budget.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to check budget status.
+    fn is_over_budget(&self) -> bool {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .is_over_budget()
+    }
+
+    /// Shapes a rich text layout with the specified font spans.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to perform text layout and shaping.
+    fn shape_rich_text(
+        &mut self,
+        spans: &[runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: runic_text::TextAlign,
+        overflow: runic_text::TextOverflow,
+    ) -> Option<runic_text::ShapedText> {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .shape_rich_text(spans, max_width, align, overflow)
+    }
+
+    /// Draws a previously shaped text layout at the specified coordinates.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to emit glyph instances.
+    fn draw_shaped_text(&mut self, shaped: &runic_text::ShapedText, x: f32, y: f32) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .draw_shaped_text(shaped, x, y);
+    }
+
+    /// Fills a rounded rectangle with glass material, custom tint color, and intensity.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to draw frosted glass panels.
+    fn fill_glass_rect_with_tint(
+        &mut self,
+        rect: cvkg_core::Rect,
+        radius: f32,
+        blur_radius: f32,
+        tint_color: [f32; 4],
+        glass_intensity: f32,
+    ) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .fill_glass_rect_with_tint(rect, radius, blur_radius, tint_color, glass_intensity);
+    }
+
+    /// Sets the color theme of the renderer.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to update global themes.
+    fn set_theme(&mut self, theme: cvkg_core::ColorTheme) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .set_theme(theme);
+    }
+
+    /// Triggers a screen-shatter physics event at the specified origin.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to dispatch shatter compute effects.
+    fn trigger_shatter_event(&mut self, origin: [f32; 2], force: f32) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .trigger_shatter_event(origin, force);
+    }
+
+    /// Sets the fireball light source position for specular glass highlights.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to update fireball coordinates.
+    fn set_fireball_pos(&mut self, pos: [f32; 2]) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .set_fireball_pos(pos);
+    }
+
+    /// Sets the active scene preset by name.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to configure scene shaders.
+    fn set_scene(&mut self, scene: &str) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .set_scene(scene);
+    }
+
+    /// Sets the active scene preset by ID.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to configure scene shaders.
+    fn set_scene_preset(&mut self, preset: u32) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .set_scene_preset(preset);
+    }
+
+    /// Sets the default canvas background color.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to configure background clears.
+    fn set_default_background_color(&mut self, color: [f32; 4]) {
+        self.gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .set_default_background_color(color);
+    }
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
         self.gpu
             .lock()

@@ -568,6 +568,21 @@ impl VDom {
         renderer.into_vdom()
     }
 
+    /// Phase 4.4: Prepare this VDom to receive a new frame's nodes by clearing
+    /// data while retaining allocated capacity in all HashMaps.
+    ///
+    /// Call this at the start of a frame rebuild (before rebuilding) to reuse the
+    /// previous frame's heap allocations. This avoids repeated allocator churn
+    /// when the VDom is rebuilt every frame.
+    pub fn clear_and_retain_capacity(&mut self) {
+        self.root = None;
+        self.nodes.clear();
+        self.parents.clear();
+        self.event_handlers.clear();
+        // Note: focused_node, captured_node, hovered_node are Mutex<Option<NodeId>>
+        // and are not cleared here -- they carry state across frames.
+    }
+
     /// Apply a set of patches to the host's DOM environment.
     pub fn apply_to_dom(&self, patches: &[VDomPatch]) {
         // This is a bridge to the platform-specific accessibility tree (ShieldWall).
@@ -653,6 +668,22 @@ impl VDom {
     }
 }
 
+/// A single decorative draw command collected into a batch.
+///
+/// Phase 4.1: Instead of creating individual VNodes for every decorative
+/// draw call (fill_rect, fill_rounded_rect, etc.), consecutive decorative
+/// operations are collected into a batch and emitted as a single VNode.
+/// This reduces VDOM node count and allocation pressure.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DecorativeCmd {
+    /// The draw command type.
+    pub cmd_type: String,
+    /// The bounding rect.
+    pub rect: LayoutRect,
+    /// Serialized command-specific properties (radius, color, width, etc.).
+    pub props: HashMap<String, serde_json::Value>,
+}
+
 /// A specialized renderer that captures the component hierarchy as a Virtual DOM.
 pub struct VNodeRenderer {
     nodes: HashMap<NodeId, VNode>,
@@ -661,6 +692,10 @@ pub struct VNodeRenderer {
     stack: Vec<NodeId>,
     clip_stack: Vec<cvkg_core::Rect>,
     root: Option<NodeId>,
+    /// Phase 4.1: Accumulated decorative commands since last flush.
+    decorative_batch: Vec<DecorativeCmd>,
+    /// Phase 4.1: The node ID of the current batch VNode, if any.
+    batch_node_id: Option<NodeId>,
 }
 
 impl Default for VNodeRenderer {
@@ -679,11 +714,15 @@ impl VNodeRenderer {
             stack: Vec::new(),
             clip_stack: Vec::new(),
             root: None,
+            decorative_batch: Vec::new(),
+            batch_node_id: None,
         }
     }
 
     /// Convert the captured nodes into a VDom instance.
-    pub fn into_vdom(self) -> VDom {
+    pub fn into_vdom(mut self) -> VDom {
+        // Phase 4.1: Flush any remaining decorative batch before finalizing.
+        self.flush_decorative_batch();
         log::debug!("[VDOM] Built VDOM with {} nodes", self.nodes.len());
         let mut parents = HashMap::new();
         for (id, node) in &self.nodes {
@@ -726,6 +765,96 @@ impl VNodeRenderer {
         self.nodes.insert(id, node);
         id
     }
+
+    /// Phase 4.1: Flush the accumulated decorative batch as a single VNode.
+    fn flush_decorative_batch(&mut self) {
+        if self.decorative_batch.is_empty() {
+            return;
+        }
+        if let Some(batch_id) = self.batch_node_id {
+            if let Some(node) = self.nodes.get_mut(&batch_id) {
+                node.props.insert(
+                    "commands".to_string(),
+                    serde_json::to_value(&self.decorative_batch).unwrap_or_default(),
+                );
+            }
+        }
+        self.decorative_batch.clear();
+        self.batch_node_id = None;
+    }
+
+    /// Phase 4.1: Begin a new decorative batch. Called by decorative draw methods.
+    fn begin_decorative(&mut self, rect: cvkg_core::Rect) {
+        if self.batch_node_id.is_none() {
+            let id = self.next_id();
+            self.batch_node_id = Some(id);
+            let batch_node = VNode {
+                id,
+                key: None,
+                component_type: "Primitive::DecorativeBatch".to_string(),
+                props: HashMap::new(),
+                state: None,
+                layout: LayoutRect {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                },
+                children: Vec::new(),
+                aria_role: "presentation".to_string(),
+                aria_props: AriaProps::default(),
+                portal_target: None,
+                sdf_shape: None,
+            };
+            if let Some(parent_id) = self.stack.last() {
+                if let Some(parent) = self.nodes.get_mut(parent_id) {
+                    parent.children.push(id);
+                }
+            } else if self.root.is_none() {
+                self.root = Some(id);
+            }
+            self.nodes.insert(id, batch_node);
+        }
+    }
+
+    /// Phase 4.1: Expand the current batch node's bounding rect.
+    fn expand_batch_rect(&mut self, rect: cvkg_core::Rect) {
+        if let Some(batch_id) = self.batch_node_id {
+            if let Some(node) = self.nodes.get_mut(&batch_id) {
+                let new_left = node.layout.x.min(rect.x);
+                let new_top = node.layout.y.min(rect.y);
+                let new_right = (node.layout.x + node.layout.width).max(rect.x + rect.width);
+                let new_bottom = (node.layout.y + node.layout.height).max(rect.y + rect.height);
+                node.layout.x = new_left;
+                node.layout.y = new_top;
+                node.layout.width = new_right - new_left;
+                node.layout.height = new_bottom - new_top;
+            }
+        }
+    }
+
+    /// Phase 4.1: Push a decorative command and update the batch node.
+    fn push_decorative_cmd(&mut self, cmd_type: &str, rect: cvkg_core::Rect, props: HashMap<String, serde_json::Value>) {
+        self.expand_batch_rect(rect);
+        self.decorative_batch.push(DecorativeCmd {
+            cmd_type: cmd_type.to_string(),
+            rect: LayoutRect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+            },
+            props,
+        });
+        if let Some(batch_id) = self.batch_node_id {
+            if let Some(node) = self.nodes.get_mut(&batch_id) {
+                node.props.insert(
+                    "commands".to_string(),
+                    serde_json::to_value(&self.decorative_batch).unwrap_or_default(),
+                );
+            }
+        }
+    }
 }
 
 impl cvkg_core::ElapsedTime for VNodeRenderer {
@@ -740,25 +869,9 @@ impl cvkg_core::ElapsedTime for VNodeRenderer {
 
 impl cvkg_core::Renderer for VNodeRenderer {
     fn fill_rect(&mut self, rect: cvkg_core::Rect, _color: [f32; 4]) {
-        let id = self.next_id();
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::Rect".to_string(),
-            props: HashMap::new(),
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
+        self.push_decorative_cmd("fill_rect", rect, HashMap::new());
     }
 
 
@@ -775,6 +888,8 @@ impl cvkg_core::Renderer for VNodeRenderer {
     }
 
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
+        // Phase 4.1: Flush decorative batch before creating a text node.
+        self.flush_decorative_batch();
         let id = self.next_id();
         let mut props = HashMap::new();
         let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
@@ -795,6 +910,8 @@ impl cvkg_core::Renderer for VNodeRenderer {
     }
 
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
+        // Phase 4.1: Flush decorative batch before starting a new named component.
+        self.flush_decorative_batch();
         let id = self.next_id();
         let role = match name {
             "CornerButton" => "button",
@@ -829,95 +946,31 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     // Standard renderer methods can be implemented as stubs or as specific VNodes if needed.
     fn fill_rounded_rect(&mut self, rect: cvkg_core::Rect, radius: f32, _color: [f32; 4]) {
-        let id = self.next_id();
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("radius".to_string(), serde_json::to_value(radius).unwrap());
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::RoundedRect".to_string(),
-            props,
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        self.push_decorative_cmd("fill_rounded_rect", rect, props);
     }
 
     fn fill_ellipse(&mut self, rect: cvkg_core::Rect, _color: [f32; 4]) {
-        let id = self.next_id();
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::Ellipse".to_string(),
-            props: HashMap::new(),
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
+        self.push_decorative_cmd("fill_ellipse", rect, HashMap::new());
     }
 
     fn draw_3d_cube(&mut self, rect: cvkg_core::Rect, _color: [f32; 4], _rotation: [f32; 3]) {
-        let id = self.next_id();
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::Cube3D".to_string(),
-            props: HashMap::new(),
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
+        self.push_decorative_cmd("draw_3d_cube", rect, HashMap::new());
     }
 
     fn stroke_rect(&mut self, rect: cvkg_core::Rect, _color: [f32; 4], width: f32) {
-        let id = self.next_id();
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("width".to_string(), serde_json::to_value(width).unwrap());
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::StrokeRect".to_string(),
-            props,
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        self.push_decorative_cmd("stroke_rect", rect, props);
     }
 
     fn stroke_rounded_rect(
@@ -927,52 +980,20 @@ impl cvkg_core::Renderer for VNodeRenderer {
         _color: [f32; 4],
         width: f32,
     ) {
-        let id = self.next_id();
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("radius".to_string(), serde_json::to_value(radius).unwrap());
         props.insert("width".to_string(), serde_json::to_value(width).unwrap());
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::StrokeRoundedRect".to_string(),
-            props,
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        self.push_decorative_cmd("stroke_rounded_rect", rect, props);
     }
 
     fn stroke_ellipse(&mut self, rect: cvkg_core::Rect, _color: [f32; 4], width: f32) {
-        let id = self.next_id();
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("width".to_string(), serde_json::to_value(width).unwrap());
-        self.add_node(VNode {
-            id,
-            key: None,
-            component_type: "Primitive::StrokeEllipse".to_string(),
-            props,
-            state: None,
-            layout: LayoutRect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width,
-                height: rect.height,
-            },
-            children: Vec::new(),
-            aria_role: "presentation".to_string(),
-            aria_props: AriaProps::default(),
-            portal_target: None,
-            sdf_shape: None,
-        });
+        self.push_decorative_cmd("stroke_ellipse", rect, props);
     }
 
     fn set_sdf_shape(&mut self, shape: cvkg_core::layout::SdfShape) {
@@ -984,6 +1005,14 @@ impl cvkg_core::Renderer for VNodeRenderer {
     }
 
     fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4], width: f32) {
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        let rect = cvkg_core::Rect {
+            x: x1.min(x2),
+            y: y1.min(y2),
+            width: (x1 - x2).abs(),
+            height: (y1 - y2).abs(),
+        };
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("x1".to_string(), serde_json::to_value(x1).unwrap());
         props.insert("y1".to_string(), serde_json::to_value(y1).unwrap());
@@ -991,33 +1020,17 @@ impl cvkg_core::Renderer for VNodeRenderer {
         props.insert("y2".to_string(), serde_json::to_value(y2).unwrap());
         props.insert("color".to_string(), serde_json::to_value(color).unwrap());
         props.insert("width".to_string(), serde_json::to_value(width).unwrap());
-        let rect = cvkg_core::Rect {
-            x: x1.min(x2),
-            y: y1.min(y2),
-            width: (x1 - x2).abs(),
-            height: (y1 - y2).abs(),
-        };
-        self.push_vnode(rect, "Primitive::Line");
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.props = props;
-        }
-        self.pop_vnode();
+        self.push_decorative_cmd("draw_line", rect, props);
     }
 
     fn draw_texture(&mut self, _id: u32, _rect: cvkg_core::Rect) {}
 
     fn draw_image(&mut self, name: &str, rect: cvkg_core::Rect) {
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("src".to_string(), serde_json::to_value(name).unwrap());
-        self.push_vnode(rect, "Primitive::Image");
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.props = props;
-        }
-        self.pop_vnode();
+        self.push_decorative_cmd("draw_image", rect, props);
     }
 
     fn load_image(&mut self, _name: &str, _data: &[u8]) {}
@@ -1043,17 +1056,13 @@ impl cvkg_core::Renderer for VNodeRenderer {
     fn pop_mjolnir_slice(&mut self) {}
 
     fn mjolnir_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("pieces".to_string(), serde_json::to_value(pieces).unwrap());
         props.insert("force".to_string(), serde_json::to_value(force).unwrap());
         props.insert("color".to_string(), serde_json::to_value(color).unwrap());
-        self.push_vnode(rect, "Effect::Shatter");
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.props = props;
-        }
-        self.pop_vnode();
+        self.push_decorative_cmd("mjolnir_shatter", rect, props);
     }
 
     fn draw_mjolnir_bolt(&mut self, _from: [f32; 2], _to: [f32; 2], _color: [f32; 4]) {}
@@ -1065,6 +1074,8 @@ impl cvkg_core::Renderer for VNodeRenderer {
         end_color: [f32; 4],
         angle: f32,
     ) {
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert(
             "start_color".to_string(),
@@ -1075,13 +1086,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             serde_json::to_value(end_color).unwrap(),
         );
         props.insert("angle".to_string(), serde_json::to_value(angle).unwrap());
-        self.push_vnode(rect, "Primitive::LinearGradient");
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.props = props;
-        }
-        self.pop_vnode();
+        self.push_decorative_cmd("draw_linear_gradient", rect, props);
     }
 
     fn draw_radial_gradient(
@@ -1090,6 +1095,8 @@ impl cvkg_core::Renderer for VNodeRenderer {
         inner_color: [f32; 4],
         outer_color: [f32; 4],
     ) {
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert(
             "inner_color".to_string(),
@@ -1099,16 +1106,12 @@ impl cvkg_core::Renderer for VNodeRenderer {
             "outer_color".to_string(),
             serde_json::to_value(outer_color).unwrap(),
         );
-        self.push_vnode(rect, "Primitive::RadialGradient");
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.props = props;
-        }
-        self.pop_vnode();
+        self.push_decorative_cmd("draw_radial_gradient", rect, props);
     }
 
     fn gungnir(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32, intensity: f32) {
+        // Phase 4.1: Batch decorative draw calls into a single VNode.
+        self.begin_decorative(rect);
         let mut props = HashMap::new();
         props.insert("radius".to_string(), serde_json::to_value(radius).unwrap());
         props.insert(
@@ -1116,13 +1119,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             serde_json::to_value(intensity).unwrap(),
         );
         props.insert("color".to_string(), serde_json::to_value(color).unwrap());
-        self.push_vnode(rect, "Effect::Gungnir");
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.props = props;
-        }
-        self.pop_vnode();
+        self.push_decorative_cmd("gungnir", rect, props);
     }
 
     fn set_aria_role(&mut self, role: &str) {
@@ -1180,6 +1177,8 @@ impl cvkg_core::Renderer for VNodeRenderer {
         event_type: &str,
         handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
     ) {
+        // Phase 4.1: Flush decorative batch before registering a handler.
+        self.flush_decorative_batch();
         if let Some(node_id) = self.stack.last() {
             log::trace!(
                 "[VDOM] Registering handler '{}' on node {:?}",
