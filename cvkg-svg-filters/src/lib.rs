@@ -2780,3 +2780,192 @@ mod p1_29_30_filter_resource_tests {
         assert_eq!(FilterPlanner::shared_resource_count(&plan), 1);
     }
 }
+
+// =============================================================================
+// P1-31: Lighting Filter Validation
+// =============================================================================
+
+/// Validates lighting filter parameters.
+pub struct LightingValidator;
+
+impl LightingValidator {
+    /// Validate feDiffuseLighting parameters.
+    pub fn validate_diffuse_lighting(
+        surface_scale: f32,
+        diffuse_constant: f32,
+        kernel_unit_length: Option<(f32, f32)>,
+    ) -> Result<(), FilterError> {
+        if surface_scale < 0.0 {
+            return Err(FilterError::InvalidRegion(surface_scale, 0.0));
+        }
+        if diffuse_constant < 0.0 {
+            return Err(FilterError::InvalidRegion(diffuse_constant, 0.0));
+        }
+        if let Some((kx, ky)) = kernel_unit_length {
+            if kx <= 0.0 || ky <= 0.0 {
+                return Err(FilterError::InvalidRegion(kx, ky));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate feSpecularLighting parameters.
+    pub fn validate_specular_lighting(
+        surface_scale: f32,
+        specular_constant: f32,
+        specular_exponent: f32,
+    ) -> Result<(), FilterError> {
+        if surface_scale < 0.0 {
+            return Err(FilterError::InvalidRegion(surface_scale, 0.0));
+        }
+        if specular_constant < 0.0 {
+            return Err(FilterError::InvalidRegion(specular_constant, 0.0));
+        }
+        if specular_exponent < 1.0 || specular_exponent > 128.0 {
+            return Err(FilterError::InvalidRegion(specular_exponent, 1.0));
+        }
+        Ok(())
+    }
+
+    /// Validate light source parameters.
+    pub fn validate_light_source(
+        light_type: &str,
+        azimuth: Option<f32>,
+        elevation: Option<f32>,
+    ) -> Result<(), FilterError> {
+        match light_type {
+            "distant" => {
+                if let Some(az) = azimuth {
+                    if !(0.0..=360.0).contains(&az) {
+                        return Err(FilterError::InvalidRegion(az, 0.0));
+                    }
+                }
+                if let Some(el) = elevation {
+                    if !(-90.0..=90.0).contains(&el) {
+                        return Err(FilterError::InvalidRegion(el, 0.0));
+                    }
+                }
+            }
+            "point" | "spot" => {
+                // Point and spot lights have 3D position, always valid
+            }
+            other => return Err(FilterError::UnresolvedInput(format!("unknown light type: {}", other))),
+        }
+        Ok(())
+    }
+}
+
+// =============================================================================
+// P1-32: Turbulence Filter Validation
+// =============================================================================
+
+/// Validates turbulence filter parameters and provides reference values.
+pub struct TurbulenceValidator;
+
+impl TurbulenceValidator {
+    /// Validate feTurbulence parameters.
+    pub fn validate_turbulence(
+        base_frequency_x: f32,
+        base_frequency_y: f32,
+        num_octaves: i32,
+        seed: i32,
+        stitch_tiles: bool,
+    ) -> Result<(), FilterError> {
+        if base_frequency_x < 0.0 || base_frequency_y < 0.0 {
+            return Err(FilterError::InvalidRegion(base_frequency_x, base_frequency_y));
+        }
+        if num_octaves < 1 || num_octaves > 8 {
+            return Err(FilterError::InvalidRegion(num_octaves as f32, 1.0));
+        }
+        if seed < 0 {
+            return Err(FilterError::InvalidRegion(seed as f32, 0.0));
+        }
+        // stitch_tiles is a boolean, always valid
+        let _ = stitch_tiles;
+        Ok(())
+    }
+
+    /// Compute a reference turbulence value at a given point for validation.
+    /// Uses a simplified Perlin-like noise for testing purposes.
+    pub fn reference_value(x: f32, y: f32, seed: i32) -> f32 {
+        // Simple hash-based noise for validation (not production quality)
+        let n = (x * 12.9898 + y * 78.233 + seed as f32 * 0.001).sin();
+        let val = (n * 43758.5453).fract();
+        val.max(0.0).min(1.0)
+    }
+}
+
+#[cfg(test)]
+mod p1_31_32_filter_validation_tests {
+    use super::*;
+
+    // P1-31: Lighting validation
+    #[test]
+    fn diffuse_lighting_valid() {
+        assert!(LightingValidator::validate_diffuse_lighting(1.0, 1.0, None).is_ok());
+        assert!(LightingValidator::validate_diffuse_lighting(5.0, 0.5, Some((1.0, 1.0))).is_ok());
+    }
+
+    #[test]
+    fn diffuse_lighting_rejects_negative_surface_scale() {
+        assert!(LightingValidator::validate_diffuse_lighting(-1.0, 1.0, None).is_err());
+    }
+
+    #[test]
+    fn diffuse_lighting_rejects_negative_diffuse_constant() {
+        assert!(LightingValidator::validate_diffuse_lighting(1.0, -0.5, None).is_err());
+    }
+
+    #[test]
+    fn specular_lighting_valid() {
+        assert!(LightingValidator::validate_specular_lighting(1.0, 1.0, 10.0).is_ok());
+    }
+
+    #[test]
+    fn specular_lighting_rejects_bad_exponent() {
+        assert!(LightingValidator::validate_specular_lighting(1.0, 1.0, 0.5).is_err());
+        assert!(LightingValidator::validate_specular_lighting(1.0, 1.0, 200.0).is_err());
+    }
+
+    #[test]
+    fn light_source_distant_valid() {
+        assert!(LightingValidator::validate_light_source("distant", Some(45.0), Some(30.0)).is_ok());
+    }
+
+    #[test]
+    fn light_source_distant_rejects_bad_azimuth() {
+        assert!(LightingValidator::validate_light_source("distant", Some(400.0), None).is_err());
+    }
+
+    #[test]
+    fn light_source_unknown_type() {
+        assert!(LightingValidator::validate_light_source("invalid", None, None).is_err());
+    }
+
+    // P1-32: Turbulence validation
+    #[test]
+    fn turbulence_valid() {
+        assert!(TurbulenceValidator::validate_turbulence(0.05, 0.05, 3, 42, false).is_ok());
+    }
+
+    #[test]
+    fn turbulence_rejects_negative_frequency() {
+        assert!(TurbulenceValidator::validate_turbulence(-0.01, 0.05, 3, 42, false).is_err());
+    }
+
+    #[test]
+    fn turbulence_rejects_bad_octaves() {
+        assert!(TurbulenceValidator::validate_turbulence(0.05, 0.05, 0, 42, false).is_err());
+        assert!(TurbulenceValidator::validate_turbulence(0.05, 0.05, 10, 42, false).is_err());
+    }
+
+    #[test]
+    fn turbulence_reference_value_in_range() {
+        for x in 0..10 {
+            for y in 0..10 {
+                let v = TurbulenceValidator::reference_value(x as f32, y as f32, 0);
+                assert!(v >= 0.0 && v <= 1.0, "value {} out of range at ({}, {})", v, x, y);
+            }
+        }
+    }
+}
