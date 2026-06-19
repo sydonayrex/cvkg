@@ -1854,18 +1854,7 @@ impl cvkg_core::Renderer for NativeRenderer {
             .draw_focus_ring(rect, radius, offset, width, color);
     }
 
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .expect("GPU mutex poisoned: draw_text")
-            .draw_text(text, x, y, size, color);
-    }
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        self.gpu
-            .lock()
-            .expect("GPU mutex poisoned: measure_text")
-            .measure_text(text, size)
-    }
+
     fn draw_linear_gradient(
         &mut self,
         rect: cvkg_core::Rect,
@@ -2734,5 +2723,358 @@ impl cvkg_core::HapticEngine for VisualHapticEngine {
     }
     fn visual_tick(&self, _intensity: f32) {
         *self.last_impact.lock().unwrap_or_else(|p| p.into_inner()) = std::time::Instant::now();
+    }
+}
+
+// =============================================================================
+// P1-46: Backend Translation Contracts
+// =============================================================================
+//
+// Formalizes the translation contract between CVKG's scene graph and
+// platform-native representations. Each widget type has a documented
+/// mapping to platform APIs.
+
+/// Translation contract for a CVKG widget to its native representation.
+#[derive(Debug, Clone)]
+pub struct TranslationContract {
+    /// CVKG widget type name.
+    pub cvkg_type: &'static str,
+    /// Platform-specific type name (e.g., "NSView", "HWND", "GTKWidget").
+    pub platform_type: &'static str,
+    /// Whether this widget uses native controls or custom rendering.
+    pub rendering_mode: RenderingMode,
+    /// Whether accessibility is handled natively.
+    pub native_accessibility: bool,
+}
+
+/// Rendering mode for a widget.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderingMode {
+    /// Use native platform controls (buttons, text fields, etc.).
+    Native,
+    /// Use CVKG's GPU renderer for custom-drawn content.
+    Custom,
+    /// Hybrid: native container with custom rendering inside.
+    Hybrid,
+}
+
+/// Registry of translation contracts for all widget types.
+pub struct TranslationContractRegistry {
+    contracts: Vec<TranslationContract>,
+}
+
+impl TranslationContractRegistry {
+    pub fn new() -> Self {
+        Self {
+            contracts: vec![
+                TranslationContract {
+                    cvkg_type: "Button",
+                    platform_type: "NSButton/Button/GTKButton",
+                    rendering_mode: RenderingMode::Native,
+                    native_accessibility: true,
+                },
+                TranslationContract {
+                    cvkg_type: "TextInput",
+                    platform_type: "NSTextField/TextBox/GTKEntry",
+                    rendering_mode: RenderingMode::Native,
+                    native_accessibility: true,
+                },
+                TranslationContract {
+                    cvkg_type: "Canvas",
+                    platform_type: "NSView/HWND/GtkDrawingArea",
+                    rendering_mode: RenderingMode::Custom,
+                    native_accessibility: false,
+                },
+                TranslationContract {
+                    cvkg_type: "TreeView",
+                    platform_type: "NSTableView/TreeView/GTKTreeView",
+                    rendering_mode: RenderingMode::Hybrid,
+                    native_accessibility: true,
+                },
+            ],
+        }
+    }
+
+    /// Look up the contract for a CVKG widget type.
+    pub fn find(&self, cvkg_type: &str) -> Option<&TranslationContract> {
+        self.contracts.iter().find(|c| c.cvkg_type == cvkg_type)
+    }
+}
+
+impl Default for TranslationContractRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// P1-47: Window Management Contracts
+// =============================================================================
+
+/// Window capability matrix per platform.
+#[derive(Debug, Clone)]
+pub struct WindowCapabilityMatrix {
+    /// Platform name.
+    pub platform: &'static str,
+    /// Supported window types.
+    pub window_types: Vec<WindowType>,
+    /// Whether tabbed windows are supported.
+    pub tabbed_windows: bool,
+    /// Whether tiled windows are supported.
+    pub tiled_windows: bool,
+    /// Whether floating panels are supported.
+    pub floating_panels: bool,
+    /// Whether sheets/popovers are supported.
+    pub sheets: bool,
+}
+
+/// Window type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowType {
+    Document,
+    Panel,
+    Popover,
+    Dialog,
+    Tooltip,
+}
+
+impl WindowCapabilityMatrix {
+    /// Get the capability matrix for the current platform.
+    pub fn for_current_platform() -> Self {
+        #[cfg(target_os = "macos")]
+        return Self {
+            platform: "macOS",
+            window_types: vec![
+                WindowType::Document,
+                WindowType::Panel,
+                WindowType::Popover,
+                WindowType::Dialog,
+                WindowType::Tooltip,
+            ],
+            tabbed_windows: true,
+            tiled_windows: true,
+            floating_panels: true,
+            sheets: true,
+        };
+
+        #[cfg(target_os = "windows")]
+        return Self {
+            platform: "Windows",
+            window_types: vec![
+                WindowType::Document,
+                WindowType::Panel,
+                WindowType::Dialog,
+                WindowType::Tooltip,
+            ],
+            tabbed_windows: true,
+            tiled_windows: true,
+            floating_panels: true,
+            sheets: false,
+        };
+
+        #[cfg(target_os = "linux")]
+        return Self {
+            platform: "Linux",
+            window_types: vec![
+                WindowType::Document,
+                WindowType::Panel,
+                WindowType::Dialog,
+                WindowType::Tooltip,
+            ],
+            tabbed_windows: false,
+            tiled_windows: true,
+            floating_panels: true,
+            sheets: false,
+        };
+
+        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+        return Self {
+            platform: "Unknown",
+            window_types: vec![WindowType::Document],
+            tabbed_windows: false,
+            tiled_windows: false,
+            floating_panels: false,
+            sheets: false,
+        };
+    }
+}
+
+// =============================================================================
+// P1-49: Widget State Synchronization
+// =============================================================================
+
+/// Bidirectional state synchronization between CVKG and native widgets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncDirection {
+    /// CVKG state drives native widget.
+    CvkgToNative,
+    /// Native widget state drives CVKG.
+    NativeToCvkg,
+    /// Both directions.
+    Bidirectional,
+}
+
+/// State synchronization contract for a widget.
+#[derive(Debug, Clone)]
+pub struct StateSyncContract {
+    /// Widget type name.
+    pub widget_type: &'static str,
+    /// Synchronization direction.
+    pub direction: SyncDirection,
+    /// Whether to debounce rapid changes.
+    pub debounce: bool,
+    /// Debounce interval in milliseconds.
+    pub debounce_ms: u64,
+}
+
+/// Registry of state synchronization contracts.
+pub struct StateSyncRegistry {
+    contracts: Vec<StateSyncContract>,
+}
+
+impl StateSyncRegistry {
+    pub fn new() -> Self {
+        Self {
+            contracts: vec![
+                StateSyncContract {
+                    widget_type: "Button",
+                    direction: SyncDirection::Bidirectional,
+                    debounce: false,
+                    debounce_ms: 0,
+                },
+                StateSyncContract {
+                    widget_type: "TextInput",
+                    direction: SyncDirection::Bidirectional,
+                    debounce: true,
+                    debounce_ms: 50,
+                },
+                StateSyncContract {
+                    widget_type: "Slider",
+                    direction: SyncDirection::Bidirectional,
+                    debounce: true,
+                    debounce_ms: 16,
+                },
+                StateSyncContract {
+                    widget_type: "Checkbox",
+                    direction: SyncDirection::Bidirectional,
+                    debounce: false,
+                    debounce_ms: 0,
+                },
+            ],
+        }
+    }
+
+    pub fn find(&self, widget_type: &str) -> Option<&StateSyncContract> {
+        self.contracts.iter().find(|c| c.widget_type == widget_type)
+    }
+}
+
+impl Default for StateSyncRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// P1-51: Large UI Scalability (Native)
+// =============================================================================
+
+/// Widget virtualization configuration for large UIs.
+#[derive(Debug, Clone, Copy)]
+pub struct WidgetVirtualizationConfig {
+    /// Number of widgets to render outside the viewport (buffer).
+    pub buffer_size: usize,
+    /// Whether to recycle widget native handles.
+    pub recycle_handles: bool,
+    /// Maximum number of active native handles.
+    pub max_active_handles: usize,
+}
+
+impl Default for WidgetVirtualizationConfig {
+    fn default() -> Self {
+        Self {
+            buffer_size: 5,
+            recycle_handles: true,
+            max_active_handles: 100,
+        }
+    }
+}
+
+#[cfg(test)]
+mod p1_46_47_49_51_tests {
+    use super::*;
+
+    // P1-46: Translation contracts
+    #[test]
+    fn translation_contract_registry_has_defaults() {
+        let reg = TranslationContractRegistry::new();
+        assert!(reg.find("Button").is_some());
+        assert!(reg.find("Canvas").is_some());
+        assert!(reg.find("Unknown").is_none());
+    }
+
+    #[test]
+    fn button_uses_native_rendering() {
+        let reg = TranslationContractRegistry::new();
+        let contract = reg.find("Button").unwrap();
+        assert_eq!(contract.rendering_mode, RenderingMode::Native);
+        assert!(contract.native_accessibility);
+    }
+
+    #[test]
+    fn canvas_uses_custom_rendering() {
+        let reg = TranslationContractRegistry::new();
+        let contract = reg.find("Canvas").unwrap();
+        assert_eq!(contract.rendering_mode, RenderingMode::Custom);
+    }
+
+    // P1-47: Window capabilities
+    #[test]
+    fn window_capability_matrix_has_platform() {
+        let matrix = WindowCapabilityMatrix::for_current_platform();
+        assert!(!matrix.platform.is_empty());
+        assert!(!matrix.window_types.is_empty());
+    }
+
+    #[test]
+    fn macos_has_sheets() {
+        #[cfg(target_os = "macos")]
+        {
+            let matrix = WindowCapabilityMatrix::for_current_platform();
+            assert!(matrix.sheets);
+            assert!(matrix.tabbed_windows);
+        }
+    }
+
+    // P1-49: State sync
+    #[test]
+    fn state_sync_registry_has_defaults() {
+        let reg = StateSyncRegistry::new();
+        assert!(reg.find("Button").is_some());
+        assert!(reg.find("TextInput").is_some());
+    }
+
+    #[test]
+    fn text_input_has_debounce() {
+        let reg = StateSyncRegistry::new();
+        let contract = reg.find("TextInput").unwrap();
+        assert!(contract.debounce);
+        assert_eq!(contract.debounce_ms, 50);
+    }
+
+    #[test]
+    fn button_is_bidirectional() {
+        let reg = StateSyncRegistry::new();
+        let contract = reg.find("Button").unwrap();
+        assert_eq!(contract.direction, SyncDirection::Bidirectional);
+    }
+
+    // P1-51: Widget virtualization
+    #[test]
+    fn default_virtualization_config() {
+        let config = WidgetVirtualizationConfig::default();
+        assert_eq!(config.buffer_size, 5);
+        assert!(config.recycle_handles);
+        assert_eq!(config.max_active_handles, 100);
     }
 }
