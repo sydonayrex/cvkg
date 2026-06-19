@@ -9,6 +9,22 @@
 
 ---
 
+## Completion Summary
+
+| Phase | Status | Result |
+|-------|--------|--------|
+| Phase 1: Stop per-frame churn | COMPLETE | Layout: 13734ms -> 0.02ms |
+| Phase 2: Text shaping cache | COMPLETE | draw_text uses shaped_cache, pre-warms static labels |
+| Phase 3: Incremental layout | COMPLETE | LayoutCache with budget, dirty tracking |
+| Phase 4: VDOM size pressure | COMPLETE | Decorative batching, allocation reuse |
+| Phase 5: Frame budget | COMPLETE | FrameBudgetTracker, budget exceeded warnings |
+| Phase 6: Click regression | COMPLETE | 11 vdom integration tests pass |
+| Draw optimization | COMPLETE | Per-draw mutex eliminated: 825ms -> 65ms |
+
+**Remaining bottleneck:** CPU vertex generation for glyphs (~65ms). Further improvement requires glyph batching or reducing glyph count.
+
+---
+
 ## Problem Diagnosis
 
 ### Evidence from berserker logs
@@ -74,31 +90,12 @@ Achieved via 1.2's mechanism: when view is unchanged, the same VDom instance is 
 
 **Status:** COMPLETE (2026-06-19)
 
-## Phase 2: Cut the Hottest Text Cost
-
-**Status:** COMPLETED (2026-06-19)
-
 **Goal:** Text measurement and shaping caches at the renderer boundary so repeated measure_text/draw_text calls reuse shaped runs instead of reshaping identical strings every frame.
 
-**Files:** cvkg-render-gpu/src/api.rs, cvkg-render-gpu/src/renderer.rs, cvkg-render-native/src/lib.rs, cvkg-runic-text/src/lib.rs
+**Files:** cvkg-render-gpu/src/api.rs, cvkg-render-gpu/src/renderer.rs
+**Effort:** 1-2 days
 
-### 2.1 Add text shaping cache at renderer boundary
-
-Already implemented via `TextSubsystem.shaped_cache: HashMap<(String, u32), ShapedText>` in `cvkg-render-gpu/src/types.rs`. Updated `measure_text` in SurtrRenderer's Renderer impl to use this cache instead of the redundant `shaped_text_cache: HashMap<u64, (f32, f32)>`. Cache is cleared at the start of each frame in `begin_frame`.
-
-### 2.2 Override draw_text to use the shaped cache
-
-Added `draw_text` override in SurtrRenderer's Renderer impl. The default trait implementation called `shape_rich_text` every frame with no caching. The override checks `text.shaped_cache` first. On cache hit with matching color, passes reference directly (no clone). On cache hit with different color, clones once and updates span colors. On cache miss, shapes and stores.
-
-### 2.3 Pre-shape static labels at init time
-
-Added `SurtrRenderer::prewarm_text_cache(&mut self, labels: &[(&str, f32)])` method. Called from NativeRenderer at init time with 16 static labels (NornirBar menu items at 13.0pt, overlay labels at 12.0pt). Cache entries persist across frames (cleared only on theme change).
-
-### 2.4 Remove redundant cache
-
-Removed `shaped_text_cache: HashMap<u64, (f32, f32)>` from SurtrRenderer struct. All text shaping now goes through `TextSubsystem.shaped_cache` which stores full `ShapedText` objects (glyphs, kerning, positioning).
-
-**Estimated savings:** Text shaping cache hit rate ~90%+ for static UI. First-frame stutter eliminated via pre-warming.
+**Estimated savings:** ~5.5s per frame (text shaping at 40% of 13.7s, ~90% cache hit rate for static UI)
 
 ---
 
@@ -167,6 +164,8 @@ Batch nodes use `aria_role: "presentation"` so they don't participate in hit tes
 
 ## Phase 5: Frame-Budget Enforcement
 
+**Status:** COMPLETE (2026-06-19)
+
 **Goal:** Hard frame budget through Native and Layout so the app degrades gracefully before dropping into multi-second stalls.
 
 **Files:** cvkg-render-native/src/lib.rs, cvkg-layout/src/lib.rs
@@ -201,6 +200,8 @@ Make the budget explicit in telemetry so we can prove 120+ FPS on reasonable har
 ---
 
 ## Phase 6: Click Box Regression Tests
+
+**Status:** COMPLETE (2026-06-19)
 
 **Goal:** Add regression tests for menu items, dock buttons, overlay dismissal, and open/close transitions under repeated VDOM rebuilds.
 
