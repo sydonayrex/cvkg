@@ -325,8 +325,18 @@ impl SafeAreaInsets {
     }
 }
 
+// Thread-local raw pointer to the locked SurtrRenderer for the duration of one render pass.
+// CONTRACT: Set to non-null only while the MutexGuard is live on the call stack in render_frame_locked().
+// All NativeRenderer draw calls use this pointer to avoid per-call mutex lock overhead.
+// SAFETY: The pointer is valid because the MutexGuard is held for the entire duration the pointer is set.
+thread_local! {
+    static GPU_FRAME_PTR: std::cell::Cell<*mut cvkg_render_gpu::SurtrRenderer> =
+        const { std::cell::Cell::new(std::ptr::null_mut()) };
+}
+
 /// Native renderer backend implementing the Renderer trait.
 /// It wraps a shared SurtrRenderer for high-performance GPU drawing.
+/// During a render pass, GPU_FRAME_PTR is set so draw calls bypass the mutex.
 pub struct NativeRenderer {
     gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
     delta_time: f32,
@@ -334,6 +344,87 @@ pub struct NativeRenderer {
     berserker_mode: cvkg_core::BerserkerMode,
     rage: f32,
     window: Arc<Window>,
+}
+
+impl NativeRenderer {
+    /// Returns a reference to the GPU renderer.
+    /// If GPU_FRAME_PTR is set (we're inside a locked render pass) uses that directly.
+    /// Otherwise falls back to acquiring the mutex (safe for calls outside the render pass).
+    ///
+    /// # Safety
+    /// GPU_FRAME_PTR is only non-null when a MutexGuard is live on the same thread's call stack.
+    #[inline(always)]
+    fn gpu_ref(&mut self) -> impl std::ops::DerefMut<Target = cvkg_render_gpu::SurtrRenderer> + '_ {
+        GPU_FRAME_PTR.with(|ptr| {
+            let raw = ptr.get();
+            if !raw.is_null() {
+                // SAFETY: Pointer is valid and the mutex guard is live above us on the call stack.
+                GpuRef::Ptr(unsafe { &mut *raw })
+            } else {
+                GpuRef::Guard(self.gpu.lock().unwrap_or_else(|p| p.into_inner()))
+            }
+        })
+    }
+
+    /// Read-only variant for &self Renderer methods.
+    /// Uses the same thread_local fast path; falls back to mutex for out-of-pass calls.
+    ///
+    /// # Safety
+    /// GPU_FRAME_PTR is only non-null when a MutexGuard is live above us on the call stack.
+    #[inline(always)]
+    fn gpu_ref_shared(&self) -> impl std::ops::Deref<Target = cvkg_render_gpu::SurtrRenderer> + '_ {
+        GPU_FRAME_PTR.with(|ptr| {
+            let raw = ptr.get();
+            if !raw.is_null() {
+                // SAFETY: Pointer is valid; the mutex guard is held for the render pass duration.
+                // We only read via this path during &self methods, which is safe.
+                GpuRefShared::Ptr(unsafe { &*raw })
+            } else {
+                GpuRefShared::Guard(self.gpu.lock().unwrap_or_else(|p| p.into_inner()))
+            }
+        })
+    }
+}
+
+/// Returned by NativeRenderer::gpu_ref() — either a direct pointer ref or a mutex guard.
+enum GpuRef<'a> {
+    Ptr(&'a mut cvkg_render_gpu::SurtrRenderer),
+    Guard(std::sync::MutexGuard<'a, cvkg_render_gpu::SurtrRenderer>),
+}
+
+impl<'a> std::ops::Deref for GpuRef<'a> {
+    type Target = cvkg_render_gpu::SurtrRenderer;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            GpuRef::Ptr(r) => r,
+            GpuRef::Guard(g) => g,
+        }
+    }
+}
+
+impl<'a> std::ops::DerefMut for GpuRef<'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            GpuRef::Ptr(r) => r,
+            GpuRef::Guard(g) => &mut *g,
+        }
+    }
+}
+
+/// Read-only variant returned by NativeRenderer::gpu_ref_shared().
+enum GpuRefShared<'a> {
+    Ptr(&'a cvkg_render_gpu::SurtrRenderer),
+    Guard(std::sync::MutexGuard<'a, cvkg_render_gpu::SurtrRenderer>),
+}
+
+impl<'a> std::ops::Deref for GpuRefShared<'a> {
+    type Target = cvkg_render_gpu::SurtrRenderer;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            GpuRefShared::Ptr(r) => r,
+            GpuRefShared::Guard(g) => g,
+        }
+    }
 }
 
 /// Custom events for the native application event loop, handling accessibility
@@ -415,7 +506,7 @@ impl NativeRenderer {
             berserker_mode: cvkg_core::BerserkerMode::Normal,
             rage: 0.0,
             state_detector: WindowStateDetector::new(),
-            frame_budget: cvkg_core::FrameBudgetTracker::default_60fps(),
+            frame_budget: cvkg_core::FrameBudgetTracker::default_120fps(),
             modifiers: winit::keyboard::ModifiersState::default(),
             audio_engine: None,
             haptic_engine: Arc::new(VisualHapticEngine::new()),
@@ -1115,14 +1206,24 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         self.berserker_mode,
                         self.rage,
                     );
-                    // Release the gpu lock before calling render -- the render methods each
-                    // re-acquire it per-call, allowing the view tree to interleave with other
-                    // work without holding one giant critical section across the whole draw.
+                    // Release the per-frame setup lock. We re-acquire it once below for the
+                    // entire render pass, storing the raw pointer in GPU_FRAME_PTR so individual
+                    // draw calls skip mutex acquisition entirely. This reduces lock overhead from
+                    // O(draw_calls) per frame to O(1).
                     drop(gpu);
 
-                    // Phase 2 profiling: measure CPU draw call recording separately from GPU submit.
+                    // Phase 2 profiling: lock once, render entire frame, unlock once.
                     let cpu_draw_start = std::time::Instant::now();
-                    self.view.render(&mut renderer, content_rect);
+                    {
+                        // Lock the GPU for the entire render pass and publish pointer.
+                        let mut gpu_guard = gpu_arc.lock().unwrap_or_else(|p| p.into_inner());
+                        let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu_guard;
+                        GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
+                        self.view.render(&mut renderer, content_rect);
+                        // Clear the pointer before the guard drops to prevent dangling access.
+                        GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
+                        // gpu_guard drops here, releasing the lock.
+                    }
                     let cpu_draw_end = std::time::Instant::now();
                     cvkg_core::LayoutCache::clear_layout_budget_deadline();
 
@@ -1236,6 +1337,12 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     telemetry.berserker_rage = self.rage;
                     gpu.telemetry = telemetry;
+
+                    // Drive the continuous animation loop: immediately schedule the next frame.
+                    // Without this, winit's Wait mode only redraws on OS input events (mouse
+                    // moves), which produces ~20fps driven by cursor poll rate instead of
+                    // the 120fps target. This single call is the animation loop.
+                    state.window.request_redraw();
                 }
                 WindowEvent::CursorEntered { .. } => {
                     log::info!("[Native] Cursor ENTERED window");
@@ -1848,15 +1955,12 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
         // Apply Rage Decay: rage naturally settles to 0 over time.
         self.rage = (self.rage - 0.02).max(0.0);
 
-        // Frame Throttling: 60FPS target (16.6ms)
+        // Frame Throttling: 120FPS target (8.33ms). Heartbeat timer for idle wakeup only.
+        // The primary render loop is driven by request_redraw() inside RedrawRequested.
         let now = std::time::Instant::now();
-        let target_interval = std::time::Duration::from_millis(16);
+        let target_interval = std::time::Duration::from_micros(8_333); // 120fps
 
         if now.duration_since(self.last_frame_time) >= target_interval {
-            if self.rage > 0.01 {
-                // Only log heartbeat when there is kinetic activity
-                log::debug!("[Native] Heartbeat ticking (rage: {})", self.rage);
-            }
             self.last_frame_time = now;
             for window_state in self.window_manager.windows.values() {
                 window_state.window.request_redraw();
@@ -1884,28 +1988,16 @@ impl cvkg_core::ElapsedTime for NativeRenderer {
 
 impl cvkg_core::Renderer for NativeRenderer {
     fn fill_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .fill_rect(rect, color);
+        self.gpu_ref().fill_rect(rect, color);
     }
     fn fill_rounded_rect(&mut self, rect: cvkg_core::Rect, radius: f32, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .fill_rounded_rect(rect, radius, color);
+        self.gpu_ref().fill_rounded_rect(rect, radius, color);
     }
     fn fill_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .fill_ellipse(rect, color);
+        self.gpu_ref().fill_ellipse(rect, color);
     }
     fn stroke_rect(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .stroke_rect(rect, color, stroke_width);
+        self.gpu_ref().stroke_rect(rect, color, stroke_width);
     }
     fn stroke_rounded_rect(
         &mut self,
@@ -1914,16 +2006,10 @@ impl cvkg_core::Renderer for NativeRenderer {
         color: [f32; 4],
         stroke_width: f32,
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .stroke_rounded_rect(rect, radius, color, stroke_width);
+        self.gpu_ref().stroke_rounded_rect(rect, radius, color, stroke_width);
     }
     fn stroke_ellipse(&mut self, rect: cvkg_core::Rect, color: [f32; 4], stroke_width: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .stroke_ellipse(rect, color, stroke_width);
+        self.gpu_ref().stroke_ellipse(rect, color, stroke_width);
     }
     fn draw_line(
         &mut self,
@@ -1934,52 +2020,38 @@ impl cvkg_core::Renderer for NativeRenderer {
         color: [f32; 4],
         stroke_width: f32,
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_line(x1, y1, x2, y2, color, stroke_width);
     }
 
     fn fill_glass_rect(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .fill_glass_rect(rect, radius, blur_radius);
     }
 
     fn fill_glass_rect_with_intensity(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .fill_glass_rect_with_intensity(rect, radius, blur_radius, glass_intensity);
     }
 
     fn fill_glass_rect_with_pressure(&mut self, rect: cvkg_core::Rect, radius: f32, blur_radius: f32, pressure: f32) {
         // Scale glass intensity by pressure: full pressure = full glass, no pressure = solid
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .fill_glass_rect_with_intensity(rect, radius, blur_radius, pressure);
     }
 
     fn fill_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .fill_squircle(rect, n, color);
     }
 
     fn stroke_squircle(&mut self, rect: cvkg_core::Rect, n: f32, color: [f32; 4], stroke_width: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .stroke_squircle(rect, n, color, stroke_width);
     }
 
     fn draw_focus_ring(&mut self, rect: cvkg_core::Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_focus_ring(rect, radius, offset, width, color);
     }
 
@@ -1991,9 +2063,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         end_color: [f32; 4],
         angle: f32,
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_linear_gradient(rect, start_color, end_color, angle);
     }
     fn draw_radial_gradient(
@@ -2002,81 +2072,55 @@ impl cvkg_core::Renderer for NativeRenderer {
         inner_color: [f32; 4],
         outer_color: [f32; 4],
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_radial_gradient(rect, inner_color, outer_color);
     }
     fn draw_texture(&mut self, texture_id: u32, rect: cvkg_core::Rect) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_texture(texture_id, rect);
     }
     fn draw_image(&mut self, image_name: &str, rect: cvkg_core::Rect) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_image(image_name, rect);
     }
     fn load_image(&mut self, name: &str, data: &[u8]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .load_image(name, data);
     }
     fn push_clip_rect(&mut self, rect: cvkg_core::Rect) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_clip_rect(rect);
     }
     fn pop_clip_rect(&mut self) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .pop_clip_rect();
     }
     fn push_opacity(&mut self, opacity: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_opacity(opacity);
     }
     fn draw_3d_cube(&mut self, rect: cvkg_core::Rect, color: [f32; 4], rotation: [f32; 3]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_3d_cube(rect, color, rotation);
     }
     fn pop_opacity(&mut self) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .pop_opacity();
     }
     fn bifrost(&mut self, rect: cvkg_core::Rect, blur: f32, saturation: f32, opacity: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .bifrost(rect, blur, saturation, opacity);
     }
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_mjolnir_slice(angle, offset);
     }
     fn pop_mjolnir_slice(&mut self) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .pop_mjolnir_slice();
     }
     fn mjolnir_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .mjolnir_shatter(rect, pieces, force, color);
     }
     fn mjolnir_fluid_shatter(
@@ -2086,27 +2130,19 @@ impl cvkg_core::Renderer for NativeRenderer {
         force: f32,
         color: [f32; 4],
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .mjolnir_fluid_shatter(rect, pieces, force, color);
     }
     fn draw_mjolnir_bolt(&mut self, from: [f32; 2], to: [f32; 2], color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_mjolnir_bolt(from, to, color);
     }
     fn gungnir(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32, intensity: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .gungnir(rect, color, radius, intensity);
     }
     fn mani_glow(&mut self, rect: cvkg_core::Rect, color: [f32; 4], radius: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .mani_glow(rect, color, radius);
     }
     fn register_handler(
@@ -2114,60 +2150,42 @@ impl cvkg_core::Renderer for NativeRenderer {
         event_type: &str,
         handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .register_handler(event_type, handler);
     }
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_vnode(rect, name);
     }
     fn pop_vnode(&mut self) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .pop_vnode();
     }
     // FIX #1: Removed duplicate definitions of set_z_index and get_z_index.
     // They appeared twice in this impl block (after pop_vnode and after register_shared_element),
     // which is a hard compiler error. Exactly one definition of each is kept here.
     fn set_z_index(&mut self, z: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_z_index(z);
     }
     fn get_z_index(&self) -> f32 {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref_shared()
             .get_z_index()
     }
     fn register_shared_element(&mut self, id: &str, rect: cvkg_core::Rect) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .register_shared_element(id, rect);
     }
     fn set_material(&mut self, material: cvkg_core::DrawMaterial) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_material(material);
     }
     fn current_material(&self) -> cvkg_core::DrawMaterial {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref_shared()
             .current_material()
     }
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .serialize_svg(name)
     }
     fn apply_svg_filter(
@@ -2176,27 +2194,19 @@ impl cvkg_core::Renderer for NativeRenderer {
         filter_id: &str,
         region: cvkg_core::Rect,
     ) -> Result<String, String> {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .apply_svg_filter(name, filter_id, region)
     }
     fn push_shadow(&mut self, radius: f32, color: [f32; 4], offset: [f32; 2]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_shadow(radius, color, offset);
     }
     fn pop_shadow(&mut self) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .pop_shadow();
     }
     fn push_affine(&mut self, transform: [f32; 6]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_affine(transform);
     }
     fn enter_portal(&mut self, z_index: i32) {
@@ -2224,34 +2234,24 @@ impl cvkg_core::Renderer for NativeRenderer {
         log::info!("Accessibility announcement [{:?}]: {}", priority, message);
     }
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .load_svg(name, svg_data);
     }
     fn draw_svg(&mut self, name: &str, rect: cvkg_core::Rect) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_svg(name, rect, None, 0);
     }
     fn draw_svg_with_offset(&mut self, name: &str, rect: cvkg_core::Rect, animation_time_offset: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_svg_with_offset(name, rect, None, 0, animation_time_offset);
     }
     fn get_telemetry(&self) -> cvkg_core::TelemetryData {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref_shared()
             .telemetry
             .clone()
     }
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .prewarm_vram(assets);
     }
 
@@ -2260,9 +2260,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to retrieve the correct scale factor.
     fn text_scale_factor(&self) -> f32 {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref_shared()
             .text_scale_factor()
     }
 
@@ -2271,10 +2269,26 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to check budget status.
     fn is_over_budget(&self) -> bool {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref_shared()
             .is_over_budget()
+    }
+
+    /// Draws simple unformatted text at the specified coordinates.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to perform cached text rendering.
+    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        self.gpu_ref()
+            .draw_text(text, x, y, size, color);
+    }
+
+    /// Measures the dimensions of the text if rendered at the specified size.
+    ///
+    /// # Contract
+    /// delegates to the locked GPU renderer instance to look up cached text dimensions.
+    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
+        self.gpu_ref()
+            .measure_text(text, size)
     }
 
     /// Shapes a rich text layout with the specified font spans.
@@ -2288,9 +2302,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         align: runic_text::TextAlign,
         overflow: runic_text::TextOverflow,
     ) -> Option<runic_text::ShapedText> {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .shape_rich_text(spans, max_width, align, overflow)
     }
 
@@ -2299,9 +2311,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to emit glyph instances.
     fn draw_shaped_text(&mut self, shaped: &runic_text::ShapedText, x: f32, y: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .draw_shaped_text(shaped, x, y);
     }
 
@@ -2317,9 +2327,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         tint_color: [f32; 4],
         glass_intensity: f32,
     ) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .fill_glass_rect_with_tint(rect, radius, blur_radius, tint_color, glass_intensity);
     }
 
@@ -2328,9 +2336,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to update global themes.
     fn set_theme(&mut self, theme: cvkg_core::ColorTheme) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_theme(theme);
     }
 
@@ -2339,9 +2345,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to dispatch shatter compute effects.
     fn trigger_shatter_event(&mut self, origin: [f32; 2], force: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .trigger_shatter_event(origin, force);
     }
 
@@ -2350,9 +2354,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to update fireball coordinates.
     fn set_fireball_pos(&mut self, pos: [f32; 2]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_fireball_pos(pos);
     }
 
@@ -2361,9 +2363,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to configure scene shaders.
     fn set_scene(&mut self, scene: &str) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_scene(scene);
     }
 
@@ -2372,9 +2372,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to configure scene shaders.
     fn set_scene_preset(&mut self, preset: u32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_scene_preset(preset);
     }
 
@@ -2383,21 +2381,15 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// # Contract
     /// delegates to the locked GPU renderer instance to configure background clears.
     fn set_default_background_color(&mut self, color: [f32; 4]) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_default_background_color(color);
     }
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .push_transform(translation, scale, rotation);
     }
     fn pop_transform(&mut self) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .pop_transform();
     }
 
@@ -2421,38 +2413,28 @@ impl cvkg_core::Renderer for NativeRenderer {
             }
         }
 
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_berserker_mode(state);
     }
 
     fn set_rage(&mut self, rage: f32) {
         self.rage = rage;
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .set_rage(rage);
     }
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .memoize(id, data_hash, render_fn);
     }
 
     fn snapshot_render_state(&self) -> RenderStateSnapshot {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref_shared()
             .snapshot_render_state()
     }
 
     fn restore_render_state(&mut self, snap: RenderStateSnapshot) {
-        self.gpu
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
+        self.gpu_ref()
             .restore_render_state(snap);
     }
     fn request_redraw(&mut self) {
