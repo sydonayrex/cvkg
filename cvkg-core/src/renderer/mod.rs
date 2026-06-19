@@ -75,8 +75,41 @@ pub trait Renderer3D {
 // ══════════════════════════════════════════════════════════════════════════════
 
 pub trait RendererText {
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32);
+    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
+        let g = (color[1] * 255.0).clamp(0.0, 255.0) as u8;
+        let b = (color[2] * 255.0).clamp(0.0, 255.0) as u8;
+        let a = (color[3] * 255.0).clamp(0.0, 255.0) as u8;
+
+        let mut style = cvkg_runic_text::TextStyle::new("Inter", size);
+        style.color = [r, g, b, a];
+        let spans = [cvkg_runic_text::TextSpan::new(text, style)];
+
+        if let Some(shaped) = self.shape_rich_text(
+            &spans,
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            self.draw_shaped_text(&shaped, x, y);
+        }
+    }
+
+    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
+        let style = cvkg_runic_text::TextStyle::new("Inter", size);
+        let spans = [cvkg_runic_text::TextSpan::new(text, style)];
+
+        if let Some(shaped) = self.shape_rich_text(
+            &spans,
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            (shaped.width, shaped.height)
+        } else {
+            (0.0, 0.0)
+        }
+    }
 
     fn shape_rich_text(
         &mut self,
@@ -414,6 +447,50 @@ pub trait RendererMaterial {
     /// Return the currently active material.
     fn current_material(&self) -> crate::material::DrawMaterial {
         crate::material::DrawMaterial::Opaque
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Capabilities -- runtime feature detection (P2-35)
+// ══════════════════════════════════════════════════════════════════════════════
+
+/// P2-35: Capability flags for runtime feature detection.
+/// Backends implement this to declare which features they support,
+/// reducing the need for endless trait expansion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RendererCapabilities {
+    pub shapes: bool,
+    pub text: bool,
+    pub images: bool,
+    pub svg: bool,
+    pub data_viz: bool,
+    pub effects: bool,
+    pub three_d: bool,
+    pub volumetric: bool,
+    pub compute: bool,
+    pub accessibility: bool,
+    pub export: bool,
+    pub berserker: bool,
+    pub cyberpunk: bool,
+}
+
+/// Returns the capabilities supported by this renderer.
+/// Backends override this to declare their actual capabilities.
+pub fn renderer_capabilities() -> RendererCapabilities {
+    RendererCapabilities {
+        shapes: true,
+        text: true,
+        images: true,
+        svg: true,
+        data_viz: false,
+        effects: true,
+        three_d: false,
+        volumetric: false,
+        compute: false,
+        accessibility: true,
+        export: false,
+        berserker: false,
+        cyberpunk: false,
     }
 }
 
