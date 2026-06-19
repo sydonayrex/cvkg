@@ -2238,6 +2238,14 @@ pub trait Renderer: ElapsedTime + Send {
                 family: "Inter".to_string(),
                 font_size: size,
                 color: [(color[0]*255.0) as u8, (color[1]*255.0) as u8, (color[2]*255.0) as u8, (color[3]*255.0) as u8],
+                fallback_families: vec![
+                    "SF Pro".to_string(),
+                    "SF Pro Text".to_string(),
+                    "Helvetica Neue".to_string(),
+                    "Helvetica".to_string(),
+                    "Arial".to_string(),
+                    "sans-serif".to_string(),
+                ],
                 ..Default::default()
             },
         );
@@ -2258,6 +2266,14 @@ pub trait Renderer: ElapsedTime + Send {
             cvkg_runic_text::TextStyle {
                 family: "Inter".to_string(),
                 font_size: size,
+                fallback_families: vec![
+                    "SF Pro".to_string(),
+                    "SF Pro Text".to_string(),
+                    "Helvetica Neue".to_string(),
+                    "Helvetica".to_string(),
+                    "Arial".to_string(),
+                    "sans-serif".to_string(),
+                ],
                 ..Default::default()
             },
         );
@@ -2267,7 +2283,8 @@ pub trait Renderer: ElapsedTime + Send {
             cvkg_runic_text::TextAlign::Start,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
-            (shaped.width, shaped.height)
+            let scale = self.text_scale_factor().max(1.0);
+            (shaped.width / scale, shaped.height / scale)
         } else {
             (0.0, 0.0)
         }
@@ -2282,6 +2299,14 @@ pub trait Renderer: ElapsedTime + Send {
             cvkg_runic_text::TextStyle {
                 family: "Inter".to_string(),
                 font_size: size,
+                fallback_families: vec![
+                    "SF Pro".to_string(),
+                    "SF Pro Text".to_string(),
+                    "Helvetica Neue".to_string(),
+                    "Helvetica".to_string(),
+                    "Arial".to_string(),
+                    "sans-serif".to_string(),
+                ],
                 ..Default::default()
             },
         );
@@ -2291,10 +2316,18 @@ pub trait Renderer: ElapsedTime + Send {
             cvkg_runic_text::TextAlign::Start,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
-            shaped.ascent
+            shaped.ascent / self.text_scale_factor().max(1.0)
         } else {
             0.0
         }
+    }
+
+    /// Scale factor used by text measurement helpers.
+    ///
+    /// Renderers that shape text in device pixels should return their current
+    /// device scale so `measure_text` and `measure_text_baseline` stay in logical pixels.
+    fn text_scale_factor(&self) -> f32 {
+        1.0
     }
 
     fn shape_rich_text(

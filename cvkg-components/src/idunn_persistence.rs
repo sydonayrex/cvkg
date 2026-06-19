@@ -57,7 +57,7 @@ impl IdunnPersistence {
             name: name.to_string(),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("unexpected None")
+                .unwrap_or_else(|e| e.duration())
                 .as_secs_f64(),
             component_states: HashMap::new(),
             layout: layout.to_string(),
@@ -81,7 +81,7 @@ impl IdunnPersistence {
             workspace_id: workspace_id.to_string(),
             restore_time: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("unexpected None")
+                .unwrap_or_else(|e| e.duration())
                 .as_secs_f64(),
         });
         self
@@ -159,7 +159,7 @@ impl View for IdunnPersistence {
         for snap in &self.snapshots {
             let age = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("unexpected None")
+                .unwrap_or_else(|e| e.duration())
                 .as_secs_f64()
                 - snap.timestamp;
             let age_str = if age < 60.0 {

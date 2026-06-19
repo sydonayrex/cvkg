@@ -9,6 +9,7 @@ use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape,
 use cvkg_vdom::signals::Signal;
 use glam::Vec2;
 use std::fs;
+use std::path::PathBuf;
 
 // --- Valknut Procedural Animation ---
 
@@ -429,8 +430,6 @@ impl View for BerserkerFireView {
             update_berserker_simulation(&mut s, w, h, t, dt, new_rage);
         }
 
-        r.push_vnode(rect, "BerserkerFireView");
-
         // Draw the 3D rotating cubes in the background
         let t_cubes_start = std::time::Instant::now();
         draw_3d_cubes_bg(r, &s, w, h, t);
@@ -489,8 +488,6 @@ impl View for BerserkerFireView {
             let perf = self.perf.lock().expect("Failed to lock PerfOverlay");
             perf.render(r, rect);
         }
-
-        r.pop_vnode();
     }
 }
 
@@ -509,9 +506,8 @@ fn draw_nornir_bar(
         width: w,
         height: 28.0,
     };
-    r.push_vnode(bar_rect, "NornirBar");
     // Glass background: uses glass material pipeline for frosted blur effect
-    r.fill_glass_rect(bar_rect, 4.0, 15.0);
+    r.fill_glass_rect_with_intensity(bar_rect, 4.0, 12.0, 0.35);
 
     let menu_x = 8.0;
     let items = [
@@ -537,6 +533,7 @@ fn draw_nornir_bar(
         // To visually center: shift up so the baseline lands at bar_height/2 + descent/2.
         // Approximation: y = (bar_height - lh) / 2 - lh * 0.5
         let ty = (28.0 - lh) * 0.5 - lh * 0.5;
+        r.draw_text(label, tx + 1.0, ty + 1.0, 13.0, [0.0, 0.0, 0.0, 0.45]);
         r.draw_text(label, tx, ty, 13.0, [0.9, 0.9, 0.92, 1.0]);
         let active_menu_clone = active_menu.clone();
         let h_closure = Arc::new(move |_| {
@@ -550,7 +547,6 @@ fn draw_nornir_bar(
         });
         r.register_handler("pointerdown", h_closure.clone());
         r.register_handler("pointerclick", h_closure);
-        r.pop_vnode();
         x += width;
     }
 
@@ -559,6 +555,7 @@ fn draw_nornir_bar(
     let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
     let title_y = (28.0 - tlh) * 0.5 - tlh * 0.5;
+    r.draw_text(&title_str, title_x + 1.0, title_y + 1.0, 14.0, [0.0, 0.0, 0.0, 0.45]);
     r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.3, 0.1, 1.0]);
 
     // Right-aligned, vertically centered rage meter
@@ -566,9 +563,8 @@ fn draw_nornir_bar(
     let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
     let rage_y = (28.0 - rlh) * 0.5 - rlh * 0.5;
+    r.draw_text(&rage_str, rage_x + 1.0, rage_y + 1.0, 12.0, [0.0, 0.0, 0.0, 0.45]);
     r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.5, 1.0]);
-
-    r.pop_vnode();
 
     // Render the active dropdown menu if open
     if let Some(open_idx) = active_menu.get() {
@@ -757,9 +753,8 @@ fn draw_dock(
         width: w * 0.4,
         height: 56.0,
     };
-    r.push_vnode(dock_rect, "HeimdallDock");
     // Glass background: uses glass material pipeline for frosted blur effect
-    r.fill_glass_rect(dock_rect, 12.0, 20.0);
+    r.fill_glass_rect_with_intensity(dock_rect, 12.0, 16.0, 0.28);
 
     let icons = ["ATK", "RGE", "DEF", "CRT", "ULT"];
     let icon_size = 48.0;
@@ -782,6 +777,7 @@ fn draw_dock(
         let (tw, th) = r.measure_text(icon, text_size);
         let tx = ix + (icon_size - tw) / 2.0;
         let ty = dock_rect.y + (dock_rect.height - th) / 2.0 - th * 0.25;
+        r.draw_text(icon, tx + 1.0, ty + 1.0, text_size, [0.0, 0.0, 0.0, 0.45]);
         r.draw_text(icon, tx, ty, text_size, [0.95, 0.95, 0.98, 1.0]);
 
         if i < 3 {
@@ -812,11 +808,8 @@ fn draw_dock(
         });
         r.register_handler("pointerdown", h_closure.clone());
         r.register_handler("pointerclick", h_closure);
-
         r.pop_vnode();
     }
-
-    r.pop_vnode();
 }
 
 fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32, _h: f32, _t: f32) {
@@ -868,9 +861,15 @@ fn draw_glass_cards(
                     width: card_width,
                     height: card_height,
                 };
-                r.push_vnode(rect, "Card");
-                r.fill_glass_rect(rect, 12.0, 60.0); // Use glass material for proper frosted effect
+                r.fill_glass_rect_with_intensity(rect, 12.0, 12.0, 0.38);
                 let (rw, rh) = r.measure_text(runes[i % runes.len()], 32.0);
+                r.draw_text(
+                    runes[i % runes.len()],
+                    cx - rw / 2.0 + 1.0,
+                    cy - rh / 2.0 + 1.0,
+                    32.0,
+                    [0.0, 0.0, 0.0, 0.45],
+                );
                 r.draw_text(
                     runes[i % runes.len()],
                     cx - rw / 2.0,
@@ -878,7 +877,6 @@ fn draw_glass_cards(
                     32.0,
                     [0.8, 0.9, 1.0, 1.0],
                 );
-                r.pop_vnode();
             } else {
                 // Card has broken apart: render two separate halves
                 let rect_l = cvkg_core::Rect {
@@ -887,18 +885,14 @@ fn draw_glass_cards(
                     width: card_width,
                     height: card_height,
                 };
-                r.push_vnode(rect_l, "CardLeft");
-                r.fill_glass_rect(rect_l, 12.0, 45.0);
-                r.pop_vnode();
+                r.fill_glass_rect_with_intensity(rect_l, 12.0, 8.0, 0.24);
                 let rect_r = cvkg_core::Rect {
                     x: br.position.x - half_w,
                     y: br.position.y - half_h,
                     width: card_width,
                     height: card_height,
                 };
-                r.push_vnode(rect_r, "CardRight");
-                r.fill_glass_rect(rect_r, 12.0, 45.0);
-                r.pop_vnode();
+                r.fill_glass_rect_with_intensity(rect_r, 12.0, 8.0, 0.24);
             }
         }
     }
@@ -1020,8 +1014,8 @@ fn draw_berserker_fire(
             width: 200.0,
             height: 200.0,
         },
-        [1.0, 0.4, 0.0, 0.6],
-        [0.2, 0.0, 0.0, 0.0],
+        [1.0, 0.55, 0.05, 0.85],
+        [0.15, 0.0, 0.0, 0.0],
     );
     r.draw_radial_gradient(
         cvkg_core::Rect {
@@ -1030,8 +1024,8 @@ fn draw_berserker_fire(
             width: 120.0,
             height: 120.0,
         },
-        [1.0, 0.8, 0.2, 0.8],
-        [1.0, 0.2, 0.0, 0.0],
+        [1.0, 0.85, 0.3, 0.95],
+        [1.0, 0.35, 0.05, 0.0],
     );
     r.draw_radial_gradient(
         cvkg_core::Rect {
@@ -1040,12 +1034,90 @@ fn draw_berserker_fire(
             width: 60.0,
             height: 60.0,
         },
-        [1.0, 1.0, 0.8, 1.0],
-        [1.0, 0.5, 0.0, 0.0],
+        [1.0, 1.0, 0.95, 1.0],
+        [1.0, 0.75, 0.15, 0.0],
+    );
+    let phase = t * 4.0;
+    let drift_x = (t * 1.2).cos() * 120.0;
+    let drift_y = (t * 0.8).sin() * 90.0;
+    let flame_tongues = [
+        (0.0_f32, 34.0_f32, [0.55, -0.15], [1.0, 1.0, 1.0, 0.60]),
+        (1.4, 30.0, [-0.35, 0.25], [0.65, 0.95, 1.0, 0.50]),
+        (2.7, 38.0, [0.25, 0.55], [1.0, 0.60, 0.12, 0.48]),
+        (4.1, 32.0, [-0.55, 0.10], [1.0, 0.25, 0.08, 0.40]),
+        (5.2, 28.0, [0.10, 0.75], [0.60, 0.82, 1.0, 0.34]),
+    ];
+    for (offset, radius, drift, color) in flame_tongues {
+        let wobble = (phase + offset).sin();
+        let stretch = 1.0 + (phase * 0.8 + offset).cos() * 0.18;
+        let flame_x = cx + drift[0] * 8.0 + wobble * 6.0;
+        let flame_y = cy + drift[1] * 10.0 - radius * 0.35;
+        r.fill_ellipse(
+            cvkg_core::Rect {
+                x: flame_x - radius * 0.5 * stretch,
+                y: flame_y - radius * 0.8,
+                width: radius * stretch,
+                height: radius * 1.6,
+            },
+            color,
+        );
+    }
+    for i in 1..6 {
+        let trail_t = i as f32 / 6.0;
+        let trail_x = cx - drift_x * 0.02 * trail_t;
+        let trail_y = cy - drift_y * 0.02 * trail_t + trail_t * 18.0;
+        let trail_w = 26.0 + trail_t * 12.0;
+        let trail_h = 12.0 + trail_t * 28.0;
+        let alpha = (0.25 * (1.0 - trail_t)).max(0.0);
+        r.fill_ellipse(
+            cvkg_core::Rect {
+                x: trail_x - trail_w * 0.5,
+                y: trail_y - trail_h * 0.5,
+                width: trail_w,
+                height: trail_h,
+            },
+            [1.0, 0.45 + trail_t * 0.3, 0.08, alpha],
+        );
+    }
+    r.fill_ellipse(
+        cvkg_core::Rect {
+            x: cx - 18.0,
+            y: cy - 18.0,
+            width: 36.0,
+            height: 36.0,
+        },
+        [0.85, 0.98, 1.0, 0.95],
+    );
+    r.fill_ellipse(
+        cvkg_core::Rect {
+            x: cx - 14.0,
+            y: cy - 14.0,
+            width: 28.0,
+            height: 28.0,
+        },
+        [1.0, 0.72, 0.18, 0.92],
+    );
+    r.fill_ellipse(
+        cvkg_core::Rect {
+            x: cx - 9.0,
+            y: cy - 9.0,
+            width: 18.0,
+            height: 18.0,
+        },
+        [0.95, 0.18, 0.05, 0.82],
     );
 
     for p in &s.particles {
-        let p_color = [p.color[0], p.color[1], p.color[2], p.life.min(1.0)];
+        let heat = ((p.pos[0] + p.pos[1]) * 0.03 + t * 3.5).sin() * 0.5 + 0.5;
+        let p_color = if p.is_ember {
+            [1.0, 0.50 + heat * 0.3, 0.08, p.life.min(1.0)]
+        } else if heat > 0.66 {
+            [0.55, 0.82, 1.0, p.life.min(1.0)]
+        } else if heat > 0.33 {
+            [1.0, 0.88, 0.45, p.life.min(1.0)]
+        } else {
+            [1.0, 0.30, 0.05, p.life.min(1.0)]
+        };
         let rect = cvkg_core::Rect {
             x: p.pos[0],
             y: p.pos[1],
@@ -1096,24 +1168,18 @@ fn draw_corner_buttons(
         r.push_vnode(rect, "CornerButton");
         r.fill_rounded_rect(rect, 12.0, [0.2, 0.2, 0.3, 0.8]);
         let (cw, ch) = r.measure_text(corner.2, 32.0);
-        r.draw_text(
-            corner.2,
-            corner.0 + (btn_size - cw) / 2.0,
-            corner.1 + (btn_size - ch) / 2.0 - ch * 0.25,
-            32.0,
-            [1.0, 1.0, 1.0, 1.0],
-        );
+        let text_x = corner.0 + (btn_size - cw) / 2.0;
+        let text_y = corner.1 + (btn_size - ch) / 2.0 - ch * 0.25;
+        r.draw_text(corner.2, text_x + 1.0, text_y + 1.0, 32.0, [0.0, 0.0, 0.0, 0.45]);
+        r.draw_text(corner.2, text_x, text_y, 32.0, [1.0, 1.0, 1.0, 1.0]);
 
         let val = counters[i].get();
         let val_str = format!("{}", val);
         let (_vw, vh) = r.measure_text(&val_str, 24.0);
-        r.draw_text(
-            &val_str,
-            corner.0 + btn_size + 10.0,
-            corner.1 + (btn_size - vh) / 2.0 - vh * 0.25,
-            24.0,
-            [0.0, 1.0, 0.5, 1.0],
-        );
+        let value_x = corner.0 + btn_size + 10.0;
+        let value_y = corner.1 + (btn_size - vh) / 2.0 - vh * 0.25;
+        r.draw_text(&val_str, value_x + 1.0, value_y + 1.0, 24.0, [0.0, 0.0, 0.0, 0.45]);
+        r.draw_text(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.5, 1.0]);
 
         let c_signal = counters[i].clone();
         let r_signal = rage.clone();
@@ -1126,6 +1192,36 @@ fn draw_corner_buttons(
         r.register_handler("pointerclick", h_closure);
         r.pop_vnode();
     }
+}
+
+/// Search for a demo asset using the shared CVKG asset layout.
+fn find_cvkg_asset_path(name: &str) -> Option<PathBuf> {
+    let mut candidates = vec![
+        PathBuf::from("assets").join(name),
+        PathBuf::from("demos/berserker/assets").join(name),
+        PathBuf::from("demos/berserker").join(name),
+    ];
+
+    if let Ok(current_dir) = std::env::current_dir() {
+        candidates.push(current_dir.join("assets").join(name));
+        candidates.push(current_dir.join("demos/berserker/assets").join(name));
+        candidates.push(current_dir.join("demos/berserker").join(name));
+    }
+
+    if let Ok(exe_path) = std::env::current_exe()
+        && let Some(exe_dir) = exe_path.parent()
+    {
+        candidates.push(exe_dir.join("assets").join(name));
+        candidates.push(exe_dir.join("demos/berserker/assets").join(name));
+        candidates.push(exe_dir.join(name));
+        if let Some(parent) = exe_dir.parent() {
+            candidates.push(parent.join("assets").join(name));
+            candidates.push(parent.join("demos/berserker/assets").join(name));
+            candidates.push(parent.join("demos/berserker").join(name));
+        }
+    }
+
+    candidates.into_iter().find(|path| path.exists())
 }
 
 fn main() {
@@ -1142,17 +1238,12 @@ fn main() {
     );
     log::info!("═══════════════════════════════════════════════════");
     // Load background image
-        let bg_image_data = fs::read("demos/berserker/background.jpg")
-            .or_else(|_| fs::read("../demos/berserker/background.jpg"))
-            .or_else(|_| fs::read("background.jpg"))
-            .or_else(|_| {
-                // Try from workspace root using env var
-                std::env::var("CARGO_MANIFEST_DIR")
-                    .map_err(|_| std::io::Error::other("CARGO_MANIFEST_DIR not set"))
-                    .and_then(|manifest_dir| {
-                        let path = std::path::Path::new(&manifest_dir).join("demos/berserker/background.jpg");
-                        fs::read(&path)
-                    })
+        let bg_image_data = find_cvkg_asset_path("background.jpg")
+            .map(fs::read)
+            .unwrap_or_else(|| {
+                Err(std::io::Error::other(
+                    "background.jpg not found in shared CVKG asset paths",
+                ))
             })
             .inspect(|data| log::info!("[Berserker] Loaded background image: {} bytes", data.len()))
             .inspect_err(|e| log::warn!("[Berserker] Failed to load background image: {}", e))

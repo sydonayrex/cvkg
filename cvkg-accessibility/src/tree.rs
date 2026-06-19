@@ -299,6 +299,13 @@ impl AccessibilityTree {
     /// Setting the root increments the version counter because the AT bridge
     /// must re-announce the root on every structural change.
     pub fn set_root(&mut self, id: KvasirId) {
+        if !self.nodes.contains_key(&id) {
+            log::warn!(
+                "AccessibilityTree::set_root: node {:?} does not exist in the tree",
+                id
+            );
+            return;
+        }
         self.root = Some(id);
         self.version += 1;
     }

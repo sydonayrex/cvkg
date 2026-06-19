@@ -9,6 +9,7 @@ pub struct Grid {
     column_gap: f32,
     row_gap: f32,
     children: Vec<AnyView>,
+    layout_cache: std::sync::Arc<std::sync::Mutex<LayoutCache>>,
 }
 
 impl Grid {
@@ -20,6 +21,7 @@ impl Grid {
             column_gap: 0.0,
             row_gap: 0.0,
             children: Vec::new(),
+            layout_cache: std::sync::Arc::new(std::sync::Mutex::new(LayoutCache::new())),
         }
     }
 
@@ -60,7 +62,6 @@ impl View for Grid {
             return;
         }
 
-        let mut cache = LayoutCache::new();
         let mut layouts = Vec::new();
         let mut placements = Vec::new();
         for child in &self.children {
@@ -77,6 +78,7 @@ impl View for Grid {
             row_gap: self.row_gap,
         };
 
+        let mut cache = self.layout_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let rects = grid_engine.compute_layout_rects(rect, &layouts, &placements, &mut cache);
 
         let mut rect_idx = 0;
@@ -89,7 +91,6 @@ impl View for Grid {
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
-        let mut cache = LayoutCache::new();
         let mut layouts = Vec::new();
         let mut placements = Vec::new();
         for child in &self.children {
@@ -110,6 +111,7 @@ impl View for Grid {
         let height = proposal.height.unwrap_or(300.0);
         let bounds = Rect::new(0.0, 0.0, width, height);
 
+        let mut cache = self.layout_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let rects = grid_engine.compute_layout_rects(bounds, &layouts, &placements, &mut cache);
 
         if rects.is_empty() {

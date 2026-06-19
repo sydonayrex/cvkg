@@ -343,7 +343,7 @@ impl<V: View> View for GraniSheet<V> {
             if let Some(solver_arc) =
                 sys.get_component_state::<cvkg_core::SleipnirSolver>(solver_hash)
             {
-                let mut solver = solver_arc.write().expect("lock poisoned");
+                let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(1.0);
                 anim = solver.tick(renderer.delta_time());
                 if !solver.is_settled() {
@@ -1583,6 +1583,7 @@ pub struct VStack {
     alignment: cvkg_core::Alignment,
     distribution: cvkg_core::Distribution,
     children: Vec<cvkg_core::AnyView>,
+    layout_cache: std::sync::Arc<std::sync::Mutex<LayoutCache>>,
 }
 
 impl VStack {
@@ -1592,6 +1593,7 @@ impl VStack {
             alignment: cvkg_core::Alignment::Center,
             distribution: cvkg_core::Distribution::Fill,
             children: Vec::new(),
+            layout_cache: std::sync::Arc::new(std::sync::Mutex::new(LayoutCache::new())),
         }
     }
 
@@ -1624,10 +1626,10 @@ impl View for VStack {
             return;
         }
 
-        let mut cache = LayoutCache::new();
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
+        let mut cache = self.layout_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let rects = cvkg_layout::VStack::compute_layout(
             self.spacing,
             self.alignment,
@@ -1709,6 +1711,48 @@ impl LayoutView for VStack {
             &layouts,
             cache,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cvkg_core::layout::{LayoutCache, LayoutView, Rect, SizeProposal};
+    use cvkg_core::{Never, Size, View};
+
+    #[derive(Clone)]
+    struct FixedLayout;
+
+    impl View for FixedLayout {
+        type Body = Never;
+        fn body(self) -> Self::Body {
+            unreachable!()
+        }
+    }
+
+    impl LayoutView for FixedLayout {
+        fn size_that_fits(
+            &self,
+            _proposal: SizeProposal,
+            _subviews: &[&dyn LayoutView],
+            _cache: &mut LayoutCache,
+        ) -> Size {
+            Size { width: 80.0, height: 20.0 }
+        }
+        fn place_subviews(
+            &self,
+            _bounds: Rect,
+            _subviews: &mut [&mut dyn LayoutView],
+            _cache: &mut LayoutCache,
+        ) {
+        }
+    }
+
+    #[test]
+    fn vstack_clone_shares_layout_cache() {
+        let stack = VStack::new(8.0).child(FixedLayout);
+        let cloned = stack.clone();
+        assert!(std::sync::Arc::ptr_eq(&stack.layout_cache, &cloned.layout_cache));
     }
 }
 

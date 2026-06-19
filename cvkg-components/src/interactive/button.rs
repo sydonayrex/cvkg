@@ -324,7 +324,7 @@ impl View for Button {
             if let Some(solver_arc) =
                 s.get_component_state::<cvkg_anim::SleipnirSolver>(hover_anim_hash)
             {
-                let mut solver = solver_arc.write().expect("lock poisoned");
+                let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(hover_target);
                 hover_t = solver.tick(renderer.delta_time());
             }
@@ -356,7 +356,7 @@ impl View for Button {
             if let Some(solver_arc) =
                 s.get_component_state::<cvkg_anim::SleipnirSolver>(press_anim_hash)
             {
-                let mut solver = solver_arc.write().expect("lock poisoned");
+                let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(press_target);
                 press_t = solver.tick(renderer.delta_time());
             }
@@ -714,7 +714,7 @@ impl View for Toggle {
         {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(id_hash) {
-                let mut solver = solver_arc.write().expect("lock poisoned");
+                let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(target);
                 toggle_t = solver.tick(renderer.delta_time());
             }

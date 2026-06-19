@@ -123,9 +123,6 @@ impl View for PerfOverlay {
         if !self.visible {
             return;
         }
-        if renderer.get_telemetry().layout_over_budget {
-            return;
-        }
 
         let pad = 12.0;
         let overlay_w: f32 = 280.0;
@@ -153,7 +150,7 @@ impl View for PerfOverlay {
                 height: overlay_h,
             },
             10.0,
-            [0.05, 0.05, 0.08, 0.92],
+            [0.02, 0.02, 0.04, 0.96],
         );
         renderer.stroke_rounded_rect(
             Rect {
@@ -171,6 +168,7 @@ impl View for PerfOverlay {
         let mut y = oy + pad;
 
         // Title
+        renderer.draw_text("Performance", text_x + 1.0, y + 1.0, 14.0, [0.0, 0.0, 0.0, 0.75]);
         renderer.draw_text("Performance", text_x, y, 14.0, theme::text());
         y += 22.0;
 
@@ -186,50 +184,26 @@ impl View for PerfOverlay {
         } else {
             theme::error_color()
         };
-        renderer.draw_text(
-            &format!("{:.0} FPS", self.current_fps),
-            text_x,
-            y,
-            16.0,
-            fps_color,
-        );
-        renderer.draw_text(
-            &format!("{:.1}ms", self.current_frame_ms),
-            text_x + 110.0,
-            y,
-            13.0,
-            theme::text_dim(),
-        );
+        let fps_text = format!("{:.0} FPS", self.current_fps);
+        let frame_text = format!("{:.1}ms", self.current_frame_ms);
+        renderer.draw_text(&fps_text, text_x + 1.0, y + 1.0, 16.0, [0.0, 0.0, 0.0, 0.75]);
+        renderer.draw_text(&fps_text, text_x, y, 16.0, fps_color);
+        renderer.draw_text(&frame_text, text_x + 111.0, y + 1.0, 13.0, [0.0, 0.0, 0.0, 0.75]);
+        renderer.draw_text(&frame_text, text_x + 110.0, y, 13.0, theme::text());
         y += 22.0;
 
         // Stats
-        renderer.draw_text(
-            &format!("Draw Calls: {}", self.draw_calls),
-            text_x,
-            y,
-            11.0,
-            theme::text_dim(),
-        );
+        let draw_calls_text = format!("Draw Calls: {}", self.draw_calls);
+        renderer.draw_text(&draw_calls_text, text_x + 1.0, y + 1.0, 11.0, [0.0, 0.0, 0.0, 0.7]);
+        renderer.draw_text(&draw_calls_text, text_x, y, 11.0, theme::text());
         y += 18.0;
-        renderer.draw_text(
-            &format!("Tris: {}  Verts: {}", self.triangles, self.vertices),
-            text_x,
-            y,
-            11.0,
-            theme::text_dim(),
-        );
+        let geom_text = format!("Tris: {}  Verts: {}", self.triangles, self.vertices);
+        renderer.draw_text(&geom_text, text_x + 1.0, y + 1.0, 11.0, [0.0, 0.0, 0.0, 0.7]);
+        renderer.draw_text(&geom_text, text_x, y, 11.0, theme::text());
         y += 18.0;
-        renderer.draw_text(
-            &format!(
-                "Avg: {:.1}ms  P99: {:.1}ms",
-                self.avg_frame_ms(),
-                self.p99_frame_ms()
-            ),
-            text_x,
-            y,
-            11.0,
-            theme::text_dim(),
-        );
+        let stats_text = format!("Avg: {:.1}ms  P99: {:.1}ms", self.avg_frame_ms(), self.p99_frame_ms());
+        renderer.draw_text(&stats_text, text_x + 1.0, y + 1.0, 11.0, [0.0, 0.0, 0.0, 0.7]);
+        renderer.draw_text(&stats_text, text_x, y, 11.0, theme::text());
         // Rolling frame time graph
         let graph_x = text_x;
         let graph_w = overlay_w - pad * 2.0;

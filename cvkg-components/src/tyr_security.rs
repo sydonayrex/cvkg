@@ -83,7 +83,7 @@ impl TyrSecurity {
         self.audit_log.push(AuditEntry {
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("unexpected None")
+                .unwrap_or_else(|e| e.duration())
                 .as_secs_f64(),
             user: user.to_string(),
             action: action.to_string(),
@@ -97,7 +97,7 @@ impl TyrSecurity {
     pub fn session(mut self, id: &str, user: &str, expires_in_hours: f64) -> Self {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("unexpected None")
+            .unwrap_or_else(|e| e.duration())
             .as_secs_f64();
         self.current_session = Some(SessionInfo {
             id: id.to_string(),
@@ -148,7 +148,7 @@ impl View for TyrSecurity {
             let remaining = session.expires_at
                 - std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .expect("unexpected None")
+                    .unwrap_or_else(|e| e.duration())
                     .as_secs_f64();
             let hours = (remaining / 3600.0).max(0.0) as u32;
             renderer.draw_text(

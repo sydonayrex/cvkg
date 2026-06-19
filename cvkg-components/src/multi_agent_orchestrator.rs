@@ -1385,7 +1385,7 @@ impl MultiAgentOrchestrator {
                                 new_state.active_run_id =
                                     Some(format!("run-{}", new_state.run_counter));
                             }
-                            *guard.write().expect("unexpected None") = new_state;
+                            *guard.write().unwrap_or_else(|e| e.into_inner()) = new_state;
                         }
                         s
                     });
@@ -1406,7 +1406,7 @@ impl MultiAgentOrchestrator {
                             let mut new_state =
                                 guard.read().ok().map(|g| g.clone()).unwrap_or_default();
                             new_state.show_log_panel = !new_state.show_log_panel;
-                            *guard.write().expect("unexpected None") = new_state;
+                            *guard.write().unwrap_or_else(|e| e.into_inner()) = new_state;
                         }
                         s
                     });
@@ -1427,7 +1427,7 @@ impl MultiAgentOrchestrator {
                             let mut new_state =
                                 guard.read().ok().map(|g| g.clone()).unwrap_or_default();
                             new_state.show_metrics_panel = !new_state.show_metrics_panel;
-                            *guard.write().expect("unexpected None") = new_state;
+                            *guard.write().unwrap_or_else(|e| e.into_inner()) = new_state;
                         }
                         s
                     });

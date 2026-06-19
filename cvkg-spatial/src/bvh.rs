@@ -134,7 +134,7 @@ impl<T: Clone> Bvh<T> {
     /// Recursive case: compute combined AABB, split by centroid median along
     /// the longest axis, build left and right subtrees.
     fn build_recursive(items: &[(Rect, T)], indices: &[usize]) -> BvhNode {
-        debug_assert!(!indices.is_empty());
+        assert!(!indices.is_empty());
 
         if indices.len() == 1 {
             let idx = indices[0];

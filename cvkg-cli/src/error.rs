@@ -89,6 +89,12 @@ impl From<&str> for CliError {
     }
 }
 
+impl From<cvkg_core::CvkgError> for CliError {
+    fn from(e: cvkg_core::CvkgError) -> Self {
+        CliError::Other(e.to_string())
+    }
+}
+
 /// Print a user-friendly error message and exit with code 1.
 pub fn exit_with_error(error: CliError) -> ! {
     use console::style;

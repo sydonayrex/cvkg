@@ -142,7 +142,7 @@ pub struct BerserkerTheme {
 
 ### Assets
 
-Place assets in the `assets/` directory:
+Place assets in the shared CVKG `assets/` directory at the workspace root, or under `demos/berserker/assets/` for local overrides:
 - Textures
 - Models
 - Sounds

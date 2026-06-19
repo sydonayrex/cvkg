@@ -75,8 +75,8 @@ impl GerdTelemetry {
             s.points.push(TelemetryPoint {
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .expect("unexpected None")
-                    .as_secs_f64(),
+                    .map(|duration| duration.as_secs_f64())
+                    .unwrap_or(0.0),
                 metric: series_name.to_string(),
                 value,
                 unit: unit.to_string(),
@@ -91,9 +91,9 @@ impl GerdTelemetry {
             severity,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .expect("unexpected None")
-                .as_secs_f64(),
-        });
+                .map(|duration| duration.as_secs_f64())
+                .unwrap_or(0.0),
+                });
         self
     }
 }

@@ -124,7 +124,7 @@ impl FocusManager {
 
         let new_id = match direction {
             FocusDirection::First => self.tab_order[0],
-            FocusDirection::Last => *self.tab_order.last().unwrap(),
+            FocusDirection::Last => *self.tab_order.last().unwrap_or(&self.tab_order[0]),
             FocusDirection::Forward => {
                 let idx = self
                     .focused

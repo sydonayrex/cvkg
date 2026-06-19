@@ -79,7 +79,7 @@ pub fn set_mode(mode: ThemeMode) {
     CURRENT_MODE.store(val, Ordering::Relaxed);
     persist_mode(mode);
 
-    let listeners = MODE_LISTENERS.lock().expect("mode listeners poisoned");
+    let listeners = MODE_LISTENERS.lock().unwrap_or_else(|e| e.into_inner());
     for cb in listeners.iter() {
         cb(mode);
     }
@@ -87,7 +87,7 @@ pub fn set_mode(mode: ThemeMode) {
 
 /// Register a callback to be invoked whenever the mode changes.
 pub fn on_mode_change(cb: impl Fn(ThemeMode) + Send + Sync + 'static) {
-    let mut listeners = MODE_LISTENERS.lock().expect("mode listeners poisoned");
+    let mut listeners = MODE_LISTENERS.lock().unwrap_or_else(|e| e.into_inner());
     listeners.push(StdArc::new(cb));
 }
 

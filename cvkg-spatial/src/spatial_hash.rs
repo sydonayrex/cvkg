@@ -62,13 +62,15 @@ impl<T: Clone> SpatialHash<T> {
     /// `cell_size` should be chosen to match the typical object size: too small
     /// wastes memory, too large reduces query selectivity. 64.0 px is a good
     /// default for UI graphs; use smaller values for dense physics simulations.
-    pub fn new(cell_size: f32) -> Self {
-        assert!(cell_size > 0.0, "cell_size must be positive");
-        Self {
+    pub fn new(cell_size: f32) -> Option<Self> {
+        if cell_size <= 0.0 {
+            return None;
+        }
+        Some(Self {
             cells: HashMap::new(),
             cell_size,
             registration_count: 0,
-        }
+        })
     }
 
     /// Insert `item` into every cell that `rect` overlaps.
@@ -128,10 +130,18 @@ impl<T: Clone> SpatialHash<T> {
 
     /// Compute the inclusive cell range `(min_cx, min_cy, max_cx, max_cy)` for a rect.
     fn cells_for_rect(&self, rect: Rect) -> (i32, i32, i32, i32) {
-        let min_cx = (rect.x / self.cell_size).floor() as i32;
-        let min_cy = (rect.y / self.cell_size).floor() as i32;
-        let max_cx = ((rect.x + rect.width) / self.cell_size).floor() as i32;
-        let max_cy = ((rect.y + rect.height) / self.cell_size).floor() as i32;
+        let min_cx = (rect.x / self.cell_size)
+            .floor()
+            .clamp(i32::MIN as f32, i32::MAX as f32) as i32;
+        let min_cy = (rect.y / self.cell_size)
+            .floor()
+            .clamp(i32::MIN as f32, i32::MAX as f32) as i32;
+        let max_cx = ((rect.x + rect.width) / self.cell_size)
+            .floor()
+            .clamp(i32::MIN as f32, i32::MAX as f32) as i32;
+        let max_cy = ((rect.y + rect.height) / self.cell_size)
+            .floor()
+            .clamp(i32::MIN as f32, i32::MAX as f32) as i32;
         (min_cx, min_cy, max_cx, max_cy)
     }
 }
@@ -152,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_insert_and_query() {
-        let mut sh: SpatialHash<u32> = SpatialHash::new(100.0);
+        let mut sh: SpatialHash<u32> = SpatialHash::new(100.0).unwrap();
         sh.insert(rect(0.0, 0.0, 50.0, 50.0), 1);
         sh.insert(rect(200.0, 200.0, 50.0, 50.0), 2);
 
@@ -163,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_clear_resets_state() {
-        let mut sh: SpatialHash<u32> = SpatialHash::new(64.0);
+        let mut sh: SpatialHash<u32> = SpatialHash::new(64.0).unwrap();
         sh.insert(rect(0.0, 0.0, 10.0, 10.0), 42);
         assert!(!sh.is_empty());
 
@@ -177,7 +187,7 @@ mod tests {
     #[test]
     fn test_multi_cell_item() {
         // An item spanning 2 cells horizontally should appear in queries to either cell.
-        let mut sh: SpatialHash<&str> = SpatialHash::new(100.0);
+        let mut sh: SpatialHash<&str> = SpatialHash::new(100.0).unwrap();
         // rect spans cells (0,0) and (1,0)
         sh.insert(rect(50.0, 0.0, 100.0, 50.0), "wide");
 
@@ -192,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_negative_coordinates() {
-        let mut sh: SpatialHash<i32> = SpatialHash::new(50.0);
+        let mut sh: SpatialHash<i32> = SpatialHash::new(50.0).unwrap();
         sh.insert(rect(-100.0, -100.0, 20.0, 20.0), 99);
 
         let results = sh.query(rect(-110.0, -110.0, 40.0, 40.0));

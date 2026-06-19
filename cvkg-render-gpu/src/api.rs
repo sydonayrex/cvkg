@@ -25,6 +25,10 @@ impl cvkg_core::Renderer for SurtrRenderer {
             && self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
     }
 
+    fn text_scale_factor(&self) -> f32 {
+        self.current_scale_factor()
+    }
+
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
         log::info!(
             "[Surtr] Pre-warming Mega-Heim with {} assets...",
@@ -1518,6 +1522,34 @@ impl cvkg_core::Renderer for SurtrRenderer {
             .serialize(tree)
             .map_err(|e| format!("SVG filter serialization failed: {}", e))
     }
+
+    /// Phase 2.1: text shaping cache lookup.
+    /// Uses a hashed per-frame cache keyed by text content and font size.
+    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let mut hasher = DefaultHasher::new();
+        text.hash(&mut hasher);
+        size.to_bits().hash(&mut hasher);
+        let key = hasher.finish();
+        if let Some(&result) = self.shaped_text_cache.get(&key) {
+            return result;
+        }
+        let style = cvkg_runic_text::TextStyle::new("Inter", size);
+        let spans = [cvkg_runic_text::TextSpan::new(text, style)];
+        let result = if let Some(shaped) = self.shape_rich_text(
+            &spans,
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            (shaped.width, shaped.height)
+        } else {
+            (0.0, 0.0)
+        };
+        self.shaped_text_cache.insert(key, result);
+        result
+    }
 }
 
 // ── Inherent methods on SurtrRenderer (not part of the Renderer trait) ──
@@ -1527,6 +1559,11 @@ impl SurtrRenderer {
     /// before re-rendering the component tree.
     pub fn clear_event_handlers(&mut self) {
         self.event_handlers.clear();
+    }
+
+    /// Phase 2.1: clear the text shaping cache at the start of each frame.
+    pub fn clear_text_cache(&mut self) {
+        self.shaped_text_cache.clear();
     }
 
     /// Get all registered event handlers for a specific event type.
@@ -1637,6 +1674,8 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         cvkg_core::begin_render_phase();
         self.frame_rendered = false;
         self.app_drew_background = false;
+        // Phase 2.1: clear text shaping cache at start of each frame.
+        self.shaped_text_cache.clear();
         let id = self
             .current_window
             .expect("No target window set for frame. Call set_target_window first.");

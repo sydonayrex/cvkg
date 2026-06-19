@@ -1812,8 +1812,6 @@ struct ProgressiveChild {
     /// The view hash (from `LayoutView::view_hash()`), or 0 if the view
     /// does not provide a hash.
     hash: u64,
-    /// The index into the original subviews slice.
-    index: usize,
     /// Whether this child has been laid out by the Taffy engine.
     laid_out: bool,
     /// The computed rect (from Taffy or fallback).
@@ -1867,10 +1865,8 @@ impl<'a> ProgressiveLayoutContext<'a> {
     ) -> Self {
         let entries = subviews
             .iter()
-            .enumerate()
-            .map(|(i, v)| ProgressiveChild {
+            .map(|v| ProgressiveChild {
                 hash: v.view_hash(),
-                index: i,
                 laid_out: false,
                 rect: Rect::zero(),
             })
@@ -2073,11 +2069,6 @@ impl<'a> ProgressiveLayoutContext<'a> {
 
         self.fallback_applied = true;
         fallback_rects
-    }
-
-    /// Return a reference to the per-child tracking entries.
-    pub fn computed_rects(&self) -> &[ProgressiveChild] {
-        &self.entries
     }
 
     /// Consume the context and return the final `Vec<Rect>` for all children
@@ -2748,7 +2739,7 @@ mod tests {
             Distribution::Leading,
         );
         ctx1.layout_next_batch(2);
-        for entry in ctx1.computed_rects().iter() {
+        for entry in ctx1.entries.iter() {
             if entry.rect != Rect::zero() {
                 cache.previous_rects.insert(entry.hash, entry.rect);
             }

@@ -356,6 +356,10 @@ pub struct SurtrRenderer {
     pub(crate) texture_view_cache: std::sync::Mutex<
         std::collections::HashMap<(crate::kvasir::resource::ResourceId, u32), wgpu::TextureView>,
     >,
+    /// Phase 2.1: text shaping cache. Maps (text, font_size) -> (width, height).
+    /// Cleared at the start of each frame. Avoids re-shaping identical strings
+    /// via HarfBuzz, which was the single biggest cost in the cpu_draw phase.
+    pub(crate) shaped_text_cache: std::collections::HashMap<u64, (f32, f32)>,
 }
 
 // P0-3 safety audit: unsafe Send/Sync on WASM.
@@ -2498,6 +2502,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 .collect(),
             bind_group_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             texture_view_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
+            shaped_text_cache: std::collections::HashMap::new(),
         }
     }
 

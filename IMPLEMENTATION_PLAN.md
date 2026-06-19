@@ -5,6 +5,8 @@
 **Symptom:** berserker demo runs at 13.7s/frame layout time, click boxes non-functional
 **Root Cause:** Full VDOM rebuild + full layout + full text shaping every frame; event handlers lost on rebuild
 
+> **Note:** The 9 P0 audit findings from `hory_sheet.md` (unsafe transmute, TVar desync, UTF-8 panic, broadphase cell size, NaN panic, NodeId/KvasirId collision, accesskit NodeId re-export, unsafe Send/Sync, pipeline cache) have all been **FIXED** in the codebase. This plan addresses the remaining performance issues that are not covered by those fixes.
+
 ---
 
 ## Problem Diagnosis

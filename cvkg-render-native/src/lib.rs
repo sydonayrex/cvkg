@@ -1053,7 +1053,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     self.frame_budget.subsystem_finish(0);
 
                     // GPU rendering
-                    let draw_start = std::time::Instant::now();
+                    let _draw_start = std::time::Instant::now();
                     let delta_time = redraw_start.duration_since(last_redraw_start).as_secs_f32();
                     let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
                     let mut gpu = gpu_arc
