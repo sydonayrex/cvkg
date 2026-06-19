@@ -546,8 +546,8 @@ impl MaterialCompiler {
     let original_size = in.size - 2.0 * margin;
     let half_size = original_size * 0.5;
     let p = in.logical - margin - half_size;
-    let d = sd_round_rect(p, half_size - in.radius, in.radius);
-    __RESULT__ = vec4<f32>(col.rgb, col.a * smoothstep(blur, 0.0, d));"#.trim().to_string()
+    let d_sdf = sd_round_rect(p, half_size - in.radius, in.radius);
+    __RESULT__ = vec4<f32>(col.rgb, col.a * smoothstep(blur, 0.0, d_sdf));"#.trim().to_string()
                 }
                 MaterialOp::NineSlice => {
                     "col".to_string() // Passthrough: 9-slice UV remapping is resolved on CPU

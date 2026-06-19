@@ -224,9 +224,9 @@ pub struct SurtrRenderer {
     // Telemetry
     pub telemetry: cvkg_core::TelemetryData,
 
-    /// Pipeline cache for disk-persisted compiled shaders.
-    /// Speeds up cold startup by avoiding recompilation of identical pipelines.
-    pub(crate) pipeline_cache: wgpu::PipelineCache,
+    /// Pipeline cache for disk-persisted compiled shaders when the adapter exposes PIPELINE_CACHE.
+    /// None means pipelines compile normally without a disk cache.
+    pub(crate) pipeline_cache: Option<wgpu::PipelineCache>,
 
     /// Configuration for render-loop frame timing and degradation strategies.
     pub frame_budget: cvkg_core::FrameBudget,
@@ -842,6 +842,7 @@ impl SurtrRenderer {
         );
         log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
+        let supports_pipeline_cache = adapter.features().contains(wgpu::Features::PIPELINE_CACHE);
         #[cfg(not(target_arch = "wasm32"))]
         let mut required_features =
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -851,6 +852,9 @@ impl SurtrRenderer {
         let mut required_features = wgpu::Features::empty(); // Fallbacks for WebGL
         if supports_timestamps {
             required_features |= wgpu::Features::TIMESTAMP_QUERY;
+        }
+        if supports_pipeline_cache {
+            required_features |= wgpu::Features::PIPELINE_CACHE;
         }
                 // Enable validation layer in debug builds for better error reporting
         #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
@@ -1038,7 +1042,7 @@ impl SurtrRenderer {
         // matches the cache bytes. If the sidecar is missing or the hash
         // does not match, we treat the cache as empty rather than risk
         // passing tampered data through the unsafe boundary.
-        let pipeline_cache = {
+        let pipeline_cache = if device.features().contains(wgpu::Features::PIPELINE_CACHE) {
             let cache_dir = std::env::current_exe()
                 .ok()
                 .and_then(|p| p.parent().map(|d| d.join("pipeline_cache")))
@@ -1054,13 +1058,18 @@ impl SurtrRenderer {
                     None
                 }
             };
-            unsafe {
+            Some(unsafe {
                 device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
                     label: Some("CVKG Pipeline Cache"),
                     data: cache_data.as_deref(),
                     fallback: true,
                 })
-            }
+            })
+        } else {
+            log::debug!(
+                "[GPU] device does not expose PIPELINE_CACHE; compiling pipelines without cache"
+            );
+            None
         };
         let materials_generated = crate::material::generate_builtins_wgsl();
 
@@ -1247,7 +1256,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         let background_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -1283,7 +1292,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // ── Specialized Material Pipelines ─────────────────────────────────────
@@ -1329,7 +1338,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
         let ui_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim UI"),
@@ -1358,7 +1367,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
         let glass_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Muspelheim Glass"),
@@ -1387,7 +1396,7 @@ impl SurtrRenderer {
                 alpha_to_coverage_enabled: false,
             },
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // Muspelheim Bloom Extract Pipeline
@@ -1415,7 +1424,7 @@ impl SurtrRenderer {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
-                cache: Some(&pipeline_cache),
+                cache: pipeline_cache.as_ref(),
             });
 
         // Muspelheim Copy Pipeline (identity copy for backdrop blur Pass 2)
@@ -1442,7 +1451,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // Kawase blur pyramid pipelines (separate shader module -- conflicting bindings)
@@ -1514,7 +1523,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
         let kawase_up_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Kawase Upsample"),
@@ -1539,7 +1548,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // Muspelheim Composite Pipeline (additive blend onto screen)
@@ -1578,7 +1587,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // Forge the Mega-Heim (4096x4096 RGBA for production batching)
@@ -1704,6 +1713,7 @@ impl SurtrRenderer {
         let mut texture_registry = LruCache::new(NonZeroUsize::new(31).unwrap());
         let mut texture_bind_groups = Vec::new();
 
+        // Index 0 is permanently reserved for the Mega-Heim atlas. Loaded images start at 1.
         texture_registry.put("__mega_heim".to_string(), 0);
         texture_bind_groups.push(mega_heim_bind_group.clone());
 
@@ -1869,7 +1879,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // Volumetric raymarching pipeline (fullscreen triangle with SDF raymarch).
@@ -1938,7 +1948,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // HDR tone mapping pipeline (ACES filmic tone mapping).
@@ -2008,7 +2018,7 @@ impl SurtrRenderer {
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
-            cache: Some(&pipeline_cache),
+            cache: pipeline_cache.as_ref(),
         });
 
         // Tone map uniform buffer (exposure, gamma)
@@ -2087,7 +2097,7 @@ impl SurtrRenderer {
                 module: &particle_shader,
                 entry_point: Some("cs_main"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-                cache: Some(&pipeline_cache),
+                cache: pipeline_cache.as_ref(),
             });
 
         // Particle storage buffer (ring buffer, 65536 particles × 32 bytes)
@@ -2217,7 +2227,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
-                cache: Some(&pipeline_cache),
+                cache: pipeline_cache.as_ref(),
             });
 
         Self {
@@ -3736,7 +3746,6 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             [uv_rect.x, uv_rect.y + uv_rect.height],
         ];
 
-        let screen = [self.current_width() as f32, self.current_height() as f32];
         let rect = Rect {
             x: points[0][0],
             y: points[0][1],
@@ -3924,7 +3933,6 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         let y2 = snap(rect.y + rect.height);
         let z = self.current_z;
         let normal = [0.0, 0.0, 1.0];
-        let screen = [self.current_width() as f32, self.current_height() as f32];
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
             y: -10000.0,
@@ -4553,10 +4561,11 @@ impl Drop for SurtrRenderer {
             .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
         let _ = std::fs::create_dir_all(&cache_dir);
         let cache_path = cache_dir.join("cvkg_render_gpu.bin");
-        let data = self.pipeline_cache.get_data();
-        if let Some(data) = data {
-            if let Err(e) = std::fs::write(&cache_path, data) {
-                log::warn!("Failed to persist pipeline cache: {}", e);
+        if let Some(cache) = &self.pipeline_cache {
+            if let Some(data) = cache.get_data() {
+                if let Err(e) = std::fs::write(&cache_path, data) {
+                    log::warn!("Failed to persist pipeline cache: {}", e);
+                }
             }
         }
 
@@ -4789,7 +4798,6 @@ impl SurtrRenderer {
             }
 
             let lyon_path = usvg_to_lyon(path, node.abs_transform());
-            let screen = [4096.0, 4096.0]; // Placeholder, will be overridden if needed
             let clip = [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY]; // Default clip
 
             // Tessellate fill if present
@@ -5138,7 +5146,6 @@ impl SurtrRenderer {
         let _scale_x = rect.width / model.view_box.width;
         let _scale_y = rect.height / model.view_box.height;
         let base_idx = self.vertices.len() as u32;
-        let screen = [self.current_width() as f32, self.current_height() as f32];
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
             y: -10000.0,
