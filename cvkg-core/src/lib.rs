@@ -33,7 +33,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::panic::AssertUnwindSafe;
 use std::str::FromStr;
 
 pub mod error_types;
@@ -2686,9 +2685,12 @@ pub struct ColorTheme {
     pub glass_ior: f32,
     /// Color space for framebuffer output. 0 = sRGB (default), 1 = Display P3, 2 = Adobe RGB.
     pub color_space: u32,
-    // Padding to match WGSL uniform buffer 16-byte alignment (total = 160 bytes)
+    // Padding to match WGSL uniform buffer 16-byte struct alignment (total = 176 bytes).
     pub _pad0: f32,
     pub _pad1: f32,
+    pub _pad2: f32,
+    pub _pad3: f32,
+    pub _pad4: f32,
 }
 impl ColorTheme {
     /// Asgard Mode: The high-fidelity "Cyberpunk Viking" aesthetic.
@@ -2711,6 +2713,9 @@ impl ColorTheme {
             color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
+            _pad2: 0.0,
+            _pad3: 0.0,
+            _pad4: 0.0,
         }
     }
 
@@ -2734,6 +2739,9 @@ impl ColorTheme {
             color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
+            _pad2: 0.0,
+            _pad3: 0.0,
+            _pad4: 0.0,
         }
     }
 
@@ -2759,6 +2767,9 @@ impl ColorTheme {
             color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
+            _pad2: 0.0,
+            _pad3: 0.0,
+            _pad4: 0.0,
         }
     }
 
@@ -2782,6 +2793,9 @@ impl ColorTheme {
             color_space: 0,
             _pad0: 0.0,
             _pad1: 0.0,
+            _pad2: 0.0,
+            _pad3: 0.0,
+            _pad4: 0.0,
         }
     }
 }
@@ -4754,7 +4768,12 @@ pub mod layout {
         pub delta_time: f32,
         /// Device scale factor for HiDPI / retina snapping. Defaults to 1.0.
         pub scale_factor: f32,
+        /// The visible viewport bounds in logical pixels.
+        /// If Some, layout execution can cull offscreen subtrees.
+        pub viewport: Option<Rect>,
         size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
+        /// Map tracking child-to-parent view hash relationships for bottom-up invalidation.
+        pub parent_map: HashMap<u64, u64>,
         /// Monotonically increasing generation counter for cache invalidation.
         /// When a view tree changes, bumping the generation causes stale entries
         /// to be treated as invalid without eagerly clearing the entire cache.
@@ -4779,7 +4798,9 @@ pub mod layout {
                 safe_area: SafeArea::default(),
                 delta_time: 0.016,
                 scale_factor: 1.0,
+                viewport: None,
                 size_cache: HashMap::new(),
+                parent_map: HashMap::new(),
                 generation: 0,
                 engine: None,
                 animators: None,
@@ -4807,7 +4828,9 @@ pub mod layout {
 
         pub fn clear(&mut self) {
             self.safe_area = SafeArea::default();
+            self.viewport = None;
             self.size_cache.clear();
+            self.parent_map.clear();
         }
 
         pub fn get_size(&self, view_hash: u64, proposal: SizeProposal) -> Option<Size> {
@@ -4822,9 +4845,27 @@ pub mod layout {
             self.size_cache.insert((view_hash, pw, ph), size);
         }
 
-        /// Remove all cached size entries for a specific view hash.
+        /// Register a child-to-parent layout relationship for bottom-up invalidation propagation.
+        pub fn register_parent(&mut self, child_hash: u64, parent_hash: u64) {
+            if child_hash != 0 && parent_hash != 0 {
+                self.parent_map.insert(child_hash, parent_hash);
+            }
+        }
+
+        /// Remove all cached size entries for a specific view hash and propagate the invalidation
+        /// bottom-up to all its layout ancestors to ensure consistent layout updates.
         pub fn invalidate_view(&mut self, view_hash: u64) {
-            self.size_cache.retain(|&(hash, _, _), _| hash != view_hash);
+            let mut to_invalidate = vec![view_hash];
+            let mut visited = std::collections::HashSet::new();
+            while let Some(hash) = to_invalidate.pop() {
+                if !visited.insert(hash) {
+                    continue;
+                }
+                self.size_cache.retain(|&(h, _, _), _| h != hash);
+                if let Some(&parent) = self.parent_map.get(&hash) {
+                    to_invalidate.push(parent);
+                }
+            }
         }
     }
 
@@ -4995,6 +5036,19 @@ pub mod layout {
 
         pub fn contains(&self, x: f32, y: f32) -> bool {
             x >= self.x && x <= self.x + self.width && y >= self.y && y <= self.y + self.height
+        }
+
+        /// Determines whether this rectangle overlaps with another rectangle.
+        ///
+        /// # Contract
+        /// Two rectangles overlap if their projection intervals on both the X
+        /// and Y axes overlap. This is used for viewport intersection checks
+        /// to determine visibility constraints during layout culling.
+        pub fn intersects(&self, other: &Rect) -> bool {
+            self.x < other.x + other.width
+                && self.x + self.width > other.x
+                && self.y < other.y + other.height
+                && self.y + self.height > other.y
         }
 
         pub fn size(&self) -> Size {

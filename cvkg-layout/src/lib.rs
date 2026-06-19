@@ -25,6 +25,53 @@
 pub use cvkg_core::layout::EdgeInsets;
 use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
 use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::HashSet;
+
+thread_local! {
+    static ACTIVE_LAYOUT_NODES: RefCell<HashSet<u64>> = RefCell::new(HashSet::new());
+}
+
+/// Helper function to prevent layout calculation cycles in recursive size queries.
+/// If a view is already being traversed on the current thread, returns the fallback size.
+fn with_layout_cycle_guard<F, R>(hash: u64, fallback: R, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    if hash == 0 {
+        return f();
+    }
+    let already_active = ACTIVE_LAYOUT_NODES.with(|nodes| !nodes.borrow_mut().insert(hash));
+    if already_active {
+        log::warn!("[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle with fallback size.", hash);
+        return fallback;
+    }
+    let res = f();
+    ACTIVE_LAYOUT_NODES.with(|nodes| {
+        nodes.borrow_mut().remove(&hash);
+    });
+    res
+}
+
+/// Helper function to prevent layout calculation cycles in recursive subview placements.
+fn with_layout_cycle_guard_void<F>(hash: u64, f: F)
+where
+    F: FnOnce(),
+{
+    if hash == 0 {
+        f();
+        return;
+    }
+    let already_active = ACTIVE_LAYOUT_NODES.with(|nodes| !nodes.borrow_mut().insert(hash));
+    if already_active {
+        log::warn!("[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle placement.", hash);
+        return;
+    }
+    f();
+    ACTIVE_LAYOUT_NODES.with(|nodes| {
+        nodes.borrow_mut().remove(&hash);
+    });
+}
 
 /// The central Taffy engine that computes flexbox and grid layouts.
 /// Stored opaquely inside `cvkg_core::LayoutCache::engine`.
@@ -148,13 +195,18 @@ fn compute_taffy_flex(
         let size = match cached_size {
             Some(sz) => sz,
             None => {
-                let sz = child.size_that_fits(proposal, &[], cache);
+                let sz = with_layout_cycle_guard(hash, Size::ZERO, || {
+                    child.size_that_fits(proposal, &[], cache)
+                });
                 if hash != 0 {
                     cache.set_size(hash, proposal, sz);
                 }
                 sz
             }
         };
+        if params.container_hash != 0 && hash != 0 {
+            cache.register_parent(hash, params.container_hash);
+        }
         sizes.push(size);
     }
 
@@ -284,13 +336,15 @@ fn apply_layout_animations(
     for (child, target_rect) in subviews.iter().zip(&rects) {
         let hash = child.view_hash();
         if hash != 0 {
-            if let Some(prev) = cache.previous_rects.get(&hash)
-                && (prev.x != target_rect.x
-                    || prev.y != target_rect.y
-                    || prev.width != target_rect.width
-                    || prev.height != target_rect.height)
-            {
-                transitions_to_update.push((hash, *prev, *target_rect));
+            if let Some(prev) = cache.previous_rects.get(&hash) {
+                let dx = (prev.x - target_rect.x).abs();
+                let dy = (prev.y - target_rect.y).abs();
+                let dw = (prev.width - target_rect.width).abs();
+                let dh = (prev.height - target_rect.height).abs();
+                let epsilon = 1e-3;
+                if dx > epsilon || dy > epsilon || dw > epsilon || dh > epsilon {
+                    transitions_to_update.push((hash, *prev, *target_rect));
+                }
             }
             cache.previous_rects.insert(hash, *target_rect);
         }
@@ -352,7 +406,16 @@ fn apply_layout_animations(
         if let Some(interp) = interpolated_rects.get(&hash) {
             target_rect = *interp;
         }
-        child.place_subviews(target_rect, &mut [], cache);
+        let is_visible = if let Some(viewport) = cache.viewport {
+            target_rect.intersects(&viewport)
+        } else {
+            true
+        };
+        if is_visible {
+            with_layout_cycle_guard_void(hash, || {
+                child.place_subviews(target_rect, &mut [], cache);
+            });
+        }
     }
 }
 
@@ -613,12 +676,18 @@ impl LayoutView for ZStack {
         subviews: &[&dyn LayoutView],
         cache: &mut LayoutCache,
     ) -> Size {
-        // For ZStack, we want the maximum width and height of all children
         let mut width = 0.0f32;
         let mut height = 0.0f32;
+        let self_hash = self.view_hash();
 
         for child in subviews.iter() {
-            let child_size = child.size_that_fits(proposal, &[], cache);
+            let child_hash = child.view_hash();
+            if self_hash != 0 && child_hash != 0 {
+                cache.register_parent(child_hash, self_hash);
+            }
+            let child_size = with_layout_cycle_guard(child_hash, Size::ZERO, || {
+                child.size_that_fits(proposal, &[], cache)
+            });
             width = width.max(child_size.width);
             height = height.max(child_size.height);
         }
@@ -632,9 +701,22 @@ impl LayoutView for ZStack {
         subviews: &mut [&mut dyn LayoutView],
         cache: &mut LayoutCache,
     ) {
-        // In ZStack, all children get the same bounds (they stack on top of each other)
+        let self_hash = self.view_hash();
         for child in subviews.iter_mut() {
-            child.place_subviews(bounds, &mut [], cache);
+            let child_hash = child.view_hash();
+            if self_hash != 0 && child_hash != 0 {
+                cache.register_parent(child_hash, self_hash);
+            }
+            let is_visible = if let Some(viewport) = cache.viewport {
+                bounds.intersects(&viewport)
+            } else {
+                true
+            };
+            if is_visible {
+                with_layout_cycle_guard_void(child_hash, || {
+                    child.place_subviews(bounds, &mut [], cache);
+                });
+            }
         }
     }
 }
@@ -702,6 +784,7 @@ impl LayoutView for Flex {
             return;
         }
 
+        let self_hash = self.view_hash();
         let n = subviews.len() as f32;
         match self.orientation {
             cvkg_core::Orientation::Horizontal => {
@@ -714,7 +797,20 @@ impl LayoutView for Flex {
                         width: item_width,
                         height: bounds.height,
                     };
-                    child.place_subviews(child_rect, &mut [], cache);
+                    let child_hash = child.view_hash();
+                    if self_hash != 0 && child_hash != 0 {
+                        cache.register_parent(child_hash, self_hash);
+                    }
+                    let is_visible = if let Some(viewport) = cache.viewport {
+                        child_rect.intersects(&viewport)
+                    } else {
+                        true
+                    };
+                    if is_visible {
+                        with_layout_cycle_guard_void(child_hash, || {
+                            child.place_subviews(child_rect, &mut [], cache);
+                        });
+                    }
                 }
             }
             cvkg_core::Orientation::Vertical => {
@@ -727,7 +823,20 @@ impl LayoutView for Flex {
                         width: bounds.width,
                         height: item_height,
                     };
-                    child.place_subviews(child_rect, &mut [], cache);
+                    let child_hash = child.view_hash();
+                    if self_hash != 0 && child_hash != 0 {
+                        cache.register_parent(child_hash, self_hash);
+                    }
+                    let is_visible = if let Some(viewport) = cache.viewport {
+                        child_rect.intersects(&viewport)
+                    } else {
+                        true
+                    };
+                    if is_visible {
+                        with_layout_cycle_guard_void(child_hash, || {
+                            child.place_subviews(child_rect, &mut [], cache);
+                        });
+                    }
                 }
             }
         }
@@ -807,7 +916,11 @@ impl Grid {
     ) -> Vec<Rect> {
         let mut hashes = Vec::with_capacity(subviews.len());
         for child in subviews {
-            hashes.push(child.view_hash());
+            let hash = child.view_hash();
+            hashes.push(hash);
+            if container_hash != 0 && hash != 0 {
+                cache.register_parent(hash, container_hash);
+            }
         }
 
         let engine = TaffyLayoutEngine::get_or_insert_engine(cache);
@@ -993,10 +1106,17 @@ impl LayoutView for Padding {
                 .height
                 .map(|h| (h - self.insets.top - self.insets.bottom).max(0.0)),
         );
+        let self_hash = self.view_hash();
         let child_size = if subviews.is_empty() {
             Size::ZERO
         } else {
-            subviews[0].size_that_fits(inner_proposal, &[], cache)
+            let child_hash = subviews[0].view_hash();
+            if self_hash != 0 && child_hash != 0 {
+                cache.register_parent(child_hash, self_hash);
+            }
+            with_layout_cycle_guard(child_hash, Size::ZERO, || {
+                subviews[0].size_that_fits(inner_proposal, &[], cache)
+            })
         };
         Size {
             width: child_size.width + self.insets.leading + self.insets.trailing,
@@ -1016,8 +1136,22 @@ impl LayoutView for Padding {
             width: (bounds.width - self.insets.leading - self.insets.trailing).max(0.0),
             height: (bounds.height - self.insets.top - self.insets.bottom).max(0.0),
         };
+        let self_hash = self.view_hash();
         for child in subviews.iter_mut() {
-            child.place_subviews(inner, &mut [], cache);
+            let child_hash = child.view_hash();
+            if self_hash != 0 && child_hash != 0 {
+                cache.register_parent(child_hash, self_hash);
+            }
+            let is_visible = if let Some(viewport) = cache.viewport {
+                inner.intersects(&viewport)
+            } else {
+                true
+            };
+            if is_visible {
+                with_layout_cycle_guard_void(child_hash, || {
+                    child.place_subviews(inner, &mut [], cache);
+                });
+            }
         }
     }
 }
@@ -1154,12 +1288,19 @@ impl LayoutView for AspectRatio {
         if subviews.is_empty() {
             return self.fitted_size(proposal);
         }
+        let self_hash = self.view_hash();
         let child = subviews[0];
-        let child_size = child.size_that_fits(
-            SizeProposal::new(Some(f32::MAX), Some(f32::MAX)),
-            &[],
-            cache,
-        );
+        let child_hash = child.view_hash();
+        if self_hash != 0 && child_hash != 0 {
+            cache.register_parent(child_hash, self_hash);
+        }
+        let child_size = with_layout_cycle_guard(child_hash, Size::ZERO, || {
+            child.size_that_fits(
+                SizeProposal::new(Some(f32::MAX), Some(f32::MAX)),
+                &[],
+                cache,
+            )
+        });
         let intrinsic_ratio = child_size.width / child_size.height.max(0.01);
         if (intrinsic_ratio - self.ratio).abs() < 0.01 {
             return self.fitted_size(proposal);
@@ -1190,8 +1331,22 @@ impl LayoutView for AspectRatio {
             width: fit.width,
             height: fit.height,
         };
+        let self_hash = self.view_hash();
         for child in subviews.iter_mut() {
-            child.place_subviews(inner, &mut [], cache);
+            let child_hash = child.view_hash();
+            if self_hash != 0 && child_hash != 0 {
+                cache.register_parent(child_hash, self_hash);
+            }
+            let is_visible = if let Some(viewport) = cache.viewport {
+                inner.intersects(&viewport)
+            } else {
+                true
+            };
+            if is_visible {
+                with_layout_cycle_guard_void(child_hash, || {
+                    child.place_subviews(inner, &mut [], cache);
+                });
+            }
         }
     }
 }
@@ -1410,5 +1565,111 @@ mod tests {
                 height: 100.0
             }
         );
+    }
+
+    #[test]
+    fn test_layout_cycle_detection() {
+        struct CyclingView {
+            child_hash: u64,
+        }
+        impl LayoutView for CyclingView {
+            fn size_that_fits(
+                &self,
+                proposal: SizeProposal,
+                _subviews: &[&dyn LayoutView],
+                cache: &mut LayoutCache,
+            ) -> Size {
+                with_layout_cycle_guard(self.view_hash(), Size { width: 42.0, height: 42.0 }, || {
+                    let recursive_self = CyclingView { child_hash: self.view_hash() };
+                    let subviews: Vec<&dyn LayoutView> = vec![&recursive_self];
+                    recursive_self.size_that_fits(proposal, &subviews, cache)
+                })
+            }
+            fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {}
+            fn view_hash(&self) -> u64 {
+                12345
+            }
+        }
+
+        let view = CyclingView { child_hash: 12345 };
+        let mut cache = LayoutCache::new();
+        let size = view.size_that_fits(SizeProposal::unspecified(), &[], &mut cache);
+        // The cycle should be broken and return the fallback size of 42
+        assert_eq!(size.width, 42.0);
+        assert_eq!(size.height, 42.0);
+    }
+
+    #[test]
+    fn test_bottom_up_layout_invalidation() {
+        let mut cache = LayoutCache::new();
+        let child_hash = 100u64;
+        let parent_hash = 200u64;
+
+        cache.register_parent(child_hash, parent_hash);
+        cache.set_size(child_hash, SizeProposal::unspecified(), Size { width: 10.0, height: 10.0 });
+        cache.set_size(parent_hash, SizeProposal::unspecified(), Size { width: 20.0, height: 20.0 });
+
+        // Verify both are in the cache
+        assert!(cache.get_size(child_hash, SizeProposal::unspecified()).is_some());
+        assert!(cache.get_size(parent_hash, SizeProposal::unspecified()).is_some());
+
+        // Invalidate child
+        cache.invalidate_view(child_hash);
+
+        // Child invalidation must propagate bottom-up and invalidate parent too!
+        assert!(cache.get_size(child_hash, SizeProposal::unspecified()).is_none());
+        assert!(cache.get_size(parent_hash, SizeProposal::unspecified()).is_none());
+    }
+
+    #[test]
+    fn test_viewport_aware_layout_culling() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        struct SpyView {
+            calls: Arc<AtomicUsize>,
+            hash: u64,
+            rect: Rect,
+        }
+
+        impl LayoutView for SpyView {
+            fn size_that_fits(&self, _p: SizeProposal, _s: &[&dyn LayoutView], _c: &mut LayoutCache) -> Size {
+                Size { width: self.rect.width, height: self.rect.height }
+            }
+            fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+            }
+            fn view_hash(&self) -> u64 {
+                self.hash
+            }
+        }
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let view1 = SpyView {
+            calls: calls.clone(),
+            hash: 1001,
+            rect: Rect::new(0.0, 0.0, 50.0, 50.0),
+        };
+        let view2 = SpyView {
+            calls: calls.clone(),
+            hash: 1002,
+            rect: Rect::new(500.0, 0.0, 50.0, 50.0), // Offscreen
+        };
+
+        let mut cache = LayoutCache::new();
+        // Viewport only covers the first view (ends at 55.0, second child is at 60.0)
+        cache.viewport = Some(Rect::new(0.0, 0.0, 55.0, 100.0));
+
+        let mut v1 = view1;
+        let mut v2 = view2;
+        let mut mut_subviews: Vec<&mut dyn LayoutView> = vec![&mut v1, &mut v2];
+
+        HStack::new(10.0, Alignment::Center, Distribution::Leading)
+            .place_subviews(Rect::new(0.0, 0.0, 600.0, 100.0), &mut mut_subviews, &mut cache);
+
+        // Since viewport-aware culling is enabled and only view1 intersects it,
+        // view2.place_subviews should be bypassed/culled.
+        // Therefore calls count should be 1.
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }
