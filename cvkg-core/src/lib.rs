@@ -2211,14 +2211,70 @@ pub trait Renderer: ElapsedTime + Send {
     fn stroke_polygon(&mut self, _vertices: &[[f32; 2]], _color: [f32; 4], _stroke_width: f32) {}
 
     // ── Text ─────────────────────────────────────────────────────────────
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]);
+    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        let span = cvkg_runic_text::TextSpan::new(
+            text,
+            cvkg_runic_text::TextStyle {
+                family: "Inter".to_string(),
+                font_size: size,
+                color: [(color[0]*255.0) as u8, (color[1]*255.0) as u8, (color[2]*255.0) as u8, (color[3]*255.0) as u8],
+                ..Default::default()
+            },
+        );
+        if let Some(shaped) = self.shape_rich_text(
+            &[span],
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            self.draw_shaped_text(&shaped, x, y);
+        }
+    }
+
     /// Measure the width and height of the specified text.
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32);
+    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
+        let span = cvkg_runic_text::TextSpan::new(
+            text,
+            cvkg_runic_text::TextStyle {
+                family: "Inter".to_string(),
+                font_size: size,
+                ..Default::default()
+            },
+        );
+        if let Some(shaped) = self.shape_rich_text(
+            &[span],
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            (shaped.width, shaped.height)
+        } else {
+            (0.0, 0.0)
+        }
+    }
+
     /// Return the baseline offset (ascent) for the given text and size.
     /// This is the distance from the text origin (y in draw_text) to the baseline.
     /// Default returns 0.0; override in renderers that support text shaping.
-    fn measure_text_baseline(&mut self, _text: &str, _size: f32) -> f32 {
-        0.0
+    fn measure_text_baseline(&mut self, text: &str, size: f32) -> f32 {
+        let span = cvkg_runic_text::TextSpan::new(
+            text,
+            cvkg_runic_text::TextStyle {
+                family: "Inter".to_string(),
+                font_size: size,
+                ..Default::default()
+            },
+        );
+        if let Some(shaped) = self.shape_rich_text(
+            &[span],
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            shaped.ascent
+        } else {
+            0.0
+        }
     }
 
     fn shape_rich_text(
@@ -2692,6 +2748,13 @@ pub struct ColorTheme {
     pub _pad3: f32,
     pub _pad4: f32,
 }
+// P2-9: Compile-time layout verification between Rust ColorTheme and WGSL.
+// WGSL std140 struct size = 176 bytes (164 raw + 12 alignment padding).
+// Rust repr(C) struct must match exactly.
+const _: () = assert!(
+    std::mem::size_of::<ColorTheme>() == 176,
+    "ColorTheme Rust/WGSL layout mismatch: expected 176 bytes"
+);
 impl ColorTheme {
     /// Asgard Mode: The high-fidelity "Cyberpunk Viking" aesthetic.
     pub fn asgard() -> Self {
@@ -5652,10 +5715,7 @@ mod vili_tests {
         fn stroke_rounded_rect(&mut self, _r: Rect, _rad: f32, _c: [f32; 4], _w: f32) {}
         fn stroke_ellipse(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
         fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
-        fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
-        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) {
-            (0.0, 0.0)
-        }
+
         fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
         fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {
         }
@@ -5856,10 +5916,7 @@ mod error_boundary_tests {
         fn stroke_rounded_rect(&mut self, _r: Rect, _rad: f32, _c: [f32; 4], _w: f32) {}
         fn stroke_ellipse(&mut self, _r: Rect, _c: [f32; 4], _w: f32) {}
         fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
-        fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
-        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) {
-            (0.0, 0.0)
-        }
+
         fn memoize(&mut self, _id: u64, _hash: u64, _r: &dyn Fn(&mut dyn Renderer)) {}
         fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {
         }
@@ -6025,10 +6082,7 @@ mod error_boundary_tests {
         }
         fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _stroke_width: f32) {}
         fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _c: [f32; 4], _w: f32) {}
-        fn draw_text(&mut self, _t: &str, _x: f32, _y: f32, _s: f32, _c: [f32; 4]) {}
-        fn measure_text(&mut self, _t: &str, _s: f32) -> (f32, f32) {
-            (0.0, 0.0)
-        }
+
         fn push_clip_rect(&mut self, _rect: Rect) {
             self.clip_depth += 1;
         }
@@ -8590,6 +8644,214 @@ mod p1_39_dirty_region_tests {
 //  - Automatic QualityLevel adjustment when over budget
 //  - Integration with the renderer's frame loop
 
+// =============================================================================
+// P1-41: LIST / TREE VIRTUALIZATION
+// =============================================================================
+
+/// Outcome of a `VirtualListWindow::compute` call — describes which rows
+/// should be rendered and what scroll offset to apply to position them.
+///
+/// P1-41: IDE and visualization workloads with tens-of-thousands of rows must
+/// only render the rows visible in the current viewport.  `VirtualListWindow`
+/// computes the correct row range without building the full row list.
+#[derive(Debug, Clone, PartialEq)]
+pub struct VirtualWindow {
+    /// Index of the first row that should be rendered (inclusive).
+    pub first_visible: usize,
+    /// Index one past the last row that should be rendered (exclusive).
+    pub last_visible: usize,
+    /// Total estimated height of all rows above `first_visible`, in logical
+    /// pixels.  Use this as the scroll-offset padding above the rendered rows.
+    pub offset_before: f32,
+    /// Total estimated height of all rows below `last_visible`, in logical
+    /// pixels.  Use this as the placeholder height below the rendered rows.
+    pub offset_after: f32,
+}
+
+/// Computes the visible slice of a uniform-height virtual list.
+///
+/// Contract:
+/// - `total_rows`: total number of items in the list (can be enormous).
+/// - `row_height`: uniform logical height of every row in pixels.
+/// - `viewport_y`: scroll offset of the viewport top edge.
+/// - `viewport_height`: height of the visible window in pixels.
+/// - `overscan`: number of extra rows to render above/below the viewport for
+///   smooth scrolling.  Typically 2–5.
+///
+/// Returns a `VirtualWindow` describing the rendered slice and offset padding.
+/// If `row_height` is ≤ 0 or `total_rows` is 0, returns a zero window.
+pub fn compute_virtual_list_window(
+    total_rows: usize,
+    row_height: f32,
+    viewport_y: f32,
+    viewport_height: f32,
+    overscan: usize,
+) -> VirtualWindow {
+    if total_rows == 0 || row_height <= 0.0 {
+        return VirtualWindow {
+            first_visible: 0,
+            last_visible: 0,
+            offset_before: 0.0,
+            offset_after: 0.0,
+        };
+    }
+
+    // How many rows fit in the viewport (rounded up for partial rows).
+    let visible_rows = (viewport_height / row_height).ceil() as usize;
+
+    // First row whose bottom edge is below the viewport top.
+    let first = (viewport_y / row_height).floor() as isize - overscan as isize;
+    let first = first.max(0) as usize;
+
+    // Last row whose top edge is above the viewport bottom.
+    let last = first + visible_rows + 2 * overscan;
+    let last = last.min(total_rows);
+
+    VirtualWindow {
+        first_visible: first,
+        last_visible: last,
+        offset_before: first as f32 * row_height,
+        offset_after: (total_rows - last) as f32 * row_height,
+    }
+}
+
+/// Computes the visible slice of a variable-height virtual list using
+/// a precomputed prefix-sum of row heights.
+///
+/// Contract:
+/// - `prefix_heights[i]` is the cumulative height of all rows 0..i (not
+///   including row i).  `prefix_heights.len()` must equal `total_rows + 1`
+///   where `prefix_heights[0] == 0` and `prefix_heights[total_rows]` is the
+///   total list height.
+/// - `viewport_y` and `viewport_height` are in the same logical pixel units.
+/// - `overscan` works the same as in `compute_virtual_list_window`.
+///
+/// This is O(log N) via binary search on the prefix-sum array.
+pub fn compute_virtual_list_window_variable(
+    prefix_heights: &[f32],
+    viewport_y: f32,
+    viewport_height: f32,
+    overscan: usize,
+) -> VirtualWindow {
+    let total_rows = prefix_heights.len().saturating_sub(1);
+    if total_rows == 0 {
+        return VirtualWindow {
+            first_visible: 0,
+            last_visible: 0,
+            offset_before: 0.0,
+            offset_after: 0.0,
+        };
+    }
+
+    // Binary search for the first row whose cumulative top is >= viewport_y.
+    let first_idx = prefix_heights
+        .partition_point(|&h| h < viewport_y)
+        .saturating_sub(1);
+    let first = first_idx.saturating_sub(overscan);
+
+    // Binary search for the last row whose top < viewport_y + viewport_height.
+    let viewport_bottom = viewport_y + viewport_height;
+    let last_idx = prefix_heights.partition_point(|&h| h < viewport_bottom);
+    let last = (last_idx + overscan).min(total_rows);
+
+    VirtualWindow {
+        first_visible: first,
+        last_visible: last,
+        offset_before: prefix_heights[first],
+        offset_after: prefix_heights[total_rows] - prefix_heights[last],
+    }
+}
+
+// =============================================================================
+// P1-42: DEPENDENCY-TRACKED STATE INVALIDATION
+// =============================================================================
+
+/// Tracks fine-grained dependencies between components (subscribers) and the
+/// state keys they depend on.
+///
+/// P1-42: A single `State<T>` mutation currently fans out to every subscriber,
+/// even those that do not depend on the changed value.  `DependencyGraph`
+/// enables callers to register which state keys a component depends on, then
+/// query only the components that are actually affected by a given change.
+///
+/// This is a lightweight directed graph: state_key → Set<component_id>.
+/// The graph is append-only; removal happens by re-registration.
+pub struct DependencyGraph {
+    /// Maps a state key (e.g. a hashed type id + version) to the set of
+    /// component IDs that depend on it.
+    deps: std::collections::HashMap<u64, std::collections::HashSet<u64>>,
+    /// Reverse map: component_id → set of state keys it depends on.
+    /// Used to efficiently re-register (clear then re-add) a component.
+    reverse: std::collections::HashMap<u64, Vec<u64>>,
+}
+
+impl DependencyGraph {
+    /// Create an empty dependency graph.
+    pub fn new() -> Self {
+        Self {
+            deps: std::collections::HashMap::new(),
+            reverse: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Register that `component_id` depends on `state_key`.
+    ///
+    /// Idempotent — calling this twice with the same arguments has no effect.
+    /// To replace a component's full dependency set, call `unregister` first.
+    pub fn register(&mut self, component_id: u64, state_key: u64) {
+        self.deps
+            .entry(state_key)
+            .or_default()
+            .insert(component_id);
+        self.reverse
+            .entry(component_id)
+            .or_default()
+            .push(state_key);
+    }
+
+    /// Remove all dependencies for `component_id`.  Call before re-registering
+    /// a component after its dependency set changes.
+    pub fn unregister(&mut self, component_id: u64) {
+        if let Some(keys) = self.reverse.remove(&component_id) {
+            for key in keys {
+                if let Some(set) = self.deps.get_mut(&key) {
+                    set.remove(&component_id);
+                }
+            }
+        }
+    }
+
+    /// Return the set of component IDs that depend on `state_key`.
+    ///
+    /// Returns an empty slice when no component depends on this key.
+    /// Callers iterate the result and schedule re-render only for those
+    /// components instead of broadcasting to all subscribers.
+    pub fn affected_components(&self, state_key: u64) -> impl Iterator<Item = u64> + '_ {
+        self.deps
+            .get(&state_key)
+            .into_iter()
+            .flat_map(|set| set.iter().copied())
+    }
+
+    /// Return true if any component depends on `state_key`.
+    pub fn has_dependents(&self, state_key: u64) -> bool {
+        self.deps
+            .get(&state_key)
+            .map_or(false, |set| !set.is_empty())
+    }
+
+    /// Total number of registered dependency edges.
+    pub fn edge_count(&self) -> usize {
+        self.deps.values().map(|s| s.len()).sum()
+    }
+}
+
+impl Default for DependencyGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 use std::time::{Duration, Instant};
 
 /// P1-43: per-subsystem budget allocation. A frame's total
@@ -8836,5 +9098,119 @@ mod p1_40_event_phase_tests {
         let phase = EventPhase::Bubble;
         let copied = phase;
         assert_eq!(phase, copied);
+    }
+}
+
+// =========================================================================
+// P1-41: VirtualListWindow tests
+// =========================================================================
+#[cfg(test)]
+mod p1_41_virtual_list_tests {
+    use super::{compute_virtual_list_window, compute_virtual_list_window_variable};
+
+    #[test]
+    fn uniform_list_at_top_shows_first_rows() {
+        // 1000 rows of 20px each, viewport at y=0 height=200, overscan=2.
+        let w = compute_virtual_list_window(1000, 20.0, 0.0, 200.0, 2);
+        // Visible rows 0..10, overscan adds 2 above (clamped to 0) and 2 below.
+        assert_eq!(w.first_visible, 0, "first_visible should be clamped to 0");
+        // 10 visible + 2*overscan below = 14, but overscan above is 0 (clamped)
+        // so total = 10 visible + 2 below overscan = 12 rows (0..12)
+        assert!(w.last_visible <= 14, "last_visible should not exceed 14 at top");
+        assert_eq!(w.offset_before, 0.0);
+        assert!(w.offset_after > 0.0, "tail placeholder must be > 0");
+    }
+
+    #[test]
+    fn uniform_list_mid_scroll_correct_window() {
+        // Scrolled to row 50 (y=1000) in a 1000-row, 20px list.
+        let w = compute_virtual_list_window(1000, 20.0, 1000.0, 200.0, 2);
+        assert!(w.first_visible <= 48, "must include overscan rows above 50");
+        assert!(w.last_visible > 60, "must include rows below visible");
+        // offset_before = first * 20px
+        let expected_before = w.first_visible as f32 * 20.0;
+        assert!((w.offset_before - expected_before).abs() < 1.0);
+    }
+
+    #[test]
+    fn uniform_list_near_end_does_not_exceed_total() {
+        let w = compute_virtual_list_window(10, 20.0, 150.0, 100.0, 5);
+        assert!(w.last_visible <= 10, "must not exceed total rows");
+        assert!(w.offset_after >= 0.0);
+    }
+
+    #[test]
+    fn variable_list_basic() {
+        // 5 rows with heights [10, 20, 30, 40, 50] => prefix = [0,10,30,60,100,150]
+        let prefix: Vec<f32> = vec![0.0, 10.0, 30.0, 60.0, 100.0, 150.0];
+        // Viewport from y=0 to y=40 should include rows 0,1,2 (tops at 0,10,30).
+        let w = compute_virtual_list_window_variable(&prefix, 0.0, 40.0, 0);
+        assert!(w.first_visible == 0);
+        assert!(w.last_visible >= 3 && w.last_visible <= 5);
+    }
+
+    #[test]
+    fn empty_list_returns_zero_window() {
+        let w = compute_virtual_list_window(0, 20.0, 0.0, 200.0, 2);
+        assert_eq!(w.first_visible, 0);
+        assert_eq!(w.last_visible, 0);
+        assert_eq!(w.offset_before, 0.0);
+        assert_eq!(w.offset_after, 0.0);
+    }
+}
+
+// =========================================================================
+// P1-42: DependencyGraph tests
+// =========================================================================
+#[cfg(test)]
+mod p1_42_dependency_graph_tests {
+    use super::DependencyGraph;
+
+    #[test]
+    fn register_and_query_single_dep() {
+        let mut g = DependencyGraph::new();
+        g.register(42, 100); // component 42 depends on state key 100
+        let affected: Vec<u64> = g.affected_components(100).collect();
+        assert_eq!(affected, vec![42]);
+    }
+
+    #[test]
+    fn unregister_removes_component() {
+        let mut g = DependencyGraph::new();
+        g.register(1, 10);
+        g.register(2, 10);
+        g.unregister(1);
+        let affected: Vec<u64> = g.affected_components(10).collect();
+        assert!(!affected.contains(&1), "component 1 must be gone after unregister");
+        assert!(affected.contains(&2), "component 2 must still be present");
+    }
+
+    #[test]
+    fn no_deps_returns_empty() {
+        let g = DependencyGraph::new();
+        let affected: Vec<u64> = g.affected_components(999).collect();
+        assert!(affected.is_empty());
+        assert!(!g.has_dependents(999));
+    }
+
+    #[test]
+    fn edge_count_reflects_registrations() {
+        let mut g = DependencyGraph::new();
+        assert_eq!(g.edge_count(), 0);
+        g.register(1, 10);
+        g.register(2, 10);
+        g.register(1, 20); // component 1 now depends on two keys
+        assert_eq!(g.edge_count(), 3);
+    }
+
+    #[test]
+    fn re_register_after_unregister_works() {
+        let mut g = DependencyGraph::new();
+        g.register(5, 50);
+        g.unregister(5);
+        // Re-register with different key.
+        g.register(5, 60);
+        assert!(!g.has_dependents(50), "old key must be gone");
+        assert!(g.has_dependents(60), "new key must be present");
     }
 }

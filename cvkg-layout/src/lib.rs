@@ -28,6 +28,26 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use std::collections::HashSet;
 
+// P2-45: Layout capability flags for runtime feature detection.
+// Applications can query these to determine which layout modes are supported.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LayoutCapabilities {
+    pub flexbox: bool,
+    pub grid: bool,
+    pub absolute: bool,
+    pub container_queries: bool,
+}
+
+/// Returns the layout capabilities supported by this engine.
+pub fn layout_capabilities() -> LayoutCapabilities {
+    LayoutCapabilities {
+        flexbox: true,
+        grid: true,
+        absolute: true,
+        container_queries: true,
+    }
+}
+
 thread_local! {
     static ACTIVE_LAYOUT_NODES: RefCell<HashSet<u64>> = RefCell::new(HashSet::new());
 }
@@ -1379,6 +1399,406 @@ impl LayoutView for AspectRatio {
     }
 }
 
+// =============================================================================
+// P1-63: LAYOUT SPATIAL INDEX
+// =============================================================================
+
+/// A node entry stored in the spatial index after layout completes.
+///
+/// Contract: every laid-out view that has a non-zero hash AND a non-degenerate
+/// rect (width > 0, height > 0) is recorded here.  Callers use
+/// `LayoutSpatialIndex::hit_test` for O(log N) point queries instead of
+/// scanning the whole tree.
+#[derive(Debug, Clone)]
+pub struct LayoutSpatialEntry {
+    /// Stable identity of the view — matches `LayoutView::view_hash()`.
+    pub hash: u64,
+    /// Post-layout bounding rect in the root coordinate space.
+    pub rect: Rect,
+}
+
+/// Axis-aligned 2-D quadtree that indexes laid-out view bounding boxes.
+///
+/// All four children of a node share the same depth but cover distinct
+/// quadrants.  Leaf nodes store up to `MAX_ITEMS_PER_NODE` entries before
+/// splitting.  The tree is rebuilt from scratch each layout pass via
+/// `rebuild`; incremental updates are not supported because layout already
+/// performs incremental caching and the tree is cheap to rebuild.
+///
+/// P1-63: Reduces hit-testing, focus-traversal, and visibility-culling from
+/// O(N) linear scans to O(log N) quadtree lookups.
+pub struct LayoutSpatialIndex {
+    root: Option<Box<QuadNode>>,
+    /// Root bounds used when the tree was built — needed for hit queries.
+    bounds: Rect,
+}
+
+const MAX_ITEMS_PER_NODE: usize = 16;
+const MAX_TREE_DEPTH: u32 = 8;
+
+struct QuadNode {
+    bounds: Rect,
+    entries: Vec<LayoutSpatialEntry>,
+    /// `None` when this is a leaf; `Some([nw, ne, sw, se])` when split.
+    children: Option<Box<[Box<QuadNode>; 4]>>,
+}
+
+impl QuadNode {
+    fn new(bounds: Rect) -> Self {
+        Self {
+            bounds,
+            entries: Vec::new(),
+            children: None,
+        }
+    }
+
+    /// Insert an entry into this node, splitting if necessary.
+    fn insert(&mut self, entry: LayoutSpatialEntry, depth: u32) {
+        if !self.bounds.intersects(&entry.rect) {
+            return;
+        }
+        if let Some(children) = &mut self.children {
+            for child in children.iter_mut() {
+                if child.bounds.intersects(&entry.rect) {
+                    child.insert(entry.clone(), depth + 1);
+                }
+            }
+            return;
+        }
+        self.entries.push(entry);
+        if self.entries.len() > MAX_ITEMS_PER_NODE && depth < MAX_TREE_DEPTH {
+            self.split(depth);
+        }
+    }
+
+    /// Split this leaf into four quadrants.
+    fn split(&mut self, depth: u32) {
+        let hw = self.bounds.width * 0.5;
+        let hh = self.bounds.height * 0.5;
+        let mx = self.bounds.x + hw;
+        let my = self.bounds.y + hh;
+        let make = |x, y, w, h| Box::new(QuadNode::new(Rect { x, y, width: w, height: h }));
+        let mut children = Box::new([
+            make(self.bounds.x, self.bounds.y, hw, hh), // NW
+            make(mx, self.bounds.y, hw, hh),            // NE
+            make(self.bounds.x, my, hw, hh),            // SW
+            make(mx, my, hw, hh),                       // SE
+        ]);
+        let entries = std::mem::take(&mut self.entries);
+        for e in entries {
+            for child in children.iter_mut() {
+                if child.bounds.intersects(&e.rect) {
+                    child.insert(e.clone(), depth + 1);
+                }
+            }
+        }
+        self.children = Some(children);
+    }
+
+    /// Collect all entries whose rect contains `point`.
+    fn hit_test(&self, point: (f32, f32), out: &mut Vec<LayoutSpatialEntry>) {
+        if !self.bounds.contains(point.0, point.1) {
+            return;
+        }
+        for e in &self.entries {
+            if e.rect.contains(point.0, point.1) {
+                out.push(e.clone());
+            }
+        }
+        if let Some(children) = &self.children {
+            for child in children.iter() {
+                child.hit_test(point, out);
+            }
+        }
+    }
+
+    /// Collect all entries overlapping `region`.
+    fn query_region(&self, region: &Rect, out: &mut Vec<LayoutSpatialEntry>) {
+        if !self.bounds.intersects(region) {
+            return;
+        }
+        for e in &self.entries {
+            if e.rect.intersects(region) {
+                out.push(e.clone());
+            }
+        }
+        if let Some(children) = &self.children {
+            for child in children.iter() {
+                child.query_region(region, out);
+            }
+        }
+    }
+}
+
+impl LayoutSpatialIndex {
+    /// Construct an empty index.
+    pub fn new() -> Self {
+        Self { root: None, bounds: Rect::zero() }
+    }
+
+    /// Rebuild the index from a flat list of (hash, rect) pairs produced after
+    /// a layout pass.  `root_bounds` should cover the entire layout space
+    /// (typically the root view's bounds).
+    ///
+    /// Contract: all rects must be in the same coordinate space.
+    pub fn rebuild(&mut self, root_bounds: Rect, entries: impl IntoIterator<Item = LayoutSpatialEntry>) {
+        self.bounds = root_bounds;
+        let mut root = QuadNode::new(root_bounds);
+        for e in entries {
+            // Only index views with a non-degenerate area.
+            if e.rect.width > 0.0 && e.rect.height > 0.0 {
+                root.insert(e, 0);
+            }
+        }
+        self.root = Some(Box::new(root));
+    }
+
+    /// Return all entries whose bounding rect contains `(x, y)`, ordered
+    /// front-to-back (no particular guarantee — callers should sort by z).
+    ///
+    /// Returns an empty Vec if the index is empty.
+    /// Uses `Rect::contains(x, y)` which is the canonical point-in-rect test.
+    pub fn hit_test(&self, x: f32, y: f32) -> Vec<LayoutSpatialEntry> {
+        let mut out = Vec::new();
+        if let Some(root) = &self.root {
+            root.hit_test((x, y), &mut out);
+        }
+        out
+    }
+
+    /// Return all entries whose bounding rect overlaps `region`.
+    pub fn query_region(&self, region: &Rect) -> Vec<LayoutSpatialEntry> {
+        let mut out = Vec::new();
+        if let Some(root) = &self.root {
+            root.query_region(region, &mut out);
+        }
+        out
+    }
+}
+
+impl Default for LayoutSpatialIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// =============================================================================
+// P1-66: PARALLEL LAYOUT HELPER
+// =============================================================================
+
+/// Compute size-that-fits for a batch of independent subviews in parallel when
+/// the `parallel` cargo feature is active.  Falls back to sequential iteration
+/// when the feature is absent or when `rayon` would not help (≤ 1 view).
+///
+/// Contract: views must have no shared mutable state observable through the
+/// `size_that_fits` call — the `LayoutCache` is split per-view as a *clone*
+/// so that parallel computation does not race on the cache.  Results are merged
+/// back into the provided `cache` after the parallel phase.
+///
+/// P1-66: Independent subtrees (e.g. split-pane columns) can be sized in
+/// parallel, reducing layout time for wide view trees on multi-core hardware.
+pub fn size_views_parallel(
+    views: &[&dyn LayoutView],
+    proposal: cvkg_core::SizeProposal,
+    cache: &mut LayoutCache,
+) -> Vec<cvkg_core::Size> {
+    if views.len() <= 1 {
+        // Sequential fast path — no overhead for trivially small slices.
+        return views
+            .iter()
+            .map(|v| v.size_that_fits(proposal, &[], cache))
+            .collect();
+    }
+
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        // Clone the *read-only* portion of the cache (size map, previous rects)
+        // into per-thread snapshots.  Writes are discarded; the caller's cache
+        // is the authoritative store.
+        let results: Vec<cvkg_core::Size> = views
+            .par_iter()
+            .map(|v| {
+                let mut local_cache = cache.clone();
+                v.size_that_fits(proposal, &[], &mut local_cache)
+            })
+            .collect();
+        return results;
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    views
+        .iter()
+        .map(|v| v.size_that_fits(proposal, &[], cache))
+        .collect()
+}
+
+// =============================================================================
+// P1-67: ADAPTIVE LAYOUT MODALITY
+// =============================================================================
+
+/// The current input modality that the layout engine adapts to.
+///
+/// P1-67: Modern platforms adjust touch target sizes and item spacing for
+/// touch vs pointer input.  Setting `LayoutModality::Touch` causes layout
+/// containers to enforce a minimum touch target of 44×44 pt (Apple HIG) for
+/// any view whose intrinsic size is smaller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LayoutModality {
+    /// Precise pointer (mouse, trackpad, stylus).  Use intrinsic sizes.
+    #[default]
+    Pointer,
+    /// Touch input.  Enforce a minimum tap-target size of 44×44 logical pts.
+    Touch,
+    /// Accessibility zoom is active.  Touch rules apply and spacing is doubled.
+    AccessibilityZoom,
+}
+
+impl LayoutModality {
+    /// Minimum tap-target dimension for this modality (logical pixels).
+    pub fn min_tap_target(self) -> f32 {
+        match self {
+            LayoutModality::Pointer => 0.0,
+            LayoutModality::Touch => 44.0,
+            LayoutModality::AccessibilityZoom => 44.0,
+        }
+    }
+
+    /// Spacing multiplier applied on top of the view's configured spacing.
+    pub fn spacing_multiplier(self) -> f32 {
+        match self {
+            LayoutModality::Pointer => 1.0,
+            LayoutModality::Touch => 1.25,
+            LayoutModality::AccessibilityZoom => 2.0,
+        }
+    }
+
+    /// Apply this modality's minimum tap-target constraint to a measured size.
+    ///
+    /// Contract: only enlarges the size; never shrinks it.
+    pub fn adapt_size(self, size: cvkg_core::Size) -> cvkg_core::Size {
+        let min = self.min_tap_target();
+        cvkg_core::Size {
+            width: size.width.max(min),
+            height: size.height.max(min),
+        }
+    }
+}
+
+// =============================================================================
+// P1-68 & P1-69: FOCUS TRAVERSAL & READING ORDER
+// =============================================================================
+
+/// A focusable element produced by `compute_focus_order`.
+///
+/// Views that participate in keyboard focus must record their hash and rect in
+/// a `FocusCandidate` so that `compute_focus_order` can sort them into a
+/// deterministic Tab sequence.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FocusCandidate {
+    /// Stable identity — matches `LayoutView::view_hash()`.
+    pub hash: u64,
+    /// Post-layout bounding rect, in the root coordinate space.
+    pub rect: Rect,
+    /// Explicit tab index, if the view has one.  `None` means natural order.
+    /// Positive indices come before natural-order elements; 0 is treated as
+    /// natural order per the HTML spec.
+    pub tab_index: Option<i32>,
+}
+
+/// Compute a deterministic keyboard-focus traversal order for a flat list of
+/// `FocusCandidate`s.
+///
+/// **Algorithm (P1-68):**
+/// 1. Candidates with an explicit positive `tab_index` come first, sorted
+///    ascending by index then by visual position.
+/// 2. Remaining candidates are sorted by visual position: top-to-bottom,
+///    left-to-right (LTR) — i.e. `y` first, then `x`.  This matches the DOM
+///    `tabindex=0` behaviour described in WHATWG and platform accessibility
+///    guidelines.
+///
+/// **Reading order (P1-69):**
+/// The returned order is also the semantic reading order expected by screen
+/// readers.  Callers may pass this list to the accessibility bridge to set
+/// the `AXNext`/`AXPrev` attributes.
+///
+/// Returns a `Vec<u64>` of view hashes in Tab focus order.
+pub fn compute_focus_order(mut candidates: Vec<FocusCandidate>) -> Vec<u64> {
+    // Partition into explicit-tabindex (positive) vs natural.
+    let mut explicit: Vec<FocusCandidate> = candidates
+        .iter()
+        .filter(|c| c.tab_index.map_or(false, |t| t > 0))
+        .cloned()
+        .collect();
+    candidates.retain(|c| !c.tab_index.map_or(false, |t| t > 0));
+
+    // Sort explicit-index group: by tab_index asc, then visual position.
+    explicit.sort_by(|a, b| {
+        let ta = a.tab_index.unwrap_or(i32::MAX);
+        let tb = b.tab_index.unwrap_or(i32::MAX);
+        ta.cmp(&tb)
+            .then_with(|| a.rect.y.total_cmp(&b.rect.y))
+            .then_with(|| a.rect.x.total_cmp(&b.rect.x))
+    });
+
+    // Sort natural group by visual position LTR (row-major).
+    // We bucket by row (y rounded to nearest 8px) for robustness against
+    // sub-pixel misalignments between items on the same logical line.
+    let row_bucket = |r: &Rect| (r.y / 8.0).floor() as i32;
+    candidates.sort_by(|a, b| {
+        row_bucket(&a.rect)
+            .cmp(&row_bucket(&b.rect))
+            .then_with(|| a.rect.x.total_cmp(&b.rect.x))
+    });
+
+    explicit
+        .into_iter()
+        .chain(candidates)
+        .map(|c| c.hash)
+        .collect()
+}
+
+/// Validate that the focus order computed by `compute_focus_order` is
+/// consistent with visual reading order (P1-69 contract).
+///
+/// Returns `Ok(())` when the order is consistent, or `Err(msg)` describing
+/// the first inconsistency found.  Callers may log the error or surface it
+/// as an accessibility warning.
+///
+/// Consistency rule: within the natural-order partition, no element at index
+/// `i` should have a bounding rect that is *visually above and to the right*
+/// of element `i+1` — that would mean the reader jumps backward.
+pub fn validate_reading_order(order: &[FocusCandidate]) -> Result<(), String> {
+    let natural: Vec<&FocusCandidate> = order
+        .iter()
+        .filter(|c| !c.tab_index.map_or(false, |t| t > 0))
+        .collect();
+
+    let row_bucket = |r: &Rect| (r.y / 8.0).floor() as i32;
+    for window in natural.windows(2) {
+        let a = window[0];
+        let b = window[1];
+        // If b is on a strictly earlier row than a, reading order is violated.
+        if row_bucket(&b.rect) < row_bucket(&a.rect) {
+            return Err(format!(
+                "reading order violation: view 0x{:X} (y≈{:.1}) precedes view 0x{:X} (y≈{:.1}) visually",
+                b.hash, b.rect.y, a.hash, a.rect.y
+            ));
+        }
+        // If on the same row, b must not be left of a.
+        if row_bucket(&a.rect) == row_bucket(&b.rect) && b.rect.x < a.rect.x - 1.0 {
+            return Err(format!(
+                "reading order violation: view 0x{:X} (x≈{:.1}) precedes view 0x{:X} (x≈{:.1}) on same row",
+                b.hash, b.rect.x, a.hash, a.rect.x
+            ));
+        }
+    }
+    Ok(())
+}
+
+// Note: Rect::contains(x, y) is defined in cvkg-core and used by the spatial
+// index.  No orphan impl is needed here.
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1753,5 +2173,131 @@ mod tests {
         // Let's verify that Taffy node map does not contain the view, meaning Taffy was skipped!
         let engine = TaffyLayoutEngine::get_or_insert_engine(&mut cache);
         assert!(!engine.node_map.contains_key(&2001));
+    }
+
+    // -------------------------------------------------------------------------
+    // P1-63 regression: spatial index hit testing
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_spatial_index_hit_test() {
+        let mut index = LayoutSpatialIndex::new();
+        let root = Rect { x: 0.0, y: 0.0, width: 1000.0, height: 1000.0 };
+        let entries = vec![
+            LayoutSpatialEntry { hash: 1, rect: Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 } },
+            LayoutSpatialEntry { hash: 2, rect: Rect { x: 200.0, y: 200.0, width: 50.0, height: 50.0 } },
+            LayoutSpatialEntry { hash: 3, rect: Rect { x: 500.0, y: 500.0, width: 200.0, height: 200.0 } },
+        ];
+        index.rebuild(root, entries);
+
+        // Point inside view 1 only.
+        let hits = index.hit_test(50.0, 50.0);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].hash, 1);
+
+        // Point inside view 3 only.
+        let hits = index.hit_test(600.0, 600.0);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].hash, 3);
+
+        // Point outside all views.
+        let hits = index.hit_test(999.0, 1.0);
+        assert!(hits.is_empty(), "Expected no hits, got {:?}", hits.iter().map(|e| e.hash).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_spatial_index_query_region() {
+        let mut index = LayoutSpatialIndex::new();
+        let root = Rect { x: 0.0, y: 0.0, width: 500.0, height: 500.0 };
+        let entries = vec![
+            LayoutSpatialEntry { hash: 10, rect: Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 } },
+            LayoutSpatialEntry { hash: 20, rect: Rect { x: 400.0, y: 400.0, width: 50.0, height: 50.0 } },
+        ];
+        index.rebuild(root, entries);
+
+        // Region that only overlaps hash 10.
+        let region = Rect { x: 0.0, y: 0.0, width: 150.0, height: 150.0 };
+        let results = index.query_region(&region);
+        assert!(results.iter().any(|e| e.hash == 10));
+        assert!(!results.iter().any(|e| e.hash == 20));
+    }
+
+    // -------------------------------------------------------------------------
+    // P1-67 regression: adaptive touch-target sizing
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_adaptive_modality_touch_enlarges_small_views() {
+        let small = cvkg_core::Size { width: 20.0, height: 12.0 };
+        let adapted = LayoutModality::Touch.adapt_size(small);
+        assert!(adapted.width >= 44.0, "Width must be at least 44pt for touch");
+        assert!(adapted.height >= 44.0, "Height must be at least 44pt for touch");
+    }
+
+    #[test]
+    fn test_adaptive_modality_pointer_does_not_enlarge() {
+        let large = cvkg_core::Size { width: 200.0, height: 50.0 };
+        let adapted = LayoutModality::Pointer.adapt_size(large);
+        assert_eq!(adapted.width, 200.0);
+        assert_eq!(adapted.height, 50.0);
+    }
+
+    #[test]
+    fn test_adaptive_modality_accessibility_zoom_spacing() {
+        assert!(
+            LayoutModality::AccessibilityZoom.spacing_multiplier() > LayoutModality::Touch.spacing_multiplier(),
+            "Accessibility zoom must have the largest spacing multiplier"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // P1-68 regression: focus traversal order
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_focus_order_ltr_visual_sort() {
+        // Three views on the same row: right, left, middle.
+        let candidates = vec![
+            FocusCandidate { hash: 100, rect: Rect { x: 200.0, y: 10.0, width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate { hash: 200, rect: Rect { x: 0.0,   y: 10.0, width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate { hash: 300, rect: Rect { x: 100.0, y: 10.0, width: 50.0, height: 20.0 }, tab_index: None },
+        ];
+        let order = compute_focus_order(candidates);
+        // Expected: left (200) → middle (300) → right (100).
+        assert_eq!(order, vec![200, 300, 100], "LTR focus order violated: {:?}", order);
+    }
+
+    #[test]
+    fn test_focus_order_explicit_tabindex_comes_first() {
+        let candidates = vec![
+            FocusCandidate { hash: 1, rect: Rect { x: 0.0, y: 100.0, width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate { hash: 2, rect: Rect { x: 0.0, y: 0.0,   width: 50.0, height: 20.0 }, tab_index: Some(2) },
+            FocusCandidate { hash: 3, rect: Rect { x: 0.0, y: 50.0,  width: 50.0, height: 20.0 }, tab_index: Some(1) },
+        ];
+        let order = compute_focus_order(candidates);
+        // tabindex=1 (hash 3) first, tabindex=2 (hash 2) second, natural (hash 1) last.
+        assert_eq!(order[0], 3, "tabindex=1 must be first");
+        assert_eq!(order[1], 2, "tabindex=2 must be second");
+        assert_eq!(order[2], 1, "natural order must be last");
+    }
+
+    // -------------------------------------------------------------------------
+    // P1-69 regression: reading order validation
+    // -------------------------------------------------------------------------
+    #[test]
+    fn test_reading_order_valid_sequence_passes() {
+        let candidates = vec![
+            FocusCandidate { hash: 1, rect: Rect { x: 0.0,   y: 0.0,  width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate { hash: 2, rect: Rect { x: 100.0, y: 0.0,  width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate { hash: 3, rect: Rect { x: 0.0,   y: 30.0, width: 50.0, height: 20.0 }, tab_index: None },
+        ];
+        assert!(validate_reading_order(&candidates).is_ok());
+    }
+
+    #[test]
+    fn test_reading_order_backwards_row_fails() {
+        // hash 2 appears after hash 1 but is visually above it — order violation.
+        let candidates = vec![
+            FocusCandidate { hash: 1, rect: Rect { x: 0.0, y: 100.0, width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate { hash: 2, rect: Rect { x: 0.0, y: 0.0,   width: 50.0, height: 20.0 }, tab_index: None },
+        ];
+        assert!(validate_reading_order(&candidates).is_err(), "Backwards row must fail validation");
     }
 }

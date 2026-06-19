@@ -516,6 +516,22 @@ fn compute_sha256(data: &[u8]) -> [u8; 32] {
     hasher.finalize()
 }
 
+// P2-12: Compute mip level count from texture dimensions.
+// Uses floor(log2(max(width, height))) + 1, clamped to [2, 8].
+// A 1080p/2=540px blur texture -> log2(540)=9.07 -> 10 mips, clamped to 8.
+// A 720p/2=360px blur texture -> log2(360)=8.49 -> 9 mips, clamped to 8.
+// A 256px blur texture -> log2(256)=8 -> 9 mips, clamped to 8.
+// A 64px blur texture -> log2(64)=6 -> 7 mips.
+fn compute_mip_levels(width: u32, height: u32) -> u32 {
+    let max_dim = width.max(height);
+    if max_dim <= 1 {
+        return 1;
+    }
+    // floor(log2(max_dim)) + 1, clamped to [2, 8]
+    let mips = (32 - max_dim.leading_zeros()).clamp(2, 8);
+    mips
+}
+
 impl SurtrRenderer {
     /// Access the hologram instances submitted this frame.
     pub fn hologram_instances(&self) -> &[HologramInstance] {
@@ -2550,7 +2566,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 6,
+                    mip_level_count: compute_mip_levels(blur_width, blur_height),
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -2565,7 +2581,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 6,
+                    mip_level_count: compute_mip_levels(blur_width, blur_height),
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -2580,7 +2596,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 6,
+                    mip_level_count: compute_mip_levels(blur_width, blur_height),
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -2595,7 +2611,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     format: ctx.config.format,
                     width: blur_width,
                     height: blur_height,
-                    mip_level_count: 6,
+                    mip_level_count: compute_mip_levels(blur_width, blur_height),
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                         | wgpu::TextureUsages::TEXTURE_BINDING
                         | wgpu::TextureUsages::COPY_SRC,
@@ -2712,6 +2728,25 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
+        // P2-13: Always update the volumetric time uniform, even if the
+        // volumetric pass is skipped by the frame budget system. This prevents
+        // a visible time pop when the pass resumes after being skipped.
+        let current_time = self.current_time();
+        let resolution = [
+            self.current_width() as f32,
+            self.current_height() as f32,
+        ];
+        let time_uniform: [f32; 4] = [
+            current_time,
+            resolution[0],
+            resolution[1],
+            0.0, // _pad
+        ];
+        self.queue.write_buffer(
+            &self.volumetric_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&time_uniform),
+        );
         // Clear per-frame state but NOT memo_cache -- use generation counter instead
         self.frame_generation += 1;
         // Evict memo cache entries that are too old to prevent unbounded growth.
@@ -2920,7 +2955,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2935,7 +2970,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2950,7 +2985,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2965,7 +3000,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -2997,10 +3032,21 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             label: Some("Headless Scene Bind Group"),
         });
 
-        let blur_view_a = registry.get_texture_view(blur_tex_a).unwrap();
-        let blur_view_b = registry.get_texture_view(blur_tex_b).unwrap();
-        let bloom_view_a = registry.get_texture_view(bloom_tex_a).unwrap();
-        let bloom_view_b = registry.get_texture_view(bloom_tex_b).unwrap();
+        // P2-1: Use expect() with descriptive messages instead of unwrap()
+        // for resource access paths. These textures were just allocated above,
+        // so failure indicates a registry bug, not a runtime condition.
+        let blur_view_a = registry
+            .get_texture_view(blur_tex_a)
+            .expect("headless: blur_tex_a view must exist after allocation");
+        let blur_view_b = registry
+            .get_texture_view(blur_tex_b)
+            .expect("headless: blur_tex_b view must exist after allocation");
+        let bloom_view_a = registry
+            .get_texture_view(bloom_tex_a)
+            .expect("headless: bloom_tex_a view must exist after allocation");
+        let bloom_view_b = registry
+            .get_texture_view(bloom_tex_b)
+            .expect("headless: bloom_tex_b view must exist after allocation");
 
         let blur_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: env_bind_group_layout,
@@ -3185,7 +3231,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -3200,7 +3246,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -3215,7 +3261,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -3230,7 +3276,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 format: config.format,
                 width: blur_width,
                 height: blur_height,
-                mip_level_count: 6,
+                mip_level_count: compute_mip_levels(blur_width, blur_height),
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING
                     | wgpu::TextureUsages::COPY_SRC,
@@ -3262,10 +3308,21 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             label: Some("Scene Bind Group"),
         });
 
-        let blur_view_a = registry.get_texture_view(blur_tex_a).unwrap();
-        let blur_view_b = registry.get_texture_view(blur_tex_b).unwrap();
-        let bloom_view_a = registry.get_texture_view(bloom_tex_a).unwrap();
-        let bloom_view_b = registry.get_texture_view(bloom_tex_b).unwrap();
+        // P2-1: Use expect() with descriptive messages instead of unwrap()
+        // for resource access paths. These textures were just allocated above,
+        // so failure indicates a registry bug, not a runtime condition.
+        let blur_view_a = registry
+            .get_texture_view(blur_tex_a)
+            .expect("resize: blur_tex_a view must exist after allocation");
+        let blur_view_b = registry
+            .get_texture_view(blur_tex_b)
+            .expect("resize: blur_tex_b view must exist after allocation");
+        let bloom_view_a = registry
+            .get_texture_view(bloom_tex_a)
+            .expect("resize: bloom_tex_a view must exist after allocation");
+        let bloom_view_b = registry
+            .get_texture_view(bloom_tex_b)
+            .expect("resize: bloom_tex_b view must exist after allocation");
 
         let blur_env_bind_group_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: env_bind_group_layout,
@@ -4391,7 +4448,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
 
             // 2. Run compute pass to integrate particle physics
             let dt = self.current_scene.delta_time;
-            let uniforms = crate::types::ParticleUniforms { dt, _pad: [0.0; 3] };
+            let uniforms = crate::types::ParticleUniforms { dt, _pad: [0.0; 7] };
             self.queue.write_buffer(
                 &self.particle_uniform_buffer,
                 0,

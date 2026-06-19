@@ -128,6 +128,13 @@ impl KvasirNode for GeometryNode {
             p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
 
+            // P2-6: Geometry pass filtering contract
+            // Only draws Opaque material calls with no render target binding.
+            // - DrawMaterial::Opaque: standard geometry (rects, text, SVGs).
+            // - target_id.is_none(): not a texture-mapped call (those go through
+            //   the offscreen/target pass).
+            // - Glass calls (material_id=7) are handled by GlassNode.
+            // - Calls with target_id.is_some() are rendered in the offscreen pass.
             let mut opaque_calls_count = 0;
             for call in ctx.renderer.draw_calls.iter().filter(|c| {
                 matches!(c.material, cvkg_core::DrawMaterial::Opaque) && c.target_id.is_none()

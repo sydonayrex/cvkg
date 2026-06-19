@@ -12,9 +12,9 @@ The CVKG render pipeline is a sophisticated multi-pass GPU renderer built on wgp
 
 **Overall assessment:** The architecture is sound. The render graph abstraction is well-designed with proper topological sorting, resource management, and frame budget degradation. The trait hierarchy (ElapsedTime -> Renderer -> View) cleanly separates concerns. However, there are several correctness issues, a few safety concerns, and significant gaps in error handling that would affect production use.
 
-**Critical issues:** 42 (6 resolved)
+**Critical issues:** 42 (8 resolved)
 **Major issues:** 44 (25 resolved)
-**Minor issues:** 47 (1 resolved)
+**Minor issues:** 47 (7 resolved)
 
 **Cross-audit notes:** Findings P0-4 through P0-7, P1-13 through P1-18, and P2-19 through P2-24 are from an independent second audit pass. Findings P0-8 through P0-12, P1-19 through P1-28, and P2-25 through P2-29 are from a GPU-focused third audit pass. Findings P0-13 through P0-17, P1-29 through P1-37, and P2-30 through P2-34 are from an SVG filter-focused fourth audit pass. Findings P0-18 through P0-25, P1-38 through P1-45, and P2-35 through P2-38 are from a core crate-focused fifth audit pass. Findings P0-26 through P0-34, P1-46 through P1-51, and P2-39 through P2-40 are from a render-native-focused sixth audit pass. Findings P0-35 through P0-43, P1-52 through P1-62, and P2-41 through P2-44 are from a runic-text-focused seventh audit pass. Findings P0-44 through P0-48, P1-63 through P1-69, and P2-45 through P2-48 are from a layout crate-focused eighth audit pass. All verified against source.
 
@@ -422,7 +422,7 @@ Additionally, `mutate`'s `f: Fn(&T) -> T` clones the entire value on every mutat
 
 **Resolution:** Added State<T>::set_direct() for callers not needing atomic compound transactions. Reduces redundant storage for simple updates.
 
-### P1-15: Subscriber List Mutex Poisoning Causes Permanent State Update Failure [CROSS-AUDIT]
+### P1-15: Subscriber List Mutex Poisoning Causes Permanent State Update Failure [CROSS-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-core (State<T> subscriber invocation)
@@ -432,7 +432,9 @@ Subscriber callbacks are invoked while holding `subs.lock().unwrap()`. If any su
 
 **Recommendation:** Wrap subscriber callback invocation in `catch_unwind`. Or use `parking_lot::Mutex` which does not poison on panic.
 
-### P1-16: SceneGraph Spatial Hash Breaks on Negative Coordinates [CROSS-AUDIT]
+**Resolution:** Added `invoke_subscribers_safely<T>(subs, val)` which wraps each callback in `std::panic::catch_unwind(AssertUnwindSafe(...))`. Panicking subscribers are logged via `log::error!` and skipped; remaining subscribers continue. On mutex poisoning, the guard is recovered via `poisoned.into_inner()`. Tests in `subscriber_panic_isolation_tests`.
+
+### P1-16: SceneGraph Spatial Hash Breaks on Negative Coordinates [CROSS-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-scene/src/lib.rs (query_region, rebuild_spatial_hash)
@@ -444,7 +446,9 @@ Subscriber callbacks are invoked while holding `subs.lock().unwrap()`. If any su
 
 **Recommendation:** Use signed integer cell coordinates (`i32`) and adjust the query range calculation to handle negative indices correctly.
 
-### P1-17: Suspense::new_async Spawns Unbounded OS Threads [CROSS-AUDIT]
+**Resolution:** cvkg-scene spatial hash now uses `i32` cell coordinates with an `i32_to_u32_cell` mapping that applies a fixed offset to keep negative coordinates in a valid bucket range. The old `as u32` cast that saturated at 0 is replaced.
+
+### P1-17: Suspense::new_async Spawns Unbounded OS Threads [CROSS-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-core (Suspense::new_async)
@@ -454,7 +458,9 @@ When no ambient tokio runtime exists, `Suspense::new_async` spawns a dedicated O
 
 **Recommendation:** Use a shared runtime pool or `spawn_blocking` on an ambient runtime. Limit concurrent thread count.
 
-### P1-18: SceneGraph z_index Sort Key Uses Float-to-Int Truncation [CROSS-AUDIT]
+**Resolution:** `SHARED_FALLBACK_RUNTIME` — a `OnceLock<Arc<tokio::runtime::Runtime>>` — is initialised once and shared across all `new_async` calls that lack an ambient runtime. Only one OS thread (with one single-threaded runtime) is ever created. Test `p1_17_shared_fallback_runtime_tests` validates that 20 concurrent calls reuse the same handle.
+
+### P1-18: SceneGraph z_index Sort Key Uses Float-to-Int Truncation [CROSS-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-scene/src/lib.rs (batch function)
@@ -464,18 +470,22 @@ The z_index sort key is `(n.z_index * 1000.0) as i64`. For two z_indices differi
 
 **Recommendation:** Use `sort_by(|a, b| a.z_index.total_cmp(&b.z_index))` for exact float ordering.
 
+**Resolution:** `batch()` now uses `sort_by(|a, b| za.total_cmp(&zb))` for exact IEEE-754 total ordering. Test `test_batch_z_index_preserves_sub_milli_ordering` confirms sub-0.001 z_index differences are correctly ordered.
+
 ---
 
-### P2-1: 39 unwrap() Calls in SurtrRenderer
+### P2-1: 39 unwrap() Calls in SurtrRenderer **[RESOLVED]**
 
 **Severity:** Minor (most are safe)
 **Affected:** cvkg-render-gpu/src/renderer.rs
 **Lens:** Code Review
 
-14 are `NonZeroUsize::new(N).unwrap()` (safe constants), 12 are guarded by `is_empty()` checks, 8 are in tests. However, 5 are in resource access paths where `?` would be more appropriate:
+14 are `NonZeroUsize::new(N).unwrap()` (safe constants), 12 are guarded by `is_empty()` checks, 8 are in tests. 5 were in resource access paths where `?` would be more appropriate:
 
 - `registry.get_texture_view(...).unwrap()` at lines 2600-2603, 2864-2867
 - `self.draw_calls.last().unwrap()` at lines 3324, 3507-3508
+
+**Resolution:** Converted `get_texture_view().unwrap()` calls to `expect()` with descriptive messages indicating which texture was being accessed. The `draw_calls.last().unwrap()` call is guarded by `is_empty()` short-circuit check and is safe. Remaining unwraps are in test code or on safe constants.
 
 ### P2-2: 46 unwrap() Calls in cvkg-layout
 
@@ -509,7 +519,7 @@ Most are Arc clones (cheap), TextureView clones (wgpu ref-counted, cheap), and S
 
 The codebase is clean of dead markers. This is good but means there are no documented known-issues or future work items in the code itself.
 
-### P2-6: GeometryNode Only Draws Opaque Calls
+### P2-6: GeometryNode Only Draws Opaque Calls **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-render-gpu/src/passes/geometry.rs, lines 132-178
@@ -522,6 +532,8 @@ for call in ctx.renderer.draw_calls.iter().filter(|c| {
 ```
 
 The GeometryNode only renders `DrawMaterial::Opaque` calls with `target_id.is_none()`. Glass calls (material_id=7) are handled by GlassNode. But calls with `target_id.is_some()` (texture-mapped calls) are silently skipped in the geometry pass. These appear to be handled elsewhere, but the filtering logic is implicit and undocumented.
+
+**Resolution:** Added documentation comment to geometry.rs explaining the filtering contract: Opaque material + no target_id means standard geometry; glass calls go through GlassNode; texture-mapped calls go through the offscreen pass.
 
 ### P2-7: Scissor Rect Edge Case with Zero Dimensions **[RESOLVED]**
 
@@ -544,13 +556,15 @@ let wgsl_src = format!("{}{}{}{}{}{}", WGSL_COMMON, WGSL_SHAPES, WGSL_BIFROST, .
 
 This produces a single massive shader string. On WASM, this is parsed at runtime. On native, it's compiled once at startup. The approach works but makes shader debugging difficult -- stack traces reference line numbers in the concatenated string, not the original files.
 
-### P2-9: ColorTheme Struct Padding in Shader vs Rust
+### P2-9: ColorTheme Struct Padding in Shader vs Rust **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-render-gpu/src/shaders/common.wgsl, lines 6-23; cvkg-core ColorTheme
 **Lens:** Correctness
 
 The WGSL ColorTheme struct has explicit padding (`_pad0: f32, _pad1: f32`) to match the Rust layout. If the Rust struct changes (e.g., adding a field), the shader padding must be updated manually. There is no compile-time verification of struct layout alignment between Rust and WGSL.
+
+**Resolution:** Added `const _: () = assert!(std::mem::size_of::<ColorTheme>() == 176, ...)` to cvkg-core. This compile-time assertion ensures the Rust struct size matches the WGSL std140 layout (176 bytes). Any field addition or removal that changes the size will fail at compile time.
 
 ### P2-10: Material Graph Has No Validation for Disconnected Nodes
 
@@ -568,7 +582,7 @@ The WGSL ColorTheme struct has explicit padding (`_pad0: f32, _pad1: f32`) to ma
 
 The glass pass assumes the environment texture is always available and in the expected format. If the backdrop blur pass was skipped (frame budget degradation, P0-2), the glass pass would sample from a stale or uninitialized texture.
 
-### P2-12: KawasePyramid Hardcoded to 7 Mip Levels
+### P2-12: KawasePyramid Hardcoded to 7 Mip Levels **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-render-gpu/src/pyramid.rs
@@ -576,12 +590,16 @@ The glass pass assumes the environment texture is always available and in the ex
 
 7 mip levels for a 4096x4096 texture means the smallest mip is 32x32. On a 1080p display, this is sufficient. On a 4K display, 7 levels may not provide enough blur range. On a 720p mobile display, 7 levels is overkill.
 
-### P2-13: Volumetric Pass Uses Fixed Time Uniform
+**Resolution:** Added `compute_mip_levels(width, height)` function that derives mip count from texture dimensions using `floor(log2(max_dim)) + 1` clamped to [2, 8]. Replaced all 12 hardcoded `mip_level_count: 6` occurrences in renderer.rs. The glass pass already reads `mip_level_count()` from the texture dynamically.
+
+### P2-13: Volumetric Pass Uses Fixed Time Uniform **[RESOLVED]**
 
 ---
 
 
 The volumetric fog shader uses `scene.time` for animation. If the frame budget system skips the volumetric pass (P0-2), the fog animation freezes when resuming, creating a visible pop.
+
+**Resolution:** Moved the time/resolution uniform write to `reset_frame_state()`, which runs unconditionally at the start of every frame. This ensures the volumetric uniform buffer always has the current time, even when the pass is skipped by the frame budget system.
 
 ### P1-19: Duplicate Resource Ownership Across Registries [GPU-AUDIT] **[RESOLVED]**
 
@@ -1171,7 +1189,7 @@ No explicit documentation or enforcement for capture, bubble, target, and cancel
 
 **Resolution:** Added EventPhase documentation enum and event propagation rules in cvkg-core.
 
-### P1-41: Virtualization Support Incomplete [CORE-AUDIT]
+### P1-41: Virtualization Support Incomplete [CORE-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-core (scene graph, layout)
@@ -1183,7 +1201,9 @@ Large collections require list virtualization, tree virtualization, and canvas v
 
 **Recommendation:** Implement list virtualization (only render visible rows), tree virtualization (only render expanded nodes), and canvas virtualization (only render visible viewport).
 
-### P1-42: State Invalidation Coupling Risk [CORE-AUDIT]
+**Resolution:** Added `compute_virtual_list_window` (uniform-height, O(1)) and `compute_virtual_list_window_variable` (variable-height via prefix-sum binary search, O(log N)) in cvkg-core. Both return a `VirtualWindow { first_visible, last_visible, offset_before, offset_after }`. Canvas virtualization is handled by the existing P0-47 viewport-aware layout. 5 unit tests in `p1_41_virtual_list_tests`.
+
+### P1-42: State Invalidation Coupling Risk [CORE-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-core (state management)
@@ -1194,6 +1214,8 @@ State changes appear capable of triggering large update chains. A single state m
 **Result:** Cascading recomposition from single state changes. Unnecessary layout and render work.
 
 **Recommendation:** Implement dependency-tracked invalidation. Only re-render components that depend on changed state.
+
+**Resolution:** Added `DependencyGraph` in cvkg-core: a bidirectional map of `state_key → Set<component_id>`. `register(component_id, state_key)` adds an edge; `unregister(component_id)` removes all edges for that component; `affected_components(state_key)` returns only the components that must re-render. 5 unit tests in `p1_42_dependency_graph_tests`.
 
 ### P1-43: Frame Budget Awareness Missing [CORE-AUDIT] **[RESOLVED]**
 
@@ -1573,7 +1595,7 @@ No testing for Arabic, Hebrew, or mixed RTL/LTR text. Bidirectional text require
 
 **Recommendation:** Implement UAX #9 bidi algorithm. Test with Arabic, Hebrew, and mixed-script text. Validate cursor movement and selection in RTL context.
 
-### P0-42: Text Semantic Layer Missing [RUNIC-AUDIT]
+### P0-42: Text Semantic Layer Missing [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-runic-text (text model), cvkg-core (accessibility)
@@ -1585,7 +1607,7 @@ Accessibility depends on correct text semantics. Screen readers need TextRun, Pa
 
 **Recommendation:** Add text semantic layer: TextRun (styled text range), Paragraph (block-level unit), SemanticRange (heading, link, emphasis, code). Map to platform accessibility APIs.
 
-### P0-43: Large Document Scaling Unproven [RUNIC-AUDIT]
+### P0-43: Large Document Scaling Unproven [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-runic-text (performance, memory)
@@ -1777,7 +1799,7 @@ No visible font selection policy for matching family name, weight, stretch, styl
 
 **Recommendation:** Document font matching strategy. Follow CSS font-matching algorithm or platform font selection.
 
-### P0-44: Layout Cycle Detection Missing [LAYOUT-AUDIT]
+### P0-44: Layout Cycle Detection Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-layout (constraint resolution)
@@ -1789,7 +1811,9 @@ Complex constraints can produce dependency cycles (A depends on B, B depends on 
 
 **Recommendation:** Implement cycle detection during layout constraint resolution. Detect strongly connected components in the constraint graph. Break cycles with priority rules and log warnings.
 
-### P0-45: Measurement Stability Not Guaranteed [LAYOUT-AUDIT]
+**Resolution:** Added `with_layout_cycle_guard` and `with_layout_cycle_guard_void` helpers using a thread-local `HashSet<u64>` of active view hashes. Cyclic recursion is detected and broken by returning a fallback size. Test: `test_layout_cycle_detection` confirms cycle resolves to fallback.
+
+### P0-45: Measurement Stability Not Guaranteed [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-layout (measurement system)
@@ -1801,7 +1825,9 @@ No guarantee that measure() returns identical results between passes for the sam
 
 **Recommendation:** Ensure measurement is a pure function of constraints and content. Cache measurement results. Document measurement stability contract explicitly. This extends P0-21 (layout contract) to the measurement phase specifically.
 
-### P0-46: Dirty Layout Propagation Model Missing [LAYOUT-AUDIT]
+**Resolution:** `LayoutCache.get_size` / `set_size` memoize measurement keyed by `(view_hash, SizeProposal)`. `invalidate_view` propagates bottom-up via the parent registry. `size_that_fits` is called at most once per (hash, proposal) per pass, making it effectively idempotent.
+
+### P0-46: Dirty Layout Propagation Model Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-layout (invalidation, propagation)
@@ -1813,7 +1839,9 @@ No explicit propagation model for dirty layout state. When a child changes, it i
 
 **Recommendation:** Implement dirty layout propagation model. Only recompute ancestors of changed nodes. Siblings are unaffected by sibling changes. Count changes bubble up; size changes propagate up the tree. Document propagation rules.
 
-### P0-47: Viewport Awareness Missing (Viewport-Oriented Layout) [LAYOUT-AUDIT]
+**Resolution:** `LayoutCache::register_parent(child_hash, parent_hash)` builds a bottom-up ancestry map. `invalidate_view(hash)` evicts the view's cached size then recursively invalidates its registered parent chain. Test `test_bottom_up_layout_invalidation` confirms cascading invalidation.
+
+### P0-47: Viewport Awareness Missing (Viewport-Oriented Layout) [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-layout (layout strategy)
@@ -1825,7 +1853,9 @@ Layout is tree-oriented rather than viewport-oriented. Invisible content (off-sc
 
 **Recommendation:** Implement viewport-aware layout. Only layout content within or near the viewport. Estimate sizes for off-screen content. This is a prerequisite for virtualization (P1-41, P1-15 equivalent).
 
-### P0-48: Layout Thrashing Risk (Animation-Induced) [LAYOUT-AUDIT]
+**Resolution:** `LayoutCache::viewport: Option<Rect>` accepted by all placement paths. HStack, VStack, ZStack, Flex, Padding, AspectRatio skip `place_subviews` for any child whose rect does not intersect the viewport. Test `test_viewport_aware_layout_culling` confirms off-screen child placement calls are elided.
+
+### P0-48: Layout Thrashing Risk (Animation-Induced) [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Critical
 **Affected:** cvkg-layout (layout/animation interaction)
@@ -1837,7 +1867,9 @@ Animations that affect size (width, height, flex grow) trigger measure -> layout
 
 **Recommendation:** Implement layout animation strategy. Detect when animation affects layout vs transform. Use transform-only animations where possible. Implement layout animation budget (skip layout if frame time exceeded). Cache animated constraint values.
 
-### P1-63: Spatial Indexing for Layout Missing [LAYOUT-AUDIT]
+**Resolution:** `LayoutCache::layout_time_budget` and `layout_start_time` fields track elapsed time. `is_over_budget()` gates Taffy recomputation: when the budget is exceeded the previous `previous_rects` are reused. `apply_layout_animations` uses `ViscousSpring` physics to interpolate animated rects; snaps to pixel grid when spring velocity drops below threshold. Test `test_layout_budget_thrashing_prevention` confirms Taffy is skipped when over budget.
+
+### P1-63: Spatial Indexing for Layout Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (spatial queries, hit testing)
@@ -1849,7 +1881,9 @@ No spatial indexing exists for layout results. Hit testing, focus traversal, and
 
 **Recommendation:** Implement LayoutSpatialIndex (quadtree for 2D, interval tree for 1D). Update incrementally during layout. Use for hit testing, focus traversal, and visibility culling.
 
-### P1-64: Incremental Layout Strategy Missing [LAYOUT-AUDIT]
+**Resolution:** Added `LayoutSpatialIndex` — an axis-aligned 2D quadtree with configurable max leaf capacity (16) and max depth (8). `hit_test(x, y)` returns all entries whose rect contains the point in O(log N). `query_region(rect)` returns overlapping entries. `rebuild(bounds, entries)` rebuilds from a flat iterator post-layout. 2 unit tests.
+
+### P1-64: Incremental Layout Strategy Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (incremental computation)
@@ -1861,7 +1895,9 @@ No visible incremental layout system. Every layout pass recomputes from scratch.
 
 **Recommendation:** Implement incremental layout. Dirty nodes are re-measured. Clean subtrees reuse cached results. Only dirty ancestors are re-positioned.
 
-### P1-65: Layout Caching Needed [LAYOUT-AUDIT]
+**Resolution:** `LayoutCache::get_size` / `set_size` provide per-view memoization keyed by `(hash, SizeProposal)`. `invalidate_view` evicts dirty views and their registered ancestors. Taffy nodes are reused via `node_map` — only dirty views trigger `set_style` + recompute. Clean subtrees never re-enter `compute_taffy_flex`.
+
+### P1-65: Layout Caching Needed [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (caching, performance)
@@ -1873,7 +1909,9 @@ Measurement results are not cached across frames. Repeated measurement of unchan
 
 **Recommendation:** Implement LayoutCache. Cache measurement results keyed by constraints + content hash. Cache final rects. Invalidate on dirty propagation.
 
-### P1-66: Parallel Layout Potential Untapped [LAYOUT-AUDIT]
+**Resolution:** `LayoutCache` (in cvkg-core) stores `size_cache: HashMap<(u64, SizeProposal), Size>` and `previous_rects: HashMap<u64, Rect>`. All layout containers call `get_size` before measuring and `set_size` after. Taffy's `node_map` persists across frames, reusing existing nodes for unchanged views.
+
+### P1-66: Parallel Layout Potential Untapped [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (parallelism)
@@ -1885,7 +1923,9 @@ Layout appears to be single-threaded. Independent subtrees could be laid out in 
 
 **Recommendation:** Investigate parallel layout execution. Independent subtrees can be laid out in parallel. Use rayon or similar for parallel subtree computation. Merge results after parallel phase.
 
-### P1-67: Adaptive Layout Behavior Missing [LAYOUT-AUDIT]
+**Resolution:** Added `size_views_parallel(views, proposal, cache)` in cvkg-layout. With the `parallel` Cargo feature enabled, uses `rayon::par_iter` with per-thread `LayoutCache` clones so independent subtrees are sized concurrently. Falls back to sequential iteration without the feature. The `rayon` optional dependency already existed in Cargo.toml.
+
+### P1-67: Adaptive Layout Behavior Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (input adaptation)
@@ -1897,7 +1937,9 @@ Modern platforms adapt layout to input modality (touch, mouse, tablet, accessibi
 
 **Recommendation:** Implement adaptive layout. Detect input modality. Adjust touch target sizes. Adjust spacing for pointer vs touch. Honor accessibility zoom settings.
 
-### P1-68: Focus Traversal Rules Unclear [LAYOUT-AUDIT]
+**Resolution:** Added `LayoutModality` enum (`Pointer`, `Touch`, `AccessibilityZoom`) with `min_tap_target()`, `spacing_multiplier()`, and `adapt_size(size)` methods. `Touch` enforces a 44×44 pt minimum; `AccessibilityZoom` doubles spacing. 3 unit tests cover enlargement, no-op on pointer, and zoom ordering.
+
+### P1-68: Focus Traversal Rules Unclear [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (focus, accessibility)
@@ -1909,7 +1951,9 @@ No deterministic focus order is defined. Focus traversal (Tab key) depends on la
 
 **Recommendation:** Define focus traversal rules. Focus order should follow visual order (left-to-right, top-to-bottom for LTR). Document and test focus order. This extends P1-40 (event propagation rules) to focus specifically.
 
-### P1-69: Reading Order Validation Missing [LAYOUT-AUDIT]
+**Resolution:** Added `FocusCandidate { hash, rect, tab_index }` and `compute_focus_order(candidates)`. Algorithm: explicit `tab_index > 0` candidates come first (sorted ascending), then natural-order candidates sorted by row bucket then x position (LTR). 2 unit tests: `test_focus_order_ltr_visual_sort` and `test_focus_order_explicit_tabindex_comes_first`.
+
+### P1-69: Reading Order Validation Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Major
 **Affected:** cvkg-layout (reading order, accessibility)
@@ -1921,7 +1965,9 @@ Screen readers depend on layout semantics for reading order. No validation that 
 
 **Recommendation:** Validate reading order against visual order. Ensure semantic layout order matches visual position. Test with screen readers.
 
-### P2-45: Layout Capability Model Missing [LAYOUT-AUDIT]
+**Resolution:** Added `validate_reading_order(candidates)` which checks the natural-order partition of a `FocusCandidate` slice for violations: if any element appears after a visually earlier element (different row bucket), or to the left of the previous element on the same row, it returns `Err`. 2 unit tests cover valid sequence and backwards-row detection.
+
+### P2-45: Layout Capability Model Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-layout (capabilities)
@@ -1932,6 +1978,8 @@ Layout capabilities are implicit. Applications cannot query which layout modes a
 **Result:** Applications cannot adapt to layout engine capabilities.
 
 **Recommendation:** Introduce LayoutCapabilities struct. Document supported layout modes.
+
+**Resolution:** Added `LayoutCapabilities` struct with boolean fields (`flexbox`, `grid`, `absolute`, `container_queries`) and `layout_capabilities()` function to cvkg-layout. Applications can query supported modes at runtime.
 
 ### P2-46: Progressive Layout Missing [LAYOUT-AUDIT]
 
