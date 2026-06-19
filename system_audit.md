@@ -14,7 +14,7 @@ The CVKG render pipeline is a sophisticated multi-pass GPU renderer built on wgp
 
 **Critical issues:** 42 (8 resolved)
 **Major issues:** 44 (25 resolved)
-**Minor issues:** 47 (13 resolved)
+**Minor issues:** 47 (15 resolved)
 
 **Cross-audit notes:** Findings P0-4 through P0-7, P1-13 through P1-18, and P2-19 through P2-24 are from an independent second audit pass. Findings P0-8 through P0-12, P1-19 through P1-28, and P2-25 through P2-29 are from a GPU-focused third audit pass. Findings P0-13 through P0-17, P1-29 through P1-37, and P2-30 through P2-34 are from an SVG filter-focused fourth audit pass. Findings P0-18 through P0-25, P1-38 through P1-45, and P2-35 through P2-38 are from a core crate-focused fifth audit pass. Findings P0-26 through P0-34, P1-46 through P1-51, and P2-39 through P2-40 are from a render-native-focused sixth audit pass. Findings P0-35 through P0-43, P1-52 through P1-62, and P2-41 through P2-44 are from a runic-text-focused seventh audit pass. Findings P0-44 through P0-48, P1-63 through P1-69, and P2-45 through P2-48 are from a layout crate-focused eighth audit pass. All verified against source.
 
@@ -497,13 +497,15 @@ All are on taffy tree operations (`new_leaf`, `new_with_children`, `compute_layo
 
 **Resolution:** All 46 unwraps are on infallible taffy operations. No code change needed -- these are safe by design.
 
-### P2-3: 188 expect() Calls in cvkg-render-native
+### P2-3: 188 expect() Calls in cvkg-render-native **[DEFERRED]**
 
 **Severity:** Minor
 **Affected:** cvkg-render-native/src/lib.rs
 **Lens:** Error Handling
 
 Most are `GPU mutex poisoned: <method_name>` -- descriptive but panic-on-poison. On a production mobile app, a poisoned mutex should degrade gracefully, not crash.
+
+**Resolution:** Deferred -- requires broader error handling design for NativeRenderer. Changing from panic-on-poison to graceful degradation needs Renderer trait modifications to support error returns across all 50+ methods.
 
 ### P2-4: 62+ clone() Calls in SurtrRenderer **[RESOLVED]**
 
@@ -515,13 +517,15 @@ Most are Arc clones (cheap), TextureView clones (wgpu ref-counted, cheap), and S
 
 **Resolution:** Audit confirmed no performance issue. All clones are cheap (Arc, ref-counted wgpu types, or small structs). No code change needed.
 
-### P2-5: No TODO/FIXME/HACK/STUB Comments Found
+### P2-5: No TODO/FIXME/HACK/STUB Comments Found **[RESOLVED]**
 
 **Severity:** Positive
 **Affected:** All files
 **Lens:** Code Review
 
 The codebase is clean of dead markers. This is good but means there are no documented known-issues or future work items in the code itself.
+
+**Resolution:** Positive finding. No action needed -- clean codebase is the desired state.
 
 ### P2-6: GeometryNode Only Draws Opaque Calls **[RESOLVED]**
 
@@ -547,7 +551,7 @@ The GeometryNode only renders `DrawMaterial::Opaque` calls with `target_id.is_no
 
 When scissor rect has zero width or height after scaling, the code sets `set_scissor_rect(0, 0, 1, 1)` -- a 1x1 pixel region. This prevents a wgpu validation error (scissor rect must be non-zero) but draws to a single pixel, which is visually wrong. Should skip the draw call entirely.
 
-### P2-8: Shader String Concatenation at Compile Time
+### P2-8: Shader String Concatenation at Compile Time **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-render-gpu/src/renderer.rs, lines 693-719
@@ -559,6 +563,8 @@ let wgsl_src = format!("{}{}{}{}{}{}", WGSL_COMMON, WGSL_SHAPES, WGSL_BIFROST, .
 ```
 
 This produces a single massive shader string. On WASM, this is parsed at runtime. On native, it's compiled once at startup. The approach works but makes shader debugging difficult -- stack traces reference line numbers in the concatenated string, not the original files.
+
+**Resolution:** Added documentation comment to renderer.rs explaining the concatenation approach, its trade-offs, and future improvement direction (naga module composition). No structural change needed -- the format! cost is one-time at startup.
 
 ### P2-9: ColorTheme Struct Padding in Shader vs Rust **[RESOLVED]**
 

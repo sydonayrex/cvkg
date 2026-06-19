@@ -1089,6 +1089,16 @@ impl SurtrRenderer {
         };
         let materials_generated = crate::material::generate_builtins_wgsl();
 
+        // P2-8: Shader concatenation approach
+        // WGSL shaders are assembled by string concatenation at pipeline creation time.
+        // This produces a single massive shader string per pipeline variant.
+        // Trade-offs:
+        // + Simple: no preprocessor or build script needed
+        // + All shader code is visible in .wgsl files with full IDE support
+        // - Debug line numbers reference the concatenated string, not original files
+        // - Runtime cost: format! at startup (one-time, not per frame)
+        // - WASM: parsed at runtime; native: compiled once at startup
+        // Future improvement: use naga for proper module composition with source maps.
         let wgsl_src = format!(
             "{}{}{}{}{}{}",
             WGSL_COMMON,
