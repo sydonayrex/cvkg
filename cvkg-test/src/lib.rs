@@ -137,3 +137,10 @@ impl GoldenImage {
         );
     }
 }
+
+// ── Backend Conformance (P1-38) ──────────────────────────────────────────────
+
+mod conformance;
+pub use conformance::{
+    ConformanceResult, ConformanceSuite, ConformanceTest, pixels_approx_match, pixels_match,
+};
