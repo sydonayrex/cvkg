@@ -1171,24 +1171,42 @@ impl ShapedText {
 // ── FontData ─────────────────────────────────────────────────────────────────
 
 /// Owning wrapper for font data that can be shared.
+/// Holds the stable data vector, the collection index, and the pre-computed
+/// Swash CacheKey value to prevent dynamic ID generation anomalies.
 #[derive(Clone)]
 struct FontData {
     data: std::sync::Arc<Vec<u8>>,
     index: u32,
+    key: u64,
 }
 
 impl FontData {
+    /// Creates a new FontData container and immediately evaluates the Swash cache key value.
+    ///
+    /// # Contract
+    /// Evaluates the unique font key once using Swash, caching it inline so that subsequent
+    /// lookups on this font instance are fully deterministic and bypass atomic counter mutations.
     fn new(data: Vec<u8>, index: u32) -> Self {
+        let key = FontRef::from_index(&data, index as usize)
+            .map(|r| r.key.value())
+            .unwrap_or(0);
         FontData {
             data: std::sync::Arc::new(data),
             index,
+            key,
         }
     }
 
+    /// Accesses the underlying raw bytes of the font data.
     fn as_bytes(&self) -> &[u8] {
         &self.data
     }
 
+    /// Resolves a transient FontRef from the raw data.
+    ///
+    /// # Contract
+    /// Returns a transient FontRef referencing the heap-stable data. Callers should use
+    /// `self.key` for stable cache indexing rather than the transient `FontRef.key` value.
     fn font_ref(&self) -> Option<FontRef<'_>> {
         FontRef::from_index(&self.data, self.index as usize)
     }
@@ -1223,7 +1241,7 @@ impl ResolvedFont {
         let _metrics = swash::scale::image::Image::new(); // placeholder
         // We'll get metrics via font_ref's internal data
         // Use swash's metrics method through the shape module
-        let cache_key = font_ref.key.value();
+        let cache_key = data.key;
 
         // Read metrics directly from the font data using ttf-parser
         let ttf_face = rustybuzz::ttf_parser::Face::parse(data.as_bytes(), data.index).ok()?;
@@ -1275,40 +1293,63 @@ pub struct RunicTextEngine {
     font_data: HashMap<fontdb::ID, FontData>,
     /// Scale context for rasterization.
     scale_context: ScaleContext,
+    /// Background database loading state.
+    bg_db: Option<std::sync::Arc<std::sync::Mutex<Option<Database>>>>,
 }
 
 impl RunicTextEngine {
-    /// Create a new text engine with system fonts and user fonts.
+    /// Create a new text engine with system fonts and user fonts loaded asynchronously.
     ///
     /// # Contract
-    /// Guaranteed to successfully instantiate a usable text engine. Loads all standard
-    /// system and user fonts first, and then embeds Jupiteroid.ttf as an absolute last-resort
-    /// fallback so text rendering cannot fail even on zero-font systems.
+    /// Guaranteed to successfully instantiate a usable text engine. Loads Jupiteroid.ttf
+    /// synchronously so there's always a font ready immediately, and spawns a background thread
+    /// to load all standard system and user fonts so winit startup is not blocked.
     pub fn new() -> Self {
         let mut db = Database::new();
-        db.load_system_fonts();
+        // Load Jupiteroid.ttf synchronously so there's always a font ready.
+        let jupiteroid_data = include_bytes!("../Fonts/Jupiteroid.ttf").to_vec();
+        db.load_font_data(jupiteroid_data.clone());
 
-        // Load user fonts from standard directories
-        let home = std::env::var("HOME").unwrap_or_default();
-        for dir in &[
-            format!("{}/.local/share/fonts", home),
-            format!("{}/.fonts", home),
-            "/usr/share/fonts".to_string(),
-            "/usr/local/share/fonts".to_string(),
-        ] {
-            db.load_fonts_dir(dir);
+        let bg_db_arc = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let bg_db_clone = bg_db_arc.clone();
+
+        std::thread::spawn(move || {
+            let mut bg_db = Database::new();
+            bg_db.load_system_fonts();
+
+            // Load user fonts from standard directories
+            let home = std::env::var("HOME").unwrap_or_default();
+            for dir in &[
+                format!("{}/.local/share/fonts", home),
+                format!("{}/.fonts", home),
+                "/usr/share/fonts".to_string(),
+                "/usr/local/share/fonts".to_string(),
+            ] {
+                bg_db.load_fonts_dir(dir);
+            }
+            
+            // Also load Jupiteroid.ttf in the background db to keep it consistent
+            bg_db.load_font_data(jupiteroid_data);
+
+            if let Ok(mut guard) = bg_db_clone.lock() {
+                *guard = Some(bg_db);
+            }
+        });
+
+        let mut font_data = HashMap::new();
+        // Index the synchronous Jupiteroid font
+        for face in db.faces() {
+            let id = face.id;
+            let face_index = face.index;
+            font_data.insert(id, FontData::new(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(), face_index));
         }
 
-        let mut engine = RunicTextEngine {
+        RunicTextEngine {
             db,
-            font_data: HashMap::new(),
+            font_data,
             scale_context: ScaleContext::new(),
-        };
-
-        // Load Jupiteroid.ttf as a built-in last-resort fallback font
-        engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
-
-        engine
+            bg_db: Some(bg_db_arc),
+        }
     }
 
     /// Create a light text engine for testing -- no system/user font loading.
@@ -1318,6 +1359,35 @@ impl RunicTextEngine {
             db: Database::new(),
             font_data: HashMap::new(),
             scale_context: ScaleContext::new(),
+            bg_db: None,
+        }
+    }
+
+    /// Checks if the background font database has completed indexing and swaps it into the active state.
+    ///
+    /// # Contract
+    /// Swaps the database atomically when background font scanning completes, invalidating the
+    /// local font_data cache to allow query resolution against the newly loaded system fonts.
+    fn check_bg_db(&mut self) {
+        // Drop the guard before mutating self.bg_db to avoid borrow conflict.
+        let should_clear = if let Some(ref bg_db_arc) = self.bg_db {
+            if let Ok(mut guard) = bg_db_arc.try_lock() {
+                if let Some(new_db) = guard.take() {
+                    self.db = new_db;
+                    self.font_data.clear();
+                    log::info!("[RunicTextEngine] Background font database loaded successfully.");
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        if should_clear {
+            self.bg_db = None;
         }
     }
 
@@ -1331,6 +1401,7 @@ impl RunicTextEngine {
 
     /// Load a font from file data.
     pub fn load_font_data(&mut self, data: Vec<u8>) {
+        self.check_bg_db();
         self.db.load_font_data(data.clone());
         for face in self.db.faces() {
             let id = face.id;
@@ -1342,6 +1413,7 @@ impl RunicTextEngine {
     }
     /// Get or load FontData for a fontdb ID.
     fn get_font_data(&mut self, id: fontdb::ID) -> Option<FontData> {
+        self.check_bg_db();
         if let Some(data) = self.font_data.get(&id) {
             return Some(data.clone());
         }
@@ -1365,6 +1437,7 @@ impl RunicTextEngine {
 
     /// Resolve a font for the given style.
     fn resolve_font(&mut self, style: &TextStyle) -> Result<ResolvedFont, ShapingError> {
+        self.check_bg_db();
         // Try primary family
         for family_name in std::iter::once(&style.family).chain(style.fallback_families.iter()) {
             let query = Query {
@@ -1378,7 +1451,7 @@ impl RunicTextEngine {
                 && let Some(data) = self.get_font_data(id)
                 && let Some(mut resolved) = ResolvedFont::from_data(data.clone())
             {
-                // Load fallbacks - collect IDs first to avoid borrow issues
+                 // Load fallbacks - collect IDs first to avoid borrow issues
                 let fallback_ids: Vec<fontdb::ID> = self
                     .db
                     .faces()
@@ -1644,10 +1717,7 @@ impl RunicTextEngine {
                                 glyphs[i].y = (pos.y_offset as f32) * scale;
                                 glyphs[i].advance_width = (pos.x_advance as f32) * scale;
                                 
-                                let fallback_key = fallback
-                                    .font_ref()
-                                    .map(|r| r.key.value())
-                                    .unwrap_or(resolved.cache_key);
+                                let fallback_key = fallback.key;
                                 glyphs[i].cache_key = Self::calculate_glyph_cache_key(
                                     fallback_key,
                                     style.font_size,
@@ -2743,6 +2813,7 @@ impl RunicTextEngine {
     /// to prevent cache collisions and visual distortion. Returns `None` if no matching shaped
     /// glyph is present in the cache.
     pub fn rasterize(&mut self, cache_key: u64) -> Option<GlyphImage> {
+        self.check_bg_db();
         let found = global_cache::global_cache_find_glyph(cache_key);
         let (ck, glyph) = found?;
 
@@ -2751,8 +2822,7 @@ impl RunicTextEngine {
         let face_ids: Vec<fontdb::ID> = self.db.faces().map(|f| f.id).collect();
         for id in face_ids {
             if let Some(font_data) = self.get_font_data(id)
-                && let Some(font_ref) = font_data.font_ref()
-                && font_ref.key.value() == ck.font_cache_key
+                && font_data.key == ck.font_cache_key
             {
                 if let Some(face) = self.db.face(id)
                     && let Some((name, _)) = face.families.first()

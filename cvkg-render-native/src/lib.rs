@@ -820,7 +820,34 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 .clone();
 
             // Immediately set self.gpu to prevent re-entry
-            let gpu = pollster::block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
+            let mut gpu = pollster::block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
+
+            // Phase 2.3: Pre-shape static labels to warm the text cache.
+            // These strings are rendered every frame by the berserker demo
+            // (NornirBar menu items, dock labels, overlay labels).
+            // Pre-shaping avoids the first-frame HarfBuzz cost.
+            static PREFETCH_LABELS: &[(&str, f32)] = &[
+                // NornirBar menu items
+                ("File", 13.0),
+                ("Edit", 13.0),
+                ("View", 13.0),
+                ("Window", 13.0),
+                ("Help", 13.0),
+                // Title / overlay labels (common sizes)
+                ("Berserker", 14.0),
+                ("Rage", 12.0),
+                ("FPS", 12.0),
+                ("Frame", 12.0),
+                ("Draw", 12.0),
+                ("Layout", 12.0),
+                ("Submit", 12.0),
+                ("Browser", 12.0),
+                ("Chat", 12.0),
+                ("Code", 12.0),
+                ("Terminal", 12.0),
+            ];
+            gpu.prewarm_text_cache(PREFETCH_LABELS);
+
             self.gpu = Some(Arc::new(std::sync::Mutex::new(gpu)));
 
             log::info!("[Native] Initialization complete.");

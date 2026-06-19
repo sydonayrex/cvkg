@@ -620,6 +620,8 @@ impl cvkg_core::Renderer for SurtrRenderer {
                     let y_offset = image.y_offset;
                     let (rgba_data, gw, gh) = glyph_image_to_rgba(image);
                     if gw == 0 || gh == 0 {
+                        let info = (Rect::zero(), 0.0, 0.0, 0.0, 0.0);
+                        self.text.glyph_cache.put(cache_key, info);
                         continue;
                     }
                     if rgba_data.is_empty() {
@@ -1524,31 +1526,65 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     /// Phase 2.1: text shaping cache lookup.
-    /// Uses a hashed per-frame cache keyed by text content and font size.
+    /// Uses text.shaped_cache which stores full ShapedText objects.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::new();
-        text.hash(&mut hasher);
-        size.to_bits().hash(&mut hasher);
-        let key = hasher.finish();
-        if let Some(&result) = self.shaped_text_cache.get(&key) {
-            return result;
+        let cache_key = (text.to_string(), (size * 100.0) as u32);
+        if let Some(shaped) = self.text.shaped_cache.get(&cache_key) {
+            return (shaped.width, shaped.height);
         }
+        // Fall back to shape_rich_text (handles color/style variations).
         let style = cvkg_runic_text::TextStyle::new("Inter", size);
         let spans = [cvkg_runic_text::TextSpan::new(text, style)];
-        let result = if let Some(shaped) = self.shape_rich_text(
+        if let Some(shaped) = self.shape_rich_text(
             &spans,
             None,
             cvkg_runic_text::TextAlign::Start,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
-            (shaped.width, shaped.height)
+            let result = (shaped.width, shaped.height);
+            self.text.shaped_cache.insert(cache_key, shaped);
+            result
         } else {
             (0.0, 0.0)
-        };
-        self.shaped_text_cache.insert(key, result);
-        result
+        }
+    }
+
+    /// Phase 2.2: Override draw_text to use the shaped text cache.
+    /// The default trait implementation calls shape_rich_text every frame.
+    /// This override checks the shaped_cache first, avoiding redundant HarfBuzz shaping.
+    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        let cache_key = (text.to_string(), (size * 100.0) as u32);
+        let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
+        let g = (color[1] * 255.0).clamp(0.0, 255.0) as u8;
+        let b = (color[2] * 255.0).clamp(0.0, 255.0) as u8;
+        let a = (color[3] * 255.0).clamp(0.0, 255.0) as u8;
+        // Clone out of cache first to avoid borrow conflict with draw_shaped_text.
+        let cached = self.text.shaped_cache.get(&cache_key).cloned();
+        if let Some(mut shaped) = cached {
+            let color_matches = shaped.spans.first()
+                .map(|s| s.style.color == [r, g, b, a])
+                .unwrap_or(false);
+            if !color_matches {
+                for span in &mut shaped.spans {
+                    span.style.color = [r, g, b, a];
+                }
+            }
+            self.draw_shaped_text(&shaped, x, y);
+            return;
+        }
+        // Not cached -- shape now and store.
+        let mut style = cvkg_runic_text::TextStyle::new("Inter", size);
+        style.color = [r, g, b, a];
+        let spans = [cvkg_runic_text::TextSpan::new(text, style)];
+        if let Some(shaped) = self.shape_rich_text(
+            &spans,
+            None,
+            cvkg_runic_text::TextAlign::Start,
+            cvkg_runic_text::TextOverflow::Visible,
+        ) {
+            self.text.shaped_cache.insert(cache_key, shaped.clone());
+            self.draw_shaped_text(&shaped, x, y);
+        }
     }
 }
 
@@ -1563,7 +1599,7 @@ impl SurtrRenderer {
 
     /// Phase 2.1: clear the text shaping cache at the start of each frame.
     pub fn clear_text_cache(&mut self) {
-        self.shaped_text_cache.clear();
+        self.text.shaped_cache.clear();
     }
 
     /// Get all registered event handlers for a specific event type.
@@ -1675,7 +1711,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         self.frame_rendered = false;
         self.app_drew_background = false;
         // Phase 2.1: clear text shaping cache at start of each frame.
-        self.shaped_text_cache.clear();
+        self.text.shaped_cache.clear();
         let id = self
             .current_window
             .expect("No target window set for frame. Call set_target_window first.");

@@ -356,19 +356,13 @@ pub struct SurtrRenderer {
     pub(crate) texture_view_cache: std::sync::Mutex<
         std::collections::HashMap<(crate::kvasir::resource::ResourceId, u32), wgpu::TextureView>,
     >,
-    /// Phase 2.1: text shaping cache. Maps (text, font_size) -> (width, height).
-    /// Cleared at the start of each frame. Avoids re-shaping identical strings
-    /// via HarfBuzz, which was the single biggest cost in the cpu_draw phase.
-    pub(crate) shaped_text_cache: std::collections::HashMap<u64, (f32, f32)>,
 }
 
 // P0-3 safety audit: unsafe Send/Sync on WASM.
 //
 // SurtrRenderer contains the following shared state:
 //   - wgpu::Device and wgpu::Queue  (transitively !Send + !Sync on WASM)
-//   - Mutex<HashMap<...>> caches    (bind_group_cache, texture_view_cache,
-//                                    shaped_text_cache -- Mutex<T> is Send+Sync
-//                                    iff T: Send, which holds for our HashMaps)
+//   - Mutex<HashMap<...>> caches    (bind_group_cache, texture_view_cache)
 //   - Vec<Vertex>, Vec<u32>, Vec<InstanceData>, Vec<DrawCall> -- the GPU
 //     buffer staging areas. These are mutated each frame and may be observed
 //     by the GPU submission queue.
@@ -709,6 +703,40 @@ impl SurtrRenderer {
             total
         );
         total
+    }
+
+    /// Phase 2.3: Pre-shape static text labels to warm the shaped text cache.
+    ///
+    /// Called once at init time with the set of labels that are known to be
+    /// rendered every frame (menu titles, dock labels, overlay labels, etc.).
+    /// This avoids the first-frame HarfBuzz shaping cost for these strings,
+    /// which would otherwise cause a visible stutter on the first rendered frame.
+    ///
+    /// The cache entries persist across frames (cleared only on theme change
+    /// via `invalidate_all_caches`), so pre-shaped labels are reused for the
+    /// lifetime of the renderer.
+    pub fn prewarm_text_cache(&mut self, labels: &[(&str, f32)]) {
+        let mut count = 0;
+        for (text, size) in labels {
+            let cache_key = (text.to_string(), (size * 100.0) as u32);
+            if self.text.shaped_cache.contains_key(&cache_key) {
+                continue;
+            }
+            let style = cvkg_runic_text::TextStyle::new("Inter", *size);
+            let spans = [cvkg_runic_text::TextSpan::new(text, style)];
+            if let Some(shaped) = self.text.engine.shape_layout(
+                &spans,
+                None,
+                cvkg_runic_text::TextAlign::Start,
+                cvkg_runic_text::TextOverflow::Visible,
+            ).ok() {
+                self.text.shaped_cache.insert(cache_key, shaped);
+                count += 1;
+            }
+        }
+        if count > 0 {
+            log::info!("[Surtr] prewarm_text_cache: pre-shaped {} labels", count);
+        }
     }
 
     /// select_best_surface_format selects the highest precision/HDR texture format
@@ -2502,7 +2530,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 .collect(),
             bind_group_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             texture_view_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
-            shaped_text_cache: std::collections::HashMap::new(),
+
         }
     }
 
@@ -6005,7 +6033,7 @@ mod p1_11_pipeline_cache_tests {
 
     /// Write the cache + SHA256 sidecar atomically. Used by tests to
     /// populate a cache file that the integrity check will accept.
-    fn write_cache(cache_path: &std::path::Path, data: &[u8]) {
+    fn write_cache(cache_path: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
         use std::io::Write;
         let mut hasher = Sha256::new();
         hasher.update(data);
@@ -6015,10 +6043,11 @@ mod p1_11_pipeline_cache_tests {
             hash[0], hash[1], hash[2], hash[3],
             hash[4], hash[5], hash[6], hash[7]
         );
-        std::fs::write(cache_path, data).unwrap();
+        std::fs::write(cache_path, data)?;
         let hash_path = cache_path.with_extension("bin.sha256");
-        let mut f = std::fs::File::create(hash_path).unwrap();
-        f.write_all(hash_hex.as_bytes()).unwrap();
+        let mut f = std::fs::File::create(hash_path)?;
+        f.write_all(hash_hex.as_bytes())?;
+        Ok(())
     }
 
     #[test]
@@ -6033,7 +6062,7 @@ mod p1_11_pipeline_cache_tests {
     fn returns_data_when_sidecar_matches() {
         let tmp = std::env::temp_dir().join("cvkg_test_good_cache.bin");
         let data = b"pipeline cache blob with some bytes";
-        write_cache(&tmp, data);
+        write_cache(&tmp, data).expect("failed to write test cache");
         let result = load_pipeline_cache_with_integrity_check(&tmp);
         match result {
             Ok(Some(d)) => assert_eq!(d, data),
@@ -6046,7 +6075,7 @@ mod p1_11_pipeline_cache_tests {
     #[test]
     fn returns_err_when_sidecar_missing() {
         let tmp = std::env::temp_dir().join("cvkg_test_no_sidecar.bin");
-        std::fs::write(&tmp, b"data without sidecar").unwrap();
+        std::fs::write(&tmp, b"data without sidecar").expect("failed to write test file");
         let result = load_pipeline_cache_with_integrity_check(&tmp);
         assert!(result.is_err(), "missing sidecar must yield Err");
         let msg = result.unwrap_err();
@@ -6060,11 +6089,12 @@ mod p1_11_pipeline_cache_tests {
         // refused, so the unsafe create_pipeline_cache boundary is never
         // crossed with untrusted data.
         let tmp = std::env::temp_dir().join("cvkg_test_bad_hash.bin");
-        std::fs::write(&tmp, b"original data").unwrap();
+        std::fs::write(&tmp, b"original data").expect("failed to write test file");
         let hash_path = tmp.with_extension("bin.sha256");
-        std::fs::write(&hash_path, b"0000000000000000000000000000000000000000000000000000000000000000").unwrap();
+        std::fs::write(&hash_path, b"0000000000000000000000000000000000000000000000000000000000000000")
+            .expect("failed to write hash sidecar");
         // Now overwrite the cache file with different data.
-        std::fs::write(&tmp, b"tampered data with extra bytes").unwrap();
+        std::fs::write(&tmp, b"tampered data with extra bytes").expect("failed to write test file");
         let result = load_pipeline_cache_with_integrity_check(&tmp);
         assert!(result.is_err(), "tampered cache must yield Err");
         let msg = result.unwrap_err();
