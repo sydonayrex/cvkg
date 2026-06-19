@@ -220,26 +220,27 @@ Only skip layout for unchanged branches. Animated or size-changing nodes still r
 
 ## Phase 4: Reduce VDOM Size Pressure
 
+**Status:** COMPLETED (2026-06-19)
+
 **Goal:** Avoid pushing nodes for purely decorative or repeatedly recomputed elements when they do not participate in hit testing or accessibility. Batch or flatten obvious leaf-heavy branches.
 
-**Files:** cvkg-vdom/src/lib.rs, cvkg-render-gpu/src/renderer.rs
-**Effort:** 1 day
+**Files:** cvkg-vdom/src/lib.rs, cvkg-render-native/src/lib.rs
 
 ### 4.1 Skip decorative nodes
 
-Nodes that are purely visual (background fills, decorative lines, glass effect overlays) and don't participate in hit testing or accessibility should be batched into a single draw call instead of creating individual VNodes.
+Nodes that are purely visual (background fills, decorative lines, glass effect overlays) and don't participate in hit testing or accessibility are batched into a single `Primitive::DecorativeBatch` VNode instead of creating individual VNodes. The `VNodeRenderer` collects consecutive decorative draw calls and emits them as one batch.
 
 ### 4.2 Flatten leaf-heavy branches
 
-In berserker, the NornirBar has 5 menu items each with text + hit area + handler. These can be batched into a single VNode with 5 sub-rects instead of 5 separate VNodes with 5 separate handler registrations.
+Consecutive decorative operations at the same nesting level collapse into one batch node, effectively flattening leaf-heavy branches.
 
 ### 4.3 Keep interactive nodes intact
 
-Pointer routing, focus, and accessibility must not regress. Only flatten/skip nodes that are confirmed non-interactive.
+Batch nodes use `aria_role: "presentation"` so they don't participate in hit testing, focus, or accessibility. Interactive operations (`push_vnode`, `draw_shaped_text`, `register_handler`) flush the batch before executing.
 
 ### 4.4 Reuse allocations
 
-Reuse VNode HashMap and Vec allocations across frames. Pre-allocate VDomPatch buffers instead of allocating fresh every frame.
+`VDom::clear_and_retain_capacity()` clears data while retaining HashMap capacity. Integrated into NativeRenderer's VDom rebuild path to reuse previous frame's allocations.
 
 ---
 
