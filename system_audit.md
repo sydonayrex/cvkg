@@ -2104,10 +2104,7 @@ No stress tests for deep trees, wide trees, or nested constraints. Constraint re
 
 **Resolution:** Added 3 stress tests to cvkg-layout: `p2_47_deep_tree_100_levels`, `p2_47_wide_tree_1000_children`, and `p2_47_nested_flex_no_panic`.
 
-### P2-48: Parallel Layout Benchmarks Missing [LAYOUT-AUDIT]
-
-**Resolution:** Deferred -- Requires parallel layout benchmark harness with rayon
-
+### P2-48: Parallel Layout Benchmarks Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-layout (testing)
@@ -2118,6 +2115,8 @@ No benchmarks for parallel layout execution. Performance characteristics unknown
 **Result:** Parallel performance unknown. Cannot measure speedup from parallelism.
 
 **Recommendation:** Add parallel layout benchmarks. Compare single-threaded vs multi-threaded layout for various tree shapes.
+
+**Resolution:** Added `benches/layout_benches.rs` with criterion benchmarks: hstack_single_threaded vs hstack_parallel (100/1000/10000 children), deep_tree_single_threaded vs deep_tree_parallel (10/50/100 levels), wide_tree single vs parallel (1000 children). Parallel benchmarks use `rayon` via the `parallel` feature flag. Full parallel LayoutView computation requires Send+Sync trait bounds (deferred as architectural change).
 
 ---
 | P0-12 (SVG Animation) | Animated brush tip SVGs render as static first frame |

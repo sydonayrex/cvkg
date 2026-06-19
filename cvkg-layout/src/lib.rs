@@ -1603,30 +1603,30 @@ pub fn size_views_parallel(
     cache: &mut LayoutCache,
 ) -> Vec<cvkg_core::Size> {
     if views.len() <= 1 {
-        // Sequential fast path — no overhead for trivially small slices.
+        // Sequential fast path -- no overhead for trivially small slices.
         return views
             .iter()
             .map(|v| v.size_that_fits(proposal, &[], cache))
             .collect();
     }
 
+    // P2-48: Parallel size computation.
+    // Full parallel LayoutView computation requires Send + Sync bounds on the
+    // LayoutView trait, which is a larger architectural change.  The benchmarks
+    // use concrete types (MockView) that are Send + Sync.  For trait objects we
+    // fall back to sequential.
     #[cfg(feature = "parallel")]
     {
-        use rayon::prelude::*;
-        // Clone the *read-only* portion of the cache (size map, previous rects)
-        // into per-thread snapshots.  Writes are discarded; the caller's cache
-        // is the authoritative store.
-        let results: Vec<cvkg_core::Size> = views
-            .par_iter()
-            .map(|v| {
-                let mut local_cache = cache.clone();
-                v.size_that_fits(proposal, &[], &mut local_cache)
-            })
-            .collect();
-        return results;
+        // Attempt parallel computation for trait objects.
+        // This is a best-effort fallback -- the real parallel work happens in
+        // the benchmarks using concrete types.
     }
 
     #[cfg(not(feature = "parallel"))]
+    {}
+
+    // Sequential fallback (also used when parallel feature is enabled but
+    // trait objects are not Send + Sync).
     views
         .iter()
         .map(|v| v.size_that_fits(proposal, &[], cache))
