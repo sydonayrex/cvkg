@@ -402,9 +402,19 @@ pub struct SurtrRenderer {
 // This is a known intentional divergence from wgpu's conservative
 // !Send+!Sync on WASM. It is necessary because winit's event loop on
 // WASM requires the application state to be Send so it can be held
-// across .await points. The single-threaded WASM execution model
-// guarantees that no two threads ever access the renderer concurrently,
-// so the safety contract holds.
+// X-08: unsafe Send/Sync for SurtrRenderer on WASM
+// SAFETY: SurtrRenderer contains wgpu types that are not Send/Sync on WASM
+// because wgpu's web backend uses OffscreenCanvas which is main-thread-only.
+// However, CVKG's WASM execution model is single-threaded:
+// - The browser event loop is single-threaded
+// - All renderer access happens on the main thread
+// - No web workers are used for rendering
+// - wgpu's own WebGPU backend allows this on single-threaded WASM
+//
+// CRITICAL: If CVKG ever adds web worker rendering or shared WebAssembly
+// threads, this unsafe impl MUST be removed and SurtrRenderer must be
+// wrapped in a !Send/!Sync marker (e.g., PhantomData<*const ()>) to prevent
+// accidental cross-thread use. The cfg gate ensures this only applies to wasm32.
 #[cfg(target_arch = "wasm32")]
 unsafe impl Send for SurtrRenderer {}
 #[cfg(target_arch = "wasm32")]
@@ -1067,6 +1077,12 @@ impl SurtrRenderer {
                     None
                 }
             };
+            // SAFETY: create_pipeline_cache takes raw bytes that may have been loaded from
+            // disk. We only reach this point after a successful SHA256 integrity check
+            // (see load_pipeline_cache_with_integrity_check), which verifies the sidecar
+            // hash matches the cache bytes. With `fallback: true`, wgpu will ignore
+            // corrupt or incompatible data and recompile from scratch. The unsafe block
+            // covers only the FFI boundary; no Rust-validated code runs inside it.
             Some(unsafe {
                 device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
                     label: Some("CVKG Pipeline Cache"),

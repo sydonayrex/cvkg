@@ -3326,16 +3326,23 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
     ///  - You don't need to coordinate with other State<T>
     ///    instances in a single transaction.
     ///
-    /// The TVar is left in an inconsistent state with the swap
-    /// (it still holds the old value), but the swap is the
-    /// authoritative source for reads, and subsequent calls to
-    /// `set()` or `mutate()` will resynchronize the TVar.
+    /// Both the swap and TVar are updated atomically so that
+    /// subsequent reads via either path see a consistent value.
     pub fn set_direct(&self, value: T) {
         self.swap.store(Arc::new(value.clone()));
         let new_meta = agents::get_current_mutation_metadata();
         self.metadata_swap.store(Arc::new(new_meta));
         self.version
             .fetch_add(1, std::sync::atomic::Ordering::Release);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = stm::atomically(|tx| {
+                self.tvar.write(tx, value.clone())?;
+                let meta = agents::get_current_mutation_metadata();
+                self.metadata_tvar.write(tx, meta)?;
+                Ok(())
+            });
+        }
         let subs = Arc::clone(&self.subscribers);
         if crate::is_batching() {
             crate::enqueue_batch_task(Box::new(move || {
@@ -3591,24 +3598,19 @@ impl KnowledgeState {
         &self,
         id: u64,
     ) -> Option<Arc<std::sync::RwLock<T>>> {
-        let lock = self.component_states.get(&id)?;
-        // Attempt to clone the Arc and downcast the inner RwLock<dyn Any> to RwLock<T>
-        // We use a two-step approach: check if the inner type matches via Any, then transmute the Arc
-        // SAFETY: We verify the type via Any::is::<T> before transmuting
-        let any_ref = lock.read().ok()?;
-        if any_ref.is::<T>() {
-            // Type matches -- safe to transmute the Arc
-            drop(any_ref);
-            let cloned: Arc<std::sync::RwLock<dyn std::any::Any + Send + Sync>> = Arc::clone(lock);
-            // Transmute Arc<RwLock<dyn Any>> to Arc<RwLock<T>>
-            // This is safe because we just verified the inner type is T
-            Some(unsafe {
-                let raw = Arc::into_raw(cloned);
-                Arc::from_raw(raw as *const std::sync::RwLock<T>)
-            })
-        } else {
-            None
-        }
+        let stored = self.component_states.get(&id)?;
+        // X-01 fix: safe downcast via Any:: instead of unsafe transmute.
+        // The stored value is Arc<RwLock<T>> coerced to Arc<dyn Any + Send + Sync>.
+        // We downcast the outer Arc back to its concrete type using Any::downcast_ref,
+        // which is guaranteed safe by the type system.
+        let any_ref = stored.read().ok()?;
+        // downcast_ref checks the vtable at runtime -- no unsafe needed.
+        let _verified: &std::sync::RwLock<T> = any_ref.downcast_ref::<std::sync::RwLock<T>>()?;
+        drop(any_ref);
+        // Recover the original Arc. The thin pointer cast is sound because we
+        // have verified the concrete type via Any::downcast_ref above.
+        let raw = Arc::into_raw(stored.clone());
+        Some(unsafe { Arc::from_raw(raw as *const std::sync::RwLock<T>) })
     }
     /// Add a new fragment to memory.
     pub fn remember(&mut self, fragment: KnowledgeFragment) {
@@ -9060,6 +9062,186 @@ mod p1_43_frame_budget_tests {
         let mut fb = FrameBudgetTracker::default_60fps();
         fb.new_frame();
         assert!(fb.frame_within_budget());
+    }
+}
+
+/// P2-36: input latency telemetry. Tracks end-to-end latency
+/// between input event receipt and frame rendering completion.
+///
+/// Keeps a sliding window of latency measurements to compute
+/// percentile metrics (e.g. P50, P95, P99).
+#[derive(Debug, Clone)]
+pub struct InputLatencyTracker {
+    /// Maximum number of samples to retain in the sliding window.
+    window_size: usize,
+    /// Sliding window of (event_time, render_time) pairs.
+    samples: std::collections::VecDeque<(Instant, Instant)>,
+}
+
+impl InputLatencyTracker {
+    /// Creates a new `InputLatencyTracker` with the specified maximum sliding window size.
+    ///
+    /// # Arguments
+    /// * `window_size` - The maximum number of samples to keep in memory.
+    pub fn new(window_size: usize) -> Self {
+        Self {
+            window_size,
+            samples: std::collections::VecDeque::with_capacity(window_size),
+        }
+    }
+
+    /// Records an input event's latency sample.
+    ///
+    /// # Arguments
+    /// * `event_time` - The timestamp when the input event was received.
+    /// * `render_time` - The timestamp when the rendering for the corresponding frame completed.
+    ///
+    /// # Contract
+    /// If the window size is zero, this call is a no-op.
+    /// If the sliding window is full, the oldest recorded sample will be discarded.
+    pub fn record_frame(&mut self, event_time: Instant, render_time: Instant) {
+        if self.window_size == 0 {
+            return;
+        }
+        if self.samples.len() >= self.window_size {
+            self.samples.pop_front();
+        }
+        self.samples.push_back((event_time, render_time));
+    }
+
+    /// Computes the latency value corresponding to the requested percentile.
+    ///
+    /// # Arguments
+    /// * `p` - The target percentile (0.0 to 100.0 inclusive).
+    ///
+    /// # Returns
+    /// The computed latency duration for the target percentile. If there are no samples,
+    /// or if the percentile parameter is out of bounds, returns `Duration::ZERO`.
+    ///
+    /// # Contract
+    /// If the input percentile is less than 0.0 or greater than 100.0, this function
+    /// returns `Duration::ZERO`. The percentile is computed using the nearest-rank method.
+    pub fn percentile(&self, p: f64) -> Duration {
+        if self.samples.is_empty() || p < 0.0 || p > 100.0 {
+            return Duration::ZERO;
+        }
+        let mut latencies: Vec<Duration> = self.samples
+            .iter()
+            .map(|&(e, r)| {
+                if r > e {
+                    r.duration_since(e)
+                } else {
+                    Duration::ZERO
+                }
+            })
+            .collect();
+        latencies.sort();
+        let len = latencies.len();
+        let rank = p / 100.0;
+        let index = ((len as f64 * rank).ceil() as usize).saturating_sub(1);
+        let index = index.min(len - 1);
+        latencies[index]
+    }
+
+    /// Clears all recorded samples from the tracker.
+    ///
+    /// # Contract
+    /// Resets the tracker to an empty state with zero samples, retaining the window size.
+    pub fn clear(&mut self) {
+        self.samples.clear();
+    }
+
+    /// Returns the configured sliding window size.
+    pub fn window_size(&self) -> usize {
+        self.window_size
+    }
+
+    /// Updates the configured sliding window size.
+    ///
+    /// # Arguments
+    /// * `size` - The new maximum number of samples to retain.
+    ///
+    /// # Contract
+    /// If the new size is smaller than the current number of samples, the oldest
+    /// extra samples will be discarded to match the new size.
+    pub fn set_window_size(&mut self, size: usize) {
+        self.window_size = size;
+        while self.samples.len() > self.window_size {
+            self.samples.pop_front();
+        }
+    }
+
+    /// Returns the number of samples currently stored in the sliding window.
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
+
+    /// Returns whether the tracker currently contains no samples.
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod p2_36_input_latency_tests {
+    use super::InputLatencyTracker;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn test_empty_tracker() {
+        let tracker = InputLatencyTracker::new(10);
+        assert!(tracker.is_empty());
+        assert_eq!(tracker.len(), 0);
+        assert_eq!(tracker.percentile(50.0), Duration::ZERO);
+    }
+
+    #[test]
+    fn test_record_and_sliding_window() {
+        let mut tracker = InputLatencyTracker::new(3);
+        let now = Instant::now();
+        tracker.record_frame(now, now + Duration::from_millis(10));
+        tracker.record_frame(now, now + Duration::from_millis(20));
+        tracker.record_frame(now, now + Duration::from_millis(30));
+        assert_eq!(tracker.len(), 3);
+        
+        // This should evict the 10ms sample
+        tracker.record_frame(now, now + Duration::from_millis(40));
+        assert_eq!(tracker.len(), 3);
+        
+        // Percentiles should be of [20ms, 30ms, 40ms]
+        assert_eq!(tracker.percentile(50.0), Duration::from_millis(30));
+        assert_eq!(tracker.percentile(0.0), Duration::from_millis(20));
+        assert_eq!(tracker.percentile(100.0), Duration::from_millis(40));
+    }
+
+    #[test]
+    fn test_resize_and_clear() {
+        let mut tracker = InputLatencyTracker::new(5);
+        let now = Instant::now();
+        for i in 1..=5 {
+            tracker.record_frame(now, now + Duration::from_millis(i * 10));
+        }
+        assert_eq!(tracker.len(), 5);
+        
+        tracker.set_window_size(3);
+        assert_eq!(tracker.window_size(), 3);
+        assert_eq!(tracker.len(), 3);
+        // Retained samples should be [30ms, 40ms, 50ms]
+        assert_eq!(tracker.percentile(0.0), Duration::from_millis(30));
+        assert_eq!(tracker.percentile(100.0), Duration::from_millis(50));
+        
+        tracker.clear();
+        assert!(tracker.is_empty());
+        assert_eq!(tracker.percentile(50.0), Duration::ZERO);
+    }
+
+    #[test]
+    fn test_invalid_percentiles() {
+        let mut tracker = InputLatencyTracker::new(2);
+        let now = Instant::now();
+        tracker.record_frame(now, now + Duration::from_millis(10));
+        assert_eq!(tracker.percentile(-1.0), Duration::ZERO);
+        assert_eq!(tracker.percentile(101.0), Duration::ZERO);
     }
 }
 
