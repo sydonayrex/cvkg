@@ -167,5 +167,8 @@ pub use accesskit_winit::Adapter as ShieldWallAdapter;
 pub use cvkg_core::{ColorTheme, SceneUniforms};
 
 pub use renderer::SurtrRenderer;
+
+// P1-35: SVG filter graph integration
+pub mod svg_filter_graph;
 pub use types::{SvgAnimation, SvgModel};
 pub use vertex::{InstanceData, Vertex};

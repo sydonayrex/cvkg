@@ -1201,8 +1201,8 @@ mod tests {
     fn p2_10_unreachable_node_detected() {
         let mut graph = MaterialGraph::new();
         let n0 = graph.add_node(MaterialOp::InputColor);
-        let n1 = graph.add_node(MaterialOp::Solid);
-        let n2 = graph.add_node(MaterialOp::Solid); // unreachable
+        let n1 = graph.add_node(MaterialOp::ConstantColor { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
+        let n2 = graph.add_node(MaterialOp::ConstantColor { r: 0.0, g: 1.0, b: 0.0, a: 1.0 }); // unreachable
         graph.connect(n0, MaterialSocket::Color, n1, MaterialSocket::Color);
         graph.set_output(n1);
         // n2 is not connected to the output path
@@ -1217,7 +1217,7 @@ mod tests {
     fn p2_10_all_reachable_passes() {
         let mut graph = MaterialGraph::new();
         let n0 = graph.add_node(MaterialOp::InputColor);
-        let n1 = graph.add_node(MaterialOp::Solid);
+        let n1 = graph.add_node(MaterialOp::ConstantColor { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
         graph.connect(n0, MaterialSocket::Color, n1, MaterialSocket::Color);
         graph.set_output(n1);
         // Both nodes reachable from output
