@@ -2396,6 +2396,16 @@ No benchmarks for parallel layout execution. Performance characteristics unknown
 89. **P1-68:** Define focus traversal rules. Focus order follows visual order (LTR: left-to-right, top-to-bottom).
 90. **P1-69:** Validate reading order against visual order. Ensure semantic layout order matches visual position.
 
+### Low (P3 -- resolved / accepted)
+
+- **P3-19:** Pipeline cache path uses a runtime path when available and falls back to temp storage; cache data is integrity-checked before use.
+- **P3-20:** Removed unused screen-size locals from mesh and SVG drawing paths.
+- **P3-21:** Documented that texture index 0 is permanently reserved for the Mega-Heim atlas and loaded images start at 1.
+- **P3-22:** Verified material ID 9 routing as the intended blend-mode mapping for current callers.
+- **P3-23:** Accepted ActiveFrameResources Arc clone overhead as negligible relative to GPU work.
+- **P3-24:** Guarded empty surface-format lists with a safe fallback.
+- **P3-25:** Wired `ShadowState._offset` into drop-shadow drawing.
+
 ---
 
 ## 8. Test Coverage Assessment
