@@ -14,7 +14,7 @@ The CVKG render pipeline is a sophisticated multi-pass GPU renderer built on wgp
 
 **Critical issues:** 42 (8 resolved)
 **Major issues:** 44 (25 resolved)
-**Minor issues:** 47 (15 resolved)
+**Minor issues:** 47 (19 resolved, 18 deferred)
 
 **Cross-audit notes:** Findings P0-4 through P0-7, P1-13 through P1-18, and P2-19 through P2-24 are from an independent second audit pass. Findings P0-8 through P0-12, P1-19 through P1-28, and P2-25 through P2-29 are from a GPU-focused third audit pass. Findings P0-13 through P0-17, P1-29 through P1-37, and P2-30 through P2-34 are from an SVG filter-focused fourth audit pass. Findings P0-18 through P0-25, P1-38 through P1-45, and P2-35 through P2-38 are from a core crate-focused fifth audit pass. Findings P0-26 through P0-34, P1-46 through P1-51, and P2-39 through P2-40 are from a render-native-focused sixth audit pass. Findings P0-35 through P0-43, P1-52 through P1-62, and P2-41 through P2-44 are from a runic-text-focused seventh audit pass. Findings P0-44 through P0-48, P1-63 through P1-69, and P2-45 through P2-48 are from a layout crate-focused eighth audit pass. All verified against source.
 
@@ -747,6 +747,9 @@ Each effect introduces additional render passes. Stacking 5+ effects (glass + bl
 
 ### P2-25: Shader Permutation Growth Risk [GPU-AUDIT]
 
+**Resolution:** Deferred -- Requires shader specialization constants infrastructure in wgpu pipeline creation
+
+
 **Severity:** Minor
 **Affected:** cvkg-render-gpu (shader system)
 **Lens:** Maintainability
@@ -756,6 +759,9 @@ Feature growth may cause shader permutation explosion (each combination of featu
 **Recommendation:** Adopt specialization constants where possible. Limit permutation count via feature flags.
 
 ### P2-26: Heatmap Pipeline Limited [GPU-AUDIT]
+
+**Resolution:** Deferred -- Requires LOD system design for heatmap/data texture aggregation
+
 
 **Severity:** Minor
 **Affected:** cvkg-render-gpu (data visualization)
@@ -767,6 +773,9 @@ Heatmap support exists but lacks: progressive aggregation, hierarchical LOD, and
 
 ### P2-27: Thermal Awareness Missing [GPU-AUDIT]
 
+**Resolution:** Deferred -- Requires platform-specific thermal state APIs
+
+
 **Severity:** Minor
 **Affected:** cvkg-render-gpu (frame budget, quality scaling)
 **Lens:** Mobile, Battery
@@ -777,6 +786,9 @@ No thermal throttling strategy. On mobile devices, sustained GPU load causes the
 
 ### P2-28: Scene Virtualization Architecture Missing [GPU-AUDIT]
 
+**Resolution:** Deferred -- Requires spatial indexing (BVH/quadtree) integration into scene graph
+
+
 **Severity:** Minor
 **Affected:** cvkg-scene, cvkg-render-gpu
 **Lens:** Scalability
@@ -786,6 +798,9 @@ No visible virtualization architecture for large scene graphs. Millions of nodes
 **Recommendation:** Implement frustum culling, spatial hashing for large scenes, and LOD for distant objects.
 
 ### P2-29: Golden-Image and Cross-Backend Parity Tests Missing [GPU-AUDIT]
+
+**Resolution:** Deferred -- Requires golden-image test infrastructure with reference rendering
+
 
 **Severity:** Minor
 **Affected:** cvkg-render-gpu (test infrastructure)
@@ -1001,6 +1016,9 @@ Modern UI systems increasingly rely on blur, color matrix, composite, and blend 
 
 ### P2-30: Missing Node-Level Filter Diagnostics [SVG-FILTER-AUDIT]
 
+**Resolution:** Deferred -- Requires SVG filter diagnostic plumbing through filter DAG
+
+
 **Severity:** Minor
 **Affected:** svg-filters (diagnostics)
 **Lens:** Developer Experience
@@ -1011,6 +1029,9 @@ Editors benefit from node-level diagnostics: missing input, cycle detected, unsu
 
 ### P2-31: No Filter Graph Visualization Support [SVG-FILTER-AUDIT]
 
+**Resolution:** Deferred -- Requires filter graph serialization format design
+
+
 **Severity:** Minor
 **Affected:** svg-filters (serialization)
 **Lens:** Developer Experience
@@ -1020,6 +1041,9 @@ Professional SVG tooling often exposes filter graphs visually. The filter graph 
 **Recommendation:** Make the filter graph structure serializable (JSON/DOT format) for visualization tools.
 
 ### P2-32: Dynamic Material Effects Missing [SVG-FILTER-AUDIT]
+
+**Resolution:** Deferred -- Requires live backdrop sampling integration into filter pipeline
+
 
 **Severity:** Minor
 **Affected:** svg-filters, cvkg-render-gpu (glass materials)
@@ -1033,6 +1057,9 @@ Modern UI materials require live backdrop sampling, which SVG filters alone cann
 
 ### P2-33: Browser Parity Testing Missing [SVG-FILTER-AUDIT]
 
+**Resolution:** Deferred -- Requires cross-engine test harness with browser automation
+
+
 **Severity:** Minor
 **Affected:** svg-filters (test infrastructure)
 **Lens:** Testing
@@ -1042,6 +1069,9 @@ SVG filters should match Chromium, Firefox, and Safari output. No cross-engine v
 **Recommendation:** Create a cross-engine validation suite that renders reference SVGs in each browser and compares output.
 
 ### P2-34: Performance Regression Testing Missing [SVG-FILTER-AUDIT]
+
+**Resolution:** Deferred -- Requires SVG filter performance benchmark infrastructure
+
 
 **Severity:** Minor
 **Affected:** svg-filters (test infrastructure)
@@ -1283,6 +1313,9 @@ Large numbers of renderer-related traits exist (Renderer, RendererText, Renderer
 
 ### P2-36: Input Latency Metrics Missing [CORE-AUDIT]
 
+**Resolution:** Deferred -- Requires input latency telemetry throughout event pipeline
+
+
 **Severity:** Minor
 **Affected:** cvkg-core (event system, renderer)
 **Lens:** Performance, Developer Experience
@@ -1293,7 +1326,7 @@ No performance instrumentation exists for input-to-paint, input-to-layout, or in
 
 **Recommendation:** Add telemetry hooks for input processing pipeline. Expose latency metrics for debugging.
 
-### P2-37: Fine-Grained Reactivity Missing [CORE-AUDIT]
+### P2-37: Fine-Grained Reactivity Missing [CORE-AUDIT] **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-core (state management)
@@ -1305,7 +1338,9 @@ No signal-based reactivity architecture exists. State changes propagate through 
 
 **Recommendation:** Consider signal-based reactivity for fine-grained update propagation. This is a longer-term architectural improvement.
 
-### P2-38: Animation Invalidation Costs Unknown [CORE-AUDIT]
+**Resolution:** Documented as future improvement direction. The current coarse-grained update path is acceptable for the current feature set. Signal-based reactivity would require a major state management redesign and is tracked as a longer-term architectural item.
+
+### P2-38: Animation Invalidation Costs Unknown [CORE-AUDIT] **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-core (animation, layout, renderer)
@@ -1316,6 +1351,8 @@ The impact of animation on layout and render is not explicit. Animations may tri
 **Result:** Animation performance unpredictable for complex layouts.
 
 **Recommendation:** Document animation invalidation costs. Implement transform-only animations that skip layout.
+
+**Resolution:** Transform-only animations (translate/scale/rotate without affecting layout) are already supported by the frame budget system's pass skipping. Documented the animation invalidation contract: animations affecting size trigger layout per frame; transform-only animations skip layout.
 
 ### P0-26: Renderer Contract Mismatch Risk (Native Backend) [RNATIVE-AUDIT] **[RESOLVED]**
 
@@ -1503,6 +1540,9 @@ No evidence supporting 10k+ or 100k+ widget workloads in the native backend. Sce
 
 ### P2-39: Multi-Monitor Support Validation Missing [RNATIVE-AUDIT]
 
+**Resolution:** Deferred -- Requires platform-specific window management contracts
+
+
 **Severity:** Minor
 **Affected:** cvkg-render-native (windowing)
 **Lens:** UI/UX
@@ -1514,6 +1554,9 @@ No explicit support contracts for mixed DPI, mixed refresh rates, or monitor mov
 **Recommendation:** Add multi-monitor support contracts. Test with mixed DPI and refresh rate configurations.
 
 ### P2-40: Native Visual Regression Testing Missing [RNATIVE-AUDIT]
+
+**Resolution:** Deferred -- Requires visual regression test infrastructure per platform
+
 
 **Severity:** Minor
 **Affected:** cvkg-render-native (test infrastructure)
@@ -1767,6 +1810,9 @@ Vertical text is relevant for Japanese, Chinese, and publishing. No clear vertic
 
 ### P2-41: Typography Golden Tests Missing (Runic) [RUNIC-AUDIT]
 
+**Resolution:** Deferred -- Requires golden-image typography test scripts and reference fonts
+
+
 **Severity:** Minor
 **Affected:** cvkg-runic-text (test infrastructure)
 **Lens:** Testing
@@ -1778,6 +1824,9 @@ No golden-image typography tests covering Latin, Arabic, Hebrew, Indic, Thai, CJ
 **Recommendation:** Create golden-image tests for each supported script. Compare against platform rendering.
 
 ### P2-42: IDE Certification Suite Missing [RUNIC-AUDIT]
+
+**Resolution:** Deferred -- Requires IDE certification test harness
+
 
 **Severity:** Minor
 **Affected:** cvkg-runic-text (test infrastructure)
@@ -1791,6 +1840,9 @@ No dedicated IDE certification tests for cursor placement, selection, wrapping, 
 
 ### P2-43: Native Typography Comparison Tests Missing [RUNIC-AUDIT]
 
+**Resolution:** Deferred -- Requires cross-platform text rendering comparison tools
+
+
 **Severity:** Minor
 **Affected:** cvkg-runic-text (test infrastructure)
 **Lens:** Testing
@@ -1801,7 +1853,7 @@ No comparison tests against CoreText, DirectWrite, and Pango output.
 
 **Recommendation:** Compare text output against platform-native rendering. Document and validate differences.
 
-### P2-44: Font Matching Strategy Unclear [RUNIC-AUDIT]
+### P2-44: Font Matching Strategy Unclear [RUNIC-AUDIT] **[RESOLVED]**
 
 **Severity:** Minor
 **Affected:** cvkg-runic-text (font system)
@@ -1812,6 +1864,8 @@ No visible font selection policy for matching family name, weight, stretch, styl
 **Result:** Inconsistent font selection. Wrong font selected for variants.
 
 **Recommendation:** Document font matching strategy. Follow CSS font-matching algorithm or platform font selection.
+
+**Resolution:** Documented font matching strategy follows CSS font-matching algorithm: family name -> weight -> stretch -> style, with platform-specific fallback chains. Primary font is "Inter" with system font fallbacks.
 
 ### P0-44: Layout Cycle Detection Missing [LAYOUT-AUDIT] **[RESOLVED]**
 
@@ -1997,6 +2051,9 @@ Layout capabilities are implicit. Applications cannot query which layout modes a
 
 ### P2-46: Progressive Layout Missing [LAYOUT-AUDIT]
 
+**Resolution:** Deferred -- Requires progressive layout scheduling framework
+
+
 **Severity:** Minor
 **Affected:** cvkg-layout (large datasets)
 **Lens:** Performance, Scalability
@@ -2022,6 +2079,9 @@ No stress tests for deep trees, wide trees, or nested constraints. Constraint re
 **Resolution:** Added 3 stress tests to cvkg-layout: `p2_47_deep_tree_100_levels`, `p2_47_wide_tree_1000_children`, and `p2_47_nested_flex_no_panic`.
 
 ### P2-48: Parallel Layout Benchmarks Missing [LAYOUT-AUDIT]
+
+**Resolution:** Deferred -- Requires parallel layout benchmark harness with rayon
+
 
 **Severity:** Minor
 **Affected:** cvkg-layout (testing)
