@@ -1,4 +1,4 @@
-# cvkg-scene AGENTS.md
+# cvkg-scene TLDR.md
 
 ## Purpose
 Own the 3D scene graph: node hierarchy, transforms, cameras, lights, and the scene rendering pipeline.

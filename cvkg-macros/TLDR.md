@@ -1,4 +1,4 @@
-# cvkg-macros AGENTS.md
+# cvkg-macros TLDR.md
 
 ## Purpose
 Own the declarative macros for CVKG: derive macros, builder macros, and code generation utilities that reduce boilerplate for component authors.

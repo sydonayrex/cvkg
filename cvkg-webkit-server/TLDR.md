@@ -1,4 +1,4 @@
-# cvkg-webkit-server AGENTS.md
+# cvkg-webkit-server TLDR.md
 
 ## Purpose
 Own the WebKit integration server: embedding WebKit views, bridging between CVKG and web content, and the web-to-native message passing system.

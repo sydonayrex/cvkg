@@ -1,4 +1,4 @@
-# cvkg-svg-filters AGENTS.md
+# cvkg-svg-filters TLDR.md
 
 ## Purpose
 Own the SVG filter effects: blur, drop-shadow, color matrix, composite filters, and the SVG filter graph evaluation engine.

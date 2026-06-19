@@ -1,4 +1,4 @@
-# cvkg-test AGENTS.md
+# cvkg-test TLDR.md
 
 ## Purpose
 Own the testing framework: test utilities, snapshot testing, accessibility testing helpers, and the test harness for CVKG components.

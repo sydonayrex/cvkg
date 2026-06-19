@@ -1,4 +1,4 @@
-# cvkg-themes AGENTS.md
+# cvkg-themes TLDR.md
 
 ## Purpose
 Own the design token system: OKLCH color model, APCA contrast validation, theme tokens (light/dark), and semantic color roles.

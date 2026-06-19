@@ -1,4 +1,4 @@
-# cvkg-render-native AGENTS.md
+# cvkg-render-native TLDR.md
 
 ## Purpose
 Own the native renderer backend: platform-specific windowing, surface management, and native rendering integration (Metal, DirectX, Vulkan).

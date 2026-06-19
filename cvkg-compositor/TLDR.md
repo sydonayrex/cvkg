@@ -1,4 +1,4 @@
-# cvkg-compositor AGENTS.md
+# cvkg-compositor TLDR.md
 
 ## Purpose
 Own the compositor: layer management, z-ordering, blend modes, and the final compositing pipeline that combines all visual layers into the output frame.

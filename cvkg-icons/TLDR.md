@@ -1,4 +1,4 @@
-# cvkg-icons AGENTS.md
+# cvkg-icons TLDR.md
 
 ## Purpose
 Own the icon library: icon definitions, icon rendering, and the icon theme system used across all CVKG components.

@@ -1,4 +1,4 @@
-# cvkg-cli AGENTS.md
+# cvkg-cli TLDR.md
 
 ## Purpose
 Own the command-line interface for CVKG: CLI argument parsing, project scaffolding, development server, and build tooling.

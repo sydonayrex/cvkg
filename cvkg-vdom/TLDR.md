@@ -1,4 +1,4 @@
-# cvkg-vdom AGENTS.md
+# cvkg-vdom TLDR.md
 
 ## Purpose
 Own the Virtual DOM layer: VDOM node types, accessibility tree construction, event propagation, and the bridge between the View system and the renderer.

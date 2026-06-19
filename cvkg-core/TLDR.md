@@ -1,4 +1,4 @@
-# cvkg-core AGENTS.md
+# cvkg-core TLDR.md
 
 ## Purpose
 Own the core View system, Renderer trait, layout engine, focus management, and all foundational types for the CVKG UI framework.

@@ -1,4 +1,4 @@
-# cvkg-render-gpu AGENTS.md
+# cvkg-render-gpu TLDR.md
 
 ## Purpose
 Own the GPU rendering pipeline for CVKG: SurtrRenderer, Kvasir render graph, WGSL shaders, GPU resources, compositor integration, and render validation.

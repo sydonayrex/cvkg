@@ -1,4 +1,4 @@
-# cvkg-physics AGENTS.md
+# cvkg-physics TLDR.md
 
 ## Purpose
 Own the physics simulation engine: collision detection, rigid body dynamics, and physics-based interactions for UI elements.

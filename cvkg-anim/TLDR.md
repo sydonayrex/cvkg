@@ -1,4 +1,4 @@
-# cvkg-anim AGENTS.md
+# cvkg-anim TLDR.md
 
 ## Purpose
 Own the Sleipnir animation engine: RK4 spring integration, easing functions, transform stacks, and the MotionScale design token system.

@@ -1,4 +1,4 @@
-# cvkg-runic-text AGENTS.md
+# cvkg-runic-text TLDR.md
 
 ## Purpose
 Own the text rendering engine: BiDi (bidirectional text), shaping, font fallback, and the low-level text drawing primitives.

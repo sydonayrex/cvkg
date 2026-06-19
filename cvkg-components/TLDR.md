@@ -1,4 +1,4 @@
-# cvkg-components AGENTS.md
+# cvkg-components TLDR.md
 
 ## Purpose
 Own all UI components: interactive (Button, Input, Toggle, etc.), navigation (Menubar, List, etc.), display (Toast, HoverCard, etc.), and composite widgets.

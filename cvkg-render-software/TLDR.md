@@ -1,4 +1,4 @@
-# cvkg-render-software AGENTS.md
+# cvkg-render-software TLDR.md
 
 ## Purpose
 Own the software renderer backend: CPU-based rendering fallback for environments where GPU acceleration is unavailable.

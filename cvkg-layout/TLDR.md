@@ -1,4 +1,4 @@
-# cvkg-layout AGENTS.md
+# cvkg-layout TLDR.md
 
 ## Purpose
 Own the layout engine: FlexBox, Grid, Container queries (FlexiScope), padding, spacing, and the layout computation system built on Taffy.

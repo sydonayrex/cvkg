@@ -1,4 +1,4 @@
-# cvkg-svg-serialize AGENTS.md
+# cvkg-svg-serialize TLDR.md
 
 ## Purpose
 Own the SVG serialization: converting CVKG visual trees to SVG format, supporting both export and interchange use cases.

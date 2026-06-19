@@ -1,4 +1,4 @@
-# cvkg-skills AGENTS.md
+# cvkg-skills TLDR.md
 
 ## Purpose
 Own the skills system: skill definitions, skill loading, and the skill execution framework for AI-driven development workflows.

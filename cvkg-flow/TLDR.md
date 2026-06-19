@@ -1,4 +1,4 @@
-# cvkg-flow AGENTS.md
+# cvkg-flow TLDR.md
 
 ## Purpose
 Own the flow engine: data flow management, reactive state propagation, and the connection system between CVKG components and external data sources.
