@@ -4771,6 +4771,10 @@ pub mod layout {
         /// The visible viewport bounds in logical pixels.
         /// If Some, layout execution can cull offscreen subtrees.
         pub viewport: Option<Rect>,
+        /// Time budget for the layout pass. Defaults to 4.0ms.
+        pub layout_time_budget: std::time::Duration,
+        /// Start of the layout pass, captured at the beginning of the frame/layout run.
+        pub layout_start_time: Option<std::time::Instant>,
         size_cache: HashMap<(u64, u32, u32), Size>, // (ViewHash, ProposalW, ProposalH)
         /// Map tracking child-to-parent view hash relationships for bottom-up invalidation.
         pub parent_map: HashMap<u64, u64>,
@@ -4799,6 +4803,8 @@ pub mod layout {
                 delta_time: 0.016,
                 scale_factor: 1.0,
                 viewport: None,
+                layout_time_budget: std::time::Duration::from_millis(4),
+                layout_start_time: None,
                 size_cache: HashMap::new(),
                 parent_map: HashMap::new(),
                 generation: 0,
@@ -4811,6 +4817,15 @@ pub mod layout {
         /// Returns the current generation counter.
         pub fn generation(&self) -> u64 {
             self.generation
+        }
+
+        /// Checks if the layout pass is currently running over its allocated time budget.
+        pub fn is_over_budget(&self) -> bool {
+            if let Some(start) = self.layout_start_time {
+                start.elapsed() > self.layout_time_budget
+            } else {
+                false
+            }
         }
 
         /// Bump the generation counter, logically invalidating all cached entries
@@ -4829,6 +4844,7 @@ pub mod layout {
         pub fn clear(&mut self) {
             self.safe_area = SafeArea::default();
             self.viewport = None;
+            self.layout_start_time = None;
             self.size_cache.clear();
             self.parent_map.clear();
         }

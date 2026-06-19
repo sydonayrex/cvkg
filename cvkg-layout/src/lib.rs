@@ -176,6 +176,20 @@ fn compute_taffy_flex(
     subviews: &[&dyn LayoutView],
     cache: &mut LayoutCache,
 ) -> Vec<Rect> {
+    if cache.is_over_budget() {
+        let mut rects = Vec::with_capacity(subviews.len());
+        for child in subviews {
+            let hash = child.view_hash();
+            let r = if hash != 0 {
+                cache.previous_rects.get(&hash).copied().unwrap_or(Rect::zero())
+            } else {
+                Rect::zero()
+            };
+            rects.push(r);
+        }
+        return rects;
+    }
+
     let mut sizes = Vec::with_capacity(subviews.len());
     let mut hashes = Vec::with_capacity(subviews.len());
     let mut flex_weights = Vec::with_capacity(subviews.len());
@@ -914,6 +928,20 @@ impl Grid {
         placements: &[Option<cvkg_core::GridPlacement>],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
+        if cache.is_over_budget() {
+            let mut rects = Vec::with_capacity(subviews.len());
+            for child in subviews {
+                let hash = child.view_hash();
+                let r = if hash != 0 {
+                    cache.previous_rects.get(&hash).copied().unwrap_or(Rect::zero())
+                } else {
+                    Rect::zero()
+                };
+                rects.push(r);
+            }
+            return rects;
+        }
+
         let mut hashes = Vec::with_capacity(subviews.len());
         for child in subviews {
             let hash = child.view_hash();
@@ -1671,5 +1699,59 @@ mod tests {
         // view2.place_subviews should be bypassed/culled.
         // Therefore calls count should be 1.
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn test_layout_budget_thrashing_prevention() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        struct SpyView {
+            calls: Arc<AtomicUsize>,
+            hash: u64,
+            rect: Rect,
+        }
+
+        impl LayoutView for SpyView {
+            fn size_that_fits(&self, _p: SizeProposal, _s: &[&dyn LayoutView], _c: &mut LayoutCache) -> Size {
+                Size { width: self.rect.width, height: self.rect.height }
+            }
+            fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+            }
+            fn view_hash(&self) -> u64 {
+                self.hash
+            }
+        }
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let view = SpyView {
+            calls: calls.clone(),
+            hash: 2001,
+            rect: Rect::new(0.0, 0.0, 100.0, 100.0),
+        };
+
+        let mut cache = LayoutCache::new();
+        // Setup budget to be exceeded
+        cache.layout_time_budget = std::time::Duration::from_nanos(1);
+        cache.layout_start_time = Some(std::time::Instant::now() - std::time::Duration::from_millis(50));
+        
+        // Cache a previous rect for the view
+        cache.previous_rects.insert(2001, Rect::new(10.0, 10.0, 100.0, 100.0));
+
+        let mut v = view;
+        let mut subviews: Vec<&mut dyn LayoutView> = vec![&mut v];
+
+        HStack::new(0.0, Alignment::Center, Distribution::Leading)
+            .place_subviews(Rect::new(0.0, 0.0, 500.0, 500.0), &mut subviews, &mut cache);
+
+        // Since we are over budget, Taffy layout computation should be skipped,
+        // and we should fall back to placing subviews at their previous cached rects.
+        // Also place_subviews of the spy child will still be called (with the previous rect).
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        
+        // Let's verify that Taffy node map does not contain the view, meaning Taffy was skipped!
+        let engine = TaffyLayoutEngine::get_or_insert_engine(&mut cache);
+        assert!(!engine.node_map.contains_key(&2001));
     }
 }
