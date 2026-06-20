@@ -974,6 +974,10 @@ impl SurtrRenderer {
         let surface_format = Self::select_best_surface_format(&surface_caps.formats);
 
         // Dynamic capability selection for robust Wayland/X11 rendering
+        // NOTE: On Wayland, even with PresentMode::Immediate, the compositor may still
+        // pace presentation at vsync unless wp_tearing_control_v1 is explicitly requested
+        // on the surface. wgpu 29 / winit 0.30 do NOT request this protocol automatically.
+        // See: https://github.com/gfx-rs/wgpu/issues/xxxx
         log::info!("[GPU] Available present modes: {:?}", surface_caps.present_modes);
         log::info!("[GPU] Adapter: {} ({:?})", adapter.get_info().name, adapter.get_info().backend);
         let present_mode = if surface_caps
