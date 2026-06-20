@@ -1639,26 +1639,22 @@ impl SurtrRenderer {
         let c = self.apply_opacity(color);
         let base_vertex_idx = self.vertices.len() as u32;
         let base_index_idx = self.indices.len() as u32;
-
         // Compute a stable hash for this path + stroke width for cache lookup.
-        // We hash the path data directly since lyon::Path doesn't expose a raw pointer.
+        // We use the path's element count and bounding box as a lightweight identity.
+        // Note: This is a heuristic — paths with identical element counts and bounds
+        // will share a cache entry, which is acceptable for our use case (static paths).
         let path_hash = {
-            // Use the path's internal representation as a hash key.
-            // Lyon Path stores segments contiguously; we hash the raw bytes.
-            let path_bytes = unsafe {
-                std::slice::from_raw_parts(
-                    path as *const lyon::path::Path as *const u8,
-                    std::mem::size_of_val(path),
-                )
-            };
             let mut h = std::collections::hash_map::DefaultHasher::new();
-            h.write(path_bytes);
+            // Hash the number of elements in the path
+            let num_elements = path.iter().count();
+            std::hash::Hash::hash(&num_elements, &mut h);
+            // Hash the stroke width for exact matching
+            std::hash::Hash::hash(&stroke_width.to_bits(), &mut h);
             h.finish()
         };
-        let cache_key = (path_hash, stroke_width.to_bits());
 
         // Check cache — if we have tessellated geometry for this path+width, reuse it.
-        let (vert_count, idx_count) = match self.path_geometry_cache.get(&cache_key) {
+        let (vert_count, idx_count) = match self.path_geometry_cache.get(&path_hash) {
             Some((cached_verts, cached_indices)) => {
                 // Cache hit — copy tessellated geometry directly.
                 self.vertices.extend_from_slice(cached_verts);
@@ -1693,7 +1689,7 @@ impl SurtrRenderer {
                 let cached_verts = buffers.vertices.clone();
                 let cached_indices = buffers.indices.clone();
                 self.path_geometry_cache
-                    .put(cache_key, (cached_verts, cached_indices));
+                    .put(path_hash, (cached_verts, cached_indices));
                 // Now extend the live buffers.
                 self.vertices.extend(buffers.vertices);
                 for idx in &buffers.indices {

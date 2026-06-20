@@ -265,11 +265,7 @@ pub struct SurtrRenderer {
     /// the path's data pointer identity + length, and stroke_width_bits is
     /// the bit representation of the stroke width for exact matching.
     /// Value: (vertices, indices) ready to upload to GPU buffers.
-    pub(crate) path_geometry_cache: lru::LruCache<(u64, u32), (Vec<Vertex>, Vec<u32>)>,
-    /// Counter for generating unique path hashes.
-    pub(crate) path_hash_counter: u64,
-    /// Map from path data pointer to stable hash for cache lookup.
-    pub(crate) path_identity_cache: std::collections::HashMap<usize, u64>,
+    pub(crate) path_geometry_cache: lru::LruCache<u64, (Vec<Vertex>, Vec<u32>)>,
     /// Color blindness bind group layout (texture + sampler + uniform).
     pub(crate) color_blind_bind_group_layout: wgpu::BindGroupLayout,
     /// Color blindness uniform buffer (updated each frame when mode changes).
@@ -2518,8 +2514,6 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             bloom_enabled: true,
             volumetric_enabled: false,
             path_geometry_cache: lru::LruCache::new(NonZeroUsize::new(64).unwrap()),
-            path_hash_counter: 0,
-            path_identity_cache: std::collections::HashMap::new(),
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
             color_blind_pipeline,
