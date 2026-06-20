@@ -279,18 +279,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // ─── Section 8: Edge Smear Convolution ───────────────────────────────────
 
-    // Smear: extend blur slightly beyond the glass edge
-    let smear_dist = clamp(-d_sdf, 0.0, 3.0) / 3.0;
+    // Keep the edge response soft and avoid a hard white caustic line.
+    let smear_dist = clamp(-d_sdf, 0.0, 2.0) / 2.0;
     let smear_sample = textureSampleLevel(
         t_env, s_env,
-        screen_uv + lens_normal * smear_dist * 0.01,
+        screen_uv + lens_normal * smear_dist * 0.004,
         blur_mip
     ).rgb;
-    let smear_contribution = smear_sample * 0.15;
+    let smear_contribution = smear_sample * 0.07;
 
-    // Crystalline edge highlight: bright specular at the boundary
-    let edge_mask = smoothstep(0.5, 0.0, abs(d_sdf));
-    let crystal_edge = edge_mask * 0.4 * (0.7 + 0.3 * smoothstep(0.45, 0.55, dot(uv, normalize(vec2<f32>(-0.4, -0.8))))) * 0.18;
+    let edge_mask = smoothstep(0.45, 0.0, abs(d_sdf));
+    let crystal_edge = edge_mask * 0.04;
 
     // ─── Section 9: Displacement + Specular ────────────────────────────────────
 

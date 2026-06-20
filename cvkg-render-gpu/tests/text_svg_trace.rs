@@ -57,6 +57,36 @@ fn test_text_svg_rendering_trace() {
     renderer.render_frame();
     renderer.end_frame(encoder);
 
+    // Frame 2
+    let encoder2 = renderer.begin_frame_headless();
+    renderer.fill_rect(
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: width as f32,
+            height: height as f32,
+        },
+        [0.0, 0.0, 0.0, 1.0],
+    );
+    renderer.draw_text(
+        "Trace Text",
+        32.0,
+        32.0,
+        24.0,
+        [1.0, 1.0, 1.0, 1.0],
+    );
+    renderer.draw_image(
+        "__mega_heim",
+        Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 256.0,
+            height: 256.0,
+        }
+    );
+    renderer.render_frame();
+    renderer.end_frame(encoder2);
+
     let pixels = capture_frame(&mut renderer);
 
     println!("--- TRACE RESULTS ---");

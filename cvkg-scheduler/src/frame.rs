@@ -311,7 +311,7 @@ impl FrameScheduler {
             // stable sort preserves FIFO).
             let mut tmp = TaskScheduler::new();
             for entry in to_run {
-                tmp.submit(priority, name, entry.work);
+                tmp.submit_boxed(priority, name, entry.work);
             }
             tmp.run_all();
         }

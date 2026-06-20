@@ -180,6 +180,16 @@ impl FocusManager {
         let mut ids: Vec<KvasirId> = tree.focusable_nodes().iter().map(|n| n.id).collect();
         // Sort by raw id value for a stable, deterministic order.
         // Real document-order sorting would use layout position (x, y).
+        // TODO: Replace this stub with proper document-order sorting.
+        //   1. Retrieve the layout bounds (Rect) for each focusable node from the
+        //      AccessibilityTree (each node already stores a `bounds` field).
+        //   2. Sort by vertical position first (top-to-bottom: `rect.y`), then
+        //      by horizontal position (left-to-right: `rect.x`) for nodes on
+        //      the same row. This matches the visual reading order expected by
+        //      screen readers and keyboard navigation.
+        //   3. If the tree provides a DOM/semantic depth, use it as a tiebreaker
+        //      so that nested focusable children follow their parent's group.
+        //   4. Once implemented, remove the `id.0` sort below.
         ids.sort_by_key(|id| id.0);
         self.set_tab_order(ids);
     }

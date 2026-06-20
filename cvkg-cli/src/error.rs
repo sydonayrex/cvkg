@@ -89,8 +89,8 @@ impl From<&str> for CliError {
     }
 }
 
-impl From<cvkg_core::CvkgError> for CliError {
-    fn from(e: cvkg_core::CvkgError) -> Self {
+impl From<cvkg_core::error_types::CvkgError> for CliError {
+    fn from(e: cvkg_core::error_types::CvkgError) -> Self {
         CliError::Other(e.to_string())
     }
 }

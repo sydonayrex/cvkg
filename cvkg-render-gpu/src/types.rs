@@ -412,10 +412,11 @@ pub struct TextSubsystem {
     /// LRU cache mapping glyph hash -> (uv_rect, w, h, x_off, y_off).
     /// Capacity is configurable via SurtrConfig.
     pub glyph_cache: LruCache<u64, (cvkg_core::Rect, f32, f32, f32, f32)>,
-    /// Shaped text cache keyed by (text, font_size). Cleared on
-    /// theme change; not bounded. Stores Arc<ShapedText> so clones
-    /// are cheap (atomic refcount bump, no heap allocation).
-    pub shaped_cache: std::collections::HashMap<(String, u32), std::sync::Arc<cvkg_runic_text::ShapedText>>,
+    /// Shaped text cache keyed by (text, font_size). Bounded so it
+    /// survives across frames without growing without limit.
+    /// Stores Arc<ShapedText> so clones are cheap (atomic refcount bump).
+    pub shaped_cache:
+        LruCache<(String, u32), std::sync::Arc<cvkg_runic_text::ShapedText>>,
 }
 
 impl TextSubsystem {
@@ -425,7 +426,7 @@ impl TextSubsystem {
         Self {
             engine: cvkg_runic_text::RunicTextEngine::default(),
             glyph_cache: LruCache::new(glyph_cache_capacity),
-            shaped_cache: std::collections::HashMap::new(),
+            shaped_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
         }
     }
 

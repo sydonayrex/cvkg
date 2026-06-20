@@ -130,6 +130,12 @@ impl TaffyLayoutEngine {
 /// Manages active physics transitions for layout bounding boxes.
 pub struct AnimationEngine {
     pub active_transitions: HashMap<u64, cvkg_anim::physics::ViscousSpring>,
+    /// Generation counter for transition eviction.
+    pub eviction_generation: u64,
+    /// Tracks which generation each transition was last touched in.
+    pub transition_generation: HashMap<u64, u64>,
+    /// Number of generations a transition can go untouched before eviction.
+    pub eviction_threshold: u64,
 }
 
 impl Default for AnimationEngine {
@@ -142,6 +148,9 @@ impl AnimationEngine {
     pub fn new() -> Self {
         Self {
             active_transitions: HashMap::new(),
+            eviction_generation: 0,
+            transition_generation: HashMap::new(),
+            eviction_threshold: 300,
         }
     }
 
@@ -155,6 +164,23 @@ impl AnimationEngine {
             .unwrap()
             .downcast_mut::<AnimationEngine>()
             .unwrap()
+    }
+
+    /// Evict settled transitions that haven't been touched for N generations.
+    pub fn evict_stale_transitions(&mut self) {
+        self.eviction_generation += 1;
+        let threshold = self.eviction_threshold;
+        let current_gen = self.eviction_generation;
+        self.active_transitions.retain(|hash, spring| {
+            let recent = self
+                .transition_generation
+                .get(hash)
+                .map_or(false, |g| current_gen - *g < threshold);
+            let unsettled = spring.velocity_a.length_sq() > 0.0001 || spring.velocity_b.length_sq() > 0.0001;
+            recent || unsettled
+        });
+        self.transition_generation
+            .retain(|hash, _| self.active_transitions.contains_key(hash));
     }
 }
 
@@ -430,6 +456,7 @@ fn apply_layout_animations(
                 }
             }
             cache.previous_rects.insert(hash, *target_rect);
+            cache.previous_rects_generation.insert(hash, cache.eviction_generation);
         }
     }
 
@@ -482,7 +509,17 @@ fn apply_layout_animations(
             },
         );
         anim_engine.active_transitions.insert(hash, spring);
+        anim_engine.transition_generation.insert(hash, anim_engine.eviction_generation);
     }
+    // Drop anim_engine before evicting cache entries (borrow conflict)
+    drop(anim_engine);
+
+    // Evict stale entries to prevent unbounded growth over long sessions.
+    cache.evict_stale_entries();
+
+    // Re-borrow anim_engine for its own eviction
+    let mut anim_engine = AnimationEngine::get_or_insert_engine(cache);
+    anim_engine.evict_stale_transitions();
 
     for (child, mut target_rect) in subviews.iter_mut().zip(rects) {
         let hash = child.view_hash();

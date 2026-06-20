@@ -1933,6 +1933,8 @@ impl RunicTextEngine {
             width: total_width,
             height: total_height,
             text: full_text,
+            // One-time clone per unique text element (cache miss only).
+            // Subsequent calls hit global_cache_get() and return early.
             spans: spans.to_vec(),
             has_rtl,
             ascent: primary_metrics.0,
@@ -2847,14 +2849,16 @@ impl RunicTextEngine {
         let found = global_cache::global_cache_find_glyph(cache_key);
         let (ck, glyph) = found?;
 
-        // Reconstruct font family from the database matching the font_cache_key
+        // Reconstruct font family from the database matching the font_cache_key.
+        // Collect face IDs first to avoid holding a borrow on self.db across
+        // the mutable self.get_font_data() call.
         let mut family = "sans-serif".to_string();
         let face_ids: Vec<fontdb::ID> = self.db.faces().map(|f| f.id).collect();
-        for id in face_ids {
-            if let Some(font_data) = self.get_font_data(id)
+        for id in &face_ids {
+            if let Some(font_data) = self.get_font_data(*id)
                 && font_data.key == ck.font_cache_key
             {
-                if let Some(face) = self.db.face(id)
+                if let Some(face) = self.db.face(*id)
                     && let Some((name, _)) = face.families.first()
                 {
                     family = name.clone();

@@ -23,15 +23,16 @@ struct ShieldWallActivation(NodeId);
 impl ActivationHandler for ShieldWallActivation {
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
         let root_id = self.0;
+        let ak_root_id = NodeId(root_id.0);
         Some(TreeUpdate {
-            nodes: vec![(root_id, {
+            nodes: vec![(ak_root_id, {
                 let mut n = Node::new(Role::Window);
                 n.set_label("CVKG Forge Effects Demo");
                 n
             })],
-            tree: Some(Tree::new(root_id)),
+            tree: Some(Tree::new(ak_root_id)),
             tree_id: TreeId::ROOT,
-            focus: root_id,
+            focus: ak_root_id,
         })
     }
 }
@@ -59,11 +60,12 @@ impl ApplicationHandler for ForgeEffectsApp {
                 .unwrap(),
         );
 
-        let root_id = NodeId(1);
+        let root_id = cvkg_core::NodeId::new();
+        let ak_root_id = NodeId(root_id.0);
         let shieldwall = ShieldWallAdapter::with_direct_handlers(
             event_loop,
             &window,
-            ShieldWallActivation(root_id),
+            ShieldWallActivation(ak_root_id),
             ShieldWallAction,
             ShieldWallDeactivation,
         );

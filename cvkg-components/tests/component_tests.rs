@@ -3,12 +3,14 @@ use cvkg_core::{ElapsedTime, Rect, Renderer, View};
 
 struct MockRenderer {
     commands: Vec<String>,
+    text_engine: cvkg_runic_text::RunicTextEngine,
 }
 
 impl MockRenderer {
     fn new() -> Self {
         Self {
             commands: Vec::new(),
+            text_engine: cvkg_runic_text::RunicTextEngine::new(),
         }
     }
 }
@@ -48,13 +50,12 @@ impl Renderer for MockRenderer {
 
     fn shape_rich_text(
         &mut self,
-        _spans: &[cvkg_runic_text::TextSpan],
-        _max_width: Option<f32>,
-        _align: cvkg_runic_text::TextAlign,
-        _overflow: cvkg_runic_text::TextOverflow,
+        spans: &[cvkg_runic_text::TextSpan],
+        max_width: Option<f32>,
+        align: cvkg_runic_text::TextAlign,
+        overflow: cvkg_runic_text::TextOverflow,
     ) -> Option<cvkg_runic_text::ShapedText> {
-        let mut engine = cvkg_runic_text::RunicTextEngine::new();
-        engine.shape_layout(_spans, _max_width, _align, _overflow).ok()
+        self.text_engine.shape_layout(spans, max_width, align, overflow).ok()
     }
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {
         let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
@@ -276,7 +277,10 @@ fn test_notification_system() {
         width: 1024.0,
         height: 768.0,
     };
-    panel.render(&mut renderer, rect);
+    for _ in 0..100 {
+        renderer.commands.clear();
+        panel.render(&mut renderer, rect);
+    }
 
     // Verify NotificationCenterPanel pushed its node and drew texts
     assert!(

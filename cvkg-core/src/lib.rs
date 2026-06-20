@@ -33,6 +33,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::str::FromStr;
 
 pub mod error_types;
@@ -45,6 +46,7 @@ pub use future_views::{HologramView, ParticleEmitter, StreamingText};
 pub mod asset;
 pub mod error_boundary;
 pub mod knowledge;
+pub mod renderer;
 pub mod undo;
 pub mod window;
 
@@ -631,6 +633,7 @@ impl FocusTrap {
 #[derive(Debug, Default)]
 pub struct FocusManager {
     order: Vec<FocusableId>,
+    order_set: HashSet<FocusableId>,
     focused: Option<FocusableId>,
     traps: Vec<FocusTrap>,
 }
@@ -642,13 +645,15 @@ impl FocusManager {
 
     pub fn register(&mut self, id: impl Into<FocusableId>) {
         let id = id.into();
-        if !self.order.contains(&id) {
+        if self.order_set.insert(id.clone()) {
             self.order.push(id);
         }
     }
 
     pub fn unregister(&mut self, id: &FocusableId) {
-        self.order.retain(|x| x != id);
+        if self.order_set.remove(id) {
+            self.order.retain(|x| x != id);
+        }
         if self.focused.as_ref() == Some(id) {
             self.focused = None;
         }
@@ -2137,6 +2142,11 @@ pub trait ElapsedTime {
 /// 1. Coordinate system is origin-top-left (0,0) with Y increasing downwards.
 /// 2. Colors are [R, G, B, A] in the [0.0, 1.0] range.
 /// 3. All operations must be batchable by the underlying backend.
+///
+/// Sub-traits in `renderer/mod.rs` (RendererCore, RendererShapes, etc.) provide
+/// logical groupings for consumer code. Backends implement this monolithic trait;
+/// the sub-traits are aspirational documentation and NOT enforced as supertraits
+/// to avoid method ambiguity (sub-traits re-declare the same methods).
 pub trait Renderer: ElapsedTime + Send {
     /// Requests that the renderer redraws as soon as possible.
     /// Used for continuous animations.
@@ -2159,7 +2169,7 @@ pub trait Renderer: ElapsedTime + Send {
     /// of a full-rect background. The image must have been pre-warmed via
     /// `prewarm_vram` before the first frame.
     fn draw_background_image(&mut self, image_name: &str, rect: Rect) {
-        self.draw_image(image_name, rect);
+        Renderer::draw_image(self, image_name, rect);
     }
 
     /// Fill a rounded rect with glass material for frosted backdrop effect.
@@ -2186,19 +2196,19 @@ pub trait Renderer: ElapsedTime + Send {
     /// Desktop stub: pressure is always 1.0 for mouse clicks, 0.0 otherwise.
     fn fill_glass_rect_with_pressure(&mut self, rect: Rect, radius: f32, blur_radius: f32, pressure: f32) {
         // Default: delegate to standard glass with intensity = pressure
-        self.fill_glass_rect_with_intensity(rect, radius, blur_radius, pressure);
+        Renderer::fill_glass_rect_with_intensity(self, rect, radius, blur_radius, pressure);
     }
 
     /// Fill a squircle (superellipse) for Apple-style icon silhouettes.
     /// `n` controls the squareness: 2.0 = rounded rect, 4.0 = classic squircle, higher = more square.
     fn fill_squircle(&mut self, rect: Rect, _n: f32, color: [f32; 4]) {
         // Default fallback to rounded rect
-        self.fill_rounded_rect(rect, rect.width.min(rect.height) * 0.22, color);
+        Renderer::fill_rounded_rect(self, rect, rect.width.min(rect.height) * 0.22, color);
     }
 
     /// Stroke a squircle (superellipse) outline.
     fn stroke_squircle(&mut self, rect: Rect, _n: f32, color: [f32; 4], stroke_width: f32) {
-        self.stroke_rounded_rect(rect, rect.width.min(rect.height) * 0.22, color, stroke_width);
+        Renderer::stroke_rounded_rect(self, rect, rect.width.min(rect.height) * 0.22, color, stroke_width);
     }
 
     /// Draw a focus ring around a rect (for keyboard navigation accessibility).
@@ -2211,7 +2221,7 @@ pub trait Renderer: ElapsedTime + Send {
             width: rect.width + 2.0 * offset,
             height: rect.height + 2.0 * offset,
         };
-        self.stroke_rounded_rect(ring_rect, radius + offset, color, width);
+        Renderer::stroke_rounded_rect(self, ring_rect, radius + offset, color, width);
     }
 
     /// Draw a high-fidelity 3D cube inside the given rectangle using specialized shader logic.
@@ -2249,13 +2259,14 @@ pub trait Renderer: ElapsedTime + Send {
                 ..Default::default()
             },
         );
-        if let Some(shaped) = self.shape_rich_text(
+        if let Some(shaped) = Renderer::shape_rich_text(
+            self,
             &[span],
             None,
             cvkg_runic_text::TextAlign::Start,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
-            self.draw_shaped_text(&shaped, x, y);
+            Renderer::draw_shaped_text(self, &shaped, x, y);
         }
     }
 
@@ -2277,7 +2288,8 @@ pub trait Renderer: ElapsedTime + Send {
                 ..Default::default()
             },
         );
-        if let Some(shaped) = self.shape_rich_text(
+        if let Some(shaped) = Renderer::shape_rich_text(
+            self,
             &[span],
             None,
             cvkg_runic_text::TextAlign::Start,
@@ -2310,7 +2322,8 @@ pub trait Renderer: ElapsedTime + Send {
                 ..Default::default()
             },
         );
-        if let Some(shaped) = self.shape_rich_text(
+        if let Some(shaped) = Renderer::shape_rich_text(
+            self,
             &[span],
             None,
             cvkg_runic_text::TextAlign::Start,
@@ -2484,7 +2497,7 @@ pub trait Renderer: ElapsedTime + Send {
     /// Aliases: "empty", "none", "blank" → Void.
     fn set_scene_by_name(&mut self, name: &str) {
         if let Some(preset) = resolve_scene_by_name(name) {
-            self.set_scene_preset(preset);
+            Renderer::set_scene_preset(self, preset);
         }
     }
 
@@ -2606,12 +2619,12 @@ pub trait Renderer: ElapsedTime + Send {
     /// The offset shifts the animation phase, allowing multiple draws of the same
     /// SVG to animate independently. Default delegates to draw_svg (no offset).
     fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, _animation_time_offset: f32) {
-        self.draw_svg(name, rect);
+        Renderer::draw_svg(self, name, rect);
     }
     /// Draw a pre-loaded SVG model with explicit draw_order for z-sorting.
     /// draw_order=200 renders above UI chrome (draw_order=0).
     fn draw_svg_with_order(&mut self, name: &str, rect: Rect, _draw_order: i32) {
-        self.draw_svg(name, rect);
+        Renderer::draw_svg(self, name, rect);
     }
     /// Serialize a pre-loaded SVG model back to SVG XML markup.
     /// Returns the serialized SVG string, or an error if the model is not loaded
@@ -3653,12 +3666,11 @@ impl KnowledgeState {
     ) -> Option<Arc<std::sync::RwLock<T>>> {
         let stored = self.component_states.get(&id)?;
         // X-01 fix: safe downcast via Any:: instead of unsafe transmute.
-        // The stored value is Arc<RwLock<T>> coerced to Arc<dyn Any + Send + Sync>.
-        // We downcast the outer Arc back to its concrete type using Any::downcast_ref,
-        // which is guaranteed safe by the type system.
+        // The stored value is Arc<RwLock<dyn Any>>. We obtain a read lock
+        // to verify that the inner type is indeed T.
         let any_ref = stored.read().ok()?;
         // downcast_ref checks the vtable at runtime -- no unsafe needed.
-        let _verified: &std::sync::RwLock<T> = any_ref.downcast_ref::<std::sync::RwLock<T>>()?;
+        let _verified: &T = any_ref.downcast_ref::<T>()?;
         drop(any_ref);
         // Recover the original Arc. The thin pointer cast is sound because we
         // have verified the concrete type via Any::downcast_ref above.
@@ -4906,6 +4918,13 @@ pub mod layout {
         pub animators: Option<Box<dyn std::any::Any + Send + Sync>>,
         /// Cached previous rects for view transitions
         pub previous_rects: HashMap<u64, Rect>,
+        /// Generation counter for cache eviction.
+        /// Incremented each frame; entries not touched for N frames are evicted.
+        pub eviction_generation: u64,
+        /// Tracks which generation each previous_rects entry was last touched in.
+        pub previous_rects_generation: HashMap<u64, u64>,
+        /// Number of generations an entry can go untouched before eviction.
+        eviction_threshold: u64,
     }
 
     thread_local! {
@@ -4934,12 +4953,29 @@ pub mod layout {
                 engine: None,
                 animators: None,
                 previous_rects: HashMap::new(),
+                eviction_generation: 0,
+                previous_rects_generation: HashMap::new(),
+                eviction_threshold: 300, // ~5 seconds at 60fps
             }
         }
 
         /// Returns the current generation counter.
         pub fn generation(&self) -> u64 {
             self.generation
+        }
+
+        /// Evict entries from previous_rects that haven't been touched for N generations.
+        pub fn evict_stale_entries(&mut self) {
+            self.eviction_generation += 1;
+            let threshold = self.eviction_threshold;
+            let current_gen = self.eviction_generation;
+            self.previous_rects.retain(|hash, _| {
+                self.previous_rects_generation
+                    .get(hash)
+                    .map_or(false, |g| current_gen - *g < threshold)
+            });
+            self.previous_rects_generation
+                .retain(|hash, _| self.previous_rects.contains_key(hash));
         }
 
         /// Checks if the layout pass is currently running over its allocated time budget.
@@ -5096,6 +5132,18 @@ pub mod layout {
         /// Return 0 (default) to disable layout animations for this node.
         fn view_hash(&self) -> u64 {
             0
+        }
+
+        /// Return true when this view's layout may have changed since the last pass.
+        ///
+        /// The layout engine uses this to skip cache lookups for views that are
+        /// guaranteed static (e.g., chrome elements that never change between frames).
+        /// Default true for backward compatibility -- override false for static subtrees.
+        ///
+        /// When false, the engine may skip `size_that_fits` entirely and reuse the
+        /// cached rect from `LayoutCache::previous_rects`.
+        fn changed(&self) -> bool {
+            true
         }
 
         /// Return a debug representation of this layout subtree.
@@ -8991,6 +9039,38 @@ impl FrameBudgetTracker {
                 },
                 SubsystemBudget {
                     time_slice: Duration::from_micros(8_000),
+                    skippable: false, // render must always run
+                    name: "render",
+                },
+            ],
+            start: None,
+            elapsed: vec![
+                Duration::ZERO,
+                Duration::ZERO,
+                Duration::ZERO,
+            ],
+        }
+    }
+
+    /// Standard 120fps frame budget: 8.33ms total, with
+    /// allocations across animation (2ms), layout (2ms), and render (4ms).
+    /// Used for high-refresh-rate targets like the Berserker demo.
+    pub fn default_120fps() -> Self {
+        Self {
+            total: Duration::from_micros(8_333), // ~8.33ms
+            allocations: vec![
+                SubsystemBudget {
+                    time_slice: Duration::from_micros(2_000),
+                    skippable: true,
+                    name: "animation",
+                },
+                SubsystemBudget {
+                    time_slice: Duration::from_micros(2_000),
+                    skippable: true,
+                    name: "layout",
+                },
+                SubsystemBudget {
+                    time_slice: Duration::from_micros(4_000),
                     skippable: false, // render must always run
                     name: "render",
                 },

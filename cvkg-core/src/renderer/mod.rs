@@ -49,7 +49,7 @@ pub trait RendererShapes {
         color: [f32; 4],
         stroke_width: f32,
     );
-    fn fill_polygon(&mut self, vertices: &[[f32; 2]], color: [f32; 4]) {}
+    fn fill_polygon(&mut self, _vertices: &[[f32; 2]], _color: [f32; 4]) {}
     fn stroke_polygon(
         &mut self,
         vertices: &[[f32; 2]],

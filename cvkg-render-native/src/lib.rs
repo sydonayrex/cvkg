@@ -39,7 +39,7 @@
 //! This crate provides platform-specific rendering backends for native desktop targets
 //  using winit for window/event handling and AccessKit for accessibility tree integration.
 
-use cvkg_core::{FrameRenderer, KvasirId, RenderStateSnapshot, Renderer};
+use cvkg_core::{FocusableId, FrameRenderer, KvasirId, RenderStateSnapshot, Renderer};
 use image;
 // FIX #10: Wayland import gated to Linux only -- was unconditional, broke macOS/Windows builds.
 use std::sync::Arc;
@@ -1154,6 +1154,10 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     && let Some(node) = new_vdom.nodes.get(id)
                                 {
                                     nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                                } else if let cvkg_vdom::VDomPatch::Remove(id) = patch {
+                                    // Unregister removed nodes from focus manager to prevent
+                                    // unbounded growth of the focus order list.
+                                    state.focus_manager.unregister(&FocusableId::from(id.0.to_string()));
                                 }
                             }
                             let focused_id = state.focused_node_id.map(|id| accesskit::NodeId(id.0)).unwrap_or(accesskit::NodeId(1));

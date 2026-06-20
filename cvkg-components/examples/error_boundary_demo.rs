@@ -1,6 +1,6 @@
 // Error Boundary Demo
 
-use cvkg_components::{Color, ErrorBoundary};
+use cvkg_components::{Color, ComponentErrorBoundary};
 use cvkg_core::{ComponentErrorState, Rect, Renderer, State, View};
 use cvkg_render_gpu::SurtrRenderer;
 use std::sync::Arc;
@@ -84,7 +84,7 @@ impl ApplicationHandler for ErrorApp {
                 let content = Color::new(0.0, 0.8, 1.0, 0.5); // Cyan semi-transparent
 
                 // Wrap in boundary
-                let boundary = ErrorBoundary::new(self.error_state.clone(), content);
+                let boundary = ComponentErrorBoundary::new(self.error_state.clone(), content);
 
                 boundary.render(renderer, error_rect);
 

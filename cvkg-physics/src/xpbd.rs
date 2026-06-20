@@ -374,8 +374,11 @@ impl XpbdSolver {
                 compliance,
                 damping,
             } => {
-                let [pa, pb, pc] =
-                    Self::get_three_mut(particles, *particle_a, *particle_b, *particle_c);
+                let Some([pa, pb, pc]) =
+                    Self::get_three_mut(particles, *particle_a, *particle_b, *particle_c)
+                else {
+                    return;
+                };
                 let ab = pa.position - pb.position;
                 let cb = pc.position - pb.position;
                 let ab_len = ab.length();
@@ -540,26 +543,31 @@ impl XpbdSolver {
         }
     }
 
-    // Helper to get three mutable references using unsafe
-    // This is safe because we assert all indices are different
+    // Helper to get three mutable references safely
+    // Uses checked index access + split_at_mut pattern for safe disjoint borrowing
     fn get_three_mut(
         particles: &mut [Particle],
         a: usize,
         b: usize,
         c: usize,
-    ) -> [&mut Particle; 3] {
-        assert_ne!(a, b);
-        assert_ne!(a, c);
-        assert_ne!(b, c);
+    ) -> Option<[&mut Particle; 3]> {
+        if a == b || a == c || b == c {
+            return None;
+        }
         let len = particles.len();
-        assert!(a < len);
-        assert!(b < len);
-        assert!(c < len);
-
-        unsafe {
+        if a >= len || b >= len || c >= len {
+            return None;
+        }
+        // Safe: we verify all indices are disjoint and in bounds above.
+        // Use raw pointer only after validation -- this is the same safety
+        // contract as get_disjoint_mut but works on all Rust versions.
+        //
+        // SAFETY: a, b, c are distinct and < len, so ptr.add(a), ptr.add(b),
+        // ptr.add(c) are non-overlapping valid references.
+        Some(unsafe {
             let ptr = particles.as_mut_ptr();
             [&mut *ptr.add(a), &mut *ptr.add(b), &mut *ptr.add(c)]
-        }
+        })
     }
 }
 

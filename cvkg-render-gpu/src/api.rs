@@ -1543,7 +1543,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         ) {
             let shaped = std::sync::Arc::new(shaped);
             let result = (shaped.width, shaped.height);
-            self.text.shaped_cache.insert(cache_key, shaped);
+            self.text.shaped_cache.put(cache_key, shaped);
             result
         } else {
             (0.0, 0.0)
@@ -1592,7 +1592,7 @@ impl cvkg_core::Renderer for SurtrRenderer {
         ) {
             let shaped = std::sync::Arc::new(shaped);
             self.draw_shaped_text(&shaped, x, y);
-            self.text.shaped_cache.insert(cache_key, shaped);
+            self.text.shaped_cache.put(cache_key, shaped);
         }
     }
 }
@@ -1719,8 +1719,6 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         cvkg_core::begin_render_phase();
         self.frame_rendered = false;
         self.app_drew_background = false;
-        // Phase 2.1: clear text shaping cache at start of each frame.
-        self.text.shaped_cache.clear();
         let id = self
             .current_window
             .expect("No target window set for frame. Call set_target_window first.");

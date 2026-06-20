@@ -145,7 +145,7 @@ impl SurtrRenderer {
             });
 
         let arc = std::sync::Arc::new(shaped);
-        self.text.shaped_cache.insert(cache_key, arc.clone());
+        self.text.shaped_cache.put(cache_key, arc.clone());
         arc
     }
 }

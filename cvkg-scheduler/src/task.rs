@@ -141,6 +141,25 @@ impl TaskScheduler {
         TaskHandle { id }
     }
 
+    /// Submit a pre-boxed task to the queue, avoiding double-boxing when the
+    /// caller already owns a `Box<dyn FnOnce() + Send>` (e.g. from a
+    /// `PhaseEntry`).
+    pub fn submit_boxed(
+        &mut self,
+        priority: Priority,
+        name: &'static str,
+        work: Box<dyn FnOnce() + Send>,
+    ) -> TaskHandle {
+        let id = KvasirId::new();
+        self.queue.push(Task {
+            id,
+            priority,
+            name,
+            work,
+        });
+        TaskHandle { id }
+    }
+
     /// Drain and execute all pending tasks in priority order (Critical → Idle).
     ///
     /// # Why sort-on-drain?

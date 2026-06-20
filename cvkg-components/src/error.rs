@@ -1,18 +1,18 @@
 use crate::theme;
 use cvkg_core::{ComponentErrorState, Never, Rect, Renderer, State, View};
 
-/// ErrorBoundary provides fault isolation for a component subtree.
+/// ComponentErrorBoundary provides fault isolation for a component subtree.
 ///
 /// If the associated `ComponentErrorState` has `has_error` set to true,
-/// the ErrorBoundary will suppress the normal UI and render a high-visibility
+/// the ComponentErrorBoundary will suppress the normal UI and render a high-visibility
 /// error placeholder instead.
-pub struct ErrorBoundary<V: View> {
+pub struct ComponentErrorBoundary<V: View> {
     pub error_state: State<ComponentErrorState>,
     pub content: V,
 }
 
-impl<V: View> ErrorBoundary<V> {
-    /// Create a new ErrorBoundary wrapping the given content.
+impl<V: View> ComponentErrorBoundary<V> {
+    /// Create a new ComponentErrorBoundary wrapping the given content.
     pub fn new(error_state: State<ComponentErrorState>, content: V) -> Self {
         Self {
             error_state,
@@ -21,7 +21,7 @@ impl<V: View> ErrorBoundary<V> {
     }
 }
 
-impl<V: View> View for ErrorBoundary<V> {
+impl<V: View> View for ComponentErrorBoundary<V> {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()

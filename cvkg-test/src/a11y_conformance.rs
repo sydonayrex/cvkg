@@ -3,7 +3,7 @@
 // Validates CVKG's accessibility model against platform protocols:
 // UIAutomation (Windows), VoiceOver (macOS/iOS), AT-SPI (Linux), ARIA (web).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Platform accessibility protocol.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -13,7 +13,7 @@ pub enum A11yProtocol {
     /// Apple Accessibility API (macOS/iOS).
     VoiceOver,
     /// AT-SPI (Linux).
-    AT_SPI,
+    AtSpi,
     /// WAI-ARIA (web).
     ARIA,
 }
@@ -24,7 +24,7 @@ impl A11yProtocol {
         &[
             A11yProtocol::UIAutomation,
             A11yProtocol::VoiceOver,
-            A11yProtocol::AT_SPI,
+            A11yProtocol::AtSpi,
             A11yProtocol::ARIA,
         ]
     }
@@ -34,7 +34,7 @@ impl A11yProtocol {
         match self {
             A11yProtocol::UIAutomation => true,
             A11yProtocol::VoiceOver => true,
-            A11yProtocol::AT_SPI => true,
+            A11yProtocol::AtSpi => true,
             A11yProtocol::ARIA => true,
         }
     }
@@ -44,7 +44,7 @@ impl A11yProtocol {
         match self {
             A11yProtocol::UIAutomation => true,
             A11yProtocol::VoiceOver => true,
-            A11yProtocol::AT_SPI => false,
+            A11yProtocol::AtSpi => false,
             A11yProtocol::ARIA => false,
         }
     }
@@ -155,17 +155,17 @@ impl A11yConformanceSuite {
             RoleMapping::new(A11yRole::Button)
                 .with_protocol(A11yProtocol::UIAutomation, "Button")
                 .with_protocol(A11yProtocol::VoiceOver, "AXButton")
-                .with_protocol(A11yProtocol::AT_SPI, "push_button")
+                .with_protocol(A11yProtocol::AtSpi, "push_button")
                 .with_protocol(A11yProtocol::ARIA, "button"),
             RoleMapping::new(A11yRole::Checkbox)
                 .with_protocol(A11yProtocol::UIAutomation, "CheckBox")
                 .with_protocol(A11yProtocol::VoiceOver, "AXCheckbox")
-                .with_protocol(A11yProtocol::AT_SPI, "check_box")
+                .with_protocol(A11yProtocol::AtSpi, "check_box")
                 .with_protocol(A11yProtocol::ARIA, "checkbox"),
             RoleMapping::new(A11yRole::TextInput)
                 .with_protocol(A11yProtocol::UIAutomation, "Edit")
                 .with_protocol(A11yProtocol::VoiceOver, "AXTextField")
-                .with_protocol(A11yProtocol::AT_SPI, "text")
+                .with_protocol(A11yProtocol::AtSpi, "text")
                 .with_protocol(A11yProtocol::ARIA, "textbox"),
         ]
     }
@@ -249,7 +249,7 @@ mod p1_44_45_a11y_tests {
     fn uia_supports_custom_actions() {
         assert!(A11yProtocol::UIAutomation.supports_custom_actions());
         assert!(A11yProtocol::VoiceOver.supports_custom_actions());
-        assert!(!A11yProtocol::AT_SPI.supports_custom_actions());
+        assert!(!A11yProtocol::AtSpi.supports_custom_actions());
     }
 
     #[test]
