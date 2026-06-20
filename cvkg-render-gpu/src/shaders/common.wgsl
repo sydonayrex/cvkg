@@ -338,7 +338,7 @@ fn scene_sdf(p: vec3<f32>) -> f32 {
 }
 fn ray_march(ro: vec3<f32>, rd: vec3<f32>) -> f32 {
     var t = 0.0;
-    for (var i = 0; i < 64; i++) {
+    for (var i = 0; i < 16; i++) {
         let d = scene_sdf(ro + rd * t);
         if d < 0.001 { return t; }
         if t > 20.0  { break; }

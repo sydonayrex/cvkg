@@ -40,11 +40,12 @@
 35|    // SVG Path/Stroke Tracing Animation
 36|    // Works for any non-glass material that has valid path length data (uv.y > 0)
 37|    // and a tracing threshold set (slice.w < 0.999).
-38|    if (in.uv.y > 0.0 && in.slice.w < 0.999 && in.material_id != 7u) {
-39|        if (in.uv.x / max(in.uv.y, 0.0001) > in.slice.w) {
-40|            discard;
-41|        }
-42|    }
+38|    // Restricted to material_id == 0u (excludes 7u (GLASS) indirectly) so it doesn't falsely discard radial gradients (16u) or other shapes.
+39|    if (in.material_id == 0u && in.uv.y > 0.0 && in.slice.w < 0.999) {
+40|        if (in.uv.x / max(in.uv.y, 0.0001) > in.slice.w) {
+41|            discard;
+42|        }
+43|    }
 43|
 44|    if in.material_id == 1u {
 45|        // Neon Line
@@ -183,7 +184,7 @@
 178|        var t = 0.0;
 179|        var hit = false;
 180|        var d = 0.0;
-181|        for (var i = 0; i < 40; i++) {
+181|        for (var i = 0; i < 16; i++) {
 182|            let p = m * (ro + rd * t);
 183|            d = sd_box_3d(p, vec3(0.5, 0.5, 0.5));
 184|            if d < 0.001 { hit = true; break; }

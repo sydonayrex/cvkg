@@ -1336,6 +1336,11 @@ impl cvkg_core::Renderer for SurtrRenderer {
         self.pop_transform();
     }
 
+    /// Render a 3D scene graph node using the GPU backend.
+    ///
+    /// # Contract
+    /// PBR lighting and opacity are computed using base color, metallic (0.0), and roughness (0.5)
+    /// to support standard matte opaque 3D meshes.
     fn render_scene_node_3d(
         &mut self,
         position: [f32; 3],
@@ -1399,10 +1404,22 @@ impl cvkg_core::Renderer for SurtrRenderer {
                     4, 5, 1, 4, 1, 0, // bottom
                 ],
             };
-            let material = cvkg_core::Material3D::unlit(color);
+            let material = cvkg_core::Material3D {
+                base_color: color,
+                metallic: 0.0,
+                roughness: 0.5,
+                emissive: [0.0, 0.0, 0.0],
+                opacity: color[3],
+            };
             self.draw_mesh_3d(&cube, &material, &transform);
         } else {
-            let material = cvkg_core::Material3D::unlit(color);
+            let material = cvkg_core::Material3D {
+                base_color: color,
+                metallic: 0.0,
+                roughness: 0.5,
+                emissive: [0.0, 0.0, 0.0],
+                opacity: color[3],
+            };
             self.draw_mesh_3d(&meshes[0], &material, &transform);
         }
     }

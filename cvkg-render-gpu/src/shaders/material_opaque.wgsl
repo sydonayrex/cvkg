@@ -35,7 +35,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // SVG Path/Stroke Tracing Animation
     // Works for any non-glass material that has valid path length data (uv.y > 0)
     // and a tracing threshold set (slice.w < 0.999).
-    if (in.uv.y > 0.0 && in.slice.w < 0.999 && in.material_id != 7u) {
+    // Restricted to material_id == 0u (excludes 7u (GLASS) indirectly) so it doesn't falsely discard radial gradients (16u) or other shapes.
+    if (in.material_id == 0u && in.uv.y > 0.0 && in.slice.w < 0.999) {
         if (in.uv.x / max(in.uv.y, 0.0001) > in.slice.w) {
             discard;
         }
@@ -178,7 +179,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         var t = 0.0;
         var hit = false;
         var d = 0.0;
-        for (var i = 0; i < 40; i++) {
+        for (var i = 0; i < 16; i++) {
             let p = m * (ro + rd * t);
             d = sd_box_3d(p, vec3(0.5, 0.5, 0.5));
             if d < 0.001 { hit = true; break; }

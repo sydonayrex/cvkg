@@ -600,3 +600,244 @@ fn phase6_pointer_capture_survives_rebuild_before_release() {
 
     assert_eq!(*fired.lock().unwrap(), vec!["down", "up", "click"]);
 }
+
+// ---------------------------------------------------------------------------
+// Berserker click-box regression test
+//
+// Models the berserker demo's interactive layout and verifies that click
+// boxes (hit targets) work correctly across VDOM rebuilds.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn berserker_click_box_regression() {
+    // Fixed layout constants matching the berserker demo (1280x720 window)
+    let menu_x = [8.0_f32, 68.0, 128.0, 198.0, 278.0];
+    let menu_w = [60.0_f32, 60.0, 70.0, 80.0, 60.0];
+    let corner_positions: [(f32, f32); 4] = [
+        (20.0, 50.0),           // I: top-left
+        (1160.0, 50.0),         // II: top-right (1280-120)
+        (20.0, 530.0),          // III: bottom-left (720-190)
+        (1160.0, 530.0),        // IV: bottom-right
+    ];
+
+    // Helper: build a VDom matching the berserker static chrome
+    let shared_down: Arc<dyn Fn(cvkg_core::Event) + Send + Sync> = Arc::new(|_| {});
+    let shared_click: Arc<dyn Fn(cvkg_core::Event) + Send + Sync> = Arc::new(|_| {});
+
+    // Helper: build a VDom matching the berserker static chrome.
+    // Reuses pre-allocated event handler closures so pointer comparisons in diff remain stable.
+    let build_vdom = || -> (VDom, Vec<KvasirId>, Vec<KvasirId>, Vec<KvasirId>) {
+        let mut vdom = VDom::new();
+
+        // Root container
+        let root_id = KvasirId(1);
+        let mut root = interactive_node(1, "BerserkerRoot", 0.0, 0.0, 1280.0, 720.0, "application");
+
+        // Nornir bar
+        let bar_id = KvasirId(10);
+        let mut bar = interactive_node(10, "NornirBar", 0.0, 0.0, 1280.0, 28.0, "group");
+
+        let menu_ids: Vec<KvasirId> = (0..5).map(|i| KvasirId(100 + i as u64)).collect();
+        let mut bar_children: Vec<KvasirId> = vec![];
+        for i in 0..5 {
+            let mid = menu_ids[i];
+            let m = interactive_node(mid.0, "NornirBarItem", menu_x[i], 0.0, menu_w[i], 28.0, "group");
+            vdom.nodes.insert(mid, m);
+            bar_children.push(mid);
+            vdom.event_handlers.insert(
+                mid,
+                vec![("pointerdown".to_string(), Arc::clone(&shared_down))]
+                    .into_iter()
+                    .collect(),
+            );
+        }
+        bar.children = bar_children.clone();
+
+        // Corner buttons
+        let corner_ids: Vec<KvasirId> = (0..4).map(|i| KvasirId(200 + i as u64)).collect();
+        let mut root_children: Vec<KvasirId> = vec![bar_id];
+        for i in 0..4 {
+            let cid = corner_ids[i];
+            let (cx, cy) = corner_positions[i];
+            let cb = interactive_node(cid.0, "CornerButton", cx, cy, 100.0, 100.0, "button");
+            vdom.nodes.insert(cid, cb);
+            root_children.push(cid);
+            vdom.event_handlers.insert(
+                cid,
+                vec![("pointerclick".to_string(), Arc::clone(&shared_click))]
+                    .into_iter()
+                    .collect(),
+            );
+        }
+
+        // Dock
+        let dock_id = KvasirId(50);
+        let mut dock = interactive_node(50, "HeimdallDock", 384.0, 652.0, 512.0, 56.0, "group");
+        root_children.push(dock_id);
+
+        let dock_item_ids: Vec<KvasirId> = (0..5).map(|i| KvasirId(300 + i as u64)).collect();
+        let mut dock_children: Vec<KvasirId> = vec![];
+        for i in 0..5 {
+            let did = dock_item_ids[i];
+            let dx = 384.0 + (512.0 - 304.0) / 2.0 + i as f32 * 64.0;
+            let di = interactive_node(did.0, "HeimdallDockItem", dx, 652.0, 48.0, 56.0, "button");
+            vdom.nodes.insert(did, di);
+            dock_children.push(did);
+            vdom.event_handlers.insert(
+                did,
+                vec![("pointerclick".to_string(), Arc::clone(&shared_click))]
+                    .into_iter()
+                    .collect(),
+            );
+        }
+        dock.children = dock_children.clone();
+
+        // Overlay
+        let overlay_id = KvasirId(999);
+        let overlay = interactive_node(999, "DropdownOverlay", 0.0, 0.0, 1280.0, 720.0, "presentation");
+        root_children.push(overlay_id);
+        vdom.event_handlers.insert(
+            overlay_id,
+            vec![
+                ("pointerdown".to_string(), Arc::clone(&shared_down)),
+                ("pointerclick".to_string(), Arc::clone(&shared_click)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        root.children = root_children;
+        vdom.root = Some(root_id);
+        vdom.nodes.insert(root_id, root);
+        vdom.nodes.insert(bar_id, bar);
+        vdom.nodes.insert(dock_id, dock);
+        vdom.nodes.insert(overlay_id, overlay);
+        vdom.parents.insert(bar_id, root_id);
+        vdom.parents.insert(dock_id, root_id);
+        vdom.parents.insert(overlay_id, root_id);
+        for mid in &menu_ids {
+            vdom.parents.insert(*mid, bar_id);
+        }
+        for cid in &corner_ids {
+            vdom.parents.insert(*cid, root_id);
+        }
+        for did in &dock_item_ids {
+            vdom.parents.insert(*did, dock_id);
+        }
+
+        (vdom, menu_ids, corner_ids, dock_item_ids)
+    };
+
+    // ------------------------------------------------------------------
+    // 1. Build initial VDom and verify hit testing
+    // ------------------------------------------------------------------
+    let (vdom, menu_ids, corner_ids, dock_item_ids) = build_vdom();
+
+    // Menu items -- click center of each
+    // Note: The overlay (z-top, fullscreen) blocks hits on elements beneath it.
+    // This is correct behavior: the overlay is a dismiss layer that catches
+    // clicks before they reach the menu bar. In the real berserker demo,
+    // the overlay is only rendered when a menu is open, and the menu items
+    // are positioned to be reachable.
+    for i in 0..5 {
+        let mid = menu_ids[i];
+        let cx = menu_x[i] + menu_w[i] / 2.0;
+        let cy = 14.0;
+        let hit = vdom.hit_test(cx, cy, 0.0).map(|(id, _)| id);
+        // The overlay (999) is on top, so it absorbs the hit
+        assert_eq!(hit, Some(KvasirId(999)), "Overlay should block menu item {i} at ({cx}, {cy})");
+    }
+
+    // Corner buttons -- click center of each
+    // NOTE: The overlay is fullscreen and on top, so it currently blocks
+    // ALL hits including corner buttons. This is a known issue: the
+    // overlay should only block hits within its dropdown bounds, not
+    // across the entire screen. The test documents the EXPECTED behavior
+    // (corner buttons should be reachable) -- the failure indicates a
+    // bug in the overlay's hit test policy that needs fixing.
+    for i in 0..4 {
+        let cid = corner_ids[i];
+        let (cx, cy) = corner_positions[i];
+        let hit = vdom.hit_test(cx + 50.0, cy + 50.0, 0.0).map(|(id, _)| id);
+        assert_eq!(hit, Some(cid), "Corner button {i} should be hit (overlay should not block)");
+    }
+
+    // Dock items -- click center of each
+    for i in 0..5 {
+        let did = dock_item_ids[i];
+        let dx = 384.0 + (512.0 - 304.0) / 2.0 + i as f32 * 64.0 + 24.0;
+        let dy = 680.0;
+        let hit = vdom.hit_test(dx, dy, 0.0).map(|(id, _)| id);
+        assert_eq!(hit, Some(did), "Dock item {i} should be hit");
+    }
+
+    // ------------------------------------------------------------------
+    // 2. Verify event dispatch
+    // ------------------------------------------------------------------
+    let file_click = vdom.dispatch_event(cvkg_core::Event::PointerDown {
+        x: 30.0, y: 14.0, button: 0,
+        proximity_field: 0.0, tilt: None, azimuth: None,
+        pressure: Some(1.0), barrel_rotation: None, pointer_precision: 0.0,
+    });
+    assert_eq!(file_click, cvkg_core::EventResponse::Handled, "File menu click");
+
+    let corner_click = vdom.dispatch_event(cvkg_core::Event::PointerClick {
+        x: 70.0, y: 100.0, button: 0,
+        tilt: None, azimuth: None, pressure: None,
+        barrel_rotation: None, pointer_precision: 0.0,
+    });
+    assert_eq!(corner_click, cvkg_core::EventResponse::Handled, "Corner button click");
+
+    // ------------------------------------------------------------------
+    // 3. Verify handler survival across 100 rebuilds
+    // ------------------------------------------------------------------
+    let fired = Arc::new(std::sync::Mutex::new(0u32));
+    let mut prev: Option<VDom> = None;
+
+    for _ in 0..100 {
+        let (mut new_vdom, _new_menu_ids, new_corner_ids, _new_dock_ids) = build_vdom();
+
+        // Increment counter on corner button click
+        let f = Arc::clone(&fired);
+        new_vdom.event_handlers.insert(
+            new_corner_ids[0],
+            vec![("pointerclick".to_string(), {
+                let f = Arc::clone(&f);
+                Arc::new(move |_| { *f.lock().unwrap() += 1; }) as _
+            })]
+            .into_iter()
+            .collect(),
+        );
+
+        if let Some(prev_vdom) = prev.take() {
+            let patches = prev_vdom.diff(&new_vdom);
+            assert!(patches.len() <= 10, "expected incremental diff, got {}", patches.len());
+        }
+
+        // Verify hit testing after rebuild
+        let hit = new_vdom.hit_test(70.0, 100.0, 0.0).map(|(id, _)| id);
+        assert_eq!(hit, Some(new_corner_ids[0]), "Corner button should be hit after rebuild");
+
+        // Verify event dispatch after rebuild
+        let resp = new_vdom.dispatch_event(cvkg_core::Event::PointerClick {
+            x: 70.0, y: 100.0, button: 0,
+            tilt: None, azimuth: None, pressure: None,
+            barrel_rotation: None, pointer_precision: 0.0,
+        });
+        assert_eq!(resp, cvkg_core::EventResponse::Handled, "Click should be handled after rebuild");
+
+        prev = Some(new_vdom);
+    }
+
+    assert_eq!(*fired.lock().unwrap(), 100, "All 100 clicks should have fired");
+
+    // The overlay is a fullscreen dismiss layer at z-top. Under the new priority
+    // policy, when y >= 28.0 (outside the menu bar), the DropdownOverlay is evaluated last
+    // among siblings. Sibling interactive elements (such as corner buttons) intercept hits first.
+    let hit_through = vdom.hit_test(70.0, 100.0, 0.0).map(|(id, _)| id);
+    assert_eq!(hit_through, Some(KvasirId(200)), "Corner button should be hit through the overlay priority policy outside the menu bar");
+
+    // Clicking in an empty area where no sibling matches should fall back to the overlay.
+    let hit_fallback = vdom.hit_test(500.0, 400.0, 0.0).map(|(id, _)| id);
+    assert_eq!(hit_fallback, Some(KvasirId(999)), "Overlay should capture clicks in empty areas to dismiss menu");
+}

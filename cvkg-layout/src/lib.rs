@@ -512,13 +512,13 @@ fn apply_layout_animations(
         anim_engine.transition_generation.insert(hash, anim_engine.eviction_generation);
     }
     // Drop anim_engine before evicting cache entries (borrow conflict)
-    drop(anim_engine);
+    // anim_engine dropped implicitly (borrow conflict resolved by scope)
 
     // Evict stale entries to prevent unbounded growth over long sessions.
     cache.evict_stale_entries();
 
     // Re-borrow anim_engine for its own eviction
-    let mut anim_engine = AnimationEngine::get_or_insert_engine(cache);
+    let anim_engine = AnimationEngine::get_or_insert_engine(cache);
     anim_engine.evict_stale_transitions();
 
     for (child, mut target_rect) in subviews.iter_mut().zip(rects) {

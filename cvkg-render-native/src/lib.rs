@@ -736,6 +736,7 @@ impl WindowManager {
             window_handle: handle.clone(),
             focus_manager: cvkg_core::FocusManager::new(),
             focused_node_id: None,
+            last_touch_time: None,
         };
 
         self.windows.insert(winit_id, data);
@@ -830,6 +831,9 @@ pub struct WindowData {
     // ── Focus navigation ───────────────────────────────────────────────────
     focus_manager: cvkg_core::FocusManager,
     focused_node_id: Option<cvkg_vdom::NodeId>,
+    
+    // -- Input disambiguation --
+    last_touch_time: Option<std::time::Instant>,
 }
 
 struct App<V: cvkg_core::View> {
@@ -1412,6 +1416,12 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         button,
                         state.cursor_pos
                     );
+                    if let Some(touch_time) = state.last_touch_time {
+                        if touch_time.elapsed().as_millis() < 500 {
+                            log::info!("[Native] Ignoring MouseInput (synthesized from Touch)");
+                            return;
+                        }
+                    }
                     if let Some(vdom) = &state.vdom {
                         let btn_id = match button {
                             winit::event::MouseButton::Left => 0,
@@ -1566,6 +1576,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 // Map native winit touchscreen events to VDOM Pointer events using
                 // low-precision fat-finger bounding expansion (150px proximity field).
                 WindowEvent::Touch(touch) => {
+                    state.last_touch_time = Some(std::time::Instant::now());
                     if let Some(vdom) = &state.vdom {
                         let scale = state.window.scale_factor();
                         let logical = touch.location.to_logical::<f32>(scale);
@@ -2215,6 +2226,21 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn draw_3d_cube(&mut self, rect: cvkg_core::Rect, color: [f32; 4], rotation: [f32; 3]) {
         self.gpu_ref()
             .draw_3d_cube(rect, color, rotation);
+    }
+    /// Render a 3D scene graph node using the GPU backend.
+    ///
+    /// # Contract
+    /// Delegates to the locked GPU renderer instance to queue the 3D meshes for rendering.
+    fn render_scene_node_3d(
+        &mut self,
+        position: [f32; 3],
+        rotation: [f32; 4],
+        scale: [f32; 3],
+        color: [f32; 4],
+        meshes: &[cvkg_core::Mesh],
+    ) {
+        self.gpu_ref()
+            .render_scene_node_3d(position, rotation, scale, color, meshes);
     }
     fn pop_opacity(&mut self) {
         self.gpu_ref()
