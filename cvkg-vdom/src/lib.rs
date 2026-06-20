@@ -1778,16 +1778,6 @@ impl VDom {
 
         let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, x, y);
 
-        // DEBUG: log root node children on first hit test
-        if node_id == NodeId::from(1) {
-            log::debug!("[HIT_TEST] root children: {:?}", node.children);
-            log::debug!("[HIT_TEST] root id={:?} total nodes={}, self.root={:?}", node_id, self.nodes.len(), self.root);
-            // Also dump ALL nodes to find the actual VDOM structure
-            for (nid, n) in self.nodes.iter().take(10) {
-                log::debug!("[HIT_TEST] node {:?}: type={} children={:?}", nid, n.component_type, n.children);
-            }
-        }
-
         // Scale proximity limit based on the precision of the pointer device.
         let proximity_limit = pointer_precision.max(0.0);
         let proximity = if dist <= 0.0 {
