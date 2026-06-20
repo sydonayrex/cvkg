@@ -723,9 +723,11 @@ impl View for BerserkerFireView {
 
         // Run the physics and particle simulation step only on active frame ticks (dt > 0)
         // to prevent layout VDOM builds from spawning static ghost particles.
+        let t_sim_start = std::time::Instant::now();
         if dt > 0.0 {
             update_berserker_simulation(&mut s, w, h, t, dt, new_rage);
         }
+        let t_sim = t_sim_start.elapsed().as_secs_f32() * 1000.0;
 
         // Draw the 3D rotating cubes in the background
         let t_cubes_start = std::time::Instant::now();
@@ -738,19 +740,24 @@ impl View for BerserkerFireView {
         let t_cards = t_cards_start.elapsed().as_secs_f32() * 1000.0;
 
         // Draw the valknut symbol with procedural fuse animation
+        let t_valknut_start = std::time::Instant::now();
         let vk_cx = w / 2.0;
         let vk_cy = h / 2.0 - 100.0;
         let vk_size = 120.0;
         draw_valknut(r, vk_cx, vk_cy, vk_size, t);
+        let t_valknut = t_valknut_start.elapsed().as_secs_f32() * 1000.0;
 
         let t_fire_start = std::time::Instant::now();
+        let mut t_ragdoll = 0.0f32;
         if t > 0.0 {
             // Clip fire to content area (safe area top is now 0 in content coordinates)
             r.push_clip_rect(cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
             // Draw particles and Mjolnir lightning bolts
             draw_berserker_fire(r, &s, w, h, t);
             // Draw skeletal/ragdoll elements
+            let t_ragdoll_start = std::time::Instant::now();
             draw_ragdoll_dummy(r, &mut s, w, h, new_rage);
+            t_ragdoll = t_ragdoll_start.elapsed().as_secs_f32() * 1000.0;
             r.pop_clip_rect();
         }
         let t_fire = t_fire_start.elapsed().as_secs_f32() * 1000.0;
@@ -772,10 +779,13 @@ impl View for BerserkerFireView {
 
         if (s.last_time as u32).is_multiple_of(5) {
             log::info!(
-                "[Berserker] Draw timings: cubes={:.2}ms cards={:.2}ms fire={:.2}ms chrome={:.2}ms",
+                "[Berserker] Draw timings: sim={:.2}ms cubes={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms ragdoll={:.2}ms chrome={:.2}ms",
+                t_sim,
                 t_cubes,
                 t_cards,
+                t_valknut,
                 t_fire,
+                t_ragdoll,
                 t_chrome
             );
         }
