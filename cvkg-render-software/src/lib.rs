@@ -84,6 +84,11 @@ impl Framebuffer {
             return;
         }
         let idx = (y * self.width + x) as usize;
+        // Fast path: opaque source avoids full Porter-Duff blend
+        if color[3] >= 1.0 {
+            self.pixels[idx] = pack_rgba(color);
+            return;
+        }
         let src = color;
         let dst = unpack_rgba(self.pixels[idx]);
 
@@ -130,6 +135,12 @@ pub struct SoftwareRenderer {
     fb: Framebuffer,
     start_time: Instant,
     last_frame: Instant,
+    /// Phase 2 fix: long-lived text engine, constructed once.
+    #[cfg(feature = "text")]
+    text_engine: cvkg_runic_text::RunicTextEngine,
+    /// Memoize cache: tracks (id, data_hash) of the last memoized render.
+    /// If the same id+hash is seen again, the render is skipped.
+    memoize_cache: Option<(u64, u64)>,
 }
 
 impl SoftwareRenderer {
@@ -140,6 +151,15 @@ impl SoftwareRenderer {
             fb: Framebuffer::new(width, height),
             start_time: now,
             last_frame: now,
+            #[cfg(feature = "text")]
+            text_engine: {
+                let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
+                engine.load_font_data(
+                    include_bytes!("../../cvkg-runic-text/Fonts/Jupiteroid.ttf").to_vec(),
+                );
+                engine
+            },
+            memoize_cache: None,
         }
     }
 
@@ -150,6 +170,13 @@ impl SoftwareRenderer {
             fb: Framebuffer::with_color(width, height, color),
             start_time: now,
             last_frame: now,
+            #[cfg(feature = "text")]
+            text_engine: {
+                let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
+                engine.load_font_data(include_bytes!("../../cvkg-runic-text/Fonts/Jupiteroid.ttf").to_vec());
+                engine
+            },
+            memoize_cache: None,
         }
     }
 
@@ -159,9 +186,6 @@ impl SoftwareRenderer {
     }
 
     /// Returns the internal framebuffer, consuming the renderer.
-    pub fn into_framebuffer(self) -> Framebuffer {
-        self.fb
-    }
 
     /// Returns the width of the framebuffer.
     pub fn width(&self) -> u32 {
@@ -459,8 +483,8 @@ impl Renderer for SoftwareRenderer {
     ) -> Option<cvkg_runic_text::ShapedText> {
         #[cfg(feature = "text")]
         {
-            let mut engine = cvkg_runic_text::RunicTextEngine::new();
-            engine.shape_layout(spans, max_width, align, overflow).ok()
+            // Phase 2 fix: use the long-lived text engine instead of creating a new one per call.
+            self.text_engine.shape_layout(spans, max_width, align, overflow).ok()
         }
         #[cfg(not(feature = "text"))]
         {
@@ -535,8 +559,16 @@ impl Renderer for SoftwareRenderer {
         );
     }
 
-    fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        // Software renderer has no geometry cache -- just call the render function
+    fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
+        // Simple cache: skip re-rendering if the data_hash hasn't changed.
+        // We track (id, data_hash) pairs; if the same id is rendered with the
+        // same hash, we skip the render call entirely.
+        if let Some(&(cached_id, cached_hash)) = self.memoize_cache.as_ref() {
+            if cached_id == id && cached_hash == data_hash {
+                return; // content unchanged, skip
+            }
+        }
+        self.memoize_cache = Some((id, data_hash));
         render_fn(self);
     }
 }
