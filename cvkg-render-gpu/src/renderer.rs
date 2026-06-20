@@ -2890,37 +2890,8 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             }
         }
 
-        // Skuld: Read the timestamps from previous frame (non-blocking)
-        // Skip when reusing frame (no new draw commands issued)
-        if reset_state {
-            if let Some(rb) = &self.skuld_read_buffer {
-                let slice = rb.slice(..);
-                let (tx, rx) = std::sync::mpsc::channel();
-                slice.map_async(wgpu::MapMode::Read, move |r| {
-                    let _ = tx.send(r);
-                });
-
-                // Non-blocking poll: only read if data is already available
-                // This avoids a GPU sync stall that costs ~10ms per frame
-                if self.device.poll(wgpu::PollType::Poll).is_ok() {
-                    if let Ok(Ok(())) = rx.try_recv() {
-                        let data = slice.get_mapped_range();
-                        let timestamps: [u64; 2] = bytemuck::cast_slice(&data).try_into().unwrap_or([0, 0]);
-                        drop(data);
-                        rb.unmap();
-
-                        if timestamps[1] > timestamps[0] {
-                            let diff_ticks = timestamps[1] - timestamps[0];
-                            self.last_gpu_time_ns = (diff_ticks as f64 * self.skuld_period as f64) as u64;
-                            log::trace!(
-                                "[Skuld] GPU time: {} ms",
-                                self.last_gpu_time_ns as f64 / 1_000_000.0
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        // Skuld timestamp query removed — was causing GPU sync stalls (10ms/frame)
+        // and buffer mapping errors. GPU time can be profiled externally if needed.
 
         self.staging_belt.recall();
         self.current_window = Some(window_id);
