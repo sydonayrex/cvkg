@@ -1475,10 +1475,17 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 let target = state
                                     .active_pointer_target
                                     .filter(|target| {
-                                        vdom.nodes.get(target).map_or(false, |node| {
-                                            Some(&node.component_type) == state.active_pointer_target_type.as_ref()
-                                                && node.key == state.active_pointer_target_key
-                                        })
+                                        let verified = vdom.nodes.get(target).map_or(false, |node| {
+                                            let type_match = Some(&node.component_type) == state.active_pointer_target_type.as_ref();
+                                            let key_match = node.key == state.active_pointer_target_key;
+                                            log::debug!("[Native] Target verify: id={:?} type={} key={:?} type_match={} key_match={}",
+                                                target, node.component_type, node.key, type_match, key_match);
+                                            type_match && key_match
+                                        });
+                                        if !verified {
+                                            log::debug!("[Native] Target verification failed for {:?}, using fallback", target);
+                                        }
+                                        verified
                                     })
                                     .or(fallback_target);
                                 let pointer_up = cvkg_core::Event::PointerUp {
@@ -1509,10 +1516,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 // Only dispatch PointerClick if we didn't drag
                                 if !state.is_dragging {
                                     if let Some(target) = target {
+                                        log::info!("[Native] Dispatching PointerClick to VDOM (target={:?})", target);
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
+                                        log::info!("[Native] Dispatching PointerClick to VDOM (no target, bubbling)");
                                         vdom.dispatch_event(pointer_click);
                                     }
+                                } else {
+                                    log::info!("[Native] Skipping PointerClick (is_dragging=true)");
                                 }
                                 // Reset drag state
                                 state.is_dragging = false;
@@ -1654,10 +1665,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 // Only dispatch PointerClick if we didn't drag
                                 if !state.is_dragging {
                                     if let Some(target) = target {
+                                        log::info!("[Native] Dispatching PointerClick to VDOM (target={:?})", target);
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
+                                        log::info!("[Native] Dispatching PointerClick to VDOM (no target, bubbling)");
                                         vdom.dispatch_event(pointer_click);
                                     }
+                                } else {
+                                    log::info!("[Native] Skipping PointerClick (is_dragging=true)");
                                 }
                                 // Reset drag state
                                 state.is_dragging = false;
