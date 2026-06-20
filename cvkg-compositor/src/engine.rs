@@ -199,41 +199,23 @@ impl CompositorEngine {
             &mut self.has_active_shaders,
         );
 
-        // Route into buckets by material.
-        for cmd in &self.flatten_buffer {
-            match cmd {
+        // Route into buckets by material — use retain-like approach to avoid clones.
+        // Instead of cloning each command, we drain from flatten_buffer.
+        for cmd in self.flatten_buffer.drain(..) {
+            match &cmd {
                 RenderCommand::Draw(routed) => match routed.material {
-                    Material::Opaque
-                    | Material::Multiply
-                    | Material::Screen
-                    | Material::BlendOverlay
-                    | Material::Darken
-                    | Material::Lighten
-                    | Material::ColorDodge
-                    | Material::ColorBurn
-                    | Material::HardLight
-                    | Material::SoftLight
-                    | Material::Difference
-                    | Material::Exclusion
-                    | Material::Hue
-                    | Material::Saturation
-                    | Material::Color
-                    | Material::Luminosity => {
-                        buckets.scene_commands.push(cmd.clone());
-                    }
-                    Material::Isolated | Material::ShaderEffect { .. } => {
-                        buckets.scene_commands.push(cmd.clone());
-                    }
                     Material::Glass { .. } => {
-                        buckets.glass_commands.push(cmd.clone());
+                        buckets.glass_commands.push(cmd);
                     }
                     Material::Overlay => {
-                        buckets.overlay_commands.push(cmd.clone());
+                        buckets.overlay_commands.push(cmd);
+                    }
+                    _ => {
+                        buckets.scene_commands.push(cmd);
                     }
                 },
-                RenderCommand::PushOffscreen { .. } | RenderCommand::PopOffscreen => {
-                    // Push and Pop currently always map to the scene pass where offscreen textures are processed
-                    buckets.scene_commands.push(cmd.clone());
+                _ => {
+                    buckets.scene_commands.push(cmd);
                 }
             }
         }
@@ -270,8 +252,20 @@ impl CompositorEngine {
         z_counter: &mut u32,
         has_active_shaders: &mut bool,
     ) {
-        let layer = match layer_tree.get_layer(layer_id) {
-            Some(l) => l,
+        // Extract layer data first to avoid borrow conflicts with recursive calls.
+        let (material, draw_list, children, bounds, visible) = match layer_tree.get_layer(layer_id) {
+            Some(layer) => {
+                if !layer.visible {
+                    return;
+                }
+                (
+                    layer.material.clone(),
+                    layer.draw_list.clone(),
+                    layer.children.clone(),
+                    layer.bounds,
+                    true,
+                )
+            }
             None => {
                 warn!(
                     "CompositorEngine: referenced layer {:?} not found in tree",
@@ -280,15 +274,6 @@ impl CompositorEngine {
                 return;
             }
         };
-
-        if !layer.visible {
-            return;
-        }
-
-        let material = layer.material.clone();
-        let draw_list: Vec<_> = layer.draw_list.to_vec();
-        let children: Vec<_> = layer.children.iter().rev().cloned().collect();
-        let bounds = layer.bounds;
 
         let is_offscreen = matches!(material, Material::Isolated | Material::ShaderEffect { .. });
 
@@ -304,6 +289,7 @@ impl CompositorEngine {
             }
         }
 
+        // Push draw commands.
         for cmd in &draw_list {
             buffer.push(RenderCommand::Draw(RoutedDrawCommand {
                 command: cmd.clone(),
@@ -315,7 +301,8 @@ impl CompositorEngine {
             *z_counter += 1;
         }
 
-        for child_id in &children {
+        // Process children back-to-front (reverse order for painter's algorithm).
+        for child_id in children.iter().rev() {
             Self::flatten_layer(layer_tree, *child_id, buffer, z_counter, has_active_shaders);
         }
 
@@ -326,12 +313,16 @@ impl CompositorEngine {
 
     /// Returns true if the layer tree has been modified since the last flatten.
     pub fn needs_reflatten(&self) -> bool {
+        // Only force re-flatten every frame if there are active shaders.
+        // For static content, skip flattening entirely.
         if self.has_active_shaders {
             return true;
         }
+        // Check if any layers were structurally modified or marked dirty.
         if self.current_damage.full_rebuild_needed {
             return true;
         }
+        // Check per-layer dirty stamps — only re-flatten if something actually changed.
         if !self.current_damage.dirty_layers.is_empty() {
             return true;
         }
