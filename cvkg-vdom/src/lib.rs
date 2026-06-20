@@ -819,6 +819,12 @@ impl VNodeRenderer {
     /// Phase 4.1: Begin a new decorative batch. Called by decorative draw methods.
     fn begin_decorative(&mut self, rect: cvkg_core::Rect) {
         if self.batch_node_id.is_none() {
+            // Only create a batch node if there's a parent on the stack.
+            // If the stack is empty, decorative calls before any push_vnode
+            // should be no-ops -- they can't be linked to any parent.
+            if self.stack.last().is_none() {
+                return;
+            }
             let id = self.next_id();
             self.batch_node_id = Some(id);
             let batch_node = VNode {
@@ -843,12 +849,8 @@ impl VNodeRenderer {
                 if let Some(parent) = self.nodes.get_mut(parent_id) {
                     parent.children.push(id);
                 }
-            } else if self.root.is_none() {
-                self.root = Some(id);
             }
             self.nodes.insert(id, batch_node);
-            // Push batch node onto stack so children can find it as parent
-            self.stack.push(id);
         }
     }
 
