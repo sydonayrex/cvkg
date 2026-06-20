@@ -1133,6 +1133,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // Apply patches to the accessibility tree and the previous VDOM.
                     // When new_vdom is None (view unchanged), skip diff entirely.
                     let state_flush_start = std::time::Instant::now();
+                    #[allow(unused)]
                     let mut diff_patches = None;
                     match (new_vdom, &mut state.vdom) {
                         (Some(new_vdom), Some(prev_vdom)) => {

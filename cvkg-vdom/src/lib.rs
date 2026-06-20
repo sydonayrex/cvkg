@@ -807,6 +807,10 @@ impl VNodeRenderer {
                     serde_json::to_value(&self.decorative_batch).unwrap_or_default(),
                 );
             }
+            // Pop the batch node from the stack -- it was pushed in begin_decorative
+            if self.stack.last() == Some(&batch_id) {
+                self.stack.pop();
+            }
         }
         self.decorative_batch.clear();
         self.batch_node_id = None;
@@ -843,6 +847,8 @@ impl VNodeRenderer {
                 self.root = Some(id);
             }
             self.nodes.insert(id, batch_node);
+            // Push batch node onto stack so children can find it as parent
+            self.stack.push(id);
         }
     }
 
@@ -1742,6 +1748,17 @@ impl VDom {
 
         let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, x, y);
 
+        // DEBUG: log root node children on first hit test
+        if node_id == NodeId::from(1) {
+            log::debug!("[HIT_TEST] root children: {:?}", node.children);
+            log::debug!("[HIT_TEST] root id={:?} total nodes={}, self.root={:?}", node_id, self.nodes.len(), self.root);
+            for (i, child_id) in node.children.iter().enumerate().take(5) {
+                if let Some(child) = self.nodes.get(child_id) {
+                    log::debug!("[HIT_TEST] child[{}]: id={:?} type={} layout={:?}", i, child_id, child.component_type, child.layout);
+                }
+            }
+        }
+
         // Scale proximity limit based on the precision of the pointer device.
         let proximity_limit = pointer_precision.max(0.0);
         let proximity = if dist <= 0.0 {
@@ -1965,6 +1982,7 @@ impl VDom {
     ) -> cvkg_core::EventResponse {
         let event_name = event.name();
         let mut processed = false;
+        let target = current_id;
 
         loop {
             if let Some(handlers) = self.event_handlers.get(&current_id) {
@@ -1972,8 +1990,7 @@ impl VDom {
                 if let Some(handler) = handlers.get(event_name) {
                     log::debug!(
                         "[VDOM] Executing handler for '{}' on node {:?}",
-                        event_name,
-                        current_id
+                        event_name, current_id
                     );
                     handler(event.clone());
                     processed = true;
@@ -1984,6 +2001,32 @@ impl VDom {
                 current_id = *parent_id;
             } else {
                 break;
+            }
+        }
+
+        // If no handler found walking up from target, search descendants.
+        // This handles the case where hit_test returns the root but the
+        // actual clickable element is a descendant with event handlers.
+        if !processed {
+            let mut stack = vec![target];
+            while let Some(node_id) = stack.pop() {
+                if node_id != target {
+                    if let Some(handlers) = self.event_handlers.get(&node_id) {
+                        if let Some(handler) = handlers.get(event_name) {
+                            log::debug!(
+                                "[VDOM] Found descendant handler on {:?} for '{}'",
+                                node_id, event_name
+                            );
+                            handler(event.clone());
+                            processed = true;
+                        }
+                    }
+                }
+                if let Some(node) = self.nodes.get(&node_id) {
+                    for child_id in &node.children {
+                        stack.push(*child_id);
+                    }
+                }
             }
         }
 
