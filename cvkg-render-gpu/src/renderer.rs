@@ -3959,6 +3959,10 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             });
         }
 
+        // Push indices for the quad (two triangles: 0-1-2 and 0-2-3)
+        let base = self.vertices.len() as u32 - 4;
+        self.indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+
         if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += 6;
         }
