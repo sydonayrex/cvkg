@@ -972,16 +972,16 @@ impl SurtrRenderer {
             .present_modes
             .contains(&wgpu::PresentMode::Immediate)
         {
-            log::info!("[GPU] Present mode: Immediate (no vsync, uncapped)");
+            log::warn!("[GPU] Present mode: Immediate (no vsync, uncapped)");
             wgpu::PresentMode::Immediate
         } else if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Mailbox)
         {
-            log::info!("[GPU] Present mode: Mailbox (no vsync)");
+            log::warn!("[GPU] Present mode: Mailbox (no vsync)");
             wgpu::PresentMode::Mailbox
         } else {
-            log::warn!("[GPU] Neither Immediate nor Mailbox supported, falling back to Fifo (V-Sync capped)");
+            log::warn!("[GPU] Present mode: Fifo (V-Sync capped at compositor rate)");
             wgpu::PresentMode::Fifo
         };
 
