@@ -1754,37 +1754,30 @@ impl VDom {
 
         if proximity > 0.0 {
             // Search children in reverse (front-to-back) to maintain proper Z-ordering.
-            let mut best_hit: Option<(NodeId, f32)> = None;
+            let mut best_child_hit: Option<(NodeId, f32)> = None;
             for child_id in node.children.iter().rev() {
                 if let Some((hit, hit_prox)) =
                     self.hit_test_recursive(*child_id, x, y, pointer_precision)
                 {
-                    if let Some(child_node) = self.nodes.get(&hit)
-                        && child_node.aria_role == "presentation"
-                        && self.event_handlers.contains_key(&node_id)
-                    {
-                        let resolved_prox = proximity.max(hit_prox);
-                        if resolved_prox >= 1.0 {
-                            return Some((node_id, resolved_prox));
-                        }
-                        if best_hit.is_none() || resolved_prox > best_hit.unwrap().1 {
-                            best_hit = Some((node_id, resolved_prox));
-                        }
-                    } else {
-                        if hit_prox >= 1.0 {
-                            return Some((hit, hit_prox));
-                        }
-                        if best_hit.is_none() || hit_prox > best_hit.unwrap().1 {
-                            best_hit = Some((hit, hit_prox));
-                        }
+                    // Direct hit (point inside child's SDF): return immediately
+                    if hit_prox >= 1.0 {
+                        return Some((hit, hit_prox));
+                    }
+                    // Track best partial hit among children
+                    if best_child_hit.is_none() || hit_prox > best_child_hit.unwrap().1 {
+                        best_child_hit = Some((hit, hit_prox));
                     }
                 }
             }
 
-            if let Some(bh) = best_hit {
+            // If any child matched (even partially), prefer the best child hit
+            // over the parent. This prevents the root from swallowing clicks
+            // when children cover the click point but lack event handlers.
+            if let Some(bh) = best_child_hit {
                 return Some(bh);
             }
 
+            // No child matched at all -- return this node if it's interactive
             if dist <= 0.0 || self.event_handlers.contains_key(&node_id) {
                 return Some((node_id, proximity));
             }
