@@ -1365,7 +1365,7 @@ impl RunicTextEngine {
                 if let Some(new_db) = guard.take() {
                     self.db = new_db;
                     self.font_data.clear();
-                    log::info!("[RunicTextEngine] Background font database loaded successfully.");
+                    log::debug!("[RunicTextEngine] Background font database loaded successfully.");
                     true
                 } else {
                     false
