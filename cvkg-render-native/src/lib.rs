@@ -1884,6 +1884,28 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         }
                                         state.window.request_redraw();
                                     }
+                                    // ── Fullscreen toggle ────────────────────────
+                                    winit::keyboard::KeyCode::F11 => {
+                                        let is_fullscreen = state.window.fullscreen().is_some();
+                                        if is_fullscreen {
+                                            state.window.set_fullscreen(None);
+                                            log::info!("[Native] Fullscreen OFF");
+                                        } else {
+                                            if let Some(monitor) = state.window.current_monitor() {
+                                                if let Some(mode) = monitor.video_modes().next() {
+                                                    let w = mode.size().width;
+                                                    let h = mode.size().height;
+                                                    let rr = mode.refresh_rate_millihertz();
+                                                    state.window.set_fullscreen(Some(winit::window::Fullscreen::Exclusive(mode)));
+                                                    log::info!("[Native] Fullscreen ON (exclusive: {}x{}@{:?}Hz)", w, h, rr);
+                                                }
+                                            } else {
+                                                state.window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+                                                log::info!("[Native] Fullscreen ON (borderless)");
+                                            }
+                                        }
+                                        state.window.request_redraw();
+                                    }
                                     // ── Selection / search ────────────────────────
                                     winit::keyboard::KeyCode::KeyA => {
                                         log::info!("[Native] Shortcut: Select All (Cmd+A)");

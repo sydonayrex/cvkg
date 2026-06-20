@@ -974,21 +974,22 @@ impl SurtrRenderer {
         let surface_format = Self::select_best_surface_format(&surface_caps.formats);
 
         // Dynamic capability selection for robust Wayland/X11 rendering
-        // Try Immediate first (no vsync, uncapped), then Mailbox, then Fifo
+        log::info!("[GPU] Available present modes: {:?}", surface_caps.present_modes);
+        log::info!("[GPU] Adapter: {} ({:?})", adapter.get_info().name, adapter.get_info().backend);
         let present_mode = if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Immediate)
         {
-            log::info!("[GPU] Present mode: Immediate (no vsync, uncapped)");
+            log::info!("[GPU] Selected: Immediate (no vsync, uncapped)");
             wgpu::PresentMode::Immediate
         } else if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Mailbox)
         {
-            log::info!("[GPU] Present mode: Mailbox (no vsync)");
+            log::info!("[GPU] Selected: Mailbox (no vsync)");
             wgpu::PresentMode::Mailbox
         } else {
-            log::info!("[GPU] Present mode: Fifo (V-Sync capped at compositor rate)");
+            log::info!("[GPU] Selected: Fifo (V-Sync capped at compositor rate)");
             wgpu::PresentMode::Fifo
         };
 
