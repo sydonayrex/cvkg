@@ -2890,7 +2890,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             }
         }
 
-        // Skuld: Read the timestamps from the previous frame
+        // Skuld: Read the timestamps from previous frame (non-blocking)
         // Skip when reusing frame (no new draw commands issued)
         if reset_state {
             if let Some(rb) = &self.skuld_read_buffer {
@@ -2900,27 +2900,23 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                     let _ = tx.send(r);
                 });
 
-                // Poll to ensure mapping is complete
-                self.device
-                    .poll(wgpu::PollType::Wait {
-                        submission_index: None,
-                        timeout: None,
-                    })
-                    .unwrap();
+                // Non-blocking poll: only read if data is already available
+                // This avoids a GPU sync stall that costs ~10ms per frame
+                if self.device.poll(wgpu::PollType::Poll).is_ok() {
+                    if let Ok(()) = rx.try_recv() {
+                        let data = slice.get_mapped_range();
+                        let timestamps: [u64; 2] = bytemuck::cast_slice(&data).try_into().unwrap_or([0, 0]);
+                        drop(data);
+                        rb.unmap();
 
-                if rx.recv().is_ok() {
-                    let data = slice.get_mapped_range();
-                    let timestamps: [u64; 2] = bytemuck::cast_slice(&data).try_into().unwrap_or([0, 0]);
-                    drop(data);
-                    rb.unmap();
-
-                    if timestamps[1] > timestamps[0] {
-                        let diff_ticks = timestamps[1] - timestamps[0];
-                        self.last_gpu_time_ns = (diff_ticks as f64 * self.skuld_period as f64) as u64;
-                        log::trace!(
-                            "[Skuld] GPU time: {} ms",
-                            self.last_gpu_time_ns as f64 / 1_000_000.0
-                        );
+                        if timestamps[1] > timestamps[0] {
+                            let diff_ticks = timestamps[1] - timestamps[0];
+                            self.last_gpu_time_ns = (diff_ticks as f64 * self.skuld_period as f64) as u64;
+                            log::trace!(
+                                "[Skuld] GPU time: {} ms",
+                                self.last_gpu_time_ns as f64 / 1_000_000.0
+                            );
+                        }
                     }
                 }
             }
