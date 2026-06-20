@@ -726,6 +726,8 @@ impl WindowManager {
             drag_button: 0,
             drag_threshold: 5.0,
             active_pointer_target: None,
+            active_pointer_target_type: None,
+            active_pointer_target_key: None,
             active_pointer_pos: None,
             active_pointer_precision: 0.0,
             is_key_focused,
@@ -810,6 +812,10 @@ pub struct WindowData {
     drag_threshold: f32,
     /// Pointer target captured on press so release/click stay stable through rebuilds.
     active_pointer_target: Option<cvkg_vdom::NodeId>,
+    /// Stashed component_type of the pressed target, used to verify identity across rebuilds.
+    active_pointer_target_type: Option<String>,
+    /// Stashed key of the pressed target, used to verify identity across rebuilds.
+    active_pointer_target_key: Option<String>,
     /// Pointer position captured on press for fallback hit-testing.
     active_pointer_pos: Option<[f32; 2]>,
     /// Pointer precision captured on press for fallback hit-testing.
@@ -1422,6 +1428,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.active_pointer_target = vdom
                                     .hit_test(state.cursor_pos[0], state.cursor_pos[1], 0.0)
                                     .map(|(id, _)| id);
+                                // Stash component_type and key for identity verification on release.
+                                // NodeIds are stable across rebuilds when nodes have keys, but
+                                // we still verify identity to be safe against hash collisions.
+                                if let Some(target_id) = state.active_pointer_target {
+                                    if let Some(node) = vdom.nodes.get(&target_id) {
+                                        state.active_pointer_target_type = Some(node.component_type.clone());
+                                        state.active_pointer_target_key = node.key.clone();
+                                    }
+                                }
                                 log::info!("[Native] Dispatching PointerDown to VDOM");
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x: state.cursor_pos[0],
@@ -1451,9 +1466,16 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         )
                                         .map(|(id, _)| id)
                                     });
+                                // Verify the cached target is the same logical node,
+                                // not just a coincidentally-numbered one after a rebuild.
                                 let target = state
                                     .active_pointer_target
-                                    .filter(|target| vdom.nodes.contains_key(target))
+                                    .filter(|target| {
+                                        vdom.nodes.get(target).map_or(false, |node| {
+                                            Some(&node.component_type) == state.active_pointer_target_type.as_ref()
+                                                && node.key == state.active_pointer_target_key
+                                        })
+                                    })
                                     .or(fallback_target);
                                 let pointer_up = cvkg_core::Event::PointerUp {
                                     x: state.cursor_pos[0],
@@ -1491,6 +1513,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 // Reset drag state
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
+                                state.active_pointer_target_type = None;
+                                state.active_pointer_target_key = None;
                                 state.active_pointer_pos = None;
                             }
                         }
@@ -1537,6 +1561,12 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.active_pointer_pos = Some([x, y]);
                                 state.active_pointer_precision = 150.0;
                                 state.active_pointer_target = vdom.hit_test(x, y, 150.0).map(|(id, _)| id);
+                                if let Some(target_id) = state.active_pointer_target {
+                                    if let Some(node) = vdom.nodes.get(&target_id) {
+                                        state.active_pointer_target_type = Some(node.component_type.clone());
+                                        state.active_pointer_target_key = node.key.clone();
+                                    }
+                                }
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x,
                                     y,
@@ -1582,9 +1612,15 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             .map(|(id, _)| id)
                                     })
                                     .or_else(|| vdom.hit_test(x, y, state.active_pointer_precision).map(|(id, _)| id));
+                                // Verify the cached target is the same logical node.
                                 let target = state
                                     .active_pointer_target
-                                    .filter(|target| vdom.nodes.contains_key(target))
+                                    .filter(|target| {
+                                        vdom.nodes.get(target).map_or(false, |node| {
+                                            Some(&node.component_type) == state.active_pointer_target_type.as_ref()
+                                                && node.key == state.active_pointer_target_key
+                                        })
+                                    })
                                     .or(fallback_target);
                                 let pointer_up = cvkg_core::Event::PointerUp {
                                     x,
@@ -1622,6 +1658,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 // Reset drag state
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
+                                state.active_pointer_target_type = None;
+                                state.active_pointer_target_key = None;
                                 state.active_pointer_pos = None;
                             }
                             winit::event::TouchPhase::Cancelled => {

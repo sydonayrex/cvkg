@@ -755,7 +755,28 @@ impl VNodeRenderer {
         id
     }
 
-    fn add_node(&mut self, node: VNode) -> NodeId {
+    /// Generate a stable NodeId from a node's key and component type.
+    /// Nodes with the same (component_type, key) pair will get the same NodeId
+    /// across rebuilds, ensuring event targeting survives VDOM diff/patch cycles.
+    fn stable_id_for(&self, component_type: &str, key: Option<&str>) -> Option<NodeId> {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+        let key = key?;
+        let mut hasher = DefaultHasher::new();
+        component_type.hash(&mut hasher);
+        key.hash(&mut hasher);
+        // Use high bit range to avoid collisions with sequential counter (which starts at 1)
+        let hash = hasher.finish();
+        Some(KvasirId(0x8000_0000_0000_0000 | (hash & 0x7FFF_FFFF_FFFF_FFFF)))
+    }
+
+    fn add_node(&mut self, mut node: VNode) -> NodeId {
+        // Use stable ID derived from (component_type, key) when available.
+        // This ensures the same logical node gets the same NodeId across rebuilds,
+        // which is critical for event targeting (click boxes) to survive VDOM diff/patch.
+        if let Some(stable_id) = self.stable_id_for(&node.component_type, node.key.as_deref()) {
+            node.id = stable_id;
+        }
         let id = node.id;
         log::trace!(
             "[VDOM] Adding node {:?} ({}): {:?}",
@@ -854,14 +875,6 @@ impl VNodeRenderer {
             },
             props,
         });
-        if let Some(batch_id) = self.batch_node_id {
-            if let Some(node) = self.nodes.get_mut(&batch_id) {
-                node.props.insert(
-                    "commands".to_string(),
-                    serde_json::to_value(&self.decorative_batch).unwrap_or_default(),
-                );
-            }
-        }
     }
 }
 
