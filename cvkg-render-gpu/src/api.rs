@@ -485,20 +485,23 @@ impl cvkg_core::Renderer for SurtrRenderer {
     ) {
         let dx = x2 - x1;
         let dy = y2 - y1;
-        let len = (dx * dx + dy * dy).sqrt();
-        if len < 0.001 {
+        let len_sq = dx * dx + dy * dy;
+        if len_sq < 0.000001 {
             return;
         }
-
-        // Create a proper line path using Lyon for correct tessellation
-        // The stroke_path function will apply the current transform, which handles rotation
-        let mut builder = lyon::path::Path::builder();
-        builder.begin(point(x1, y1));
-        builder.line_to(point(x2, y2));
-        builder.close();
-        let path = builder.build();
-
-        self.stroke_path(&path, color, stroke_width);
+        let len = len_sq.sqrt();
+        let half_w = stroke_width * 0.5;
+        // Perpendicular unit vector
+        let nx = -dy / len * half_w;
+        let ny = dx / len * half_w;
+        // Build 4 corner points of the line quad
+        let points = [
+            [x1 + nx, y1 + ny],
+            [x2 + nx, y2 + ny],
+            [x2 - nx, y2 - ny],
+            [x1 - nx, y1 - ny],
+        ];
+        self.push_oriented_quad(points, color, 1, Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 });
     }
 
     fn draw_image(&mut self, image_name: &str, rect: Rect) {

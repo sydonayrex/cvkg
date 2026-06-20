@@ -124,6 +124,11 @@ pub struct PhysicsWorld {
     accumulator: f32,
     /// Current simulation tick count.
     tick: u64,
+    // Scratch buffers to avoid per-substep allocations
+    scratch_ccd_manifolds: Vec<ContactManifold>,
+    scratch_manifolds: Vec<ContactManifold>,
+    scratch_sensor_manifolds: Vec<ContactManifold>,
+    scratch_slept: Vec<BodyId>,
 }
 
 /// The result of a simulation step, exposed for application consumption.
@@ -156,6 +161,10 @@ impl PhysicsWorld {
             scene_bridge: crate::scene_bridge::SceneBridge::new(),
             accumulator: 0.0,
             tick: 0,
+            scratch_ccd_manifolds: Vec::new(),
+            scratch_manifolds: Vec::new(),
+            scratch_sensor_manifolds: Vec::new(),
+            scratch_slept: Vec::new(),
         }
     }
 
@@ -665,7 +674,7 @@ impl PhysicsWorld {
         // 2b. CCD pass: detect collisions for fast-moving bodies
         // Run CCD for bodies with velocity exceeding a threshold
         let ccd_velocity_threshold = self.config.max_velocity_per_substep * 0.5;
-        let mut ccd_manifolds = Vec::new();
+        self.scratch_ccd_manifolds.clear();
 
         for (i, collider_a) in self.colliders.iter().enumerate() {
             let body_a = match self.body_id_map.get(&collider_a.body_id) {
@@ -784,7 +793,7 @@ impl PhysicsWorld {
                             depth: 0.0, // CCD contacts have zero penetration at TOI
                         }],
                     };
-                    ccd_manifolds.push(manifold);
+                    self.scratch_ccd_manifolds.push(manifold);
 
                     // Wake sleeping bodies
                     if let Some(&idx_a) = self.body_id_map.get(&collider_a.body_id) {
@@ -803,8 +812,10 @@ impl PhysicsWorld {
 
         // 3. Narrow phase: generate contact manifolds
         let pairs = self.spatial_hash.candidate_pairs();
-        let mut manifolds = Vec::new();
-        let mut sensor_manifolds = Vec::new();
+        self.scratch_manifolds.clear();
+        self.scratch_sensor_manifolds.clear();
+        let manifolds = &mut self.scratch_manifolds;
+        let sensor_manifolds = &mut self.scratch_sensor_manifolds;
 
         for (id_a, id_b) in pairs {
             let idx_a = id_a.0 as usize;
@@ -841,9 +852,9 @@ impl PhysicsWorld {
                 collide(idx_a, &col_a.shape, body_a, idx_b, &col_b.shape, body_b)
             {
                 if is_sensor_pair {
-                    sensor_manifolds.push(manifold);
+                    self.scratch_sensor_manifolds.push(manifold);
                 } else {
-                    manifolds.push(manifold);
+                    self.scratch_manifolds.push(manifold);
                     result.collision_pairs += 1;
 
                     // Wake sleeping bodies
@@ -862,12 +873,13 @@ impl PhysicsWorld {
         }
 
         // Process collision events for BOTH regular and sensor collisions
-        let mut all_manifolds = manifolds.clone();
-        all_manifolds.extend(sensor_manifolds.iter().cloned());
+        let mut all_manifolds = self.scratch_manifolds.clone();
+        all_manifolds.extend(self.scratch_sensor_manifolds.iter().cloned());
         self.process_collision_events(&all_manifolds);
 
         // 4. Solve contacts (apply contact impulses) - ONLY for non-sensor collisions
-        for manifold in &manifolds {
+        let manifolds_copy = self.scratch_manifolds.clone();
+        for manifold in &manifolds_copy {
             let idx_a = match self.body_id_map.get(&BodyId(manifold.body_a as u64)) {
                 Some(&i) => i,
                 None => continue,
@@ -896,21 +908,21 @@ impl PhysicsWorld {
         }
 
         // 6. Update sleep states
-        let mut slept = Vec::new();
+        self.scratch_slept.clear();
         for (id, &idx) in &self.body_id_map {
             let body = &mut self.bodies[idx];
             if update_sleep(body, body.sleep_threshold, self.config.sleep_delay) {
-                slept.push(*id);
+                self.scratch_slept.push(*id);
             }
         }
 
         // Fire sleep callbacks
         if let Some(ref callback) = self.on_sleep {
-            for id in &slept {
+            for id in &self.scratch_slept {
                 callback(*id);
             }
         }
-        result.slept_bodies = slept;
+        result.slept_bodies = std::mem::take(&mut self.scratch_slept);
     }
 
     fn resolve_contact(

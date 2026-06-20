@@ -763,9 +763,8 @@ impl View for BerserkerFireView {
 
         if (s.last_time as u32).is_multiple_of(5) {
             log::info!(
-                "[Berserker] Draw timings: sim={:.2}ms cubes={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms ragdoll={:.2}ms chrome={:.2}ms",
+                "[Berserker] Draw timings: sim={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms ragdoll={:.2}ms chrome={:.2}ms",
                 t_sim,
-                t_cubes,
                 t_cards,
                 t_valknut,
                 t_fire,
