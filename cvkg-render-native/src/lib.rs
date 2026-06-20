@@ -1260,22 +1260,29 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     self.frame_budget.subsystem_finish(2);
 
                     // Submit the frame (still under the same lock)
-                    let gpu_submit_start = std::time::Instant::now();
                     let gpu_render_start = std::time::Instant::now();
                     gpu.render_frame();
                     let gpu_render_end = std::time::Instant::now();
+
+                    // end_frame internally does: get_current_texture (vsync wait),
+                    // render graph execution, queue.submit, and present.
                     gpu.end_frame(encoder);
                     let gpu_submit_end = std::time::Instant::now();
 
                     // GPU guard drops here, releasing the lock
 
-                    // GPU profile logging: only log every 60 frames to avoid per-frame overhead
+                    // Detailed timing breakdown every 60 frames
                     if state.frame_count % 60 == 0 {
+                        let cpu_draw = cpu_draw_end.duration_since(cpu_draw_start);
+                        let gpu_render = gpu_render_end.duration_since(gpu_render_start);
+                        let gpu_submit = gpu_submit_end.duration_since(gpu_render_end);
+                        let total = gpu_submit_end.duration_since(redraw_start);
                         log::info!(
-                            "[Native] GPU profile: cpu_draw={:?} gpu_render={:?} gpu_submit={:?}",
-                            cpu_draw_end.duration_since(cpu_draw_start),
-                            gpu_render_end.duration_since(gpu_render_start),
-                            gpu_submit_end.duration_since(gpu_render_end),
+                            "[Native] Frame breakdown: cpu_draw={:?} gpu_render={:?} gpu_submit(end_frame)={:?} total={:?}",
+                            cpu_draw, gpu_render, gpu_submit, total
+                        );
+                        log::info!(
+                            "[Native] NOTE: gpu_submit includes surface.get_current_texture() vsync wait + render graph + queue.submit + present"
                         );
                     }
 
@@ -1295,7 +1302,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     telemetry.draw_time_ms =
                         cpu_draw_end.duration_since(cpu_draw_start).as_secs_f32() * 1000.0;
                     telemetry.gpu_submit_time_ms = gpu_submit_end
-                        .duration_since(gpu_submit_start)
+                        .duration_since(cpu_draw_end)
                         .as_secs_f32()
                         * 1000.0;
 

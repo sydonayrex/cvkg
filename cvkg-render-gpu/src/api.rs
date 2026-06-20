@@ -1840,12 +1840,13 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         self.telemetry.vertices = self.vertices.len() as u32;
         self.frame_rendered = true;
 
-        // Performance diagnostic: log draw call count
+        // Performance diagnostic: log draw call and command buffer count
         log::debug!(
-            "[Perf] draw_calls={} vertices={} instances={}",
+            "[Perf] draw_calls={} vertices={} instances={} staging_cmds={}",
             self.draw_calls.len(),
             self.vertices.len(),
-            self.instance_data.len()
+            self.instance_data.len(),
+            self.staging_command_buffers.len()
         );
     }
 

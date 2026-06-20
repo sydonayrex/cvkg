@@ -971,9 +971,10 @@ impl SurtrRenderer {
             .present_modes
             .contains(&wgpu::PresentMode::Mailbox)
         {
+            log::info!("[GPU] Present mode: Mailbox (no vsync)");
             wgpu::PresentMode::Mailbox
         } else {
-            log::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync)");
+            log::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync capped)");
             wgpu::PresentMode::Fifo
         };
 
