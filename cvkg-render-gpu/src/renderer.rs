@@ -259,6 +259,17 @@ pub struct SurtrRenderer {
     pub bloom_enabled: bool,
     /// Dynamic toggle to enable or disable the volumetric raymarching pass, which handles fog and light shaft simulations.
     pub volumetric_enabled: bool,
+
+    // Path Geometry Cache — avoids re-tessellating static paths every frame.
+    /// Key: (path_hash, stroke_width_bits) where path_hash is derived from
+    /// the path's data pointer identity + length, and stroke_width_bits is
+    /// the bit representation of the stroke width for exact matching.
+    /// Value: (vertices, indices) ready to upload to GPU buffers.
+    pub(crate) path_geometry_cache: lru::LruCache<(u64, u32), (Vec<Vertex>, Vec<u32>)>,
+    /// Counter for generating unique path hashes.
+    pub(crate) path_hash_counter: u64,
+    /// Map from path data pointer to stable hash for cache lookup.
+    pub(crate) path_identity_cache: std::collections::HashMap<usize, u64>,
     /// Color blindness bind group layout (texture + sampler + uniform).
     pub(crate) color_blind_bind_group_layout: wgpu::BindGroupLayout,
     /// Color blindness uniform buffer (updated each frame when mode changes).
@@ -972,16 +983,16 @@ impl SurtrRenderer {
             .present_modes
             .contains(&wgpu::PresentMode::Immediate)
         {
-            log::warn!("[GPU] Present mode: Immediate (no vsync, uncapped)");
+            log::info!("[GPU] Present mode: Immediate (no vsync, uncapped)");
             wgpu::PresentMode::Immediate
         } else if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Mailbox)
         {
-            log::warn!("[GPU] Present mode: Mailbox (no vsync)");
+            log::info!("[GPU] Present mode: Mailbox (no vsync)");
             wgpu::PresentMode::Mailbox
         } else {
-            log::warn!("[GPU] Present mode: Fifo (V-Sync capped at compositor rate)");
+            log::info!("[GPU] Present mode: Fifo (V-Sync capped at compositor rate)");
             wgpu::PresentMode::Fifo
         };
 
@@ -2506,6 +2517,9 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             pipeline_cache,
             bloom_enabled: true,
             volumetric_enabled: false,
+            path_geometry_cache: lru::LruCache::new(NonZeroUsize::new(64).unwrap()),
+            path_hash_counter: 0,
+            path_identity_cache: std::collections::HashMap::new(),
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
             color_blind_pipeline,

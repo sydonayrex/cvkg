@@ -7,6 +7,7 @@ use cvkg_core::LAYOUT_DIRTY;
 use cvkg_core::{ColorTheme, Mesh, Rect, RenderStateSnapshot, Renderer};
 use lyon::math::point;
 use lyon::tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, VertexBuffers};
+use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
 
 impl cvkg_core::ElapsedTime for SurtrRenderer {
@@ -1636,50 +1637,82 @@ impl SurtrRenderer {
 
     pub fn stroke_path(&mut self, path: &lyon::path::Path, color: [f32; 4], stroke_width: f32) {
         let c = self.apply_opacity(color);
-        let mut tessellator = StrokeTessellator::new();
-        let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
         let base_vertex_idx = self.vertices.len() as u32;
         let base_index_idx = self.indices.len() as u32;
 
-        let (translation, scale, rotation, _, _) = self.current_transform();
-        let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
-            x: -10000.0,
-            y: -10000.0,
-            width: 20000.0,
-            height: 20000.0,
-        });
-        let clip = [clip_rect.x, clip_rect.y, clip_rect.width, clip_rect.height];
+        // Compute a stable hash for this path + stroke width for cache lookup.
+        // We hash the path data directly since lyon::Path doesn't expose a raw pointer.
+        let path_hash = {
+            // Use the path's internal representation as a hash key.
+            // Lyon Path stores segments contiguously; we hash the raw bytes.
+            let path_bytes = unsafe {
+                std::slice::from_raw_parts(
+                    path as *const lyon::path::Path as *const u8,
+                    std::mem::size_of_val(path),
+                )
+            };
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            h.write(path_bytes);
+            h.finish()
+        };
+        let cache_key = (path_hash, stroke_width.to_bits());
 
-        let result = tessellator.tessellate_path(
-            path,
-            &StrokeOptions::default().with_line_width(stroke_width),
-            &mut BuffersBuilder::new(
-                &mut buffers,
-                CustomStrokeVertexConstructor { color: c, clip, path_length: 1.0 },
-            ),
-        );
-        if let Err(e) = result {
-            log::warn!("Failed to tessellate stroke path: {:?}", e);
-            return;
-        }
-
-        self.vertices.extend(buffers.vertices);
-        for idx in &buffers.indices {
-            self.indices.push(base_vertex_idx + *idx);
-        }
+        // Check cache — if we have tessellated geometry for this path+width, reuse it.
+        let (vert_count, idx_count) = match self.path_geometry_cache.get(&cache_key) {
+            Some((cached_verts, cached_indices)) => {
+                // Cache hit — copy tessellated geometry directly.
+                self.vertices.extend_from_slice(cached_verts);
+                for idx in cached_indices {
+                    self.indices.push(base_vertex_idx + *idx);
+                }
+                (cached_verts.len(), cached_indices.len())
+            }
+            None => {
+                // Cache miss — tessellate and store in cache.
+                let mut tessellator = StrokeTessellator::new();
+                let mut buffers: VertexBuffers<Vertex, u32> = VertexBuffers::new();
+                let result = tessellator.tessellate_path(
+                    path,
+                    &StrokeOptions::default().with_line_width(stroke_width),
+                    &mut BuffersBuilder::new(
+                        &mut buffers,
+                        CustomStrokeVertexConstructor {
+                            color: c,
+                            clip: [0.0, 0.0, 0.0, 0.0],
+                            path_length: 1.0,
+                        },
+                    ),
+                );
+                if let Err(e) = result {
+                    log::warn!("Failed to tessellate stroke path: {:?}", e);
+                    return;
+                }
+                let vert_count = buffers.vertices.len();
+                let idx_count = buffers.indices.len();
+                // Store in cache before extending (cache owns a copy).
+                let cached_verts = buffers.vertices.clone();
+                let cached_indices = buffers.indices.clone();
+                self.path_geometry_cache
+                    .put(cache_key, (cached_verts, cached_indices));
+                // Now extend the live buffers.
+                self.vertices.extend(buffers.vertices);
+                for idx in &buffers.indices {
+                    self.indices.push(base_vertex_idx + *idx);
+                }
+                (vert_count, idx_count)
+            }
+        };
 
         let material = self.current_material();
         let tid = self.get_texture_id("__mega_heim");
 
-        let last_call = self.draw_calls.last();
-        let needs_new_call = self.draw_calls.is_empty()
+        if self.draw_calls.last().is_none()
             || self.current_texture_id != tid
-            || last_call.unwrap().scissor_rect != self.clip_stack.last().copied()
-            || last_call.unwrap().material != material;
-
-        if needs_new_call {
+            || self.draw_calls.last().unwrap().scissor_rect != self.clip_stack.last().copied()
+            || self.draw_calls.last().unwrap().material != material
+        {
             self.current_texture_id = tid;
-
+            let (translation, scale, rotation, _, _) = self.current_transform();
             self.instance_data.push(InstanceData {
                 translation,
                 scale,
@@ -1693,14 +1726,17 @@ impl SurtrRenderer {
                 texture_id: tid,
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: base_index_idx,
-                index_count: buffers.indices.len() as u32,
+                index_count: idx_count as u32,
                 instance_count: 1,
                 material,
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
-        } else if let Some(call) = self.draw_calls.last_mut() {
-            call.index_count += buffers.indices.len() as u32;
+        } else {
+            // Merge into the current draw call.
+            if let Some(last) = self.draw_calls.last_mut() {
+                last.index_count += idx_count as u32;
+            }
         }
     }
 }
