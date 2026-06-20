@@ -696,6 +696,9 @@ pub struct VNodeRenderer {
     decorative_batch: Vec<DecorativeCmd>,
     /// Phase 4.1: The node ID of the current batch VNode, if any.
     batch_node_id: Option<NodeId>,
+    /// Phase 2 fix: long-lived text engine, constructed once per VNodeRenderer.
+    /// Avoids re-parsing fonts + spawning a thread on every text shape call.
+    text_engine: cvkg_runic_text::RunicTextEngine,
 }
 
 impl Default for VNodeRenderer {
@@ -716,6 +719,11 @@ impl VNodeRenderer {
             root: None,
             decorative_batch: Vec::new(),
             batch_node_id: None,
+            text_engine: {
+                let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
+                engine.load_font_data(include_bytes!("../../cvkg-runic-text/Fonts/Jupiteroid.ttf").to_vec());
+                engine
+            },
         }
     }
 
@@ -883,8 +891,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
         align: cvkg_runic_text::TextAlign,
         overflow: cvkg_runic_text::TextOverflow,
     ) -> Option<cvkg_runic_text::ShapedText> {
-        let mut engine = cvkg_runic_text::RunicTextEngine::new();
-        engine.shape_layout(spans, max_width, align, overflow).ok()
+        // Phase 2 fix: use the long-lived text engine instead of creating a new one per call.
+        // This avoids re-parsing fonts + spawning a thread on every text shape call.
+        self.text_engine.shape_layout(spans, max_width, align, overflow).ok()
     }
 
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
