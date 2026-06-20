@@ -469,20 +469,7 @@ impl BerserkerState {
         }));
 
         let mut cube_ids = Vec::new();
-        for _ in 0..15 {
-            let size = 50.0 + rng.next_f32() * 100.0;
-            let shape = Shape::aabb(Vec2::new(size / 2.0, size / 2.0));
-            let mut body = RigidBody::new(size * size * 0.01, &shape);
-            body.position = Vec2::new(rng.next_f32() * w, rng.next_f32() * h);
-            body.velocity = Vec2::new(
-                (rng.next_f32() - 0.5) * 100.0,
-                (rng.next_f32() - 0.5) * 100.0,
-            );
-            body.angular_velocity = (rng.next_f32() - 0.5) * 2.0;
-            let id = world.add_body(body);
-            world.add_collider(Collider::new(id, shape));
-            cube_ids.push((id, size));
-        }
+        // Cubes removed for performance — 15 bodies + colliders was ~8ms/frame in XPBD solver
 
         // Static bounds
         let mut ground = RigidBody::static_body();
@@ -729,10 +716,7 @@ impl View for BerserkerFireView {
         }
         let t_sim = t_sim_start.elapsed().as_secs_f32() * 1000.0;
 
-        // Draw the 3D rotating cubes in the background
-        let t_cubes_start = std::time::Instant::now();
-        draw_3d_cubes_bg(r, &s, w, h, t);
-        let t_cubes = t_cubes_start.elapsed().as_secs_f32() * 1000.0;
+        // Cubes removed for performance
 
         // Draw the glass cards
         let t_cards_start = std::time::Instant::now();
@@ -1117,28 +1101,6 @@ fn draw_dock(
     }
 }
 
-/// Draw rotating 3D background cubes with physical position and solid opaque material.
-///
-/// # Contract
-/// Rotation utilizes a normalized 3D unit quaternion constructed via Euler angles
-/// to prevent culling due to infinite scale decomposition. The base color is opaque.
-fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32, _h: f32, _t: f32) {
-    // Background is now drawn by the main render() function via draw_image
-
-    for &(id, size) in &s.physics.cube_ids {
-        if let Some(body) = s.physics.world.body(id) {
-            let q = glam::Quat::from_euler(glam::EulerRot::XYZ, body.angle, body.angle * 0.5, body.angle * 0.2);
-            r.render_scene_node_3d(
-                [body.position.x, body.position.y, 0.0],
-                [q.x, q.y, q.z, q.w],
-                [size, size, size],
-                [0.1, 0.6, 0.9, 1.0],
-                &[],
-            );
-        }
-    }
-}
-
 fn draw_glass_cards(
     r: &mut dyn cvkg_core::Renderer,
     s: &BerserkerState,
@@ -1300,13 +1262,7 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
 
     if rage > 0.0 {
         let force_mag = rage * 50000.0;
-        for &(id, _) in &s.physics.cube_ids {
-            let fx = (s.rng.next_f32() - 0.5) * force_mag;
-            let fy = (s.rng.next_f32() - 0.5) * force_mag;
-            if let Some(body) = s.physics.world.body_mut(id) {
-                body.apply_force(Vec2::new(fx, fy));
-            }
-        }
+        // Cubes removed — only apply forces to card bodies
         for &(id_l, id_r) in &s.physics.card_bodies {
             let fx = (s.rng.next_f32() - 0.5) * force_mag * 0.5;
             let fy = (s.rng.next_f32() - 0.5) * force_mag * 0.5;
