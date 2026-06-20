@@ -2903,7 +2903,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 // Non-blocking poll: only read if data is already available
                 // This avoids a GPU sync stall that costs ~10ms per frame
                 if self.device.poll(wgpu::PollType::Poll).is_ok() {
-                    if let Ok(()) = rx.try_recv() {
+                    if let Ok(Ok(())) = rx.try_recv() {
                         let data = slice.get_mapped_range();
                         let timestamps: [u64; 2] = bytemuck::cast_slice(&data).try_into().unwrap_or([0, 0]);
                         drop(data);
