@@ -1180,6 +1180,10 @@ fn draw_ragdoll_dummy(
     _h: f32,
     rage: f32,
 ) {
+    // Don't draw ragdoll when no rage — avoids visible orange/red rectangles at origin
+    if rage <= 0.0 {
+        return;
+    }
     s.anim.bridge.update(&s.physics.world);
     let transforms = s.anim.bridge.physics_transforms().to_vec();
     s.anim.blender.set_physics(&transforms);
