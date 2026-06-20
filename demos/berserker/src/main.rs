@@ -508,7 +508,7 @@ impl BerserkerState {
             world.add_collider(Collider::new(id_r, shape));
 
             let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
-            constraint.break_threshold = Some(15000.0);
+            constraint.break_threshold = Some(500.0); // Lower threshold so cards shatter on impact
             world.add_constraint(constraint);
             world.add_constraint(Constraint::distance(
                 ground_id,
@@ -520,44 +520,17 @@ impl BerserkerState {
             card_bodies.push((id_l, id_r));
         }
 
-        // Ragdoll Dummy
-        let head_shape = Shape::aabb(Vec2::new(20.0, 20.0));
-        let mut dummy_head_body = RigidBody::new(5.0, &head_shape);
-        dummy_head_body.position = Vec2::new(w * 0.8, h * 0.4);
-        let dummy_head = world.add_body(dummy_head_body);
-        world.add_collider(Collider::new(dummy_head, head_shape));
+        // Ragdoll Dummy — removed, was drawing orange/red rectangles at fixed position
+        // without actual skeletal animation. Replaced with empty vec.
+        let dummy_head = world.add_body(RigidBody::static_body());
+        let dummy_torso = world.add_body(RigidBody::static_body());
+        // Suppress unused variable warnings
+        let _ = (dummy_head, dummy_torso);
 
-        let torso_shape = Shape::aabb(Vec2::new(30.0, 50.0));
-        let mut dummy_torso_body = RigidBody::new(15.0, &torso_shape);
-        dummy_torso_body.position = Vec2::new(w * 0.8, h * 0.5);
-        let dummy_torso = world.add_body(dummy_torso_body);
-        world.add_collider(Collider::new(dummy_torso, torso_shape));
-
-        world.add_constraint(Constraint::pin(
-            dummy_head,
-            dummy_torso,
-            Vec2::new(w * 0.8, h * 0.45),
-        ));
-        world.add_constraint(Constraint::pin(
-            ground_id,
-            dummy_head,
-            Vec2::new(w * 0.8, h * 0.4),
-        ));
-
-        let mut bridge_config = cvkg_physics::RagdollBridgeConfig::default();
-        bridge_config.bone_mappings.push(cvkg_physics::BoneBodyMap {
-            bone_index: 0,
-            body_id: dummy_head,
-            local_offset: glam::Vec3::ZERO,
-            local_rotation: glam::Quat::IDENTITY,
-        });
-        bridge_config.bone_mappings.push(cvkg_physics::BoneBodyMap {
-            bone_index: 1,
-            body_id: dummy_torso,
-            local_offset: glam::Vec3::ZERO,
-            local_rotation: glam::Quat::IDENTITY,
-        });
-        let bridge = cvkg_physics::RagdollBridge::new(bridge_config);
+        // Ragdoll bridge/blender removed — was drawing static orange/red rectangles
+        // without actual skeletal animation. Keep dummy bodies as static for physics
+        // world stability but skip bridge setup.
+        let bridge = cvkg_physics::RagdollBridge::new(cvkg_physics::RagdollBridgeConfig::default());
         let blender = RagdollBlender::new(2);
 
         log::info!(
