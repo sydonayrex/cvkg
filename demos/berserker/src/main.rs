@@ -1358,12 +1358,13 @@ fn draw_berserker_fire(
 
     // --- Outer heat haze glow ---
     // Wide ellipse elongated in the flame direction.
-    let haze_rx = 80.0 + tail_len * 0.3;
-    let haze_ry = 130.0 + tail_len * 0.6;
+    // Scaled down from 80x130 to ~12x18 for a ~20px fireball.
+    let haze_rx = 12.0 + tail_len * 0.05;
+    let haze_ry = 18.0 + tail_len * 0.1;
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx + flame_nx * 20.0 - haze_rx,
-            y: cy + flame_ny * 20.0 - haze_ry,
+            x: cx + flame_nx * 3.0 - haze_rx,
+            y: cy + flame_ny * 3.0 - haze_ry,
             width: haze_rx * 2.0,
             height: haze_ry * 2.0,
         },
@@ -1372,12 +1373,12 @@ fn draw_berserker_fire(
     );
 
     // --- Middle flame corona ---
-    let corona_rx = 50.0 + tail_len * 0.2;
-    let corona_ry = 85.0 + tail_len * 0.4;
+    let corona_rx = 8.0 + tail_len * 0.03;
+    let corona_ry = 14.0 + tail_len * 0.06;
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx + flame_nx * 15.0 - corona_rx,
-            y: cy + flame_ny * 15.0 - corona_ry,
+            x: cx + flame_nx * 2.0 - corona_rx,
+            y: cy + flame_ny * 2.0 - corona_ry,
             width: corona_rx * 2.0,
             height: corona_ry * 2.0,
         },
@@ -1404,22 +1405,22 @@ fn draw_berserker_fire(
         color:    [f32; 4],
     }
     let tongues = [
-        TongueDef { perp_off:  0.0, reach: 95.0, half_w: 22.0, phase_off: 0.0, color: [1.0, 0.96, 0.85, 0.95] },
-        TongueDef { perp_off: -18.0, reach: 78.0, half_w: 15.0, phase_off: 1.3, color: [1.0, 0.85, 0.25, 0.85] },
-        TongueDef { perp_off:  18.0, reach: 78.0, half_w: 15.0, phase_off: 2.6, color: [1.0, 0.85, 0.25, 0.85] },
-        TongueDef { perp_off: -32.0, reach: 55.0, half_w: 11.0, phase_off: 0.7, color: [1.0, 0.55, 0.08, 0.72] },
-        TongueDef { perp_off:  32.0, reach: 55.0, half_w: 11.0, phase_off: 3.9, color: [1.0, 0.55, 0.08, 0.72] },
-        TongueDef { perp_off: -44.0, reach: 34.0, half_w:  8.0, phase_off: 2.1, color: [1.0, 0.28, 0.04, 0.52] },
-        TongueDef { perp_off:  44.0, reach: 34.0, half_w:  8.0, phase_off: 4.7, color: [1.0, 0.28, 0.04, 0.52] },
+        TongueDef { perp_off:  0.0, reach: 14.0, half_w: 3.5, phase_off: 0.0, color: [1.0, 0.96, 0.85, 0.95] },
+        TongueDef { perp_off: -2.5, reach: 12.0, half_w: 2.5, phase_off: 1.3, color: [1.0, 0.85, 0.25, 0.85] },
+        TongueDef { perp_off:  2.5, reach: 12.0, half_w: 2.5, phase_off: 2.6, color: [1.0, 0.85, 0.25, 0.85] },
+        TongueDef { perp_off: -4.5, reach:  8.5, half_w: 1.8, phase_off: 0.7, color: [1.0, 0.55, 0.08, 0.72] },
+        TongueDef { perp_off:  4.5, reach:  8.5, half_w: 1.8, phase_off: 3.9, color: [1.0, 0.55, 0.08, 0.72] },
+        TongueDef { perp_off: -6.5, reach:  5.0, half_w: 1.2, phase_off: 2.1, color: [1.0, 0.28, 0.04, 0.52] },
+        TongueDef { perp_off:  6.5, reach:  5.0, half_w: 1.2, phase_off: 4.7, color: [1.0, 0.28, 0.04, 0.52] },
     ];
 
     // --- Ambient flame aura glow behind everything ---
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx - 70.0,
-            y: cy - 80.0,
-            width: 140.0,
-            height: 150.0,
+            x: cx - 12.0,
+            y: cy - 14.0,
+            width: 24.0,
+            height: 28.0,
         },
         [1.0, 0.32, 0.0, 0.65],
         [0.8, 0.08, 0.0, 0.0],
@@ -1461,8 +1462,8 @@ fn draw_berserker_fire(
         let trail_x = cx + d_x * trail_t;
         let trail_y = cy + d_y * trail_t;
         // Trail narrows and fades towards the tail tip.
-        let trail_w = 34.0 * (1.0 - trail_t * 0.7);
-        let trail_h = 34.0 * (1.0 - trail_t * 0.7);
+        let trail_w = 5.0 * (1.0 - trail_t * 0.7);
+        let trail_h = 5.0 * (1.0 - trail_t * 0.7);
         r.draw_radial_gradient(
             cvkg_core::Rect {
                 x: trail_x - trail_w * 0.5,
@@ -1478,20 +1479,20 @@ fn draw_berserker_fire(
     // --- Fireball core: hot concentric volumetric gradients ---
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx - 22.0,
-            y: cy - 26.0,
-            width: 44.0,
-            height: 52.0,
+            x: cx - 4.0,
+            y: cy - 5.0,
+            width: 8.0,
+            height: 10.0,
         },
         [1.0, 0.88, 0.45, 0.98],
         [1.0, 0.32, 0.0, 0.0],
     );
     r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx - 14.0,
-            y: cy - 18.0,
-            width: 28.0,
-            height: 36.0,
+            x: cx - 2.5,
+            y: cy - 3.0,
+            width: 5.0,
+            height: 6.0,
         },
         [1.0, 1.0, 0.92, 1.0],
         [1.0, 0.65, 0.1, 0.0],
@@ -1542,7 +1543,7 @@ fn draw_berserker_fire(
     // --- Mjolnir lightning bolt: fires every ~20ms ---
     if ((t * 1000.0) as u32).is_multiple_of(20) {
         let angle = (t * 5.0) % 6.28;
-        let dist = 300.0;
+        let dist = 45.0;
         r.draw_mjolnir_bolt(
             [cx, cy],
             [cx + angle.cos() * dist, cy + angle.sin() * dist],
