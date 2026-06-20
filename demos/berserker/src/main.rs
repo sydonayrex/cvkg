@@ -1295,8 +1295,8 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
         }
     }
 
-    // Step Navier-Stokes simulation
-    s.fluid.step(dt, 0.0001, 0.0001);
+    // Navier-Stokes fluid simulation removed for performance.
+    // Particles now use simple velocity-based advection without fluid coupling.
 
     if rage > 0.0 {
         let force_mag = rage * 50000.0;
@@ -1343,16 +1343,16 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
         }
     }
 
-    // Fast particle update and advection along the fluid grid flow
+    // Fast particle update — simple drag + buoyancy, no fluid coupling
     let mut i = s.particles.len();
     while i > 0 {
         i -= 1;
         let p = &mut s.particles[i];
         p.life -= dt;
-        
-        let f_vel = s.fluid.get_velocity(p.pos[0], p.pos[1], w, h);
-        p.vel[0] = p.vel[0] * 0.82 + f_vel[0] * 0.18;
-        p.vel[1] = p.vel[1] * 0.82 + f_vel[1] * 0.18;
+
+        // Simple drag + upward buoyancy
+        p.vel[0] *= 0.82;
+        p.vel[1] = p.vel[1] * 0.82 - 30.0 * dt;
 
         p.pos[0] += p.vel[0] * dt;
         p.pos[1] += p.vel[1] * dt;
@@ -1362,7 +1362,7 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     }
 }
 
-/// Draw the fireball with directional Navier-Stokes influenced flame tongues.
+/// Draw the fireball with directional flame tongues.
 ///
 /// CONTRACT: `s.flame_x/y` must be pre-updated by `update_berserker_simulation` before calling.
 /// The flame is shaped as a teardrop/tongue pointing opposite the movement direction,
