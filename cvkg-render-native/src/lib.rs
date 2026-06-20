@@ -1227,6 +1227,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // This eliminates two extra lock/unlock cycles per frame.
                     let cpu_draw_start = std::time::Instant::now();
                     let mut gpu = gpu_arc.lock().unwrap_or_else(|p| p.into_inner());
+                    let gpu_lock_time = cpu_draw_start.elapsed().as_secs_f32() * 1000.0;
 
                     // Update mouse position
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
@@ -1239,13 +1240,19 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     // Begin frame
                     let encoder = gpu.begin_frame(id);
+                    let begin_frame_time = cpu_draw_start.elapsed().as_secs_f32() * 1000.0 - gpu_lock_time;
 
                     // Render pass: publish pointer, draw, clear pointer
                     {
                         let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
+                        let render_start = std::time::Instant::now();
                         self.view.render(&mut renderer, content_rect);
+                        let render_time = render_start.elapsed().as_secs_f32() * 1000.0;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
+                        if render_time > 5.0 {
+                            log::warn!("[Native] view.render() took {:.2}ms (gpu_lock={:.2}ms, begin_frame={:.2}ms)", render_time, gpu_lock_time, begin_frame_time);
+                        }
                     }
                     let cpu_draw_end = std::time::Instant::now();
                     cvkg_core::LayoutCache::clear_layout_budget_deadline();
