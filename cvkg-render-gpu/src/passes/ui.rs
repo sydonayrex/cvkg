@@ -120,7 +120,7 @@ impl KvasirNode for UINode {
             p.draw_indexed(
                 call.index_start..call.index_start + call.index_count,
                 0,
-                call.instance_start..call.instance_start + 1,
+                call.instance_start..call.instance_start + call.instance_count,
             );
         }
     }

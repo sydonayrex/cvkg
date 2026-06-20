@@ -2825,8 +2825,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         self.svg.clear_filter_batches();
         self.shared_elements.clear();
         self.current_texture_id = None;
-        self.opacity_stack.clear();
-        self.opacity_stack.push(1.0);
+        self.opacity_stack = vec![1.0];
         self.clip_stack.clear();
         self.slice_stack.clear();
         self.transform_stack.clear();
@@ -3899,23 +3898,11 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             glass_intensity: 1.0,
         };
 
-        // CRITICAL FIX: Only break batch on material/scissor/texture state changes.
-        // Transform (translation/scale/rotation) is per-instance data.
-        let last_call = self.draw_calls.last();
-        let needs_new_call = self.draw_calls.is_empty()
+        if self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
-            || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().material != Self::resolve_material_with_context(material_id, &self.current_draw_material)
-            || {
-                let last_material = last_call.unwrap().material;
-                let current_material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
-                matches!((current_material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
-
-        if needs_new_call {
+            || self.draw_calls.last().unwrap().scissor_rect != scissor
+            || self.instance_data.last() != Some(&current_instance_data)
+        {
             self.current_texture_id = texture_id;
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
@@ -3924,17 +3911,10 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
                 index_count: 0,
-                instance_count: 1,
                 material: Self::resolve_material_with_context(material_id, &self.current_draw_material),
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
-        } else {
-            // Same batch - add instance data and increment instance count
-            self.instance_data.push(current_instance_data);
-            if let Some(call) = self.draw_calls.last_mut() {
-                call.instance_count += 1;
-            }
         }
 
         let uvs = [
@@ -4100,22 +4080,11 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         // Batching: check if we need to start a new DrawCall
         // With Texture Array, we no longer need to break batches when the texture changes,
         // as long as they are all part of the same array bind group (Group 0).
-        // CRITICAL FIX: Only break batch on material/scissor/blur/glass state changes.
-        // Transform (translation/scale/rotation) is per-instance data and should NOT
-        // break the batch - multiple instances with different transforms can share a draw call.
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || last_call.unwrap().scissor_rect != scissor
             || last_call.unwrap().material != material
-            || last_call.unwrap().texture_id != self.current_texture_id
-            || {
-                // Check if glass/blur state changed (these require pipeline changes)
-                let last_material = last_call.unwrap().material;
-                matches!((material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || self.instance_data.last() != Some(&current_instance_data);
 
         if needs_new_call {
             self.current_texture_id = Some(0); // All textures are now in the binding array at Group 0
@@ -4126,17 +4095,10 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
                 index_count: 0,
-                instance_count: 1,
                 material,
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
-        } else {
-            // Same batch - add instance data and increment instance count
-            self.instance_data.push(current_instance_data);
-            if let Some(call) = self.draw_calls.last_mut() {
-                call.instance_count += 1;
-            }
         }
 
         let scale = self.current_scale_factor();
@@ -4905,7 +4867,6 @@ impl SurtrRenderer {
             scissor_rect: cmd.scissor_rect,
             index_start: cmd.index_start,
             index_count: cmd.index_count,
-            instance_count: 1,
             material,
             target_id,
             instance_start: cmd.instance_id,
@@ -5568,20 +5529,12 @@ impl SurtrRenderer {
             ior_override: 0.0,
             glass_intensity: 1.0,
         };
-        // CRITICAL FIX: Only break batch on material/scissor/texture state changes.
-        // Transform (translation/scale/rotation) is per-instance data.
         let last_call = renderer.draw_calls.last();
         let needs_new_call = renderer.draw_calls.is_empty()
             || renderer.current_texture_id != texture_id
             || last_call.unwrap().scissor_rect != renderer.clip_stack.last().copied()
             || last_call.unwrap().material != material
-            || {
-                let last_material = last_call.unwrap().material;
-                matches!((material, last_material),
-                    (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
-                     cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
-                    if a != d || b != e || c != f)
-            };
+            || renderer.instance_data.last() != Some(&current_instance_data);
 
         if needs_new_call {
             renderer.current_texture_id = texture_id;
@@ -5592,17 +5545,12 @@ impl SurtrRenderer {
                 scissor_rect: renderer.clip_stack.last().copied(),
                 index_start: (renderer.indices.len() - index_count as usize) as u32,
                 index_count,
-                instance_count: 1,
                 material,
                 instance_start: (renderer.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
-        } else {
-            // Same batch - add instance data and increment instance count
-            renderer.instance_data.push(current_instance_data);
-            if let Some(call) = renderer.draw_calls.last_mut() {
-                call.instance_count += 1;
-            }
+        } else if let Some(call) = renderer.draw_calls.last_mut() {
+            call.index_count += index_count;
         }
     }
 

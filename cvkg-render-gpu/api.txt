@@ -229,28 +229,28 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn gungnir(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
-        // Single draw call via SDF glow material instead of 4 additive rects
-        let margin = radius;
-        let glow_rect = Rect {
-            x: rect.x - margin,
-            y: rect.y - margin,
-            width: rect.width + 2.0 * margin,
-            height: rect.height + 2.0 * margin,
-        };
-        let glow_color = [color[0], color[1], color[2], intensity * 0.3];
-        self.fill_rect_with_full_params(
-            glow_rect,
-            self.apply_opacity(glow_color),
-            material_id::DROP_SHADOW,
-            None,
-            8.0,
-            Rect {
-                x: margin,
-                y: radius,
-                width: 0.0,
-                height: 0.0,
-            },
-        );
+        // Create neon glow effect using additive blending
+        // This renders a glowing aura around the element
+        let center_x = rect.x + rect.width * 0.5;
+        let center_y = rect.y + rect.height * 0.5;
+        let max_dim = rect.width.max(rect.height) * 0.5 + radius;
+
+        // Draw expanding glow layers (reduced from 8 to 4 layers, intensity / 8 for subtler effect)
+        for i in 0..4 {
+            let alpha = intensity / (i as f32 + 1.0) * 0.08;
+            let glow_color = [color[0], color[1], color[2], alpha];
+            self.fill_rect_with_mode(
+                Rect {
+                    x: center_x - max_dim - i as f32 * 2.0,
+                    y: center_y - max_dim - i as f32 * 2.0,
+                    width: max_dim * 2.0 + i as f32 * 4.0,
+                    height: max_dim * 2.0 + i as f32 * 4.0,
+                },
+                glow_color,
+                8, // Mode for additive blending
+                None,
+            );
+        }
     }
 
     /// Soft glow variant -- half the intensity of gungnir().
@@ -291,19 +291,51 @@ impl cvkg_core::Renderer for SurtrRenderer {
 
     fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32) {
         let c = self.apply_opacity(color);
-        // Single draw call via SDF stroke material instead of 4 edge bars
-        self.fill_rect_with_full_params(
-            rect,
-            c,
-            material_id::SQUIRCLE_STROKE,
-            None,
-            0.0, // radius = 0 for sharp rect corners
+        let hw = stroke_width;
+        // Top, bottom, left, right edge bars
+        self.fill_rect_with_mode(
             Rect {
-                x: stroke_width,
-                y: 0.0,
-                width: 0.0,
-                height: 0.0,
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: hw,
             },
+            c,
+            1,
+            None,
+        );
+        self.fill_rect_with_mode(
+            Rect {
+                x: rect.x,
+                y: rect.y + rect.height - hw,
+                width: rect.width,
+                height: hw,
+            },
+            c,
+            1,
+            None,
+        );
+        self.fill_rect_with_mode(
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: hw,
+                height: rect.height,
+            },
+            c,
+            1,
+            None,
+        );
+        self.fill_rect_with_mode(
+            Rect {
+                x: rect.x + rect.width - hw,
+                y: rect.y,
+                width: hw,
+                height: rect.height,
+            },
+            c,
+            1,
+            None,
         );
     }
 
@@ -1216,7 +1248,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
                 index_count: mesh.indices.len() as u32,
-                instance_count: 1,
                 material: cvkg_core::DrawMaterial::Opaque,
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
@@ -1273,7 +1304,6 @@ impl cvkg_core::Renderer for SurtrRenderer {
             scissor_rect: self.clip_stack.last().copied(),
             index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
             index_count: mesh.indices.len() as u32,
-            instance_count: 1,
             material: cvkg_core::DrawMaterial::Opaque,
             instance_start: (self.instance_data.len() - 1) as u32,
             draw_order: 0,
@@ -1691,7 +1721,6 @@ impl SurtrRenderer {
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: base_index_idx,
                 index_count: buffers.indices.len() as u32,
-                instance_count: 1,
                 material,
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
@@ -1836,14 +1865,6 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
         self.telemetry.draw_calls = self.draw_calls.len() as u32;
         self.telemetry.vertices = self.vertices.len() as u32;
         self.frame_rendered = true;
-
-        // Performance diagnostic: log draw call count
-        log::debug!(
-            "[Perf] draw_calls={} vertices={} instances={}",
-            self.draw_calls.len(),
-            self.vertices.len(),
-            self.instance_data.len()
-        );
     }
 
     fn end_frame(&mut self, encoder: wgpu::CommandEncoder) {

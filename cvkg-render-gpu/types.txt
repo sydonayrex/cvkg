@@ -116,10 +116,6 @@ pub(crate) struct DrawCall {
     pub scissor_rect: Option<Rect>,
     pub index_start: u32,
     pub index_count: u32,
-    /// Number of instances in this draw call. For instanced rendering,
-    /// multiple instances can share the same vertex/index buffers but
-    /// have different instance data (position, etc.).
-    pub instance_count: u32,
     /// Material routing tag -- determines which pass this draw call is routed to
     /// in the multi-pass Backdrop Capture pipeline.
     pub material: cvkg_core::DrawMaterial,

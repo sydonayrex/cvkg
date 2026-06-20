@@ -185,7 +185,7 @@ impl KvasirNode for GeometryNode {
                 p.draw_indexed(
                     call.index_start..call.index_start + call.index_count,
                     0,
-                    call.instance_start..call.instance_start + 1,
+                    call.instance_start..call.instance_start + call.instance_count,
                 );
             }
             log::trace!(
