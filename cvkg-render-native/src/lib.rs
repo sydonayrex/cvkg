@@ -1470,11 +1470,16 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         )
                                         .map(|(id, _)| id)
                                     });
-                                // Verify the cached target is the same logical node,
-                                // not just a coincidentally-numbered one after a rebuild.
+                                // Verify the cached target is the same logical node.
+                                // When key is None, identity can't be verified reliably
+                                // (many nodes have None keys), so fall back to fresh hit-test.
                                 let target = state
                                     .active_pointer_target
                                     .filter(|target| {
+                                        if state.active_pointer_target_key.is_none() {
+                                            log::debug!("[Native] Target verification: key is None, skipping cache");
+                                            return false;
+                                        }
                                         let verified = vdom.nodes.get(target).map_or(false, |node| {
                                             let type_match = Some(&node.component_type) == state.active_pointer_target_type.as_ref();
                                             let key_match = node.key == state.active_pointer_target_key;
