@@ -1100,6 +1100,29 @@ impl cvkg_core::Renderer for VNodeRenderer {
         self.push_decorative_cmd("mjolnir_shatter", rect, props);
     }
 
+    fn render_scene_node_3d(
+        &mut self,
+        position: [f32; 3],
+        rotation: [f32; 4],
+        scale: [f32; 3],
+        color: [f32; 4],
+        _meshes: &[cvkg_core::Mesh],
+    ) {
+        let rect = cvkg_core::Rect {
+            x: position[0] - scale[0] / 2.0,
+            y: position[1] - scale[1] / 2.0,
+            width: scale[0],
+            height: scale[1],
+        };
+        self.begin_decorative(rect);
+        let mut props = HashMap::new();
+        props.insert("position".to_string(), serde_json::to_value(position).unwrap());
+        props.insert("rotation".to_string(), serde_json::to_value(rotation).unwrap());
+        props.insert("scale".to_string(), serde_json::to_value(scale).unwrap());
+        props.insert("color".to_string(), serde_json::to_value(color).unwrap());
+        self.push_decorative_cmd("render_scene_node_3d", rect, props);
+    }
+
     fn draw_mjolnir_bolt(&mut self, _from: [f32; 2], _to: [f32; 2], _color: [f32; 4]) {}
 
     fn draw_linear_gradient(
@@ -1778,7 +1801,20 @@ impl VDom {
         if proximity > 0.0 {
             // Search children in reverse (front-to-back) to maintain proper Z-ordering.
             let mut best_child_hit: Option<(NodeId, f32)> = None;
-            for child_id in node.children.iter().rev() {
+
+            // Hit test policy: if the click is outside the menu bar (y >= 28.0),
+            // evaluate DropdownOverlay last so it doesn't block sibling interactive elements.
+            let mut children_to_test = node.children.clone();
+            if y >= 28.0 {
+                if let Some(pos) = children_to_test.iter().position(|&cid| {
+                    self.nodes.get(&cid).map_or(false, |n| n.component_type == "DropdownOverlay")
+                }) {
+                    let overlay_id = children_to_test.remove(pos);
+                    children_to_test.insert(0, overlay_id);
+                }
+            }
+
+            for child_id in children_to_test.iter().rev() {
                 if let Some((hit, hit_prox)) =
                     self.hit_test_recursive(*child_id, x, y, pointer_precision)
                 {
@@ -2025,6 +2061,7 @@ impl VDom {
                             );
                             handler(event.clone());
                             processed = true;
+                            break;
                         }
                     }
                 }

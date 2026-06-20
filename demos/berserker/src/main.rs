@@ -653,17 +653,11 @@ impl View for BerserkerFireView {
             self.counters[2].get(),
             self.counters[3].get(),
         ];
-        // Also check fireball position -- it changes every frame during animation
-        let (flame_x, flame_y) = self.state.lock()
-            .map(|s| (s.flame_x, s.flame_y))
-            .unwrap_or((f32::NAN, f32::NAN));
 
         thread_local! {
             static LAST_RAGE: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
             static LAST_MENU: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
             static LAST_COUNTERS: std::cell::Cell<[u32; 4]> = const { std::cell::Cell::new([0; 4]) };
-            static LAST_FLAME_X: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
-            static LAST_FLAME_Y: std::cell::Cell<f32> = const { std::cell::Cell::new(f32::NAN) };
         }
 
         let changed = LAST_RAGE.with(|l| {
@@ -678,14 +672,6 @@ impl View for BerserkerFireView {
             let prev = l.get();
             l.set(counter_vals);
             prev != counter_vals
-        }) || LAST_FLAME_X.with(|l| {
-            let prev = l.get();
-            l.set(flame_x);
-            prev != flame_x
-        }) || LAST_FLAME_Y.with(|l| {
-            let prev = l.get();
-            l.set(flame_y);
-            prev != flame_y
         });
 
         changed
@@ -698,8 +684,14 @@ impl View for BerserkerFireView {
         let w = rect.width;
         let h = rect.height;
 
+        // Push the root VNode to establish a parent for all interactive elements and decorative batches
+        r.push_vnode(rect, "BerserkerRoot");
+
         // Draw background image (prewarmed on first frame via NativeRenderer::run assets)
+        // Push the background's depth far away to prevent depth-buffer Z-fighting with 3D/2D elements.
+        r.set_z_index(900.0);
         r.draw_image("background", cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
+        r.set_z_index(0.0);
 
         // Record telemetry data to the PerfOverlay
         let tel = r.get_telemetry();
@@ -765,6 +757,8 @@ impl View for BerserkerFireView {
 
         // Draw chrome components (no state needed)
         let t_chrome_start = std::time::Instant::now();
+        draw_corner_buttons(r, &self.counters, &self.rage, w, h);
+        draw_dock(r, &self.counters, &self.rage, w, h);
         draw_nornir_bar(
             r,
             &self.counters,
@@ -774,8 +768,6 @@ impl View for BerserkerFireView {
             w,
             h,
         );
-        draw_dock(r, &self.counters, &self.rage, w, h);
-        draw_corner_buttons(r, &self.counters, &self.rage, w, h);
         let t_chrome = t_chrome_start.elapsed().as_secs_f32() * 1000.0;
 
         if (s.last_time as u32).is_multiple_of(5) {
@@ -793,6 +785,9 @@ impl View for BerserkerFireView {
             let perf = self.perf.lock().expect("Failed to lock PerfOverlay");
             perf.render(r, rect);
         }
+
+        // Pop the root VNode
+        r.pop_vnode();
     }
 }
 
@@ -834,8 +829,8 @@ fn draw_nornir_bar(
         let (lw, lh) = r.measure_text(label, 13.0);
         let tx = x + (*width - lw) / 2.0;
         let ty = (28.0 - lh) * 0.5;
-        r.draw_text(label, tx + 1.0, ty + 1.0, 13.0, [0.0, 0.0, 0.0, 0.45]);
-        r.draw_text(label, tx, ty, 13.0, [0.9, 0.9, 0.92, 1.0]);
+        r.draw_text(label, tx + 1.0, ty + 1.0, 13.0, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text(label, tx, ty, 13.0, [0.95, 0.95, 0.98, 1.0]);
         let active_menu_clone = active_menu.clone();
         let h_closure = Arc::new(move |_| {
             let current = active_menu_clone.get();
@@ -846,8 +841,8 @@ fn draw_nornir_bar(
                 active_menu_clone.set(Some(i));
             }
         });
-        r.register_handler("pointerdown", h_closure.clone());
         r.register_handler("pointerclick", h_closure);
+        r.pop_vnode();
         x += width;
     }
 
@@ -856,16 +851,16 @@ fn draw_nornir_bar(
     let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
     let title_y = (28.0 - tlh) * 0.5;
-    r.draw_text(&title_str, title_x + 1.0, title_y + 1.0, 14.0, [0.0, 0.0, 0.0, 0.45]);
-    r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.3, 0.1, 1.0]);
+    r.draw_text(&title_str, title_x + 1.0, title_y + 1.0, 14.0, [0.0, 0.0, 0.0, 0.35]);
+    r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.35, 0.15, 1.0]);
 
     // Right-aligned, vertically centered rage meter
     let rage_str = format!("Rage: {:.0}%", _rage.get());
     let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
     let rage_y = (28.0 - rlh) * 0.5;
-    r.draw_text(&rage_str, rage_x + 1.0, rage_y + 1.0, 12.0, [0.0, 0.0, 0.0, 0.45]);
-    r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.5, 1.0]);
+    r.draw_text(&rage_str, rage_x + 1.0, rage_y + 1.0, 12.0, [0.0, 0.0, 0.0, 0.35]);
+    r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.55, 1.0]);
 
     // Render the active dropdown menu if open
     if let Some(open_idx) = active_menu.get() {
@@ -1078,8 +1073,8 @@ fn draw_dock(
         let (tw, th) = r.measure_text(icon, text_size);
         let tx = ix + (icon_size - tw) / 2.0;
         let ty = dock_rect.y + (dock_rect.height - th) / 2.0;
-        r.draw_text(icon, tx + 1.0, ty + 1.0, text_size, [0.0, 0.0, 0.0, 0.45]);
-        r.draw_text(icon, tx, ty, text_size, [0.95, 0.95, 0.98, 1.0]);
+        r.draw_text(icon, tx + 1.0, ty + 1.0, text_size, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text(icon, tx, ty, text_size, [0.98, 0.98, 1.0, 1.0]);
 
         if i < 3 {
             // Center the dot horizontally below the icon cell
@@ -1107,23 +1102,27 @@ fn draw_dock(
                 c_signal.get()
             );
         });
-        r.register_handler("pointerdown", h_closure.clone());
         r.register_handler("pointerclick", h_closure);
         r.pop_vnode();
     }
 }
 
+/// Draw rotating 3D background cubes with physical position and solid opaque material.
+///
+/// # Contract
+/// Rotation utilizes a normalized 3D unit quaternion constructed via Euler angles
+/// to prevent culling due to infinite scale decomposition. The base color is opaque.
 fn draw_3d_cubes_bg(r: &mut dyn cvkg_core::Renderer, s: &BerserkerState, _w: f32, _h: f32, _t: f32) {
     // Background is now drawn by the main render() function via draw_image
 
     for &(id, size) in &s.physics.cube_ids {
         if let Some(body) = s.physics.world.body(id) {
-            let rot = [body.angle, body.angle * 0.5, body.angle * 0.2];
+            let q = glam::Quat::from_euler(glam::EulerRot::XYZ, body.angle, body.angle * 0.5, body.angle * 0.2);
             r.render_scene_node_3d(
                 [body.position.x, body.position.y, 0.0],
-                [rot[0], rot[1], rot[2], 1.0],
+                [q.x, q.y, q.z, q.w],
                 [size, size, size],
-                [0.1, 0.6, 0.9, 0.78],
+                [0.1, 0.6, 0.9, 1.0],
                 &[],
             );
         }
@@ -1169,14 +1168,14 @@ fn draw_glass_cards(
                     cx - rw / 2.0 + 1.0,
                     cy - rh / 2.0 + 1.0,
                     32.0,
-                    [0.0, 0.0, 0.0, 0.45],
+                    [0.0, 0.0, 0.0, 0.35],
                 );
                 r.draw_text(
                     runes[i % runes.len()],
                     cx - rw / 2.0,
                     cy - rh / 2.0,
                     32.0,
-                    [0.8, 0.9, 1.0, 1.0],
+                    [0.85, 0.95, 1.0, 1.0],
                 );
             } else {
                 // Card has broken apart: render two separate halves
@@ -1327,8 +1326,8 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
                     s.flame_vy * 0.15 + angle.sin() * speed - 30.0,
                 ],
                 color: [1.0, 0.3 + s.rng.next_f32() * 0.5, 0.0, 1.0],
-                life: 0.6 + s.rng.next_f32() * 0.8,
-                size: 2.0 + s.rng.next_f32() * 5.0,
+                life: 0.8 + s.rng.next_f32() * 1.0,
+                size: 3.0 + s.rng.next_f32() * 6.0,
                 is_ember: s.rng.next_f32() > 0.88,
             });
         }
@@ -1403,7 +1402,7 @@ fn draw_berserker_fire(
             width: haze_rx * 2.0,
             height: haze_ry * 2.0,
         },
-        [1.0, 0.40, 0.02, 0.55],
+        [1.0, 0.40, 0.02, 0.75],
         [0.18, 0.0, 0.0, 0.0],
     );
 
@@ -1417,7 +1416,7 @@ fn draw_berserker_fire(
             width: corona_rx * 2.0,
             height: corona_ry * 2.0,
         },
-        [1.0, 0.78, 0.18, 0.90],
+        [1.0, 0.78, 0.18, 0.95],
         [1.0, 0.30, 0.03, 0.0],
     );
 
@@ -1449,6 +1448,18 @@ fn draw_berserker_fire(
         TongueDef { perp_off:  44.0, reach: 34.0, half_w:  8.0, phase_off: 4.7, color: [1.0, 0.28, 0.04, 0.52] },
     ];
 
+    // --- Ambient flame aura glow behind everything ---
+    r.draw_radial_gradient(
+        cvkg_core::Rect {
+            x: cx - 70.0,
+            y: cy - 80.0,
+            width: 140.0,
+            height: 150.0,
+        },
+        [1.0, 0.32, 0.0, 0.65],
+        [0.8, 0.08, 0.0, 0.0],
+    );
+
     for tongue in &tongues {
         // Independent high-freq wobble per tongue in local X (side lick)
         let wobble = (phase + tongue.phase_off).sin() * tongue.half_w * 0.40
@@ -1461,16 +1472,19 @@ fn draw_berserker_fire(
         let local_y = -(tongue.reach * 0.5);
 
         // Push a transform: translate to fireball center, rotate to flame angle.
-        // fill_ellipse will then be drawn in flame-aligned local space.
+        // draw_radial_gradient will then be drawn in flame-aligned local space.
         r.push_transform([cx, cy], [1.0, 1.0], flame_angle);
-        r.fill_ellipse(
-            cvkg_core::Rect {
-                x: local_x - tongue.half_w,
-                y: local_y - tongue.reach * 0.5 * stretch,
-                width: tongue.half_w * 2.0,
-                height: tongue.reach * stretch,
-            },
+        let tongue_rect = cvkg_core::Rect {
+            x: local_x - tongue.half_w,
+            y: local_y - tongue.reach * 0.5 * stretch,
+            width: tongue.half_w * 2.0,
+            height: tongue.reach * stretch,
+        };
+        // Soft glowing flame gradient fading to transparent red/orange
+        r.draw_radial_gradient(
+            tongue_rect,
             tongue.color,
+            [1.0, 0.25, 0.0, 0.0],
         );
         r.pop_transform();
     }
@@ -1482,37 +1496,53 @@ fn draw_berserker_fire(
         let trail_x = cx + d_x * trail_t;
         let trail_y = cy + d_y * trail_t;
         // Trail narrows and fades towards the tail tip.
-        let trail_w = 30.0 * (1.0 - trail_t * 0.7);
-        let trail_h = 30.0 * (1.0 - trail_t * 0.7);
-        let alpha = 0.30 * (1.0 - trail_t);
-        r.fill_ellipse(
+        let trail_w = 34.0 * (1.0 - trail_t * 0.7);
+        let trail_h = 34.0 * (1.0 - trail_t * 0.7);
+        r.draw_radial_gradient(
             cvkg_core::Rect {
                 x: trail_x - trail_w * 0.5,
                 y: trail_y - trail_h * 0.5,
                 width: trail_w,
                 height: trail_h,
             },
-            [1.0, 0.40 + trail_t * 0.35, 0.06, alpha],
+            [1.0, 0.52, 0.12, 0.75 * (1.0 - trail_t)],
+            [0.9, 0.18, 0.0, 0.0],
         );
     }
 
-    // --- Fireball core: one cohesive flaming ellipse ---
-    r.fill_ellipse(
+    // --- Fireball core: hot concentric volumetric gradients ---
+    r.draw_radial_gradient(
         cvkg_core::Rect {
-            x: cx - 18.0,
-            y: cy - 22.0,
-            width: 36.0,
-            height: 44.0,
+            x: cx - 22.0,
+            y: cy - 26.0,
+            width: 44.0,
+            height: 52.0,
         },
-        [1.0, 0.72, 0.20, 0.95],
+        [1.0, 0.88, 0.45, 0.98],
+        [1.0, 0.32, 0.0, 0.0],
+    );
+    r.draw_radial_gradient(
+        cvkg_core::Rect {
+            x: cx - 14.0,
+            y: cy - 18.0,
+            width: 28.0,
+            height: 36.0,
+        },
+        [1.0, 1.0, 0.92, 1.0],
+        [1.0, 0.65, 0.1, 0.0],
     );
 
     // --- Particles (embers and sparks) ---
+    // Render in two separate loops grouped by shape to allow perfect draw call batching
+    // and avoid CPU-heavy text shaping for embers.
+
+    // 1. Draw all standard circular sparks (fill_ellipse)
     for p in &s.particles {
+        if p.is_ember {
+            continue;
+        }
         let heat = ((p.pos[0] + p.pos[1]) * 0.03 + t * 7.0).sin() * 0.5 + 0.5;
-        let p_color = if p.is_ember {
-            [1.0, 0.55 + heat * 0.3, 0.10, p.life.min(1.0)]
-        } else if heat > 0.66 {
+        let p_color = if heat > 0.66 {
             [0.55, 0.82, 1.0, p.life.min(1.0)]
         } else if heat > 0.33 {
             [1.0, 0.88, 0.45, p.life.min(1.0)]
@@ -1525,11 +1555,23 @@ fn draw_berserker_fire(
             width: p.size,
             height: p.size,
         };
-        if p.is_ember {
-            r.draw_text("*", p.pos[0], p.pos[1], (p.size * 2.0).round(), p_color);
-        } else {
-            r.fill_ellipse(rect, p_color);
+        r.fill_ellipse(rect, p_color);
+    }
+
+    // 2. Draw all ember particles as fast-path squares (fill_rect)
+    for p in &s.particles {
+        if !p.is_ember {
+            continue;
         }
+        let heat = ((p.pos[0] + p.pos[1]) * 0.03 + t * 7.0).sin() * 0.5 + 0.5;
+        let p_color = [1.0, 0.55 + heat * 0.3, 0.10, p.life.min(1.0)];
+        let rect = cvkg_core::Rect {
+            x: p.pos[0],
+            y: p.pos[1],
+            width: p.size,
+            height: p.size,
+        };
+        r.fill_rect(rect, p_color);
     }
 
     // --- Mjolnir lightning bolt: fires every ~20ms ---
@@ -1572,7 +1614,7 @@ fn draw_corner_buttons(
         let (cw, ch) = r.measure_text(corner.2, 32.0);
         let text_x = corner.0 + (btn_size - cw) / 2.0;
         let text_y = corner.1 + (btn_size - ch) / 2.0;
-        r.draw_text(corner.2, text_x + 1.0, text_y + 1.0, 32.0, [0.0, 0.0, 0.0, 0.45]);
+        r.draw_text(corner.2, text_x + 1.0, text_y + 1.0, 32.0, [0.0, 0.0, 0.0, 0.35]);
         r.draw_text(corner.2, text_x, text_y, 32.0, [1.0, 1.0, 1.0, 1.0]);
 
         let val = counters[i].get();
@@ -1580,8 +1622,8 @@ fn draw_corner_buttons(
         let (_vw, vh) = r.measure_text(&val_str, 24.0);
         let value_x = corner.0 + btn_size + 10.0;
         let value_y = corner.1 + (btn_size - vh) / 2.0;
-        r.draw_text(&val_str, value_x + 1.0, value_y + 1.0, 24.0, [0.0, 0.0, 0.0, 0.45]);
-        r.draw_text(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.5, 1.0]);
+        r.draw_text(&val_str, value_x + 1.0, value_y + 1.0, 24.0, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.55, 1.0]);
 
         let c_signal = counters[i].clone();
         let r_signal = rage.clone();
@@ -1590,7 +1632,6 @@ fn draw_corner_buttons(
             r_signal.set((r_signal.get() + 25.0).min(100.0));
             log::info!("Button {} clicked! Total: {}", i, c_signal.get());
         });
-        r.register_handler("pointerdown", h_closure.clone());
         r.register_handler("pointerclick", h_closure);
         r.pop_vnode();
     }
