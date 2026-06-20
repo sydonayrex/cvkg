@@ -939,7 +939,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
         // Phase 4.1: Flush decorative batch before starting a new named component.
-        self.flush_decorative_batch();
+        // NOTE: flush AFTER add_node so the batch is still on the stack when
+        // the new node looks for its parent. Without this, the batch gets popped
+        // first and the new node ends up with no parent in the VDOM tree.
         let id = self.next_id();
         let role = match name {
             "CornerButton" => "button",
@@ -966,6 +968,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
             sdf_shape: None,
         });
         self.stack.push(id);
+        // Now flush the decorative batch AFTER the node is on the stack,
+        // so the batch (if any) is popped and the new node becomes the parent.
+        self.flush_decorative_batch();
     }
 
     fn pop_vnode(&mut self) {
