@@ -750,15 +750,8 @@ impl View for BerserkerFireView {
         let t_chrome_start = std::time::Instant::now();
         draw_corner_buttons(r, &self.counters, &self.rage, w, h);
         draw_dock(r, &self.counters, &self.rage, w, h);
-        draw_nornir_bar(
-            r,
-            &self.counters,
-            &self.rage,
-            &self.active_menu,
-            &self.perf,
-            w,
-            h,
-        );
+        // Note: draw_nornir_bar is drawn LAST to ensure menu items appear above
+        // corner button counter text and other chrome elements
         let t_chrome = t_chrome_start.elapsed().as_secs_f32() * 1000.0;
 
         if (s.last_time as u32).is_multiple_of(5) {
@@ -778,6 +771,17 @@ impl View for BerserkerFireView {
             let perf = self.perf.lock().expect("Failed to lock PerfOverlay");
             perf.render(r, rect);
         }
+
+        // Draw the Nornir bar LAST so menu items always appear above corner buttons/counters
+        draw_nornir_bar(
+            r,
+            &self.counters,
+            &self.rage,
+            &self.active_menu,
+            &self.perf,
+            w,
+            h,
+        );
 
         // Pop the root VNode
         r.pop_vnode();

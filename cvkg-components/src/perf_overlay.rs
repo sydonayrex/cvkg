@@ -46,7 +46,7 @@ impl PerfOverlay {
 
     /// Show the overlay.
     pub fn show(mut self) -> Self {
-        self.visible = true;
+        self.visible = false; // Disabled by default — was causing yellow rectangle in top-left
         self
     }
 
