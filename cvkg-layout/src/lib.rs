@@ -182,6 +182,7 @@ fn taffy_distribution(dist: cvkg_core::Distribution) -> Option<taffy::JustifyCon
 }
 
 /// Taffy flex layout parameters.
+#[derive(Clone, Copy)]
 struct FlexParams {
     dir: taffy::FlexDirection,
     spacing: f32,
@@ -189,6 +190,78 @@ struct FlexParams {
     distribution: cvkg_core::Distribution,
     bounds: Rect,
     container_hash: u64,
+}
+
+/// Collect intrinsic sizes for all children without running the Taffy solver.
+/// This is the expensive part (recursively calling size_that_fits on each child),
+/// so we do it once and reuse the results for both measure and placement.
+fn collect_child_sizes(
+    subviews: &[&dyn LayoutView],
+    bounds: Rect,
+    cache: &mut LayoutCache,
+) -> (Vec<u64>, Vec<f32>, Vec<Size>) {
+    let mut sizes = Vec::with_capacity(subviews.len());
+    let mut hashes = Vec::with_capacity(subviews.len());
+    let mut flex_weights = Vec::with_capacity(subviews.len());
+
+    for child in subviews {
+        let hash = child.view_hash();
+        hashes.push(hash);
+        flex_weights.push(child.flex_weight());
+
+        let proposal = SizeProposal::new(Some(bounds.width), Some(bounds.height));
+        let cached_size = if hash != 0 {
+            cache.get_size(hash, proposal)
+        } else {
+            None
+        };
+
+        let size = match cached_size {
+            Some(sz) => sz,
+            None => {
+                let sz = with_layout_cycle_guard(hash, Size::ZERO, || {
+                    child.size_that_fits(proposal, &[], cache)
+                });
+                if hash != 0 {
+                    cache.set_size(hash, proposal, sz);
+                }
+                sz
+            }
+        };
+        if hash != 0 {
+            cache.register_parent(hash, 0); // parent registered by caller if needed
+        }
+        sizes.push(size);
+    }
+
+    (hashes, flex_weights, sizes)
+}
+
+/// Compute the natural (intrinsic) size of a flex container from child sizes,
+/// without running the Taffy solver. Used by size_that_fits to avoid a full layout.
+fn intrinsic_flex_size(dir: taffy::FlexDirection, spacing: f32, sizes: &[Size]) -> Size {
+    if sizes.is_empty() {
+        return Size::ZERO;
+    }
+    let n = sizes.len();
+    match dir {
+        taffy::FlexDirection::Row | taffy::FlexDirection::RowReverse => {
+            let total_width: f32 = sizes.iter().map(|s| s.width).sum();
+            let max_height: f32 = sizes.iter().map(|s| s.height).fold(0.0, f32::max);
+            Size {
+                width: total_width + spacing * (n.saturating_sub(1) as f32),
+                height: max_height,
+            }
+        }
+        taffy::FlexDirection::Column | taffy::FlexDirection::ColumnReverse => {
+            let max_width: f32 = sizes.iter().map(|s| s.width).fold(0.0, f32::max);
+            let total_height: f32 = sizes.iter().map(|s| s.height).sum();
+            Size {
+                width: max_width,
+                height: total_height + spacing * (n.saturating_sub(1) as f32),
+            }
+        }
+    }
 }
 
 fn compute_taffy_flex(
@@ -210,38 +283,14 @@ fn compute_taffy_flex(
         return rects;
     }
 
-    let mut sizes = Vec::with_capacity(subviews.len());
-    let mut hashes = Vec::with_capacity(subviews.len());
-    let mut flex_weights = Vec::with_capacity(subviews.len());
+    // Collect child sizes (the expensive part -- done once, reused by place_subviews).
+    let (hashes, flex_weights, sizes) = collect_child_sizes(subviews, params.bounds, cache);
 
-    for child in subviews {
-        let hash = child.view_hash();
-        hashes.push(hash);
-        flex_weights.push(child.flex_weight());
-
-        let proposal = SizeProposal::new(Some(params.bounds.width), Some(params.bounds.height));
-        let cached_size = if hash != 0 {
-            cache.get_size(hash, proposal)
-        } else {
-            None
-        };
-
-        let size = match cached_size {
-            Some(sz) => sz,
-            None => {
-                let sz = with_layout_cycle_guard(hash, Size::ZERO, || {
-                    child.size_that_fits(proposal, &[], cache)
-                });
-                if hash != 0 {
-                    cache.set_size(hash, proposal, sz);
-                }
-                sz
-            }
-        };
-        if params.container_hash != 0 && hash != 0 {
+    // Register parent relationships for invalidation propagation.
+    for &hash in &hashes {
+        if hash != 0 && params.container_hash != 0 {
             cache.register_parent(hash, params.container_hash);
         }
-        sizes.push(size);
     }
 
     let engine = TaffyLayoutEngine::get_or_insert_engine(cache);
@@ -527,26 +576,10 @@ impl LayoutView for HStack {
             width: proposal.width.unwrap_or(10000.0),
             height: proposal.height.unwrap_or(10000.0),
         };
-        let rects = Self::compute_layout_incremental(
-            self.spacing,
-            self.alignment,
-            self.distribution,
-            bounds,
-            self.view_hash(),
-            subviews,
-            cache,
-        );
-
-        let mut max_w = 0.0f32;
-        let mut max_h = 0.0f32;
-        for r in rects {
-            max_w = max_w.max(r.x + r.width);
-            max_h = max_h.max(r.y + r.height);
-        }
-        Size {
-            width: max_w,
-            height: max_h,
-        }
+        // Fast path: collect child sizes and compute intrinsic size without Taffy solve.
+        // The full Taffy solve happens only in place_subviews.
+        let (_, _, sizes) = collect_child_sizes(subviews, bounds, cache);
+        intrinsic_flex_size(taffy::FlexDirection::Row, self.spacing, &sizes)
     }
 
     fn place_subviews(
@@ -644,26 +677,9 @@ impl LayoutView for VStack {
             width: proposal.width.unwrap_or(10000.0),
             height: proposal.height.unwrap_or(10000.0),
         };
-        let rects = Self::compute_layout_incremental(
-            self.spacing,
-            self.alignment,
-            self.distribution,
-            bounds,
-            self.view_hash(),
-            subviews,
-            cache,
-        );
-
-        let mut max_w = 0.0f32;
-        let mut max_h = 0.0f32;
-        for r in rects {
-            max_w = max_w.max(r.x + r.width);
-            max_h = max_h.max(r.y + r.height);
-        }
-        Size {
-            width: max_w,
-            height: max_h,
-        }
+        // Fast path: collect child sizes and compute intrinsic size without Taffy solve.
+        let (_, _, sizes) = collect_child_sizes(subviews, bounds, cache);
+        intrinsic_flex_size(taffy::FlexDirection::Column, self.spacing, &sizes)
     }
 
     fn place_subviews(

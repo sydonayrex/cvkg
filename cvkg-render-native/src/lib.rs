@@ -726,6 +726,8 @@ impl WindowManager {
             drag_button: 0,
             drag_threshold: 5.0,
             active_pointer_target: None,
+            active_pointer_pos: None,
+            active_pointer_precision: 0.0,
             is_key_focused,
             is_main,
             core_id,
@@ -808,6 +810,10 @@ pub struct WindowData {
     drag_threshold: f32,
     /// Pointer target captured on press so release/click stay stable through rebuilds.
     active_pointer_target: Option<cvkg_vdom::NodeId>,
+    /// Pointer position captured on press for fallback hit-testing.
+    active_pointer_pos: Option<[f32; 2]>,
+    /// Pointer precision captured on press for fallback hit-testing.
+    active_pointer_precision: f32,
 
     // ── Multi-window tracking ──────────────────────────────────────────────
     is_key_focused: Arc<std::sync::atomic::AtomicBool>,
@@ -1121,11 +1127,19 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     // Apply patches to the accessibility tree and the previous VDOM.
                     // When new_vdom is None (view unchanged), skip diff entirely.
                     let state_flush_start = std::time::Instant::now();
+                    let mut diff_patches = None;
                     match (new_vdom, &mut state.vdom) {
                         (Some(new_vdom), Some(prev_vdom)) => {
+                            let diff_start = std::time::Instant::now();
                             let patches = prev_vdom.diff(&new_vdom);
+                            let diff_elapsed = diff_start.elapsed();
+                            if diff_elapsed > std::time::Duration::from_millis(1) {
+                                log::warn!("[Native] VDom::diff took {:?} ({} patches)", diff_elapsed, patches.len());
+                            }
+                            diff_patches = Some(patches);
+                            let patches = diff_patches.as_ref().unwrap();
                             let mut nodes = Vec::new();
-                            for patch in &patches {
+                            for patch in patches {
                                 if let cvkg_vdom::VDomPatch::Create(node)
                                 | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
                                 {
@@ -1137,7 +1151,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 }
                             }
                             let focused_id = state.focused_node_id.map(|id| accesskit::NodeId(id.0)).unwrap_or(accesskit::NodeId(1));
-                            for patch in &patches {
+                            for patch in diff_patches.as_ref().unwrap() {
                                 if let cvkg_vdom::VDomPatch::Create(node)
                                 | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
                                 {
@@ -1156,7 +1170,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     });
                                 }
                             }
-                            prev_vdom.apply_patches(patches);
+                            prev_vdom.apply_patches(diff_patches.unwrap());
                             state.vdom = Some(new_vdom);
                         }
                         (Some(new_vdom), None) => {
@@ -1172,21 +1186,6 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let _draw_start = std::time::Instant::now();
                     let delta_time = redraw_start.duration_since(last_redraw_start).as_secs_f32();
                     let elapsed_time = redraw_start.duration_since(self.start_time).as_secs_f32();
-
-                    // Dispatch cursor events if the mouse moved since last frame
-                    let mut gpu = gpu_arc
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner());
-                    gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
-
-                    // One-time prewarm: drain any pending assets into the GPU texture atlas
-                    if let Some(assets) = self.pending_prewarm.take() {
-                        log::info!("[Native] Pre-warming {} assets on first frame", assets.len());
-                        gpu.prewarm_vram(assets);
-                    }
-
-                    // Begin frame
-                    let encoder = gpu.begin_frame(id);
 
                     // Compute safe area insets based on current window state
                     let safe_area = crate::SafeAreaInsets::for_window_state(self.state_detector.state());
@@ -1208,13 +1207,27 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         self.berserker_mode,
                         self.rage,
                     );
-                    drop(gpu);
 
-                    // Render pass: lock GPU, publish pointer, draw, unlock
+                    // Single GPU lock for the entire frame: update mouse, prewarm, begin, draw, render, submit.
+                    // This eliminates two extra lock/unlock cycles per frame.
                     let cpu_draw_start = std::time::Instant::now();
+                    let mut gpu = gpu_arc.lock().unwrap_or_else(|p| p.into_inner());
+
+                    // Update mouse position
+                    gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
+
+                    // One-time prewarm: drain any pending assets into the GPU texture atlas
+                    if let Some(assets) = self.pending_prewarm.take() {
+                        log::info!("[Native] Pre-warming {} assets on first frame", assets.len());
+                        gpu.prewarm_vram(assets);
+                    }
+
+                    // Begin frame
+                    let encoder = gpu.begin_frame(id);
+
+                    // Render pass: publish pointer, draw, clear pointer
                     {
-                        let mut gpu_guard = gpu_arc.lock().unwrap_or_else(|p| p.into_inner());
-                        let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu_guard;
+                        let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
                         self.view.render(&mut renderer, content_rect);
                         GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
@@ -1224,24 +1237,25 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     self.frame_budget.subsystem_finish(2);
 
-                    // Re-acquire to submit the frame
+                    // Submit the frame (still under the same lock)
                     let gpu_submit_start = std::time::Instant::now();
-                    let mut gpu = gpu_arc
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner());
                     let gpu_render_start = std::time::Instant::now();
                     gpu.render_frame();
                     let gpu_render_end = std::time::Instant::now();
                     gpu.end_frame(encoder);
                     let gpu_submit_end = std::time::Instant::now();
 
-                    // Always log GPU profile for performance monitoring
-                    log::info!(
-                        "[Native] GPU profile: cpu_draw={:?} gpu_render={:?} gpu_submit={:?}",
-                        cpu_draw_end.duration_since(cpu_draw_start),
-                        gpu_render_end.duration_since(gpu_render_start),
-                        gpu_submit_end.duration_since(gpu_render_end),
-                    );
+                    // GPU guard drops here, releasing the lock
+
+                    // GPU profile logging: only log every 60 frames to avoid per-frame overhead
+                    if state.frame_count % 60 == 0 {
+                        log::info!(
+                            "[Native] GPU profile: cpu_draw={:?} gpu_render={:?} gpu_submit={:?}",
+                            cpu_draw_end.duration_since(cpu_draw_start),
+                            gpu_render_end.duration_since(gpu_render_start),
+                            gpu_submit_end.duration_since(gpu_render_end),
+                        );
+                    }
 
                     // Build telemetry from this frame's timing measurements.
                     // NOTE: input_time_ms measures the inter-frame gap (time from end of last frame
@@ -1403,6 +1417,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.drag_start_pos = state.cursor_pos;
                                 state.is_dragging = false;
                                 state.drag_button = btn_id;
+                                state.active_pointer_pos = Some(state.cursor_pos);
+                                state.active_pointer_precision = 0.0;
                                 state.active_pointer_target = vdom
                                     .hit_test(state.cursor_pos[0], state.cursor_pos[1], 0.0)
                                     .map(|(id, _)| id);
@@ -1421,6 +1437,24 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             }
                             winit::event::ElementState::Released => {
                                 log::info!("[Native] Dispatching PointerUp to VDOM");
+                                let fallback_target = state
+                                    .active_pointer_pos
+                                    .and_then(|pos| {
+                                        vdom.hit_test(pos[0], pos[1], state.active_pointer_precision)
+                                            .map(|(id, _)| id)
+                                    })
+                                    .or_else(|| {
+                                        vdom.hit_test(
+                                            state.cursor_pos[0],
+                                            state.cursor_pos[1],
+                                            state.active_pointer_precision,
+                                        )
+                                        .map(|(id, _)| id)
+                                    });
+                                let target = state
+                                    .active_pointer_target
+                                    .filter(|target| vdom.nodes.contains_key(target))
+                                    .or(fallback_target);
                                 let pointer_up = cvkg_core::Event::PointerUp {
                                     x: state.cursor_pos[0],
                                     y: state.cursor_pos[1],
@@ -1441,14 +1475,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     barrel_rotation: None,
                                     pointer_precision: 0.0,
                                 };
-                                if let Some(target) = state.active_pointer_target {
+                                if let Some(target) = target {
                                     vdom.dispatch_event_to_target(target, pointer_up);
                                 } else {
                                     vdom.dispatch_event(pointer_up);
                                 }
                                 // Only dispatch PointerClick if we didn't drag
                                 if !state.is_dragging {
-                                    if let Some(target) = state.active_pointer_target {
+                                    if let Some(target) = target {
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
                                         vdom.dispatch_event(pointer_click);
@@ -1457,6 +1491,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 // Reset drag state
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
+                                state.active_pointer_pos = None;
                             }
                         }
                         state.window.request_redraw();
@@ -1499,6 +1534,8 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.drag_start_pos = [x, y];
                                 state.is_dragging = false;
                                 state.drag_button = touch_btn as u32;
+                                state.active_pointer_pos = Some([x, y]);
+                                state.active_pointer_precision = 150.0;
                                 state.active_pointer_target = vdom.hit_test(x, y, 150.0).map(|(id, _)| id);
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x,
@@ -1538,6 +1575,17 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 });
                             }
                             winit::event::TouchPhase::Ended => {
+                                let fallback_target = state
+                                    .active_pointer_pos
+                                    .and_then(|pos| {
+                                        vdom.hit_test(pos[0], pos[1], state.active_pointer_precision)
+                                            .map(|(id, _)| id)
+                                    })
+                                    .or_else(|| vdom.hit_test(x, y, state.active_pointer_precision).map(|(id, _)| id));
+                                let target = state
+                                    .active_pointer_target
+                                    .filter(|target| vdom.nodes.contains_key(target))
+                                    .or(fallback_target);
                                 let pointer_up = cvkg_core::Event::PointerUp {
                                     x,
                                     y,
@@ -1558,14 +1606,14 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
                                 };
-                                if let Some(target) = state.active_pointer_target {
+                                if let Some(target) = target {
                                     vdom.dispatch_event_to_target(target, pointer_up);
                                 } else {
                                     vdom.dispatch_event(pointer_up);
                                 }
                                 // Only dispatch PointerClick if we didn't drag
                                 if !state.is_dragging {
-                                    if let Some(target) = state.active_pointer_target {
+                                    if let Some(target) = target {
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
                                         vdom.dispatch_event(pointer_click);
@@ -1574,6 +1622,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 // Reset drag state
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
+                                state.active_pointer_pos = None;
                             }
                             winit::event::TouchPhase::Cancelled => {
                                 vdom.dispatch_event(cvkg_core::Event::PointerUp {
@@ -1587,6 +1636,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pointer_precision: 150.0,
                                 });
                                 state.active_pointer_target = None;
+                                state.active_pointer_pos = None;
                             }
                         }
                         state.window.request_redraw();
@@ -2792,9 +2842,14 @@ mod tests {
                     barrel_rotation: None,
                     pointer_precision: 0.0,
                 })
-            });
+        });
 
         applied_vdom.apply_patches(pressed_vdom.diff(rebuilt_vdom));
+
+        let fallback_target = applied_vdom.hit_test(x, y, 0.0).map(|(id, _)| id);
+        let resolved_target = active_target
+            .filter(|target| applied_vdom.nodes.contains_key(target))
+            .or(fallback_target);
 
         let pointer_up = cvkg_core::Event::PointerUp {
             x,
@@ -2817,10 +2872,10 @@ mod tests {
             pointer_precision: 0.0,
         };
 
-        let up = active_target
+        let up = resolved_target
             .map(|target| applied_vdom.dispatch_event_to_target(target, pointer_up.clone()))
             .unwrap_or_else(|| applied_vdom.dispatch_event(pointer_up));
-        let click = active_target
+        let click = resolved_target
             .map(|target| applied_vdom.dispatch_event_to_target(target, pointer_click.clone()))
             .unwrap_or_else(|| applied_vdom.dispatch_event(pointer_click));
 
@@ -2965,6 +3020,70 @@ mod tests {
         rebuilt.nodes.insert(root_id, rebuilt_root);
         rebuilt.nodes.insert(button_id, rebuilt_button);
         rebuilt.parents.insert(button_id, root_id);
+
+        let (down, up, click) =
+            route_pointer_sequence_through_native_capture(&pressed, &rebuilt, 30.0, 30.0, 0);
+
+        assert_eq!(down, cvkg_core::EventResponse::Handled);
+        assert_eq!(up, cvkg_core::EventResponse::Handled);
+        assert_eq!(click, cvkg_core::EventResponse::Handled);
+        assert_eq!(*fired.lock().unwrap(), vec!["down", "up", "click"]);
+    }
+
+    #[test]
+    fn native_pointer_capture_falls_back_to_rebuilt_target() {
+        let fired = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+
+        let mut pressed = VDom::new();
+        let root_id = cvkg_core::KvasirId(1);
+        let old_button_id = cvkg_core::KvasirId(2);
+        let mut root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+        root.children = vec![old_button_id];
+        let button = interactive_node(2, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+
+        let fired_down = Arc::clone(&fired);
+        let fired_up = Arc::clone(&fired);
+        let fired_click = Arc::clone(&fired);
+        pressed.event_handlers.insert(
+            old_button_id,
+            vec![
+                (
+                    "pointerdown".to_string(),
+                    Arc::new(move |_| {
+                        fired_down.lock().unwrap().push("down");
+                    }) as _,
+                ),
+                (
+                    "pointerup".to_string(),
+                    Arc::new(move |_| {
+                        fired_up.lock().unwrap().push("up");
+                    }) as _,
+                ),
+                (
+                    "pointerclick".to_string(),
+                    Arc::new(move |_| {
+                        fired_click.lock().unwrap().push("click");
+                    }) as _,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        pressed.root = Some(root_id);
+        pressed.nodes.insert(root_id, root);
+        pressed.nodes.insert(old_button_id, button);
+        pressed.parents.insert(old_button_id, root_id);
+
+        let mut rebuilt = VDom::new();
+        let mut rebuilt_root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+        let rebuilt_button_id = cvkg_core::KvasirId(3);
+        rebuilt_root.children = vec![rebuilt_button_id];
+        let rebuilt_button = interactive_node(3, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+        rebuilt.event_handlers = pressed.event_handlers.clone();
+        rebuilt.root = Some(root_id);
+        rebuilt.nodes.insert(root_id, rebuilt_root);
+        rebuilt.nodes.insert(rebuilt_button_id, rebuilt_button);
+        rebuilt.parents.insert(rebuilt_button_id, root_id);
 
         let (down, up, click) =
             route_pointer_sequence_through_native_capture(&pressed, &rebuilt, 30.0, 30.0, 0);
