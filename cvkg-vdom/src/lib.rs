@@ -1759,10 +1759,9 @@ impl VDom {
         if node_id == NodeId::from(1) {
             log::debug!("[HIT_TEST] root children: {:?}", node.children);
             log::debug!("[HIT_TEST] root id={:?} total nodes={}, self.root={:?}", node_id, self.nodes.len(), self.root);
-            for (i, child_id) in node.children.iter().enumerate().take(5) {
-                if let Some(child) = self.nodes.get(child_id) {
-                    log::debug!("[HIT_TEST] child[{}]: id={:?} type={} layout={:?}", i, child_id, child.component_type, child.layout);
-                }
+            // Also dump ALL nodes to find the actual VDOM structure
+            for (nid, n) in self.nodes.iter().take(10) {
+                log::debug!("[HIT_TEST] node {:?}: type={} children={:?}", nid, n.component_type, n.children);
             }
         }
 
