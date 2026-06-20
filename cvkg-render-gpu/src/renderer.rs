@@ -967,14 +967,21 @@ impl SurtrRenderer {
         let surface_format = Self::select_best_surface_format(&surface_caps.formats);
 
         // Dynamic capability selection for robust Wayland/X11 rendering
+        // Try Immediate first (no vsync, uncapped), then Mailbox, then Fifo
         let present_mode = if surface_caps
+            .present_modes
+            .contains(&wgpu::PresentMode::Immediate)
+        {
+            log::info!("[GPU] Present mode: Immediate (no vsync, uncapped)");
+            wgpu::PresentMode::Immediate
+        } else if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Mailbox)
         {
             log::info!("[GPU] Present mode: Mailbox (no vsync)");
             wgpu::PresentMode::Mailbox
         } else {
-            log::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync capped)");
+            log::warn!("[GPU] Neither Immediate nor Mailbox supported, falling back to Fifo (V-Sync capped)");
             wgpu::PresentMode::Fifo
         };
 
@@ -1008,7 +1015,7 @@ impl SurtrRenderer {
             present_mode,
             alpha_mode,
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: 1,
         };
         surface.configure(&device, &config);
         log::info!("[GPU] Surface configuration successful.");
