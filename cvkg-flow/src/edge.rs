@@ -232,25 +232,16 @@ impl FlowEdge {
 
     /// Sets the interaction state to hovered.
     pub fn set_hovered(&mut self) {
-        if self.interaction != EdgeInteraction::Hovered {
-            self.animation_progress = 0.0;
-        }
         self.interaction = EdgeInteraction::Hovered;
     }
 
     /// Sets the interaction state to selected.
     pub fn set_selected(&mut self) {
-        if self.interaction != EdgeInteraction::Selected {
-            self.animation_progress = 0.0;
-        }
         self.interaction = EdgeInteraction::Selected;
     }
 
     /// Resets the interaction state to default.
     pub fn set_default(&mut self) {
-        if self.interaction != EdgeInteraction::Default {
-            self.animation_progress = 0.0;
-        }
         self.interaction = EdgeInteraction::Default;
     }
 

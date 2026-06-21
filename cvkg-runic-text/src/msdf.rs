@@ -206,13 +206,6 @@ pub fn pack_atlas(glyphs: &mut [MsdfGlyph], max_size: u32) -> Result<(u32, u32),
             current_y += shelf_height;
             current_x = 0;
             shelf_height = 0;
-            // Check if the new shelf would exceed max_size
-            if current_y + glyph.atlas_h > max_size {
-                return Err(format!(
-                    "Atlas height exceeds max_size {} (current_y={}, glyph_h={})",
-                    max_size, current_y, glyph.atlas_h
-                ));
-            }
         }
 
         glyph.atlas_x = current_x;
