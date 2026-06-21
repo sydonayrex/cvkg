@@ -8,6 +8,7 @@
 //! are selected via cfg flags in the renderer, not here.
 
 use std::sync::Arc;
+use std::sync::Mutex;
 
 /// Audio engine trait for playing sounds and spatial audio.
 ///
@@ -122,47 +123,59 @@ pub mod sounds {
     pub const WARNING_TONE: &[u8] = include_bytes!("../assets/sounds/warning_tone.wav");
 }
 
-/// Global audio engine instance.
-static AUDIO_ENGINE: once_cell::sync::Lazy<Arc<dyn AudioEngine>> =
-    once_cell::sync::Lazy::new(|| Arc::new(NullAudioEngine));
+/// Global audio engine instance (wrapped in Mutex for runtime replacement).
+static AUDIO_ENGINE: once_cell::sync::Lazy<Mutex<Arc<dyn AudioEngine>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(Arc::new(NullAudioEngine)));
 
-/// Global haptic engine instance.
-static HAPTIC_ENGINE: once_cell::sync::Lazy<Arc<dyn HapticEngine>> =
-    once_cell::sync::Lazy::new(|| Arc::new(NullHapticEngine));
+/// Global haptic engine instance (wrapped in Mutex for runtime replacement).
+static HAPTIC_ENGINE: once_cell::sync::Lazy<Mutex<Arc<dyn HapticEngine>>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(Arc::new(NullHapticEngine)));
 
 /// Set the global audio engine.
 pub fn set_audio_engine(engine: Arc<dyn AudioEngine>) {
-    // Note: once_cell can't be overwritten. In production, use a Mutex<Arc<dyn AudioEngine>>.
-    // For now, this is a placeholder for the API design.
-    let _ = engine;
+    if let Ok(mut guard) = AUDIO_ENGINE.lock() {
+        *guard = engine;
+    }
 }
 
 /// Set the global haptic engine.
 pub fn set_haptic_engine(engine: Arc<dyn HapticEngine>) {
-    let _ = engine;
+    if let Ok(mut guard) = HAPTIC_ENGINE.lock() {
+        *guard = engine;
+    }
 }
 
 /// Play a sound using the global audio engine.
 pub fn play_sound(name: &str, volume: f32) {
-    AUDIO_ENGINE.play_sound(name, volume);
+    if let Ok(guard) = AUDIO_ENGINE.lock() {
+        guard.play_sound(name, volume);
+    }
 }
 
 /// Trigger a haptic using the global haptic engine.
 pub fn haptic_impact(intensity: HapticIntensity) {
-    HAPTIC_ENGINE.impact(intensity);
+    if let Ok(guard) = HAPTIC_ENGINE.lock() {
+        guard.impact(intensity);
+    }
 }
 
 /// Trigger selection haptic.
 pub fn haptic_selection() {
-    HAPTIC_ENGINE.selection();
+    if let Ok(guard) = HAPTIC_ENGINE.lock() {
+        guard.selection();
+    }
 }
 
 /// Trigger success haptic.
 pub fn haptic_success() {
-    HAPTIC_ENGINE.success();
+    if let Ok(guard) = HAPTIC_ENGINE.lock() {
+        guard.success();
+    }
 }
 
 /// Trigger error haptic.
 pub fn haptic_error() {
-    HAPTIC_ENGINE.error();
+    if let Ok(guard) = HAPTIC_ENGINE.lock() {
+        guard.error();
+    }
 }
