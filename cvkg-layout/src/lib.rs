@@ -52,6 +52,21 @@ thread_local! {
     static ACTIVE_LAYOUT_NODES: RefCell<HashSet<u64>> = RefCell::new(HashSet::new());
 }
 
+/// RAII guard that removes the hash from ACTIVE_LAYOUT_NODES on drop.
+struct LayoutCycleGuard {
+    hash: u64,
+}
+
+impl Drop for LayoutCycleGuard {
+    fn drop(&mut self) {
+        if self.hash != 0 {
+            ACTIVE_LAYOUT_NODES.with(|nodes| {
+                nodes.borrow_mut().remove(&self.hash);
+            });
+        }
+    }
+}
+
 /// Helper function to prevent layout calculation cycles in recursive size queries.
 /// If a view is already being traversed on the current thread, returns the fallback size.
 fn with_layout_cycle_guard<F, R>(hash: u64, fallback: R, f: F) -> R
@@ -66,11 +81,8 @@ where
         log::warn!("[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle with fallback size.", hash);
         return fallback;
     }
-    let res = f();
-    ACTIVE_LAYOUT_NODES.with(|nodes| {
-        nodes.borrow_mut().remove(&hash);
-    });
-    res
+    let _guard = LayoutCycleGuard { hash }; // drops even on panic
+    f()
 }
 
 /// Helper function to prevent layout calculation cycles in recursive subview placements.
@@ -87,10 +99,8 @@ where
         log::warn!("[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle placement.", hash);
         return;
     }
+    let _guard = LayoutCycleGuard { hash }; // drops even on panic
     f();
-    ACTIVE_LAYOUT_NODES.with(|nodes| {
-        nodes.borrow_mut().remove(&hash);
-    });
 }
 
 /// The central Taffy engine that computes flexbox and grid layouts.

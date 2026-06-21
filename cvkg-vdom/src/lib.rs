@@ -2316,7 +2316,7 @@ pub fn use_state<T: Clone + Send + Sync + 'static>(
     let current = {
         let s = cvkg_core::load_system_state();
         match s.get_component_state::<T>(id_hash) {
-            Some(arc_val) => arc_val.read().unwrap().clone(),
+            Some(arc_val) => arc_val.read().unwrap_or_else(|e| e.into_inner()).clone(),
             None => {
                 cvkg_core::update_system_state(|s| {
                     let mut s = s.clone();
