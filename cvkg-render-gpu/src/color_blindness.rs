@@ -120,16 +120,19 @@ struct VertexOutput {
 
 @vertex
 fn fs_main_vs(@builtin(vertex_index) vid: u32) -> VertexOutput {
-    // Full-screen triangle
-    let pos = vec4<f32>(
-        select(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vid == 1u),
-        0.0,
-        1.0
-    );
-    let uv = vec2<f32>(
-        select(0.0, 2.0, vid == 1u),
-        select(0.0, 2.0, vid > 0u),
-    );
+    // Full-screen triangle (degenerate triangle fix: vertex 2 should be at (-1, 3))
+    var pos = vec4<f32>(-1.0, -1.0, 0.0, 1.0);
+    if vid == 1u {
+        pos = vec4<f32>(3.0, -1.0, 0.0, 1.0);
+    } else if vid == 2u {
+        pos = vec4<f32>(-1.0, 3.0, 0.0, 1.0);
+    }
+    var uv = vec2<f32>(0.0, 0.0);
+    if vid == 1u {
+        uv = vec2<f32>(2.0, 0.0);
+    } else if vid == 2u {
+        uv = vec2<f32>(0.0, 2.0);
+    }
     return VertexOutput(pos, uv);
 }
 

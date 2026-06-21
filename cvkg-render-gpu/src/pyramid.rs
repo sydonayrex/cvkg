@@ -42,13 +42,16 @@ impl ImagePyramid {
             mip_h = (mip_h / 2).max(1);
         }
 
+        // Luminance texture matches the last allocated mip level dimensions
+        let last_mip_w = (mip_w * 2).min(width);
+        let last_mip_h = (mip_h * 2).min(height);
         let luminance = registry.allocate_image(
             device,
             &ResourceDescriptor {
                 label: Some("pyramid_luminance".to_string()),
                 kind: ResourceKind::Image {
-                    width: mips.last().map(|_| mip_w).unwrap_or(width),
-                    height: mips.last().map(|_| mip_h).unwrap_or(height),
+                    width: last_mip_w,
+                    height: last_mip_h,
                     format: wgpu::TextureFormat::R8Unorm,
                     mip_level_count: 1,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING

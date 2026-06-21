@@ -177,20 +177,19 @@ impl FocusManager {
     /// production integration the caller would impose a document-order sort
     /// based on visual position or DOM tree depth instead.
     pub fn rebuild_from_tree(&mut self, tree: &super::tree::AccessibilityTree) {
-        let mut ids: Vec<KvasirId> = tree.focusable_nodes().iter().map(|n| n.id).collect();
-        // Sort by raw id value for a stable, deterministic order.
-        // Real document-order sorting would use layout position (x, y).
-        // TODO: Replace this stub with proper document-order sorting.
-        //   1. Retrieve the layout bounds (Rect) for each focusable node from the
-        //      AccessibilityTree (each node already stores a `bounds` field).
-        //   2. Sort by vertical position first (top-to-bottom: `rect.y`), then
-        //      by horizontal position (left-to-right: `rect.x`) for nodes on
-        //      the same row. This matches the visual reading order expected by
-        //      screen readers and keyboard navigation.
-        //   3. If the tree provides a DOM/semantic depth, use it as a tiebreaker
-        //      so that nested focusable children follow their parent's group.
-        //   4. Once implemented, remove the `id.0` sort below.
-        ids.sort_by_key(|id| id.0);
+        let mut nodes: Vec<(KvasirId, crate::Rect)> = tree
+            .focusable_nodes()
+            .iter()
+            .map(|n| (n.id, n.bounds))
+            .collect();
+        // Sort by visual position: top-to-bottom (y), then left-to-right (x)
+        nodes.sort_by(|a, b| {
+            a.1.y
+                .partial_cmp(&b.1.y)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.1.x.partial_cmp(&b.1.x).unwrap_or(std::cmp::Ordering::Equal))
+        });
+        let ids: Vec<KvasirId> = nodes.into_iter().map(|(id, _)| id).collect();
         self.set_tab_order(ids);
     }
 }
