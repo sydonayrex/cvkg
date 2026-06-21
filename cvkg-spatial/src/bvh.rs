@@ -155,11 +155,15 @@ impl<T: Clone> Bvh<T> {
         let split_on_x = combined.width >= combined.height;
 
         // Sort by centroid along split axis to find the median.
+        // NOTE: We use `total_cmp` instead of `partial_cmp` to handle NaN
+        // deterministically (NaN sorts above all finite values).  Rect
+        // coordinates are expected to be finite, but this protects against
+        // accidental NaN propagation from buggy callers.
         let mut sorted = indices.to_vec();
         sorted.sort_by(|&a, &b| {
             let ca = centroid(&items[a].0, split_on_x);
             let cb = centroid(&items[b].0, split_on_x);
-            ca.partial_cmp(&cb).unwrap_or(std::cmp::Ordering::Equal)
+            ca.total_cmp(&cb)
         });
 
         let mid = sorted.len() / 2;

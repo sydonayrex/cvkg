@@ -83,7 +83,8 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     let mut last_scene_node = geometry;
 
     for offscreen in config.active_offscreens {
-        let tex_id = ResourceId(1000 + offscreen.target_id as u32);
+        let tex_id = ResourceId(1000 + (offscreen.target_id as u32));
+        debug_assert!(offscreen.target_id <= u32::MAX as u64, "target_id overflow");
 
         let off_geom = builder.add_node(Box::new(
             crate::passes::effects::OffscreenGeometryNode::new(offscreen.target_id, tex_id),

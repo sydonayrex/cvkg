@@ -3021,7 +3021,7 @@ impl Mesh {
             let mesh = m.mesh;
             let vertices: Vec<[f32; 3]> = mesh
                 .positions
-                .chunks(3)
+                .chunks_exact(3)
                 .map(|c| [c[0], c[1], c[2]])
                 .collect();
             let normals = if mesh.normals.is_empty() {

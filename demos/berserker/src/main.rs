@@ -751,7 +751,7 @@ fn draw_nornir_bar(
             width: w,
             height: h,
         };
-        r.set_z_index(1000.0); // Render above all other elements
+        r.set_z_index(-1000.0); // Render above all other elements
         r.push_vnode(overlay_rect, "DropdownOverlay");
         let active_menu_clone = active_menu.clone();
         r.register_handler(
@@ -902,7 +902,7 @@ fn draw_nornir_bar(
             ],
         };
 
-        r.set_z_index(500.0);
+        r.set_z_index(-500.0);
         r.set_material(cvkg_core::DrawMaterial::TopUI);
         let dropdown = ContextMenu::new(menu_items)
             .position(menu_pos_x, 28.0)
@@ -1017,25 +1017,29 @@ fn draw_glass_cards(
 
         // Update shattered card physics
         if card.shattered {
-            card.velocity_y += 800.0 * dt; // gravity
             card.x += card.velocity_x * dt;
             card.y += card.velocity_y * dt;
             card.left_offset -= rage * 15.0 * dt;
             card.right_offset += rage * 15.0 * dt;
         }
 
-        // Wrap cards that fall off screen back to top
-        if card.y > h + 200.0 {
-            card.y = -200.0;
-            card.x = w * (0.2 + (i as f32) * 0.25);
+        // Fade out and respawn cards instead of letting them fall off screen
+        if card.shattered && card.left_offset < -200.0 {
             card.shattered = false;
             card.velocity_x = 0.0;
             card.velocity_y = 0.0;
             card.left_offset = 0.0;
             card.right_offset = 0.0;
+            // Restore position to original starting pos
+            card.y = h * 0.25;
+            if i == 1 { card.y = h * 0.4; } // middle card
+            card.x = w * 0.15;
+            if i == 1 { card.x = w * 0.5; }
+            if i == 2 { card.x = w * 0.85; }
         }
 
         if card.shattered {
+            let alpha = (1.0 - (-card.left_offset / 200.0)).clamp(0.0, 1.0);
             // Render two separate halves
             let rect_l = cvkg_core::Rect {
                 x: card.x - half_w + card.left_offset,
@@ -1043,14 +1047,14 @@ fn draw_glass_cards(
                 width: card_width,
                 height: card_height,
             };
-            r.fill_glass_rect_with_intensity(rect_l, 12.0, 8.0, 0.24);
+            r.fill_glass_rect_with_intensity(rect_l, 12.0, 8.0, 0.24 * alpha);
             let rect_r = cvkg_core::Rect {
                 x: card.x - half_w + card.right_offset,
                 y: card.y - half_h,
                 width: card_width,
                 height: card_height,
             };
-            r.fill_glass_rect_with_intensity(rect_r, 12.0, 8.0, 0.24);
+            r.fill_glass_rect_with_intensity(rect_r, 12.0, 8.0, 0.24 * alpha);
         } else {
             // Render intact card
             let rect = cvkg_core::Rect {

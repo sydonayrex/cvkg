@@ -291,7 +291,13 @@ pub fn build_ribbon_batch(edges: &[FlowEdge], nodes: &HashMap<NodeId, FlowNode>)
             let t = uvs[i];
 
             // Compute tangent for perpendicular offset
-            let tangent = if i + 1 < points.len() {
+            //
+            // Guard against degenerate curves (fewer than 2 points) — this
+            // shouldn't happen at the current hardcoded SEGMENTS=16, but
+            // protects against future changes that reduce segments to 0 or 1.
+            let tangent = if points.len() < 2 {
+                Vec2::new(1.0, 0.0) // fallback for degenerate curve
+            } else if i + 1 < points.len() {
                 (points[i + 1] - *point).normalize_or_zero()
             } else {
                 (*point - points[i - 1]).normalize_or_zero()

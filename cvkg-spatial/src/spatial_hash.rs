@@ -43,6 +43,11 @@
 use cvkg_core::Rect;
 use std::collections::HashMap;
 
+/// Maximum number of cells spanned in any single dimension for insert/query.
+/// This bounds the loop in `insert()` and `query()` to prevent CPU exhaustion
+/// when callers pass extreme coordinate values.
+const MAX_CELL_SPAN: i32 = 1000;
+
 /// A uniform-grid spatial hash map keyed by `(cell_x, cell_y)`.
 ///
 /// `T` must be `Clone` because a single large item may be registered in
@@ -142,6 +147,11 @@ impl<T: Clone> SpatialHash<T> {
         let max_cy = ((rect.y + rect.height) / self.cell_size)
             .floor()
             .clamp(i32::MIN as f32, i32::MAX as f32) as i32;
+
+        // Clamp the total span to prevent CPU exhaustion from extreme coordinates.
+        let max_cx = max_cx.min(min_cx.saturating_add(MAX_CELL_SPAN));
+        let max_cy = max_cy.min(min_cy.saturating_add(MAX_CELL_SPAN));
+
         (min_cx, min_cy, max_cx, max_cy)
     }
 }

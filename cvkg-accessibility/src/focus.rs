@@ -177,17 +177,19 @@ impl FocusManager {
     /// production integration the caller would impose a document-order sort
     /// based on visual position or DOM tree depth instead.
     pub fn rebuild_from_tree(&mut self, tree: &super::tree::AccessibilityTree) {
-        let mut nodes: Vec<(KvasirId, crate::Rect)> = tree
+        let mut nodes: Vec<(KvasirId, cvkg_core::layout::Rect)> = tree
             .focusable_nodes()
             .iter()
             .map(|n| (n.id, n.bounds))
             .collect();
         // Sort by visual position: top-to-bottom (y), then left-to-right (x)
+        // Use node ID as tiebreaker for stable ordering when positions are equal
         nodes.sort_by(|a, b| {
             a.1.y
                 .partial_cmp(&b.1.y)
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.1.x.partial_cmp(&b.1.x).unwrap_or(std::cmp::Ordering::Equal))
+                .then_with(|| a.0 .0.cmp(&b.0 .0))
         });
         let ids: Vec<KvasirId> = nodes.into_iter().map(|(id, _)| id).collect();
         self.set_tab_order(ids);
