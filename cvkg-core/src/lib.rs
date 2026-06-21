@@ -140,8 +140,8 @@ pub trait View: Sized + Send {
     }
 
     /// Apply a Mjolnir Slice (Geometric cut) to the view
-    fn mjolnir_slice(self, angle: f32, offset: f32) -> ModifiedView<Self, MjolnirSliceModifier> {
-        self.modifier(MjolnirSliceModifier { angle, offset })
+    fn mjolnir_slice(self, angle: f32, offset: f32) -> ModifiedView<Self, GeometricClipModifier> {
+        self.modifier(GeometricClipModifier { angle, offset })
     }
 
     /// Apply a Mjolnir Shatter (Fragmented transition) to the view
@@ -149,8 +149,8 @@ pub trait View: Sized + Send {
         self,
         pieces: u32,
         force: f32,
-    ) -> ModifiedView<Self, MjolnirShatterModifier> {
-        self.modifier(MjolnirShatterModifier { pieces, force })
+    ) -> ModifiedView<Self, FragmentModifier> {
+        self.modifier(FragmentModifier { pieces, force })
     }
 
     /// Mark this view as a Bifrost Bridge (Shared Element) for cross-view persistence
@@ -261,18 +261,18 @@ pub trait View: Sized + Send {
     }
 
     /// Enable Fafnir's Evolution: The component grows and glows as it is used.
-    fn fafnir_evolve(self, id: u64) -> ModifiedView<Self, FafnirModifier> {
-        self.modifier(FafnirModifier { id })
+    fn fafnir_evolve(self, id: u64) -> ModifiedView<Self, EvolvingInteractionModifier> {
+        self.modifier(EvolvingInteractionModifier { id })
     }
 
     /// Enable Mimir's Intent: The component anticipates user interaction via pointer kinematics.
-    fn mimir_intent(self) -> ModifiedView<Self, MimirIntentModifier> {
-        self.modifier(MimirIntentModifier)
+    fn mimir_intent(self) -> ModifiedView<Self, IntentPredictionModifier> {
+        self.modifier(IntentPredictionModifier)
     }
 
     /// Enable Kvasir's Vibes: Subconscious telemetry representing cognitive complexity.
-    fn kvasir_vibes(self, complexity: f32) -> ModifiedView<Self, KvasirVibeModifier> {
-        self.modifier(KvasirVibeModifier { complexity })
+    fn kvasir_vibes(self, complexity: f32) -> ModifiedView<Self, ComplexityTelemetryModifier> {
+        self.modifier(ComplexityTelemetryModifier { complexity })
     }
 
     /// Bestow Odin's Eye: Global omniscient observability layer.
@@ -885,15 +885,15 @@ impl ViewModifier for SharedElementModifier {
     }
 }
 
-/// MjolnirSliceModifier implements the "Geometric Slice" aesthetic.
+/// GeometricClipModifier implements the "Geometric Slice" aesthetic.
 /// It uses a signed distance field (SDF) to clip the view along a sharp angled line.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MjolnirSliceModifier {
+pub struct GeometricClipModifier {
     pub angle: f32,
     pub offset: f32,
 }
 
-impl ViewModifier for MjolnirSliceModifier {
+impl ViewModifier for GeometricClipModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -907,15 +907,15 @@ impl ViewModifier for MjolnirSliceModifier {
     }
 }
 
-/// MjolnirShatterModifier implements the "Shattering" effect.
+/// FragmentModifier implements the "Shattering" effect.
 /// It breaks the view into discrete geometric fragments that can be animated.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MjolnirShatterModifier {
+pub struct FragmentModifier {
     pub pieces: u32,
     pub force: f32,
 }
 
-impl ViewModifier for MjolnirShatterModifier {
+impl ViewModifier for FragmentModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1189,16 +1189,16 @@ impl ViewModifier for MemoryLayerModifier {
     }
 }
 
-/// FafnirModifier enables self-evolving UI capabilities.
+/// EvolvingInteractionModifier enables self-evolving UI capabilities.
 /// Named after Fafnir, the dragon who grows in power based on the gold he hoards.
 /// In CVKG, 'Gold' is user attention/interaction.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FafnirModifier {
+pub struct EvolvingInteractionModifier {
     /// Unique ID for tracking this component's vitality across frames.
     pub id: u64,
 }
 
-impl ViewModifier for FafnirModifier {
+impl ViewModifier for EvolvingInteractionModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1249,11 +1249,11 @@ impl ViewModifier for FafnirModifier {
     }
 }
 
-/// MimirIntentModifier anticipates user movement and manifests holographic ghosts.
+/// IntentPredictionModifier anticipates user movement and manifests holographic ghosts.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MimirIntentModifier;
+pub struct IntentPredictionModifier;
 
-impl ViewModifier for MimirIntentModifier {
+impl ViewModifier for IntentPredictionModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1283,13 +1283,13 @@ impl ViewModifier for MimirIntentModifier {
     }
 }
 
-/// KvasirVibeModifier renders a cognitive telemetry cloud representing agent complexity.
+/// ComplexityTelemetryModifier renders a cognitive telemetry cloud representing agent complexity.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct KvasirVibeModifier {
+pub struct ComplexityTelemetryModifier {
     pub complexity: f32,
 }
 
-impl ViewModifier for KvasirVibeModifier {
+impl ViewModifier for ComplexityTelemetryModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
