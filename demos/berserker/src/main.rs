@@ -498,17 +498,19 @@ impl BerserkerState {
             world.add_collider(Collider::new(id_r, shape));
 
             let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
-            constraint.break_threshold = Some(50.0);
+            constraint.break_threshold = Some(200.0); // Breaks when halves are pulled apart
             world.add_constraint(constraint);
-            // Ground constraint on left half only — keeps card in place
-            // but when pin breaks, right half can separate and fall
-            world.add_constraint(Constraint::distance(
+            // Ground constraint on left half — high threshold so it stays grounded
+            // when the pin breaks, only the right half flies off
+            let mut ground_constraint = Constraint::distance(
                 ground_id,
                 id_l,
                 Vec2::new(pos[0] - w / 2.0 - 100.0, pos[1] - h),
                 Vec2::new(0.0, 0.0),
                 0.0,
-            ));
+            );
+            ground_constraint.break_threshold = Some(999999.0); // Never breaks
+            world.add_constraint(ground_constraint);
             card_bodies.push((id_l, id_r));
         }
 
@@ -813,6 +815,7 @@ fn draw_nornir_bar(
             width: w,
             height: h,
         };
+        r.set_z_index(1000.0); // Render above all other elements
         r.push_vnode(overlay_rect, "DropdownOverlay");
         let active_menu_clone = active_menu.clone();
         r.register_handler(
@@ -963,6 +966,8 @@ fn draw_nornir_bar(
             ],
         };
 
+        r.set_z_index(500.0);
+        r.set_material(cvkg_core::DrawMaterial::TopUI);
         let dropdown = ContextMenu::new(menu_items)
             .position(menu_pos_x, 28.0)
             .open(true);
@@ -975,6 +980,9 @@ fn draw_nornir_bar(
                 height: h,
             },
         );
+        r.set_material(cvkg_core::DrawMaterial::Opaque);
+        r.set_z_index(0.0);
+        r.set_z_index(0.0); // Reset z-index
     }
 }
 
@@ -1178,7 +1186,7 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
                     let dy = br.position.y - bl.position.y;
                     let dist = (dx * dx + dy * dy).sqrt().max(1.0);
                     // Push halves apart along their separation axis
-                    let force = rage * 500.0;
+                    let force = rage * 2000.0; // Increased from 500 for faster breaking
                     let fx = (dx / dist) * force;
                     let fy = (dy / dist) * force;
                     if let Some(body) = s.physics.world.body_mut(id_l) {
