@@ -1,8 +1,8 @@
 use cvkg_core::{FrameRenderer, Rect, Renderer};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 
 /// Capture the framebuffer from a headless renderer.
-fn capture_frame(renderer: &mut SurtrRenderer) -> Vec<u8> {
+fn capture_frame(renderer: &mut GpuRenderer) -> Vec<u8> {
     pollster::block_on(renderer.capture_frame()).expect("Failed to capture frame")
 }
 
@@ -12,7 +12,7 @@ fn test_text_svg_rendering_trace() {
     let width: u32 = 256;
     let height: u32 = 256;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     
     // Load a dummy SVG
     let svg_data = br#"<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">

@@ -1,7 +1,7 @@
 //! P1-1 (phase 6): GeometryBuffers -- the three GPU draw buffers.
 //!
 //! Extracted from types.rs so the buffer management subsystem
-//! has its own module. The SurtrRenderer holds a single
+//! has its own module. The GpuRenderer holds a single
 //! `GeometryBuffers` field; the three buffers are accessed via
 //! `renderer.geometry_buffers.{vertex,index,instance}_buffer`.
 

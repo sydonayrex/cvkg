@@ -53,7 +53,7 @@ pub mod window;
 // P1-13: re-exports for backward compatibility
 pub use asset::{AssetKey, AssetState, TokenValue, YggdrasilTokens};
 pub use error_boundary::{ComponentErrorState, ErrorBoundary};
-pub use knowledge::{AnnouncementPriority, KnowledgeFragment, KnowledgeId, KnowledgeState, MemoryLayer, Realm, TemporalEdge, TemporalNode};
+pub use knowledge::{AnnouncementPriority, KnowledgeFragment, KnowledgeId, AppState, MemoryLayer, Realm, TemporalEdge, TemporalNode};
 pub use undo::{UndoGroup, UndoManager};
 pub use window::{Window, WindowCloseAction, WindowConfig, WindowHandle, WindowId, WindowLevel};
 
@@ -1436,13 +1436,13 @@ impl ViewModifier for OdinsEyeModifier {
 
 /// Sleipnir spring parameters for the physics solver
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SleipnirParams {
+pub struct SpringParams {
     pub stiffness: f32,
     pub damping: f32,
     pub mass: f32,
 }
 
-impl SleipnirParams {
+impl SpringParams {
     pub fn snappy() -> Self {
         Self {
             stiffness: 230.0,
@@ -1473,7 +1473,7 @@ impl SleipnirParams {
     }
 }
 
-impl Default for SleipnirParams {
+impl Default for SpringParams {
     fn default() -> Self {
         Self::fluid()
     }
@@ -1485,18 +1485,18 @@ struct SolverState {
     v: f32,
 }
 
-/// SleipnirSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
+/// SpringSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
 /// This provides superior stability for high-fidelity interactive motion.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SleipnirSolver {
-    params: SleipnirParams,
+pub struct SpringSolver {
+    params: SpringParams,
     target: f32,
     state: SolverState,
 }
 
-impl SleipnirSolver {
+impl SpringSolver {
     /// Create a new solver with a target value and starting state.
-    pub fn new(params: SleipnirParams, target: f32, current: f32) -> Self {
+    pub fn new(params: SpringParams, target: f32, current: f32) -> Self {
         Self {
             params,
             target,
@@ -1568,7 +1568,7 @@ impl SleipnirSolver {
 pub struct SleipnirModifier {
     pub id: u64,
     pub target: f32,
-    pub params: SleipnirParams,
+    pub params: SpringParams,
 }
 
 impl ViewModifier for SleipnirModifier {
@@ -1580,7 +1580,7 @@ impl ViewModifier for SleipnirModifier {
         let state = load_system_state();
 
         // Try to fetch the solver from persistent state.
-        let solver_lock_opt = state.get_component_state::<SleipnirSolver>(self.id);
+        let solver_lock_opt = state.get_component_state::<SpringSolver>(self.id);
 
         let current_val;
 
@@ -1596,7 +1596,7 @@ impl ViewModifier for SleipnirModifier {
             }
         } else {
             // First time seeing this ID. Initialize solver state.
-            let solver = SleipnirSolver::new(
+            let solver = SpringSolver::new(
                 self.params,
                 self.target,
                 self.target, // Initialize at target to avoid jump on first frame
@@ -3530,9 +3530,9 @@ fn fallback_runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 /// Global application state registry.
-pub static SYSTEM_STATE: OnceLock<Arc<arc_swap::ArcSwap<KnowledgeState>>> = OnceLock::new();
+pub static SYSTEM_STATE: OnceLock<Arc<arc_swap::ArcSwap<AppState>>> = OnceLock::new();
 #[cfg(not(target_arch = "wasm32"))]
-static KNOWLEDGE_TVAR: OnceLock<stm::TVar<KnowledgeState>> = OnceLock::new();
+static KNOWLEDGE_TVAR: OnceLock<stm::TVar<AppState>> = OnceLock::new();
 static IS_BATCHING: AtomicBool = AtomicBool::new(false);
 pub static IS_RENDERING: AtomicBool = AtomicBool::new(false);
 pub static LAYOUT_DIRTY: AtomicBool = AtomicBool::new(false);
@@ -3587,17 +3587,17 @@ pub fn batch<F: FnOnce()>(f: F) {
     }
 }
 /// Get a reference to the global system state.
-pub fn get_system_state() -> Arc<arc_swap::ArcSwap<KnowledgeState>> {
+pub fn get_system_state() -> Arc<arc_swap::ArcSwap<AppState>> {
     SYSTEM_STATE
-        .get_or_init(|| Arc::new(arc_swap::ArcSwap::from_pointee(KnowledgeState::default())))
+        .get_or_init(|| Arc::new(arc_swap::ArcSwap::from_pointee(AppState::default())))
         .clone()
 }
-pub fn load_system_state() -> arc_swap::Guard<Arc<KnowledgeState>> {
+pub fn load_system_state() -> arc_swap::Guard<Arc<AppState>> {
     get_system_state().load()
 }
 pub fn update_system_state<F>(f: F)
 where
-    F: FnOnce(&KnowledgeState) -> KnowledgeState,
+    F: FnOnce(&AppState) -> AppState,
 {
     let _lock = STATE_WRITE_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
     if is_rendering() {
@@ -3618,7 +3618,7 @@ where
 }
 pub fn transact_system_state<F>(f: F)
 where
-    F: Fn(&KnowledgeState) -> KnowledgeState,
+    F: Fn(&AppState) -> AppState,
 {
     let _lock = STATE_WRITE_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
     #[cfg(not(target_arch = "wasm32"))]
@@ -3649,8 +3649,8 @@ where
         update_system_state(f);
     }
 }
-impl KnowledgeState {
-    /// Create a new empty KnowledgeState.
+impl AppState {
+    /// Create a new empty AppState.
     pub fn new() -> Self {
         Self::default()
     }
@@ -6576,7 +6576,7 @@ pub mod color {
 // The setter updates the global system state and triggers a re-render.
 //
 // This is the minimal state primitive needed for interactive components.
-// For complex state, use the global `KnowledgeState` directly.
+// For complex state, use the global `AppState` directly.
 
 /// Local state hook for components.
 ///
@@ -7199,7 +7199,7 @@ pub trait NotificationHandler: Send + Sync {
 static NEXT_NOTIFICATION_ID: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(1);
 
-/// Default in-app notification handler that writes state to KnowledgeState.
+/// Default in-app notification handler that writes state to AppState.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DefaultNotificationHandler;
 

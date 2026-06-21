@@ -5,7 +5,7 @@
 //! execute within the 16.6ms target frame budget when caches are hot.
 
 use cvkg_core::{FrameRenderer, Rect, Renderer};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 use std::time::Instant;
 
 /// Validates how long a draw/render sequence takes to propagate through the headless pipeline.
@@ -20,7 +20,7 @@ async fn test_pipeline_ingestion_latency() {
     let height = 600;
 
     let start_init = Instant::now();
-    let mut renderer = SurtrRenderer::forge_headless(width, height).await;
+    let mut renderer = GpuRenderer::forge_headless(width, height).await;
     let init_duration = start_init.elapsed();
     println!("Pipeline setup latency: {:?}", init_duration);
 

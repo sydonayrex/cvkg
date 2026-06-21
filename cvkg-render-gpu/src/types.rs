@@ -284,7 +284,7 @@ impl Default for GlassInstanceUniforms {
 // P1-1: GeometryBuffers - encapsulates the three GPU draw buffers
 // =========================================================================
 //
-// The SurtrRenderer struct used to have vertex_buffer, index_buffer, and
+// The GpuRenderer struct used to have vertex_buffer, index_buffer, and
 // instance_buffer as separate fields. This struct groups them together
 // so the buffer management subsystem can be moved into its own module
 // in a follow-up refactor. For now, it provides a single
@@ -403,7 +403,7 @@ impl GeometryBuffers {
 // P1-1: TextSubsystem - encapsulates text rendering caches
 // =========================================================================
 //
-// The SurtrRenderer struct had text_engine, text_cache, and
+// The GpuRenderer struct had text_engine, text_cache, and
 // shaped_text_cache as separate fields. This struct groups them
 // together so the text rendering subsystem can be moved into its
 // own module in a follow-up refactor.
@@ -412,7 +412,7 @@ impl GeometryBuffers {
 pub struct TextSubsystem {
     /// The Runic text shaping engine. Default-constructible; the
     /// engine itself is stateless across threads.
-    pub engine: cvkg_runic_text::RunicTextEngine,
+    pub engine: cvkg_runic_text::TextEngine,
     /// LRU cache mapping glyph hash -> (uv_rect, w, h, x_off, y_off).
     /// Capacity is configurable via SurtrConfig.
     pub glyph_cache: LruCache<u64, (cvkg_core::Rect, f32, f32, f32, f32)>,
@@ -428,7 +428,7 @@ impl TextSubsystem {
     /// glyph cache. The shaped text cache is unbounded.
     pub fn forge(glyph_cache_capacity: NonZeroUsize) -> Self {
         Self {
-            engine: cvkg_runic_text::RunicTextEngine::default(),
+            engine: cvkg_runic_text::TextEngine::default(),
             glyph_cache: LruCache::new(glyph_cache_capacity),
             shaped_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
         }
@@ -447,7 +447,7 @@ impl TextSubsystem {
 // P1-1: SvgSubsystem - encapsulates SVG rendering caches and engine
 // =========================================================================
 //
-// The SurtrRenderer struct had svg_cache, svg_trees, filter_engine,
+// The GpuRenderer struct had svg_cache, svg_trees, filter_engine,
 // and filter_batches as separate fields. This struct groups them
 // together so the SVG rendering subsystem can be moved into its
 // own module in a follow-up refactor.
@@ -541,7 +541,7 @@ impl SvgSubsystem {
 // P1-1: ParticleSubsystem - encapsulates particle system state
 // =========================================================================
 //
-// The SurtrRenderer struct had particle_staging, particle_count, and
+// The GpuRenderer struct had particle_staging, particle_count, and
 // particle_write_head as separate fields. This struct groups the
 // CPU-side state of the particle system so it can be moved into its
 // own module in a follow-up refactor. The GPU-side buffers and
@@ -646,7 +646,7 @@ mod p1_1_text_subsystem_tests {
         // For shaped cache, we can put a (text, size) -> ShapedText.
         // For glyph cache, we can put a hash -> (Rect, f32, f32, f32, f32).
         // Both are type-checked at compile time.
-        // However, ShapedText requires construction from RunicTextEngine,
+        // However, ShapedText requires construction from TextEngine,
         // which we can't easily do without a full text pipeline.
         // Instead, we test that clear_caches() doesn't panic on an
         // empty subsystem and that subsequent access works.
@@ -659,7 +659,7 @@ mod p1_1_text_subsystem_tests {
     #[test]
     fn default_capacity_is_8192_matching_p1_5() {
         // P1-1 regression: the default text cache size used in
-        // SurtrRenderer::forge_internal should match the P1-5
+        // GpuRenderer::forge_internal should match the P1-5
         // hardcoded value (8192) for behavior preservation.
         let cap = NonZeroUsize::new(8192).unwrap();
         let subsystem = TextSubsystem::forge(cap);

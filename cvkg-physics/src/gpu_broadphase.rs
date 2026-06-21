@@ -18,7 +18,7 @@
 //! acceleration:
 //!
 //! 1. Write the WGSL compute shader (spatial_hash.wgsl)
-//! 2. Create the compute pipeline in SurtrRenderer
+//! 2. Create the compute pipeline in GpuRenderer
 //! 3. Implement the upload/readback in execute_pass_gpu_broadphase
 //! 4. Set `config.gpu_broadphase = true` in WorldConfig
 
@@ -215,7 +215,7 @@ pub struct BroadphaseStats {
 
 /// WGSL compute shader source for spatial hash broad-phase.
 ///
-/// This would be loaded and compiled by the SurtrRenderer.
+/// This would be loaded and compiled by the GpuRenderer.
 #[allow(dead_code)]
 const WGSL_SPATIAL_HASH: &str = r#"
 // Spatial hash compute shader for GPU broad-phase collision detection.

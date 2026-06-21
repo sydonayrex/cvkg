@@ -1,17 +1,17 @@
 use crate::theme;
-use cvkg_core::{KnowledgeState, Never, Rect, Renderer, State, View};
+use cvkg_core::{AppState, Never, Rect, Renderer, State, View};
 
-/// MemoryView provides a tactical interface for inspecting an agent's KnowledgeState.
+/// MemoryView provides a tactical interface for inspecting an agent's AppState.
 ///
 /// Section 2.3: "Prompt Integration... Only inject summaries/references."
 pub struct MemoryView {
     /// The knowledge state to display
-    pub state: State<KnowledgeState>,
+    pub state: State<AppState>,
 }
 
 impl MemoryView {
     /// Create a new MemoryView for the given state.
-    pub fn new(state: State<KnowledgeState>) -> Self {
+    pub fn new(state: State<AppState>) -> Self {
         Self { state }
     }
 }

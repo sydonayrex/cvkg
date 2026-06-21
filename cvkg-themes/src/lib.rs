@@ -383,10 +383,10 @@ pub struct SpacingScale {
 /// Motion scale for standardized animation physics
 #[derive(Debug, Clone)]
 pub struct MotionScale {
-    pub snappy: cvkg_anim::SleipnirParams,
-    pub fluid: cvkg_anim::SleipnirParams,
-    pub heavy: cvkg_anim::SleipnirParams,
-    pub bouncy: cvkg_anim::SleipnirParams,
+    pub snappy: cvkg_anim::SpringParams,
+    pub fluid: cvkg_anim::SpringParams,
+    pub heavy: cvkg_anim::SpringParams,
+    pub bouncy: cvkg_anim::SpringParams,
 }
 
 /// Density variant for controlling spacing/radius scaling.
@@ -532,10 +532,10 @@ impl Theme {
                 full: 9999.0,
             },
             motion: MotionScale {
-                snappy: cvkg_anim::SleipnirParams::snappy(),
-                fluid: cvkg_anim::SleipnirParams::fluid(),
-                heavy: cvkg_anim::SleipnirParams::heavy(),
-                bouncy: cvkg_anim::SleipnirParams::bouncy(),
+                snappy: cvkg_anim::SpringParams::snappy(),
+                fluid: cvkg_anim::SpringParams::fluid(),
+                heavy: cvkg_anim::SpringParams::heavy(),
+                bouncy: cvkg_anim::SpringParams::bouncy(),
             },
             materials: vec![GlassMaterial::default_glass()],
             accessibility: AccessibilityOverrides::default(),
@@ -609,10 +609,10 @@ impl Theme {
                 xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0,
             },
             motion: MotionScale {
-                snappy: cvkg_anim::SleipnirParams::snappy(),
-                fluid: cvkg_anim::SleipnirParams::fluid(),
-                heavy: cvkg_anim::SleipnirParams::heavy(),
-                bouncy: cvkg_anim::SleipnirParams::bouncy(),
+                snappy: cvkg_anim::SpringParams::snappy(),
+                fluid: cvkg_anim::SpringParams::fluid(),
+                heavy: cvkg_anim::SpringParams::heavy(),
+                bouncy: cvkg_anim::SpringParams::bouncy(),
             },
             materials: vec![GlassMaterial::default_glass()],
             accessibility: AccessibilityOverrides::default(),
@@ -668,10 +668,10 @@ impl Theme {
                 xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0,
             },
             motion: MotionScale {
-                snappy: cvkg_anim::SleipnirParams::snappy(),
-                fluid: cvkg_anim::SleipnirParams::fluid(),
-                heavy: cvkg_anim::SleipnirParams::heavy(),
-                bouncy: cvkg_anim::SleipnirParams::bouncy(),
+                snappy: cvkg_anim::SpringParams::snappy(),
+                fluid: cvkg_anim::SpringParams::fluid(),
+                heavy: cvkg_anim::SpringParams::heavy(),
+                bouncy: cvkg_anim::SpringParams::bouncy(),
             },
             materials: vec![GlassMaterial {
                 backdrop_blur_radius: 20.0,

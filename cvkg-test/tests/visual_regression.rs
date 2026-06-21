@@ -1,12 +1,12 @@
 use cvkg_core::{FrameRenderer, Rect, Renderer, View};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 use cvkg_test::VisualComparator;
 
 #[tokio::test]
 async fn test_visual_regression_basic() {
     let width = 128;
     let height = 128;
-    let mut renderer = SurtrRenderer::forge_headless(width, height).await;
+    let mut renderer = GpuRenderer::forge_headless(width, height).await;
 
     // 1. Render Frame
     let encoder = renderer.begin_frame_headless();
@@ -94,7 +94,7 @@ async fn test_generate_niflheim_screenshot() {
 
     let width = 800;
     let height = 600;
-    let mut renderer = SurtrRenderer::forge_headless(width, height).await;
+    let mut renderer = GpuRenderer::forge_headless(width, height).await;
 
     let encoder = renderer.begin_frame_headless();
 

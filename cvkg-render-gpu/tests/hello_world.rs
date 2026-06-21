@@ -8,14 +8,14 @@
 //! - Correctness: pixel-exact validation of rendered output
 
 use cvkg_core::{FrameRenderer, Rect, Renderer};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 
 // =============================================================================
 // Test Infrastructure
 // =============================================================================
 
 /// Capture the framebuffer from a headless renderer.
-fn capture_frame(renderer: &mut SurtrRenderer) -> Vec<u8> {
+fn capture_frame(renderer: &mut GpuRenderer) -> Vec<u8> {
     pollster::block_on(renderer.capture_frame()).expect("Failed to capture frame")
 }
 
@@ -48,7 +48,7 @@ fn test_opaque_quad_renders_correctly() {
     let width: u32 = 128;
     let height: u32 = 128;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
@@ -88,7 +88,7 @@ fn test_alpha_blending() {
     let width: u32 = 128;
     let height: u32 = 128;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
@@ -137,7 +137,7 @@ fn test_glass_pipeline_renders() {
     let width: u32 = 256;
     let height: u32 = 256;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     // Background
@@ -197,7 +197,7 @@ fn test_bloom_pipeline() {
     let width: u32 = 128;
     let height: u32 = 128;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     renderer.bloom_enabled = true;
 
     let encoder = renderer.begin_frame_headless();
@@ -241,7 +241,7 @@ fn test_glass_pipeline_debug() {
 
     // Step 1: Test with just opaque (should pass)
     {
-        let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+        let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
         let encoder = renderer.begin_frame_headless();
         renderer.fill_rect(
             Rect {
@@ -266,7 +266,7 @@ fn test_glass_pipeline_debug() {
 
     // Step 2: Test with glass rect (this is the failing case)
     {
-        let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+        let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
         let encoder = renderer.begin_frame_headless();
         renderer.fill_rect(
             Rect {
@@ -325,7 +325,7 @@ fn test_render_graph_execution() {
     let width: u32 = 64;
     let height: u32 = 64;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
@@ -360,7 +360,7 @@ fn test_frame_time_budget() {
     let width: u32 = 256;
     let height: u32 = 256;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
 
     for _ in 0..5 {
         let encoder = renderer.begin_frame_headless();
@@ -407,7 +407,7 @@ fn test_draw_call_efficiency() {
     let width: u32 = 128;
     let height: u32 = 128;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     for i in 0..10 {
@@ -441,7 +441,7 @@ fn test_vertex_count() {
     let width: u32 = 64;
     let height: u32 = 64;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     renderer.fill_rect(
@@ -477,7 +477,7 @@ fn test_many_draw_calls() {
     let width: u32 = 256;
     let height: u32 = 256;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     let encoder = renderer.begin_frame_headless();
 
     for i in 0..100 {
@@ -517,7 +517,7 @@ fn test_full_pipeline_integration() {
     let width: u32 = 256;
     let height: u32 = 256;
 
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     renderer.bloom_enabled = true;
 
     let encoder = renderer.begin_frame_headless();
@@ -612,7 +612,7 @@ fn test_glass_pipeline_is_valid() {
 
     // If the glass pipeline is invalid, forge_headless will panic
     // during pipeline creation
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
 
     // Try to use the glass pipeline
     let encoder = renderer.begin_frame_headless();
@@ -645,7 +645,7 @@ fn test_memoize_replays_cached_draw_calls_on_skip() {
 
     let width: u32 = 64;
     let height: u32 = 64;
-    let mut renderer = pollster::block_on(SurtrRenderer::forge_headless(width, height));
+    let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
 
     let _encoder = renderer.begin_frame_headless();
 

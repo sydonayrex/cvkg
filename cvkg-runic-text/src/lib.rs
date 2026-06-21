@@ -23,12 +23,12 @@ use std::sync::Arc;
 /// Shared test engine that loads only bundled fonts (no system fonts).
 /// Uses Arc for thread-safe sharing across parallel tests.
 #[allow(dead_code)]
-static TEST_ENGINE: std::sync::OnceLock<Arc<RunicTextEngine>> = std::sync::OnceLock::new();
+static TEST_ENGINE: std::sync::OnceLock<Arc<TextEngine>> = std::sync::OnceLock::new();
 
 /// Get or create the shared test engine.
-pub fn test_engine() -> &'static Arc<RunicTextEngine> {
+pub fn test_engine() -> &'static Arc<TextEngine> {
     TEST_ENGINE.get_or_init(|| {
-        let mut engine = RunicTextEngine::new_light();
+        let mut engine = TextEngine::new_light();
         // Load bundled Jupiteroid font for tests
         engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
         Arc::new(engine)
@@ -1283,10 +1283,10 @@ impl ResolvedFont {
     }
 }
 
-// ── RunicTextEngine ──────────────────────────────────────────────────────────
+// ── TextEngine ──────────────────────────────────────────────────────────
 
 /// The main text shaping and layout engine.
-pub struct RunicTextEngine {
+pub struct TextEngine {
     /// Font database.
     db: Database,
     /// Font data cache: fontdb::ID -> FontData.
@@ -1297,7 +1297,7 @@ pub struct RunicTextEngine {
     bg_db: Option<std::sync::Arc<std::sync::Mutex<Option<Database>>>>,
 }
 
-impl RunicTextEngine {
+impl TextEngine {
     /// Create a new text engine with system fonts and user fonts loaded asynchronously.
     ///
     /// # Contract
@@ -1334,7 +1334,7 @@ impl RunicTextEngine {
             font_data.insert(id, FontData::new(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(), face_index));
         }
 
-        RunicTextEngine {
+        TextEngine {
             db,
             font_data,
             scale_context: ScaleContext::new(),
@@ -1345,7 +1345,7 @@ impl RunicTextEngine {
     /// Create a light text engine for testing -- no system/user font loading.
     /// Only bundled fonts (loaded via `load_font_data()`) are available.
     pub fn new_light() -> Self {
-        RunicTextEngine {
+        TextEngine {
             db: Database::new(),
             font_data: HashMap::new(),
             scale_context: ScaleContext::new(),
@@ -2958,7 +2958,7 @@ fn reorder_line_rtl(
     }
 }
 
-impl Default for RunicTextEngine {
+impl Default for TextEngine {
     fn default() -> Self {
         Self::new()
     }
@@ -3009,8 +3009,8 @@ mod tests {
 
     #[test]
     fn test_text_measure_render_sync() {
-        let mut engine1 = RunicTextEngine::new_test();
-        let mut engine2 = RunicTextEngine::new_test();
+        let mut engine1 = TextEngine::new_test();
+        let mut engine2 = TextEngine::new_test();
 
         let text = "Hello, convergence!";
         let style = TextStyle::new("Jupiteroid", 16.0);
@@ -3032,7 +3032,7 @@ mod tests {
 
     #[test]
     fn test_basic_shaping() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let glyphs = engine
             .shape_run("Hello", &style, Direction::LeftToRight)
@@ -3042,7 +3042,7 @@ mod tests {
 
     #[test]
     fn test_hit_test() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello", style.clone())];
         let shaped = engine
@@ -3055,7 +3055,7 @@ mod tests {
 
     #[test]
     fn test_word_wrapping() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello World This Is A Test", style.clone())];
         let shaped = engine
@@ -3146,7 +3146,7 @@ mod tests {
 
     #[test]
     fn test_cursor_model() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let text = "a👨‍👩‍👧‍👦b";
         let spans = vec![TextSpan::new(text, style.clone())];
@@ -3171,7 +3171,7 @@ mod tests {
 
     #[test]
     fn test_unicode_compliance_uax29() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         // ZWJ Sequence
@@ -3194,7 +3194,7 @@ mod tests {
 
     #[test]
     fn test_cursor_position() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello", style.clone())];
         let shaped = engine
@@ -3207,7 +3207,7 @@ mod tests {
 
     #[test]
     fn test_selection_rects() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello World", style.clone())];
         let shaped = engine
@@ -3242,7 +3242,7 @@ mod tests {
 
     #[test]
     fn test_font_metrics() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let metrics = engine.font_metrics(&style).unwrap();
         assert!(metrics.ascent > 0.0);
@@ -3252,7 +3252,7 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("", style.clone())];
         let shaped = engine
@@ -3263,7 +3263,7 @@ mod tests {
 
     #[test]
     fn test_multi_span_layout() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style1 = TextStyle::new("Jupiteroid", 16.0);
         let style2 = TextStyle::new("Jupiteroid", 24.0).with_color(255, 0, 0, 255);
         let spans = vec![
@@ -3279,7 +3279,7 @@ mod tests {
 
     #[test]
     fn test_text_align_center() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hi", style.clone())];
         let shaped = engine
@@ -3301,7 +3301,7 @@ mod tests {
 
     #[test]
     fn test_text_overflow_ellipsis() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new("Hello World This Is Long", style.clone())];
         let shaped = engine
@@ -3324,7 +3324,7 @@ mod tests {
 
     #[test]
     fn test_cache_eviction() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         let _ = engine.shape_run("Test", &style, Direction::LeftToRight);
@@ -3340,20 +3340,20 @@ mod tests {
 
     #[test]
     fn test_font_count() {
-        let engine = RunicTextEngine::new_test();
+        let engine = TextEngine::new_test();
         let count = engine.font_count();
         assert!(count > 0, "Should find at least one font, got {}", count);
     }
 
     #[test]
     fn test_jupiteroid_font_available() {
-        let engine = RunicTextEngine::new_test();
+        let engine = TextEngine::new_test();
         assert!(engine.font_count() > 0, "Should have fonts loaded");
     }
 
     #[test]
     fn test_extract_glyph_path() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         // Shape a character to get a guaranteed valid glyph ID in the test font
@@ -3466,7 +3466,7 @@ mod tests {
 
     #[test]
     fn test_shape_layout_with_path_and_boundary() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
         let spans = vec![TextSpan::new(
             "Hello World Curved Layout Test String",
@@ -3511,7 +3511,7 @@ mod tests {
 
     #[test]
     fn test_portal_alignment() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         // Construct portal spans with different vertical alignment modes using correct byte offsets
@@ -3590,7 +3590,7 @@ mod tests {
 
     #[test]
     fn test_text_semantic_layer_and_virtualization() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         // 1. Verify semantic structure

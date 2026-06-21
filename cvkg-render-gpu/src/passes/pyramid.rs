@@ -1,7 +1,7 @@
 use crate::pyramid::ImagePyramid;
-use crate::renderer::SurtrRenderer;
+use crate::renderer::GpuRenderer;
 
-impl SurtrRenderer {
+impl GpuRenderer {
     pub(crate) fn execute_pass_pyramid_build(
         &mut self,
         post_encoder: &mut wgpu::CommandEncoder,

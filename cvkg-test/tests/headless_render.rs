@@ -1,12 +1,12 @@
 use cvkg_core::{FrameRenderer, Rect, Renderer};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 
 #[tokio::test]
 async fn test_headless_render_capture() {
     let _ = env_logger::try_init();
     let width = 128;
     let height = 128;
-    let mut renderer = SurtrRenderer::forge_headless(width, height).await;
+    let mut renderer = GpuRenderer::forge_headless(width, height).await;
 
     // 1. Setup Frame
     let encoder = renderer.begin_frame_headless();

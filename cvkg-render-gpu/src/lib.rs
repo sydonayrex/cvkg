@@ -166,7 +166,7 @@ pub use accesskit_winit::Adapter as ShieldWallAdapter;
 // Re-export ColorTheme and SceneUniforms for cvkg-render-gpu users
 pub use cvkg_core::{ColorTheme, SceneUniforms};
 
-pub use renderer::SurtrRenderer;
+pub use renderer::GpuRenderer;
 
 // P1-35: SVG filter graph integration
 pub mod svg_filter_graph;

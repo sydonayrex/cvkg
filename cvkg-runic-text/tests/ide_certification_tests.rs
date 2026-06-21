@@ -1,4 +1,4 @@
-use cvkg_runic_text::{RunicTextEngine, TextSpan, TextStyle, TextAlign, TextOverflow, ShapedText};
+use cvkg_runic_text::{TextEngine, TextSpan, TextStyle, TextAlign, TextOverflow, ShapedText};
 
 /// Snap cursor selection index to the nearest grapheme boundary.
 /// Ensures we do not slice in the middle of complex graphemes like ZWJ emojis.
@@ -24,7 +24,7 @@ fn snap_to_grapheme_boundary(shaped: &ShapedText, index: usize) -> usize {
 /// and CJK monospace width alignment.
 #[test]
 fn test_ide_cursor_navigation() {
-    let mut engine = RunicTextEngine::new_test();
+    let mut engine = TextEngine::new_test();
     let style = TextStyle::new("Jupiteroid", 16.0);
     // A (1 byte) + Emoji (25 bytes) + B (1 byte)
     let text = "A👨‍👩‍👧‍👦B";
@@ -48,7 +48,7 @@ fn test_ide_cursor_navigation() {
 
 #[test]
 fn test_ide_cjk_monospace_alignment() {
-    let mut engine = RunicTextEngine::new_test();
+    let mut engine = TextEngine::new_test();
     // Test monospace font style
     let mut style = TextStyle::new("Jupiteroid", 16.0);
     // Force monospace handling simulation
@@ -72,7 +72,7 @@ fn test_ide_cjk_monospace_alignment() {
 
 #[test]
 fn test_ide_knuth_plass_wrapping_stability() {
-    let mut engine = RunicTextEngine::new_test();
+    let mut engine = TextEngine::new_test();
     let style = TextStyle::new("Jupiteroid", 16.0);
     
     // A long text that must wrap given a tight width boundary

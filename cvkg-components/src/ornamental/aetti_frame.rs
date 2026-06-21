@@ -661,7 +661,7 @@ mod tests {
             align: cvkg_runic_text::TextAlign,
             overflow: cvkg_runic_text::TextOverflow,
         ) -> Option<cvkg_runic_text::ShapedText> {
-            let mut engine = cvkg_runic_text::RunicTextEngine::new();
+            let mut engine = cvkg_runic_text::TextEngine::new();
             engine.shape_layout(spans, max_width, align, overflow).ok()
         }
         fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}

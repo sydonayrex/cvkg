@@ -3,14 +3,14 @@ use cvkg_core::{ElapsedTime, Rect, Renderer, View};
 
 struct MockRenderer {
     commands: Vec<String>,
-    text_engine: cvkg_runic_text::RunicTextEngine,
+    text_engine: cvkg_runic_text::TextEngine,
 }
 
 impl MockRenderer {
     fn new() -> Self {
         Self {
             commands: Vec::new(),
-            text_engine: cvkg_runic_text::RunicTextEngine::new(),
+            text_engine: cvkg_runic_text::TextEngine::new(),
         }
     }
 }

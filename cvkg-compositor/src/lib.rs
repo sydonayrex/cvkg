@@ -10,7 +10,7 @@
 //! ## Architecture
 //!
 //! ```text
-//! VDom → LayerTreeBuilder → CompositorEngine → SurtrRenderer
+//! VDom → LayerTreeBuilder → CompositorEngine → GpuRenderer
 //!                                    │
 //!                          ┌─────────┼─────────┐
 //!                          ▼         ▼         ▼

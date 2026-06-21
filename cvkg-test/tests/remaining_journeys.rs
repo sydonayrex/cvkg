@@ -1,4 +1,4 @@
-use cvkg_anim::{RunicEmitter, SleipnirParams, SleipnirSolver};
+use cvkg_anim::{RunicEmitter, SpringParams, SpringSolver};
 use cvkg_core::KvasirId;
 use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
 use cvkg_flow::port::FlowPort;
@@ -12,8 +12,8 @@ use std::time::Duration;
 #[test]
 fn test_journey_anim_runic_emitter() {
     // 1. Create a Sleipnir solver (RK4)
-    let params = SleipnirParams::snappy();
-    let mut solver = SleipnirSolver::new(params, 1.0, 0.0);
+    let params = SpringParams::snappy();
+    let mut solver = SpringSolver::new(params, 1.0, 0.0);
 
     // 2. Advance time and verify convergence
     let dt = 0.016;

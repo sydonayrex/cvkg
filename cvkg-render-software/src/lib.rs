@@ -137,7 +137,7 @@ pub struct SoftwareRenderer {
     last_frame: Instant,
     /// Phase 2 fix: long-lived text engine, constructed once.
     #[cfg(feature = "text")]
-    text_engine: cvkg_runic_text::RunicTextEngine,
+    text_engine: cvkg_runic_text::TextEngine,
     /// Memoize cache: tracks (id, data_hash) of the last memoized render.
     /// If the same id+hash is seen again, the render is skipped.
     memoize_cache: Option<(u64, u64)>,
@@ -153,7 +153,7 @@ impl SoftwareRenderer {
             last_frame: now,
             #[cfg(feature = "text")]
             text_engine: {
-                let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
+                let mut engine = cvkg_runic_text::TextEngine::new_light();
                 engine.load_font_data(
                     include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(),
                 );
@@ -172,7 +172,7 @@ impl SoftwareRenderer {
             last_frame: now,
             #[cfg(feature = "text")]
             text_engine: {
-                let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
+                let mut engine = cvkg_runic_text::TextEngine::new_light();
                 engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
                 engine
             },

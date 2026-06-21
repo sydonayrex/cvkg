@@ -1,11 +1,11 @@
-use cvkg_runic_text::{RunicTextEngine, TextSpan, TextStyle, TextAlign, TextOverflow};
+use cvkg_runic_text::{TextEngine, TextSpan, TextStyle, TextAlign, TextOverflow};
 
 /// P2-41: Typography golden-image text snapshot test suite.
 /// Validates that shaped layout outcomes remain stable and correct
 /// across Latin, Arabic, Hebrew, Indic, Thai, CJK, and Emoji scripts.
 #[test]
 fn test_typography_golden_snapshots() {
-    let mut engine = RunicTextEngine::new_test();
+    let mut engine = TextEngine::new_test();
     let style = TextStyle::new("Jupiteroid", 16.0);
 
     // Test cases representing different language scripts

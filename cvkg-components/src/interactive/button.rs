@@ -302,15 +302,15 @@ impl View for Button {
         let mut hover_t = 0.0;
         {
             let s = cvkg_core::load_system_state();
-            if s.get_component_state::<cvkg_anim::SleipnirSolver>(hover_anim_hash)
+            if s.get_component_state::<cvkg_anim::SpringSolver>(hover_anim_hash)
                 .is_none()
             {
                 cvkg_core::update_system_state(|st| {
                     let mut new_st = st.clone();
                     new_st.set_component_state(
                         hover_anim_hash,
-                        cvkg_anim::SleipnirSolver::new(
-                            cvkg_anim::SleipnirParams::snappy(),
+                        cvkg_anim::SpringSolver::new(
+                            cvkg_anim::SpringParams::snappy(),
                             hover_target,
                             hover_target,
                         ),
@@ -322,7 +322,7 @@ impl View for Button {
         {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) =
-                s.get_component_state::<cvkg_anim::SleipnirSolver>(hover_anim_hash)
+                s.get_component_state::<cvkg_anim::SpringSolver>(hover_anim_hash)
             {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(hover_target);
@@ -334,15 +334,15 @@ impl View for Button {
         let mut press_t = 0.0;
         {
             let s = cvkg_core::load_system_state();
-            if s.get_component_state::<cvkg_anim::SleipnirSolver>(press_anim_hash)
+            if s.get_component_state::<cvkg_anim::SpringSolver>(press_anim_hash)
                 .is_none()
             {
                 cvkg_core::update_system_state(|st| {
                     let mut new_st = st.clone();
                     new_st.set_component_state(
                         press_anim_hash,
-                        cvkg_anim::SleipnirSolver::new(
-                            cvkg_anim::SleipnirParams::snappy(),
+                        cvkg_anim::SpringSolver::new(
+                            cvkg_anim::SpringParams::snappy(),
                             press_target,
                             press_target,
                         ),
@@ -354,7 +354,7 @@ impl View for Button {
         {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) =
-                s.get_component_state::<cvkg_anim::SleipnirSolver>(press_anim_hash)
+                s.get_component_state::<cvkg_anim::SpringSolver>(press_anim_hash)
             {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(press_target);
@@ -694,15 +694,15 @@ impl View for Toggle {
         let mut toggle_t = 0.0;
         {
             let s = cvkg_core::load_system_state();
-            if s.get_component_state::<cvkg_anim::SleipnirSolver>(id_hash)
+            if s.get_component_state::<cvkg_anim::SpringSolver>(id_hash)
                 .is_none()
             {
                 cvkg_core::update_system_state(|st| {
                     let mut new_st = st.clone();
                     new_st.set_component_state(
                         id_hash,
-                        cvkg_anim::SleipnirSolver::new(
-                            cvkg_anim::SleipnirParams::snappy(),
+                        cvkg_anim::SpringSolver::new(
+                            cvkg_anim::SpringParams::snappy(),
                             target,
                             target,
                         ),
@@ -713,7 +713,7 @@ impl View for Toggle {
         }
         {
             let s = cvkg_core::load_system_state();
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(id_hash) {
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(id_hash) {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(target);
                 toggle_t = solver.tick(renderer.delta_time());

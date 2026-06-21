@@ -11,7 +11,7 @@ use crate::UndoManager;
 
 /// Knowledge state for the agentic memory system.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
-pub struct KnowledgeState {
+pub struct AppState {
     pub thoughts: Vec<String>,
     pub actions: Vec<String>,
     pub context: HashMap<String, String>,
@@ -61,7 +61,7 @@ pub struct KnowledgeState {
     pub performance_overlay_visible: bool,
 }
 
-impl KnowledgeState {
+impl AppState {
     /// Apply activation decay to all temporal nodes and evolving components.
     /// Nodes with weight below a threshold drift out of the primary context.
     /// Components lose vitality (Fafnir's Decay) if not actively 'fed'.

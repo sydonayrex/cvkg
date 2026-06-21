@@ -698,7 +698,7 @@ pub struct VNodeRenderer {
     batch_node_id: Option<NodeId>,
     /// Phase 2 fix: long-lived text engine, constructed once per VNodeRenderer.
     /// Avoids re-parsing fonts + spawning a thread on every text shape call.
-    text_engine: cvkg_runic_text::RunicTextEngine,
+    text_engine: cvkg_runic_text::TextEngine,
 }
 
 impl Default for VNodeRenderer {
@@ -720,7 +720,7 @@ impl VNodeRenderer {
             decorative_batch: Vec::new(),
             batch_node_id: None,
             text_engine: {
-                let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
+                let mut engine = cvkg_runic_text::TextEngine::new_light();
                 engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
                 engine
             },

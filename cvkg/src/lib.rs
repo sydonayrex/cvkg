@@ -44,7 +44,7 @@ pub mod prelude {
     pub use cvkg_components::Color;
     pub use cvkg_components::*;
     pub use cvkg_core::{
-        AssetKey, AssetState, Binding, ComponentErrorState, KnowledgeState, Never, Rect, State,
+        AssetKey, AssetState, Binding, ComponentErrorState, AppState, Never, Rect, State,
         View,
     };
     pub use cvkg_macros::{View, view_component};

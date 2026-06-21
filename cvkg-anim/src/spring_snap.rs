@@ -9,9 +9,9 @@
 //! ```no_run
 //! use cvkg_anim::{
 //!     spring_snap::{SpringSnapEvent, SnapPhase, SnapTracker},
-//!     Animation, SleipnirParams,
+//!     Animation, SpringParams,
 //! };
-//! let params = SleipnirParams::snappy();
+//! let params = SpringParams::snappy();
 //! let anim = Animation::Sleipnir(params);
 //! let mut tracker = SnapTracker::new(42.0, 0.5);
 //! // In your animation loop:

@@ -2,7 +2,7 @@
 
 use cvkg_components::{Color, ComponentErrorBoundary};
 use cvkg_core::{ComponentErrorState, Rect, Renderer, State, View};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,7 +13,7 @@ use winit::{
 
 struct ErrorApp {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     error_state: State<ComponentErrorState>,
 }
 
@@ -29,7 +29,7 @@ impl ApplicationHandler for ErrorApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }

@@ -1,5 +1,5 @@
 #[cfg(feature = "gpu")]
-use cvkg::render::SurtrRenderer;
+use cvkg::render::GpuRenderer;
 
 #[cfg(feature = "gpu")]
 use cvkg_core::{Rect, Renderer, View};
@@ -101,7 +101,7 @@ impl View for ShatterApp {
 #[cfg(feature = "gpu")]
 struct AppState {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     app: ShatterApp,
 }
 
@@ -118,7 +118,7 @@ impl ApplicationHandler for AppState {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }

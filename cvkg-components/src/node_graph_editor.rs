@@ -166,7 +166,7 @@ impl GraphEdge {
 
 // ── Persistent state ───────────────────────────────────────────────────────
 
-/// Stored in KnowledgeState.component_states under the "persistent" hash.
+/// Stored in AppState.component_states under the "persistent" hash.
 #[derive(Debug, Clone)]
 pub struct NodeGraphPersistentState {
     pub nodes: Vec<GraphNode>,
@@ -188,7 +188,7 @@ impl NodeGraphPersistentState {
 
 // ── Interaction state ──────────────────────────────────────────────────────
 
-/// Stored in KnowledgeState.component_states under the "interaction" hash.
+/// Stored in AppState.component_states under the "interaction" hash.
 #[derive(Debug, Clone, Default)]
 pub struct GraphInteractionState {
     pub dragging_node: Option<String>,

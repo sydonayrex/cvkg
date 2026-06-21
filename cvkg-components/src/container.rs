@@ -321,15 +321,15 @@ impl<V: View> View for GraniSheet<V> {
         {
             let sys = cvkg_core::load_system_state();
             if sys
-                .get_component_state::<cvkg_core::SleipnirSolver>(solver_hash)
+                .get_component_state::<cvkg_core::SpringSolver>(solver_hash)
                 .is_none()
             {
                 cvkg_core::update_system_state(move |s| {
                     let mut ns = s.clone();
                     ns.set_component_state(
                         solver_hash,
-                        cvkg_core::SleipnirSolver::new(
-                            cvkg_core::SleipnirParams::fluid(),
+                        cvkg_core::SpringSolver::new(
+                            cvkg_core::SpringParams::fluid(),
                             1.0,
                             0.0,
                         ),
@@ -341,7 +341,7 @@ impl<V: View> View for GraniSheet<V> {
         {
             let sys = cvkg_core::load_system_state();
             if let Some(solver_arc) =
-                sys.get_component_state::<cvkg_core::SleipnirSolver>(solver_hash)
+                sys.get_component_state::<cvkg_core::SpringSolver>(solver_hash)
             {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| e.into_inner());
                 solver.set_target(1.0);
@@ -809,12 +809,12 @@ struct ScrollState {
     is_scrollbar_dragging_v: bool,
     is_scrollbar_dragging_h: bool,
     scrollbar_drag_offset: f32,
-    spring_x: Option<cvkg_core::SleipnirSolver>,
-    spring_y: Option<cvkg_core::SleipnirSolver>,
+    spring_x: Option<cvkg_core::SpringSolver>,
+    spring_y: Option<cvkg_core::SpringSolver>,
     /// Current zoom level from pinch gestures (1.0 = normal).
     zoom_level: f32,
     /// Sleipnir spring for smooth zoom animation.
-    zoom_spring: Option<cvkg_core::SleipnirSolver>,
+    zoom_spring: Option<cvkg_core::SpringSolver>,
     /// Minimum allowed zoom from pinch.
     min_zoom: f32,
     /// Maximum allowed zoom from pinch.
@@ -951,8 +951,8 @@ impl<V: View> ScrollView<V> {
                 max_x
             };
             let mut solver = state.spring_x.unwrap_or_else(|| {
-                cvkg_core::SleipnirSolver::new(
-                    cvkg_core::SleipnirParams::fluid(),
+                cvkg_core::SpringSolver::new(
+                    cvkg_core::SpringParams::fluid(),
                     target,
                     state.scroll_offset[0],
                 )
@@ -984,8 +984,8 @@ impl<V: View> ScrollView<V> {
                 max_y
             };
             let mut solver = state.spring_y.unwrap_or_else(|| {
-                cvkg_core::SleipnirSolver::new(
-                    cvkg_core::SleipnirParams::fluid(),
+                cvkg_core::SpringSolver::new(
+                    cvkg_core::SpringParams::fluid(),
                     target,
                     state.scroll_offset[1],
                 )
@@ -1014,8 +1014,8 @@ impl<V: View> ScrollView<V> {
         let zoom_target = state.zoom_level.clamp(state.min_zoom, state.max_zoom);
         if (state.zoom_level - zoom_target).abs() > 0.001 {
             let mut solver = state.zoom_spring.unwrap_or_else(|| {
-                cvkg_core::SleipnirSolver::new(
-                    cvkg_core::SleipnirParams::fluid(),
+                cvkg_core::SpringSolver::new(
+                    cvkg_core::SpringParams::fluid(),
                     zoom_target,
                     state.zoom_level,
                 )

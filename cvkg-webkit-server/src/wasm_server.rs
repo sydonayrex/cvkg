@@ -46,7 +46,7 @@ impl NativeWasmServer {
     /// If `force_reload` is true, the module is re-instantiated, resetting all state.
     pub fn load_module(&self, wasm_path: &Path, force_reload: bool) -> anyhow::Result<()> {
         if !force_reload {
-            let guard = self.session.lock().unwrap();
+            let guard = self.session.lock().unwrap_or_else(|p| p.into_inner());
             if guard.is_some() {
                 debug!("[Native Wasm] Module already loaded, skipping reload to preserve state.");
                 return Ok(());
@@ -103,7 +103,7 @@ impl NativeWasmServer {
                 .map_err(|e| anyhow::anyhow!("cvkg_init failed: {:?}", e))?;
         }
 
-        let mut session_guard = self.session.lock().unwrap();
+        let mut session_guard = self.session.lock().unwrap_or_else(|p| p.into_inner());
         *session_guard = Some(WasmSession { store, instance });
 
         Ok(())

@@ -44,18 +44,18 @@ impl View for NotificationCenterPanel {
         };
         let mut t_val = 0.0;
 
-        // Initialize SleipnirSolver if it doesn't exist yet
+        // Initialize SpringSolver if it doesn't exist yet
         {
             if state
-                .get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
+                .get_component_state::<cvkg_anim::SpringSolver>(anim_hash)
                 .is_none()
             {
                 cvkg_core::update_system_state(|st| {
                     let mut new_st = st.clone();
                     new_st.set_component_state(
                         anim_hash,
-                        cvkg_anim::SleipnirSolver::new(
-                            cvkg_anim::SleipnirParams::snappy(),
+                        cvkg_anim::SpringSolver::new(
+                            cvkg_anim::SpringParams::snappy(),
                             target,
                             0.0,
                         ),
@@ -68,7 +68,7 @@ impl View for NotificationCenterPanel {
         // Tick solver and retrieve current interpolation value
         {
             let s = cvkg_core::load_system_state();
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SleipnirSolver>(anim_hash)
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash)
             {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| {
                     log::warn!("Lock poisoned, recovering...");

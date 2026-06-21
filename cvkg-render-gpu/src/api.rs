@@ -1,5 +1,5 @@
 //! Bridging the internal renderer to `cvkg-core` traits.
-use crate::renderer::SurtrRenderer;
+use crate::renderer::GpuRenderer;
 use crate::renderer::material_id;
 use crate::types::*;
 use crate::vertex::*;
@@ -10,7 +10,7 @@ use lyon::tessellation::{BuffersBuilder, StrokeOptions, StrokeTessellator, Verte
 use std::hash::{Hash, Hasher};
 use std::sync::atomic::Ordering;
 
-impl cvkg_core::ElapsedTime for SurtrRenderer {
+impl cvkg_core::ElapsedTime for GpuRenderer {
     fn delta_time(&self) -> f32 {
         self.current_scene.delta_time
     }
@@ -20,7 +20,7 @@ impl cvkg_core::ElapsedTime for SurtrRenderer {
     }
 }
 
-impl cvkg_core::Renderer for SurtrRenderer {
+impl cvkg_core::Renderer for GpuRenderer {
     fn is_over_budget(&self) -> bool {
         self.frame_budget.allow_degradation
             && self.last_frame_start.elapsed().as_secs_f32() * 1000.0 > self.frame_budget.target_ms
@@ -1467,20 +1467,20 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
-        SurtrRenderer::load_svg(self, name, svg_data);
+        GpuRenderer::load_svg(self, name, svg_data);
     }
 
     fn draw_svg(&mut self, name: &str, rect: Rect) {
-        SurtrRenderer::draw_svg(self, name, rect, None, 0);
+        GpuRenderer::draw_svg(self, name, rect, None, 0);
     }
     fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, animation_time_offset: f32) {
-        SurtrRenderer::draw_svg_with_offset(self, name, rect, None, 0, animation_time_offset);
+        GpuRenderer::draw_svg_with_offset(self, name, rect, None, 0, animation_time_offset);
     }
 
     /// Draw SVG content with explicit draw_order for z-sorting within the same pass.
     /// Use draw_order=200 for SVG content that should render above UI chrome (draw_order=0).
     fn draw_svg_with_order(&mut self, name: &str, rect: Rect, draw_order: i32) {
-        SurtrRenderer::draw_svg_with_order(self, name, rect, None, 0, 0.0, draw_order);
+        GpuRenderer::draw_svg_with_order(self, name, rect, None, 0, 0.0, draw_order);
     }
 
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
@@ -1588,9 +1588,9 @@ impl cvkg_core::Renderer for SurtrRenderer {
     }
 }
 
-// ── Inherent methods on SurtrRenderer (not part of the Renderer trait) ──
+// ── Inherent methods on GpuRenderer (not part of the Renderer trait) ──
 
-impl SurtrRenderer {
+impl GpuRenderer {
     /// Clear all registered event handlers. Call at the start of each frame
     /// before re-rendering the component tree.
     pub fn clear_event_handlers(&mut self) {
@@ -1737,7 +1737,7 @@ impl SurtrRenderer {
     }
 }
 
-impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
+impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
     fn begin_frame(&mut self) -> wgpu::CommandEncoder {
         cvkg_core::begin_render_phase();
         self.frame_rendered = false;
@@ -1884,7 +1884,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for SurtrRenderer {
 
     fn end_frame(&mut self, encoder: wgpu::CommandEncoder) {
         // Delegate to the inherent end_frame which runs the render graph
-        SurtrRenderer::end_frame(self, encoder);
+        GpuRenderer::end_frame(self, encoder);
         cvkg_core::end_render_phase();
     }
 }

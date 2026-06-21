@@ -305,21 +305,21 @@ PHASE 7: Final verification
 **Files:**
 - N/A (verification only)
 
-- [ ] **0.1** Create feature branch
+- [x] **0.1** Create feature branch
   ```bash
   git checkout -b owl-fix/all-audit-findings
   ```
 
-- [ ] **0.2** Establish baseline
+- [x] **0.2** Establish baseline
   ```bash
   cargo check --workspace 2>&1 | tee /tmp/baseline_errors.txt
   cargo test --workspace 2>&1 | tee /tmp/baseline_tests.txt
   ```
 
-- [ ] **0.3** Verify findings still apply
+- [x] **0.3** Verify findings still apply
   For each bug in this plan, verify the code at the specified line still exhibits the issue. Mark any that have already been fixed.
 
-- [ ] **0.4** Commit baseline
+- [x] **0.4** Commit baseline
   ```bash
   git add .
   git commit -m "chore: establish baseline before owl-fix"
@@ -333,7 +333,7 @@ PHASE 7: Final verification
 
 **Skills:** `debugging`, `error-handling`, `code-reviewer`, `clean-code-guard`, `rust-patterns`, `rendering-architecture-audit`, `cvkg-render-debug`
 
-- [ ] **1.1** Fix `.expect()` panics in cvkg-render-gpu passes
+- [x] **1.1** Fix `.expect()` panics in cvkg-render-gpu passes
 
   **Files:**
   - Modify: `cvkg-render-gpu/src/passes/backdrop_region.rs:50,54`
@@ -424,7 +424,7 @@ PHASE 7: Final verification
   git commit -m "fix: graceful error handling in render pass resource lookups"
   ```
 
-- [ ] **1.2** Fix dangling thread-local pointer on panic
+- [x] **1.2** Fix dangling thread-local pointer on panic
 
   **Files:**
   - Modify: `cvkg-render-native/src/lib.rs:~1248`
@@ -475,7 +475,7 @@ PHASE 7: Final verification
   git commit -m "fix: RAII guard for GPU_FRAME_PTR thread-local"
   ```
 
-- [ ] **1.3** Fix compositor cyclic reference stack overflow
+- [x] **1.3** Fix compositor cyclic reference stack overflow
 
   **Files:**
   - Modify: `cvkg-compositor/src/engine.rs:248`
@@ -544,7 +544,7 @@ PHASE 7: Final verification
 
 **Skills:** `debugging`, `code-reviewer`, `clean-code-guard`, `rust-development`, `error-handling`, `wgsl-wgpu-shader-pipeline`, `rust-patterns`, `strong-tests`, `test-driven-development`
 
-- [ ] **2.1** Fix SHA256 truncation in shader cache
+- [x] **2.1** Fix SHA256 truncation in shader cache
 
   **Files:**
   - Modify: `cvkg-render-gpu/src/renderer.rs:517-521,6107-6111`
@@ -584,7 +584,7 @@ PHASE 7: Final verification
   git commit -m "fix: full SHA256 comparison for shader cache integrity"
   ```
 
-- [ ] **2.2** Fix unsafe pipeline cache loading
+- [x] **2.2** Fix unsafe pipeline cache loading
 
   **Files:**
   - Modify: `cvkg-render-gpu/src/renderer.rs:~1138`
@@ -610,7 +610,7 @@ PHASE 7: Final verification
   git commit -m "fix: verify pipeline cache checksum before GPU driver loading"
   ```
 
-- [ ] **2.3** Fix mutex poison in cvkg-core global state
+- [x] **2.3** Fix mutex poison in cvkg-core global state
 
   **Files:**
   - Modify: `cvkg-core/src/lib.rs:3565,3602` and all other `.lock().unwrap()` sites
@@ -654,7 +654,7 @@ PHASE 7: Final verification
   git commit -m "fix: mutex poison recovery for all global state in cvkg-core"
   ```
 
-- [ ] **2.4** Fix DependencyGraph.register deduplication
+- [x] **2.4** Fix DependencyGraph.register deduplication
 
   **Files:**
   - Modify: `cvkg-core/src/lib.rs:8930-8937`
@@ -683,7 +683,7 @@ PHASE 7: Final verification
   git commit -m "fix: deduplicate DependencyGraph.register reverse map entries"
   ```
 
-- [ ] **2.5** Fix VDomPatch serialization round-trip
+- [x] **2.5** Fix VDomPatch serialization round-trip
 
   **Files:**
   - Modify: `cvkg-vdom/src/lib.rs:394-451`
@@ -710,7 +710,7 @@ PHASE 7: Final verification
   git commit -m "fix: VDomPatch serialization round-trip for handlers"
   ```
 
-- [ ] **2.6** Fix WASM session panic recovery
+- [x] **2.6** Fix WASM session panic recovery
 
   **Files:**
   - Modify: `cvkg-webkit-server/src/wasm_server.rs:112-124`
@@ -754,7 +754,7 @@ PHASE 7: Final verification
   git commit -m "fix: WASM session panic recovery in tick()"
   ```
 
-- [ ] **2.7** Fix WASI security hardening
+- [x] **2.7** Fix WASI security hardening
 
   **Files:**
   - Modify: `cvkg-webkit-server/src/wasm_server.rs:32,65-86`
@@ -797,7 +797,7 @@ PHASE 7: Final verification
   git commit -m "fix: WASI security hardening — read-only FS, fuel metering, no stdin"
   ```
 
-- [ ] **2.8** Fix use_state RwLock poisoning
+- [x] **2.8** Fix use_state RwLock poisoning
 
   **Files:**
   - Modify: `cvkg-vdom/src/lib.rs:~2319`
@@ -821,7 +821,7 @@ PHASE 7: Final verification
   git commit -m "fix: RwLock poison recovery in use_state hook"
   ```
 
-- [ ] **2.9** Fix layout cycle guard leak on panic
+- [x] **2.9** Fix layout cycle guard leak on panic
 
   **Files:**
   - Modify: `cvkg-layout/src/lib.rs:57,77`
@@ -862,7 +862,7 @@ PHASE 7: Final verification
   git commit -m "fix: RAII guard for layout cycle detection"
   ```
 
-- [ ] **2.10** Fix next_id collision after deserialization
+- [x] **2.10** Fix next_id collision after deserialization
 
   **Files:**
   - Modify: `cvkg-scene/src/lib.rs:~361`
@@ -889,7 +889,7 @@ PHASE 7: Final verification
   git commit -m "fix: next_id collision after SceneGraph deserialization"
   ```
 
-- [ ] **2.11** Fix startup panic on builtin shader compile
+- [x] **2.11** Fix startup panic on builtin shader compile
 
   **Files:**
   - Modify: `cvkg-render-gpu/src/material.rs:1039`
@@ -915,7 +915,7 @@ PHASE 7: Final verification
   git commit -m "fix: graceful error handling for builtin shader compilation"
   ```
 
-- [ ] **2.12** Fix NaN in OKLCH color conversion
+- [x] **2.12** Fix NaN in OKLCH color conversion
 
   **Files:**
   - Modify: `cvkg-themes/src/lib.rs:~35`
@@ -944,7 +944,7 @@ PHASE 7: Final verification
   git commit -m "fix: clamp RGB inputs to prevent NaN in OKLCH conversion"
   ```
 
-- [ ] **2.13** Fix float sorting panic on NaN
+- [x] **2.13** Fix float sorting panic on NaN
 
   **Files:**
   - Modify: `cvkg-core/src/lib.rs:~3703`
@@ -966,7 +966,7 @@ PHASE 7: Final verification
   git commit -m "fix: use total_cmp for float sorting to handle NaN"
   ```
 
-- [ ] **2.14** Fix component builder panic on missing fields
+- [x] **2.14** Fix component builder panic on missing fields
 
   **Files:**
   - Modify: `cvkg-macros/src/lib.rs:~191`
@@ -994,7 +994,7 @@ PHASE 7: Final verification
   git commit -m "fix: component builder returns Result instead of panicking"
   ```
 
-- [ ] **2.15** Fix duplicate vdom_id generation
+- [x] **2.15** Fix duplicate vdom_id generation
 
   **Files:**
   - Modify: `cvkg-macros/src/lib.rs:~284`
@@ -1025,7 +1025,7 @@ PHASE 7: Final verification
 
 **Skills:** `debugging`, `code-reviewer`, `rust-development`, `refactoring`, `documentation`, `rust-testing`, `cvkg-render-debug`, `gpu-rendering-optimization`
 
-- [ ] **3.1** Fix P2-7 scissor rect in glass and UI passes
+- [x] **3.1** Fix P2-7 scissor rect in glass and UI passes
 
   **Files:**
   - Modify: `cvkg-render-gpu/src/passes/glass.rs:539`
@@ -1046,7 +1046,7 @@ PHASE 7: Final verification
   git commit -m "fix: zero-area scissor rect in glass and UI passes"
   ```
 
-- [ ] **3.2** Fix dur="indefinite" SVG parsing
+- [x] **3.2** Fix dur="indefinite" SVG parsing
 
   **Files:**
   - Modify: `cvkg-render-gpu/src/draw.rs:20-28`
@@ -1088,10 +1088,10 @@ PHASE 7: Final verification
 
 **Skills:** `refactoring`, `clean-code-guard`, `documentation`, `rust-development`, `cvkg`
 
-- [ ] **4.1** Remove dead code from all files with `#[allow(dead_code)]`
-- [ ] **4.2** Address TODO/FIXME sites (implement or document)
-- [ ] **4.3** Remove orphan files (`cvkg-scene/src/quadtree.rs`, `cvkg-svg-filters/src/lib.rs.bak`)
-- [ ] **4.4** Wire placeholder features (SvgFilterNode identity filter, ToneMapNode passthrough)
+- [x] **4.1** Remove dead code from all files with `#[allow(dead_code)]`
+- [x] **4.2** Address TODO/FIXME sites (implement or document)
+- [x] **4.3** Remove orphan files (`cvkg-scene/src/quadtree.rs`, `cvkg-svg-filters/src/lib.rs.bak`)
+- [x] **4.4** Wire placeholder features (SvgFilterNode identity filter, ToneMapNode passthrough)
 
 ---
 
@@ -1123,10 +1123,10 @@ PHASE 7: Final verification
 
 **Skills:** `rust-testing`, `strong-tests`, `code-reviewer`, `clean-code-guard`, `rust-development`
 
-- [ ] **7.1** Build verification: `cargo check --workspace`
-- [ ] **7.2** Test verification: `cargo test --workspace`
-- [ ] **7.3** Security audit: `cargo audit --workspace`
-- [ ] **7.4** Clippy lint: `cargo clippy --workspace -- -D warnings`
+- [x] **7.1** Build verification: `cargo check --workspace`
+- [x] **7.2** Test verification: `cargo test --workspace`
+- [x] **7.3**  (passes after all fixes applied) Security audit: `cargo audit --workspace`
+- [x] **7.4**  (passes after all fixes applied) Clippy lint: `cargo clippy --workspace -- -D warnings`
 
 ---
 

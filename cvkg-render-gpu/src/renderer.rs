@@ -1,4 +1,4 @@
-//! The main SurtrRenderer struct and core frame lifecycle.
+//! The main GpuRenderer struct and core frame lifecycle.
 use crate::draw::{parse_svg_animations, usvg_to_lyon};
 use crate::heim::SundrPacker;
 use crate::kvasir;
@@ -75,9 +75,9 @@ impl Default for QualityLevel {
     }
 }
 
-/// P1-1 fix: configurable SurtrRenderer parameters.
+/// P1-1 fix: configurable GpuRenderer parameters.
 ///
-/// The 5220-line SurtrRenderer monolith hardcoded six LRU cache sizes
+/// The 5220-line GpuRenderer monolith hardcoded six LRU cache sizes
 /// plus the Mega-Heim atlas dimensions. This struct extracts those
 /// into a single configuration object so that callers can tune the
 /// renderer for different working sets (high-end desktop vs. mid-tier
@@ -87,8 +87,8 @@ impl Default for QualityLevel {
 /// `crate::SurtrConfig` (from `cvkg_runic_text` re-exports in
 /// `lib.rs`) preserves backward compatibility.
 ///
-/// SurtrRenderer implements the high-performance GPU backend.
-pub struct SurtrRenderer {
+/// GpuRenderer implements the high-performance GPU backend.
+pub struct GpuRenderer {
     pub(crate) instance: Arc<wgpu::Instance>,
     pub(crate) adapter: Arc<wgpu::Adapter>,
     pub(crate) device: Arc<wgpu::Device>,
@@ -341,7 +341,7 @@ pub struct SurtrRenderer {
     /// Current frame generation counter. Incremented each frame to avoid
     /// clearing the memo cache (which would defeat cross-frame memoization).
     pub(crate) frame_generation: u64,
-    /// P1-1: SurtrRenderer configuration. Contains cache sizes,
+    /// P1-1: GpuRenderer configuration. Contains cache sizes,
     /// atlas dimensions, and other tunable parameters. Can be
     /// replaced at runtime via `set_config()` to adapt to different
     /// working sets (e.g., after detecting a low-VRAM device).
@@ -367,7 +367,7 @@ pub struct SurtrRenderer {
 
 // P0-3 safety audit: unsafe Send/Sync on WASM.
 //
-// SurtrRenderer contains the following shared state:
+// GpuRenderer contains the following shared state:
 //   - wgpu::Device and wgpu::Queue  (transitively !Send + !Sync on WASM)
 //   - Mutex<HashMap<...>> caches    (bind_group_cache, texture_view_cache)
 //   - Vec<Vertex>, Vec<u32>, Vec<InstanceData>, Vec<DrawCall> -- the GPU
@@ -391,7 +391,7 @@ pub struct SurtrRenderer {
 //    these locks are no-ops in practice but the data is still safe to
 //    access from a single thread.
 //
-// 3. SurtrRenderer's GPU buffer staging vectors are only mutated by the
+// 3. GpuRenderer's GPU buffer staging vectors are only mutated by the
 //    renderer's own methods, all of which are called sequentially from
 //    the event loop on a single thread. No background task, no worker
 //    thread, no async task post-yield can observe partial state.
@@ -407,8 +407,8 @@ pub struct SurtrRenderer {
 // This is a known intentional divergence from wgpu's conservative
 // !Send+!Sync on WASM. It is necessary because winit's event loop on
 // WASM requires the application state to be Send so it can be held
-// X-08: unsafe Send/Sync for SurtrRenderer on WASM
-// SAFETY: SurtrRenderer contains wgpu types that are not Send/Sync on WASM
+// X-08: unsafe Send/Sync for GpuRenderer on WASM
+// SAFETY: GpuRenderer contains wgpu types that are not Send/Sync on WASM
 // because wgpu's web backend uses OffscreenCanvas which is main-thread-only.
 // However, CVKG's WASM execution model is single-threaded:
 // - The browser event loop is single-threaded
@@ -417,13 +417,13 @@ pub struct SurtrRenderer {
 // - wgpu's own WebGPU backend allows this on single-threaded WASM
 //
 // CRITICAL: If CVKG ever adds web worker rendering or shared WebAssembly
-// threads, this unsafe impl MUST be removed and SurtrRenderer must be
+// threads, this unsafe impl MUST be removed and GpuRenderer must be
 // wrapped in a !Send/!Sync marker (e.g., PhantomData<*const ()>) to prevent
 // accidental cross-thread use. The cfg gate ensures this only applies to wasm32.
 #[cfg(target_arch = "wasm32")]
-unsafe impl Send for SurtrRenderer {}
+unsafe impl Send for GpuRenderer {}
 #[cfg(target_arch = "wasm32")]
-unsafe impl Sync for SurtrRenderer {}
+unsafe impl Sync for GpuRenderer {}
 
 /// SVG tessellation parameters.
 pub(crate) struct TessellateParams<'a> {
@@ -548,7 +548,7 @@ fn compute_mip_levels(width: u32, height: u32) -> u32 {
     mips
 }
 
-impl SurtrRenderer {
+impl GpuRenderer {
     /// Access the hologram instances submitted this frame.
     pub fn hologram_instances(&self) -> &[HologramInstance] {
         &self.hologram_instances
@@ -594,7 +594,7 @@ impl SurtrRenderer {
 
     /// Acquire a poisoned-mutex guard and CLEAR the underlying data on recovery.
     ///
-    /// P1-3 fix: the previous SurtrRenderer::lock_or_clear_cache(` pattern
+    /// P1-3 fix: the previous GpuRenderer::lock_or_clear_cache(` pattern
     /// silently accepted a partially-mutated cache (e.g. a bind group
     /// insertion interrupted by panic), which could then be used on the
     /// next frame and cause GPU validation errors or visual glitches.
@@ -1830,7 +1830,7 @@ impl SurtrRenderer {
         // P1-10: capture MSAA sample count. forge_internal is an
         // associated function (no `&self`), so we use the default
         // QualityLevel here. The QualityLevel on the resulting
-        // SurtrRenderer is initialized to the same default below,
+        // GpuRenderer is initialized to the same default below,
         // and can be changed later via set_quality_level().
         let msaa_sample_count = QualityLevel::default().msaa_sample_count();
         let scene_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2632,8 +2632,8 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             }
 
             log::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
-            SurtrRenderer::lock_or_clear_cache(&self.bind_group_cache).clear();
-            SurtrRenderer::lock_or_clear_cache(&self.texture_view_cache).clear();
+            GpuRenderer::lock_or_clear_cache(&self.bind_group_cache).clear();
+            GpuRenderer::lock_or_clear_cache(&self.texture_view_cache).clear();
             self.text.shaped_cache.clear();
             ctx.config.width = width;
             ctx.config.height = height;
@@ -4753,7 +4753,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
     }
 }
 
-impl Drop for SurtrRenderer {
+impl Drop for GpuRenderer {
     fn drop(&mut self) {
         // Persist pipeline cache to disk for faster subsequent startups.
         // Use the same path logic as forge_internal() for consistency:
@@ -4780,7 +4780,7 @@ impl Drop for SurtrRenderer {
     }
 }
 
-impl SurtrRenderer {
+impl GpuRenderer {
     /// Submit pre-routed draw command buckets from the cvkg-compositor.
     ///
     /// Accepts `CommandBuckets` produced by `CompositorEngine::flatten_and_route()`
@@ -4901,7 +4901,7 @@ impl SurtrRenderer {
     }
 }
 
-impl SurtrRenderer {
+impl GpuRenderer {
     /// Returns the current effective opacity (product of all stacked values).
     pub(crate) fn apply_opacity(&self, mut color: [f32; 4]) -> [f32; 4] {
         if let Some(&alpha) = self.opacity_stack.last() {
@@ -5545,7 +5545,7 @@ impl SurtrRenderer {
 
     /// Helper: emit a draw call for a batch of vertices.
     fn emit_draw_call(
-        renderer: &mut SurtrRenderer,
+        renderer: &mut GpuRenderer,
         material: cvkg_core::DrawMaterial,
         texture_id: Option<u32>,
         scissor_rect: Rect,
@@ -5855,14 +5855,14 @@ impl SurtrRenderer {
 
 #[cfg(test)]
 mod lock_or_clear_cache_tests {
-    use crate::renderer::SurtrRenderer;
+    use crate::renderer::GpuRenderer;
     use std::collections::HashMap;
     use std::sync::Mutex;
 
     #[test]
     fn returns_lock_when_not_poisoned() {
         let mutex = Mutex::new(HashMap::<u64, u32>::new());
-        let guard = SurtrRenderer::lock_or_clear_cache(&mutex);
+        let guard = GpuRenderer::lock_or_clear_cache(&mutex);
         assert!(guard.is_empty());
     }
 
@@ -5884,7 +5884,7 @@ mod lock_or_clear_cache_tests {
 
         // Now access the poisoned mutex via our helper. The cache should
         // be cleared (not the pre-poison state with {1:100, 2:200}).
-        let guard = SurtrRenderer::lock_or_clear_cache(&mutex);
+        let guard = GpuRenderer::lock_or_clear_cache(&mutex);
         assert!(
             guard.is_empty(),
             "cache must be cleared after poison recovery, got {:?}",
@@ -5909,7 +5909,7 @@ mod lock_or_clear_cache_tests {
         });
 
         // After recovery, the Vec should be empty.
-        let guard = SurtrRenderer::lock_or_clear_cache(&mutex);
+        let guard = GpuRenderer::lock_or_clear_cache(&mutex);
         assert!(guard.is_empty(), "Vec cache should be cleared on poison");
     }
 }
@@ -6276,14 +6276,14 @@ mod p1_10_quality_level_tests {
 
 #[cfg(test)]
 mod p1_7_surface_format_tests {
-    use super::SurtrRenderer;
+    use super::GpuRenderer;
     use wgpu::TextureFormat;
 
     #[test]
     fn empty_list_returns_safe_format() {
         // P1-7 regression: empty format list must not panic; it must
         // return a universally-supported format.
-        let result = SurtrRenderer::select_best_surface_format(&[]);
+        let result = GpuRenderer::select_best_surface_format(&[]);
         // The result must be a format that virtually all GPUs support.
         assert!(
             matches!(result, TextureFormat::Rgba8Unorm | TextureFormat::Bgra8Unorm
@@ -6300,7 +6300,7 @@ mod p1_7_surface_format_tests {
             TextureFormat::Rgba16Float,
             TextureFormat::Bgra8UnormSrgb,
         ];
-        let result = SurtrRenderer::select_best_surface_format(&formats);
+        let result = GpuRenderer::select_best_surface_format(&formats);
         assert_eq!(result, TextureFormat::Rgba16Float);
     }
 
@@ -6312,7 +6312,7 @@ mod p1_7_surface_format_tests {
             TextureFormat::Rgba8UnormSrgb,
             TextureFormat::Bgra8UnormSrgb,
         ];
-        let result = SurtrRenderer::select_best_surface_format(&formats);
+        let result = GpuRenderer::select_best_surface_format(&formats);
         // Rgba8Unorm is listed before the sRGB formats in the
         // preferred list, so it would actually be picked first.
         // Either Rgba8Unorm or any sRGB format is acceptable.
@@ -6333,7 +6333,7 @@ mod p1_7_surface_format_tests {
             TextureFormat::Rgba8Unorm,
             TextureFormat::Bgra8Unorm,
         ];
-        let result = SurtrRenderer::select_best_surface_format(&formats);
+        let result = GpuRenderer::select_best_surface_format(&formats);
         // Must be one of the linear formats we provided.
         assert!(
             formats.contains(&result),
@@ -6346,7 +6346,7 @@ mod p1_7_surface_format_tests {
         // If the only formats are exotic (e.g. RGB9E5Float HDR),
         // the function must return one of them, but not panic.
         let formats = [TextureFormat::Rgb9e5Ufloat];
-        let result = SurtrRenderer::select_best_surface_format(&formats);
+        let result = GpuRenderer::select_best_surface_format(&formats);
         // Either the exotic format itself or a safe fallback.
         // In this case the only option is the exotic one, which is fine.
         assert_eq!(result, TextureFormat::Rgb9e5Ufloat);
@@ -6358,7 +6358,7 @@ mod p1_7_surface_format_tests {
 // =========================================================================
 //
 // P1-6 regression tests for the ring buffer write logic. We can't
-// easily test the actual GPU write_buffer call without a SurtrRenderer
+// easily test the actual GPU write_buffer call without a GpuRenderer
 // instance, but we CAN test the math (chunk sizes, drop counts, head
 // updates) which is where the bug was.
 
@@ -6529,7 +6529,7 @@ mod p1_1_surtr_config_tests {
     // ==========================================
     // The invalidate_all_caches() method provides a single point
     // of coordination for clearing all asset caches. We can't
-    // easily test it without a real SurtrRenderer instance, but
+    // easily test it without a real GpuRenderer instance, but
     // we can verify the method signature compiles and that the
     // underlying cache types implement the operations we use.
 

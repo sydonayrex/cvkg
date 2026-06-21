@@ -1,7 +1,7 @@
 //! KvasirNode trait and ExecutionContext.
 
 use super::resource::ResourceId;
-use crate::renderer::SurtrRenderer;
+use crate::renderer::GpuRenderer;
 
 /// Hint to the planner about preferred execution backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,12 +14,12 @@ pub enum ExecutionHint {
 /// Context passed to each node during execution.
 ///
 /// P1-2 fix: documented the aliasing contract. The struct holds:
-/// - Several `&'a` shared references to fields of `SurtrRenderer`
+/// - Several `&'a` shared references to fields of `GpuRenderer`
 ///   (device, queue, registry, renderer, target_view, depth_view,
 ///   bind groups)
 /// - A single `&'a mut wgpu::CommandEncoder` (the only mutable field)
 ///
-/// The `renderer` field is `&'a SurtrRenderer` (immutable), so nodes
+/// The `renderer` field is `&'a GpuRenderer` (immutable), so nodes
 /// cannot call `&mut self` methods on the renderer during execution.
 /// This is intentional: the renderer is being driven by the outer
 /// frame loop, and allowing a node to mutate the renderer mid-frame
@@ -36,7 +36,7 @@ pub struct ExecutionContext<'a> {
     pub queue: &'a wgpu::Queue,
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub registry: &'a crate::kvasir::registry::ResourceRegistry,
-    pub renderer: &'a crate::renderer::SurtrRenderer,
+    pub renderer: &'a crate::renderer::GpuRenderer,
     pub target_view: &'a wgpu::TextureView,
     pub depth_view: &'a wgpu::TextureView,
     pub blur_env_bind_group_a: &'a wgpu::BindGroup,
@@ -63,7 +63,7 @@ impl<'a> ExecutionContext<'a> {
         entries: &[wgpu::BindGroupEntry<'_>],
         label: Option<&str>,
     ) -> wgpu::BindGroup {
-        let mut cache = SurtrRenderer::lock_or_clear_cache(&self.renderer.bind_group_cache);
+        let mut cache = GpuRenderer::lock_or_clear_cache(&self.renderer.bind_group_cache);
         // Use entry API: if key exists, return a clone of the cached bind group.
         // If not, create it, insert it, and return a clone.
         if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(key) {
@@ -103,22 +103,22 @@ pub trait KvasirNode {
 // =========================================================================
 //
 // These tests verify the aliasing contract documented on
-// ExecutionContext. The renderer field is `&SurtrRenderer`
+// ExecutionContext. The renderer field is `&GpuRenderer`
 // (immutable), and the encoder field is `&mut CommandEncoder`.
 
 #[cfg(test)]
 mod p1_2_aliasing_contract_tests {
     use super::*;
 
-    /// P1-2 regression: the `renderer` field must be `&SurtrRenderer`
-    /// (immutable), not `&mut SurtrRenderer`. This is a compile-time
+    /// P1-2 regression: the `renderer` field must be `&GpuRenderer`
+    /// (immutable), not `&mut GpuRenderer`. This is a compile-time
     /// invariant; the test makes the contract explicit so future
     /// refactors cannot silently weaken it.
     #[test]
     fn renderer_field_is_immutable() {
-        // Type-level assertion: SurtrRenderer can be borrowed immutably.
-        fn _assert_immutable(_: &SurtrRenderer) {}
-        let _f: fn(&SurtrRenderer) = _assert_immutable;
+        // Type-level assertion: GpuRenderer can be borrowed immutably.
+        fn _assert_immutable(_: &GpuRenderer) {}
+        let _f: fn(&GpuRenderer) = _assert_immutable;
     }
 
     /// P1-2 documentation: the encoder field is the only `&mut`

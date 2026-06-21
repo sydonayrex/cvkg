@@ -6,12 +6,12 @@
 
 use std::num::NonZeroUsize;
 
-/// Configurable parameters for the SurtrRenderer.
+/// Configurable parameters for the GpuRenderer.
 ///
-/// The 5220-line SurtrRenderer monolith hardcoded six LRU cache
+/// The 5220-line GpuRenderer monolith hardcoded six LRU cache
 /// sizes plus the Mega-Heim atlas dimensions. This struct
 /// extracts those tunables so they can be adjusted at runtime via
-/// `SurtrRenderer::set_config()` (e.g., to use a low_vram preset
+/// `GpuRenderer::set_config()` (e.g., to use a low_vram preset
 /// after detecting a device with limited VRAM).
 #[derive(Debug, Clone)]
 pub struct SurtrConfig {

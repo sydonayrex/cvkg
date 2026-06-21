@@ -1,7 +1,7 @@
 use crate::kvasir::node::{ExecutionContext, KvasirNode};
 use crate::kvasir::nodes::{PassId, RES_BLUR_A, RES_SCENE};
 use crate::kvasir::resource::ResourceId;
-use crate::renderer::SurtrRenderer;
+use crate::renderer::GpuRenderer;
 
 pub struct BackdropCopyNode {
     pub inputs: Vec<ResourceId>,
@@ -43,7 +43,7 @@ impl KvasirNode for BackdropCopyNode {
             }
         };
         let target_view = {
-            let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
+            let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
             cache
                 .entry((RES_BLUR_A, 0))
                 .or_insert_with(|| {
@@ -86,7 +86,7 @@ impl KvasirNode for BackdropCopyNode {
             }
         };
         let source_bind_group = {
-            let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
+            let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
             cache
                 .entry((RES_SCENE, 0, false))
                 .or_insert_with(|| {
@@ -180,7 +180,7 @@ impl KvasirNode for BackdropBlurNode {
 
         let mip_views: Vec<wgpu::TextureView> = (0..effective_mips)
             .map(|mip| {
-                let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
+                let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                 cache
                     .entry((RES_BLUR_A, mip as u32))
                     .or_insert_with(|| {
@@ -480,7 +480,7 @@ impl KvasirNode for GlassNode {
                 let portal_res_id = ResourceId(2000 + portal_idx as u32);
                 if let Some(portal_view) = ctx.registry.get_texture_view(portal_res_id) {
                     let cache_key = (portal_res_id, 0, false);
-                    let mut cache = SurtrRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
+                    let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
                     let bg = cache.entry(cache_key).or_insert_with(|| {
                         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some(&format!("portal_blur_env_bg_{}", portal_idx)),

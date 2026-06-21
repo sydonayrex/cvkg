@@ -325,20 +325,20 @@ impl SafeAreaInsets {
     }
 }
 
-// Thread-local raw pointer to the locked SurtrRenderer for the duration of one render pass.
+// Thread-local raw pointer to the locked GpuRenderer for the duration of one render pass.
 // CONTRACT: Set to non-null only while the MutexGuard is live on the call stack in render_frame_locked().
 // All NativeRenderer draw calls use this pointer to avoid per-call mutex lock overhead.
 // SAFETY: The pointer is valid because the MutexGuard is held for the entire duration the pointer is set.
 thread_local! {
-    static GPU_FRAME_PTR: std::cell::Cell<*mut cvkg_render_gpu::SurtrRenderer> =
+    static GPU_FRAME_PTR: std::cell::Cell<*mut cvkg_render_gpu::GpuRenderer> =
         const { std::cell::Cell::new(std::ptr::null_mut()) };
 }
 
 /// Native renderer backend implementing the Renderer trait.
-/// It wraps a shared SurtrRenderer for high-performance GPU drawing.
+/// It wraps a shared GpuRenderer for high-performance GPU drawing.
 /// During a render pass, GPU_FRAME_PTR is set so draw calls bypass the mutex.
 pub struct NativeRenderer {
-    gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
+    gpu: Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>,
     delta_time: f32,
     elapsed_time: f32,
     berserker_mode: cvkg_core::BerserkerMode,
@@ -354,7 +354,7 @@ impl NativeRenderer {
     /// # Safety
     /// GPU_FRAME_PTR is only non-null when a MutexGuard is live on the same thread's call stack.
     #[inline(always)]
-    fn gpu_ref(&mut self) -> impl std::ops::DerefMut<Target = cvkg_render_gpu::SurtrRenderer> + '_ {
+    fn gpu_ref(&mut self) -> impl std::ops::DerefMut<Target = cvkg_render_gpu::GpuRenderer> + '_ {
         GPU_FRAME_PTR.with(|ptr| {
             let raw = ptr.get();
             if !raw.is_null() {
@@ -372,7 +372,7 @@ impl NativeRenderer {
     /// # Safety
     /// GPU_FRAME_PTR is only non-null when a MutexGuard is live above us on the call stack.
     #[inline(always)]
-    fn gpu_ref_shared(&self) -> impl std::ops::Deref<Target = cvkg_render_gpu::SurtrRenderer> + '_ {
+    fn gpu_ref_shared(&self) -> impl std::ops::Deref<Target = cvkg_render_gpu::GpuRenderer> + '_ {
         GPU_FRAME_PTR.with(|ptr| {
             let raw = ptr.get();
             if !raw.is_null() {
@@ -388,12 +388,12 @@ impl NativeRenderer {
 
 /// Returned by NativeRenderer::gpu_ref() — either a direct pointer ref or a mutex guard.
 enum GpuRef<'a> {
-    Ptr(&'a mut cvkg_render_gpu::SurtrRenderer),
-    Guard(std::sync::MutexGuard<'a, cvkg_render_gpu::SurtrRenderer>),
+    Ptr(&'a mut cvkg_render_gpu::GpuRenderer),
+    Guard(std::sync::MutexGuard<'a, cvkg_render_gpu::GpuRenderer>),
 }
 
 impl<'a> std::ops::Deref for GpuRef<'a> {
-    type Target = cvkg_render_gpu::SurtrRenderer;
+    type Target = cvkg_render_gpu::GpuRenderer;
     fn deref(&self) -> &Self::Target {
         match self {
             GpuRef::Ptr(r) => r,
@@ -413,12 +413,12 @@ impl<'a> std::ops::DerefMut for GpuRef<'a> {
 
 /// Read-only variant returned by NativeRenderer::gpu_ref_shared().
 enum GpuRefShared<'a> {
-    Ptr(&'a cvkg_render_gpu::SurtrRenderer),
-    Guard(std::sync::MutexGuard<'a, cvkg_render_gpu::SurtrRenderer>),
+    Ptr(&'a cvkg_render_gpu::GpuRenderer),
+    Guard(std::sync::MutexGuard<'a, cvkg_render_gpu::GpuRenderer>),
 }
 
 impl<'a> std::ops::Deref for GpuRefShared<'a> {
-    type Target = cvkg_render_gpu::SurtrRenderer;
+    type Target = cvkg_render_gpu::GpuRenderer;
     fn deref(&self) -> &Self::Target {
         match self {
             GpuRefShared::Ptr(r) => r,
@@ -470,7 +470,7 @@ impl NativeRenderer {
     /// Create a new NativeRenderer (internal use by App)
     fn new(
         window: Arc<Window>,
-        gpu: Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>,
+        gpu: Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>,
         delta_time: f32,
         elapsed_time: f32,
         berserker_mode: cvkg_core::BerserkerMode,
@@ -621,7 +621,7 @@ impl WindowManager {
     pub fn create_window(
         &mut self,
         event_loop: &ActiveEventLoop,
-        gpu: &Option<Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>>,
+        gpu: &Option<Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>>,
         proxy: winit::event_loop::EventLoopProxy<AppEvent>,
         config: cvkg_core::WindowConfig,
         is_main: bool,
@@ -839,7 +839,7 @@ pub struct WindowData {
 struct App<V: cvkg_core::View> {
     view: V,
     window_manager: WindowManager,
-    gpu: Option<Arc<std::sync::Mutex<cvkg_render_gpu::SurtrRenderer>>>,
+    gpu: Option<Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>>,
     #[allow(dead_code)]
     asset_manager: std::sync::Arc<NativeAssetManager>,
     proxy: winit::event_loop::EventLoopProxy<AppEvent>,
@@ -927,7 +927,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 .clone();
 
             // Immediately set self.gpu to prevent re-entry
-            let mut gpu = pollster::block_on(cvkg_render_gpu::SurtrRenderer::forge(window.clone()));
+            let mut gpu = pollster::block_on(cvkg_render_gpu::GpuRenderer::forge(window.clone()));
 
             // Phase 2.3: Pre-shape static labels to warm the text cache.
             // These strings are rendered every frame by the berserker demo
@@ -1244,7 +1244,7 @@ impl<V: cvkg_core::View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     // Render pass: publish pointer, draw, clear pointer
                     {
-                        let raw: *mut cvkg_render_gpu::SurtrRenderer = &mut *gpu;
+                        let raw: *mut cvkg_render_gpu::GpuRenderer = &mut *gpu;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
                         let render_start = std::time::Instant::now();
                         self.view.render(&mut renderer, content_rect);
@@ -2385,7 +2385,7 @@ impl cvkg_core::Renderer for NativeRenderer {
             .push_affine(transform);
     }
     fn enter_portal(&mut self, z_index: i32) {
-        // Portal layer rendering not yet supported in SurtrRenderer.
+        // Portal layer rendering not yet supported in GpuRenderer.
         // Content within portals renders inline as fallback.
         log::warn!(
             "Portal rendering (enter_portal) not yet implemented in GPU backend; z_index={}",
@@ -2393,7 +2393,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         );
     }
     fn exit_portal(&mut self) {
-        // Portal layer rendering not yet supported in SurtrRenderer.
+        // Portal layer rendering not yet supported in GpuRenderer.
         log::warn!("Portal rendering (exit_portal) not yet implemented in GPU backend");
     }
     fn viewport_size(&self) -> cvkg_core::Rect {
@@ -2619,7 +2619,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     /// Captures the current frame as a PNG-encoded byte buffer via GPU readback.
     /// Captures the current frame as a PNG-encoded byte buffer via GPU readback.
     ///
-    /// FIX #4: capture_frame() returns a Future that borrows the SurtrRenderer, so the
+    /// FIX #4: capture_frame() returns a Future that borrows the GpuRenderer, so the
     /// MutexGuard must remain alive until block_on completes -- the guard cannot be dropped
     /// before the future is driven to completion. The lock is held for the duration of the
     /// GPU readback. This is acceptable because capture_png is an infrequent, explicit
@@ -2628,7 +2628,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn capture_png(&mut self) -> Vec<u8> {
         log::info!("CAPTURING_FRAME: Initiating GPU readback...");
         // INVARIANT: The MutexGuard `gpu` must outlive the future returned by capture_frame()
-        // because the future borrows from the SurtrRenderer. We therefore lock, block_on the
+        // because the future borrows from the GpuRenderer. We therefore lock, block_on the
         // future (driving it to completion), and only then allow the guard to drop.
         let gpu = self.gpu.lock().unwrap_or_else(|p| p.into_inner());
         pollster::block_on(gpu.capture_frame()).unwrap_or_else(|e| {

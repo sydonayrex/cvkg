@@ -48,13 +48,13 @@ pub mod verlet;
 
 /// Sleipnir spring parameters for the physics solver
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SleipnirParams {
+pub struct SpringParams {
     pub stiffness: f32,
     pub damping: f32,
     pub mass: f32,
 }
 
-impl SleipnirParams {
+impl SpringParams {
     pub fn snappy() -> Self {
         Self {
             stiffness: 230.0,
@@ -85,7 +85,7 @@ impl SleipnirParams {
     }
 }
 
-impl Default for SleipnirParams {
+impl Default for SpringParams {
     fn default() -> Self {
         Self::fluid()
     }
@@ -134,11 +134,11 @@ pub enum Animation {
     /// Linear animation
     Linear { duration: Duration },
     /// Organic spring animation
-    Sleipnir(SleipnirParams),
+    Sleipnir(SpringParams),
     /// Hybrid: Keyframe path followed by a Spring settle
     Hybrid {
         keyframes: Vec<Keyframe>,
-        settle: SleipnirParams,
+        settle: SpringParams,
     },
     /// Coordination: Multiple animations in parallel
     Parallel(Vec<Animation>),
@@ -244,11 +244,11 @@ impl Motion {
     }
 }
 
-/// SleipnirSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
+/// SpringSolver implements a 4th-order Runge-Kutta (RK4) integration for springs.
 /// This provides superior stability for high-fidelity interactive motion.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SleipnirSolver {
-    params: SleipnirParams,
+pub struct SpringSolver {
+    params: SpringParams,
     target: f32,
     state: SolverState,
     /// When true, tick() snaps to target instantly (accessibility: reduce motion).
@@ -261,9 +261,9 @@ struct SolverState {
     v: f32,
 }
 
-impl SleipnirSolver {
+impl SpringSolver {
     /// Create a new solver with a target value and starting state.
-    pub fn new(params: SleipnirParams, target: f32, current: f32) -> Self {
+    pub fn new(params: SpringParams, target: f32, current: f32) -> Self {
         Self {
             params,
             target,
@@ -336,7 +336,7 @@ pub struct ActiveAnimation {
     pub current_value: f32,
 
     // Internal state for complex animations
-    solver: Option<SleipnirSolver>,
+    solver: Option<SpringSolver>,
     child_states: Vec<ActiveAnimation>,
     current_index: usize,
 }
@@ -403,7 +403,7 @@ impl ActiveAnimation {
             Animation::Sleipnir(params) => {
                 let solver = self
                     .solver
-                    .get_or_insert_with(|| SleipnirSolver::new(*params, end_val, start_val));
+                    .get_or_insert_with(|| SpringSolver::new(*params, end_val, start_val));
                 self.current_value = solver.tick(dt_secs);
                 if solver.is_settled() {
                     self.is_finished = true;
@@ -484,12 +484,12 @@ impl ActiveAnimation {
                         self.current_index += 1;
                         if self.current_index >= keyframes.len() {
                             self.solver =
-                                Some(SleipnirSolver::new(*settle, end_val, self.current_value));
+                                Some(SpringSolver::new(*settle, end_val, self.current_value));
                         }
                     }
                 } else {
                     let solver = self.solver.get_or_insert_with(|| {
-                        SleipnirSolver::new(*settle, end_val, self.current_value)
+                        SpringSolver::new(*settle, end_val, self.current_value)
                     });
                     self.current_value = solver.tick(dt_secs);
                     if solver.is_settled() {
@@ -573,13 +573,13 @@ impl ActiveAnimation {
                     for i in 0..piece_count {
                         let offset = ((i as f32 + 1.0) / piece_count as f32) * force_val * 0.1;
                         let piece_start = end_val + offset * (if i % 2 == 0 { 1.0 } else { -1.0 });
-                        let params = SleipnirParams {
+                        let params = SpringParams {
                             stiffness: stiff,
                             damping: 8.0,
                             mass: 1.0,
                         };
                         let mut child = ActiveAnimation::new(Animation::Sleipnir(params));
-                        child.solver = Some(SleipnirSolver::new(params, end_val, piece_start));
+                        child.solver = Some(SpringSolver::new(params, end_val, piece_start));
                         self.child_states.push(child);
                     }
                 }
@@ -672,8 +672,8 @@ mod tests {
 
     #[test]
     fn test_sleipnir_solver_convergence() {
-        let params = SleipnirParams::snappy();
-        let mut solver = SleipnirSolver::new(params, 100.0, 0.0);
+        let params = SpringParams::snappy();
+        let mut solver = SpringSolver::new(params, 100.0, 0.0);
 
         // Initial state
         assert!(!solver.is_settled());

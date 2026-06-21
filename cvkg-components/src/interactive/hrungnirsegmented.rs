@@ -11,7 +11,7 @@ pub struct HrungnirSegmented {
     pill_x: f32,
     pill_width: f32,
     #[allow(dead_code)]
-    anim: cvkg_anim::SleipnirSolver,
+    anim: cvkg_anim::SpringSolver,
 }
 
 pub enum SegmentedStyle {
@@ -29,7 +29,7 @@ impl HrungnirSegmented {
             style: SegmentedStyle::Glass,
             pill_x: 0.0,
             pill_width: 0.0,
-            anim: cvkg_anim::SleipnirSolver::new(cvkg_anim::SleipnirParams::snappy(), 0.0, 0.0),
+            anim: cvkg_anim::SpringSolver::new(cvkg_anim::SpringParams::snappy(), 0.0, 0.0),
         }
     }
 

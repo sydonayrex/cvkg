@@ -1,8 +1,8 @@
 //! Atlas loading and text shaping utilities.
-use crate::renderer::SurtrRenderer;
+use crate::renderer::GpuRenderer;
 use cvkg_core::{Rect, Renderer};
 
-impl SurtrRenderer {
+impl GpuRenderer {
     /// load_image_to_heim -- Packs a raw asset into the Mega-Heim.
     /// This is used for common icons to enable aggressive batching (1 draw call).
     pub fn load_image_to_heim(&mut self, name: &str, data: &[u8]) {

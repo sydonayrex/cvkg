@@ -1,4 +1,4 @@
-use cvkg_anim::{SleipnirParams, SleipnirSolver};
+use cvkg_anim::{SpringParams, SpringSolver};
 use cvkg_core::{
     Never, Rect, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, SizeProposal},
@@ -9,10 +9,10 @@ use cvkg_core::{
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MorphState {
     current_rect: Rect,
-    solver_x: Option<SleipnirSolver>,
-    solver_y: Option<SleipnirSolver>,
-    solver_w: Option<SleipnirSolver>,
-    solver_h: Option<SleipnirSolver>,
+    solver_x: Option<SpringSolver>,
+    solver_y: Option<SpringSolver>,
+    solver_w: Option<SpringSolver>,
+    solver_h: Option<SpringSolver>,
 }
 
 impl Default for MorphState {
@@ -41,7 +41,7 @@ impl Default for MorphState {
 pub struct Morphed<V: View> {
     pub content: V,
     pub morph_id: u64,
-    pub spring_params: SleipnirParams,
+    pub spring_params: SpringParams,
 }
 
 impl<V: View> Morphed<V> {
@@ -50,12 +50,12 @@ impl<V: View> Morphed<V> {
         Self {
             content,
             morph_id,
-            spring_params: SleipnirParams::fluid(),
+            spring_params: SpringParams::fluid(),
         }
     }
 
     /// Set custom spring parameters for the layout interpolation.
-    pub fn spring_params(mut self, params: SleipnirParams) -> Self {
+    pub fn spring_params(mut self, params: SpringParams) -> Self {
         self.spring_params = params;
         self
     }
@@ -86,14 +86,14 @@ impl<V: View> View for Morphed<V> {
         if needs_init {
             let initial = MorphState {
                 current_rect: rect,
-                solver_x: Some(SleipnirSolver::new(self.spring_params, rect.x, rect.x)),
-                solver_y: Some(SleipnirSolver::new(self.spring_params, rect.y, rect.y)),
-                solver_w: Some(SleipnirSolver::new(
+                solver_x: Some(SpringSolver::new(self.spring_params, rect.x, rect.x)),
+                solver_y: Some(SpringSolver::new(self.spring_params, rect.y, rect.y)),
+                solver_w: Some(SpringSolver::new(
                     self.spring_params,
                     rect.width,
                     rect.width,
                 )),
-                solver_h: Some(SleipnirSolver::new(
+                solver_h: Some(SpringSolver::new(
                     self.spring_params,
                     rect.height,
                     rect.height,
@@ -118,7 +118,7 @@ impl<V: View> View for Morphed<V> {
 
                 // Get or create solvers, updating targets if layout proposal changed
                 let mut sx = state.solver_x.unwrap_or_else(|| {
-                    SleipnirSolver::new(self.spring_params, rect.x, state.current_rect.x)
+                    SpringSolver::new(self.spring_params, rect.x, state.current_rect.x)
                 });
                 sx.set_target(rect.x);
                 current_rect.x = sx.tick(dt);
@@ -128,7 +128,7 @@ impl<V: View> View for Morphed<V> {
                 state.solver_x = Some(sx);
 
                 let mut sy = state.solver_y.unwrap_or_else(|| {
-                    SleipnirSolver::new(self.spring_params, rect.y, state.current_rect.y)
+                    SpringSolver::new(self.spring_params, rect.y, state.current_rect.y)
                 });
                 sy.set_target(rect.y);
                 current_rect.y = sy.tick(dt);
@@ -138,7 +138,7 @@ impl<V: View> View for Morphed<V> {
                 state.solver_y = Some(sy);
 
                 let mut sw = state.solver_w.unwrap_or_else(|| {
-                    SleipnirSolver::new(self.spring_params, rect.width, state.current_rect.width)
+                    SpringSolver::new(self.spring_params, rect.width, state.current_rect.width)
                 });
                 sw.set_target(rect.width);
                 current_rect.width = sw.tick(dt);
@@ -148,7 +148,7 @@ impl<V: View> View for Morphed<V> {
                 state.solver_w = Some(sw);
 
                 let mut sh = state.solver_h.unwrap_or_else(|| {
-                    SleipnirSolver::new(self.spring_params, rect.height, state.current_rect.height)
+                    SpringSolver::new(self.spring_params, rect.height, state.current_rect.height)
                 });
                 sh.set_target(rect.height);
                 current_rect.height = sh.tick(dt);

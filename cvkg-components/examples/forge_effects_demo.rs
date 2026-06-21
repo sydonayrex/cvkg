@@ -3,7 +3,7 @@
 use cvkg_core::{Rect, Renderer};
 use cvkg_render_gpu::{
     ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role,
-    ShieldWallAdapter, SurtrRenderer, Tree, TreeId, TreeUpdate,
+    ShieldWallAdapter, GpuRenderer, Tree, TreeId, TreeUpdate,
 };
 use std::sync::Arc;
 use winit::{
@@ -15,7 +15,7 @@ use winit::{
 
 struct ForgeEffectsApp {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     shieldwall: Option<ShieldWallAdapter>,
 }
 
@@ -72,7 +72,7 @@ impl ApplicationHandler for ForgeEffectsApp {
 
         window.set_visible(true);
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
         self.shieldwall = Some(shieldwall);

@@ -12,7 +12,7 @@
 //!
 //! # Integration
 //!
-//! The `SurtrRenderer` in cvkg-render-gpu uses a multi-pass pipeline architecture.
+//! The `GpuRenderer` in cvkg-render-gpu uses a multi-pass pipeline architecture.
 //! To add color blindness simulation, create a dedicated render pipeline using
 //! `shader_source()` and `ColorBlindUniforms`, then render a full-screen triangle
 //! after the main pass but before composite/present.

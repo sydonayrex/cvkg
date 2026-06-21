@@ -48,7 +48,7 @@ impl Renderer for MockRenderer {
         _align: cvkg_runic_text::TextAlign,
         _overflow: cvkg_runic_text::TextOverflow,
     ) -> Option<cvkg_runic_text::ShapedText> {
-        let mut engine = cvkg_runic_text::RunicTextEngine::new();
+        let mut engine = cvkg_runic_text::TextEngine::new();
         engine.shape_layout(_spans, _max_width, _align, _overflow).ok()
     }
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {

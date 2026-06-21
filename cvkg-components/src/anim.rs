@@ -1,4 +1,4 @@
-use cvkg_anim::{SleipnirParams, SleipnirSolver};
+use cvkg_anim::{SpringParams, SpringSolver};
 use cvkg_core::{Never, Rect, Renderer, View, load_system_state, update_system_state};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub struct Animated<V: View> {
 
     // Spring physics target
     pub state_hash: Option<u64>,
-    pub spring_params: SleipnirParams,
+    pub spring_params: SpringParams,
     pub target_translate_x: Option<f32>,
     pub target_translate_y: Option<f32>,
     pub target_scale: Option<f32>,
@@ -67,7 +67,7 @@ impl<V: View> Animated<V> {
             easing: Easing::EaseInOut,
             duration: 0.3,
             state_hash: None,
-            spring_params: SleipnirParams::snappy(),
+            spring_params: SpringParams::snappy(),
             target_translate_x: None,
             target_translate_y: None,
             target_scale: None,
@@ -89,7 +89,7 @@ impl<V: View> Animated<V> {
         self
     }
 
-    pub fn spring(mut self, hash: u64, params: SleipnirParams) -> Self {
+    pub fn spring(mut self, hash: u64, params: SpringParams) -> Self {
         self.state_hash = Some(hash);
         self.spring_params = params;
         self
@@ -167,7 +167,7 @@ impl<V: View> View for Animated<V> {
 
             let needs_init = {
                 let state = load_system_state();
-                state.get_component_state::<SleipnirSolver>(hash).is_none()
+                state.get_component_state::<SpringSolver>(hash).is_none()
             };
 
             if needs_init {
@@ -176,19 +176,19 @@ impl<V: View> View for Animated<V> {
                     if let Some(target) = self.target_translate_x {
                         ns.set_component_state(
                             hash,
-                            SleipnirSolver::new(self.spring_params, target, 0.0),
+                            SpringSolver::new(self.spring_params, target, 0.0),
                         );
                     }
                     if let Some(target) = self.target_translate_y {
                         ns.set_component_state(
                             hash + 1,
-                            SleipnirSolver::new(self.spring_params, target, 0.0),
+                            SpringSolver::new(self.spring_params, target, 0.0),
                         );
                     }
                     if let Some(target) = self.target_scale {
                         ns.set_component_state(
                             hash + 2,
-                            SleipnirSolver::new(self.spring_params, target, 1.0),
+                            SpringSolver::new(self.spring_params, target, 1.0),
                         );
                     }
                     ns
@@ -215,7 +215,7 @@ impl<V: View> View for Animated<V> {
                         continue;
                     }
                     let h = hash + i as u64;
-                    if let Some(solver) = ns.get_component_state::<SleipnirSolver>(h)
+                    if let Some(solver) = ns.get_component_state::<SpringSolver>(h)
                         && let Ok(guard) = solver.read()
                     {
                         let mut solver = *guard;

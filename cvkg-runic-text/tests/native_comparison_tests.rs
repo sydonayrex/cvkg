@@ -1,4 +1,4 @@
-use cvkg_runic_text::{RunicTextEngine, TextSpan, TextStyle, TextAlign, TextOverflow};
+use cvkg_runic_text::{TextEngine, TextSpan, TextStyle, TextAlign, TextOverflow};
 
 /// P2-43: Native typography comparison helper.
 /// Models the expected metrics boundaries from standard platform text engines (CoreText, DirectWrite, Pango).
@@ -33,7 +33,7 @@ impl MockPlatformMetrics {
 /// compared to expected reference platform metrics.
 #[test]
 fn test_native_typography_metrics_drift() {
-    let mut engine = RunicTextEngine::new_test();
+    let mut engine = TextEngine::new_test();
     let style = TextStyle::new("Jupiteroid", 16.0);
     
     let text = "Hello World";

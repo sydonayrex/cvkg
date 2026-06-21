@@ -5,11 +5,11 @@
 
 #[cfg(test)]
 mod tests {
-    use cvkg_render_gpu::SurtrRenderer;
+    use cvkg_render_gpu::GpuRenderer;
 use cvkg_core::KvasirId;
     use cvkg_runic_text::subpixel::{SubpixelGlyph, render_lcd};
     use cvkg_runic_text::{
-        PortalAlignment, RunicPathSegment, RunicTextEngine, TextAlign, TextOverflow, TextSpan,
+        PortalAlignment, RunicPathSegment, TextEngine, TextAlign, TextOverflow, TextSpan,
         TextStyle,
     };
 
@@ -25,13 +25,13 @@ use cvkg_core::KvasirId;
     #[tokio::test]
     async fn test_gpu_renderer_integration() {
         // Verify we can at least attempt to forge a headless renderer
-        let _ = SurtrRenderer::forge_headless(100, 100).await;
+        let _ = GpuRenderer::forge_headless(100, 100).await;
         assert!(true);
     }
 
     #[test]
     fn test_runic_text_vector_outline_extraction() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         // 1. Shape a character 'B' to get its glyph ID via public shape_layout API
@@ -105,7 +105,7 @@ use cvkg_core::KvasirId;
 
     #[test]
     fn test_runic_text_portal_vertical_alignment() {
-        let mut engine = RunicTextEngine::new_test();
+        let mut engine = TextEngine::new_test();
         let style = TextStyle::new("Jupiteroid", 16.0);
 
         // Build inline portal spans with different vertical alignments using correct offsets
@@ -234,11 +234,11 @@ use cvkg_core::KvasirId;
 
     #[test]
     fn test_anim_velocity_inheritance() {
-        use cvkg_anim::{SleipnirParams, SleipnirSolver};
+        use cvkg_anim::{SpringParams, SpringSolver};
 
-        let params = SleipnirParams::snappy();
-        let mut solver_no_vel = SleipnirSolver::new(params, 100.0, 0.0);
-        let mut solver_with_vel = SleipnirSolver::new(params, 100.0, 0.0).with_velocity(150.0);
+        let params = SpringParams::snappy();
+        let mut solver_no_vel = SpringSolver::new(params, 100.0, 0.0);
+        let mut solver_with_vel = SpringSolver::new(params, 100.0, 0.0).with_velocity(150.0);
 
         solver_no_vel.tick(0.016);
         solver_with_vel.tick(0.016);
@@ -248,10 +248,10 @@ use cvkg_core::KvasirId;
 
     #[test]
     fn test_anim_substepping_stability() {
-        use cvkg_anim::{SleipnirParams, SleipnirSolver};
+        use cvkg_anim::{SpringParams, SpringSolver};
 
-        let params = SleipnirParams::bouncy();
-        let mut solver = SleipnirSolver::new(params, 10.0, 0.0);
+        let params = SpringParams::bouncy();
+        let mut solver = SpringSolver::new(params, 10.0, 0.0);
 
         // Huge time step (0.3s)
         solver.tick(0.3);

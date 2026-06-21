@@ -1,8 +1,8 @@
 // Memory System Demo
 
 use cvkg_components::MemoryView;
-use cvkg_core::{KnowledgeFragment, KnowledgeState, Rect, Renderer, State, View};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_core::{KnowledgeFragment, AppState, Rect, Renderer, State, View};
+use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,8 +13,8 @@ use winit::{
 
 struct MemoryApp {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
-    memory_state: State<KnowledgeState>,
+    renderer: Option<GpuRenderer>,
+    memory_state: State<AppState>,
 }
 
 impl ApplicationHandler for MemoryApp {
@@ -29,12 +29,12 @@ impl ApplicationHandler for MemoryApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
 
         // Seed some initial knowledge
-        let mut initial_state = KnowledgeState::default();
+        let mut initial_state = AppState::default();
         initial_state.remember(KnowledgeFragment {
             id: "1".to_string(),
             summary: "Project Bifrost Security Protocol".to_string(),
@@ -158,7 +158,7 @@ fn main() {
     let mut app = MemoryApp {
         window: None,
         renderer: None,
-        memory_state: State::new(KnowledgeState::default()),
+        memory_state: State::new(AppState::default()),
     };
     event_loop.run_app(&mut app).unwrap();
 }

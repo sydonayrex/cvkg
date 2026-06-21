@@ -3,7 +3,7 @@
 //! Run: cargo run -p cvkg --example berserker_fire_demo --features gpu
 
 use cvkg_core::{BerserkerMode, DrawMaterial, FrameRenderer, Rect, Renderer};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use std::time::Instant;
 use winit::{
@@ -14,7 +14,7 @@ use winit::{
 };
 
 fn draw_triangle_fuse(
-    renderer: &mut SurtrRenderer,
+    renderer: &mut GpuRenderer,
     p1: [f32; 2],
     p2: [f32; 2],
     p3: [f32; 2],
@@ -165,7 +165,7 @@ impl DemoState {
 
 struct App {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     state: DemoState,
 }
 
@@ -190,7 +190,7 @@ impl ApplicationHandler for App {
                 )
                 .unwrap(),
         );
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }

@@ -2,12 +2,12 @@
 
 use cvkg_components::ValkyrieIndicator;
 use cvkg_core::{FrameRenderer, Rect, View};
-use cvkg_render_gpu::SurtrRenderer;
-// use cvkg_render_gpu::SurtrRenderer; // already imported above
+use cvkg_render_gpu::GpuRenderer;
+// use cvkg_render_gpu::GpuRenderer; // already imported above
 
 #[tokio::test]
 async fn test_journey_web_backend_stub() {
-    let _web_renderer = SurtrRenderer::forge_headless(800, 600).await;
+    let _web_renderer = GpuRenderer::forge_headless(800, 600).await;
 
     // On non-wasm32, this should be Tier1GPU
     #[cfg(not(target_arch = "wasm32"))]
@@ -23,7 +23,7 @@ async fn test_journey_web_backend_stub() {
 async fn test_journey_native_backend_initialization() {
     let result = tokio::time::timeout(
         std::time::Duration::from_secs(2),
-        SurtrRenderer::forge_headless(100, 100),
+        GpuRenderer::forge_headless(100, 100),
     )
     .await;
 
