@@ -3479,7 +3479,7 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
     }
     /// Subscribe to state changes
     pub fn subscribe<F: Fn(&T) + Send + Sync + 'static>(&self, callback: F) {
-        self.subscribers.lock().unwrap().push(Box::new(callback));
+        self.subscribers.lock().unwrap_or_else(|p| p.into_inner()).push(Box::new(callback));
     }
 }
 use crate::runtime::NodeStateSnapshot;
@@ -3562,7 +3562,7 @@ pub fn enqueue_batch_task(task: Box<dyn FnOnce() + Send + Sync>) {
     let mut queue = BATCH_QUEUE
         .get_or_init(|| std::sync::Mutex::new(Vec::new()))
         .lock()
-        .unwrap();
+        .unwrap_or_else(|p| p.into_inner());
     queue.push(task);
 }
 /// Executes multiple state updates in a single batch, deferring all subscriber
@@ -3599,7 +3599,7 @@ pub fn update_system_state<F>(f: F)
 where
     F: FnOnce(&KnowledgeState) -> KnowledgeState,
 {
-    let _lock = STATE_WRITE_MUTEX.lock().unwrap();
+    let _lock = STATE_WRITE_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
     if is_rendering() {
         log::warn!(
             "LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance."
@@ -3620,7 +3620,7 @@ pub fn transact_system_state<F>(f: F)
 where
     F: Fn(&KnowledgeState) -> KnowledgeState,
 {
-    let _lock = STATE_WRITE_MUTEX.lock().unwrap();
+    let _lock = STATE_WRITE_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
     #[cfg(not(target_arch = "wasm32"))]
     {
         if is_rendering() {
@@ -3784,13 +3784,13 @@ where
     if crate::is_batching() {
         crate::enqueue_batch_task(Box::new(move || {
             {
-                let s = subs_a.lock().unwrap();
+                let s = subs_a.lock().unwrap_or_else(|p| p.into_inner());
                 for cb in s.iter() {
                     cb(&new_a);
                 }
             }
             {
-                let s = subs_b.lock().unwrap();
+                let s = subs_b.lock().unwrap_or_else(|p| p.into_inner());
                 for cb in s.iter() {
                     cb(&new_b);
                 }
@@ -3798,13 +3798,13 @@ where
         }));
     } else {
         {
-            let s = subs_a.lock().unwrap();
+            let s = subs_a.lock().unwrap_or_else(|p| p.into_inner());
             for cb in s.iter() {
                 cb(&new_a);
             }
         }
         {
-            let s = subs_b.lock().unwrap();
+            let s = subs_b.lock().unwrap_or_else(|p| p.into_inner());
             for cb in s.iter() {
                 cb(&new_b);
             }
@@ -4356,7 +4356,7 @@ impl<K: EnvKey> Environment<K> {
     /// Get the current value from the environment
     pub fn get(&self) -> K::Value {
         if let Some(env_store) = ENVIRONMENT.get() {
-            let env_lock = env_store.lock().unwrap();
+            let env_lock = env_store.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(val) = env_lock.get(&std::any::TypeId::of::<K>()) {
                 if let Some(typed_val) = val.downcast_ref::<K::Value>() {
                     return typed_val.clone();
@@ -4389,13 +4389,13 @@ pub mod env {
     pub fn insert<K: super::EnvKey>(value: K::Value) {
         let store = super::ENVIRONMENT
             .get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
-        let mut env_map = store.lock().unwrap();
+        let mut env_map = store.lock().unwrap_or_else(|p| p.into_inner());
         env_map.insert(std::any::TypeId::of::<K>(), Box::new(value));
     }
     /// Remove a value from the environment.
     pub fn remove<K: super::EnvKey>() {
         if let Some(store) = super::ENVIRONMENT.get() {
-            let mut env_map = store.lock().unwrap();
+            let mut env_map = store.lock().unwrap_or_else(|p| p.into_inner());
             env_map.remove(&std::any::TypeId::of::<K>());
         }
     }
