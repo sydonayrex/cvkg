@@ -8927,14 +8927,16 @@ impl DependencyGraph {
     /// Idempotent — calling this twice with the same arguments has no effect.
     /// To replace a component's full dependency set, call `unregister` first.
     pub fn register(&mut self, component_id: u64, state_key: u64) {
-        self.deps
+        let is_new = self.deps
             .entry(state_key)
             .or_default()
             .insert(component_id);
-        self.reverse
-            .entry(component_id)
-            .or_default()
-            .push(state_key);
+        if is_new {
+            self.reverse
+                .entry(component_id)
+                .or_default()
+                .push(state_key);
+        }
     }
 
     /// Remove all dependencies for `component_id`.  Call before re-registering
