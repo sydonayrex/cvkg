@@ -487,7 +487,7 @@ impl BerserkerState {
         let card_positions = [[w * 0.2, h * 0.3], [w * 0.7, h * 0.2], [w * 0.5, h * 0.7]];
         for pos in card_positions {
             let shape = Shape::aabb(Vec2::new(100.0, 125.0));
-            let mut left_half = RigidBody::new(10.0, &shape);
+            let mut left_half = RigidBody::static_body();
             left_half.position = Vec2::new(pos[0] - 100.0, pos[1]);
             let id_l = world.add_body(left_half);
             world.add_collider(Collider::new(id_l, shape.clone()));
@@ -497,20 +497,12 @@ impl BerserkerState {
             let id_r = world.add_body(right_half);
             world.add_collider(Collider::new(id_r, shape));
 
+            // Pin constraint — breaks easily when force is applied
             let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
-            constraint.break_threshold = Some(200.0); // Breaks when halves are pulled apart
+            constraint.break_threshold = Some(150.0); // Initial strain is 100, breaks when right half moves 50+ units away
             world.add_constraint(constraint);
-            // Ground constraint on left half — high threshold so it stays grounded
-            // when the pin breaks, only the right half flies off
-            let mut ground_constraint = Constraint::distance(
-                ground_id,
-                id_l,
-                Vec2::new(pos[0] - w / 2.0 - 100.0, pos[1] - h),
-                Vec2::new(0.0, 0.0),
-                0.0,
-            );
-            ground_constraint.break_threshold = Some(999999.0); // Never breaks
-            world.add_constraint(ground_constraint);
+            // No ground constraint — both halves are free-floating
+            // When pin breaks, right half flies off, left half stays (static body below)
             card_bodies.push((id_l, id_r));
         }
 
