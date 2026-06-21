@@ -499,7 +499,7 @@ impl BerserkerState {
 
             // Pin constraint — breaks easily when force is applied
             let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
-            constraint.break_threshold = Some(150.0); // Initial strain is 100, breaks when right half moves 50+ units away
+            constraint.break_threshold = Some(101.0); // Just above initial strain of 100 — breaks on any separation
             world.add_constraint(constraint);
             // No ground constraint — both halves are free-floating
             // When pin breaks, right half flies off, left half stays (static body below)
@@ -1170,23 +1170,16 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     // Particles now use simple velocity-based advection without fluid coupling.
 
     if rage > 0.0 {
-        // Apply gentle outward force to card halves to break the pin constraint
+        // Disable pin constraints between card halves and apply separation force
         for &(id_l, id_r) in &s.physics.card_bodies {
-            if let Some(bl) = s.physics.world.body(id_l) {
-                if let Some(br) = s.physics.world.body(id_r) {
-                    let dx = br.position.x - bl.position.x;
-                    let dy = br.position.y - bl.position.y;
-                    let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-                    // Push halves apart along their separation axis
-                    let force = rage * 2000.0; // Increased from 500 for faster breaking
-                    let fx = (dx / dist) * force;
-                    let fy = (dy / dist) * force;
-                    if let Some(body) = s.physics.world.body_mut(id_l) {
-                        body.apply_force(Vec2::new(-fx, -fy));
-                    }
-                    if let Some(body) = s.physics.world.body_mut(id_r) {
-                        body.apply_force(Vec2::new(fx, fy));
-                    }
+            s.physics.world.disable_constraint_between(id_l, id_r);
+            // Apply outward force to right half to separate it
+            if let Some(br) = s.physics.world.body(id_r) {
+                let dx = br.position.x - s.flame_x;
+                let force = rage * 5000.0;
+                let fx = dx.signum() * force;
+                if let Some(body) = s.physics.world.body_mut(id_r) {
+                    body.apply_force(Vec2::new(fx, -rage * 3000.0));
                 }
             }
         }
