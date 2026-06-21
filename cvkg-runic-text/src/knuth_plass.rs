@@ -344,12 +344,13 @@ pub fn break_text_simple(
     let mut line_start = 0;
     let mut last_break: Option<usize> = None;
     let mut pos = 0;
+    let mut char_count: f32 = 0.0; // Track character count separately from byte offset
 
     for c in text.chars() {
         let char_len = c.len_utf8();
         let char_end = pos + char_len;
-        let line_chars = char_end - line_start;
-        let line_px = line_chars as f32 * char_width;
+        char_count += 1.0;
+        let line_px = char_count * char_width;
 
         if c == '\n' {
             // Hard break at newline
@@ -361,11 +362,13 @@ pub fn break_text_simple(
                 badness: (line_width - line_px).abs() / line_width.max(1.0),
             });
             line_start = char_end;
+            char_count = 0.0;
             last_break = None;
         } else if line_px > line_width && line_start < pos {
             // Exceeds width -- break at last known break point
             let break_pos = last_break.unwrap_or(pos);
-            let break_px = (break_pos - line_start) as f32 * char_width;
+            let break_chars = char_count - (char_end - break_pos) as f32;
+            let break_px = break_chars.max(1.0) * char_width;
             lines.push(KnuthPlassLine {
                 start: line_start,
                 end: break_pos,
@@ -374,6 +377,8 @@ pub fn break_text_simple(
                 badness: 0.0,
             });
             line_start = break_pos;
+            // Recalculate char_count for the remaining text after the break
+            char_count = text[break_pos..char_end].chars().count() as f32;
             last_break = None;
         }
 
