@@ -1,10 +1,8 @@
 #![allow(dead_code, clippy::approx_constant)]
 
 use cvkg::prelude::*;
-use cvkg_anim::skeletal::RagdollBlender;
 use cvkg_components::context_menu::{ContextMenu, ContextMenuItem};
 use cvkg_core::{DisplayEnvironment, PerformanceContract};
-use cvkg_physics::ragdoll_bridge::RagdollBridge;
 use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig};
 use cvkg_vdom::signals::Signal;
 use glam::Vec2;
@@ -120,13 +118,6 @@ struct PhysicsState {
     world: PhysicsWorld,
     cube_ids: Vec<(BodyId, f32)>,
     card_bodies: Vec<(BodyId, BodyId)>,
-    dummy_head: BodyId,
-    dummy_torso: BodyId,
-}
-
-struct AnimState {
-    blender: RagdollBlender,
-    bridge: RagdollBridge,
 }
 
 /// Grid resolution for the Navier-Stokes velocity field.
@@ -408,7 +399,6 @@ struct BerserkerState {
     rng: Lcg,
     last_time: f32,
     physics: PhysicsState,
-    anim: AnimState,
     loaded_svgs: bool,
     fluid: FluidGrid,
     flame_x: f32,
@@ -524,17 +514,6 @@ impl BerserkerState {
 
         // Ragdoll Dummy — removed, was drawing orange/red rectangles at fixed position
         // without actual skeletal animation. Replaced with empty vec.
-        let dummy_head = world.add_body(RigidBody::static_body());
-        let dummy_torso = world.add_body(RigidBody::static_body());
-        // Suppress unused variable warnings
-        let _ = (dummy_head, dummy_torso);
-
-        // Ragdoll bridge/blender removed — was drawing static orange/red rectangles
-        // without actual skeletal animation. Keep dummy bodies as static for physics
-        // world stability but skip bridge setup.
-        let bridge = cvkg_physics::RagdollBridge::new(cvkg_physics::RagdollBridgeConfig::default());
-        let blender = RagdollBlender::new(2);
-
         log::info!(
             "BerserkerState initialized: {} cubes, {} cards",
             cube_ids.len(),
@@ -552,10 +531,7 @@ impl BerserkerState {
                 world,
                 cube_ids,
                 card_bodies,
-                dummy_head,
-                dummy_torso,
             },
-            anim: AnimState { blender, bridge },
             loaded_svgs: false,
             fluid: FluidGrid::new(),
             flame_x: cx,
@@ -707,16 +683,11 @@ impl View for BerserkerFireView {
         let t_valknut = t_valknut_start.elapsed().as_secs_f32() * 1000.0;
 
         let t_fire_start = std::time::Instant::now();
-        let mut t_ragdoll = 0.0f32;
         if t > 0.0 {
             // Clip fire to content area (safe area top is now 0 in content coordinates)
             r.push_clip_rect(cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
             // Draw particles and Mjolnir lightning bolts
             draw_berserker_fire(r, &s, w, h, t);
-            // Draw skeletal/ragdoll elements
-            let t_ragdoll_start = std::time::Instant::now();
-            draw_ragdoll_dummy(r, &mut s, w, h, new_rage);
-            t_ragdoll = t_ragdoll_start.elapsed().as_secs_f32() * 1000.0;
             r.pop_clip_rect();
         }
         let t_fire = t_fire_start.elapsed().as_secs_f32() * 1000.0;
@@ -731,12 +702,11 @@ impl View for BerserkerFireView {
 
         if (s.last_time as u32).is_multiple_of(5) {
             log::info!(
-                "[Berserker] Draw timings: sim={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms ragdoll={:.2}ms chrome={:.2}ms",
+                "[Berserker] Draw timings: sim={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms chrome={:.2}ms",
                 t_sim,
                 t_cards,
                 t_valknut,
                 t_fire,
-                t_ragdoll,
                 t_chrome
             );
         }
@@ -1146,49 +1116,6 @@ fn draw_glass_cards(
             }
         }
     }
-}
-
-fn draw_ragdoll_dummy(
-    r: &mut dyn cvkg_core::Renderer,
-    s: &mut BerserkerState,
-    _w: f32,
-    _h: f32,
-    rage: f32,
-) {
-    // Don't draw ragdoll when no rage — avoids visible orange/red rectangles at origin
-    if rage <= 0.0 {
-        return;
-    }
-    s.anim.bridge.update(&s.physics.world);
-    let transforms = s.anim.bridge.physics_transforms().to_vec();
-    s.anim.blender.set_physics(&transforms);
-    let blend_weight = (rage / 5.0).clamp(0.0, 1.0);
-    s.anim.blender.blend(blend_weight);
-    let poses = s.anim.blender.update(0.016);
-
-    let head_pos = poses[0].0;
-    r.fill_rounded_rect(
-        cvkg_core::Rect {
-            x: head_pos.x - 20.0,
-            y: head_pos.y - 20.0,
-            width: 40.0,
-            height: 40.0,
-        },
-        8.0,
-        [0.9, 0.2, 0.2, 1.0],
-    );
-
-    let torso_pos = poses[1].0;
-    r.fill_rounded_rect(
-        cvkg_core::Rect {
-            x: torso_pos.x - 30.0,
-            y: torso_pos.y - 50.0,
-            width: 60.0,
-            height: 100.0,
-        },
-        12.0,
-        [0.8, 0.4, 0.1, 1.0],
-    );
 }
 
 fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, dt: f32, rage: f32) {
