@@ -100,8 +100,8 @@ pub trait View: Sized + Send {
         blur: f32,
         saturation: f32,
         opacity: f32,
-    ) -> ModifiedView<Self, BifrostModifier> {
-        self.modifier(BifrostModifier {
+    ) -> ModifiedView<Self, FrostedGlassModifier> {
+        self.modifier(FrostedGlassModifier {
             blur,
             saturation,
             opacity,
@@ -116,8 +116,8 @@ pub trait View: Sized + Send {
         saturation: f32,
         opacity: f32,
         fresnel_strength: f32,
-    ) -> ModifiedView<Self, BifrostModifier> {
-        self.modifier(BifrostModifier {
+    ) -> ModifiedView<Self, FrostedGlassModifier> {
+        self.modifier(FrostedGlassModifier {
             blur,
             saturation,
             opacity,
@@ -131,8 +131,8 @@ pub trait View: Sized + Send {
         color: impl Into<String>,
         radius: f32,
         intensity: f32,
-    ) -> ModifiedView<Self, GungnirModifier> {
-        self.modifier(GungnirModifier {
+    ) -> ModifiedView<Self, NeonGlowModifier> {
+        self.modifier(NeonGlowModifier {
             color: color.into(),
             radius,
             intensity,
@@ -154,8 +154,8 @@ pub trait View: Sized + Send {
     }
 
     /// Mark this view as a Bifrost Bridge (Shared Element) for cross-view persistence
-    fn bifrost_bridge(self, id: impl Into<String>) -> ModifiedView<Self, BifrostBridgeModifier> {
-        self.modifier(BifrostBridgeModifier { id: id.into() })
+    fn bifrost_bridge(self, id: impl Into<String>) -> ModifiedView<Self, SharedElementModifier> {
+        self.modifier(SharedElementModifier { id: id.into() })
     }
 
     /// Add a background color to this view
@@ -256,8 +256,8 @@ pub trait View: Sized + Send {
     }
 
     /// Theme this view based on a specific memory layer.
-    fn memory_layer(self, layer: MemoryLayer) -> ModifiedView<Self, BifrostLayerModifier> {
-        self.modifier(BifrostLayerModifier { layer })
+    fn memory_layer(self, layer: MemoryLayer) -> ModifiedView<Self, MemoryLayerModifier> {
+        self.modifier(MemoryLayerModifier { layer })
     }
 
     /// Enable Fafnir's Evolution: The component grows and glows as it is used.
@@ -866,15 +866,15 @@ impl View for AnyView {
     }
 }
 
-/// BifrostBridgeModifier enables shared-element transitions.
+/// SharedElementModifier enables shared-element transitions.
 /// When two views share the same Bifrost Bridge ID, the Sleipnir solver will
 /// interpolate their geometry and effects (blur, glow) during the transition.
 #[derive(Debug, Clone, PartialEq)]
-pub struct BifrostBridgeModifier {
+pub struct SharedElementModifier {
     pub id: String,
 }
 
-impl ViewModifier for BifrostBridgeModifier {
+impl ViewModifier for SharedElementModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -954,10 +954,10 @@ impl ViewModifier for MjolnirShatterModifier {
     }
 }
 
-/// BifrostModifier implements the Cyberpunk "Frosted Glass" aesthetic.
+/// FrostedGlassModifier implements the Cyberpunk "Frosted Glass" aesthetic.
 /// It triggers backdrop blurring and light scattering in the render pipeline.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct BifrostModifier {
+pub struct FrostedGlassModifier {
     pub blur: f32,
     pub saturation: f32,
     pub opacity: f32,
@@ -965,7 +965,7 @@ pub struct BifrostModifier {
     pub fresnel_strength: f32,
 }
 
-impl ViewModifier for BifrostModifier {
+impl ViewModifier for FrostedGlassModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1033,16 +1033,16 @@ impl ViewModifier for PaddingModifier {
     }
 }
 
-/// GungnirModifier implements the "Neon Glow" aesthetic.
+/// NeonGlowModifier implements the "Neon Glow" aesthetic.
 /// It uses additive blending and multi-pass blurring to simulate glowing light.
 #[derive(Debug, Clone, PartialEq)]
-pub struct GungnirModifier {
+pub struct NeonGlowModifier {
     pub color: String,
     pub radius: f32,
     pub intensity: f32,
 }
 
-impl ViewModifier for GungnirModifier {
+impl ViewModifier for NeonGlowModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1053,15 +1053,15 @@ impl ViewModifier for GungnirModifier {
     }
 }
 
-/// GungnirPulseModifier implements a "breathing" neon effect.
+/// PulsingGlowModifier implements a "breathing" neon effect.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct GungnirPulseModifier {
+pub struct PulsingGlowModifier {
     pub color: [f32; 4],
     pub radius: f32,
     pub speed: f32,
 }
 
-impl ViewModifier for GungnirPulseModifier {
+impl ViewModifier for PulsingGlowModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1144,16 +1144,16 @@ impl ViewModifier for ManiGlowModifier {
     }
 }
 
-/// BifrostLayerModifier themes a view based on its cognitive memory layer.
+/// MemoryLayerModifier themes a view based on its cognitive memory layer.
 /// Episodic: Shifting aurora clouds.
 /// Semantic: Crystalline gold.
 /// Procedural: Heavy obsidian stone.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct BifrostLayerModifier {
+pub struct MemoryLayerModifier {
     pub layer: MemoryLayer,
 }
 
-impl ViewModifier for BifrostLayerModifier {
+impl ViewModifier for MemoryLayerModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
