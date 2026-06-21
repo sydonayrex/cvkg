@@ -508,10 +508,17 @@ impl BerserkerState {
             world.add_collider(Collider::new(id_r, shape));
 
             let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
-            constraint.break_threshold = Some(10.0); // Very low — breaks on any force
+            constraint.break_threshold = Some(50.0);
             world.add_constraint(constraint);
-            // Note: no ground constraint on card bodies — they are free-floating
-            // so when the pin breaks, the halves separate visibly
+            // Ground constraint on left half only — keeps card in place
+            // but when pin breaks, right half can separate and fall
+            world.add_constraint(Constraint::distance(
+                ground_id,
+                id_l,
+                Vec2::new(pos[0] - w / 2.0 - 100.0, pos[1] - h),
+                Vec2::new(0.0, 0.0),
+                0.0,
+            ));
             card_bodies.push((id_l, id_r));
         }
 
@@ -1094,7 +1101,7 @@ fn draw_glass_cards(
             let half_w = card_width * 0.5;
             let half_h = card_height * 0.5;
 
-            if dist < card_width * 0.8 {
+            if dist < card_width * 1.2 {
                 // Card is intact or nearly so: render as single centered quad with glass material
                 let cx = (bl.position.x + br.position.x) * 0.5;
                 let cy = (bl.position.y + br.position.y) * 0.5;
@@ -1236,15 +1243,24 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     // Particles now use simple velocity-based advection without fluid coupling.
 
     if rage > 0.0 {
-        // Apply strong outward impulse to card bodies to shatter them
+        // Apply gentle outward force to card halves to break the pin constraint
         for &(id_l, id_r) in &s.physics.card_bodies {
-            if let Some(body_l) = s.physics.world.body_mut(id_l) {
-                let impulse = (body_l.position.x - s.flame_x).signum() * rage * 5000.0;
-                body_l.apply_impulse(Vec2::new(impulse, -rage * 2000.0));
-            }
-            if let Some(body_r) = s.physics.world.body_mut(id_r) {
-                let impulse = (body_r.position.x - s.flame_x).signum() * rage * 5000.0;
-                body_r.apply_impulse(Vec2::new(impulse, -rage * 2000.0));
+            if let Some(bl) = s.physics.world.body(id_l) {
+                if let Some(br) = s.physics.world.body(id_r) {
+                    let dx = br.position.x - bl.position.x;
+                    let dy = br.position.y - bl.position.y;
+                    let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+                    // Push halves apart along their separation axis
+                    let force = rage * 500.0;
+                    let fx = (dx / dist) * force;
+                    let fy = (dy / dist) * force;
+                    if let Some(body) = s.physics.world.body_mut(id_l) {
+                        body.apply_force(Vec2::new(-fx, -fy));
+                    }
+                    if let Some(body) = s.physics.world.body_mut(id_r) {
+                        body.apply_force(Vec2::new(fx, fy));
+                    }
+                }
             }
         }
     }
