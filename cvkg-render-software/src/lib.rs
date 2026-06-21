@@ -155,7 +155,7 @@ impl SoftwareRenderer {
             text_engine: {
                 let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
                 engine.load_font_data(
-                    include_bytes!("../../cvkg-runic-text/Fonts/Jupiteroid.ttf").to_vec(),
+                    include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(),
                 );
                 engine
             },
@@ -173,7 +173,7 @@ impl SoftwareRenderer {
             #[cfg(feature = "text")]
             text_engine: {
                 let mut engine = cvkg_runic_text::RunicTextEngine::new_light();
-                engine.load_font_data(include_bytes!("../../cvkg-runic-text/Fonts/Jupiteroid.ttf").to_vec());
+                engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
                 engine
             },
             memoize_cache: None,

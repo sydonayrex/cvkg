@@ -8,8 +8,8 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core" }
-cvkg-render-gpu = { path = "../../cvkg-render-gpu" }
+cvkg-core.workspace = true
+cvkg-render-gpu.workspace = true
 glam = "0.29"
 
 [package.metadata.wasm-pack.profile.release]

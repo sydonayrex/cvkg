@@ -8,6 +8,6 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core" }
-cvkg-components = { path = "../../cvkg-components" }
+cvkg-core.workspace = true
+cvkg-components.workspace = true
 log = "0.4"
