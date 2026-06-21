@@ -1,6 +1,6 @@
 use crate::theme;
 use crate::{RADIUS_LG, RADIUS_MD};
-use cvkg_core::{Event, Never, Rect, Renderer, View};
+use cvkg_core::{AriaProperties, AriaRole, Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// Liquid glass tabs with chromatic aberration.
@@ -178,5 +178,9 @@ impl View for BifrostTabs {
                 }
             }),
         );
+    }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        Some(AriaProperties::new(AriaRole::Tablist, "Tabs"))
     }
 }

@@ -276,6 +276,10 @@ impl<V: Clone + View> View for Select<V> {
             height: 36.0,
         }
     }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        Some(AriaProperties::new(AriaRole::Combobox, &self.placeholder))
+    }
 }
 
 /// Dropdown component for selecting from a list of options with a popover

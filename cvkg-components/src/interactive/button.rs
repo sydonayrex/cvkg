@@ -1025,6 +1025,13 @@ impl View for Slider {
             height: 24.0,
         }
     }
+
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        Some(
+            AriaProperties::new(AriaRole::Slider, "Slider")
+                .value(format!("{:.0}", self.value)),
+        )
+    }
 }
 
 /// Stepper for discrete increment/decrement
