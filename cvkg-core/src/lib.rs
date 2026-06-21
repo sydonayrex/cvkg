@@ -246,13 +246,13 @@ pub trait View: Sized + Send {
     }
 
     /// Add a magnetic effect that pulls the view towards the cursor.
-    fn magnetic(self, radius: f32, intensity: f32) -> ModifiedView<Self, MagneticModifier> {
-        self.modifier(MagneticModifier { radius, intensity })
+    fn magnetic(self, radius: f32, intensity: f32) -> ModifiedView<Self, MagneticPullModifier> {
+        self.modifier(MagneticPullModifier { radius, intensity })
     }
 
     /// Add a ManiGlow (Lunar Illuminator) effect that glows near the cursor.
-    fn mani_glow(self, color: [f32; 4], radius: f32) -> ModifiedView<Self, ManiGlowModifier> {
-        self.modifier(ManiGlowModifier { color, radius })
+    fn mani_glow(self, color: [f32; 4], radius: f32) -> ModifiedView<Self, CursorGlowModifier> {
+        self.modifier(CursorGlowModifier { color, radius })
     }
 
     /// Theme this view based on a specific memory layer.
@@ -276,8 +276,8 @@ pub trait View: Sized + Send {
     }
 
     /// Bestow Odin's Eye: Global omniscient observability layer.
-    fn odins_eye(self) -> ModifiedView<Self, OdinsEyeModifier> {
-        self.modifier(OdinsEyeModifier)
+    fn odins_eye(self) -> ModifiedView<Self, ObservabilityOverlayModifier> {
+        self.modifier(ObservabilityOverlayModifier)
     }
 
     /// Trigger an action when the view appears
@@ -1083,14 +1083,14 @@ impl ViewModifier for PulsingGlowModifier {
     }
 }
 
-/// MagneticModifier makes a view "magnetic", subtly leaning towards or pulling the cursor.
+/// MagneticPullModifier makes a view "magnetic", subtly leaning towards or pulling the cursor.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct MagneticModifier {
+pub struct MagneticPullModifier {
     pub radius: f32,
     pub intensity: f32,
 }
 
-impl ViewModifier for MagneticModifier {
+impl ViewModifier for MagneticPullModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1123,15 +1123,15 @@ impl ViewModifier for MagneticModifier {
     }
 }
 
-/// ManiGlowModifier adds a soft, lunar-like cursor glow to a view.
+/// CursorGlowModifier adds a soft, lunar-like cursor glow to a view.
 /// Named after Máni, the personification of the Moon.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct ManiGlowModifier {
+pub struct CursorGlowModifier {
     pub color: [f32; 4],
     pub radius: f32,
 }
 
-impl ViewModifier for ManiGlowModifier {
+impl ViewModifier for CursorGlowModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -1330,11 +1330,11 @@ impl ViewModifier for ComplexityTelemetryModifier {
     }
 }
 
-/// OdinsEyeModifier bestows omniscient observability over the entire scene graph.
+/// ObservabilityOverlayModifier bestows omniscient observability over the entire scene graph.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct OdinsEyeModifier;
+pub struct ObservabilityOverlayModifier;
 
-impl ViewModifier for OdinsEyeModifier {
+impl ViewModifier for ObservabilityOverlayModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
