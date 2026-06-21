@@ -17,7 +17,9 @@ pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
 
                 if !target_id.is_empty() {
                     let dur_str = node.attribute("dur").unwrap_or("1s");
-                    let duration = if dur_str.ends_with("ms") {
+                    let duration = if dur_str == "indefinite" {
+                        f32::INFINITY
+                    } else if dur_str.ends_with("ms") {
                         dur_str
                             .trim_end_matches("ms")
                             .parse::<f32>()

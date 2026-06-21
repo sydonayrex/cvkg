@@ -84,8 +84,7 @@ impl GeometryBuffers {
         if min_capacity <= current {
             return false;
         }
-        let new_size = (min_capacity.min(max_capacity.max(min_capacity)))
-            * std::mem::size_of::<Vertex>();
+        let new_size = (min_capacity.min(max_capacity)) * std::mem::size_of::<Vertex>();
         self.vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Buffer (Grown)"),
             size: new_size as u64,
@@ -110,8 +109,7 @@ impl GeometryBuffers {
         if min_capacity <= current {
             return false;
         }
-        let new_size = (min_capacity.min(max_capacity.max(min_capacity)))
-            * std::mem::size_of::<u32>();
+        let new_size = (min_capacity.min(max_capacity)) * std::mem::size_of::<u32>();
         self.index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer (Grown)"),
             size: new_size as u64,

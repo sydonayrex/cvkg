@@ -112,7 +112,7 @@ impl KvasirNode for UINode {
                 if w > 0 && h > 0 {
                     p.set_scissor_rect(x1 as u32, y1 as u32, w as u32, h as u32);
                 } else {
-                    p.set_scissor_rect(0, 0, 1, 1);
+                    p.set_scissor_rect(0, 0, 0, 0);
                 }
             } else {
                 p.set_scissor_rect(0, 0, rt_w as u32, rt_h as u32);
