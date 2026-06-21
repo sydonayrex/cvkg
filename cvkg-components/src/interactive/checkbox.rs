@@ -18,6 +18,13 @@ pub struct Checkbox {
 
 impl Checkbox {
     /// Create a new Checkbox.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::Checkbox;
+    /// let checkbox = Checkbox::new(false, |checked| println!("Checked: {}", checked))
+    ///     .label("Enable feature");
+    /// ```
     pub fn new(is_checked: bool, on_change: impl Fn(bool) + Send + Sync + 'static) -> Self {
         Self {
             state: if is_checked {

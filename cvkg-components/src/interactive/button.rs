@@ -16,6 +16,14 @@ pub struct Button {
 
 impl Button {
     /// Create a new Button with a label and an action callback.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::{Button, ButtonVariant, ButtonSize};
+    /// let button = Button::new("Click me", || println!("clicked"))
+    ///     .variant(ButtonVariant::Default)
+    ///     .size(ButtonSize::Default);
+    /// ```
     pub fn new(label: impl Into<String>, on_click: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
             label: label.into(),

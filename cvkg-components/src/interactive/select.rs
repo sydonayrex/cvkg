@@ -15,6 +15,15 @@ pub struct Select<V> {
 }
 
 impl<V: Clone> Select<V> {
+    /// Create a new Select dropdown with a placeholder label.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::Select;
+    /// let select = Select::new("Select an option")
+    ///     .option("Option 1", "val1")
+    ///     .option("Option 2", "val2");
+    /// ```
     pub fn new(placeholder: impl Into<String>) -> Self {
         use std::hash::{Hash, Hasher};
         let placeholder_string = placeholder.into();

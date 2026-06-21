@@ -17,6 +17,17 @@ pub struct BifrostTabs {
 }
 
 impl BifrostTabs {
+    /// Create a new BifrostTabs component with the given tab labels and selection callback.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::BifrostTabs;
+    /// let tabs = BifrostTabs::new(
+    ///     vec!["Tab 1".to_string(), "Tab 2".to_string()],
+    ///     0,
+    ///     |idx| println!("Selected tab: {}", idx),
+    /// );
+    /// ```
     pub fn new(
         options: Vec<String>,
         selected: usize,

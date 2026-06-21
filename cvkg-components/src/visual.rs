@@ -3,6 +3,15 @@ use crate::{RADIUS_SM, RADIUS_MD};
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// SkollProgress indicator component.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::SkollProgress;
+/// use cvkg_components::visual::ProgressVariant;
+/// let progress = SkollProgress::new(75.0)
+///     .variant(ProgressVariant::Linear)
+///     .max(100.0);
+/// ```
 #[doc(alias = "Progress")]
 #[derive(Clone)]
 pub struct SkollProgress {
@@ -1166,6 +1175,13 @@ pub enum SpinnerVariant {
 }
 
 /// An animated loading indicator component.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::HatiSpinner;
+/// let spinner = HatiSpinner::new()
+///     .size(32.0);
+/// ```
 #[doc(alias = "Spinner")]
 #[derive(Clone)]
 pub struct HatiSpinner {
@@ -1381,6 +1397,14 @@ impl View for HatiSpinner {
 // =============================================================================
 
 /// A centered empty state component with icon, title, description, and optional CTA.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::EmptyState;
+/// let empty = EmptyState::new("No items found", "Try adding your first item to get started.")
+///     .icon("📦")
+///     .action("Add Item", || {});
+/// ```
 #[derive(Clone)]
 pub struct EmptyState {
     pub(crate) title: String,

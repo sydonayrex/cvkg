@@ -4,7 +4,32 @@ use cvkg_core::{
     layout::{LayoutCache, LayoutView, SizeProposal},
 };
 
-/// Multi-step onboarding Wizard workflow component.
+// =============================================================================
+// PATTERNS — Common application patterns
+// =============================================================================
+//
+// This module provides pre-built UI patterns for common application screens:
+// - `Wizard` — Multi-step onboarding workflow
+// - `Login` — Login/authentication screen
+// - `Settings` — Tabbed settings panel
+// - `Gallery` — Image/content grid gallery
+//
+// These patterns are designed to be customized through their public fields
+// and builder methods. They demonstrate composition of CVKG primitives into
+// higher-level UI structures.
+//
+// # Examples
+//
+// Building a settings page:
+// ```
+// use cvkg_components::Settings;
+// let settings = Settings::new()
+//     .category("General")
+//     .category("Account")
+//     .build();
+// ```
+
+/// Multi-step onboarding Wizard workflow component.]
 pub struct Wizard {
     pub(crate) steps: Vec<String>,
     pub(crate) current_step: usize,
@@ -138,6 +163,15 @@ impl LayoutView for Wizard {
 }
 
 /// Image grid Gallery component.
+///
+/// Displays a grid of images with lazy loading and keyboard navigation.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::Gallery;
+/// let gallery = Gallery::new()
+///     .items(vec!["img1.png".into(), "img2.png".into()]);
+/// ```
 pub struct Gallery {
     pub(crate) images: Vec<String>,
 }
@@ -216,6 +250,16 @@ impl LayoutView for Gallery {
 }
 
 /// Authorization Login panel template component.
+///
+/// A pre-built login form with username/password fields and submit handling.
+/// Customize the field labels and styling through the builder methods.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::Login;
+/// let login = Login::new()
+///     .submitting(false);
+/// ```
 pub struct Login {
     pub(crate) username_label: String,
     pub(crate) password_label: String,

@@ -107,6 +107,14 @@ impl View for Vegvísir {
 }
 
 /// TacticalGauge - A high-fidelity HUD gauge for monitoring real-time kinetics.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::TacticalGauge;
+/// let gauge = TacticalGauge::new("CPU", 0.75)
+///     .warning_level(0.8)
+///     .critical_level(0.95);
+/// ```
 #[derive(Clone)]
 pub struct TacticalGauge {
     pub label: String,
@@ -203,6 +211,13 @@ impl View for TacticalGauge {
 }
 /// GjallarAlert - A high-priority tactical notification (toast).
 /// Named after the Gjallarhorn, the loud horn used to signal danger or major events.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::{GjallarAlert, AlertKind};
+/// let alert = GjallarAlert::new("Error", "Something went wrong")
+///     .kind(AlertKind::Critical);
+/// ```
 #[doc(alias = "Alert")]
 #[derive(Clone)]
 pub struct GjallarAlert {

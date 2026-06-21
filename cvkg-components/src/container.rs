@@ -1590,6 +1590,15 @@ pub struct VStack {
 }
 
 impl VStack {
+    /// Create a new vertical stack with the given spacing between children.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::{VStack, Text, Button};
+    /// let column = VStack::new(16.0)
+    ///     .child(Text::new("Title"))
+    ///     .child(Button::new("Submit", || {}));
+    /// ```
     pub fn new(spacing: f32) -> Self {
         Self {
             spacing,
@@ -1843,6 +1852,15 @@ pub struct HStack {
 }
 
 impl HStack {
+    /// Create a new horizontal stack with the given spacing between children.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::{HStack, Text, Button};
+    /// let row = HStack::new(8.0)
+    ///     .child(Text::new("Label"))
+    ///     .child(Button::new("Action", || {}));
+    /// ```
     pub fn new(spacing: f32) -> Self {
         Self {
             spacing,

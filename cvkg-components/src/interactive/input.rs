@@ -29,6 +29,13 @@ pub struct Input {
 
 impl Input {
     /// Create a new Input field.
+    ///
+    /// # Examples
+    /// ```
+    /// use cvkg_components::Input;
+    /// let input = Input::new("Placeholder text")
+    ///     .on_change(|text| println!("Input: {}", text));
+    /// ```
     pub fn new(placeholder: impl Into<String>) -> Self {
         use std::hash::{Hash, Hasher};
         let mut s = std::collections::hash_map::DefaultHasher::new();

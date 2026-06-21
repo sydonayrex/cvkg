@@ -5,6 +5,14 @@ use cvkg_core::{ElapsedTime, Never, Rect, Renderer, Size, View};
 
 /// RunesCard - A container component with header, content, and footer sections.
 /// Named after the Runes, the ancient inscribed containers of meaning.
+///
+/// # Examples
+/// ```
+/// use cvkg_components::{RunesCard, Text};
+/// let card: RunesCard<Text> = RunesCard::new()
+///     .header(Text::new("Card Title"))
+///     .content(Text::new("Card content goes here"));
+/// ```
 #[doc(alias = "Card")]
 #[derive(Clone)]
 pub struct RunesCard<V> {
@@ -21,8 +29,10 @@ impl<V: View> RunesCard<V> {
     ///
     /// # Examples
     /// ```
-    /// use cvkg_components::{RunesCard, Text};
-    /// let card: RunesCard<Text> = RunesCard::new();
+    /// use cvkg_components::{RunesCard, Text, Button};
+    /// let card: RunesCard<Text> = RunesCard::new()
+    ///     .header(Text::new("Title"))
+    ///     .content(Text::new("Body content"));
     /// ```
     pub fn new() -> Self {
         Self {
