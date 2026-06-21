@@ -44,14 +44,20 @@ impl KvasirNode for BackdropRegionNode {
         PassId::BackdropRegion
     }
     fn execute(&self, ctx: &mut ExecutionContext) {
-        let scene_tex = ctx
-            .registry
-            .get_texture(crate::kvasir::nodes::RES_SCENE)
-            .expect("scene texture must exist");
-        let blur_tex = ctx
-            .registry
-            .get_texture(self.output_id)
-            .expect("blur target texture must exist");
+        let scene_tex = match ctx.registry.get_texture(crate::kvasir::nodes::RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[BackdropRegion] Missing scene texture");
+                return;
+            }
+        };
+        let blur_tex = match ctx.registry.get_texture(self.output_id) {
+            Some(v) => v,
+            None => {
+                log::error!("[BackdropRegion] Missing blur target texture");
+                return;
+            }
+        };
 
         let scale = ctx.scale_factor;
         let rx = (self.region.x * scale) as u32;

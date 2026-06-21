@@ -17,7 +17,13 @@ impl SurtrRenderer {
 
         let mut views = Vec::new();
         for mip in 0..pyramid.levels as usize {
-            views.push(self.registry.get_texture_view(pyramid.mips[mip]).unwrap());
+            match self.registry.get_texture_view(pyramid.mips[mip]) {
+                Some(v) => views.push(v),
+                None => {
+                    log::error!("[Pyramid] Missing mip {} view, skipping", mip);
+                    continue;
+                }
+            };
         }
 
         let mut current_w = pyramid.width as f32;

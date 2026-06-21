@@ -52,10 +52,13 @@ impl KvasirNode for AccessibilityNode {
         );
 
         // Sample from the scene texture, render to the swapchain target.
-        let scene_view = ctx
-            .registry
-            .get_texture_view(crate::kvasir::nodes::RES_SCENE)
-            .unwrap();
+        let scene_view = match ctx.registry.get_texture_view(crate::kvasir::nodes::RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[Accessibility] Missing scene texture view");
+                return;
+            }
+        };
         let target_view = ctx.target_view;
 
         let color_blind_bind_group = ctx.get_or_create_bind_group(
