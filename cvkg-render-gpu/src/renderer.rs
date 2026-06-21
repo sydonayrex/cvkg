@@ -512,14 +512,9 @@ fn load_pipeline_cache_with_integrity_check(
         Err(e) => return Err(format!("sidecar read failed: {e}")),
     };
 
-    // Compute actual SHA256.
+    // Compute actual SHA256 and compare full 32 bytes (not just first 8)
     let actual = compute_sha256(&cache_data);
-    let actual_hex = format!(
-        "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        actual[0], actual[1], actual[2], actual[3],
-        actual[4], actual[5], actual[6], actual[7]
-    );
-
+    let actual_hex: String = actual.iter().map(|b| format!("{:02x}", b)).collect();
     if actual_hex != expected_hash {
         return Err(format!(
             "hash mismatch: expected {expected_hash}, got {actual_hex}"
@@ -6104,11 +6099,7 @@ mod p1_11_pipeline_cache_tests {
         let mut hasher = Sha256::new();
         hasher.update(data);
         let hash = hasher.finalize();
-        let hash_hex = format!(
-            "{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-            hash[0], hash[1], hash[2], hash[3],
-            hash[4], hash[5], hash[6], hash[7]
-        );
+        let hash_hex = hash.iter().map(|b| format!("{:02x}", b)).collect::<String>();
         std::fs::write(cache_path, data)?;
         let hash_path = cache_path.with_extension("bin.sha256");
         let mut f = std::fs::File::create(hash_path)?;
