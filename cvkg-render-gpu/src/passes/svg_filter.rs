@@ -28,7 +28,7 @@ pub struct SvgFilterNode {
     /// Cached output slice for KvasirNode trait.
     output_slice: [ResourceId; 1],
     /// Filter graph to execute.
-    filter_graph: Option<crate::svg_filter_graph::SvgFilterGraph>,
+    filter_graph: Option<crate::filter::SvgFilterGraph>,
     /// Label for debugging.
     label: &'static str,
 }
@@ -47,7 +47,7 @@ impl SvgFilterNode {
     }
 
     /// Set the filter graph to execute.
-    pub fn with_filter_graph(mut self, graph: crate::svg_filter_graph::SvgFilterGraph) -> Self {
+    pub fn with_filter_graph(mut self, graph: crate::filter::SvgFilterGraph) -> Self {
         self.filter_graph = Some(graph);
         self
     }
@@ -80,86 +80,23 @@ impl KvasirNode for SvgFilterNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        // In a full implementation, this would:
-        // 1. Bind the input texture
-        // 2. For each filter primitive in the graph:
-        //    a. Set up the render/compute pass
-        //    b. Bind input/output textures
-        //    c. Dispatch the filter shader
-        // 3. The final primitive writes to the output resource
-        //
-        // For now, this is a placeholder that copies input to output
-        // (identity filter) to establish the graph wiring.
-        if self.filter_graph.is_none() {
-            return;
+        // Execute the SVG filter graph using the FilterEngine.
+        if let Some(ref graph) = self.filter_graph {
+            let mut engine = crate::filter::FilterEngine::new();
+            engine.execute(graph, ctx);
+            log::trace!(
+                "[Kvasir] Executed SVG filter: {} -> {:?} ({} primitives)",
+                self.label,
+                self.output,
+                graph.primitives.len()
+            );
         }
-
-        // TODO: Full filter execution via FilterEngine
-        // This requires access to the FilterEngine from the renderer,
-        // which would be passed through ExecutionContext.
-        log::trace!(
-            "[Kvasir] Executing SVG filter: {} -> {:?}",
-            self.label,
-            self.output
-        );
     }
 }
 
-/// Builder for constructing SVG filter render graph nodes.
-pub struct SvgFilterGraphBuilder {
-    nodes: Vec<(ResourceId, ResourceId, Option<crate::svg_filter_graph::SvgFilterGraph>)>,
-}
-
-impl SvgFilterGraphBuilder {
-    pub fn new() -> Self {
-        Self { nodes: Vec::new() }
-    }
-
-    /// Add a filter pass that reads from `input` and writes to `output`.
-    pub fn add_pass(
-        mut self,
-        input: ResourceId,
-        output: ResourceId,
-        graph: crate::svg_filter_graph::SvgFilterGraph,
-    ) -> Self {
-        self.nodes.push((input, output, Some(graph)));
-        self
-    }
-
-    /// Add a pass that reads from the scene and writes to a temp buffer.
-    pub fn add_scene_pass(self, output: ResourceId, graph: crate::svg_filter_graph::SvgFilterGraph) -> Self {
-        self.add_pass(RES_SCENE, output, graph)
-    }
-
-    /// Add a pass that reads from a temp buffer and writes to the scene.
-    pub fn add_final_pass(self, input: ResourceId, graph: crate::svg_filter_graph::SvgFilterGraph) -> Self {
-        self.add_pass(input, RES_SCENE, graph)
-    }
-
-    /// Build the filter nodes for insertion into the Kvasir graph.
-    pub fn build(self) -> Vec<SvgFilterNode> {
-        self.nodes
-            .into_iter()
-            .enumerate()
-            .map(|(i, (input, output, graph))| {
-                let mut node = SvgFilterNode::new(input, output);
-                if let Some(g) = graph {
-                    node = node.with_filter_graph(g);
-                }
-                node.with_label(match i {
-                    0 => "SvgFilter[0]",
-                    1 => "SvgFilter[1]",
-                    2 => "SvgFilter[2]",
-                    _ => "SvgFilter[n]",
-                })
-            })
-            .collect()
-    }
-}
-
-impl Default for SvgFilterGraphBuilder {
+impl Default for SvgFilterNode {
     fn default() -> Self {
-        Self::new()
+        Self::new(RES_SCENE, RES_SCENE)
     }
 }
 

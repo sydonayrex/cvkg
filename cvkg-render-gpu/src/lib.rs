@@ -41,8 +41,9 @@ pub use material::{CompiledMaterial, MaterialCompiler, MaterialError, MaterialGr
 pub mod accessibility;
 pub mod ai;
 mod api;
-mod draw;
-pub(crate) mod passes;
+pub mod draw;
+pub mod filter;
+pub mod passes;
 pub mod pyramid;
 pub mod renderer;
 mod surtr_util;
@@ -168,7 +169,6 @@ pub use cvkg_core::{ColorTheme, SceneUniforms};
 
 pub use renderer::GpuRenderer;
 
-// P1-35: SVG filter graph integration
-pub mod svg_filter_graph;
+// P1-35: SVG filter graph integration (moved to filter/ module)
 pub use types::{SvgAnimation, SvgModel};
 pub use vertex::{InstanceData, Vertex};
