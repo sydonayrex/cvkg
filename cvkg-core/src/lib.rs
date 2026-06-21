@@ -6885,10 +6885,10 @@ pub trait ClipboardProvider: Send + Sync {
 /// Default clipboard implementation using `arboard`.
 /// Note: This is only available when the `arboard` feature is enabled.
 /// The renderer provides the concrete implementation.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
 pub struct SystemClipboard;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
 impl ClipboardProvider for SystemClipboard {
     fn read_text(&self) -> Option<String> {
         use std::process::Command;
