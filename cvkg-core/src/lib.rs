@@ -245,6 +245,18 @@ pub trait View: Sized + Send {
         self.modifier(ElevationModifier { level })
     }
 
+    /// Apply an absolute-like position offset to this view.
+    /// The view is shifted by (x, y) from its layout position.
+    fn position(self, x: f32, y: f32) -> ModifiedView<Self, PositionModifier> {
+        self.modifier(PositionModifier { x, y })
+    }
+
+    /// Set the z-index (render order) for this view.
+    /// Higher values render on top of lower values.
+    fn z_index(self, z: i32) -> ModifiedView<Self, ZIndexModifier> {
+        self.modifier(ZIndexModifier { z_index: z })
+    }
+
     /// Add a magnetic effect that pulls the view towards the cursor.
     fn magnetic(self, radius: f32, intensity: f32) -> ModifiedView<Self, MagneticPullModifier> {
         self.modifier(MagneticPullModifier { radius, intensity })
@@ -4876,6 +4888,29 @@ impl ViewModifier for ElevationModifier {
             renderer.pop_shadow();
         } else {
             view.render(renderer, rect);
+        }
+    }
+}
+
+/// Position modifier — offsets a view from its layout position.
+/// Enables absolute-like positioning within a container.
+#[derive(Clone)]
+pub struct PositionModifier {
+    pub x: f32,
+    pub y: f32,
+}
+
+impl ViewModifier for PositionModifier {
+    fn modify<V: View>(self, content: V) -> impl View {
+        ModifiedView::new(content, self)
+    }
+
+    fn transform_rect(&self, rect: Rect) -> Rect {
+        Rect {
+            x: rect.x + self.x,
+            y: rect.y + self.y,
+            width: rect.width,
+            height: rect.height,
         }
     }
 }

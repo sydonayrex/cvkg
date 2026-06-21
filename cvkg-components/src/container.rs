@@ -1586,6 +1586,7 @@ pub struct VStack {
     distribution: cvkg_core::Distribution,
     children: Vec<cvkg_core::AnyView>,
     layout_cache: std::sync::Arc<std::sync::Mutex<LayoutCache>>,
+    wrap: bool,
 }
 
 impl VStack {
@@ -1596,6 +1597,7 @@ impl VStack {
             distribution: cvkg_core::Distribution::Fill,
             children: Vec::new(),
             layout_cache: std::sync::Arc::new(std::sync::Mutex::new(LayoutCache::new())),
+            wrap: false,
         }
     }
 
@@ -1606,6 +1608,13 @@ impl VStack {
 
     pub fn distribution(mut self, distribution: cvkg_core::Distribution) -> Self {
         self.distribution = distribution;
+        self
+    }
+
+    /// Enable or disable flex-wrap behavior.
+    /// When true, children will wrap to the next line when they overflow.
+    pub fn wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
         self
     }
 
@@ -1830,6 +1839,7 @@ pub struct HStack {
     alignment: cvkg_core::Alignment,
     distribution: cvkg_core::Distribution,
     children: Vec<cvkg_core::AnyView>,
+    wrap: bool,
 }
 
 impl HStack {
@@ -1839,6 +1849,7 @@ impl HStack {
             alignment: cvkg_core::Alignment::Center,
             distribution: cvkg_core::Distribution::Fill,
             children: Vec::new(),
+            wrap: false,
         }
     }
 
@@ -1849,6 +1860,13 @@ impl HStack {
 
     pub fn distribution(mut self, distribution: cvkg_core::Distribution) -> Self {
         self.distribution = distribution;
+        self
+    }
+
+    /// Enable or disable flex-wrap behavior.
+    /// When true, children will wrap to the next line when they overflow.
+    pub fn wrap(mut self, wrap: bool) -> Self {
+        self.wrap = wrap;
         self
     }
 
