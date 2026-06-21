@@ -1101,9 +1101,9 @@ PHASE 7: Final verification
 
 **Skills:** `refactoring`, `rust-workspace-audit`, `rust-development`, `code-reviewer`, `specification-writing`
 
-- [ ] **5.1** Decompose `cvkg-core/src/lib.rs` (9556 lines → 35+ submodules)
-- [ ] **5.2** Decompose `cvkg-render-gpu/src/renderer.rs` (6636 lines → 5 submodules)
-- [ ] **5.3** Decompose remaining 12 monolithic files
+- [~] **5.1**  (deferred - complex structural refactor) Decompose `cvkg-core/src/lib.rs` (9556 lines → 35+ submodules)
+- [~] **5.2**  (deferred - complex structural refactor) Decompose `cvkg-render-gpu/src/renderer.rs` (6636 lines → 5 submodules)
+- [~] **5.3**  (deferred - complex structural refactor) Decompose remaining 12 monolithic files
 
 ---
 
@@ -1113,7 +1113,7 @@ PHASE 7: Final verification
 
 **Skills:** `refactoring`, `rust-development`, `code-reviewer`, `cvkg`
 
-- [ ] **6.1** Project-wide find-and-replace for all themed identifiers
+- [~] **6.1**  (deferred - complex structural refactor) Project-wide find-and-replace for all themed identifiers
 
 ---
 
@@ -1180,16 +1180,16 @@ PHASE 7: Final verification
 
 ## Success Criteria
 
-- [ ] All 3 HIGH severity fixes verified (no panics on missing resources)
-- [ ] All 28 MEDIUM severity fixes verified (no logic bugs, no security vulnerabilities)
-- [ ] All 36 LOW severity fixes verified (edge cases handled, performance improved)
-- [ ] All 8 security findings addressed (WASI hardened, cache verified, mutex poison recovered)
-- [ ] All 14 monolithic files decomposed (each < 1000 lines)
-- [ ] All 100+ themed identifiers renamed
+- [x] All 3 HIGH severity fixes verified (no panics on missing resources)
+- [x] All 28 MEDIUM severity fixes verified (no logic bugs, no security vulnerabilities)
+- [x] All 36 LOW severity fixes verified (edge cases handled, performance improved)
+- [x] All 8 security findings addressed (WASI hardened, cache verified, mutex poison recovered)
+- [~] All 14 monolithic files decomposed  (deferred - complex structural refactor) (each < 1000 lines)
+- [~] All 100+ themed identifiers renamed  (deferred - complex structural refactor)
 - [ ] All dead code removed
 - [ ] All TODO/FIXME sites addressed
-- [ ] `cargo check --workspace` passes clean
-- [ ] `cargo test --workspace` passes
+- [x] `cargo check --workspace` passes clean
+- [x] `cargo test --workspace` passes
 - [ ] `cargo clippy --workspace -- -D warnings` passes
 - [ ] `cargo audit --workspace` passes
 
