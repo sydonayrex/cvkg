@@ -3700,7 +3700,7 @@ impl KnowledgeState {
             .filter(|(score, _)| *score > 0.0)
             .collect();
         // Sort by relevance score
-        results.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap());
+        results.sort_by(|a, b| b.0.total_cmp(&a.0));
         self.last_query_results = results.into_iter().map(|(_, id)| id).take(5).collect();
     }
     /// Captures a snapshot of the current state for debugging and hot-reloading.

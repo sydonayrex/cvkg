@@ -378,7 +378,7 @@ impl LayoutBoundary {
                     }
                 }
                 if intersections.len() >= 2 {
-                    intersections.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                    intersections.sort_by(|a, b| a.total_cmp(b));
                     Some((intersections[0], intersections[intersections.len() - 1]))
                 } else {
                     None

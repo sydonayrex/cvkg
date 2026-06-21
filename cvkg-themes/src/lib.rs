@@ -33,6 +33,10 @@ impl OklchColor {
     ///
     /// Pipeline: sRGB -> linear RGB -> OKLab -> OKLCH
     pub fn from_rgb(r: f32, g: f32, b: f32) -> Self {
+        // Clamp inputs to valid sRGB range to prevent NaN from powf on negatives
+        let r = r.clamp(0.0, 1.0);
+        let g = g.clamp(0.0, 1.0);
+        let b = b.clamp(0.0, 1.0);
         // sRGB to linear RGB
         let to_linear = |c: f32| -> f32 {
             if c <= 0.04045 {
