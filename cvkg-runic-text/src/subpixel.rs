@@ -287,7 +287,7 @@ pub fn render_lcd(
 
                 // Compute subpixel coverage based on x position within the glyph
                 let local_x = (x - x_start) as f32;
-                let subpixel_phase = (local_x * 3.0) as i32 % 3;
+                let subpixel_phase = (local_x.fract() * 3.0).floor() as i32 % 3;
                 let (sr, sg, sb) = subpixel_coverage(subpixel_phase, SubpixelOrder::Rgb);
 
                 // Perceptual gamma-corrected blending (sRGB transfer curve approximation: gamma = 2.2).

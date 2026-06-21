@@ -145,8 +145,7 @@ impl SceneGraph {
 
     /// Generate a new unique NodeId.
     pub fn next_id(&mut self) -> NodeId {
-        let id = KvasirId(self.next_id);
-        self.next_id += 1;
+        let id = KvasirId::new();
         id
     }
 

@@ -228,7 +228,7 @@ impl Renderer for TestRenderer {
 
     /// Measures text dimensions using a fast monospace estimation.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        (text.len() as f32 * size * 0.6, size)
+        (text.chars().count() as f32 * size * 0.6, size)
     }
 
     /// Shapes rich text spans using the Runic text engine.

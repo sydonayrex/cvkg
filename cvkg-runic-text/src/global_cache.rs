@@ -30,7 +30,10 @@ pub fn global_cache_get(key: &CacheKey) -> Option<Vec<GlyphInstance>> {
 
 pub fn global_cache_insert(key: CacheKey, value: Vec<GlyphInstance>) {
     let mut cache = get_global_cache();
-    if cache.cache.len() >= MAX_CACHE_SIZE {
+    // Remove existing entry from ordering if updating an existing key
+    if cache.cache.contains_key(&key) {
+        cache.cache_order.retain(|k| k != &key);
+    } else if cache.cache.len() >= MAX_CACHE_SIZE {
         if let Some(oldest) = cache.cache_order.first().cloned() {
             let old_keys_to_remove: Vec<u64> = cache
                 .cache
