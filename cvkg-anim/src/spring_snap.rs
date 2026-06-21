@@ -132,10 +132,14 @@ impl SnapTracker {
         self.prev_value = value;
 
         if crossed {
+            self.crossed_this_frame = true;
             SpringSnapEvent::CrossedTarget
-        } else if overshooting {
+        } else if overshooting && self.crossed_this_frame {
+            // Only trigger overshoot once per crossing cycle (first overshoot after crossing)
+            self.crossed_this_frame = false;
             SpringSnapEvent::Overshoot { depth: curr_dist }
         } else if dir_changed {
+            self.crossed_this_frame = false;
             SpringSnapEvent::DirectionChange { velocity: curr_dir }
         } else {
             SpringSnapEvent::None

@@ -152,6 +152,13 @@ pub enum ReflectError {
         expected: String,
         got: String,
     },
+    /// The supplied value is out of the allowed range for this field.
+    OutOfRange {
+        field: String,
+        min: f64,
+        max: f64,
+        got: f64,
+    },
 }
 
 impl std::fmt::Display for ReflectError {
@@ -172,6 +179,13 @@ impl std::fmt::Display for ReflectError {
                     f,
                     "reflect: type mismatch on field '{}': expected {}, got {}",
                     field, expected, got
+                )
+            }
+            ReflectError::OutOfRange { field, min, max, got } => {
+                write!(
+                    f,
+                    "reflect: value {} on field '{}' is out of range [{}, {}]",
+                    got, field, min, max
                 )
             }
         }
@@ -362,6 +376,14 @@ impl Reflected for ColorStop {
                         expected: "number".into(),
                         got: json_kind_name(&value).into(),
                     })?;
+                if !v.is_finite() || v < 0.0 || v > 1.0 {
+                    return Err(ReflectError::OutOfRange {
+                        field: "position".into(),
+                        min: 0.0,
+                        max: 1.0,
+                        got: v,
+                    });
+                }
                 self.position = v as f32;
                 Ok(())
             }

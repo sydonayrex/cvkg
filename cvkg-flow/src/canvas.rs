@@ -311,18 +311,22 @@ impl FlowCanvas {
     }
 
     /// Returns the node at the given screen position, if any.
+    /// Nodes with higher z_index take priority when overlapping.
     pub fn node_at_screen(&self, screen_x: f32, screen_y: f32) -> Option<NodeId> {
         let canvas_pos = self.camera.screen_to_canvas(Vec2::new(screen_x, screen_y));
-        self.graph
+        let mut candidates: Vec<_> = self.graph
             .nodes
             .iter()
-            .find(|(_, node)| {
+            .filter(|(_, node)| {
                 canvas_pos.x >= node.position.0
                     && canvas_pos.x <= node.position.0 + node.size.0
                     && canvas_pos.y >= node.position.1
                     && canvas_pos.y <= node.position.1 + node.size.1
             })
-            .map(|(id, _)| *id)
+            .collect();
+        // Sort by z_index descending so topmost node is returned
+        candidates.sort_by(|a, b| b.1.z_index.partial_cmp(&a.1.z_index).unwrap_or(std::cmp::Ordering::Equal));
+        candidates.first().map(|(id, _)| *id).copied()
     }
 
     /// Returns nodes within the given screen-space rectangle.

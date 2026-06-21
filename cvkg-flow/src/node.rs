@@ -26,11 +26,14 @@ pub struct OklchColor {
 
 impl OklchColor {
     /// Creates a new OKLCH color.
+    ///
+    /// Lightness is clamped to [0.0, 1.0], chroma is clamped to non-negative,
+    /// and hue is normalised to [0.0, 360.0).
     pub fn new(l: f32, c: f32, h: f32) -> Self {
         Self {
             l: l.clamp(0.0, 1.0),
             c: c.max(0.0),
-            h: h % 360.0,
+            h: h.rem_euclid(360.0),
         }
     }
 
@@ -93,9 +96,11 @@ impl OklchColor {
     }
 
     /// Returns a new color with adjusted hue.
+    ///
+    /// Hue is normalised to the range [0.0, 360.0).
     pub fn with_hue(self, h: f32) -> Self {
         Self {
-            h: h % 360.0,
+            h: h.rem_euclid(360.0),
             ..self
         }
     }
@@ -156,9 +161,11 @@ impl GlassNodeMaterial {
     }
 
     /// Sets the tint colour from OKLCH values and updates the cached RGBA.
+    /// Preserves the existing tint alpha (default 0.15 for glass).
     pub fn with_tint_oklch(mut self, l: f32, c: f32, h: f32) -> Self {
         self.tint_oklch = OklchColor::new(l, c, h);
-        self.tint = self.tint_oklch.to_rgba();
+        let new_rgba = self.tint_oklch.to_rgba();
+        self.tint = [new_rgba[0], new_rgba[1], new_rgba[2], self.tint[3]];
         self
     }
 

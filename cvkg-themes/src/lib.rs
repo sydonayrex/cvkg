@@ -1103,23 +1103,12 @@ impl StateColors {
             return Color::new(0.0, 0.0, 0.0, 1.0);
         }
 
-        // Neither pure white nor black works -- find a lightness that does
-        // Binary search for the lightness that gives Lc >= 60
-        let mut lo = 0.0f32;
-        let mut hi = 1.0f32;
-        for _ in 0..20 {
-            let mid = (lo + hi) / 2.0;
-            let text_lum = OklchColor::new(mid, 0.0, bg.h, 1.0)
-                .to_rgba()
-                .relative_luminance();
-            let contrast = Self::apca_contrast(text_lum, bg_lum);
-            if contrast >= 60.0 {
-                hi = mid;
-            } else {
-                lo = mid;
-            }
+        // Neither pure white nor black works -- return whichever has higher contrast
+        if white_contrast >= black_contrast {
+            return Color::new(1.0, 1.0, 1.0, 1.0);
+        } else {
+            return Color::new(0.0, 0.0, 0.0, 1.0);
         }
-        OklchColor::new(hi, 0.0, bg.h, 1.0).to_rgba()
     }
 
     /// Computes APCA contrast between two relative luminance values.

@@ -23,12 +23,16 @@ pub struct SplineEasing {
 
 impl SplineEasing {
     /// Creates a new cubic bezier easing with the given control points.
+    ///
+    /// X coordinates are clamped to [0.0, 1.0] to maintain valid time-domain
+    /// behaviour. Y coordinates are NOT clamped — they may overshoot [0.0, 1.0]
+    /// to produce elastic / spring-like effects (e.g. [`Self::elastic`]).
     pub fn new(x1: f32, y1: f32, x2: f32, y2: f32) -> Self {
         Self {
             x1: x1.clamp(0.0, 1.0),
-            y1: y1.clamp(0.0, 1.0),
+            y1,
             x2: x2.clamp(0.0, 1.0),
-            y2: y2.clamp(0.0, 1.0),
+            y2,
         }
     }
 
@@ -228,16 +232,25 @@ impl FlowEdge {
 
     /// Sets the interaction state to hovered.
     pub fn set_hovered(&mut self) {
+        if self.interaction != EdgeInteraction::Hovered {
+            self.animation_progress = 0.0;
+        }
         self.interaction = EdgeInteraction::Hovered;
     }
 
     /// Sets the interaction state to selected.
     pub fn set_selected(&mut self) {
+        if self.interaction != EdgeInteraction::Selected {
+            self.animation_progress = 0.0;
+        }
         self.interaction = EdgeInteraction::Selected;
     }
 
     /// Resets the interaction state to default.
     pub fn set_default(&mut self) {
+        if self.interaction != EdgeInteraction::Default {
+            self.animation_progress = 0.0;
+        }
         self.interaction = EdgeInteraction::Default;
     }
 
