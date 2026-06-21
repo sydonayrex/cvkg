@@ -13,7 +13,7 @@ pub mod config;
 pub mod geometry_buffers;
 pub mod gpu_capabilities;
 
-pub use config::SurtrConfig;
+pub use config::RendererConfig;
 pub use gpu_capabilities::{detect_gpu_vendor, GpuCapabilities, GpuVendor};
 
 // Re-export the existing subsystem structs that still live in

@@ -22,8 +22,8 @@ pub struct AppState {
     pub nodes: Vec<TemporalNode>,
     /// The Temporal Graph edges
     pub edges: Vec<TemporalEdge>,
-    /// The current operational Realm (Midgard/Asgard)
-    pub realm: Realm,
+    /// The current operational UiFidelityLevel (Midgard/Asgard)
+    pub realm: UiFidelityLevel,
     /// Last known pointer position (X, Y)
     pub last_pointer_pos: [f32; 2],
     /// Resolved pointer velocity (pixels per frame)
@@ -143,11 +143,11 @@ pub enum MemoryLayer {
     Procedural,
 }
 
-/// The operational Realm of the UI.
+/// The operational UiFidelityLevel of the UI.
 /// Midgard: Classic, functional, 2D tactical UI for mortals.
 /// Asgard: High-fidelity, cognitive, shader-heavy UI for the Singularity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
-pub enum Realm {
+pub enum UiFidelityLevel {
     Midgard,
     #[default]
     Asgard,

@@ -26,7 +26,7 @@ impl View for Seiðr {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+        if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
             renderer.fill_rounded_rect(rect, 4.0, theme::with_alpha(theme::surface_elevated(), 0.5));
             return;
         }
@@ -77,7 +77,7 @@ impl View for LokiGlitch {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+        if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
             renderer.draw_text(
                 &self.content,
                 rect.x,
@@ -226,7 +226,7 @@ impl<V: View> View for NiflheimFrost<V> {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+        if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
             renderer.fill_rounded_rect(rect, 4.0, theme::with_alpha(theme::surface_elevated(), 0.9));
             renderer.stroke_rounded_rect(rect, 4.0, theme::with_alpha(theme::border(), 0.8), 1.0);
             self.content.render(renderer, rect);
@@ -314,7 +314,7 @@ impl View for FutharkFlow {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+        if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
             renderer.draw_line(
                 rect.x,
                 rect.y + rect.height / 2.0,
@@ -390,7 +390,7 @@ impl<V: View> View for HeimdallSweep<V> {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+        if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
             self.content.render(renderer, rect);
             return;
         }

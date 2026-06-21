@@ -244,7 +244,7 @@ impl<V: View> View for PolygonFrame<V> {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        if cvkg_core::load_system_state().realm == cvkg_core::Realm::Midgard {
+        if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
             renderer.fill_rounded_rect(rect, RADIUS_SM, theme::with_alpha(theme::surface(), 0.1));
             renderer.stroke_rect(rect, self.color, self.stroke_width);
             self.content.render(renderer, rect.inset(4.0));

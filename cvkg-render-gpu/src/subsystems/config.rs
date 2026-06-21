@@ -1,4 +1,4 @@
-//! P1-1 (phase 6): SurtrConfig -- the renderer's tunable parameters.
+//! P1-1 (phase 6): RendererConfig -- the renderer's tunable parameters.
 //!
 //! Extracted from types.rs to give the configuration its own
 //! module. The struct and its impl blocks were previously defined
@@ -14,7 +14,7 @@ use std::num::NonZeroUsize;
 /// `GpuRenderer::set_config()` (e.g., to use a low_vram preset
 /// after detecting a device with limited VRAM).
 #[derive(Debug, Clone)]
-pub struct SurtrConfig {
+pub struct RendererConfig {
     /// Capacity of the text glyph cache (keyed by glyph hash).
     pub text_cache_capacity: NonZeroUsize,
     /// Capacity of the SVG tessellated model cache.
@@ -33,7 +33,7 @@ pub struct SurtrConfig {
     pub mega_heim_height: u32,
 }
 
-impl Default for SurtrConfig {
+impl Default for RendererConfig {
     fn default() -> Self {
         // Defaults match the previously hardcoded values so
         // behavior is preserved.
@@ -50,7 +50,7 @@ impl Default for SurtrConfig {
     }
 }
 
-impl SurtrConfig {
+impl RendererConfig {
     /// Low-VRAM preset: smaller caches and atlas for mobile GPUs.
     pub fn low_vram() -> Self {
         Self {

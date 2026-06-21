@@ -1,6 +1,6 @@
 //! The main GpuRenderer struct and core frame lifecycle.
 use crate::draw::{parse_svg_animations, usvg_to_lyon};
-use crate::heim::SundrPacker;
+use crate::heim::SkylinePacker;
 use crate::kvasir;
 use crate::types::*;
 use crate::vertex::*;
@@ -82,9 +82,9 @@ impl Default for QualityLevel {
 /// into a single configuration object so that callers can tune the
 /// renderer for different working sets (high-end desktop vs. mid-tier
 /// mobile vs. low-VRAM embedded) without modifying the source.
-/// P1-1 (phase 6): SurtrConfig has been moved to its own module
-/// at `crate::subsystems::config::SurtrConfig`. The re-export at
-/// `crate::SurtrConfig` (from `cvkg_runic_text` re-exports in
+/// P1-1 (phase 6): RendererConfig has been moved to its own module
+/// at `crate::subsystems::config::RendererConfig`. The re-export at
+/// `crate::RendererConfig` (from `cvkg_runic_text` re-exports in
 /// `lib.rs`) preserves backward compatibility.
 ///
 /// GpuRenderer implements the high-performance GPU backend.
@@ -121,7 +121,7 @@ pub struct GpuRenderer {
     pub(crate) text: crate::types::TextSubsystem,
     pub(crate) mega_heim_tex: wgpu::Texture,
     pub(crate) mega_heim_bind_group: wgpu::BindGroup,
-    pub(crate) heim_packer: SundrPacker,
+    pub(crate) heim_packer: SkylinePacker,
     pub(crate) image_uv_registry: LruCache<String, Rect>,
     pub(crate) texture_registry: LruCache<String, u32>,
     pub(crate) texture_views: Vec<wgpu::TextureView>,
@@ -345,7 +345,7 @@ pub struct GpuRenderer {
     /// atlas dimensions, and other tunable parameters. Can be
     /// replaced at runtime via `set_config()` to adapt to different
     /// working sets (e.g., after detecting a low-VRAM device).
-    pub(crate) config: crate::subsystems::SurtrConfig,
+    pub(crate) config: crate::subsystems::RendererConfig,
     /// P1-10: Quality level controlling MSAA sample count and other
     /// adaptive rendering settings. Defaults to High to match the
     /// previous hardcoded 4x MSAA behavior.
@@ -578,12 +578,12 @@ impl GpuRenderer {
     ///
     /// Changes to atlas dimensions and other one-shot values take
     /// effect on the next frame.
-    pub fn set_config(&mut self, config: crate::subsystems::SurtrConfig) {
+    pub fn set_config(&mut self, config: crate::subsystems::RendererConfig) {
         self.config = config;
     }
 
     /// P1-1: read the current configuration.
-    pub fn config(&self) -> &crate::subsystems::SurtrConfig {
+    pub fn config(&self) -> &crate::subsystems::RendererConfig {
         &self.config
     }
 
@@ -2416,17 +2416,17 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             // to a content-addressed cache so multiple names pointing
             // at the same SVG share a single entry regardless of name.
             // P1-1: cache sizes and atlas dimensions are now read
-            // from the SurtrConfig struct instead of being
+            // from the RendererConfig struct instead of being
             // hardcoded. Defaults match the previously hardcoded
-            // values, so behavior is preserved. See SurtrConfig
+            // values, so behavior is preserved. See RendererConfig
             // for available presets (low_vram, high_end, default).
-            config: crate::subsystems::SurtrConfig::default(),
+            config: crate::subsystems::RendererConfig::default(),
             // P1-1: text subsystem (engine + caches) initialized
             // via TextSubsystem::forge().
             text: crate::types::TextSubsystem::forge(
                 NonZeroUsize::new(8192).unwrap(),
             ),
-            heim_packer: SundrPacker::new(4096, 4096),
+            heim_packer: SkylinePacker::new(4096, 4096),
             image_uv_registry: {
                 let mut cache = LruCache::new(NonZeroUsize::new(256).unwrap());
                 cache.put("__mega_heim".to_string(), cvkg_core::Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 });
@@ -3565,7 +3565,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
             view_formats: &[],
         });
 
-        let mut new_packer = SundrPacker::new(4096, 4096);
+        let mut new_packer = SkylinePacker::new(4096, 4096);
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -6436,18 +6436,18 @@ mod p1_6_particle_ring_buffer_tests {
 
 
 // =========================================================================
-// P1-1: SurtrConfig tests
+// P1-1: RendererConfig tests
 // =========================================================================
 
 #[cfg(test)]
 mod p1_1_surtr_config_tests {
-    use crate::subsystems::SurtrConfig;
+    use crate::subsystems::RendererConfig;
 
     #[test]
     fn default_has_p1_5_cache_sizes() {
         // P1-1 regression: default config matches the P1-5 fixed
         // cache sizes (text=8192, svg=512, trees=512, etc.).
-        let cfg = SurtrConfig::default();
+        let cfg = RendererConfig::default();
         assert_eq!(cfg.text_cache_capacity.get(), 8192);
         assert_eq!(cfg.svg_cache_capacity.get(), 512);
         assert_eq!(cfg.svg_trees_capacity.get(), 512);
@@ -6462,7 +6462,7 @@ mod p1_1_surtr_config_tests {
     fn low_vram_uses_smaller_atlas() {
         // P1-1 regression: low_vram preset uses 2048x2048 atlas
         // (~16MB RGBA8) instead of the default 4096x4096 (~64MB).
-        let cfg = SurtrConfig::low_vram();
+        let cfg = RendererConfig::low_vram();
         assert_eq!(cfg.mega_heim_width, 2048);
         assert_eq!(cfg.mega_heim_height, 2048);
         assert!(
@@ -6476,7 +6476,7 @@ mod p1_1_surtr_config_tests {
     fn high_end_uses_larger_atlas() {
         // P1-1 regression: high_end preset uses 8192x8192 atlas
         // (~256MB RGBA8) for high-end desktop GPUs.
-        let cfg = SurtrConfig::high_end();
+        let cfg = RendererConfig::high_end();
         assert_eq!(cfg.mega_heim_width, 8192);
         assert_eq!(cfg.mega_heim_height, 8192);
         assert!(cfg.mega_heim_vram_bytes() >= 256 * 1024 * 1024);
@@ -6485,7 +6485,7 @@ mod p1_1_surtr_config_tests {
     #[test]
     fn mega_heim_vram_is_4_bytes_per_pixel() {
         // P1-1 regression: VRAM cost is width*height*4 (RGBA8).
-        let cfg = SurtrConfig::default();
+        let cfg = RendererConfig::default();
         let expected = 4096u64 * 4096 * 4;
         assert_eq!(cfg.mega_heim_vram_bytes(), expected);
     }
@@ -6495,9 +6495,9 @@ mod p1_1_surtr_config_tests {
         // P1-1: every preset must have positive capacities (no
         // accidentally-zero LRU caches).
         for (name, cfg) in [
-            ("default", SurtrConfig::default()),
-            ("low_vram", SurtrConfig::low_vram()),
-            ("high_end", SurtrConfig::high_end()),
+            ("default", RendererConfig::default()),
+            ("low_vram", RendererConfig::low_vram()),
+            ("high_end", RendererConfig::high_end()),
         ] {
             assert!(cfg.text_cache_capacity.get() > 0, "{name} text_cache");
             assert!(cfg.svg_cache_capacity.get() > 0, "{name} svg_cache");
@@ -6519,7 +6519,7 @@ mod p1_1_surtr_config_tests {
     #[test]
     fn config_is_cloneable_and_debug() {
         // P1-1: config must be Clone + Debug for use in error paths.
-        let cfg = SurtrConfig::default();
+        let cfg = RendererConfig::default();
         let _cloned = cfg.clone();
         let _formatted = format!("{cfg:?}");
     }

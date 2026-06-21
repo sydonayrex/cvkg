@@ -2,7 +2,7 @@
 //!
 //! Run: cargo run -p cvkg --example berserker_fire_demo --features gpu
 
-use cvkg_core::{BerserkerMode, DrawMaterial, FrameRenderer, Rect, Renderer};
+use cvkg_core::{RenderIntensityMode, DrawMaterial, FrameRenderer, Rect, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use std::time::Instant;
@@ -150,15 +150,15 @@ impl DemoState {
         self.start.elapsed().as_secs_f32()
     }
 
-    fn berserker_mode(&self) -> BerserkerMode {
+    fn berserker_mode(&self) -> RenderIntensityMode {
         if self.rage > 0.8 {
-            BerserkerMode::GodMode
+            RenderIntensityMode::GodMode
         } else if self.rage > 0.5 {
-            BerserkerMode::Frenzy
+            RenderIntensityMode::Frenzy
         } else if self.rage > 0.2 {
-            BerserkerMode::Rage
+            RenderIntensityMode::Rage
         } else {
-            BerserkerMode::Normal
+            RenderIntensityMode::Normal
         }
     }
 }
@@ -597,10 +597,10 @@ impl ApplicationHandler for App {
 
                 // Telemetry
                 let mode = match self.state.berserker_mode() {
-                    BerserkerMode::Normal => "NORMAL",
-                    BerserkerMode::Rage => "RAGE",
-                    BerserkerMode::Frenzy => "FRENZY",
-                    BerserkerMode::GodMode => "GOD_MODE",
+                    RenderIntensityMode::Normal => "NORMAL",
+                    RenderIntensityMode::Rage => "RAGE",
+                    RenderIntensityMode::Frenzy => "FRENZY",
+                    RenderIntensityMode::GodMode => "GOD_MODE",
                 };
                 let info = format!(
                     "CVKG v0.2.8 GPU | {} | RAGE: {}% | CLICKS: {} | FRAME: {} | PARTICLES: {}",

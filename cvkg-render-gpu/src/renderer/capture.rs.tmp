@@ -1,0 +1,253 @@
+
+    /// forge_headless -- Initializes Surtr without a window for visual regression testing.
+    pub async fn forge_headless(width: u32, height: u32) -> Self {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            flags: wgpu::InstanceFlags::default(),
+            backend_options: wgpu::BackendOptions::default(),
+            display: None,
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        });
+
+        // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
+        log::info!("[GPU] Requesting HighPerformance adapter (headless)...");
+        let mut adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok();
+
+        if adapter.is_none() {
+            log::warn!(
+                "[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower..."
+            );
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                })
+                .await
+                .ok();
+        }
+
+        if adapter.is_none() {
+            log::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: true,
+                })
+                .await
+                .ok();
+        }
+
+        let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
+        let info = adapter.get_info();
+        // P1-26: detect GPU vendor for logging and future
+        // capability-based shader selection.
+        let caps = crate::subsystems::GpuCapabilities::detect(
+            &info.name,
+            format!("{:?}", info.backend),
+        );
+        log::info!(
+            "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
+            info.name,
+            info.device_type,
+            info.backend,
+            caps.vendor
+        );
+        log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        let required_features = adapter.features()
+            & (wgpu::Features::TIMESTAMP_QUERY
+                | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | wgpu::Features::TEXTURE_BINDING_ARRAY);
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("Surtr Headless Forge"),
+                required_features,
+                required_limits: wgpu::Limits {
+                    max_bindings_per_bind_group: adapter
+                        .limits()
+                        .max_bindings_per_bind_group
+                        .min(256),
+                    max_binding_array_elements_per_shader_stage: adapter
+                        .limits()
+                        .max_binding_array_elements_per_shader_stage
+                        .min(256),
+                    ..wgpu::Limits::default()
+                },
+                memory_hints: wgpu::MemoryHints::default(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                trace: wgpu::Trace::Off,
+            })
+            .await
+            .expect("Failed to create Surtr device");
+
+        let instance = Arc::new(instance);
+        let adapter = Arc::new(adapter);
+
+        device.on_uncaptured_error(Arc::new(|error| {
+            log::error!(
+                "[GPU] Uncaptured device error (Device Lost or Panic): {:?}",
+                error
+            );
+        }));
+
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
+
+        Self::forge_internal(
+            instance,
+            adapter,
+            device,
+            queue,
+            None,
+            Some((width, height, wgpu::TextureFormat::Rgba8UnormSrgb)),
+        )
+        .await
+    }
+
+    /// capture_frame -- Read back the rendered frame as a byte buffer (RGBA8).
+    pub async fn capture_frame(&self) -> Result<Vec<u8>, String> {
+        let ctx = self
+            .headless_context
+            .as_ref()
+            .ok_or("Headless context required for capture")?;
+        let current_width = self.current_width();
+        let current_height = self.current_height();
+
+        let u32_size = std::mem::size_of::<u32>() as u32;
+        let width = ctx.width;
+        let height = ctx.height;
+        let bytes_per_row = width * u32_size;
+        let padding = (256 - (bytes_per_row % 256)) % 256;
+        let padded_bytes_per_row = bytes_per_row + padding;
+
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Capture Buffer"),
+            size: (padded_bytes_per_row as u64 * height as u64),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Capture Encoder"),
+            });
+
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &ctx.output_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &output_buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        self.queue.submit(Some(encoder.finish()));
+
+        let buffer_slice = output_buffer.slice(..);
+        let (sender, receiver) = futures::channel::oneshot::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |v| {
+            let _ = sender.send(v);
+        });
+
+        let _ = self.device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        });
+
+        if let Ok(Ok(_)) = receiver.await {
+            let data = buffer_slice.get_mapped_range();
+            let mut result = Vec::with_capacity((width * height * 4) as usize);
+
+            for y in 0..height {
+                let start = (y * padded_bytes_per_row) as usize;
+                let end = start + bytes_per_row as usize;
+                result.extend_from_slice(&data[start..end]);
+            }
+
+            log::trace!(
+                "[GPU] capture_frame: data len={}, first 4 bytes={:?}",
+                data.len(),
+                &data[0..4.min(data.len())]
+            );
+
+            drop(data);
+            output_buffer.unmap();
+            Ok(result)
+        } else {
+            Err("Failed to capture frame".to_string())
+        }
+    }
+
+    pub(crate) fn current_width(&self) -> u32 {
+        if let Some(id) = self.current_window {
+            self.surfaces.get(&id).map(|s| s.config.width).unwrap_or(1)
+        } else {
+            self.headless_context.as_ref().map(|h| h.width).unwrap_or(1)
+        }
+    }
+
+    pub(crate) fn current_height(&self) -> u32 {
+        if let Some(id) = self.current_window {
+            self.surfaces.get(&id).map(|s| s.config.height).unwrap_or(1)
+        } else {
+            self.headless_context
+                .as_ref()
+                .map(|h| h.height)
+                .unwrap_or(1)
+        }
+    }
+
+    pub(crate) fn current_scale_factor(&self) -> f32 {
+        if let Some(id) = self.current_window {
+            self.surfaces
+                .get(&id)
+                .map(|s| s.scale_factor)
+                .unwrap_or(1.0)
+        } else {
+            self.headless_context
+                .as_ref()
+                .map(|h| h.scale_factor)
+                .unwrap_or(1.0)
+        }
+    }
+
+    /// Returns the elapsed time in seconds since the renderer was created.
+    /// Used by shaders for time-based animations (volumetric, particles, etc.).
+    pub(crate) fn current_time(&self) -> f32 {
+        self.start_time.elapsed().as_secs_f32()
+    }
+
+    /// Find a filter by ID in the SVG tree's filter list.
+    pub(crate) fn find_filter<'a>(
+        tree: &'a usvg::Tree,
+        filter_id: &str,
+    ) -> Option<&'a usvg::filter::Filter> {
+        tree.filters()
+            .iter()
+            .find(|f| f.id() == filter_id)
+            .map(|arc| arc.as_ref())
+    }
+}

@@ -175,7 +175,7 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         };
 
         // 2. Realm-Dependent Rendering
-        if realm == cvkg_core::Realm::Midgard {
+        if realm == cvkg_core::UiFidelityLevel::Midgard {
             // Midgard: Simple cross-fade switch
             if p < 0.5 {
                 self.primary.render(renderer, content_rect);

@@ -1,6 +1,6 @@
 //! Heim packing utilities.
 //!
-//! SundrPacker implements a skyline bin-packing algorithm for the
+//! SkylinePacker implements a skyline bin-packing algorithm for the
 //! Mega-Heim texture array. It tracks horizontal segments and finds
 //! the best position for each new rectangle.
 
@@ -11,13 +11,13 @@ pub struct SkylineSegment {
     pub w: u32,
 }
 
-pub struct SundrPacker {
+pub struct SkylinePacker {
     width: u32,
     height: u32,
     skyline: Vec<SkylineSegment>,
 }
 
-impl SundrPacker {
+impl SkylinePacker {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
             width,
@@ -118,21 +118,21 @@ mod tests {
 
     #[test]
     fn test_shelf_packer_basic() {
-        let mut packer = SundrPacker::new(100, 100);
+        let mut packer = SkylinePacker::new(100, 100);
         assert_eq!(packer.pack(10, 10), Some((0, 0)));
         assert_eq!(packer.pack(20, 15), Some((10, 0)));
     }
 
     #[test]
     fn test_shelf_packer_wrap() {
-        let mut packer = SundrPacker::new(100, 100);
+        let mut packer = SkylinePacker::new(100, 100);
         packer.pack(60, 10);
         assert_eq!(packer.pack(50, 20), Some((0, 10)));
     }
 
     #[test]
     fn test_shelf_packer_oversized() {
-        let mut packer = SundrPacker::new(10, 10);
+        let mut packer = SkylinePacker::new(10, 10);
         assert_eq!(packer.pack(11, 5), None);
         assert_eq!(packer.pack(5, 11), None);
     }

@@ -39,9 +39,9 @@ pub enum TokenValue {
     Adaptive { light: String, dark: String },
 }
 
-/// YggdrasilTokens is the authoritative container for all design tokens in the CVKG ecosystem.
+/// DesignTokens is the authoritative container for all design tokens in the CVKG ecosystem.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct YggdrasilTokens {
+pub struct DesignTokens {
     pub color: HashMap<String, TokenValue>,
     pub font: HashMap<String, TokenValue>,
     pub spacing: HashMap<String, TokenValue>,
@@ -55,13 +55,13 @@ pub struct YggdrasilTokens {
     pub accessibility: HashMap<String, TokenValue>,
 }
 
-impl Default for YggdrasilTokens {
+impl Default for DesignTokens {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl YggdrasilTokens {
+impl DesignTokens {
     pub fn new() -> Self {
         Self {
             color: HashMap::new(),

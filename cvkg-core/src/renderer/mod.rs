@@ -5,7 +5,7 @@
 //! so that consumer code can depend on only the capability slice it needs.
 
 use super::{
-    BerserkerMode, ColorTheme, Event, Mesh, Rect, TelemetryData,
+    RenderIntensityMode, ColorTheme, Event, Mesh, Rect, TelemetryData,
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -258,7 +258,7 @@ pub trait RendererOpacity {
 pub trait RendererBerserker {
     fn set_theme(&mut self, _theme: ColorTheme) {}
     fn set_rage(&mut self, _rage: f32) {}
-    fn set_berserker_mode(&mut self, _state: BerserkerMode) {}
+    fn set_berserker_mode(&mut self, _state: RenderIntensityMode) {}
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
     fn set_scene(&mut self, _scene: &str) {}
     fn set_scene_preset(&mut self, _preset: u32) {}

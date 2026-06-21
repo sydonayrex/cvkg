@@ -51,9 +51,9 @@ pub mod undo;
 pub mod window;
 
 // P1-13: re-exports for backward compatibility
-pub use asset::{AssetKey, AssetState, TokenValue, YggdrasilTokens};
+pub use asset::{AssetKey, AssetState, TokenValue, DesignTokens};
 pub use error_boundary::{ComponentErrorState, ErrorBoundary};
-pub use knowledge::{AnnouncementPriority, KnowledgeFragment, KnowledgeId, AppState, MemoryLayer, Realm, TemporalEdge, TemporalNode};
+pub use knowledge::{AnnouncementPriority, KnowledgeFragment, KnowledgeId, AppState, MemoryLayer, UiFidelityLevel, TemporalEdge, TemporalNode};
 pub use undo::{UndoGroup, UndoManager};
 pub use window::{Window, WindowCloseAction, WindowConfig, WindowHandle, WindowId, WindowLevel};
 
@@ -1137,7 +1137,7 @@ impl ViewModifier for ManiGlowModifier {
     }
 
     fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
-        if crate::load_system_state().realm == Realm::Asgard {
+        if crate::load_system_state().realm == UiFidelityLevel::Asgard {
             renderer.mani_glow(rect, self.color, self.radius);
         }
         view.render(renderer, rect);
@@ -1162,14 +1162,14 @@ impl ViewModifier for BifrostLayerModifier {
         let realm = crate::load_system_state().realm;
         match self.layer {
             MemoryLayer::Episodic => {
-                if realm == Realm::Asgard {
+                if realm == UiFidelityLevel::Asgard {
                     renderer.bifrost(rect, 40.0, 1.2, 0.7);
                 } else {
                     renderer.fill_rect(rect, [0.1, 0.12, 0.15, 0.8]);
                 }
             }
             MemoryLayer::Semantic => {
-                if realm == Realm::Asgard {
+                if realm == UiFidelityLevel::Asgard {
                     renderer.gungnir(rect, [1.0, 0.84, 0.0, 1.0], 15.0, 0.6);
                 } else {
                     renderer.stroke_rect(rect, [0.4, 0.4, 0.4, 1.0], 1.5);
@@ -1177,7 +1177,7 @@ impl ViewModifier for BifrostLayerModifier {
             }
             MemoryLayer::Procedural => {
                 renderer.fill_rect(rect, [0.05, 0.05, 0.07, 0.95]);
-                let stroke_color = if realm == Realm::Asgard {
+                let stroke_color = if realm == UiFidelityLevel::Asgard {
                     [0.3, 0.3, 0.3, 1.0]
                 } else {
                     [0.2, 0.2, 0.2, 1.0]
@@ -1237,7 +1237,7 @@ impl ViewModifier for FafnirModifier {
             renderer.push_transform([0.0, 0.0], [scale, scale], 0.0);
         }
 
-        if glow_intensity > 0.1 && state.realm == Realm::Asgard {
+        if glow_intensity > 0.1 && state.realm == UiFidelityLevel::Asgard {
             renderer.gungnir(rect, [1.0, 0.84, 0.0, 1.0], 15.0 * vitality, glow_intensity);
         }
 
@@ -1273,7 +1273,7 @@ impl ViewModifier for MimirIntentModifier {
         let speed_sq = vel[0] * vel[0] + vel[1] * vel[1];
         let dist_sq = dx * dx + dy * dy;
 
-        if dot > 0.0 && dist_sq < 250.0 * 250.0 && speed_sq > 0.5 && state.realm == Realm::Asgard {
+        if dot > 0.0 && dist_sq < 250.0 * 250.0 && speed_sq > 0.5 && state.realm == UiFidelityLevel::Asgard {
             // Intent detected: render a subtle "ghost" reveal
             let intent_strength = (dot / (speed_sq.sqrt() * dist_sq.sqrt())).clamp(0.0, 1.0);
             renderer.stroke_rect(rect, [0.0, 0.9, 1.0, 0.3 * intent_strength], 1.5);
@@ -1295,7 +1295,7 @@ impl ViewModifier for KvasirVibeModifier {
     }
 
     fn render_view<V: View>(&self, view: &V, renderer: &mut dyn Renderer, rect: Rect) {
-        if crate::load_system_state().realm == Realm::Asgard {
+        if crate::load_system_state().realm == UiFidelityLevel::Asgard {
             let t = renderer.elapsed_time();
             let c = self.complexity.clamp(0.0, 1.0);
 
@@ -1346,7 +1346,7 @@ impl ViewModifier for OdinsEyeModifier {
         // 1. Render Background content
         view.render(renderer, rect);
 
-        if state.realm == Realm::Asgard {
+        if state.realm == UiFidelityLevel::Asgard {
             // 2. Bestow Odin's Eye (Atmospheric Overlay)
             // Soft, large circular pulse representing the 'Eye'
             let eye_pulse = (t * 0.5).sin().abs() * 0.05;
@@ -1563,15 +1563,15 @@ impl SpringSolver {
     }
 }
 
-/// SleipnirModifier handles physics-based animations via the Sleipnir RK4 solver.
+/// SpringAnimationModifier handles physics-based animations via the Sleipnir RK4 solver.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SleipnirModifier {
+pub struct SpringAnimationModifier {
     pub id: u64,
     pub target: f32,
     pub params: SpringParams,
 }
 
-impl ViewModifier for SleipnirModifier {
+impl ViewModifier for SpringAnimationModifier {
     fn modify<V: View>(self, content: V) -> impl View {
         ModifiedView::new(content, self)
     }
@@ -2486,7 +2486,7 @@ pub trait Renderer: ElapsedTime + Send {
     // ── Berserker Pipeline State ─────────────────────────────────────────
     fn set_theme(&mut self, _theme: ColorTheme) {}
     fn set_rage(&mut self, _rage: f32) {}
-    fn set_berserker_mode(&mut self, _state: BerserkerMode) {}
+    fn set_berserker_mode(&mut self, _state: RenderIntensityMode) {}
     fn trigger_shatter_event(&mut self, _origin: [f32; 2], _force: f32) {}
     /// Set the fireball position for dynamic glass specular highlights.
     fn set_fireball_pos(&mut self, _pos: [f32; 2]) {}
@@ -3828,7 +3828,7 @@ pub trait EnvKey: 'static + Send + Sync {
 /// Key for accessing the Yggdrasil design token tree
 pub struct YggdrasilKey;
 impl EnvKey for YggdrasilKey {
-    type Value = YggdrasilTokens;
+    type Value = DesignTokens;
     fn default_value() -> Self::Value {
         default_tokens()
     }
@@ -4097,8 +4097,8 @@ fn parse_hex_color(hex: &str) -> [f32; 4] {
 }
 
 /// The authoritative Cyberpunk Viking default tokens
-pub fn default_tokens() -> YggdrasilTokens {
-    let mut tokens = YggdrasilTokens::new();
+pub fn default_tokens() -> DesignTokens {
+    let mut tokens = DesignTokens::new();
     // Core Norse Colorways
     tokens.color.insert(
         "background".to_string(),
@@ -5806,7 +5806,7 @@ mod phase1_test;
 
 /// Berserker mode states for the rendering pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BerserkerMode {
+pub enum RenderIntensityMode {
     Normal,
     Rage,    // Red tint, slight shake
     Frenzy,  // Heavy red tint, motion blur, aggressive shake

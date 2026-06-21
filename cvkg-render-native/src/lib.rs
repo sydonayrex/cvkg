@@ -341,7 +341,7 @@ pub struct NativeRenderer {
     gpu: Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>,
     delta_time: f32,
     elapsed_time: f32,
-    berserker_mode: cvkg_core::BerserkerMode,
+    berserker_mode: cvkg_core::RenderIntensityMode,
     rage: f32,
     window: Arc<Window>,
 }
@@ -473,7 +473,7 @@ impl NativeRenderer {
         gpu: Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>,
         delta_time: f32,
         elapsed_time: f32,
-        berserker_mode: cvkg_core::BerserkerMode,
+        berserker_mode: cvkg_core::RenderIntensityMode,
         rage: f32,
     ) -> Self {
         Self {
@@ -503,7 +503,7 @@ impl NativeRenderer {
             proxy: event_loop.create_proxy(),
             start_time: std::time::Instant::now(),
             last_frame_time: std::time::Instant::now(),
-            berserker_mode: cvkg_core::BerserkerMode::Normal,
+            berserker_mode: cvkg_core::RenderIntensityMode::Normal,
             rage: 0.0,
             state_detector: WindowStateDetector::new(),
             frame_budget: cvkg_core::FrameBudgetTracker::default_120fps(),
@@ -845,7 +845,7 @@ struct App<V: cvkg_core::View> {
     proxy: winit::event_loop::EventLoopProxy<AppEvent>,
     start_time: std::time::Instant,
     last_frame_time: std::time::Instant,
-    berserker_mode: cvkg_core::BerserkerMode,
+    berserker_mode: cvkg_core::RenderIntensityMode,
     rage: f32,
     /// Tracks the current window state for render-loop decisions.
     state_detector: WindowStateDetector,
@@ -2568,14 +2568,14 @@ impl cvkg_core::Renderer for NativeRenderer {
             .pop_transform();
     }
 
-    fn set_berserker_mode(&mut self, state: cvkg_core::BerserkerMode) {
+    fn set_berserker_mode(&mut self, state: cvkg_core::RenderIntensityMode) {
         self.berserker_mode = state;
 
         // Berserker Determinism: Apply OS-level scheduler priority hints for GodMode.
         // SAFETY: setpriority is a POSIX syscall. We pass PRIO_PROCESS with pid=0 (self).
         // Failure is silently ignored via let _ because insufficient permissions are expected
         // in unprivileged environments and must not crash the render loop.
-        if state == cvkg_core::BerserkerMode::GodMode {
+        if state == cvkg_core::RenderIntensityMode::GodMode {
             log::info!("ENTERING GOD MODE: Activating Berserker Determinism (High Priority)");
             #[cfg(target_os = "linux")]
             unsafe {

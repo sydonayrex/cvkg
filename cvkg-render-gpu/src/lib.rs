@@ -50,30 +50,30 @@ pub mod types;
 pub mod vertex;
 
 pub mod heim;
-pub use heim::SundrPacker;
+pub use heim::SkylinePacker;
 
 // P1-1 (phase 6): subsystems module. Each subsystem (config,
 // geometry, text, svg, particles) is a self-contained module
 // that can be tested, reviewed, and modified in isolation.
 pub mod subsystems;
-pub use subsystems::SurtrConfig;
+pub use subsystems::RendererConfig;
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use super::heim::SundrPacker;
+    use super::heim::SkylinePacker;
 
     #[test]
     fn test_shelf_packer_basic() {
-        let mut packer = SundrPacker::new(100, 100);
+        let mut packer = SkylinePacker::new(100, 100);
         assert_eq!(packer.pack(10, 10), Some((0, 0)));
         assert_eq!(packer.pack(20, 15), Some((10, 0)));
     }
 
     #[test]
     fn test_shelf_packer_wrap() {
-        let mut packer = SundrPacker::new(100, 100);
+        let mut packer = SkylinePacker::new(100, 100);
         packer.pack(60, 10);
         assert_eq!(packer.pack(50, 20), Some((0, 10)));
     }
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn test_shelf_packer_full() {
-        let mut packer = SundrPacker::new(10, 10);
+        let mut packer = SkylinePacker::new(10, 10);
         assert_eq!(packer.pack(11, 5), None);
         assert_eq!(packer.pack(5, 11), None);
     }
