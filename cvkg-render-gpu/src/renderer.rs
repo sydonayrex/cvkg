@@ -5459,6 +5459,13 @@ impl SurtrRenderer {
         current: &cvkg_core::DrawMaterial,
     ) -> cvkg_core::DrawMaterial {
         use material_id::*;
+        
+        // If current context is TopUI, route all non-glass elements to the overlay pass.
+        // This ensures dropdowns, popovers, and menus render crisp text/shapes on top of other content.
+        if matches!(current, cvkg_core::DrawMaterial::TopUI) && material_id != GLASS {
+            return cvkg_core::DrawMaterial::TopUI;
+        }
+
         match material_id {
             GLASS => {
                 if let cvkg_core::DrawMaterial::Glass {
