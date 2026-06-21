@@ -203,6 +203,7 @@ impl View for TacticalGauge {
 }
 /// GjallarAlert - A high-priority tactical notification (toast).
 /// Named after the Gjallarhorn, the loud horn used to signal danger or major events.
+#[doc(alias = "Alert")]
 #[derive(Clone)]
 pub struct GjallarAlert {
     pub title: String,

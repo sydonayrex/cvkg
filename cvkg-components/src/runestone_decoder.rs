@@ -4,6 +4,7 @@ use std::time::Duration;
 
 /// RunestoneDecoder - A text component that "deciphers" ancient runes into digital text.
 /// Section 4.12: "Reading the Runes -- Temporal data reconstruction."
+#[doc(alias = "Decoder")]
 pub struct RunestoneDecoder {
     pub text: String,
     pub duration: Duration,

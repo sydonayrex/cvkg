@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 /// # Syntax:
 /// - `{{name}}` -- required variable (highlighted in accent color)
 /// - `{{name:default}}` -- variable with default value (highlighted in muted color)
+#[doc(alias = "PromptBuilder")]
 #[derive(Clone)]
 pub struct PromptForge {
     template: String,

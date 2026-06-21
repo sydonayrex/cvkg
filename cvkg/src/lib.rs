@@ -41,11 +41,30 @@ pub use cvkg_render_native as native;
 pub use cvkg_render_gpu as web;
 
 pub mod prelude {
-    pub use cvkg_components::Color;
-    pub use cvkg_components::*;
-    pub use cvkg_core::{
-        AssetKey, AssetState, Binding, ComponentErrorState, AppState, Never, Rect, State,
-        View,
-    };
+    // === Macros (always needed) ===
     pub use cvkg_macros::{View, view_component};
+
+    // === Core types (always needed) ===
+    pub use cvkg_core::{
+        AppState, AssetKey, AssetState, Binding, ComponentErrorState, Never, Rect, State, View,
+    };
+
+    // === Color type ===
+    pub use cvkg_components::Color;
+
+    // === Layout primitives (most common imports) ===
+    pub use cvkg_components::{FlexBox, Grid, HStack, ScrollView, VStack};
+
+    // === Common interactive components ===
+    pub use cvkg_components::{Button, Checkbox, Input, Select, Slider, Text};
+
+    // === English API aliases for all Norse-named components ===
+    // These type aliases point to the canonical (Norse) implementation.
+    // Both names are valid; the English name is preferred for new code.
+    pub use cvkg_components::{
+        Accordion, Alert, Analytics, Avatar, ColorPicker, CommandPalette, CreativeTools,
+        Decoder, Dialog, HolographicDisplay, HUD, Indicator, Messenger, Orb, Pagination,
+        Progress, PromptBuilder, Rating, Sheet, Spinner, Splitter, StepIndicator, Tabs,
+        Timeline, Tooltip, TreeView, Well, Window,
+    };
 }

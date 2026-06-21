@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 /// Liquid glass tabs with chromatic aberration.
 /// Section 4.7: "Tactile realm-switching navigation with fluid feedback."
+#[doc(alias = "Tabs")]
 pub struct BifrostTabs {
     pub options: Vec<String>,
     pub selected_index: usize,

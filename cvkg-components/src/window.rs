@@ -4,6 +4,7 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// YggdrasilWindow - A tactical, draggable, resizable window container.
 /// Named after the World Tree, the central pillar of the Norse cosmos.
+#[doc(alias = "Window")]
 pub struct YggdrasilWindow<V: View> {
     pub title: String,
     pub content: V,

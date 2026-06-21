@@ -13,6 +13,7 @@ const SPOTLIGHT_SELECTED_HASH: u64 = 0xD00_0002;
 const SPOTLIGHT_SEARCH_HASH: u64 = 0xD00_0003;
 
 /// A command palette for searching and executing commands.
+#[doc(alias = "CommandPalette")]
 pub struct MimirSpotlight {
     /// The full list of registered commands (never modified at render time).
     pub(crate) all_commands: Vec<PaletteCommand>,

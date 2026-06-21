@@ -57,6 +57,7 @@ impl ChatMessage {
 }
 
 /// A chat block component with message history, streaming support, code blocks, and timestamps.
+#[doc(alias = "Messenger")]
 pub struct RavenMessenger {
     pub messages: Vec<ChatMessage>,
     pub is_huginn: bool, // Top position flag for backward compat

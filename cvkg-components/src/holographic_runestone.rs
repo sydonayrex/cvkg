@@ -3,6 +3,7 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A floating, semi-transparent 3D runic element.
 /// Section 4.8: "Volumetric projections for ethereal data visualization."
+#[doc(alias = "HolographicDisplay")]
 pub struct HolographicRunestone {
     pub rune: char,
     pub size: f32,

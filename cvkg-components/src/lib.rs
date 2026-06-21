@@ -565,3 +565,40 @@ impl<V: cvkg_core::View> cvkg_core::View for MicroFeedback<V> {
         self.content.render(renderer, rect);
     }
 }
+
+// =============================================================================
+// ENGLISH API ALIASES
+// Standard names for Norse-named components. These are type aliases that
+// point to the canonical (Norse) implementation. Both names are valid.
+// See `uiux.md` audit for naming analysis and discoverability metrics.
+// =============================================================================
+
+pub type Accordion = SagaAccordion<cvkg_core::AnyView>;
+pub type Alert = GjallarAlert;
+pub type Analytics = ValkyrieAnalytics;
+pub type Avatar = MuninAvatar;
+pub type ColorPicker = BifrostColorPicker;
+pub type CommandPalette = MimirSpotlight;
+pub type CreativeTools = BragiCreative;
+pub type Decoder = RunestoneDecoder;
+pub type Dialog = GeriDialog<cvkg_core::AnyView>;
+pub type HolographicDisplay = HolographicRunestone;
+pub type HUD = WyrdHUD;
+pub type Indicator = ValkyrieIndicator;
+pub type Messenger = RavenMessenger;
+pub type Orb = OracleOrb;
+pub type Pagination = HringrPagination;
+pub type Progress = SkollProgress;
+pub type PromptBuilder = PromptForge;
+pub type Rating = ValhallaRating;
+pub type ScribingNote = ScribingStone;
+pub type Sheet = GraniSheet<cvkg_core::AnyView>;
+pub type Spinner = HatiSpinner;
+pub type Splitter = GjallarSplitter<cvkg_core::AnyView, cvkg_core::AnyView>;
+pub type StepIndicator = SleipnirGait;
+pub type Tabs = BifrostTabs;
+pub type Timeline = UrdrTimeline;
+pub type Tooltip = RunicTooltip<cvkg_core::AnyView>;
+pub type TreeView = YggdrasilTree;
+pub type Well = MimirsWell;
+pub type Window = YggdrasilWindow<cvkg_core::AnyView>;

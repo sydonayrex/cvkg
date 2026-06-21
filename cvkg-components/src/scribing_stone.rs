@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 /// An interactive drawing canvas.
 /// Strokes are rendered as glowing runic fissures.
 /// Section 4.6: "Direct runic inscription via stylus or pointer."
+#[doc(alias = "ScribingNote")]
 pub struct ScribingStone {
     pub strokes: Arc<Mutex<Vec<Vec<[f32; 2]>>>>,
 }

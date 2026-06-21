@@ -1,6 +1,7 @@
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
+#[doc(alias = "Pagination")]
 #[derive(Clone)]
 pub struct HringrPagination {
     pub current_page: usize,
@@ -106,7 +107,8 @@ impl View for HringrPagination {
 }
 
 /// ValhallaRating - A tactical rating component for assessing quality.
-/// Named after Valhalla, where the chosen are assessed for their worth.#[derive(Clone, Copy)]
+/// Named after Valhalla, where the chosen are assessed for their worth.
+#[doc(alias = "Rating")]
 #[derive(Clone)]
 pub struct ValhallaRating {
     pub value: f32,
@@ -175,7 +177,8 @@ impl View for ValhallaRating {
 }
 
 /// BifrostColorPicker - A color selection component.
-/// Named after the Bifrost, the rainbow bridge connecting the realms.#[derive(Clone, Copy)]
+/// Named after the Bifrost, the rainbow bridge connecting the realms.
+#[doc(alias = "ColorPicker")]
 #[derive(Clone)]
 pub struct BifrostColorPicker {
     pub color: [f32; 4],

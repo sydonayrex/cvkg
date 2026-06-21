@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 /// A heavy, metallic, high-density slider.
 /// Section 4.1: "Tactile HUD interaction with energy-based feedback."
+#[doc(alias = "Slider")]
 pub struct MjolnirSlider {
     pub label: String,
     pub value: f32,

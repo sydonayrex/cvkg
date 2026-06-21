@@ -3,6 +3,7 @@ use crate::{RADIUS_SM, RADIUS_MD};
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// SkollProgress indicator component.
+#[doc(alias = "Progress")]
 #[derive(Clone)]
 pub struct SkollProgress {
     pub(crate) value: f32,
@@ -187,6 +188,7 @@ pub enum ChartType {
 
 /// ValkyrieAnalytics - A tactical chart for monitoring mission data.
 /// Named after the Valkyries, who monitor and choose the course of battle.
+#[doc(alias = "Analytics")]
 #[derive(Clone)]
 pub struct ValkyrieAnalytics {
     pub chart_type: ChartType,
@@ -441,6 +443,7 @@ impl View for TelemetryView {
 use cvkg_core::{MemoryLayer, TemporalEdge, TemporalNode};
 
 /// MimirsWell - A dynamic, force-directed graph visualization for the Temporal Graph.
+#[doc(alias = "Well")]
 #[derive(Clone)]
 pub struct MimirsWell {
     pub nodes: Vec<TemporalNode>,
@@ -665,6 +668,7 @@ impl View for RuneScript {
 
 /// SleipnirGait - A container that staggers the reveal of its children.
 /// Named after Odin's 8-legged horse, known for its rapid and coordinated gait.
+#[doc(alias = "StepIndicator")]
 #[derive(Clone)]
 pub struct SleipnirGait {
     pub children: Vec<cvkg_core::AnyView>,
@@ -767,6 +771,7 @@ impl<V: View> View for VölvaScan<V> {
 }
 /// RunicTooltip - A contextual tooltip for providing hidden wisdom (information).
 /// Named after the Runes, which encode secret knowledge.
+#[doc(alias = "Tooltip")]
 #[derive(Clone)]
 pub struct RunicTooltip<V: View> {
     pub content: V,
@@ -834,6 +839,7 @@ impl<V: View> View for RunicTooltip<V> {
 
 /// MuninAvatar - A user representation component with status indicators.
 /// Named after the hybrid concept of "form/image" (Eikona).
+#[doc(alias = "Avatar")]
 #[derive(Clone)]
 pub struct MuninAvatar {
     pub src: Option<String>,
@@ -978,6 +984,7 @@ impl View for MerkiBadge {
 
 /// UrdrTimeline - A chronological timeline of events (the past).
 /// Named after Urdr, the Norn of the Past.
+#[doc(alias = "Timeline")]
 #[derive(Clone)]
 pub struct UrdrTimeline {
     pub items: Vec<UrdrEvent>,
@@ -1159,6 +1166,7 @@ pub enum SpinnerVariant {
 }
 
 /// An animated loading indicator component.
+#[doc(alias = "Spinner")]
 #[derive(Clone)]
 pub struct HatiSpinner {
     pub(crate) variant: SpinnerVariant,
@@ -1509,8 +1517,9 @@ impl View for EmptyState {
 }
 
 // --- HatiCarousel ---
-use cvkg_core::Size;
 use cvkg_core::layout::SizeProposal;
+use cvkg_core::Size;
+#[doc(alias = "Carousel")]
 #[derive(Clone)]
 pub struct HatiCarousel<V> {
     children: Vec<V>,

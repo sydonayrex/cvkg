@@ -3,6 +3,7 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// The AI's visual presence. A pulsating runic orb.
 /// Section 4.2: "Animated artifacts for AI-assisted interfaces."
+#[doc(alias = "Orb")]
 pub struct OracleOrb {
     pub size: f32,
     pub color: [f32; 4],

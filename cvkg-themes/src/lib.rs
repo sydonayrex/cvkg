@@ -438,6 +438,10 @@ pub struct Theme {
     pub accessibility: AccessibilityOverrides,
     /// Density multiplier for spacing/radius. Default: 1.0 (Default density).
     pub density: Density,
+    /// If true, components may use glassmorphic effects (frosted glass, blur).
+    /// When false, components should render with solid backgrounds instead.
+    /// Default: true for dark themes, false for light themes.
+    pub glassmorphism_enabled: bool,
     is_dark: bool,
 }
 
@@ -540,6 +544,7 @@ impl Theme {
             materials: vec![GlassMaterial::default_glass()],
             accessibility: AccessibilityOverrides::default(),
             density: Density::Default,
+            glassmorphism_enabled: true,
         }
     }
 
@@ -617,12 +622,19 @@ impl Theme {
             materials: vec![GlassMaterial::default_glass()],
             accessibility: AccessibilityOverrides::default(),
             density: Density::Default,
+            glassmorphism_enabled: true,
         }
     }
 
     /// Check if the theme is currently in dark mode
     pub fn is_dark(&self) -> bool {
         self.is_dark
+    }
+
+    /// Check if glassmorphic effects are enabled.
+    /// When false, components should render with solid backgrounds instead of frosted glass.
+    pub fn glassmorphism_enabled(&self) -> bool {
+        self.glassmorphism_enabled
     }
 
     /// Create a light-mode theme with appropriate OKLCH values.
@@ -684,7 +696,54 @@ impl Theme {
             }],
             accessibility: AccessibilityOverrides::default(),
             density: Density::Default,
+            glassmorphism_enabled: false,
         }
+    }
+
+    /// A light, neutral theme suitable for business applications.
+    /// Glassmorphism is disabled. Colors are muted and professional.
+    pub fn business_light() -> Self {
+        Self {
+            is_dark: false,
+            colors: SemanticColors {
+                primary: Color::new(0.20, 0.40, 0.80, 1.0),
+                secondary: Color::new(0.50, 0.50, 0.55, 1.0),
+                accent: Color::new(0.20, 0.45, 0.75, 1.0),
+                background: Color::new(0.98, 0.98, 0.99, 1.0),
+                surface: Color::new(0.95, 0.95, 0.97, 1.0),
+                error: Color::new(0.70, 0.15, 0.15, 1.0),
+                warning: Color::new(0.80, 0.60, 0.0, 1.0),
+                success: Color::new(0.15, 0.65, 0.30, 1.0),
+                text: Color::new(0.10, 0.10, 0.15, 1.0),
+                text_dim: Color::new(0.45, 0.45, 0.50, 1.0),
+            },
+            typography: TypographyScale {
+                large_title: 34.0, title1: 28.0, title2: 22.0, title3: 20.0,
+                headline: 17.0, body: 17.0, callout: 16.0, subheadline: 15.0,
+                footnote: 13.0, caption1: 12.0, caption2: 11.0,
+                hero: 48.0, h1: 32.0, h2: 24.0, caption: 12.0, code: 12.0,
+            },
+            spacing: SpacingScale { xs: 4.0, s: 8.0, m: 12.0, l: 16.0, xl: 24.0, xxl: 32.0, xxxl: 48.0 },
+            radius: RadiusScale { xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0 },
+            motion: MotionScale {
+                snappy: cvkg_anim::SpringParams::snappy(),
+                fluid: cvkg_anim::SpringParams::fluid(),
+                heavy: cvkg_anim::SpringParams::heavy(),
+                bouncy: cvkg_anim::SpringParams::bouncy(),
+            },
+            materials: vec![],
+            accessibility: AccessibilityOverrides::default(),
+            density: Density::Default,
+            glassmorphism_enabled: false,
+        }
+    }
+
+    /// A light, polished theme suitable for marketing landing pages.
+    /// Spacious density, no glassmorphism, vibrant accent.
+    pub fn marketing_light() -> Self {
+        let mut theme = Self::business_light();
+        theme.density = Density::Spacious;
+        theme
     }
 
     /// Toggle between dark and light mode, returning a new Theme.
@@ -928,11 +987,38 @@ impl ThemeBuilder {
         self
     }
 
+    // --- Glassmorphism control ---
+
+    /// Enable or disable glassmorphic effects (frosted glass, blur).
+    /// When disabled, components should render with solid backgrounds.
+    pub fn with_glassmorphism(mut self, enabled: bool) -> Self {
+        self.base.glassmorphism_enabled = enabled;
+        self
+    }
+
     // --- Density ---
 
     pub fn with_density(mut self, density: Density) -> Self {
         self.base.density = density;
         self
+    }
+
+    // --- Preset themes ---
+
+    /// A light, neutral theme suitable for business applications.
+    /// Glassmorphism is disabled. Colors are muted and professional.
+    pub fn business_light() -> Self {
+        Self {
+            base: Theme::business_light(),
+        }
+    }
+
+    /// A light, polished theme suitable for marketing landing pages.
+    /// Spacious density, no glassmorphism, vibrant accent.
+    pub fn marketing_light() -> Self {
+        Self {
+            base: Theme::marketing_light(),
+        }
     }
 
     // --- Build ---

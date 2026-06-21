@@ -45,6 +45,7 @@ pub struct YggdrasilTreeState {
 
 /// A high-fidelity YggdrasilTree component for hierarchical data management.
 /// Named after the World Tree, whose roots and branches connect all realms.
+#[doc(alias = "TreeView")]
 pub struct YggdrasilTree {
     pub items: Vec<FileItem>,
     pub on_toggle: Arc<dyn Fn(String) + Send + Sync>,

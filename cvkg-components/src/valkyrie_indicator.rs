@@ -3,6 +3,7 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A spinning runic activity indicator.
 /// Section 4.5: "Kinetic runic pulses for background processing."
+#[doc(alias = "Indicator")]
 #[derive(Clone)]
 pub struct ValkyrieIndicator {
     pub size: f32,

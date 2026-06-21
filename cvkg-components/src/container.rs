@@ -239,6 +239,7 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
 }
 
 /// Modal bottom sheet or centered dialog
+#[doc(alias = "Sheet")]
 pub struct GraniSheet<V> {
     pub(crate) content: V,
     pub(crate) position: SheetPosition,
@@ -503,6 +504,7 @@ impl<V2: View + Clone> cvkg_core::ViewModifier for SheetModifier<V2> {
 }
 
 /// A modal dialog with title, content, and actions.
+#[doc(alias = "Dialog")]
 pub struct GeriDialog<V> {
     pub(crate) is_presented: bool,
     pub(crate) title: Option<String>,
@@ -2170,6 +2172,7 @@ impl<V: View> View for Collapsible<V> {
 }
 /// GjallarSplitter - A draggable split pane component.
 /// Named after the Gjallarhorn, which signals boundaries and transitions.
+#[doc(alias = "Splitter")]
 pub struct GjallarSplitter<V1: View, V2: View> {
     pub first: V1,
     pub second: V2,
@@ -2373,6 +2376,7 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
 
 /// SagaAccordion - A collapsible accordion component for revealing stories (data).
 /// Named after the Sagas, the epic narratives of the Norse.
+#[doc(alias = "Accordion")]
 #[derive(Clone)]
 pub struct SagaAccordion<V: View> {
     pub items: Vec<SagaItem<V>>,
