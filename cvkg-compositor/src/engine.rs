@@ -14,6 +14,7 @@
 use crate::layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 use cvkg_core::Rect;
 use log::warn;
+use std::collections::HashSet;
 
 /// Draw command tagged with its source layer material.
 /// This is the output of the compositor's routing phase.
@@ -191,12 +192,14 @@ impl CompositorEngine {
 
         // Flatten the tree depth-first, back-to-front.
         let roots = self.layer_tree.roots().to_vec();
+        let mut visited = HashSet::new();
         Self::flatten_tree(
             &mut self.layer_tree,
             &roots,
             &mut self.flatten_buffer,
             &mut self.z_counter,
             &mut self.has_active_shaders,
+            &mut visited,
         );
 
         // Route into buckets by material — use retain-like approach to avoid clones.
@@ -239,9 +242,10 @@ impl CompositorEngine {
         buffer: &mut Vec<RenderCommand>,
         z_counter: &mut u32,
         has_active_shaders: &mut bool,
+        visited: &mut HashSet<LayerId>,
     ) {
         for layer_id in layer_ids {
-            Self::flatten_layer(layer_tree, *layer_id, buffer, z_counter, has_active_shaders);
+            Self::flatten_layer(layer_tree, *layer_id, buffer, z_counter, has_active_shaders, visited);
         }
     }
 
@@ -251,9 +255,20 @@ impl CompositorEngine {
         buffer: &mut Vec<RenderCommand>,
         z_counter: &mut u32,
         has_active_shaders: &mut bool,
+        visited: &mut HashSet<LayerId>,
     ) {
+        // Cycle detection: if we've already visited this layer, there's a cycle.
+        if !visited.insert(layer_id) {
+            log::error!(
+                "Compositor: cyclic layer reference detected at {:?}",
+                layer_id
+            );
+            return;
+        }
+
         // Extract layer data first to avoid borrow conflicts with recursive calls.
-        let (material, draw_list, children, bounds, visible) = match layer_tree.get_layer(layer_id) {
+        let (material, draw_list, children, bounds, visible) = match layer_tree.get_layer(layer_id)
+        {
             Some(layer) => {
                 if !layer.visible {
                     return;
@@ -303,8 +318,11 @@ impl CompositorEngine {
 
         // Process children back-to-front (reverse order for painter's algorithm).
         for child_id in children.iter().rev() {
-            Self::flatten_layer(layer_tree, *child_id, buffer, z_counter, has_active_shaders);
+            Self::flatten_layer(layer_tree, *child_id, buffer, z_counter, has_active_shaders, visited);
         }
+
+        // Remove from visited set to allow the same layer in different branches.
+        visited.remove(&layer_id);
 
         if is_offscreen {
             buffer.push(RenderCommand::PopOffscreen);

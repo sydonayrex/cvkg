@@ -29,7 +29,7 @@ impl NativeWasmServer {
     /// Create a new WASM server with a shared engine.
     pub fn new() -> anyhow::Result<Self> {
         let mut config = Config::new();
-        config.consume_fuel(false);
+        config.consume_fuel(true);
         config.async_support(false);
 
         let engine = Engine::new(&config)?;
@@ -65,8 +65,7 @@ impl NativeWasmServer {
         let mut wasi_builder = WasiCtxBuilder::new();
         wasi_builder
             .inherit_stdout()
-            .inherit_stderr()
-            .inherit_stdin();
+            .inherit_stderr();
 
         // Hardened: Preopen only the current working directory as a safe root.
         // This prevents the WASM guest from accessing the entire host filesystem.
@@ -80,14 +79,16 @@ impl NativeWasmServer {
             .preopened_dir(
                 &safe_root,
                 ".",
-                wasmtime_wasi::DirPerms::all(),
-                wasmtime_wasi::FilePerms::all(),
+                wasmtime_wasi::DirPerms::READ,
+                wasmtime_wasi::FilePerms::READ,
             )
             .map_err(|e| anyhow::anyhow!("Failed to preopen directory: {:?}", e))?;
 
         let wasi = wasi_builder.build_p1();
 
         let mut store = Store::new(&self.engine, HostState { wasi });
+        // Set fuel limit to prevent infinite loop DoS
+        store.set_fuel(10_000_000_000)?;
 
         let instance = linker
             .instantiate(&mut store, &module)
@@ -111,17 +112,22 @@ impl NativeWasmServer {
     /// Execute a single 'tick' (update + render) of the loaded module.
     pub fn tick(&self) -> anyhow::Result<()> {
         let mut session = {
-            let mut guard = self.session.lock().unwrap();
+            let mut guard = self.session.lock().unwrap_or_else(|p| p.into_inner());
             guard.take()
         }
         .ok_or_else(|| anyhow::anyhow!("No active WASM session"))?;
 
-        let result = self.execute_tick(&mut session);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.execute_tick(&mut session)
+        }));
 
-        let mut guard = self.session.lock().unwrap();
+        let mut guard = self.session.lock().unwrap_or_else(|p| p.into_inner());
         *guard = Some(session);
 
-        result
+        match result {
+            Ok(r) => r,
+            Err(_) => Err(anyhow::anyhow!("WASM tick panicked")),
+        }
     }
 
     fn execute_tick(&self, session: &mut WasmSession) -> anyhow::Result<()> {
