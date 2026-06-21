@@ -240,15 +240,6 @@ impl PhysicsWorld {
         self.constraints.push(constraint);
     }
 
-    /// Disable all constraints between two bodies.
-    pub fn disable_constraint_between(&mut self, a: BodyId, b: BodyId) {
-        for c in &mut self.constraints {
-            if (c.body_a == a && c.body_b == b) || (c.body_a == b && c.body_b == a) {
-                c.enabled = false;
-            }
-        }
-    }
-
     /// Get all body IDs.
     pub fn body_ids(&self) -> Vec<BodyId> {
         self.body_id_map.keys().copied().collect()

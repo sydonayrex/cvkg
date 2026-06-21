@@ -3,9 +3,7 @@
 use cvkg::prelude::*;
 use cvkg_components::context_menu::{ContextMenu, ContextMenuItem};
 use cvkg_core::{DisplayEnvironment, PerformanceContract};
-use cvkg_physics::{BodyId, Collider, Constraint, PhysicsWorld, RigidBody, Shape, WorldConfig};
 use cvkg_vdom::signals::Signal;
-use glam::Vec2;
 use std::fs;
 use std::path::PathBuf;
 
@@ -114,10 +112,20 @@ impl Lcg {
 
 // --- Component State ---
 
-struct PhysicsState {
-    world: PhysicsWorld,
-    cube_ids: Vec<(BodyId, f32)>,
-    card_bodies: Vec<(BodyId, BodyId)>,
+struct Card {
+    x: f32,
+    y: f32,
+    shattered: bool,
+    left_offset: f32,  // how far left half has moved (negative = left)
+    right_offset: f32, // how far right half has moved (positive = right)
+    velocity_x: f32,
+    velocity_y: f32,
+}
+
+impl Card {
+    fn new(x: f32, y: f32) -> Self {
+        Self { x, y, shattered: false, left_offset: 0.0, right_offset: 0.0, velocity_x: 0.0, velocity_y: 0.0 }
+    }
 }
 
 /// Grid resolution for the Navier-Stokes velocity field.
@@ -398,7 +406,7 @@ struct BerserkerState {
     particles: Vec<Particle>,
     rng: Lcg,
     last_time: f32,
-    physics: PhysicsState,
+    cards: Vec<Card>,
     loaded_svgs: bool,
     fluid: FluidGrid,
     flame_x: f32,
@@ -448,71 +456,11 @@ fn draw_valknut(r: &mut dyn cvkg_core::Renderer, cx: f32, cy: f32, size: f32, ti
 
 impl BerserkerState {
     fn new(w: f32, h: f32) -> Self {
-        let mut rng = Lcg::new(1337);
-        let mut world = PhysicsWorld::new(WorldConfig {
-            gravity: Vec2::new(0.0, 150.0),
-            ..Default::default()
-        });
+        let rng = Lcg::new(1337);
 
-        world.on_constraint_broken = Some(Box::new(|_c, pos| {
-            log::info!("CONSTRAINT BROKEN AT {:?}", pos);
-        }));
-
-        let mut cube_ids = Vec::new();
-        // Cubes removed for performance — 15 bodies + colliders was ~8ms/frame in XPBD solver
-
-        // Static bounds
-        let mut ground = RigidBody::static_body();
-        ground.position = Vec2::new(w / 2.0, h + 50.0);
-        let ground_id = world.add_body(ground);
-        world.add_collider(Collider::new(ground_id, Shape::aabb(Vec2::new(w, 50.0))));
-
-        let mut left_wall = RigidBody::static_body();
-        left_wall.position = Vec2::new(-50.0, h / 2.0);
-        let lw_id = world.add_body(left_wall);
-        world.add_collider(Collider::new(lw_id, Shape::aabb(Vec2::new(50.0, h))));
-
-        let mut right_wall = RigidBody::static_body();
-        right_wall.position = Vec2::new(w + 50.0, h / 2.0);
-        let rw_id = world.add_body(right_wall);
-        world.add_collider(Collider::new(rw_id, Shape::aabb(Vec2::new(50.0, h))));
-
-        let mut top_wall = RigidBody::static_body();
-        top_wall.position = Vec2::new(w / 2.0, -50.0);
-        let tw_id = world.add_body(top_wall);
-        world.add_collider(Collider::new(tw_id, Shape::aabb(Vec2::new(w, 50.0))));
-
-        // Glass cards (breakable)
-        let mut card_bodies = Vec::new();
-        let card_positions = [[w * 0.2, h * 0.3], [w * 0.7, h * 0.2], [w * 0.5, h * 0.7]];
-        for pos in card_positions {
-            let shape = Shape::aabb(Vec2::new(100.0, 125.0));
-            let mut left_half = RigidBody::static_body();
-            left_half.position = Vec2::new(pos[0] - 100.0, pos[1]);
-            let id_l = world.add_body(left_half);
-            world.add_collider(Collider::new(id_l, shape.clone()));
-
-            let mut right_half = RigidBody::new(10.0, &shape);
-            right_half.position = Vec2::new(pos[0] + 100.0, pos[1]);
-            let id_r = world.add_body(right_half);
-            world.add_collider(Collider::new(id_r, shape));
-
-            // Pin constraint — breaks easily when force is applied
-            let mut constraint = Constraint::pin(id_l, id_r, Vec2::new(pos[0], pos[1]));
-            constraint.break_threshold = Some(101.0); // Just above initial strain of 100 — breaks on any separation
-            world.add_constraint(constraint);
-            // No ground constraint — both halves are free-floating
-            // When pin breaks, right half flies off, left half stays (static body below)
-            card_bodies.push((id_l, id_r));
-        }
-
-        // Ragdoll Dummy — removed, was drawing orange/red rectangles at fixed position
-        // without actual skeletal animation. Replaced with empty vec.
-        log::info!(
-            "BerserkerState initialized: {} cubes, {} cards",
-            cube_ids.len(),
-            card_bodies.len()
-        );
+        // Glass cards — simple visual elements positioned across the screen
+        let card_positions = [[w * 0.15, h * 0.25], [w * 0.5, h * 0.4], [w * 0.85, h * 0.25]];
+        let cards: Vec<Card> = card_positions.iter().map(|pos| Card::new(pos[0], pos[1])).collect();
 
         let cx = w * 0.5;
         let cy = h * 0.5;
@@ -521,11 +469,7 @@ impl BerserkerState {
             particles: Vec::new(),
             rng,
             last_time: 0.0,
-            physics: PhysicsState {
-                world,
-                cube_ids,
-                card_bodies,
-            },
+            cards,
             loaded_svgs: false,
             fluid: FluidGrid::new(),
             flame_x: cx,
@@ -665,7 +609,7 @@ impl View for BerserkerFireView {
 
         // Draw the glass cards
         let t_cards_start = std::time::Instant::now();
-        draw_glass_cards(r, &s, w, h, t);
+        draw_glass_cards(r, &mut s.cards, w, h, new_rage, dt);
         let t_cards = t_cards_start.elapsed().as_secs_f32() * 1000.0;
 
         // Draw the valknut symbol with procedural fuse animation
@@ -1051,69 +995,86 @@ fn draw_dock(
 
 fn draw_glass_cards(
     r: &mut dyn cvkg_core::Renderer,
-    s: &BerserkerState,
-    _w: f32,
-    _h: f32,
-    _t: f32,
+    cards: &mut Vec<Card>,
+    w: f32,
+    h: f32,
+    rage: f32,
+    dt: f32,
 ) {
     let runes = ["CVKG!", "CVKG!", "CVKG!"];
+    let card_width = 200.0;
+    let card_height = 250.0;
+    let half_w = card_width * 0.5;
+    let half_h = card_height * 0.5;
 
-    for (i, &(id_l, id_r)) in s.physics.card_bodies.iter().enumerate() {
-        if let (Some(bl), Some(br)) = (s.physics.world.body(id_l), s.physics.world.body(id_r)) {
-            let dx = bl.position.x - br.position.x;
-            let dy = bl.position.y - br.position.y;
-            let dist = (dx * dx + dy * dy).sqrt();
+    for (i, card) in cards.iter_mut().enumerate() {
+        // Shatter card when rage is high enough
+        if rage > 20.0 && !card.shattered {
+            card.shattered = true;
+            card.velocity_x = (if i % 2 == 0 { -1.0 } else { 1.0 }) * rage * 30.0;
+            card.velocity_y = -rage * 20.0;
+        }
 
-            // Card halves are 200 units wide each, centered at body positions.
-            // When intact, bodies are ~200 units apart. When broken, they separate.
-            let card_width = 200.0;
-            let card_height = 250.0;
-            let half_w = card_width * 0.5;
-            let half_h = card_height * 0.5;
+        // Update shattered card physics
+        if card.shattered {
+            card.velocity_y += 800.0 * dt; // gravity
+            card.x += card.velocity_x * dt;
+            card.y += card.velocity_y * dt;
+            card.left_offset -= rage * 15.0 * dt;
+            card.right_offset += rage * 15.0 * dt;
+        }
 
-            if dist < card_width * 1.2 {
-                // Card is intact or nearly so: render as single centered quad with glass material
-                let cx = (bl.position.x + br.position.x) * 0.5;
-                let cy = (bl.position.y + br.position.y) * 0.5;
-                let rect = cvkg_core::Rect {
-                    x: cx - half_w,
-                    y: cy - half_h,
-                    width: card_width,
-                    height: card_height,
-                };
-                r.fill_glass_rect_with_intensity(rect, 12.0, 12.0, 0.38);
-                let (rw, rh) = r.measure_text(runes[i % runes.len()], 32.0);
-                r.draw_text(
-                    runes[i % runes.len()],
-                    cx - rw / 2.0 + 1.0,
-                    cy - rh / 2.0 + 1.0,
-                    32.0,
-                    [0.0, 0.0, 0.0, 0.35],
-                );
-                r.draw_text(
-                    runes[i % runes.len()],
-                    cx - rw / 2.0,
-                    cy - rh / 2.0,
-                    32.0,
-                    [0.85, 0.95, 1.0, 1.0],
-                );
-            } else {
-                // Card has broken apart: render two separate halves
-                let rect_l = cvkg_core::Rect {
-                    x: bl.position.x - half_w,
-                    y: bl.position.y - half_h,
-                    width: card_width,
-                    height: card_height,
-                };
-                r.fill_glass_rect_with_intensity(rect_l, 12.0, 8.0, 0.24);
-                let rect_r = cvkg_core::Rect {
-                    x: br.position.x - half_w,
-                    y: br.position.y - half_h,
-                    width: card_width,
-                    height: card_height,
-                };
-                r.fill_glass_rect_with_intensity(rect_r, 12.0, 8.0, 0.24);
-            }
+        // Wrap cards that fall off screen back to top
+        if card.y > h + 200.0 {
+            card.y = -200.0;
+            card.x = w * (0.2 + (i as f32) * 0.25);
+            card.shattered = false;
+            card.velocity_x = 0.0;
+            card.velocity_y = 0.0;
+            card.left_offset = 0.0;
+            card.right_offset = 0.0;
+        }
+
+        if card.shattered {
+            // Render two separate halves
+            let rect_l = cvkg_core::Rect {
+                x: card.x - half_w + card.left_offset,
+                y: card.y - half_h,
+                width: card_width,
+                height: card_height,
+            };
+            r.fill_glass_rect_with_intensity(rect_l, 12.0, 8.0, 0.24);
+            let rect_r = cvkg_core::Rect {
+                x: card.x - half_w + card.right_offset,
+                y: card.y - half_h,
+                width: card_width,
+                height: card_height,
+            };
+            r.fill_glass_rect_with_intensity(rect_r, 12.0, 8.0, 0.24);
+        } else {
+            // Render intact card
+            let rect = cvkg_core::Rect {
+                x: card.x - half_w,
+                y: card.y - half_h,
+                width: card_width,
+                height: card_height,
+            };
+            r.fill_glass_rect_with_intensity(rect, 12.0, 12.0, 0.38);
+            let (rw, rh) = r.measure_text(runes[i % runes.len()], 32.0);
+            r.draw_text(
+                runes[i % runes.len()],
+                card.x - rw / 2.0 + 1.0,
+                card.y - rh / 2.0 + 1.0,
+                32.0,
+                [0.0, 0.0, 0.0, 0.35],
+            );
+            r.draw_text(
+                runes[i % runes.len()],
+                card.x - rw / 2.0,
+                card.y - rh / 2.0,
+                32.0,
+                [0.85, 0.95, 1.0, 1.0],
+            );
         }
     }
 }
@@ -1133,66 +1094,11 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     s.last_cx = cx;
     s.last_cy = cy;
 
-    // Inject velocity/force impulses into fluid grid around the fireball position
-    let n = FLUID_GRID_SIZE;
-    let cell_x = (cx / w * n as f32) as i32;
-    let cell_y = (cy / h * n as f32) as i32;
-    for dy in -2..=2 {
-        for dx in -2..=2 {
-            let gx = cell_x + dx;
-            let gy = cell_y + dy;
-            if gx >= 1 && gx < n as i32 - 1 && gy >= 1 && gy < n as i32 - 1 {
-                let idx = (gx + gy * n as i32) as usize;
-                // Accumulate velocity based on fireball movement, RK4 tail lag, and thermal buoyancy
-                s.fluid.u_prev[idx] += f_vx * 0.08 + d_x * 0.6;
-                s.fluid.v_prev[idx] += f_vy * 0.08 + d_y * 0.6 - 300.0;
-            }
-        }
-    }
-
-    // Add turbulence/curl to make the flame lick and swirl.
-    // Increased speed and frequency so the flame churns visibly at 120fps.
-    for _ in 0..6 {
-        let turb_angle = s.rng.next_f32() * 6.28;
-        let turb_speed = 600.0 * (0.5 + 0.5 * (t * 7.0).cos().abs());
-        let turb_x = cx + (s.rng.next_f32() - 0.5) * 90.0;
-        let turb_y = cy + (s.rng.next_f32() - 0.5) * 90.0;
-        let gx = (turb_x / w * n as f32) as i32;
-        let gy = (turb_y / h * n as f32) as i32;
-        if gx >= 1 && gx < n as i32 - 1 && gy >= 1 && gy < n as i32 - 1 {
-            let idx = (gx + gy * n as i32) as usize;
-            s.fluid.u_prev[idx] += turb_angle.cos() * turb_speed;
-            s.fluid.v_prev[idx] += turb_angle.sin() * turb_speed;
-        }
-    }
-
-    // Navier-Stokes fluid simulation removed for performance.
-    // Particles now use simple velocity-based advection without fluid coupling.
-
-    if rage > 0.0 {
-        // Disable pin constraints between card halves and apply separation force
-        for &(id_l, id_r) in &s.physics.card_bodies {
-            s.physics.world.disable_constraint_between(id_l, id_r);
-            // Apply outward force to right half to separate it
-            if let Some(br) = s.physics.world.body(id_r) {
-                let dx = br.position.x - s.flame_x;
-                let force = rage * 5000.0;
-                let fx = dx.signum() * force;
-                if let Some(body) = s.physics.world.body_mut(id_r) {
-                    body.apply_force(Vec2::new(fx, -rage * 3000.0));
-                }
-            }
-        }
-    }
-
-    s.physics.world.step(dt);
-
     // Spawn new flame particles/embers
     if s.particles.len() < 120 {
         for _ in 0..3 {
             let angle = s.rng.next_f32() * 6.28;
             let speed = 30.0 + s.rng.next_f32() * 70.0;
-            // Shift spawning slightly in direction of spring tail
             let spawn_x = cx + d_x * (0.1 + s.rng.next_f32() * 0.4);
             let spawn_y = cy + d_y * (0.1 + s.rng.next_f32() * 0.4);
             s.particles.push(Particle {
@@ -1209,7 +1115,7 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
         }
     }
 
-    // Fast particle update — simple drag + buoyancy, no fluid coupling
+    // Fast particle update — simple drag + buoyancy
     let mut i = s.particles.len();
     while i > 0 {
         i -= 1;
