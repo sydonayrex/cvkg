@@ -473,6 +473,7 @@ mod tests {
     // P2-36: InputLatencyTracker tests
     mod p2_36_input_latency_tests {
         use super::InputLatencyTracker;
+        use std::time::{Duration, Instant};
 
         #[test]
         fn test_empty_tracker() {

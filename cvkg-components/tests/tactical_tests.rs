@@ -24,6 +24,12 @@ fn test_tactical_component_rendering() {
 
 #[test]
 fn test_valkyrie_analytics_radar() {
-    let analytics = ValkyrieAnalytics::new(ChartType::Radar, vec![0.1, 0.5, 0.9]);
+    let analytics = ValkyrieAnalytics::new("Radar")
+        .chart_type(ChartType::Radar)
+        .data(vec![
+            ("A".to_string(), 0.1),
+            ("B".to_string(), 0.5),
+            ("C".to_string(), 0.9),
+        ]);
     assert_eq!(analytics.data.len(), 3);
 }

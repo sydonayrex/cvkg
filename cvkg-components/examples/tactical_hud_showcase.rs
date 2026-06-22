@@ -30,8 +30,15 @@ fn tactical_hud_showcase() -> impl View {
             // 2. Data Visualization
             HStack::new(20.0)
                 .child(
-                    ValkyrieAnalytics::new(ChartType::Radar, vec![0.8, 0.6, 0.9, 0.4, 0.7])
-                        .color([1.0, 0.0, 1.0, 0.8])
+                    ValkyrieAnalytics::new("Radar")
+                        .chart_type(ChartType::Radar)
+                        .data(vec![
+                            ("A".to_string(), 0.8),
+                            ("B".to_string(), 0.6),
+                            ("C".to_string(), 0.9),
+                            ("D".to_string(), 0.4),
+                            ("E".to_string(), 0.7),
+                        ])
                         .erase(),
                 )
                 .child(

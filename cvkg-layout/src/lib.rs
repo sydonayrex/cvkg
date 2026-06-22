@@ -139,8 +139,7 @@ pub fn size_views_parallel(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cvkg_core::Alignment;
-    use cvkg_core::Distribution;
+    use cvkg_core::{Alignment, Distribution, Rect, Size, SizeProposal};
 
     struct MockView {
         size: Size,
