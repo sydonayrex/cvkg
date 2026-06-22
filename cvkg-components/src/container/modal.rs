@@ -3,6 +3,13 @@ use crate::{draw_focus_ring, FONT_BASE, RADIUS_LG, RADIUS_MD, RADIUS_XL};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
+// Focus trap counter for generating unique IDs
+static FOCUS_TRAP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+fn next_focus_trap_id() -> u64 {
+    FOCUS_TRAP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Position from which a sheet slides in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SheetPosition {
@@ -168,6 +175,12 @@ impl<V: View> View for GraniSheet<V> {
         }
         renderer.fill_rounded_rect(sheet_rect, RADIUS_XL, theme::surface_elevated());
         renderer.stroke_rounded_rect(sheet_rect, RADIUS_XL, theme::with_alpha(theme::accent(), 0.3), 1.5);
+
+        // Push focus trap when sheet is open
+        if self.is_open {
+            let trap_id = next_focus_trap_id();
+            renderer.push_focus_trap(&format!("sheet-{}", trap_id));
+        }
 
         let padding = 16.0;
         let sheet_content_rect = Rect {
@@ -365,6 +378,11 @@ impl<V: View> View for GeriDialog<V> {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(modal_rect, 20.0, 1.2, 0.9);
         }
+
+        // Push focus trap when dialog is presented
+        let dialog_trap_id = next_focus_trap_id();
+        renderer.push_focus_trap(&format!("dialog-{}", dialog_trap_id));
+
         let modal_bg = theme::with_alpha(theme::surface_elevated(), 0.8 * opacity);
         renderer.fill_rounded_rect(modal_rect, RADIUS_LG, modal_bg);
         renderer.stroke_rounded_rect(
