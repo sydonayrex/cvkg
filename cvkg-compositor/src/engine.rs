@@ -267,7 +267,7 @@ impl CompositorEngine {
         }
 
         // Extract layer data first to avoid borrow conflicts with recursive calls.
-        let (material, draw_list, children, bounds, visible) = match layer_tree.get_layer(layer_id)
+        let (material, draw_list, children, bounds, _visible) = match layer_tree.get_layer(layer_id)
         {
             Some(layer) => {
                 if !layer.visible {

@@ -6,10 +6,9 @@ pub use types::*;
 pub use engine::*;
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crate::theme;
-use crate::{RADIUS_LG, RADIUS_MD, RADIUS_SM, RADIUS_XS};
 use cvkg_core::{
     Renderer, Size, View, Never,
     layout::{LayoutCache, LayoutView, Rect, SizeProposal},

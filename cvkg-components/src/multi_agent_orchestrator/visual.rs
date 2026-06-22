@@ -1,9 +1,8 @@
 use cvkg_core::{Renderer, Rect};
 use crate::theme;
 use crate::{RADIUS_LG, RADIUS_MD, RADIUS_SM, RADIUS_XS};
-
 use super::types::{
-    LogLevel, MessageType, NodeExecutionStatus, OrchestratorNode,
+    MessageType, NodeExecutionStatus, OrchestratorNode,
 };
 use super::MultiAgentOrchestrator;
 

@@ -30,7 +30,7 @@ pub mod progressive;
 pub mod primitives;
 
 pub use cvkg_core::layout::EdgeInsets;
-use cvkg_core::{LayoutCache, LayoutView, Rect, Size, SizeProposal};
+use cvkg_core::{LayoutCache, LayoutView};
 use std::cell::RefCell;
 use std::collections::HashSet;
 

@@ -814,8 +814,8 @@ impl PhysicsWorld {
         let pairs = self.spatial_hash.candidate_pairs();
         self.scratch_manifolds.clear();
         self.scratch_sensor_manifolds.clear();
-        let manifolds = &mut self.scratch_manifolds;
-        let sensor_manifolds = &mut self.scratch_sensor_manifolds;
+        let _manifolds = &mut self.scratch_manifolds;
+        let _sensor_manifolds = &mut self.scratch_sensor_manifolds;
 
         for (id_a, id_b) in pairs {
             let idx_a = id_a.0 as usize;

@@ -1,5 +1,5 @@
 use crate::theme;
-use crate::{RADIUS_SM, RADIUS_MD};
+use crate::RADIUS_SM;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// SkollProgress indicator component.

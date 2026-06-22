@@ -313,6 +313,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     self.frame_budget.subsystem_finish(1);
 
                     let state_flush_start = std::time::Instant::now();
+                    #[allow(unused_assignments)]
                     let mut diff_patches = None;
                     match (new_vdom, &mut state.vdom) {
                         (Some(new_vdom), Some(prev_vdom)) => {

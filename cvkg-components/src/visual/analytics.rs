@@ -51,7 +51,7 @@ impl View for ValkyrieAnalytics {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rounded_rect(rect, 8.0, theme::surface());
-        let (tw, th) = renderer.measure_text(&self.title, 12.0);
+        let (_tw, _th) = renderer.measure_text(&self.title, 12.0);
         renderer.draw_text(
             &self.title,
             rect.x + 8.0,

@@ -1083,7 +1083,7 @@ fn draw_glass_cards(
     }
 }
 
-fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, dt: f32, rage: f32) {
+fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, dt: f32, _rage: f32) {
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
@@ -1092,9 +1092,9 @@ fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, d
     let d_x = s.flame_x - cx;
     let d_y = s.flame_y - cy;
 
-    // Fireball velocity
-    let f_vx = if dt > 0.0 { (cx - s.last_cx) / dt } else { 0.0 };
-    let f_vy = if dt > 0.0 { (cy - s.last_cy) / dt } else { 0.0 };
+    // Fireball velocity (computed for potential future use)
+    let _f_vx = if dt > 0.0 { (cx - s.last_cx) / dt } else { 0.0 };
+    let _f_vy = if dt > 0.0 { (cy - s.last_cy) / dt } else { 0.0 };
     s.last_cx = cx;
     s.last_cy = cy;
 

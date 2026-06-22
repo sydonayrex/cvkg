@@ -115,7 +115,7 @@ pub struct SceneGraph {
     dirty_regions: Vec<Rect>,
 
     /// Next available unique ID
-    next_id: u64,
+    _next_id: u64,
 
     /// Spatial hash grid for fast AABB queries
     spatial_grid: HashMap<(u32, u32), Vec<NodeId>>,
@@ -137,7 +137,7 @@ impl SceneGraph {
             nodes: HashMap::new(),
             root: None,
             dirty_regions: Vec::new(),
-            next_id: 1,
+            _next_id: 1,
             spatial_grid: HashMap::new(),
             cell_size: DEFAULT_CELL_SIZE,
         }
@@ -363,7 +363,7 @@ impl SceneGraph {
             nodes,
             root,
             dirty_regions: Vec::new(),
-            next_id: 0,
+            _next_id: 0,
             cell_size: DEFAULT_CELL_SIZE,
             spatial_grid: HashMap::new(),
         })
