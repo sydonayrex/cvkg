@@ -9,6 +9,9 @@ use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
+// Re-export for test access
+pub use crate::subsystems::RendererConfig;
+
 pub(crate) mod pipelines;
 pub(crate) mod init;
 pub(crate) mod draw;
@@ -1111,5 +1114,117 @@ impl GpuRenderer {
 
     pub(crate) fn current_time(&self) -> f32 {
         self.start_time.elapsed().as_secs_f32()
+    }
+
+    /// forge_headless -- Initializes Surtr without a window for visual regression testing.
+    pub async fn forge_headless(width: u32, height: u32) -> Self {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            flags: wgpu::InstanceFlags::default(),
+            backend_options: wgpu::BackendOptions::default(),
+            display: None,
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        });
+
+        // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
+        log::info!("[GPU] Requesting HighPerformance adapter (headless)...");
+        let mut adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+            .ok();
+
+        if adapter.is_none() {
+            log::warn!(
+                "[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower..."
+            );
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: false,
+                })
+                .await
+                .ok();
+        }
+
+        if adapter.is_none() {
+            log::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::LowPower,
+                    compatible_surface: None,
+                    force_fallback_adapter: true,
+                })
+                .await
+                .ok();
+        }
+
+        let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
+        let info = adapter.get_info();
+        let caps = crate::subsystems::GpuCapabilities::detect(
+            &info.name,
+            format!("{:?}", info.backend),
+        );
+        log::info!(
+            "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
+            info.name,
+            info.device_type,
+            info.backend,
+            caps.vendor
+        );
+        log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        let required_features = adapter.features()
+            & (wgpu::Features::TIMESTAMP_QUERY
+                | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
+                | wgpu::Features::TEXTURE_BINDING_ARRAY);
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("Surtr Headless Forge"),
+                required_features,
+                required_limits: wgpu::Limits {
+                    max_bindings_per_bind_group: adapter
+                        .limits()
+                        .max_bindings_per_bind_group
+                        .min(256),
+                    max_binding_array_elements_per_shader_stage: adapter
+                        .limits()
+                        .max_binding_array_elements_per_shader_stage
+                        .min(256),
+                    ..wgpu::Limits::default()
+                },
+                memory_hints: wgpu::MemoryHints::default(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                trace: wgpu::Trace::Off,
+            })
+            .await
+            .expect("Failed to create Surtr device");
+
+        let instance = Arc::new(instance);
+        let adapter = Arc::new(adapter);
+
+        device.on_uncaptured_error(Arc::new(|error| {
+            log::error!(
+                "[GPU] Uncaptured device error (Device Lost or Panic): {:?}",
+                error
+            );
+        }));
+
+        let device = Arc::new(device);
+        let queue = Arc::new(queue);
+
+        Self::forge_internal(
+            instance,
+            adapter,
+            device,
+            queue,
+            None,
+            Some((width, height, wgpu::TextureFormat::Rgba8UnormSrgb)),
+        )
+        .await
     }
 }
