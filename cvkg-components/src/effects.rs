@@ -233,7 +233,9 @@ impl<V: View> View for NiflheimFrost<V> {
             return;
         }
 
-        renderer.bifrost(rect, self.blur_radius, 1.2, 0.95);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, self.blur_radius, 1.2, 0.95);
+        }
 
         if !self.clean_glass {
             let t = renderer.elapsed_time();

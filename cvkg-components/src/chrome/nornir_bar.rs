@@ -53,7 +53,9 @@ impl View for NornirBar {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass background (full width, 28pt tall)
-        renderer.bifrost(rect, 25.0, 1.2, 0.65);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 25.0, 1.2, 0.65);
+        }
 
         // Render each top-level menu header
         let mut x = rect.x + 8.0;
@@ -118,7 +120,9 @@ fn render_submenu(renderer: &mut dyn Renderer, items: &[MenuItem], anchor: Rect)
     };
 
     // Glass panel
-    renderer.bifrost(menu_rect, 20.0, 1.1, 0.7);
+    if crate::theme::glassmorphism_enabled() {
+        renderer.bifrost(menu_rect, 20.0, 1.1, 0.7);
+    }
     renderer.fill_rounded_rect(menu_rect, 8.0, theme::surface_elevated());
 
     // Render submenu items

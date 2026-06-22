@@ -790,17 +790,19 @@ impl View for GeriSpark {
         renderer.draw_line(cx - 8.0, cy, cx + 8.0, cy, spark_col, 2.0);
 
         if self.active {
-            renderer.bifrost(
-                Rect::new(
-                    rect.x - 4.0,
-                    rect.y - 4.0,
-                    rect.width + 8.0,
-                    rect.height + 8.0,
-                ),
-                5.0,
-                1.0,
-                0.3,
-            );
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(
+                    Rect::new(
+                        rect.x - 4.0,
+                        rect.y - 4.0,
+                        rect.width + 8.0,
+                        rect.height + 8.0,
+                    ),
+                    5.0,
+                    1.0,
+                    0.3,
+                );
+            }
         }
         renderer.pop_vnode();
     }
@@ -1081,12 +1083,14 @@ impl View for FenrirNode {
         if self.status == 1 {
             // "Running" - use a glowing ellipse
             renderer.fill_ellipse(icon_rect, theme::accent());
-            renderer.bifrost(
-                Rect::new(icon_rect.x - 8.0, icon_rect.y - 8.0, 32.0, 32.0),
-                5.0,
-                1.0,
-                0.2,
-            );
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(
+                    Rect::new(icon_rect.x - 8.0, icon_rect.y - 8.0, 32.0, 32.0),
+                    5.0,
+                    1.0,
+                    0.2,
+                );
+            }
         } else {
             renderer.fill_ellipse(icon_rect, border_color);
         }
@@ -1139,17 +1143,19 @@ impl View for SkollPulse {
             // Core
             renderer.fill_ellipse(rect, theme::accent());
             // Glow layer using bifrost
-            renderer.bifrost(
-                Rect::new(
-                    rect.x - 10.0,
-                    rect.y - 10.0,
-                    rect.width + 20.0,
-                    rect.height + 20.0,
-                ),
-                8.0,
-                1.0,
-                0.5,
-            );
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(
+                    Rect::new(
+                        rect.x - 10.0,
+                        rect.y - 10.0,
+                        rect.width + 20.0,
+                        rect.height + 20.0,
+                    ),
+                    8.0,
+                    1.0,
+                    0.5,
+                );
+            }
             // Outer pulse ring
             let mut pulse_ring = theme::accent();
             pulse_ring[3] = 0.5;

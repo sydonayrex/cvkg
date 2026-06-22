@@ -251,7 +251,9 @@ impl View for YggdrasilTree {
             };
 
             renderer.push_vnode(menu_rect, "ContextMenu");
-            renderer.bifrost(menu_rect, 15.0, 1.5, 0.95);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(menu_rect, 15.0, 1.5, 0.95);
+            }
             renderer.fill_rounded_rect(menu_rect, RADIUS_MD, theme::with_alpha(theme::surface_elevated(), 0.9));
             renderer.stroke_rounded_rect(menu_rect, RADIUS_MD, theme::border(), 1.0);
 

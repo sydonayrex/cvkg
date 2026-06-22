@@ -707,6 +707,20 @@ impl SvgFilterGraphBuilder {
     pub fn add_final_pass(self, input: ResourceId, graph: SvgFilterGraph) -> Self {
         self.add_pass(input, input, graph)
     }
+
+    /// Build the list of SvgFilterNodes.
+    pub fn build(self) -> Vec<SvgFilterNode> {
+        self.nodes
+            .into_iter()
+            .map(|(input, output, graph)| {
+                let mut node = SvgFilterNode::new(input, output);
+                if let Some(g) = graph {
+                    node = node.with_filter_graph(g);
+                }
+                node
+            })
+            .collect()
+    }
 }
 
 // Re-export the SvgFilterNode from passes for convenience

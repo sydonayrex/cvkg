@@ -210,7 +210,9 @@ impl View for ValkyrieToolbar {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass platter background with blur
-        renderer.bifrost(rect, 20.0, 1.1, 0.6);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 20.0, 1.1, 0.6);
+        }
         renderer.fill_rounded_rect(rect, self.radius, theme::surface_elevated());
 
         // Subtle border

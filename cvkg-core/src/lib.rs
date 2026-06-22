@@ -4000,6 +4000,19 @@ impl Color {
         b: 0.5,
         a: 1.0,
     };
+
+    /// Parse a HEX color string (e.g., "#FF6B35" or "FF6B35") into a Color.
+    /// Returns None if the string is not a valid 6-digit HEX color.
+    pub fn from_hex(hex: &str) -> Option<Self> {
+        let hex = hex.strip_prefix('#').unwrap_or(hex);
+        if hex.len() != 6 {
+            return None;
+        }
+        let r = u8::from_str_radix(&hex[0..2], 16).ok()? as f32 / 255.0;
+        let g = u8::from_str_radix(&hex[2..4], 16).ok()? as f32 / 255.0;
+        let b = u8::from_str_radix(&hex[4..6], 16).ok()? as f32 / 255.0;
+        Some(Color { r, g, b, a: 1.0 })
+    }
     /// Create a new color from RGBA components.
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
@@ -6391,21 +6404,53 @@ mod error_boundary_tests {
 use std::cell::RefCell;
 
 thread_local! {
-    /// Thread-local semantic colors for the current frame.
-    static THEME_CONTEXT: RefCell<Option<color::SemanticColors>> = const { RefCell::new(None) };
+    /// Thread-local theme context for the current frame.
+    static THEME_CONTEXT: RefCell<Option<ThemeContext>> = const { RefCell::new(None) };
 }
 
-/// Semantic colors extracted from the theme for use by components.
-/// This is a standalone type defined in cvkg-core so cvkg-components
-/// can use it without depending on cvkg-themes.
-///
-/// Components should access these via `use_theme()` rather than hardcoding RGBA.
+/// Theme context available to components during render.
+/// Includes both semantic colors and visual effect flags.
+#[derive(Debug, Clone)]
+pub struct ThemeContext {
+    /// Semantic colors for the current theme.
+    pub colors: color::SemanticColors,
+    /// If true, components may use glassmorphic effects (frosted glass, blur).
+    /// If false, components should render with solid backgrounds.
+    pub glassmorphism_enabled: bool,
+}
 
-/// Set the current semantic colors for this thread.
+impl ThemeContext {
+    /// Create a dark theme context with glassmorphism enabled.
+    pub fn dark() -> Self {
+        Self {
+            colors: color::SemanticColors::dark(),
+            glassmorphism_enabled: true,
+        }
+    }
+
+    /// Create a light theme context with glassmorphism disabled.
+    pub fn light() -> Self {
+        Self {
+            colors: color::SemanticColors::light(),
+            glassmorphism_enabled: false,
+        }
+    }
+}
+
+/// Set the current theme context for this thread.
 /// Called by the native renderer before each frame.
 pub fn set_current_theme(colors: color::SemanticColors) {
     THEME_CONTEXT.with(|cell| {
-        *cell.borrow_mut() = Some(colors);
+        let is_light = (colors.background.r + colors.background.g + colors.background.b) / 3.0 > 0.5;
+        let glassmorphism = !is_light; // light themes default to no glassmorphism
+        *cell.borrow_mut() = Some(ThemeContext { colors, glassmorphism_enabled: glassmorphism });
+    });
+}
+
+/// Set the full theme context (including glassmorphism flag).
+pub fn set_theme_context(ctx: ThemeContext) {
+    THEME_CONTEXT.with(|cell| {
+        *cell.borrow_mut() = Some(ctx);
     });
 }
 
@@ -6434,7 +6479,31 @@ pub fn use_theme() -> color::SemanticColors {
     THEME_CONTEXT.with(|cell| {
         cell.borrow()
             .clone()
+            .map(|ctx| ctx.colors)
             .unwrap_or_else(color::SemanticColors::dark)
+    })
+}
+
+/// Access the full theme context from within a component's `render()` method.
+///
+/// Returns the current `ThemeContext` including both colors and effect flags.
+/// Falls back to dark theme defaults if no theme has been set.
+pub fn use_theme_context() -> ThemeContext {
+    THEME_CONTEXT.with(|cell| {
+        cell.borrow()
+            .clone()
+            .unwrap_or_else(ThemeContext::dark)
+    })
+}
+
+/// Returns true if glassmorphic effects are enabled in the current theme.
+/// Components should check this before calling `renderer.bifrost()`.
+pub fn glassmorphism_enabled() -> bool {
+    THEME_CONTEXT.with(|cell| {
+        cell.borrow()
+            .as_ref()
+            .map(|ctx| ctx.glassmorphism_enabled)
+            .unwrap_or(true) // default: glassmorphism on (dark theme)
     })
 }
 

@@ -151,7 +151,9 @@ impl View for HoverCard {
             renderer.push_vnode(card_rect, "HoverCardContent");
 
             // Glass background
-            renderer.bifrost(card_rect, 15.0, 1.5, 0.95);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(card_rect, 15.0, 1.5, 0.95);
+            }
             renderer.fill_rounded_rect(
                 card_rect,
                 RADIUS_LG,

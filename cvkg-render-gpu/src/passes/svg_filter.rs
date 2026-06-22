@@ -103,6 +103,7 @@ impl Default for SvgFilterNode {
 #[cfg(test)]
 mod p1_35_filter_graph_tests {
     use super::*;
+    use crate::filter::SvgFilterGraphBuilder;
 
     #[test]
     fn filter_node_identity() {

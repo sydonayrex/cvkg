@@ -594,3 +594,17 @@ pub fn qr_dark() -> [f32; 4] {
 pub fn qr_light() -> [f32; 4] {
     bg()
 }
+
+// =============================================================================
+// GLASSMORPHISM CONTROL
+// =============================================================================
+
+/// Returns true if glassmorphic effects (frosted glass, blur) are enabled
+/// in the current theme. Components should check this before calling
+/// `renderer.bifrost()`.
+///
+/// Default: true for dark themes, false for light themes.
+#[inline]
+pub fn glassmorphism_enabled() -> bool {
+    cvkg_core::glassmorphism_enabled()
+}

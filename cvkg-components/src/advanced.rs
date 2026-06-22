@@ -49,7 +49,9 @@ impl<H: View, C: View> View for FafnirAccordion<H, C> {
             let header_rect = Rect::new(rect.x, rect.y + y_offset, rect.width, header_size.height);
 
             // Header background
-            renderer.bifrost(header_rect, 8.0, 1.0, 0.8);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(header_rect, 8.0, 1.0, 0.8);
+            }
             renderer.stroke_rounded_rect(header_rect, RADIUS_LG, theme::border(), 1.0);
 
             header.render(renderer, header_rect.inset(12.0)); // 12px padding
@@ -135,7 +137,9 @@ impl<V: View> View for SvadilVeil<V> {
         }
         renderer.push_vnode(rect, "SvadilVeil");
         // Apply full screen blur / frosted glass background
-        renderer.bifrost(rect, 0.0, 10.0, 0.6);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 0.0, 10.0, 0.6);
+        }
         renderer.fill_rect(rect, theme::bg()); // Dark dim
 
         if let Some(content) = &self.content {
@@ -209,7 +213,9 @@ impl<V: View> View for HuginHoverCard<V> {
             let _size = content.intrinsic_size(renderer, SizeProposal::unspecified());
             // Draw card background with shadow
             renderer.push_shadow(12.0, theme::shadow(), [0.0, 4.0]);
-            renderer.bifrost(rect, 8.0, 1.5, 0.9);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(rect, 8.0, 1.5, 0.9);
+            }
             renderer.stroke_rounded_rect(rect, RADIUS_LG, theme::border(), 1.0);
             renderer.pop_shadow();
 
@@ -552,7 +558,9 @@ impl<V: View> View for VedrHero<V> {
         // Vibrant hero background
         renderer.fill_rect(rect, theme::surface_elevated());
         // Hero visual accent (glowing orb behind content)
-        renderer.bifrost(rect, 15.0, 1.0, 0.5);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 15.0, 1.0, 0.5);
+        }
         renderer.fill_ellipse(
             Rect::new(
                 rect.x + rect.width / 2.0 - 150.0,
@@ -718,7 +726,9 @@ impl<V: View> View for FrekiBottomNav<V> {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "FrekiBottomNav");
-        renderer.bifrost(rect, 0.0, 2.0, 0.9); // Frosted bar
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 0.0, 2.0, 0.9); // Frosted bar
+        }
         renderer.draw_line(
             rect.x,
             rect.y,

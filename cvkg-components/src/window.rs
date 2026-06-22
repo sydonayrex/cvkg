@@ -38,7 +38,9 @@ impl<V: View> View for YggdrasilWindow<V> {
         let header_height = 28.0;
 
         // 1. Background (Bifrost Frost)
-        renderer.bifrost(rect, 20.0, 1.2, 0.9);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 20.0, 1.2, 0.9);
+        }
 
         // 2. Main Frame (Clipped Corner)
         let frame = ClippedCornerNode::new(cvkg_core::EmptyView)
@@ -133,7 +135,9 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
         let header_height = 28.0;
 
         // 1. Base Background & Border
-        renderer.bifrost(rect, 30.0, 1.1, 0.95);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 30.0, 1.1, 0.95);
+        }
         renderer.stroke_rounded_rect(rect, 8.0, self.border_color, 1.5);
 
         // Header
@@ -290,7 +294,9 @@ impl<V: View> View for HiminnModal<V> {
 
         // 3. Liquid Glass Lensing Effect
         //)
-        renderer.bifrost(modal_rect, self.blur_radius, 1.3, 0.85);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(modal_rect, self.blur_radius, 1.3, 0.85);
+        }
         renderer.stroke_rounded_rect(modal_rect, 12.0, self.border_color, 1.5);
 
         // 4. Content

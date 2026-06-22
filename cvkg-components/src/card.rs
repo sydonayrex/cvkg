@@ -78,7 +78,9 @@ impl<V: View> View for RunesCard<V> {
         renderer.push_vnode(rect, "RunesCard");
 
         // Render frosted glass background
-        renderer.bifrost(rect, 20.0, 1.2, 0.9);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 20.0, 1.2, 0.9);
+        }
         // Mostly clear center
         renderer.fill_rounded_rect(rect, RADIUS_XL, theme::with_alpha(theme::bg(), 0.4));
         // Neon glass border

@@ -479,7 +479,9 @@ impl ToastManager {
         renderer.push_vnode(rect, "Toast");
 
         // 1. Bifrost glass background (frosted glass effect)
-        renderer.bifrost(rect, 15.0, 1.5, 0.95);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 15.0, 1.5, 0.95);
+        }
 
         // 2. Semi-transparent dark fill
         renderer.fill_rounded_rect(rect, CORNER_RADIUS, theme::with_alpha(theme::surface_elevated(), 0.85));

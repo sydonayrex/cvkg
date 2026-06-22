@@ -890,6 +890,19 @@ impl ThemeBuilder {
         Self { base: Theme::from_seed(seed) }
     }
 
+    /// Set primary color from a HEX string (e.g., "#FF6B35").
+    pub fn primary_hex(self, hex: &str) -> Self {
+        let color = Color::from_hex(hex).unwrap_or(self.base.colors.primary);
+        self.with_primary(color)
+    }
+
+    /// Generate a complete theme from a single HEX brand color.
+    pub fn from_brand_hex(hex: &str) -> Self {
+        let color = Color::from_hex(hex).unwrap_or(Color::VIKING_GOLD);
+        let oklch = OklchColor::from_rgb(color.r, color.g, color.b);
+        Self::from_seed(oklch)
+    }
+
     /// Start from an existing theme.
     pub fn from_theme(theme: Theme) -> Self {
         Self { base: theme }

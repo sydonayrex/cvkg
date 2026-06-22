@@ -269,7 +269,9 @@ impl View for GjallarAlert {
 
         // 1. Mimir's Refraction (Glass Depth)
         // Simulate refractive thickness by layering bifrost with slight offsets
-        renderer.bifrost(rect, 15.0, 1.5, 0.95);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 15.0, 1.5, 0.95);
+        }
         renderer.fill_rounded_rect(rect, 4.0, theme::surface_elevated());
 
         // Secondary internal refraction line

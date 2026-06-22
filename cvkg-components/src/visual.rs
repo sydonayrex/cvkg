@@ -1,3 +1,9 @@
+pub mod decorators;
+pub mod effects;
+
+pub use decorators::*;
+pub use effects::*;
+
 use crate::theme;
 use crate::{RADIUS_SM, RADIUS_MD};
 use cvkg_core::{Never, Rect, Renderer, View};
@@ -58,7 +64,7 @@ impl View for SkollProgress {
         } else {
             0.0
         };
-
+ 
         match self.variant {
             ProgressVariant::Linear => {
                 let track_h = rect.height.min(8.0);
@@ -212,7 +218,7 @@ impl ValkyrieAnalytics {
             chart_type,
             data,
             color: theme::progress_fill(),
-        }
+            }
     }
 
     /// Sets the color of the chart elements.
@@ -354,7 +360,9 @@ impl View for TelemetryView {
         let stats = renderer.get_telemetry();
 
         // Bifrost Glassmorphism
-        renderer.bifrost(rect, 20.0, 1.2, 0.85);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 20.0, 1.2, 0.85);
+        }
         renderer.fill_rounded_rect(rect, RADIUS_MD, theme::with_alpha(theme::bg(), 0.6));
 
         let accent_cyan = theme::accent();
@@ -479,9 +487,9 @@ impl View for MimirsWell {
             let (x1, y1) = self.get_node_pos(&edge.source, rect, t);
             let (x2, y2) = self.get_node_pos(&edge.target, rect, t);
 
-            // Animated Glow-Path (Bifrost)
+            // Animated Glowing temporal lines
             let alpha = 0.2 + (t * 3.0).sin().abs() * 0.2;
-            renderer.draw_line(x1, y1, x2, y2, theme::with_alpha(theme::magenta_liquid(), alpha), 1.0); // Magenta Liquid
+            renderer.draw_line(x1, y1, x2, y2, theme::with_alpha(theme::magenta_liquid(), alpha), 1.0);
 
             // Traveling Pulse
             let progress = (t * 0.5 + (edge.source.len() as f32)).fract();
@@ -506,12 +514,11 @@ impl View for MimirsWell {
             let size = (10.0 + node.weight * 15.0) * activity_pulse;
 
             let mut color = match node.layer {
-                MemoryLayer::Episodic => theme::accent(),  // Cyan
-                MemoryLayer::Semantic => theme::viking_gold(), // Viking Gold
-                MemoryLayer::Procedural => theme::magenta_liquid(), // Magenta Liquid
+                MemoryLayer::Episodic => theme::accent(),
+                MemoryLayer::Semantic => theme::viking_gold(),
+                MemoryLayer::Procedural => theme::magenta_liquid(),
             };
 
-            // Boost brightness based on pulse
             color[3] *= activity_pulse;
 
             // Draw Clipped-Corner Node
@@ -589,571 +596,6 @@ impl MimirsWell {
             let p2 = points[(i + 1) % 8];
             renderer.draw_line(p1.0, p1.1, p2.0, p2.1, color, 1.2);
         }
-    }
-}
-
-const RUNES: &[char] = &[
-    'ᚠ', 'ᚢ', 'ᚦ', 'ᚨ', 'ᚱ', 'ᚲ', 'ᚷ', 'ᚹ', 'ᚺ', 'ᚾ', 'ᛁ', 'ᛃ', 'ᛇ', 'ᛈ', 'ᛉ', 'ᛊ', 'ᛏ', 'ᛒ', 'ᛖ',
-    'ᛗ', 'ᛚ', 'ᛜ', 'ᛞ', 'ᛟ',
-];
-
-/// RuneScript - A text component that reveals itself with a runic "deciphering" animation.
-/// Formerly ScanningText, renamed for Norse-themed tactical alignment.
-#[derive(Clone)]
-pub struct RuneScript {
-    pub text: String,
-    pub font_size: f32,
-    pub color: [f32; 4],
-    pub speed: f32, // Characters per second
-}
-
-impl RuneScript {
-    pub fn new(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            font_size: 14.0,
-            color: theme::progress_fill(), // Cyan
-            speed: 20.0,
-        }
-    }
-
-    pub fn font_size(mut self, size: f32) -> Self {
-        self.font_size = size;
-        self
-    }
-
-    pub fn color(mut self, color: [f32; 4]) -> Self {
-        self.color = color;
-        self
-    }
-}
-
-impl View for RuneScript {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let t = renderer.elapsed_time();
-        let revealed_count = (t * self.speed) as usize;
-        let mut display_text = String::new();
-
-        let chars: Vec<char> = self.text.chars().collect();
-        for i in 0..chars.len() {
-            if i < revealed_count {
-                display_text.push(chars[i]);
-            } else if i < revealed_count + 4 {
-                let rune_idx = ((t * 30.0 + i as f32) as usize) % RUNES.len();
-                display_text.push(RUNES[rune_idx]);
-            } else {
-                break;
-            }
-        }
-
-        if !display_text.is_empty() {
-            renderer.draw_text(
-                &display_text,
-                rect.x,
-                rect.y + self.font_size,
-                self.font_size,
-                self.color,
-            );
-        }
-    }
-
-    fn intrinsic_size(
-        &self,
-        renderer: &mut dyn Renderer,
-        _proposal: cvkg_core::SizeProposal,
-    ) -> cvkg_core::Size {
-        let (w, h) = renderer.measure_text(&self.text, self.font_size);
-        cvkg_core::Size {
-            width: w,
-            height: h,
-        }
-    }
-}
-
-/// SleipnirGait - A container that staggers the reveal of its children.
-/// Named after Odin's 8-legged horse, known for its rapid and coordinated gait.
-#[doc(alias = "StepIndicator")]
-#[derive(Clone)]
-pub struct SleipnirGait {
-    pub children: Vec<cvkg_core::AnyView>,
-    pub stagger_delay: f32, // Delay between child reveals in seconds
-}
-
-impl SleipnirGait {
-    pub fn new(stagger_delay: f32) -> Self {
-        Self {
-            children: Vec::new(),
-            stagger_delay,
-        }
-    }
-
-    pub fn child<V: View + Clone + 'static>(mut self, view: V) -> Self {
-        self.children.push(view.erase());
-        self
-    }
-}
-
-impl View for SleipnirGait {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let t = renderer.elapsed_time();
-        let child_height = rect.height / self.children.len().max(1) as f32;
-
-        for (i, child) in self.children.iter().enumerate() {
-            let start_time = i as f32 * self.stagger_delay;
-            if t < start_time {
-                continue;
-            }
-
-            // Apply reveal opacity based on how long since its start time
-            let opacity = ((t - start_time) * 4.0).min(1.0);
-            renderer.push_opacity(opacity);
-
-            let child_rect = Rect {
-                x: rect.x,
-                y: rect.y + i as f32 * child_height,
-                width: rect.width,
-                height: child_height,
-            };
-            child.render(renderer, child_rect);
-
-            renderer.pop_opacity();
-        }
-    }
-}
-
-/// VölvaScan - A container that renders "runic noise" before revealing its content.
-/// Named after the Völva (seers) who saw through the veil of time.
-#[derive(Clone)]
-pub struct VölvaScan<V: View> {
-    pub content: V,
-    pub duration: f32,
-}
-
-impl<V: View> VölvaScan<V> {
-    pub fn new(content: V) -> Self {
-        Self {
-            content,
-            duration: 1.5,
-        }
-    }
-}
-
-impl<V: View> View for VölvaScan<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let t = renderer.elapsed_time();
-
-        if t < self.duration {
-            // Render Runic Noise
-            let mut noise = String::new();
-            let char_count = (rect.width * rect.height / 200.0) as usize;
-            for i in 0..char_count {
-                let rune_idx = ((t * 50.0 + i as f32) as usize) % RUNES.len();
-                noise.push(RUNES[rune_idx]);
-                if i % 10 == 0 {
-                    noise.push('\n');
-                }
-            }
-            renderer.draw_text(&noise, rect.x, rect.y + 10.0, 10.0, theme::with_alpha(theme::accent(), 0.4));
-        } else {
-            // Reveal Content
-            let opacity = ((t - self.duration) * 2.0).min(1.0);
-            renderer.push_opacity(opacity);
-            self.content.render(renderer, rect);
-            renderer.pop_opacity();
-        }
-    }
-}
-/// RunicTooltip - A contextual tooltip for providing hidden wisdom (information).
-/// Named after the Runes, which encode secret knowledge.
-#[doc(alias = "Tooltip")]
-#[derive(Clone)]
-pub struct RunicTooltip<V: View> {
-    pub content: V,
-    pub text: String,
-    pub is_visible: bool,
-}
-
-impl<V: View> RunicTooltip<V> {
-    /// Creates a new RunicTooltip wrapping the given content.
-    pub fn new(content: V, text: impl Into<String>) -> Self {
-        Self {
-            content,
-            text: text.into(),
-            is_visible: false,
-        }
-    }
-
-    /// Sets whether the tooltip is visible.
-    pub fn visible(mut self, visible: bool) -> Self {
-        self.is_visible = visible;
-        self
-    }
-}
-
-impl<V: View> View for RunicTooltip<V> {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "RunicTooltip");
-
-        // 1. Render Base Content
-        self.content.render(renderer, rect);
-
-        // 2. Render Tooltip if visible
-        if self.is_visible {
-            let (tw, th) = renderer.measure_text(&self.text, 12.0);
-            let tip_rect = Rect {
-                x: rect.x + (rect.width - (tw + 16.0)) / 2.0,
-                y: rect.y - th - 16.0,
-                width: tw + 16.0,
-                height: th + 8.0,
-            };
-
-            renderer.set_z_index(200.0);
-            renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
-            renderer.fill_rounded_rect(tip_rect, RADIUS_SM, theme::surface_overlay());
-            renderer.stroke_rect(tip_rect, theme::with_alpha(theme::accent(), 0.6), 1.0);
-
-            renderer.draw_text(
-                &self.text,
-                tip_rect.x + 8.0,
-                tip_rect.y + 6.0,
-                12.0,
-                theme::text(),
-            );
-            renderer.set_z_index(0.0);
-        }
-
-        renderer.pop_vnode();
-    }
-}
-
-/// MuninAvatar - A user representation component with status indicators.
-/// Named after the hybrid concept of "form/image" (Eikona).
-#[doc(alias = "Avatar")]
-#[derive(Clone)]
-pub struct MuninAvatar {
-    pub src: Option<String>,
-    pub fallback: String,
-    pub status: Option<AvatarStatus>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AvatarStatus {
-    Online,
-    Offline,
-    Busy,
-    Away,
-}
-
-impl MuninAvatar {
-    /// Creates a new MuninAvatar.
-    pub fn new(fallback: impl Into<String>) -> Self {
-        Self {
-            src: None,
-            fallback: fallback.into(),
-            status: None,
-        }
-    }
-
-    /// Sets the image source for the avatar.
-    pub fn src(mut self, src: impl Into<String>) -> Self {
-        self.src = Some(src.into());
-        self
-    }
-
-    /// Sets the online status indicator.
-    pub fn status(mut self, status: AvatarStatus) -> Self {
-        self.status = Some(status);
-        self
-    }
-}
-
-impl View for MuninAvatar {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "MuninAvatar");
-
-        // 1. Base Circle
-        renderer.fill_ellipse(rect, theme::surface());
-        renderer.stroke_ellipse(rect, theme::border(), 1.0);
-
-        // 2. Content
-        if let Some(src) = &self.src {
-            renderer.draw_image(src, rect);
-        } else {
-            let (tw, _) = renderer.measure_text(&self.fallback, 14.0);
-            renderer.draw_text(
-                &self.fallback,
-                rect.x + (rect.width - tw) / 2.0,
-                rect.y + (rect.height - 14.0) / 2.0,
-                14.0,
-                theme::text(),
-            );
-        }
-
-        // 3. Status Indicator
-        if let Some(status) = &self.status {
-            let status_size = rect.width * 0.25;
-            let status_rect = Rect {
-                x: rect.x + rect.width - status_size,
-                y: rect.y + rect.height - status_size,
-                width: status_size,
-                height: status_size,
-            };
-
-            let color = match status {
-                AvatarStatus::Online => theme::success(),
-                AvatarStatus::Offline => theme::text_muted(),
-                AvatarStatus::Busy => theme::error_color(),
-                AvatarStatus::Away => theme::warning(),
-            };
-
-            renderer.fill_ellipse(status_rect, color);
-            renderer.stroke_ellipse(status_rect, theme::bg(), 1.5);
-        }
-
-        renderer.pop_vnode();
-    }
-}
-
-/// MerkiBadge - A status or count indicator component.
-/// Named after Merki, the Norse word for mark or sign.
-#[derive(Clone)]
-pub struct MerkiBadge {
-    pub text: String,
-    pub color: [f32; 4],
-}
-
-impl MerkiBadge {
-    /// Creates a new MerkiBadge.
-    pub fn new(text: impl Into<String>) -> Self {
-        Self {
-            text: text.into(),
-            color: theme::accent(),
-        }
-    }
-
-    /// Sets the color of the badge.
-    pub fn color(mut self, color: [f32; 4]) -> Self {
-        self.color = color;
-        self
-    }
-}
-
-impl View for MerkiBadge {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "MerkiBadge");
-
-        let mut bg = self.color;
-        bg[3] *= 0.2;
-
-        renderer.fill_rounded_rect(rect, RADIUS_SM, bg);
-        renderer.stroke_rounded_rect(rect, RADIUS_SM, self.color, 1.0);
-
-        let (tw, _) = renderer.measure_text(&self.text, 10.0);
-        renderer.draw_text(
-            &self.text,
-            rect.x + (rect.width - tw) / 2.0,
-            rect.y + (rect.height - 10.0) / 2.0,
-            10.0,
-            theme::text(),
-        );
-
-        renderer.pop_vnode();
-    }
-}
-
-/// UrdrTimeline - A chronological timeline of events (the past).
-/// Named after Urdr, the Norn of the Past.
-#[doc(alias = "Timeline")]
-#[derive(Clone)]
-pub struct UrdrTimeline {
-    pub items: Vec<UrdrEvent>,
-}
-
-#[derive(Clone)]
-pub struct UrdrEvent {
-    pub title: String,
-    pub timestamp: String,
-    pub description: Option<String>,
-}
-
-impl UrdrTimeline {
-    /// Creates a new UrdrTimeline.
-    pub fn new() -> Self {
-        Self { items: Vec::new() }
-    }
-
-    /// Adds an event to the timeline.
-    pub fn event(mut self, title: impl Into<String>, timestamp: impl Into<String>) -> Self {
-        self.items.push(UrdrEvent {
-            title: title.into(),
-            timestamp: timestamp.into(),
-            description: None,
-        });
-        self
-    }
-}
-
-impl View for UrdrTimeline {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "UrdrTimeline");
-
-        let t = renderer.elapsed_time();
-        let line_x = rect.x + 20.0;
-        renderer.draw_line(
-            line_x,
-            rect.y,
-            line_x,
-            rect.y + rect.height,
-            theme::text_muted(),
-            1.5,
-        );
-
-        let mut current_y = rect.y + 10.0;
-        let item_spacing = 50.0;
-
-        for (i, event) in self.items.iter().enumerate() {
-            // 1. Bifrost Resonance (Glowing Temporal Nodes)
-            let pulse = (t * 2.0 + i as f32).sin() * 0.2 + 0.8;
-            renderer.fill_ellipse(
-                Rect {
-                    x: line_x - 5.0,
-                    y: current_y - 1.0,
-                    width: 10.0,
-                    height: 10.0,
-                },
-                theme::with_alpha(theme::accent(), 0.3 * pulse),
-            );
-            renderer.fill_ellipse(
-                Rect {
-                    x: line_x - 3.0,
-                    y: current_y + 1.0,
-                    width: 6.0,
-                    height: 6.0,
-                },
-                theme::progress_fill(),
-            );
-
-            // 2. Content
-            renderer.draw_text(
-                &event.timestamp,
-                line_x + 20.0,
-                current_y - 2.0,
-                10.0,
-                theme::text_muted(),
-            );
-            renderer.draw_text(
-                &event.title,
-                line_x + 20.0,
-                current_y + 12.0,
-                13.0,
-                theme::text(),
-            );
-
-            current_y += item_spacing;
-        }
-
-        renderer.pop_vnode();
-    }
-}
-
-/// DraumaSkeleton - A shimmering skeleton loader for async content.
-/// Named after the dreams (Drauma) of content waiting to be born.
-#[derive(Clone)]
-pub struct DraumaSkeleton {
-    pub border_radius: f32,
-    pub shimmer: bool,
-}
-
-impl DraumaSkeleton {
-    /// Creates a new DraumaSkeleton.
-    pub fn new() -> Self {
-        Self {
-            border_radius: 4.0,
-            shimmer: true,
-        }
-    }
-
-    /// Sets the border radius of the skeleton.
-    pub fn border_radius(mut self, radius: f32) -> Self {
-        self.border_radius = radius;
-        self
-    }
-
-    /// Enables or disables the shimmer effect.
-    pub fn shimmer(mut self, enabled: bool) -> Self {
-        self.shimmer = enabled;
-        self
-    }
-}
-
-impl View for DraumaSkeleton {
-    type Body = Never;
-    fn body(self) -> Self::Body {
-        unreachable!()
-    }
-
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "DraumaSkeleton");
-
-        renderer.set_aria_role("status");
-        let t = renderer.elapsed_time();
-
-        // 1. Mimir's Refraction (Skeletal Depth)
-        // Drauma represents a "spectral" presence of content
-        renderer.bifrost(rect, self.border_radius, 2.0, 0.8);
-        renderer.fill_rounded_rect(rect, self.border_radius, theme::with_alpha(theme::surface(), 0.6));
-
-        // 2. Kinetic Shimmer Effect
-        if self.shimmer {
-            let shimmer_pos = (t * 1.2).fract(); // Slower, more spectral shimmer
-            let shimmer_w = rect.width * 0.5;
-            let shimmer_rect = Rect {
-                x: rect.x - shimmer_w + (rect.width + shimmer_w * 2.0) * shimmer_pos,
-                y: rect.y,
-                width: shimmer_w,
-                height: rect.height,
-            };
-
-            let shimmer_alpha = 0.15 * (1.0 - (shimmer_pos - 0.5).abs() * 2.0);
-            renderer.fill_rect(shimmer_rect, theme::with_alpha(theme::accent(), shimmer_alpha));
-        }
-
-        renderer.pop_vnode();
     }
 }
 
@@ -1239,7 +681,6 @@ impl View for HatiSpinner {
                     height: dim,
                 };
 
-                // Background ring (dim)
                 let bg_color = [
                     self.color[0],
                     self.color[1],
@@ -1248,11 +689,8 @@ impl View for HatiSpinner {
                 ];
                 renderer.stroke_ellipse(circ_rect, bg_color, 2.5);
 
-                // Rotating arc -- simulated by drawing short line segments
-                // along an arc with a trailing fade, creating the appearance
-                // of a rotating spinner with a gap.
                 let rotation = t * 2.5;
-                let arc_frac = 0.65; // fraction of the circle that is visible
+                let arc_frac = 0.65;
                 let num_segments = 48;
 
                 for i in 0..num_segments {
@@ -1273,7 +711,6 @@ impl View for HatiSpinner {
                     let x2 = cx + next_angle.cos() * r;
                     let y2 = cy + next_angle.sin() * r;
 
-                    // Fade the trailing edge
                     let alpha = self.color[3] * (1.0 - frac / arc_frac * 0.8).max(0.0);
                     let seg_color = [self.color[0], self.color[1], self.color[2], alpha];
                     renderer.draw_line(x1, y1, x2, y2, seg_color, 2.5);
@@ -1290,7 +727,7 @@ impl View for HatiSpinner {
                     let offset = i as f32 * 0.6;
                     let bounce = (t * 4.0 + offset).sin();
                     let y = base_y + bounce * dot_size * 1.2;
-                    let alpha = 0.4 + (bounce + 1.0) * 0.3; // 0.4–1.0
+                    let alpha = 0.4 + (bounce + 1.0) * 0.3;
 
                     let dot_rect = Rect {
                         x: start_x + i as f32 * spacing - dot_size / 2.0,
@@ -1311,7 +748,7 @@ impl View for HatiSpinner {
             SpinnerVariant::PulseBar => {
                 let bar_h = self.size * 0.2;
                 let max_w = self.size;
-                let pulse = (t * 3.0).sin() * 0.5 + 0.5; // 0.0–1.0
+                let pulse = (t * 3.0).sin() * 0.5 + 0.5;
                 let bar_w = max_w * (0.3 + pulse * 0.7);
                 let x = rect.x + (rect.width - bar_w) / 2.0;
                 let y = rect.y + (rect.height - bar_h) / 2.0;
@@ -1326,7 +763,6 @@ impl View for HatiSpinner {
                 renderer.fill_rounded_rect(bar_rect, bar_h / 2.0, self.color);
             }
             SpinnerVariant::Inline => {
-                // Small 12px circle spinner
                 let inline_size = 12.0;
                 let dim = inline_size;
                 let circ_rect = Rect {
@@ -1583,7 +1019,6 @@ impl<V: View> View for HatiCarousel<V> {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HatiCarousel");
-        // Clip children to bounds
         renderer.push_clip_rect(rect);
 
         if let Some(active_child) = self.children.get(self.current_index) {

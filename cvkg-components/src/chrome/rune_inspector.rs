@@ -35,7 +35,9 @@ impl View for RuneInspector {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // Glass background (heavier blur than toolbars)
-        renderer.bifrost(rect, 30.0, 1.3, 0.75);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 30.0, 1.3, 0.75);
+        }
         renderer.fill_rounded_rect(rect, 12.0, theme::surface_elevated());
 
         // Title bar

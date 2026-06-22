@@ -145,7 +145,9 @@ impl<T: View> View for DropdownMenu<T> {
         };
 
         // Panel background
-        renderer.bifrost(panel_rect, 12.0, 1.2, 0.9);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(panel_rect, 12.0, 1.2, 0.9);
+        }
         renderer.fill_rounded_rect(panel_rect, RADIUS_MD, theme::with_alpha(theme::surface_elevated(), 0.95));
         renderer.stroke_rounded_rect(panel_rect, RADIUS_MD, theme::with_alpha(theme::accent(), 0.3), 1.0);
 

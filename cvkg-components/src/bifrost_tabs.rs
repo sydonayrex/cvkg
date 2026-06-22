@@ -66,7 +66,9 @@ impl View for BifrostTabs {
         let tab_width = rect.width / self.options.len() as f32;
 
         // 1. Background Glass
-        renderer.bifrost(rect, 20.0, 1.0, 0.8);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, 20.0, 1.0, 0.8);
+        }
         renderer.stroke_rounded_rect(rect, RADIUS_LG, theme::with_alpha(theme::border(), 0.3), 1.0);
 
         // 2. Liquid Selection Indicator (The Bifrost bridge)

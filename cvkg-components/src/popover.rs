@@ -299,7 +299,9 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
             renderer.set_z_index(500.0);
 
             // Bifrost (frosted glass) effect.
-            renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
+            }
             // Semi-transparent dark fill.
             renderer.fill_rounded_rect(pop_rect, 10.0, theme::with_alpha(theme::surface_elevated(), 0.88));
             // Subtle neon border.

@@ -121,7 +121,9 @@ impl<V: Clone + View> View for Select<V> {
             };
 
             renderer.set_z_index(100.0);
-            renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
+            }
             renderer.fill_rounded_rect(popover_rect, RADIUS_MD, theme::surface_overlay());
             renderer.stroke_rect(popover_rect, theme::input_border_focus(), 1.0);
 
@@ -372,7 +374,9 @@ impl View for Dropdown {
 
             // Z-Index boost for popover
             renderer.set_z_index(100.0);
-            renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
+            if crate::theme::glassmorphism_enabled() {
+                renderer.bifrost(popover_rect, 20.0, 1.2, 0.9);
+            }
             renderer.fill_rounded_rect(popover_rect, 4.0, theme::surface_overlay());
             renderer.stroke_rect(popover_rect, theme::input_border_focus(), 1.0);
 

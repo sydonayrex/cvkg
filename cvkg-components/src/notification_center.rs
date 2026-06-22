@@ -97,7 +97,9 @@ impl View for NotificationCenterPanel {
         renderer.push_vnode(panel_rect, "NotificationCenterPanel");
 
         // 1. Bifrost glass background
-        renderer.bifrost(panel_rect, 20.0, 1.5, 0.96);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(panel_rect, 20.0, 1.5, 0.96);
+        }
 
         // 2. Translucent panel fill
         renderer.fill_rounded_rect(panel_rect, 0.0, theme::with_alpha(theme::surface_elevated(), 0.85));

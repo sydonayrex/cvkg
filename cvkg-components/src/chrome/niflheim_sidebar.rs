@@ -94,7 +94,9 @@ impl NiflheimSidebar {
         };
 
         // Glass background
-        renderer.bifrost(rect, blur, 1.2, opacity);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(rect, blur, 1.2, opacity);
+        }
         renderer.fill_rounded_rect(rect, 0.0, theme::surface());
 
         // Separator line on trailing edge

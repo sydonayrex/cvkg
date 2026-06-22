@@ -303,7 +303,9 @@ impl DatePicker {
         renderer.fill_rect(anchor_rect, theme::with_alpha(theme::bg(), 0.25));
 
         // Glassmorphic background
-        renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
+        }
         renderer.fill_rounded_rect(pop_rect, RADIUS_XL, theme::with_alpha(theme::surface_elevated(), 0.9));
         renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, theme::with_alpha(theme::primary(), 0.7), 1.5);
 

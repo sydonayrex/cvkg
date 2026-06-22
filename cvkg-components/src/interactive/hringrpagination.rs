@@ -244,7 +244,9 @@ impl View for BifrostColorPicker {
         };
 
         // Advanced refractive lensing
-        renderer.bifrost(indicator_rect, indicator_size / 2.0, 2.0, 0.98);
+        if crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(indicator_rect, indicator_size / 2.0, 2.0, 0.98);
+        }
         renderer.fill_ellipse(indicator_rect, self.color);
 
         // Surtur's Reactive Materials (Glow Ring)
