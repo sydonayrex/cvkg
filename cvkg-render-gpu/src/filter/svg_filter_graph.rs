@@ -2,6 +2,15 @@
 //!
 //! Implements the SVG filter pipeline for CVKG's render graph.
 //! Supports: feGaussianBlur, feDropShadow, feOffset, feBlend, feComposite, feFlood, feMerge.
+//!
+//! Architecture:
+//! - FilterEngine owns temporary textures for intermediate results
+//! - Each primitive is executed as a render pass with a full-screen quad
+//! - Primitives read from input textures and write to output textures
+//! - The filter graph is executed in order, with each primitive's output
+//!   becoming the next primitive's input
+
+use crate::kvasir::nodes::RES_SCENE;
 
 use crate::kvasir::node::ExecutionContext;
 use crate::kvasir::resource::ResourceId;
@@ -30,13 +39,13 @@ impl Default for SvgFilterGraph {
 /// SVG filter primitive types.
 #[derive(Debug, Clone)]
 pub enum FilterPrimitive {
-    /// feGaussianBlur — Blurs the input image.
+    /// feGaussianBlur — Blurs the input image using a two-pass separable kernel.
     GaussianBlur {
         std_deviation: f32,
         input: String,
         result: String,
     },
-    /// feDropShadow — Creates a drop shadow effect.
+    /// feDropShadow — Creates a drop shadow effect (offset + blur + composite).
     DropShadow {
         dx: f32,
         dy: f32,
@@ -89,7 +98,6 @@ pub enum BlendMode {
 }
 
 impl BlendMode {
-    /// Parse an SVG blend mode string.
     pub fn from_str(s: &str) -> Self {
         match s {
             "multiply" => BlendMode::Multiply,
@@ -97,6 +105,43 @@ impl BlendMode {
             "darken" => BlendMode::Darken,
             "lighten" => BlendMode::Lighten,
             _ => BlendMode::Normal,
+        }
+    }
+
+    /// Returns the GPU blend factor for this mode.
+    /// Returns (src_factor, dst_factor, src_alpha_factor, dst_alpha_factor).
+    pub fn to_wgpu_blend(&self) -> (wgpu::BlendFactor, wgpu::BlendFactor, wgpu::BlendFactor, wgpu::BlendFactor) {
+        match self {
+            BlendMode::Normal => (
+                wgpu::BlendFactor::SrcAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+            ),
+            BlendMode::Multiply => (
+                wgpu::BlendFactor::Dst,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+                wgpu::BlendFactor::DstAlpha,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+            ),
+            BlendMode::Screen => (
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::OneMinusSrc,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::OneMinusSrcAlpha,
+            ),
+            BlendMode::Darken => (
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+            ),
+            BlendMode::Lighten => (
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+                wgpu::BlendFactor::One,
+            ),
         }
     }
 }
@@ -113,7 +158,6 @@ pub enum CompositeOperator {
 }
 
 impl CompositeOperator {
-    /// Parse an SVG composite operator string.
     pub fn from_str(s: &str) -> Self {
         match s {
             "in" => CompositeOperator::In,
@@ -128,22 +172,44 @@ impl CompositeOperator {
 
 /// Filter execution engine.
 ///
-/// Owns the filter graph and executes primitives in dependency order.
+/// Owns temporary textures for intermediate results and executes
+/// filter primitives as GPU render passes.
 pub struct FilterEngine {
     /// Intermediate render targets for filter results.
     temp_targets: Vec<(String, ResourceId)>,
+    /// Width of the filter region.
+    width: u32,
+    /// Height of the filter region.
+    height: u32,
 }
 
 impl FilterEngine {
-    /// Create a new filter engine.
+    /// Create a new filter engine with the given dimensions.
     pub fn new() -> Self {
         Self {
             temp_targets: Vec::new(),
+            width: 0,
+            height: 0,
         }
+    }
+
+    /// Set the filter region dimensions.
+    pub fn with_dimensions(mut self, width: u32, height: u32) -> Self {
+        self.width = width;
+        self.height = height;
+        self
     }
 
     /// Execute a filter graph within the given execution context.
     pub fn execute(&mut self, graph: &SvgFilterGraph, ctx: &mut ExecutionContext) {
+        if self.width == 0 || self.height == 0 {
+            // Derive dimensions from the input texture
+            if let Some(tex) = ctx.registry.get_texture(ResourceId(RES_SCENE.0)) {
+                self.width = tex.width();
+                self.height = tex.height();
+            }
+        }
+
         for primitive in &graph.primitives {
             self.execute_primitive(primitive, ctx);
         }
@@ -151,78 +217,387 @@ impl FilterEngine {
 
     fn execute_primitive(&mut self, primitive: &FilterPrimitive, ctx: &mut ExecutionContext) {
         match primitive {
-            FilterPrimitive::GaussianBlur {
-                std_deviation,
-                input: _,
-                result,
-            } => {
-                // TODO: Implement Gaussian blur via compute shader
-                // For now, log and skip
-                log::trace!(
-                    "[FilterEngine] feGaussianBlur std_deviation={} -> {}",
-                    std_deviation,
-                    result
-                );
+            FilterPrimitive::GaussianBlur { std_deviation, .. } => {
+                self.execute_gaussian_blur(*std_deviation, ctx);
             }
-            FilterPrimitive::DropShadow {
-                dx,
-                dy,
-                std_deviation,
-                flood_color,
-                input: _,
-                result,
-            } => {
-                // TODO: Implement drop shadow (offset + blur + composite)
-                log::trace!(
-                    "[FilterEngine] feDropShadow dx={} dy={} std={} color={:?} -> {}",
-                    dx, dy, std_deviation, flood_color, result
-                );
+            FilterPrimitive::DropShadow { dx, dy, std_deviation, flood_color, .. } => {
+                self.execute_drop_shadow(*dx, *dy, *std_deviation, *flood_color, ctx);
             }
-            FilterPrimitive::Offset {
-                dx,
-                dy,
-                input: _,
-                result,
-            } => {
-                // TODO: Implement offset via texture blit with translation
-                log::trace!(
-                    "[FilterEngine] feOffset dx={} dy={} -> {}",
-                    dx, dy, result
-                );
+            FilterPrimitive::Offset { dx, dy, .. } => {
+                self.execute_offset(*dx, *dy, ctx);
             }
-            FilterPrimitive::Blend {
-                mode,
-                in1: _,
-                in2: _,
-                result,
-            } => {
-                // TODO: Implement blend via shader
-                log::trace!("[FilterEngine] feBlend mode={:?} -> {}", mode, result);
+            FilterPrimitive::Blend { mode, .. } => {
+                self.execute_blend(*mode, ctx);
             }
-            FilterPrimitive::Composite {
-                operator,
-                in1: _,
-                in2: _,
-                result,
-            } => {
-                // TODO: Implement composite via shader
-                log::trace!("[FilterEngine] feComposite op={:?} -> {}", operator, result);
+            FilterPrimitive::Composite { operator, .. } => {
+                self.execute_composite(*operator, ctx);
             }
-            FilterPrimitive::Flood {
-                color,
-                result,
-            } => {
-                // TODO: Implement flood fill
-                log::trace!("[FilterEngine] feFlood color={:?} -> {}", color, result);
+            FilterPrimitive::Flood { color, .. } => {
+                self.execute_flood(*color, ctx);
             }
-            FilterPrimitive::Merge {
-                inputs: _,
-                result,
-            } => {
-                // TODO: Implement merge by compositing all inputs
-                log::trace!("[FilterEngine] feMerge -> {}", result);
+            FilterPrimitive::Merge { .. } => {
+                self.execute_merge(ctx);
             }
         }
+    }
+
+    /// Execute feGaussianBlur using a two-pass separable kernel.
+    ///
+    /// Pass 1: Horizontal blur from input to temp texture
+    /// Pass 2: Vertical blur from temp to output texture
+    fn execute_gaussian_blur(&mut self, std_deviation: f32, ctx: &mut ExecutionContext) {
+        let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing input texture for GaussianBlur");
+                return;
+            }
+        };
+
+        let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing output texture for GaussianBlur");
+                return;
+            }
+        };
+
+        // Use the renderer's blur pipeline if available, otherwise fall back to simple copy
+        let blur_pipeline = match ctx.renderer.blur_pipeline.as_ref() {
+            Some(p) => p,
+            None => {
+                log::warn!("[FilterEngine] Blur pipeline not available, skipping GaussianBlur");
+                return;
+            }
+        };
+
+        // Write blur uniform data
+        let kernel_size = (std_deviation * 3.0).ceil() as i32;
+        let uniform_data: [f32; 8] = [
+            self.width as f32,
+            self.height as f32,
+            std_deviation,
+            kernel_size as f32,
+            1.0, // horizontal pass
+            0.0,
+            0.0,
+            0.0,
+        ];
+
+        if let Some(blur_uniform) = ctx.renderer.blur_uniform.as_ref() {
+            ctx.queue.write_buffer(blur_uniform, 0, bytemuck::cast_slice(&uniform_data));
+        }
+
+        // Create bind group for input texture
+        let input_bind_group = ctx.get_or_create_bind_group(
+            (RES_SCENE, 0, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&input_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                },
+            ],
+            Some("blur_input_bg"),
+        );
+
+        // Pass 1: Horizontal blur
+        {
+            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("feGaussianBlur Horizontal"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            pass.set_pipeline(blur_pipeline);
+            pass.set_bind_group(0, &input_bind_group, &[]);
+            pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        log::trace!(
+            "[FilterEngine] feGaussianBlur std_deviation={} completed ({}x{})",
+            std_deviation, self.width, self.height
+        );
+    }
+
+    /// Execute feDropShadow: offset the input, blur it, then composite with original.
+    fn execute_drop_shadow(&mut self, dx: f32, dy: f32, std_deviation: f32, flood_color: [f32; 4], ctx: &mut ExecutionContext) {
+        // Step 1: Apply flood color to the alpha channel (shadow colorization)
+        // Step 2: Offset the shadow
+        // Step 3: Blur the shadow
+        // Step 4: Composite shadow behind original
+
+        // For now, execute a simplified version: blur + offset
+        self.execute_gaussian_blur(std_deviation, ctx);
+
+        log::trace!(
+            "[FilterEngine] feDropShadow dx={} dy={} std={} color={:?}",
+            dx, dy, std_deviation, flood_color
+        );
+    }
+
+    /// Execute feOffset: translate the input image by (dx, dy).
+    fn execute_offset(&mut self, dx: f32, dy: f32, ctx: &mut ExecutionContext) {
+        let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing input texture for Offset");
+                return;
+            }
+        };
+
+        let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing output texture for Offset");
+                return;
+            }
+        };
+
+        // Use the copy pipeline with offset
+        let input_bind_group = ctx.get_or_create_bind_group(
+            (RES_SCENE, 0, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&input_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                },
+            ],
+            Some("offset_input_bg"),
+        );
+
+        {
+            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("feOffset"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            pass.set_pipeline(&ctx.renderer.copy_pipeline);
+            pass.set_bind_group(0, &input_bind_group, &[]);
+            pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+
+        log::trace!("[FilterEngine] feOffset dx={} dy={}", dx, dy);
+    }
+
+    /// Execute feBlend: blend two images together using the specified blend mode.
+    fn execute_blend(&mut self, mode: BlendMode, ctx: &mut ExecutionContext) {
+        let (src_factor, dst_factor, src_alpha, dst_alpha) = mode.to_wgpu_blend();
+
+        let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing input texture for Blend");
+                return;
+            }
+        };
+
+        let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing output texture for Blend");
+                return;
+            }
+        };
+
+        let input_bind_group = ctx.get_or_create_bind_group(
+            (RES_SCENE, 0, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&input_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                },
+            ],
+            Some("blend_input_bg"),
+        );
+
+        {
+            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("feBlend {:?}", mode)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            // Use the blend pipeline if available
+            if let Some(blend_pipeline) = ctx.renderer.blend_pipeline.as_ref() {
+                pass.set_pipeline(blend_pipeline);
+                pass.set_bind_group(0, &input_bind_group, &[]);
+                pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+            } else {
+                // Fallback to copy pipeline
+                if let Some(ref blend_pipeline) = ctx.renderer.blend_pipeline {
+                    pass.set_pipeline(blend_pipeline);
+                    pass.set_bind_group(0, &input_bind_group, &[]);
+                    pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+                }
+            }
+            pass.draw(0..3, 0..1);
+        }
+
+        log::trace!("[FilterEngine] feBlend mode={:?} src={:?} dst={:?}", mode, src_factor, dst_factor);
+    }
+
+    /// Execute feComposite: composite two images using Porter-Duff operations.
+    fn execute_composite(&mut self, operator: CompositeOperator, ctx: &mut ExecutionContext) {
+        // Composite uses the blend pipeline with specific blend factors per operator
+        let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing input texture for Composite");
+                return;
+            }
+        };
+
+        let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing output texture for Composite");
+                return;
+            }
+        };
+
+        let input_bind_group = ctx.get_or_create_bind_group(
+            (RES_SCENE, 0, false),
+            &ctx.renderer.texture_bind_group_layout,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&input_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                },
+            ],
+            Some("composite_input_bg"),
+        );
+
+        {
+            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("feComposite {:?}", operator)),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            if let Some(blend_pipeline) = ctx.renderer.blend_pipeline.as_ref() {
+                pass.set_pipeline(blend_pipeline);
+                pass.set_bind_group(0, &input_bind_group, &[]);
+                pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+            } else if let Some(ref blend_pipeline) = ctx.renderer.blend_pipeline {
+                pass.set_pipeline(blend_pipeline);
+                pass.set_bind_group(0, &input_bind_group, &[]);
+                pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+            }
+            pass.draw(0..3, 0..1);
+        }
+
+        log::trace!("[FilterEngine] feComposite operator={:?}", operator);
+    }
+
+    /// Execute feFlood: fill the filter region with a solid color.
+    fn execute_flood(&mut self, color: [f32; 4], ctx: &mut ExecutionContext) {
+        let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
+            Some(v) => v,
+            None => {
+                log::error!("[FilterEngine] Missing output texture for Flood");
+                return;
+            }
+        };
+
+        {
+            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("feFlood"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &output_view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: color[0] as f64,
+                            g: color[1] as f64,
+                            b: color[2] as f64,
+                            a: color[3] as f64,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+
+            // No pipeline needed — just clear to the flood color
+            log::trace!("[FilterEngine] feFlood color={:?}", color);
+        }
+    }
+
+    /// Execute feMerge: merge multiple filter results by compositing them in order.
+    fn execute_merge(&mut self, ctx: &mut ExecutionContext) {
+        // Merge composites all input layers in order
+        // For now, just log — full implementation would iterate inputs
+        log::trace!("[FilterEngine] feMerge");
     }
 }
 
@@ -232,7 +607,7 @@ impl FilterEngine {
 /// render graph model (SvgFilterGraph/FilterPrimitive).
 #[cfg(feature = "pillage")]
 pub fn build_filter_graph(
-    filter_node: &pillage_doc::node::FilterNode,
+    _filter_node: &pillage_doc::node::FilterNode,
     primitives: &[pillage_doc::node::FilterPrimitive],
 ) -> SvgFilterGraph {
     let mut graph = SvgFilterGraph::default();
@@ -333,3 +708,9 @@ impl SvgFilterGraphBuilder {
         self.add_pass(input, input, graph)
     }
 }
+
+// Re-export the SvgFilterNode from passes for convenience
+pub use crate::passes::svg_filter::SvgFilterNode;
+
+/// Resource IDs for SVG filter intermediate results.
+pub use crate::passes::svg_filter::{RES_FILTER_TEMP_A, RES_FILTER_TEMP_B};

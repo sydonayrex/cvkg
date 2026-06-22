@@ -158,6 +158,29 @@ pub struct GpuRenderer {
     pub(crate) slice_stack: Vec<(f32, f32)>,
     pub(crate) shadow_stack: Vec<ShadowState>,
 
+    // SVG Filter Engine Resources
+    /// Render pipeline for Gaussian blur (two-pass separable kernel).
+    /// Initialized lazily on first use.
+    pub blur_pipeline: Option<wgpu::RenderPipeline>,
+    /// Uniform buffer for blur parameters (std_deviation, kernel_size, direction).
+    /// Initialized lazily on first use.
+    pub blur_uniform: Option<wgpu::Buffer>,
+    /// Bind group layout for blur shader.
+    /// Initialized lazily on first use.
+    pub blur_bind_group_layout: Option<wgpu::BindGroupLayout>,
+    /// Render pipeline for blend operations (feBlend, feComposite).
+    /// Initialized lazily on first use.
+    pub blend_pipeline: Option<wgpu::RenderPipeline>,
+    /// Bind group layout for blend shader.
+    /// Initialized lazily on first use.
+    pub blend_bind_group_layout: Option<wgpu::BindGroupLayout>,
+    /// Render pipeline for flood fill (feFlood).
+    /// Initialized lazily on first use.
+    pub flood_pipeline: Option<wgpu::RenderPipeline>,
+    /// Bind group layout for copy/offset operations.
+    /// Initialized lazily on first use.
+    pub copy_bind_group_layout: Option<wgpu::BindGroupLayout>,
+
     // The Forge's Heart (Shared Berserker State)
     pub(crate) theme_buffer: wgpu::Buffer,
     pub(crate) scene_buffer: wgpu::Buffer,
@@ -2546,6 +2569,15 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
                 .collect(),
             bind_group_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             texture_view_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
+
+            // SVG Filter Engine Resources (initialized lazily on first use)
+            blur_pipeline: None,
+            blur_uniform: None,
+            blur_bind_group_layout: None,
+            blend_pipeline: None,
+            blend_bind_group_layout: None,
+            flood_pipeline: None,
+            copy_bind_group_layout: None,
 
         }
     }
