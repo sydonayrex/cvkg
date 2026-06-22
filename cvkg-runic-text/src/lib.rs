@@ -54,7 +54,6 @@ pub use engine::{TextEngine, CacheKey};
 
 /// Shared test engine that loads only bundled fonts (no system fonts).
 /// Uses Arc for thread-safe sharing across parallel tests.
-#[allow(dead_code)]
 static TEST_ENGINE: std::sync::OnceLock<Arc<TextEngine>> = std::sync::OnceLock::new();
 
 /// Get or create the shared test engine.
