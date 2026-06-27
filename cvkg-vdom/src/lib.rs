@@ -560,6 +560,12 @@ impl VDom {
         target: NodeId,
         event: cvkg_core::Event,
     ) -> cvkg_core::EventResponse {
+        if matches!(event, cvkg_core::Event::PointerUp { .. } | cvkg_core::Event::PointerClick { .. })
+            && let Ok(mut capture) = self.captured_node.lock()
+        {
+            *capture = None;
+        }
+
         if self.nodes.contains_key(&target) {
             self.bubble_event_response(target, event)
         } else {

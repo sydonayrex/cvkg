@@ -306,7 +306,6 @@ impl VDom {
                 let use_capture = matches!(
                     event,
                     cvkg_core::Event::PointerUp { .. }
-                        | cvkg_core::Event::PointerClick { .. }
                         | cvkg_core::Event::DragMove { .. }
                         | cvkg_core::Event::DragEnd { .. }
                 ) && captured_target.is_some();
@@ -329,7 +328,7 @@ impl VDom {
                     if let Ok(mut focus) = self.focused_node.lock() { *focus = id; }
                     if let Ok(mut capture) = self.captured_node.lock() { *capture = id; }
                 }
-                if let cvkg_core::Event::PointerUp { .. } = event
+                if matches!(event, cvkg_core::Event::PointerUp { .. } | cvkg_core::Event::PointerClick { .. })
                     && let Ok(mut capture) = self.captured_node.lock()
                 { *capture = None; }
                 id

@@ -1,4 +1,4 @@
-use cvkg::components::{Badge, BadgeVariant, BifrostTabs, ButtonVariant, Toggle};
+use cvkg::components::{Badge, BadgeVariant, BifrostTabs, ButtonVariant, SpinnerVariant, Toggle};
 use cvkg::prelude::AnyView;
 use cvkg::prelude::*;
 use cvkg::core::{Event, Renderer, View};
@@ -36,11 +36,11 @@ fn catalog() -> Vec<GalleryEntry> {
                         .child(Checkbox::new(state.checkbox_1, move |val| {
                             let mut s = arc1.lock().unwrap();
                             s.checkbox_1 = val;
-                        }).label("Enable Berserk Mode"))
+                        }).label("Enable Berserk Mode").frame(Some(220.0), Some(30.0)))
                         .child(Checkbox::new(state.checkbox_2, move |val| {
                             let mut s = arc2.lock().unwrap();
                             s.checkbox_2 = val;
-                        }).label("Auto-charge Rage")),
+                        }).label("Auto-charge Rage").frame(Some(220.0), Some(30.0))),
                 )
             },
         },
@@ -192,12 +192,16 @@ fn catalog() -> Vec<GalleryEntry> {
         GalleryEntry {
             name: "Tabs",
             category: "Navigation",
-            render: |_state, _state_arc| {
+            render: |state, state_arc| {
+                let arc_clone = state_arc.clone();
                 AnyView::new(
                     BifrostTabs::new(
                         vec!["Shield".to_string(), "Rage".to_string(), "Runes".to_string()],
-                        0,
-                        |_| {},
+                        state.tab_index,
+                        move |idx| {
+                            let mut s = arc_clone.lock().unwrap();
+                            s.tab_index = idx;
+                        },
                     ),
                 )
             },
@@ -219,28 +223,38 @@ fn catalog() -> Vec<GalleryEntry> {
         GalleryEntry {
             name: "Progress",
             category: "Data Display",
-            render: |_state, _state_arc| {
+            render: |state, _state_arc| {
+                // Animate progress 0→1 cycling every 3 seconds using wall-clock time.
+                let t = state.start_time.elapsed().as_secs_f32();
+                let progress = (t % 3.0) / 3.0;
+                let pct = (progress * 100.0) as u32;
                 AnyView::new(
                     VStack::new(8.0)
                         .child(
-                            Text::new("Progress: 70%")
+                            Text::new(format!("Progress: {}%", pct))
                                 .font_size(14.0)
                                 .color([0.7, 0.7, 0.7, 1.0]),
                         )
-                        .child(Progress::new(0.7)),
+                        .child(Progress::new(progress)),
                 )
             },
         },
         GalleryEntry {
             name: "Spinner",
             category: "Data Display",
-            render: |_state, _state_arc| {
+            render: |state, _state_arc| {
+                // Compute rotation from wall-clock time; the Spinner render
+                // also reads elapsed_time() internally for its arc offset.
+                let _t = state.start_time.elapsed().as_secs_f32();
+                // Use Ring variant at larger size so the spin animation is clearly visible
                 AnyView::new(
-                    HStack::new(8.0).child(Spinner::new()).child(
-                        Text::new("Loading...")
-                            .font_size(14.0)
-                            .color([0.7, 0.7, 0.7, 1.0]),
-                    ),
+                    HStack::new(8.0)
+                        .child(Spinner::new().variant(SpinnerVariant::Ouroboros).size(48.0))
+                        .child(
+                            Text::new("Loading...")
+                                .font_size(14.0)
+                                .color([0.7, 0.7, 0.7, 1.0]),
+                        ),
                 )
             },
         },
@@ -366,6 +380,9 @@ struct GalleryState {
     checkbox_2: bool,
     slider_value: f32,
     input_text: String,
+    /// Wall-clock start time so render closures can compute elapsed seconds.
+    start_time: std::time::Instant,
+    tab_index: usize,
 }
 
 impl GalleryState {
@@ -379,6 +396,8 @@ impl GalleryState {
             checkbox_2: true,
             slider_value: 0.5,
             input_text: "Placeholder text".to_string(),
+            start_time: std::time::Instant::now(),
+            tab_index: 0,
         }
     }
 }
@@ -436,77 +455,176 @@ impl View for GalleryApp {
             height: carousel_height,
         };
 
+        // Pre-calculate active card's rect for occlusion clipping
+        let active_scale = 1.0; // cos_a = 1.0 for selected
+        let active_w = 190.0 * active_scale;
+        let active_h = 110.0 * active_scale;
+        let center_x = carousel_rect.x + carousel_rect.width / 2.0;
+        let center_y = carousel_rect.y + carousel_rect.height / 2.0;
+        let _active_rect = Rect {
+            x: center_x - active_w / 2.0,
+            y: center_y - active_h / 2.0,
+            width: active_w,
+            height: active_h,
+        };
+
+        // We use Z-index layering to ensure cards drawn later (closer to camera)
+        // correctly occlude the text of cards drawn earlier.
         for i in draw_order {
             let mut diff = (i as i32 - selected as i32) as f32;
             while diff > half { diff -= num_entries as f32; }
             while diff < -half { diff += num_entries as f32; }
 
+            let calculate_card_rect = |d: f32| -> Rect {
+                let angle = d * 0.42;
+                let cos_a = angle.cos();
+                let sin_a = angle.sin();
+                let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
+                let card_w = 190.0 * scale * cos_a;
+                let card_h = 110.0 * scale;
+                let center_x = carousel_rect.x + carousel_rect.width / 2.0;
+                let center_y = carousel_rect.y + carousel_rect.height / 2.0;
+                Rect {
+                    x: center_x + 360.0 * sin_a * scale - card_w / 2.0,
+                    y: center_y + 12.0 * (1.0 - cos_a) * scale - card_h / 2.0,
+                    width: card_w,
+                    height: card_h,
+                }
+            };
+
             // Math for cylindrical projection
             let angle = diff * 0.42; // angle spacing
             let cos_a = angle.cos();
-            let sin_a = angle.sin();
-            
-            // Perspective depth factor
             let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
+            let card_rect = calculate_card_rect(diff);
 
-            // Card size and 2.5D position
-            let card_w = 190.0 * scale * cos_a; // foreshortened horizontally by rotation angle
-            let card_h = 110.0 * scale;
-            let center_x = carousel_rect.x + carousel_rect.width / 2.0;
-            let center_y = carousel_rect.y + carousel_rect.height / 2.0;
-            
-            let card_x = center_x + 360.0 * sin_a * scale - card_w / 2.0;
-            let card_y = center_y + 12.0 * (1.0 - cos_a) * scale - card_h / 2.0;
+            // Assign Z-index based on depth (closest card = Z 0.0, furthest = higher Z)
+            let z_index = diff.abs() * 10.0;
+            renderer.set_z_index(z_index);
 
-            let card_rect = Rect {
-                x: card_x,
-                y: card_y,
-                width: card_w,
-                height: card_h,
-            };
-
-            // Render Card
+            // Render Card — reflective ceramic black / dull dark metal
             let is_selected = i == selected;
-            let border_color = if is_selected {
-                [1.0, 0.1, 0.15, 1.0] // Neon Crimson Red for active
+
+            // Base: near-black ceramic. Active card is just barely warmer.
+            let bg_color = if is_selected {
+                [0.06, 0.055, 0.06, 1.0] // very dark ceramic — active
             } else {
-                [0.45, 0.15, 0.18, 0.55] // Muted red-brown for sides
+                [0.02, 0.018, 0.02, 1.0] // near pure black — inactive
             };
 
-            let bg_color = if is_selected {
-                [0.08, 0.08, 0.12, 0.95] // Solid flat dark active surface
+            // Border: active gets a warm amber rim; inactive nearly disappears into black
+            let border_color = if is_selected {
+                [0.65, 0.58, 0.42, 1.0] // warm forged-steel rim on active
             } else {
-                [0.04, 0.04, 0.06, 0.85] // Muted transparent side surface
+                [0.14, 0.13, 0.12, 1.0] // near-black, barely visible
             };
 
             renderer.push_vnode(card_rect, "CarouselCard");
-            renderer.fill_rounded_rect(card_rect, 6.0, bg_color);
-            renderer.stroke_rounded_rect(card_rect, 6.0, border_color, if is_selected { 2.0 } else { 1.0 });
 
-            // Text scaling
-            let text_color = if is_selected {
-                [1.0, 1.0, 1.0, 1.0]
+            // 1. Solid near-black ceramic base
+            renderer.fill_rounded_rect(card_rect, 6.0, bg_color);
+
+            // 2. Top-edge bevel: the only visible "reflection" on ceramic black
+            let bevel_h = if is_selected { 2.0 } else { 1.0 };
+            let bevel_top = Rect {
+                x: card_rect.x + 6.0,
+                y: card_rect.y + 1.0,
+                width: card_rect.width - 12.0,
+                height: bevel_h,
+            };
+            let bevel_alpha = if is_selected { 0.65 } else { 0.22 };
+            renderer.fill_rounded_rect(bevel_top, 1.0, [0.80, 0.72, 0.55, bevel_alpha]);
+
+            // 3. Left-edge secondary catch-light
+            let left_bevel = Rect {
+                x: card_rect.x + 1.0,
+                y: card_rect.y + 6.0,
+                width: 1.2,
+                height: card_rect.height - 12.0,
+            };
+            renderer.fill_rounded_rect(left_bevel, 1.0, [0.60, 0.52, 0.38, bevel_alpha * 0.45]);
+
+            // 4. Bottom anvil shadow
+            let shadow_bottom = Rect {
+                x: card_rect.x + 6.0,
+                y: card_rect.y + card_rect.height - 2.0,
+                width: card_rect.width - 12.0,
+                height: 2.0,
+            };
+            renderer.fill_rounded_rect(shadow_bottom, 1.0, [0.0, 0.0, 0.0, 0.95]);
+
+            // 5. Border rim
+            renderer.stroke_rounded_rect(card_rect, 6.0, border_color, if is_selected { 1.5 } else { 0.8 });
+
+            // Text: now safely drawn inside the loop.
+            // Since CVKG batches text at the end of the frame, Z-index is ignored for text depth.
+            // To prevent side cards' text from bleeding through the active card, we must
+            // explicitly clip it to the visible region outside the active card.
+            let abs_diff = diff.abs();
+            let text_alpha = if is_selected {
+                1.0
+            } else if abs_diff <= 1.05 {
+                0.55
+            } else if abs_diff <= 2.05 {
+                0.25
             } else {
-                [0.65, 0.5, 0.52, 0.6]
+                0.0 // too far back
             };
 
-            // Category text (tiny)
+            let text_color = if is_selected {
+                [0.0, 1.0, 0.95, text_alpha] // neon cyan
+            } else {
+                [0.75, 0.70, 0.62, text_alpha] // warm off-white, faded by depth
+            };
+
+            if !is_selected {
+                let covering_diff = if diff < 0.0 { diff + 1.0 } else { diff - 1.0 };
+                let covering_rect = calculate_card_rect(covering_diff);
+
+                let clip_rect = if diff < 0.0 {
+                    // Card is on the left, clip right side where it overlaps its right neighbor
+                    Rect {
+                        x: card_rect.x,
+                        y: card_rect.y,
+                        width: (covering_rect.x - card_rect.x).max(0.0),
+                        height: card_rect.height,
+                    }
+                } else {
+                    // Card is on the right, clip left side where it overlaps its left neighbor
+                    let start_x = covering_rect.x + covering_rect.width;
+                    Rect {
+                        x: start_x,
+                        y: card_rect.y,
+                        width: ((card_rect.x + card_rect.width) - start_x).max(0.0),
+                        height: card_rect.height,
+                    }
+                };
+                renderer.push_clip_rect(clip_rect);
+            }
+
+            let cat_font_size = 9.0 * scale;
+            let (cat_w, _) = renderer.measure_text(entries[i].category, cat_font_size);
             renderer.draw_text(
                 entries[i].category,
-                card_rect.x + 12.0 * scale,
+                card_rect.x + (card_rect.width - cat_w) / 2.0,
                 card_rect.y + 16.0 * scale,
-                9.0 * scale,
+                cat_font_size,
                 text_color,
             );
 
-            // Component name text
+            let name_font_size = 15.0 * scale * cos_a.max(0.6);
+            let (name_w, _) = renderer.measure_text(entries[i].name, name_font_size);
             renderer.draw_text(
                 entries[i].name,
-                card_rect.x + 12.0 * scale,
+                card_rect.x + (card_rect.width - name_w) / 2.0,
                 card_rect.y + 35.0 * scale,
-                15.0 * scale * cos_a.max(0.6),
+                name_font_size,
                 text_color,
             );
+
+            if !is_selected {
+                renderer.pop_clip_rect();
+            }
 
             // Register card select click handler
             let state_arc_clone = self.state.clone();
@@ -520,6 +638,9 @@ impl View for GalleryApp {
 
             renderer.pop_vnode();
         }
+        
+        // Reset Z-index to default for the rest of the UI
+        renderer.set_z_index(0.0);
 
         // Register scroll-wheel handler for carousel cycling
         let wheel_state = self.state.clone();
@@ -554,7 +675,7 @@ impl View for GalleryApp {
         // 4. Draw Selected Component Title & View
         let title_y = div_y + 15.0;
         renderer.draw_text(
-            format!("BERZERKER PREVIEW // {}", entries[selected].name.to_uppercase()).as_str(),
+            format!("GALLERY / {}", entries[selected].name.to_uppercase()).as_str(),
             rect.x + 40.0,
             title_y,
             12.0,
@@ -571,6 +692,8 @@ impl View for GalleryApp {
         };
 
         let centered_detail = VStack::new(0.0)
+            .distribution(cvkg::core::Distribution::Center)
+            .alignment(cvkg::core::Alignment::Center)
             .child(detail)
             .flex(1.0)
             .frame(None, None);

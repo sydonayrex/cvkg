@@ -101,7 +101,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
             log::info!("[Native] App instance (resumed): {:p}", self);
 
             let config = WindowConfig {
-                title: "CVKG Berserker".to_string(),
+                title: "CVKG Gallery".to_string(),
                 size: (1280.0, 720.0),
                 min_size: None,
                 max_size: None,
@@ -144,7 +144,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 ("View", 13.0),
                 ("Window", 13.0),
                 ("Help", 13.0),
-                ("Berserker", 14.0),
+                ("Gallery", 14.0),
                 ("Rage", 12.0),
                 ("FPS", 12.0),
                 ("Frame", 12.0),

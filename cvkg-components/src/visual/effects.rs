@@ -228,39 +228,72 @@ impl<V: View> View for RunicTooltip<V> {
         unreachable!()
     }
 
+    fn layout(&self) -> Option<&dyn cvkg_core::LayoutView> {
+        Some(self)
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+        self.content.intrinsic_size(renderer, proposal)
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "RunicTooltip");
 
         // 1. Render Base Content
         self.content.render(renderer, rect);
 
-        // 2. Render Tooltip if visible
+        // 2. Render Tooltip if visible — rendered below the content so it
+        //    stays within the gallery preview rect and is never clipped.
         if self.is_visible {
-            let (tw, th) = renderer.measure_text(&self.text, 12.0);
+            let font_size = 12.0;
+            let (tw, _th) = renderer.measure_text(&self.text, font_size);
+            let tip_h = font_size + 10.0; // reliable fixed height — measure_text height is unreliable
             let tip_rect = Rect {
                 x: rect.x + (rect.width - (tw + 16.0)) / 2.0,
-                y: rect.y - th - 16.0,
+                // Place below the "Hover target" label, inside the preview rect
+                y: rect.y + 26.0,
                 width: tw + 16.0,
-                height: th + 8.0,
+                height: tip_h,
             };
 
             renderer.set_z_index(200.0);
-            if crate::theme::glassmorphism_enabled() {
-                renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
-            }
-            renderer.fill_rounded_rect(tip_rect, RADIUS_SM, theme::surface_high_contrast());
-            renderer.stroke_rect(tip_rect, theme::with_alpha(theme::accent(), 0.6), 1.0);
+            // Solid dark background
+            renderer.fill_rounded_rect(tip_rect, RADIUS_SM, [0.10, 0.05, 0.15, 0.97]);
+            renderer.stroke_rounded_rect(tip_rect, RADIUS_SM, [0.70, 0.50, 0.90, 0.70], 1.0);
 
+            // Vertically center text using font_size, not th (th is unreliable)
             renderer.draw_text(
                 &self.text,
                 tip_rect.x + 8.0,
-                tip_rect.y + 6.0,
-                12.0,
-                [1.0, 1.0, 1.0, 1.0], // white text on purple bg
+                tip_rect.y + (tip_h - font_size) / 2.0,
+                font_size,
+                [1.0, 1.0, 1.0, 1.0],
             );
             renderer.set_z_index(0.0);
         }
 
         renderer.pop_vnode();
     }
+}
+
+impl<V: View> cvkg_core::LayoutView for RunicTooltip<V> {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::SizeProposal,
+        _subviews: &[&dyn cvkg_core::LayoutView],
+        cache: &mut cvkg_core::LayoutCache,
+    ) -> cvkg_core::Size {
+        if let Some(layout) = self.content.layout() {
+            layout.size_that_fits(proposal, &[], cache)
+        } else {
+            cvkg_core::Size { width: 0.0, height: 0.0 }
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: cvkg_core::Rect,
+        _subviews: &mut [&mut dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) {}
 }

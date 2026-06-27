@@ -143,10 +143,22 @@ impl View for Checkbox {
 
         let is_checked = matches!(self.state, CheckboxState::Checked);
         let on_change = self.on_change.clone();
+        let lbl = self.label.clone();
+
+        let rect_clone = rect;
         renderer.register_handler(
             "pointerclick",
-            std::sync::Arc::new(move |_| {
-                (on_change)(!is_checked);
+            std::sync::Arc::new(move |evt| {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = evt {
+                    if x >= rect_clone.x
+                        && x <= rect_clone.x + rect_clone.width
+                        && y >= rect_clone.y
+                        && y <= rect_clone.y + rect_clone.height
+                    {
+                        println!("Checkbox clicked: {:?}", lbl);
+                        (on_change)(!is_checked);
+                    }
+                }
             }),
         );
 
@@ -287,7 +299,7 @@ impl<V: View> View for Tabs<V> {
                 tab_rect.y + (tab_rect.height - 14.0) / 2.0,
                 14.0,
                 if is_selected {
-                    theme::text()
+                    [1.0, 1.0, 0.0, 1.0]
                 } else {
                     theme::text_muted()
                 },

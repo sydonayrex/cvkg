@@ -230,7 +230,7 @@ impl<V: View> ViewShadowExt for V {}
 mod tests {
     use super::*;
     use crate::testing::MockRenderer;
-    use crate::{Color, Rect, Renderer, View};
+    use crate::{Color, Never, Rect, Renderer, View};
 
     struct TestView;
 

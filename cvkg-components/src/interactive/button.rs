@@ -64,26 +64,26 @@ impl Button {
     /// Compute the background color based on variant and state.
     fn bg_color(&self, is_pressed: bool, is_hovered: bool) -> [f32; 4] {
         if self.disabled || self.loading {
-            return theme::disabled();
+            return [0.05, 0.045, 0.05, 1.0]; // near-black ceramic — disabled base
         }
         match self.variant {
             ButtonVariant::Default => {
                 if is_pressed {
-                    theme::active_color()
+                    [0.20, 0.17, 0.13, 1.0] // heated iron — pressed
                 } else if is_hovered {
-                    theme::hover()
+                    [0.14, 0.12, 0.10, 1.0] // warm iron — hovered
                 } else {
-                    theme::button_secondary_bg()
+                    [0.08, 0.07, 0.06, 1.0] // cold dark iron — resting
                 }
             }
             ButtonVariant::Destructive => theme::error_color(),
             ButtonVariant::Secondary => {
                 if is_pressed {
-                    theme::active_color()
+                    [0.20, 0.17, 0.13, 1.0]
                 } else if is_hovered {
-                    theme::hover()
+                    [0.14, 0.12, 0.10, 1.0]
                 } else {
-                    theme::button_secondary_bg()
+                    [0.07, 0.06, 0.06, 1.0] // slightly cooler iron
                 }
             }
             ButtonVariant::Ghost => {
@@ -151,11 +151,11 @@ impl Button {
         match self.variant {
             ButtonVariant::Default => {
                 if is_pressed {
-                    (theme::accent(), 3.0)
+                    ([0.80, 0.72, 0.55, 1.0], 2.0) // brighter steel under press
                 } else if is_hovered {
-                    (theme::accent_hover(), 2.0)
+                    ([0.68, 0.60, 0.46, 1.0], 1.5)
                 } else {
-                    (theme::accent(), 1.5)
+                    ([0.45, 0.40, 0.32, 1.0], 1.0) // warm iron rim
                 }
             }
             ButtonVariant::Destructive => {
@@ -219,11 +219,11 @@ impl Button {
     /// Compute the text color based on variant and state.
     fn text_color(&self, is_hovered: bool) -> [f32; 4] {
         if self.disabled {
-            return theme::disabled_text();
+            return [1.0, 0.0, 0.85, 1.0]; // neon magenta — clear "disabled" signal
         }
         match self.variant {
-            ButtonVariant::Default | ButtonVariant::Destructive => theme::text(),
-            ButtonVariant::Secondary => theme::text(),
+            ButtonVariant::Default | ButtonVariant::Destructive => [0.0, 1.0, 0.95, 1.0], // neon cyan on dark iron
+            ButtonVariant::Secondary => [0.0, 0.90, 0.88, 0.90], // slightly dimmer cyan
             ButtonVariant::Ghost => {
                 if is_hovered {
                     theme::text()
@@ -484,6 +484,29 @@ impl View for Button {
             renderer.stroke_rounded_rect(final_rect, corner_radius, border_color, border_width);
         } else if border_width > 0.0 {
             renderer.stroke_rect(final_rect, border_color, border_width);
+        }
+
+        // Forged-iron bevel: 1px top-edge catch-light + 1px bottom-edge anvil shadow.
+        // Only on solid variants (not Ghost/Link which are transparent).
+        if matches!(self.variant, ButtonVariant::Default | ButtonVariant::Secondary | ButtonVariant::Destructive) {
+            // Top bevel highlight
+            renderer.draw_line(
+                final_rect.x + corner_radius,
+                final_rect.y + 1.0,
+                final_rect.x + final_rect.width - corner_radius,
+                final_rect.y + 1.0,
+                [0.80, 0.72, 0.55, if self.disabled { 0.10 } else { 0.45 }],
+                1.0,
+            );
+            // Bottom anvil shadow
+            renderer.draw_line(
+                final_rect.x + corner_radius,
+                final_rect.y + final_rect.height - 1.5,
+                final_rect.x + final_rect.width - corner_radius,
+                final_rect.y + final_rect.height - 1.5,
+                [0.01, 0.01, 0.02, 0.60],
+                1.0,
+            );
         }
 
         // Focus ring -- WCAG 2.4.7
@@ -1005,20 +1028,7 @@ impl View for Slider {
             }),
         );
 
-        let on_move = self.on_change.clone();
-        renderer.register_handler(
-            "pointermove",
-            std::sync::Arc::new(move |event| {
-                if let Event::PointerMove { x, .. } = event {
-                    let relative_x = (x - track.x) / track.width;
-                    let mut val = val_min + relative_x.clamp(0.0, 1.0) * val_range;
-                    if let Some(s) = step {
-                        val = (val / s).round() * s;
-                    }
-                    (on_move)(val);
-                }
-            }),
-        );
+        // (pointermove handler removed so it doesn't automatically move on hover)
 
         // ── Keyboard interaction ──
         let on_key_change = self.on_change.clone();

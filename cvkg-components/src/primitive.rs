@@ -582,7 +582,7 @@ impl View for Badge {
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         );
-        let (tw, th) = if let Some(ref shaped) = shaped_opt {
+        let (tw, _th) = if let Some(ref shaped) = shaped_opt {
             let sf = renderer.text_scale_factor();
             (shaped.width / sf, shaped.height / sf)
         } else {
@@ -605,24 +605,27 @@ impl View for Badge {
             renderer.fill_ellipse(dot_rect, dot_color);
 
             let text_x = rect.x + self.size.h_padding() + dot_size + SPACE_XS;
-            let text_y = rect.y + (height - th) / 2.0;
+            let text_y = rect.y + (height - font_size) / 2.0;
             if let Some(shaped) = shaped_opt {
                 renderer.draw_shaped_text(&shaped, text_x, text_y);
             } else {
                 renderer.draw_text(&self.text, text_x, text_y, font_size, text_color);
             }
         } else {
+            // Use font_size (not th) for Y-centering — same pattern as Button.
+            // th from measure_text is unreliable; font_size is the actual rendered em-height.
+            let text_y = rect.y + (height - font_size) / 2.0;
             if let Some(shaped) = shaped_opt {
                 renderer.draw_shaped_text(
                     &shaped,
                     rect.x + (rect.width - tw) / 2.0,
-                    rect.y + (rect.height - th) / 2.0,
+                    text_y,
                 );
             } else {
                 renderer.draw_text(
                     &self.text,
                     rect.x + (rect.width - tw) / 2.0,
-                    rect.y + (rect.height - th) / 2.0,
+                    text_y,
                     font_size,
                     text_color,
                 );
