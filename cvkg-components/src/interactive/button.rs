@@ -109,24 +109,24 @@ impl Button {
                 let accent = theme::accent();
                 if is_pressed {
                     [
-                        accent[0] * 0.3 + 0.1,
-                        accent[1] * 0.3 + 0.1,
-                        accent[2] * 0.3 + 0.1,
-                        0.9,
+                        accent[0] * 0.4 + 0.12,
+                        accent[1] * 0.4 + 0.12,
+                        accent[2] * 0.4 + 0.12,
+                        0.99,
                     ]
                 } else if is_hovered {
                     [
-                        accent[0] * 0.2 + 0.08,
-                        accent[1] * 0.2 + 0.08,
-                        accent[2] * 0.2 + 0.08,
-                        0.85,
+                        accent[0] * 0.3 + 0.10,
+                        accent[1] * 0.3 + 0.10,
+                        accent[2] * 0.3 + 0.10,
+                        0.97,
                     ]
                 } else {
                     [
-                        accent[0] * 0.15 + 0.05,
-                        accent[1] * 0.15 + 0.05,
-                        accent[2] * 0.15 + 0.05,
-                        0.75,
+                        accent[0] * 0.22 + 0.08,
+                        accent[1] * 0.22 + 0.08,
+                        accent[2] * 0.22 + 0.08,
+                        0.95,
                     ]
                 }
             }

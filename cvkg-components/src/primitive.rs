@@ -103,7 +103,7 @@ impl View for Text {
         }
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
         let mut style = runic::TextStyle::new("SF Pro Text", self.font_size);
         if let FontWeight::Bold = self.font_weight {
             style = style.with_weight(700);
@@ -672,7 +672,7 @@ impl View for Badge {
 impl LayoutView for Badge {
     fn size_that_fits(
         &self,
-        proposal: SizeProposal,
+        _proposal: SizeProposal,
         _subviews: &[&dyn LayoutView],
         _cache: &mut LayoutCache,
     ) -> Size {

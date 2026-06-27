@@ -289,6 +289,13 @@ pub fn skeleton_highlight() -> [f32; 4] {
     surface_elevated()
 }
 
+/// High-contrast surface for components that must clearly stand out from
+/// the background (tabs, dropdowns, tooltips).
+#[inline]
+pub fn surface_high_contrast() -> [f32; 4] {
+    [0.45, 0.20, 0.55, 0.95] // Vibrant purple — clearly distinct from dark bg
+}
+
 /// Tab active background. Adaptive.
 #[inline]
 pub fn tab_active_bg() -> [f32; 4] {

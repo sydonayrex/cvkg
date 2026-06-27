@@ -277,7 +277,7 @@ impl<V: View> View for Tabs<V> {
                 height: tab_height,
             };
             let is_selected = idx == self.selected_index;
-            renderer.fill_rounded_rect(tab_rect, 6.0, theme::surface_elevated());
+            renderer.fill_rounded_rect(tab_rect, 6.0, if is_selected { theme::surface_high_contrast() } else { theme::tab_inactive_bg() });
             if is_selected {
                 renderer.stroke_rect(tab_rect, theme::accent(), 2.0);
             }

@@ -248,7 +248,7 @@ impl<V: View> View for RunicTooltip<V> {
             if crate::theme::glassmorphism_enabled() {
                 renderer.bifrost(tip_rect, 10.0, 1.2, 0.95);
             }
-            renderer.fill_rounded_rect(tip_rect, RADIUS_SM, theme::surface_overlay());
+            renderer.fill_rounded_rect(tip_rect, RADIUS_SM, theme::surface_high_contrast());
             renderer.stroke_rect(tip_rect, theme::with_alpha(theme::accent(), 0.6), 1.0);
 
             renderer.draw_text(
@@ -256,7 +256,7 @@ impl<V: View> View for RunicTooltip<V> {
                 tip_rect.x + 8.0,
                 tip_rect.y + 6.0,
                 12.0,
-                theme::text(),
+                [1.0, 1.0, 1.0, 1.0], // white text on purple bg
             );
             renderer.set_z_index(0.0);
         }

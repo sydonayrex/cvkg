@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{
-    DeriveInput, Expr, ExprParen, FnArg, ItemFn, ItemStruct, Pat, Token, braced, parse_macro_input,
+    DeriveInput, Expr, FnArg, ItemFn, ItemStruct, Pat, Token, braced, parse_macro_input,
 };
 
 /// State attribute macro -- derives common traits for state structs

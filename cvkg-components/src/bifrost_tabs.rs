@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 /// Liquid glass tabs with chromatic aberration.
 /// Section 4.7: "Tactile realm-switching navigation with fluid feedback."
+#[derive(Clone)]
 #[doc(alias = "Tabs")]
 pub struct BifrostTabs {
     pub options: Vec<String>,
@@ -88,11 +89,11 @@ impl View for BifrostTabs {
             height: rect.height - 8.0,
         };
 
-        renderer.gungnir(indicator_rect, [0.0, 0.8, 1.0, 0.6], 10.0, 0.8);
+        renderer.gungnir(indicator_rect, [0.6, 0.3, 0.8, 0.6], 10.0, 0.8);
         renderer.fill_rounded_rect(
             indicator_rect,
             RADIUS_MD,
-            theme::with_alpha(theme::primary(), 0.4),
+            theme::surface_high_contrast(),
         );
 
         // 3. Tab Labels

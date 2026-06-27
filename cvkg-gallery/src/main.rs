@@ -1,7 +1,7 @@
-use cvkg::components::{Badge, BadgeVariant, Toggle};
+use cvkg::components::{Badge, BadgeVariant, BifrostTabs, ButtonVariant, Toggle};
 use cvkg::prelude::AnyView;
 use cvkg::prelude::*;
-use cvkg::core::{Renderer, View};
+use cvkg::core::{Event, Renderer, View};
 
 // -- Component catalog ------------------------------------------------
 
@@ -109,9 +109,9 @@ fn catalog() -> Vec<GalleryEntry> {
             category: "Forms",
             render: |_state, _state_arc| {
                 AnyView::new(
-                    Text::new("Select (dropdown)")
-                        .font_size(14.0)
-                        .color([0.7, 0.7, 0.7, 1.0]),
+                    VStack::new(4.0)
+                        .child(Text::new("Select: Berserker").font_size(14.0).color([1.0, 1.0, 1.0, 1.0]))
+                        .child(Text::new("▼ Shieldmaiden · Runecaster · Valkyrie").font_size(11.0).color([0.8, 0.7, 0.9, 1.0])),
                 )
             },
         },
@@ -194,9 +194,11 @@ fn catalog() -> Vec<GalleryEntry> {
             category: "Navigation",
             render: |_state, _state_arc| {
                 AnyView::new(
-                    Text::new("Tabs component")
-                        .font_size(14.0)
-                        .color([0.7, 0.7, 0.7, 1.0]),
+                    BifrostTabs::new(
+                        vec!["Shield".to_string(), "Rage".to_string(), "Runes".to_string()],
+                        0,
+                        |_| {},
+                    ),
                 )
             },
         },
@@ -206,9 +208,10 @@ fn catalog() -> Vec<GalleryEntry> {
             category: "Overlays",
             render: |_state, _state_arc| {
                 AnyView::new(
-                    Text::new("Tooltip component")
-                        .font_size(14.0)
-                        .color([0.7, 0.7, 0.7, 1.0]),
+                    Tooltip::new(
+                        AnyView::new(Text::new("Hover target").font_size(14.0).color([0.9, 0.9, 0.9, 1.0])),
+                        "Hidden wisdom: Runes guide the worthy",
+                    ).visible(true),
                 )
             },
         },
@@ -250,6 +253,102 @@ fn catalog() -> Vec<GalleryEntry> {
                         .child(Badge::new("Default"))
                         .child(Badge::new("Info").variant(BadgeVariant::Secondary))
                         .child(Badge::new("Outline").variant(BadgeVariant::Outline)),
+                )
+            },
+        },
+        GalleryEntry {
+            name: "Alert",
+            category: "Feedback",
+            render: |_state, _state_arc| {
+                AnyView::new(
+                    VStack::new(8.0)
+                        .child(
+                            Text::new("ALERT: Bifrost interference detected")
+                                .font_size(14.0)
+                                .color([1.0, 0.3, 0.3, 1.0]),
+                        )
+                        .child(
+                            Text::new("Warning: Low runic charge")
+                                .font_size(12.0)
+                                .color([1.0, 0.7, 0.0, 1.0]),
+                        )
+                        .child(
+                            Text::new("Info: All systems nominal")
+                                .font_size(12.0)
+                                .color([0.3, 1.0, 0.5, 1.0]),
+                        ),
+                )
+            },
+        },
+        GalleryEntry {
+            name: "Dialog",
+            category: "Overlays",
+            render: |_state, _state_arc| {
+                AnyView::new(
+                    VStack::new(12.0)
+                        .child(
+                            Text::new("Confirm Rite of Passage?")
+                                .font_size(16.0)
+                                .color([1.0, 1.0, 1.0, 1.0]),
+                        )
+                        .child(
+                            Text::new("This action cannot be undone.")
+                                .font_size(12.0)
+                                .color([0.7, 0.7, 0.7, 1.0]),
+                        )
+                        .child(
+                            HStack::new(12.0)
+                                .child(Button::new("Accept", || {}).variant(ButtonVariant::TintedGlass))
+                                .child(Button::new("Decline", || {}).variant(ButtonVariant::Ghost)),
+                        ),
+                )
+            },
+        },
+        GalleryEntry {
+            name: "Avatar",
+            category: "Data Display",
+            render: |_state, _state_arc| {
+                AnyView::new(
+                    HStack::new(16.0)
+                        .child(
+                            VStack::new(4.0)
+                                .child(
+                                    Text::new("[A]")
+                                        .font_size(24.0)
+                                        .color([0.0, 1.0, 1.0, 1.0]),
+                                )
+                                .child(
+                                    Text::new("Astrid")
+                                        .font_size(10.0)
+                                        .color([0.7, 0.7, 0.7, 1.0]),
+                                ),
+                        )
+                        .child(
+                            VStack::new(4.0)
+                                .child(
+                                    Text::new("[B]")
+                                        .font_size(24.0)
+                                        .color([1.0, 0.5, 0.0, 1.0]),
+                                )
+                                .child(
+                                    Text::new("Bjorn")
+                                        .font_size(10.0)
+                                        .color([0.7, 0.7, 0.7, 1.0]),
+                                ),
+                        )
+                        .child(
+                            VStack::new(4.0)
+                                .child(
+                                    Text::new("[F]")
+                                        .font_size(24.0)
+                                        .color([0.5, 0.3, 1.0, 1.0]),
+                                )
+                                .child(
+                                    Text::new("Freya")
+                                        .font_size(10.0)
+                                        .color([0.7, 0.7, 0.7, 1.0]),
+                                ),
+                        ),
                 )
             },
         },
@@ -421,6 +520,25 @@ impl View for GalleryApp {
 
             renderer.pop_vnode();
         }
+
+        // Register scroll-wheel handler for carousel cycling
+        let wheel_state = self.state.clone();
+        renderer.register_handler(
+            "pointerwheel",
+            std::sync::Arc::new(move |evt| {
+                if let Event::PointerWheel { delta_y, .. } = evt {
+                    let mut s = wheel_state.lock().unwrap();
+                    let num = s.entries.len();
+                    if num > 0 {
+                        if delta_y > 0.5 {
+                            s.selected = (s.selected + 1) % num;
+                        } else if delta_y < -0.5 {
+                            s.selected = (s.selected + num - 1) % num;
+                        }
+                    }
+                }
+            }),
+        );
 
         // 3. Draw Divider Line
         let div_y = carousel_rect.y + carousel_rect.height + 15.0;

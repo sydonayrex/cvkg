@@ -343,7 +343,7 @@ impl View for Dropdown {
         };
 
         // Main button
-        renderer.fill_rounded_rect(rect, 4.0, theme::surface());
+        renderer.fill_rounded_rect(rect, 4.0, theme::surface_high_contrast());
         renderer.stroke_rect(rect, theme::accent_hover(), 1.0);
 
         let selected = self

@@ -70,8 +70,9 @@ impl LinearGradient {
         self
     }
 
-    /// Returns true when per-pixel smooth rendering should be used.
-    fn is_smooth(&self) -> bool {
+    /// Whether the gradient uses smooth interpolation.
+    #[allow(dead_code)]
+    pub fn is_smooth(&self) -> bool {
         self.quality == 0 || self.quality >= 256
     }
 

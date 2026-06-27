@@ -4,7 +4,6 @@
 //! DamageNumber, and Minimap. Each uses RK4 spring physics for smooth value
 //! transitions rather than snapping instantly.
 
-use cvkg_components::Progress;
 use cvkg_core::{Color, Never, Rect, Renderer, View};
 
 /// Internal spring animator using manual RK4 integration.

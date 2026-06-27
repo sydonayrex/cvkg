@@ -5,7 +5,7 @@
 //! - `ShadowModifier`: View modifier that applies one or more shadow layers
 //! - `shadow!` macro: convenient syntax for creating shadow sets
 
-use crate::{ModifiedView, Renderer, View};
+use crate::{ModifiedView, Rect, Renderer, View, ViewModifier};
 
 /// A single shadow layer description.
 #[derive(Debug, Clone, Copy, PartialEq)]

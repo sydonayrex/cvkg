@@ -3,7 +3,7 @@
 //! Provides a `DataTable` component with typed columns, row selection,
 //! and optional sorting. Renders using the standard Renderer trait.
 
-use crate::{Color, Never, Rect, Renderer, View};
+use crate::{Never, Rect, Renderer, View};
 use std::marker::PhantomData;
 
 /// A column definition for DataTable.
