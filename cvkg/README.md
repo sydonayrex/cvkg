@@ -16,21 +16,34 @@ This crate does NOT implement any rendering, layout, logic, or components. It is
 graph TD
     cvkg["cvkg<br/>(Umbrella facade)"]
     cvkg --> cvkg-core
+    cvkg --> cvkg-scene
     cvkg --> cvkg-layout
     cvkg --> cvkg-themes
     cvkg --> cvkg-anim
     cvkg --> cvkg-macros
     cvkg --> cvkg-components
-    cvkg --> cvkg-scene
+    cvkg --> cvkg-render-gpu
+    cvkg --> cvkg-render-native
     berserker --> cvkg
-    adele-web -.->|not direct dep<br/>uses cvkg-core| cvkg
+    berserker --> cvkg-core
+    berserker --> cvkg-physics
+    berserker --> cvkg-anim
+    berserker --> cvkg-components
+    berserker --> cvkg-themes
+    berserker --> cvkg-vdom
+    adele-web --> cvkg-core
+    adele-web --> cvkg-render-gpu
+    adele-web --> cvkg-components
+    adele-web --> cvkg-themes
+    adele-web --> cvkg-vdom
+    adele-web --> cvkg-layout
 
     classDef entry fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:2px
     classDef core fill:#1a1a2e,stroke:#1e293b,color:#e2e8f0,stroke-width:1px
     classDef ui fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
     classDef meta fill:#3f3f46,stroke:#a1a1aa,color:#d4d4d8,stroke-width:1px
     class cvkg entry
-    class cvkg-core,cvkg-scene core
+    class cvkg-core,cvkg-scene,cvkg-vdom core
     class cvkg-layout,cvkg-themes,cvkg-anim ui
     class cvkg-macros,cvkg-components meta
 ```
