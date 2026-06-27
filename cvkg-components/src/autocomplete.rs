@@ -178,8 +178,17 @@ impl View for AutoComplete {
             if crate::theme::glassmorphism_enabled() {
                 renderer.bifrost(dropdown_rect, 12.0, 1.2, 0.15);
             }
-            renderer.fill_rounded_rect(dropdown_rect, RADIUS_LG, theme::with_alpha(theme::surface_elevated(), 0.85));
-            renderer.stroke_rounded_rect(dropdown_rect, RADIUS_LG, theme::with_alpha(theme::border(), 0.6), 1.0);
+            renderer.fill_rounded_rect(
+                dropdown_rect,
+                RADIUS_LG,
+                theme::with_alpha(theme::surface_elevated(), 0.85),
+            );
+            renderer.stroke_rounded_rect(
+                dropdown_rect,
+                RADIUS_LG,
+                theme::with_alpha(theme::border(), 0.6),
+                1.0,
+            );
 
             // Render each filtered option
             for (vis_idx, &opt_idx) in state.filtered_indices.iter().enumerate() {
@@ -192,7 +201,11 @@ impl View for AutoComplete {
 
                 // Highlight the selected item
                 if state.selection == Some(vis_idx) {
-                    renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::with_alpha(theme::accent(), 0.3));
+                    renderer.fill_rounded_rect(
+                        item_rect,
+                        RADIUS_SM,
+                        theme::with_alpha(theme::accent(), 0.3),
+                    );
                 }
 
                 let opt_text = &self.options[opt_idx];

@@ -188,12 +188,7 @@ impl A11yValidator {
     ) -> Vec<u64> {
         interactive_nodes
             .iter()
-            .filter(|id| {
-                node_names
-                    .get(id)
-                    .map(|n| n.is_empty())
-                    .unwrap_or(true)
-            })
+            .filter(|id| node_names.get(id).map(|n| n.is_empty()).unwrap_or(true))
             .copied()
             .collect()
     }
@@ -218,12 +213,7 @@ impl A11yValidator {
     ) -> Vec<u64> {
         form_fields
             .iter()
-            .filter(|id| {
-                labels
-                    .get(id)
-                    .map(|l| l.is_empty())
-                    .unwrap_or(true)
-            })
+            .filter(|id| labels.get(id).map(|l| l.is_empty()).unwrap_or(true))
             .copied()
             .collect()
     }
@@ -254,8 +244,8 @@ mod p1_44_45_a11y_tests {
 
     #[test]
     fn role_mapping_button() {
-        let mapping = RoleMapping::new(A11yRole::Button)
-            .with_protocol(A11yProtocol::UIAutomation, "Button");
+        let mapping =
+            RoleMapping::new(A11yRole::Button).with_protocol(A11yProtocol::UIAutomation, "Button");
 
         assert_eq!(
             mapping.for_protocol(A11yProtocol::UIAutomation),

@@ -203,7 +203,10 @@ mod tests {
 
         let left = sh.query(rect(0.0, 0.0, 60.0, 50.0));
         let right = sh.query(rect(100.0, 0.0, 60.0, 50.0));
-        assert!(left.contains(&"wide"), "wide should appear in left cell query");
+        assert!(
+            left.contains(&"wide"),
+            "wide should appear in left cell query"
+        );
         assert!(
             right.contains(&"wide"),
             "wide should appear in right cell query"

@@ -5,12 +5,11 @@
 
 #[cfg(test)]
 mod tests {
+    use cvkg_core::KvasirId;
     use cvkg_render_gpu::GpuRenderer;
-use cvkg_core::KvasirId;
     use cvkg_runic_text::subpixel::{SubpixelGlyph, render_lcd};
     use cvkg_runic_text::{
-        PortalAlignment, RunicPathSegment, TextEngine, TextAlign, TextOverflow, TextSpan,
-        TextStyle,
+        PortalAlignment, RunicPathSegment, TextAlign, TextEngine, TextOverflow, TextSpan, TextStyle,
     };
 
     /// Test: Native Renderer Integration
@@ -205,7 +204,6 @@ use cvkg_core::KvasirId;
     fn test_flow_spatial_hash_query_correctness() {
         use cvkg_flow::FlowCanvas;
         use cvkg_flow::node::FlowNode;
-        
 
         let mut canvas = FlowCanvas::new();
         canvas.add_node(FlowNode::new(KvasirId(101), "Alpha", (10.0, 10.0)));

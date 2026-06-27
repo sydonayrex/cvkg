@@ -31,42 +31,51 @@ members = [
     "cvkg-materials",
     "cvkg-accessibility",
     "cvkg-certification",
+    "cvkg-gallery",
+    "cvkg-game-hud",
+    "cvkg-export-raster",
 ]
 
 [workspace.package]
-version = "0.2.14"
+version = "0.2.15"
 edition = "2024"
-license = "MPL-2.0"
+license = "EPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 [workspace.dependencies]
-cvkg-core = { path = "cvkg-core", version = "0.2.14" }
-cvkg-vdom = { path = "cvkg-vdom", version = "0.2.14" }
-cvkg-scene = { path = "cvkg-scene", version = "0.2.14" }
-cvkg-layout = { path = "cvkg-layout", version = "0.2.14" }
-cvkg-anim = { path = "cvkg-anim", version = "0.2.14" }
-cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.14" }
-runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.14" }
-cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.14" }
-cvkg-physics = { path = "cvkg-physics", version = "0.2.14" }
-cvkg-themes = { path = "cvkg-themes", version = "0.2.14" }
-cvkg-macros = { path = "cvkg-macros", version = "0.2.14" }
-cvkg-components = { path = "cvkg-components", version = "0.2.14" }
-cvkg-test = { path = "cvkg-test", version = "0.2.14" }
-cvkg-flow = { path = "cvkg-flow", version = "0.2.14" }
-cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.14" }
-cvkg-compositor = { path = "cvkg-compositor", version = "0.2.14" }
-cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.14" }
-cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.14" }
-cvkg-cli = { path = "cvkg-cli", version = "0.2.14" }
-cvkg = { path = "cvkg", version = "0.2.14" }
+cvkg-core = { path = "cvkg-core", version = "0.2.15" }
+cvkg-vdom = { path = "cvkg-vdom", version = "0.2.15" }
+cvkg-scene = { path = "cvkg-scene", version = "0.2.15" }
+cvkg-layout = { path = "cvkg-layout", version = "0.2.15" }
+cvkg-anim = { path = "cvkg-anim", version = "0.2.15" }
+cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.15" }
+cvkg-render-software = { path = "cvkg-render-software", version = "0.2.15" }
+runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.15" }
+cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.15" }
+cvkg-physics = { path = "cvkg-physics", version = "0.2.15" }
+cvkg-themes = { path = "cvkg-themes", version = "0.2.15" }
+cvkg-macros = { path = "cvkg-macros", version = "0.2.15" }
+cvkg-components = { path = "cvkg-components", version = "0.2.15" }
+cvkg-test = { path = "cvkg-test", version = "0.2.15" }
+cvkg-flow = { path = "cvkg-flow", version = "0.2.15" }
+cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.15" }
+cvkg-compositor = { path = "cvkg-compositor", version = "0.2.15" }
+cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.15" }
+cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.15" }
+cvkg-cli = { path = "cvkg-cli", version = "0.2.15" }
+cvkg = { path = "cvkg", version = "0.2.15" }
 # Platform infrastructure crates
-cvkg-scheduler = { path = "cvkg-scheduler", version = "0.2.14" }
-cvkg-spatial = { path = "cvkg-spatial", version = "0.2.14" }
-cvkg-reflect = { path = "cvkg-reflect", version = "0.2.14" }
-cvkg-materials = { path = "cvkg-materials", version = "0.2.14" }
-cvkg-accessibility = { path = "cvkg-accessibility", version = "0.2.14" }
-cvkg-certification = { path = "cvkg-certification", version = "0.2.14" }
+cvkg-scheduler = { path = "cvkg-scheduler", version = "0.2.15" }
+cvkg-spatial = { path = "cvkg-spatial", version = "0.2.15" }
+cvkg-reflect = { path = "cvkg-reflect", version = "0.2.15" }
+cvkg-materials = { path = "cvkg-materials", version = "0.2.15" }
+cvkg-accessibility = { path = "cvkg-accessibility", version = "0.2.15" }
+cvkg-certification = { path = "cvkg-certification", version = "0.2.15" }
+cvkg-gallery = { path = "cvkg-gallery", version = "0.2.15" }
+cvkg-game-hud = { path = "cvkg-game-hud", version = "0.2.15" }
+cvkg-export-raster = { path = "cvkg-export-raster", version = "0.2.15" }
+cvkg_components = { path = "cvkg-components", version = "0.2.15" }
+cvkg_themes = { path = "cvkg-themes", version = "0.2.15" }
 bitflags = "2.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -93,6 +102,7 @@ libc = "0.2"
 clap = { version = "4.5", features = ["derive"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 image = "0.25"
+gif = "0.13"
 rayon = "1.12"
 wgpu = { version = "29", features = ["spirv"] }
 naga = { version = "29", features = ["wgsl-in", "spv-out"] }
@@ -145,6 +155,9 @@ cvkg-reflect = { path = "cvkg-reflect" }
 cvkg-materials = { path = "cvkg-materials" }
 cvkg-accessibility = { path = "cvkg-accessibility" }
 cvkg-certification = { path = "cvkg-certification" }
+cvkg-gallery = { path = "cvkg-gallery" }
+cvkg-game-hud = { path = "cvkg-game-hud" }
+cvkg-export-raster = { path = "cvkg-export-raster" }
 
 [profile.dev]
 # Limit debug info to prevent memory exhaustion (Bus error) in GitHub Actions

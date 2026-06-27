@@ -114,6 +114,7 @@ impl KvasirNode for CompositeNode {
 
         p.set_bind_group(0, &scene_texture_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+        p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
         p.draw(0..3, 0..1);
     }
 }

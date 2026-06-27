@@ -492,13 +492,7 @@ impl View for TagInput {
                 height: rect.height - 12.0,
             };
             renderer.fill_rounded_rect(tag_rect, 4.0, theme::primary());
-            renderer.draw_text(
-                tag,
-                current_x + 4.0,
-                rect.y + 12.0,
-                11.0,
-                theme::text(),
-            );
+            renderer.draw_text(tag, current_x + 4.0, rect.y + 12.0, 11.0, theme::text());
             current_x += tag_w + 6.0;
         }
     }

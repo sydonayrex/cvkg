@@ -19,10 +19,10 @@ impl LightingValidator {
         if diffuse_constant < 0.0 {
             return Err(FilterError::InvalidRegion(diffuse_constant, 0.0));
         }
-        if let Some((kx, ky)) = kernel_unit_length {
-            if kx <= 0.0 || ky <= 0.0 {
-                return Err(FilterError::InvalidRegion(kx, ky));
-            }
+        if let Some((kx, ky)) = kernel_unit_length
+            && (kx <= 0.0 || ky <= 0.0)
+        {
+            return Err(FilterError::InvalidRegion(kx, ky));
         }
         Ok(())
     }
@@ -38,7 +38,7 @@ impl LightingValidator {
         if specular_constant < 0.0 {
             return Err(FilterError::InvalidRegion(specular_constant, 0.0));
         }
-        if specular_exponent < 1.0 || specular_exponent > 128.0 {
+        if !(1.0..=128.0).contains(&specular_exponent) {
             return Err(FilterError::InvalidRegion(specular_exponent, 1.0));
         }
         Ok(())
@@ -52,19 +52,24 @@ impl LightingValidator {
     ) -> Result<(), FilterError> {
         match light_type {
             "distant" => {
-                if let Some(az) = azimuth {
-                    if !(0.0..=360.0).contains(&az) {
-                        return Err(FilterError::InvalidRegion(az, 0.0));
-                    }
+                if let Some(az) = azimuth
+                    && !(0.0..=360.0).contains(&az)
+                {
+                    return Err(FilterError::InvalidRegion(az, 0.0));
                 }
-                if let Some(el) = elevation {
-                    if !(-90.0..=90.0).contains(&el) {
-                        return Err(FilterError::InvalidRegion(el, 0.0));
-                    }
+                if let Some(el) = elevation
+                    && !(-90.0..=90.0).contains(&el)
+                {
+                    return Err(FilterError::InvalidRegion(el, 0.0));
                 }
             }
             "point" | "spot" => {}
-            other => return Err(FilterError::UnresolvedInput(format!("unknown light type: {}", other))),
+            other => {
+                return Err(FilterError::UnresolvedInput(format!(
+                    "unknown light type: {}",
+                    other
+                )));
+            }
         }
         Ok(())
     }
@@ -86,9 +91,12 @@ impl TurbulenceValidator {
         stitch_tiles: bool,
     ) -> Result<(), FilterError> {
         if base_frequency_x < 0.0 || base_frequency_y < 0.0 {
-            return Err(FilterError::InvalidRegion(base_frequency_x, base_frequency_y));
+            return Err(FilterError::InvalidRegion(
+                base_frequency_x,
+                base_frequency_y,
+            ));
         }
-        if num_octaves < 1 || num_octaves > 8 {
+        if !(1..=8).contains(&num_octaves) {
             return Err(FilterError::InvalidRegion(num_octaves as f32, 1.0));
         }
         if seed < 0 {
@@ -100,8 +108,8 @@ impl TurbulenceValidator {
 
     pub fn reference_value(x: f32, y: f32, seed: i32) -> f32 {
         let n = (x * 12.9898 + y * 78.233 + seed as f32 * 0.001).sin();
-        let val = (n * 43758.5453).fract();
-        val.max(0.0).min(1.0)
+        let val = (n * 43_758.547).fract();
+        val.clamp(0.0, 1.0)
     }
 }
 
@@ -118,7 +126,10 @@ impl GlassCompatReference {
 
     pub fn validate_glass_params(blur_radius: f32, opacity: f32) -> Result<(), FilterError> {
         if !(Self::BLUR_RADIUS_RANGE.0..=Self::BLUR_RADIUS_RANGE.1).contains(&blur_radius) {
-            return Err(FilterError::InvalidRegion(blur_radius, Self::BLUR_RADIUS_RANGE.0));
+            return Err(FilterError::InvalidRegion(
+                blur_radius,
+                Self::BLUR_RADIUS_RANGE.0,
+            ));
         }
         if !(Self::OPACITY_RANGE.0..=Self::OPACITY_RANGE.1).contains(&opacity) {
             return Err(FilterError::InvalidRegion(opacity, Self::OPACITY_RANGE.0));
@@ -228,29 +239,45 @@ impl BrowserParityValidator {
         };
         let a = input_color[3];
 
-        let r_out = color_matrix[0] * rgb[0] + color_matrix[1] * rgb[1] + color_matrix[2] * rgb[2] + color_matrix[3] * a + color_matrix[4];
-        let g_out = color_matrix[5] * rgb[0] + color_matrix[6] * rgb[1] + color_matrix[7] * rgb[2] + color_matrix[8] * a + color_matrix[9];
-        let b_out = color_matrix[10] * rgb[0] + color_matrix[11] * rgb[1] + color_matrix[12] * rgb[2] + color_matrix[13] * a + color_matrix[14];
-        let a_out = color_matrix[15] * rgb[0] + color_matrix[16] * rgb[1] + color_matrix[17] * rgb[2] + color_matrix[18] * a + color_matrix[19];
+        let r_out = color_matrix[0] * rgb[0]
+            + color_matrix[1] * rgb[1]
+            + color_matrix[2] * rgb[2]
+            + color_matrix[3] * a
+            + color_matrix[4];
+        let g_out = color_matrix[5] * rgb[0]
+            + color_matrix[6] * rgb[1]
+            + color_matrix[7] * rgb[2]
+            + color_matrix[8] * a
+            + color_matrix[9];
+        let b_out = color_matrix[10] * rgb[0]
+            + color_matrix[11] * rgb[1]
+            + color_matrix[12] * rgb[2]
+            + color_matrix[13] * a
+            + color_matrix[14];
+        let a_out = color_matrix[15] * rgb[0]
+            + color_matrix[16] * rgb[1]
+            + color_matrix[17] * rgb[2]
+            + color_matrix[18] * a
+            + color_matrix[19];
 
         let mut expected = if profile.use_linear_rgb {
             [
                 Self::linear_to_srgb(r_out),
                 Self::linear_to_srgb(g_out),
                 Self::linear_to_srgb(b_out),
-                a_out.max(0.0).min(1.0),
+                a_out.clamp(0.0, 1.0),
             ]
         } else {
             [
-                r_out.max(0.0).min(1.0),
-                g_out.max(0.0).min(1.0),
-                b_out.max(0.0).min(1.0),
-                a_out.max(0.0).min(1.0),
+                r_out.clamp(0.0, 1.0),
+                g_out.clamp(0.0, 1.0),
+                b_out.clamp(0.0, 1.0),
+                a_out.clamp(0.0, 1.0),
             ]
         };
 
         for c in expected.iter_mut() {
-            *c = c.max(0.0).min(1.0);
+            *c = c.clamp(0.0, 1.0);
         }
 
         for i in 0..4 {
@@ -317,6 +344,8 @@ mod tests {
     #[test]
     fn test_blur_parity() {
         let chrome = BrowserProfile::for_engine(BrowserEngine::Chromium);
-        assert!(BrowserParityValidator::validate_blur_parity(5.0, 5.0, &chrome));
+        assert!(BrowserParityValidator::validate_blur_parity(
+            5.0, 5.0, &chrome
+        ));
     }
 }

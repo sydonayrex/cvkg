@@ -2,7 +2,7 @@
 //!
 //! Run: cargo run -p cvkg --example berserker_fire_demo --features gpu
 
-use cvkg_core::{RenderIntensityMode, DrawMaterial, FrameRenderer, Rect, Renderer};
+use cvkg_core::{DrawMaterial, FrameRenderer, Rect, RenderIntensityMode, Renderer};
 use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use std::time::Instant;
@@ -345,11 +345,18 @@ impl ApplicationHandler for App {
                 let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
                 // Compute fireball velocity direction for trail emission
-                let fireball_vel = [cx - self.state.prev_fireball_pos[0], cy - self.state.prev_fireball_pos[1]];
-                let fireball_speed = (fireball_vel[0] * fireball_vel[0] + fireball_vel[1] * fireball_vel[1]).sqrt();
+                let fireball_vel = [
+                    cx - self.state.prev_fireball_pos[0],
+                    cy - self.state.prev_fireball_pos[1],
+                ];
+                let fireball_speed =
+                    (fireball_vel[0] * fireball_vel[0] + fireball_vel[1] * fireball_vel[1]).sqrt();
                 // Normalize velocity for direction; default to up if stationary
                 let fireball_dir = if fireball_speed > 0.01 {
-                    [-fireball_vel[0] / fireball_speed, -fireball_vel[1] / fireball_speed]
+                    [
+                        -fireball_vel[0] / fireball_speed,
+                        -fireball_vel[1] / fireball_speed,
+                    ]
                 } else {
                     [0.0, -1.0]
                 };

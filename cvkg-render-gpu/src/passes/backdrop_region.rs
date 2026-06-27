@@ -103,9 +103,10 @@ impl KvasirNode for BackdropRegionNode {
 
             for mip in 1..mip_count {
                 let src_view = {
-                    let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
+                    let mut cache =
+                        GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
-                        .entry((self.output_id, (mip - 1)))
+                        .entry((ctx.renderer.current_window, self.output_id, (mip - 1)))
                         .or_insert_with(|| {
                             blur_tex.create_view(&wgpu::TextureViewDescriptor {
                                 label: Some(&format!("blur_region_src_mip_{}", mip - 1)),
@@ -117,9 +118,10 @@ impl KvasirNode for BackdropRegionNode {
                         .clone()
                 };
                 let dst_view = {
-                    let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
+                    let mut cache =
+                        GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
-                        .entry((self.output_id, mip))
+                        .entry((ctx.renderer.current_window, self.output_id, mip))
                         .or_insert_with(|| {
                             blur_tex.create_view(&wgpu::TextureViewDescriptor {
                                 label: Some(&format!("blur_region_dst_mip_{}", mip)),
@@ -194,9 +196,10 @@ impl KvasirNode for BackdropRegionNode {
             // Upsample chain
             for mip in (1..mip_count).rev() {
                 let src_view = {
-                    let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
+                    let mut cache =
+                        GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
-                        .entry((self.output_id, mip))
+                        .entry((ctx.renderer.current_window, self.output_id, mip))
                         .or_insert_with(|| {
                             blur_tex.create_view(&wgpu::TextureViewDescriptor {
                                 label: Some(&format!("blur_region_src_mip_{}", mip)),
@@ -208,9 +211,10 @@ impl KvasirNode for BackdropRegionNode {
                         .clone()
                 };
                 let dst_view = {
-                    let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
+                    let mut cache =
+                        GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                     cache
-                        .entry((self.output_id, (mip - 1)))
+                        .entry((ctx.renderer.current_window, self.output_id, (mip - 1)))
                         .or_insert_with(|| {
                             blur_tex.create_view(&wgpu::TextureViewDescriptor {
                                 label: Some(&format!("blur_region_dst_mip_{}", mip - 1)),

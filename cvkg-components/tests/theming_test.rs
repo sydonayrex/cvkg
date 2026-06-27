@@ -136,7 +136,9 @@ fn test_theme_token_values_valid() {
             assert!(
                 (0.0..=1.0).contains(&component),
                 "Theme token '{}' component {} = {} is out of [0.0, 1.0] range",
-                name, i, component
+                name,
+                i,
+                component
             );
         }
     }
@@ -155,7 +157,8 @@ fn test_dark_theme_text_contrast() {
     assert!(
         text_lum > bg_lum,
         "Dark theme text ({:?}) should be lighter than background ({:?})",
-        text, bg
+        text,
+        bg
     );
 }
 
@@ -172,7 +175,8 @@ fn test_light_theme_text_contrast() {
     assert!(
         text_lum < bg_lum,
         "Light theme text ({:?}) should be darker than background ({:?})",
-        text, bg
+        text,
+        bg
     );
 }
 

@@ -1,16 +1,16 @@
-pub mod types;
 pub mod engine;
+pub mod types;
 pub mod visual;
 
-pub use types::*;
 pub use engine::*;
+pub use types::*;
 
 use std::collections::HashMap;
 use std::time::Instant;
 
 use crate::theme;
 use cvkg_core::{
-    Renderer, Size, View, Never,
+    Never, Renderer, Size, View,
     layout::{LayoutCache, LayoutView, Rect, SizeProposal},
 };
 

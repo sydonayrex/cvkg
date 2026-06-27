@@ -134,7 +134,11 @@ impl<V: View> View for Collapsible<V> {
                     width: rect.width - 8.0,
                     height: content_h,
                 };
-                renderer.fill_rounded_rect(content_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.4));
+                renderer.fill_rounded_rect(
+                    content_rect,
+                    RADIUS_SM,
+                    theme::with_alpha(theme::surface_elevated(), 0.4),
+                );
                 self.content.render(renderer, content_rect);
             }
         }
@@ -147,6 +151,7 @@ impl<V: View> View for Collapsible<V> {
 ///
 /// # Contract
 /// Divides layout into two panes with an adjustable, draggable splitting boundary.
+#[doc(alias = "Splitter")]
 pub struct GjallarSplitter<V1: View, V2: View> {
     pub first: V1,
     pub second: V2,
@@ -344,6 +349,7 @@ impl<V1: View, V2: View> View for GjallarSplitter<V1, V2> {
 /// # Contract
 /// Displays vertical sections that expand individually or concurrently.
 #[derive(Clone)]
+#[doc(alias = "Accordion")]
 pub struct SagaAccordion<V: View> {
     pub items: Vec<SagaItem<V>>,
     pub allow_multiple: bool,
@@ -430,7 +436,12 @@ impl<V: View> View for SagaAccordion<V> {
 
             if is_expanded {
                 let pulse = (t * 3.0 + i as f32).sin() * 0.1 + 0.9;
-                renderer.stroke_rounded_rect(header_rect, RADIUS_SM, theme::with_alpha(theme::accent(), 0.4 * pulse), 1.5);
+                renderer.stroke_rounded_rect(
+                    header_rect,
+                    RADIUS_SM,
+                    theme::with_alpha(theme::accent(), 0.4 * pulse),
+                    1.5,
+                );
             } else {
                 renderer.stroke_rounded_rect(header_rect, RADIUS_SM, theme::border(), 1.0);
             }
@@ -507,7 +518,11 @@ impl<V: View> View for SagaAccordion<V> {
                     height: content_h,
                 };
 
-                renderer.fill_rounded_rect(content_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.3));
+                renderer.fill_rounded_rect(
+                    content_rect,
+                    RADIUS_SM,
+                    theme::with_alpha(theme::surface_elevated(), 0.3),
+                );
                 item.content.render(renderer, content_rect);
 
                 current_y += content_h + 8.0;

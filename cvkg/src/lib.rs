@@ -2,25 +2,37 @@
 //!
 //! When building an application with CVKG, you MUST explicitly select ONE and ONLY ONE rendering pipeline
 //! via your `Cargo.toml` features. Do not mix rendering pipelines in a single application.
-//!
-//! ## 1. GPU Rendering (Feature: `gpu`)
-//! High-performance, direct GPU rendering using `wgpu`. This provides the full "Cyberpunk Viking" aesthetic
-//! with shaders (Surtr/Muspelheim), frosted glass (`bifrost`), and complex geometry.
-//! Use this for high-fidelity native games or data-heavy tactical dashboards.
-//!
-//! ## 2. Native Primitive Rendering (Feature: `native`)
-//! Uses `winit` and `AccessKit` to wrap the `gpu` renderer for cross-platform desktop applications.
-//! This is the default choice for standard desktop GUIs that need windowing and accessibility.
-//!
-//! ## 3. Web/WASM VDOM Rendering (Feature: `web`)
-//! Compiles your UI to WebAssembly and renders using a Virtual DOM translated to HTML/CSS.
-//! Use this to deploy your CVKG application to the browser.
-//!
-//! # Example `Cargo.toml` Selection:
-//! ```toml
-//! # Select only one feature for your target platform:
-//! cvkg = { version = "0.1.10", features = ["native"] }
-//! ```
+
+// Compile-time enforcement: mutually exclusive features
+#[cfg(all(feature = "gpu", feature = "native", feature = "web"))]
+compile_error!(
+    "cvkg: select exactly one rendering pipeline feature (`gpu`, `native`, or `web`), not multiple. See the module-level docs in cvkg/src/lib.rs."
+);
+#[cfg(all(feature = "gpu", feature = "native"))]
+compile_error!("cvkg: `gpu` and `native` features are mutually exclusive. Pick one.");
+#[cfg(all(feature = "gpu", feature = "web"))]
+compile_error!("cvkg: `gpu` and `web` features are mutually exclusive. Pick one.");
+#[cfg(all(feature = "native", feature = "web"))]
+compile_error!("cvkg: `native` and `web` features are mutually exclusive. Pick one.");
+
+// ## 1. GPU Rendering (Feature: `gpu`)
+// High-performance, direct GPU rendering using `wgpu`. This provides the full "Cyberpunk Viking" aesthetic
+// with shaders (Surtr/Muspelheim), frosted glass (`bifrost`), and complex geometry.
+// Use this for high-fidelity native games or data-heavy tactical dashboards.
+//
+// ## 2. Native Primitive Rendering (Feature: `native`)
+// Uses `winit` and `AccessKit` to wrap the `gpu` renderer for cross-platform desktop applications.
+// This is the default choice for standard desktop GUIs that need windowing and accessibility.
+//
+// ## 3. Web/WASM VDOM Rendering (Feature: `web`)
+// Compiles your UI to WebAssembly and renders using a Virtual DOM translated to HTML/CSS.
+// Use this to deploy your CVKG application to the browser.
+//
+// # Example `Cargo.toml` Selection:
+// ```toml
+// # Select only one feature for your target platform:
+// cvkg = { version = "0.1.10", features = ["native"] }
+// ```
 
 pub use cvkg_anim as anim;
 pub use cvkg_components as components;
@@ -46,7 +58,8 @@ pub mod prelude {
 
     // === Core types (always needed) ===
     pub use cvkg_core::{
-        AppState, AssetKey, AssetState, Binding, ComponentErrorState, Never, Rect, State, View,
+        AnyView, AppState, AssetKey, AssetState, Binding, ComponentErrorState, Never, Rect, State,
+        View,
     };
 
     // === Color type ===
@@ -62,9 +75,16 @@ pub mod prelude {
     // These type aliases point to the canonical (Norse) implementation.
     // Both names are valid; the English name is preferred for new code.
     pub use cvkg_components::{
-        Accordion, Alert, Analytics, Avatar, ColorPicker, CommandPalette, CreativeTools,
-        Decoder, Dialog, HolographicDisplay, HUD, Indicator, Messenger, Orb, Pagination,
-        Progress, PromptBuilder, Rating, Sheet, Spinner, Splitter, StepIndicator, Tabs,
-        Timeline, Tooltip, TreeView, Well, Window,
+        Accordion, Alert, Analytics, Avatar, ColorPicker, CommandPalette, CreativeTools, Decoder,
+        Dialog, DraumaSkeleton, FormBinder, FormField, HUD, HolographicDisplay, Indicator,
+        Messenger, Orb, Pagination, Popover, Progress, PromptBuilder, RadioGroup, Rating,
+        RunesTable, Sheet, Sonner, SonnerPosition, SonnerToast, SonnerType, Spinner, Splitter,
+        StepIndicator, Tabs, Timeline, ToastManager, Tooltip, TreeView, Well, Window,
     };
+
+    // === Animation triggers ===
+    pub use cvkg_components::animation_triggers::{AnimationTriggers, TriggerSpring};
+
+    // === Gradients ===
+    pub use cvkg_components::gradient::{GradientStop, LinearGradient, RadialGradient};
 }

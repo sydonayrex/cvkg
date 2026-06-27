@@ -21,6 +21,12 @@ impl VolumetricNode {
     }
 }
 
+impl Default for VolumetricNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for VolumetricNode {
     fn label(&self) -> &'static str {
         "Volumetric"
@@ -73,31 +79,31 @@ impl KvasirNode for VolumetricNode {
         let msaa_count = ctx.renderer.quality_level.msaa_sample_count() as f32;
 
         let uniform_data: [f32; 24] = [
-            current_time,         // 0: time
-            resolution[0],        // 1: resolution.x
-            resolution[1],        // 2: resolution.y
-            msaa_count,           // 3: msaa_count (was _pad)
-            light_pos[0],         // 4: light_pos.x
-            light_pos[1],         // 5: light_pos.y
-            light_pos[2],         // 6: light_pos.z
-            0.0,                  // 7: _pad
-            light_color[0],       // 8: light_color.x
-            light_color[1],       // 9: light_color.y
-            light_color[2],       // 10: light_color.z
-            1.0,                  // 11: density
-            0.15,                 // 12: falloff
-            0.0,                  // 13: _pad0
-            0.0,                  // 14: _pad1
-            0.0,                  // 15: struct alignment pad to 64 bytes
+            current_time,   // 0: time
+            resolution[0],  // 1: resolution.x
+            resolution[1],  // 2: resolution.y
+            msaa_count,     // 3: msaa_count (was _pad)
+            light_pos[0],   // 4: light_pos.x
+            light_pos[1],   // 5: light_pos.y
+            light_pos[2],   // 6: light_pos.z
+            0.0,            // 7: _pad
+            light_color[0], // 8: light_color.x
+            light_color[1], // 9: light_color.y
+            light_color[2], // 10: light_color.z
+            1.0,            // 11: density
+            0.15,           // 12: falloff
+            0.0,            // 13: _pad0
+            0.0,            // 14: _pad1
+            0.0,            // 15: struct alignment pad to 64 bytes
             // -- Hologram extension (bytes 64..96) --
-            holo_rect_x,          // 16: holo_rect.x
-            holo_rect_y,          // 17: holo_rect.y
-            holo_rect_w,          // 18: holo_rect.width
-            holo_rect_h,          // 19: holo_rect.height
-            holo_id_hash,         // 20: hologram_id hash (f32 cast)
-            holo_time,            // 21: hologram instance time
-            holo_count,           // 22: number of active hologram instances
-            0.0,                  // 23: _pad2
+            holo_rect_x,  // 16: holo_rect.x
+            holo_rect_y,  // 17: holo_rect.y
+            holo_rect_w,  // 18: holo_rect.width
+            holo_rect_h,  // 19: holo_rect.height
+            holo_id_hash, // 20: hologram_id hash (f32 cast)
+            holo_time,    // 21: hologram instance time
+            holo_count,   // 22: number of active hologram instances
+            0.0,          // 23: _pad2
         ];
         ctx.renderer.queue.write_buffer(
             &ctx.renderer.volumetric_uniform_buffer,
@@ -106,7 +112,12 @@ impl KvasirNode for VolumetricNode {
         );
 
         // Get depth texture view for volumetric occlusion testing
-        let depth_view = ctx.depth_view;
+        let is_msaa = ctx.renderer.quality_level.msaa_sample_count() > 1;
+        let (depth_view_single, depth_view_msaa) = if is_msaa {
+            (&ctx.renderer.dummy_depth_view, ctx.depth_view)
+        } else {
+            (ctx.depth_view, &ctx.renderer.dummy_depth_view_msaa)
+        };
 
         // Create bind group with uniform buffer + depth textures + comparison sampler
         let bind_group = ctx.get_or_create_bind_group(
@@ -123,11 +134,11 @@ impl KvasirNode for VolumetricNode {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(depth_view),
+                    resource: wgpu::BindingResource::TextureView(depth_view_single),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(depth_view),
+                    resource: wgpu::BindingResource::TextureView(depth_view_msaa),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,

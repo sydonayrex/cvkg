@@ -22,27 +22,27 @@
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
 
-pub mod taffy_engine;
 pub mod animation;
-pub mod spatial;
 pub mod focus;
-pub mod progressive;
 pub mod primitives;
+pub mod progressive;
+pub mod spatial;
+pub mod taffy_engine;
 
 pub use cvkg_core::layout::EdgeInsets;
 use cvkg_core::{LayoutCache, LayoutView};
 use std::cell::RefCell;
 use std::collections::HashSet;
 
-pub use taffy_engine::{
-    taffy_alignment, taffy_distribution, taffy_track, Flex, Grid, GridTrack, HStack, Spacer,
-    TaffyLayoutEngine, VStack, ZStack,
-};
 pub use animation::AnimationEngine;
-pub use spatial::{LayoutSpatialEntry, LayoutSpatialIndex};
-pub use focus::{compute_focus_order, validate_reading_order, LayoutModality, FocusCandidate};
-pub use progressive::{ProgressiveChild, ProgressiveLayoutContext};
+pub use focus::{FocusCandidate, LayoutModality, compute_focus_order, validate_reading_order};
 pub use primitives::{AspectRatio, Padding, SafeArea, SafeAreaEdges};
+pub use progressive::{ProgressiveChild, ProgressiveLayoutContext};
+pub use spatial::{LayoutSpatialEntry, LayoutSpatialIndex};
+pub use taffy_engine::{
+    Flex, Grid, GridTrack, HStack, Spacer, TaffyLayoutEngine, VStack, ZStack, taffy_alignment,
+    taffy_distribution, taffy_track,
+};
 
 // P2-45: Layout capability flags for runtime feature detection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -92,7 +92,10 @@ where
     }
     let already_active = ACTIVE_LAYOUT_NODES.with(|nodes| !nodes.borrow_mut().insert(hash));
     if already_active {
-        log::warn!("[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle with fallback size.", hash);
+        log::warn!(
+            "[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle with fallback size.",
+            hash
+        );
         return fallback;
     }
     let _guard = LayoutCycleGuard { hash };
@@ -110,7 +113,10 @@ where
     }
     let already_active = ACTIVE_LAYOUT_NODES.with(|nodes| !nodes.borrow_mut().insert(hash));
     if already_active {
-        log::warn!("[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle placement.", hash);
+        log::warn!(
+            "[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle placement.",
+            hash
+        );
         return;
     }
     let _guard = LayoutCycleGuard { hash };
@@ -137,6 +143,7 @@ pub fn size_views_parallel(
 }
 
 #[cfg(test)]
+#[allow(dead_code, clippy::only_used_in_recursion)]
 mod tests {
     use super::*;
     use cvkg_core::{Alignment, Distribution, Rect, Size, SizeProposal};
@@ -365,13 +372,28 @@ mod tests {
                 _subviews: &[&dyn LayoutView],
                 cache: &mut LayoutCache,
             ) -> Size {
-                with_layout_cycle_guard(self.view_hash(), Size { width: 42.0, height: 42.0 }, || {
-                    let recursive_self = CyclingView { child_hash: self.view_hash() };
-                    let subviews: Vec<&dyn LayoutView> = vec![&recursive_self];
-                    recursive_self.size_that_fits(proposal, &subviews, cache)
-                })
+                with_layout_cycle_guard(
+                    self.view_hash(),
+                    Size {
+                        width: 42.0,
+                        height: 42.0,
+                    },
+                    || {
+                        let recursive_self = CyclingView {
+                            child_hash: self.view_hash(),
+                        };
+                        let subviews: Vec<&dyn LayoutView> = vec![&recursive_self];
+                        recursive_self.size_that_fits(proposal, &subviews, cache)
+                    },
+                )
             }
-            fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {}
+            fn place_subviews(
+                &self,
+                _b: Rect,
+                _s: &mut [&mut dyn LayoutView],
+                _c: &mut LayoutCache,
+            ) {
+            }
             fn view_hash(&self) -> u64 {
                 12345
             }
@@ -391,22 +413,52 @@ mod tests {
         let parent_hash = 200u64;
 
         cache.register_parent(child_hash, parent_hash);
-        cache.set_size(child_hash, SizeProposal::unspecified(), Size { width: 10.0, height: 10.0 });
-        cache.set_size(parent_hash, SizeProposal::unspecified(), Size { width: 20.0, height: 20.0 });
+        cache.set_size(
+            child_hash,
+            SizeProposal::unspecified(),
+            Size {
+                width: 10.0,
+                height: 10.0,
+            },
+        );
+        cache.set_size(
+            parent_hash,
+            SizeProposal::unspecified(),
+            Size {
+                width: 20.0,
+                height: 20.0,
+            },
+        );
 
-        assert!(cache.get_size(child_hash, SizeProposal::unspecified()).is_some());
-        assert!(cache.get_size(parent_hash, SizeProposal::unspecified()).is_some());
+        assert!(
+            cache
+                .get_size(child_hash, SizeProposal::unspecified())
+                .is_some()
+        );
+        assert!(
+            cache
+                .get_size(parent_hash, SizeProposal::unspecified())
+                .is_some()
+        );
 
         cache.invalidate_view(child_hash);
 
-        assert!(cache.get_size(child_hash, SizeProposal::unspecified()).is_none());
-        assert!(cache.get_size(parent_hash, SizeProposal::unspecified()).is_none());
+        assert!(
+            cache
+                .get_size(child_hash, SizeProposal::unspecified())
+                .is_none()
+        );
+        assert!(
+            cache
+                .get_size(parent_hash, SizeProposal::unspecified())
+                .is_none()
+        );
     }
 
     #[test]
     fn test_viewport_aware_layout_culling() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
         struct SpyView {
             calls: Arc<AtomicUsize>,
@@ -415,10 +467,23 @@ mod tests {
         }
 
         impl LayoutView for SpyView {
-            fn size_that_fits(&self, _p: SizeProposal, _s: &[&dyn LayoutView], _c: &mut LayoutCache) -> Size {
-                Size { width: self.rect.width, height: self.rect.height }
+            fn size_that_fits(
+                &self,
+                _p: SizeProposal,
+                _s: &[&dyn LayoutView],
+                _c: &mut LayoutCache,
+            ) -> Size {
+                Size {
+                    width: self.rect.width,
+                    height: self.rect.height,
+                }
             }
-            fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {
+            fn place_subviews(
+                &self,
+                _b: Rect,
+                _s: &mut [&mut dyn LayoutView],
+                _c: &mut LayoutCache,
+            ) {
                 self.calls.fetch_add(1, Ordering::SeqCst);
             }
             fn view_hash(&self) -> u64 {
@@ -445,16 +510,19 @@ mod tests {
         let mut v2 = view2;
         let mut mut_subviews: Vec<&mut dyn LayoutView> = vec![&mut v1, &mut v2];
 
-        HStack::new(10.0, Alignment::Center, Distribution::Leading)
-            .place_subviews(Rect::new(0.0, 0.0, 600.0, 100.0), &mut mut_subviews, &mut cache);
+        HStack::new(10.0, Alignment::Center, Distribution::Leading).place_subviews(
+            Rect::new(0.0, 0.0, 600.0, 100.0),
+            &mut mut_subviews,
+            &mut cache,
+        );
 
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 
     #[test]
     fn test_layout_budget_thrashing_prevention() {
-        use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
 
         struct SpyView {
             calls: Arc<AtomicUsize>,
@@ -463,10 +531,23 @@ mod tests {
         }
 
         impl LayoutView for SpyView {
-            fn size_that_fits(&self, _p: SizeProposal, _s: &[&dyn LayoutView], _c: &mut LayoutCache) -> Size {
-                Size { width: self.rect.width, height: self.rect.height }
+            fn size_that_fits(
+                &self,
+                _p: SizeProposal,
+                _s: &[&dyn LayoutView],
+                _c: &mut LayoutCache,
+            ) -> Size {
+                Size {
+                    width: self.rect.width,
+                    height: self.rect.height,
+                }
             }
-            fn place_subviews(&self, _b: Rect, _s: &mut [&mut dyn LayoutView], _c: &mut LayoutCache) {
+            fn place_subviews(
+                &self,
+                _b: Rect,
+                _s: &mut [&mut dyn LayoutView],
+                _c: &mut LayoutCache,
+            ) {
                 self.calls.fetch_add(1, Ordering::SeqCst);
             }
             fn view_hash(&self) -> u64 {
@@ -485,17 +566,22 @@ mod tests {
         cvkg_core::LayoutCache::set_layout_budget_deadline(Some(
             std::time::Instant::now() - std::time::Duration::from_millis(50),
         ));
-        
-        cache.previous_rects.insert(2001, Rect::new(10.0, 10.0, 100.0, 100.0));
+
+        cache
+            .previous_rects
+            .insert(2001, Rect::new(10.0, 10.0, 100.0, 100.0));
 
         let mut v = view;
         let mut subviews: Vec<&mut dyn LayoutView> = vec![&mut v];
 
-        HStack::new(0.0, Alignment::Center, Distribution::Leading)
-            .place_subviews(Rect::new(0.0, 0.0, 500.0, 500.0), &mut subviews, &mut cache);
+        HStack::new(0.0, Alignment::Center, Distribution::Leading).place_subviews(
+            Rect::new(0.0, 0.0, 500.0, 500.0),
+            &mut subviews,
+            &mut cache,
+        );
 
         assert_eq!(calls.load(Ordering::SeqCst), 1);
-        
+
         let engine = TaffyLayoutEngine::get_or_insert_engine(&mut cache);
         assert!(!engine.node_map.contains_key(&2001));
 
@@ -505,11 +591,40 @@ mod tests {
     #[test]
     fn test_spatial_index_hit_test() {
         let mut index = LayoutSpatialIndex::new();
-        let root = Rect { x: 0.0, y: 0.0, width: 1000.0, height: 1000.0 };
+        let root = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 1000.0,
+            height: 1000.0,
+        };
         let entries = vec![
-            LayoutSpatialEntry { hash: 1, rect: Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 } },
-            LayoutSpatialEntry { hash: 2, rect: Rect { x: 200.0, y: 200.0, width: 50.0, height: 50.0 } },
-            LayoutSpatialEntry { hash: 3, rect: Rect { x: 500.0, y: 500.0, width: 200.0, height: 200.0 } },
+            LayoutSpatialEntry {
+                hash: 1,
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+            },
+            LayoutSpatialEntry {
+                hash: 2,
+                rect: Rect {
+                    x: 200.0,
+                    y: 200.0,
+                    width: 50.0,
+                    height: 50.0,
+                },
+            },
+            LayoutSpatialEntry {
+                hash: 3,
+                rect: Rect {
+                    x: 500.0,
+                    y: 500.0,
+                    width: 200.0,
+                    height: 200.0,
+                },
+            },
         ];
         index.rebuild(root, entries);
 
@@ -522,20 +637,50 @@ mod tests {
         assert_eq!(hits[0].hash, 3);
 
         let hits = index.hit_test(999.0, 1.0);
-        assert!(hits.is_empty(), "Expected no hits, got {:?}", hits.iter().map(|e| e.hash).collect::<Vec<_>>());
+        assert!(
+            hits.is_empty(),
+            "Expected no hits, got {:?}",
+            hits.iter().map(|e| e.hash).collect::<Vec<_>>()
+        );
     }
 
     #[test]
     fn test_spatial_index_query_region() {
         let mut index = LayoutSpatialIndex::new();
-        let root = Rect { x: 0.0, y: 0.0, width: 500.0, height: 500.0 };
+        let root = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 500.0,
+            height: 500.0,
+        };
         let entries = vec![
-            LayoutSpatialEntry { hash: 10, rect: Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 } },
-            LayoutSpatialEntry { hash: 20, rect: Rect { x: 400.0, y: 400.0, width: 50.0, height: 50.0 } },
+            LayoutSpatialEntry {
+                hash: 10,
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 100.0,
+                    height: 100.0,
+                },
+            },
+            LayoutSpatialEntry {
+                hash: 20,
+                rect: Rect {
+                    x: 400.0,
+                    y: 400.0,
+                    width: 50.0,
+                    height: 50.0,
+                },
+            },
         ];
         index.rebuild(root, entries);
 
-        let region = Rect { x: 0.0, y: 0.0, width: 150.0, height: 150.0 };
+        let region = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 150.0,
+            height: 150.0,
+        };
         let results = index.query_region(&region);
         assert!(results.iter().any(|e| e.hash == 10));
         assert!(!results.iter().any(|e| e.hash == 20));
@@ -543,15 +688,27 @@ mod tests {
 
     #[test]
     fn test_adaptive_modality_touch_enlarges_small_views() {
-        let small = cvkg_core::Size { width: 20.0, height: 12.0 };
+        let small = cvkg_core::Size {
+            width: 20.0,
+            height: 12.0,
+        };
         let adapted = LayoutModality::Touch.adapt_size(small);
-        assert!(adapted.width >= 44.0, "Width must be at least 44pt for touch");
-        assert!(adapted.height >= 44.0, "Height must be at least 44pt for touch");
+        assert!(
+            adapted.width >= 44.0,
+            "Width must be at least 44pt for touch"
+        );
+        assert!(
+            adapted.height >= 44.0,
+            "Height must be at least 44pt for touch"
+        );
     }
 
     #[test]
     fn test_adaptive_modality_pointer_does_not_enlarge() {
-        let large = cvkg_core::Size { width: 200.0, height: 50.0 };
+        let large = cvkg_core::Size {
+            width: 200.0,
+            height: 50.0,
+        };
         let adapted = LayoutModality::Pointer.adapt_size(large);
         assert_eq!(adapted.width, 200.0);
         assert_eq!(adapted.height, 50.0);
@@ -560,7 +717,8 @@ mod tests {
     #[test]
     fn test_adaptive_modality_accessibility_zoom_spacing() {
         assert!(
-            LayoutModality::AccessibilityZoom.spacing_multiplier() > LayoutModality::Touch.spacing_multiplier(),
+            LayoutModality::AccessibilityZoom.spacing_multiplier()
+                > LayoutModality::Touch.spacing_multiplier(),
             "Accessibility zoom must have the largest spacing multiplier"
         );
     }
@@ -568,20 +726,79 @@ mod tests {
     #[test]
     fn test_focus_order_ltr_visual_sort() {
         let candidates = vec![
-            FocusCandidate { hash: 100, rect: Rect { x: 200.0, y: 10.0, width: 50.0, height: 20.0 }, tab_index: None },
-            FocusCandidate { hash: 200, rect: Rect { x: 0.0,   y: 10.0, width: 50.0, height: 20.0 }, tab_index: None },
-            FocusCandidate { hash: 300, rect: Rect { x: 100.0, y: 10.0, width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate {
+                hash: 100,
+                rect: Rect {
+                    x: 200.0,
+                    y: 10.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
+            FocusCandidate {
+                hash: 200,
+                rect: Rect {
+                    x: 0.0,
+                    y: 10.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
+            FocusCandidate {
+                hash: 300,
+                rect: Rect {
+                    x: 100.0,
+                    y: 10.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
         ];
         let order = compute_focus_order(candidates);
-        assert_eq!(order, vec![200, 300, 100], "LTR focus order violated: {:?}", order);
+        assert_eq!(
+            order,
+            vec![200, 300, 100],
+            "LTR focus order violated: {:?}",
+            order
+        );
     }
 
     #[test]
     fn test_focus_order_explicit_tabindex_comes_first() {
         let candidates = vec![
-            FocusCandidate { hash: 1, rect: Rect { x: 0.0, y: 100.0, width: 50.0, height: 20.0 }, tab_index: None },
-            FocusCandidate { hash: 2, rect: Rect { x: 0.0, y: 0.0,   width: 50.0, height: 20.0 }, tab_index: Some(2) },
-            FocusCandidate { hash: 3, rect: Rect { x: 0.0, y: 50.0,  width: 50.0, height: 20.0 }, tab_index: Some(1) },
+            FocusCandidate {
+                hash: 1,
+                rect: Rect {
+                    x: 0.0,
+                    y: 100.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
+            FocusCandidate {
+                hash: 2,
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: Some(2),
+            },
+            FocusCandidate {
+                hash: 3,
+                rect: Rect {
+                    x: 0.0,
+                    y: 50.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: Some(1),
+            },
         ];
         let order = compute_focus_order(candidates);
         assert_eq!(order[0], 3, "tabindex=1 must be first");
@@ -592,9 +809,36 @@ mod tests {
     #[test]
     fn test_reading_order_valid_sequence_passes() {
         let candidates = vec![
-            FocusCandidate { hash: 1, rect: Rect { x: 0.0,   y: 0.0,  width: 50.0, height: 20.0 }, tab_index: None },
-            FocusCandidate { hash: 2, rect: Rect { x: 100.0, y: 0.0,  width: 50.0, height: 20.0 }, tab_index: None },
-            FocusCandidate { hash: 3, rect: Rect { x: 0.0,   y: 30.0, width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate {
+                hash: 1,
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
+            FocusCandidate {
+                hash: 2,
+                rect: Rect {
+                    x: 100.0,
+                    y: 0.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
+            FocusCandidate {
+                hash: 3,
+                rect: Rect {
+                    x: 0.0,
+                    y: 30.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
         ];
         assert!(validate_reading_order(&candidates).is_ok());
     }
@@ -602,20 +846,38 @@ mod tests {
     #[test]
     fn test_reading_order_backwards_row_fails() {
         let candidates = vec![
-            FocusCandidate { hash: 1, rect: Rect { x: 0.0, y: 100.0, width: 50.0, height: 20.0 }, tab_index: None },
-            FocusCandidate { hash: 2, rect: Rect { x: 0.0, y: 0.0,   width: 50.0, height: 20.0 }, tab_index: None },
+            FocusCandidate {
+                hash: 1,
+                rect: Rect {
+                    x: 0.0,
+                    y: 100.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
+            FocusCandidate {
+                hash: 2,
+                rect: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 50.0,
+                    height: 20.0,
+                },
+                tab_index: None,
+            },
         ];
-        assert!(validate_reading_order(&candidates).is_err(), "Backwards row must fail validation");
+        assert!(
+            validate_reading_order(&candidates).is_err(),
+            "Backwards row must fail validation"
+        );
     }
 
     #[test]
     fn p2_47_deep_tree_100_levels() {
         let mut cache = LayoutCache::new();
-        let mut root: Box<dyn LayoutView> = Box::new(HStack::new(
-            0.0,
-            Alignment::Leading,
-            Distribution::Leading,
-        ));
+        let root: Box<dyn LayoutView> =
+            Box::new(HStack::new(0.0, Alignment::Leading, Distribution::Leading));
         for _ in 0..50 {
             let child: Box<dyn LayoutView> =
                 Box::new(HStack::new(0.0, Alignment::Leading, Distribution::Leading));

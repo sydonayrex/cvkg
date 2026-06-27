@@ -3,8 +3,8 @@ use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy};
 use winit::window::{Window, WindowId};
 
-use cvkg_core::{FocusableId, FocusManager, WindowConfig, WindowHandle, WindowId as CoreWindowId};
 use crate::main_loop::AppEvent;
+use cvkg_core::{FocusManager, FocusableId, WindowConfig, WindowHandle, WindowId as CoreWindowId};
 
 /// Represents the current state of a window.
 ///
@@ -399,6 +399,7 @@ impl WindowManager {
             focus_manager: FocusManager::new(),
             focused_node_id: None,
             last_touch_time: None,
+            last_bounds: None,
         };
 
         self.windows.insert(winit_id, data);
@@ -407,7 +408,10 @@ impl WindowManager {
         self.core_to_winit.insert(core_id, winit_id);
 
         if let Some(gpu_mutex) = gpu {
-            gpu_mutex.lock().unwrap_or_else(|p| p.into_inner()).register_window(window.clone());
+            gpu_mutex
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .register_window(window.clone());
         }
 
         handle
@@ -469,6 +473,7 @@ pub struct WindowData {
     pub(crate) focus_manager: FocusManager,
     pub(crate) focused_node_id: Option<cvkg_vdom::NodeId>,
     pub(crate) last_touch_time: Option<std::time::Instant>,
+    pub(crate) last_bounds: Option<cvkg_core::Rect>,
 }
 
 // =============================================================================
@@ -645,7 +650,8 @@ impl MultiMonitorManager {
 
     pub fn requires_dpi_adaptation(&self, from_index: usize, to_index: usize) -> bool {
         if from_index < self.monitors.len() && to_index < self.monitors.len() {
-            (self.monitors[from_index].scale_factor - self.monitors[to_index].scale_factor).abs() > f64::EPSILON
+            (self.monitors[from_index].scale_factor - self.monitors[to_index].scale_factor).abs()
+                > f64::EPSILON
         } else {
             false
         }

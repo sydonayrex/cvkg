@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use super::OrchestratorState;
 use super::types::{
     LogLevel, OrchestratorEdge, OrchestratorNode, OrchestratorNodeType, ValidationError,
 };
-use super::OrchestratorState;
 
 /// A step in the execution simulation.
 #[derive(Debug, Clone)]

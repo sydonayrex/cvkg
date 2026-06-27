@@ -4,9 +4,7 @@
 //! Backends continue to implement `Renderer` as before. These sub-traits exist
 //! so that consumer code can depend on only the capability slice it needs.
 
-use super::{
-    RenderIntensityMode, ColorTheme, Event, Mesh, Rect, TelemetryData,
-};
+use super::{ColorTheme, Event, Mesh, Rect, RenderIntensityMode, TelemetryData};
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Core -- required by every backend
@@ -25,40 +23,10 @@ pub trait RendererCore: Send {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// 2D shape drawing operations.
-pub trait RendererShapes {
-    fn fill_rect(&mut self, rect: Rect, color: [f32; 4]);
-    fn fill_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4]);
-    fn fill_ellipse(&mut self, rect: Rect, color: [f32; 4]);
-    /// Fill a rounded rect with glass material for frosted backdrop effect.
-    fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32);
-    fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
-    fn stroke_rounded_rect(
-        &mut self,
-        rect: Rect,
-        radius: f32,
-        color: [f32; 4],
-        stroke_width: f32,
-    );
-    fn stroke_ellipse(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32);
-    fn draw_line(
-        &mut self,
-        x1: f32,
-        y1: f32,
-        x2: f32,
-        y2: f32,
-        color: [f32; 4],
-        stroke_width: f32,
-    );
-    fn fill_polygon(&mut self, _vertices: &[[f32; 2]], _color: [f32; 4]) {}
-    fn stroke_polygon(
-        &mut self,
-        vertices: &[[f32; 2]],
-        color: [f32; 4],
-        stroke_width: f32,
-    ) {
-        let _ = (vertices, color, stroke_width);
-    }
-}
+///
+/// All methods are defined in the main `Renderer` trait. This trait serves as
+/// a capability marker for consumer code that only needs shape drawing.
+pub trait RendererShapes: Send {}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3D -- mesh and cube drawing
@@ -73,56 +41,11 @@ pub trait Renderer3D {
 // ══════════════════════════════════════════════════════════════════════════════
 // Text -- text layout and measurement
 // ══════════════════════════════════════════════════════════════════════════════
-
-pub trait RendererText {
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
-        let g = (color[1] * 255.0).clamp(0.0, 255.0) as u8;
-        let b = (color[2] * 255.0).clamp(0.0, 255.0) as u8;
-        let a = (color[3] * 255.0).clamp(0.0, 255.0) as u8;
-
-        let mut style = cvkg_runic_text::TextStyle::new("Inter", size);
-        style.color = [r, g, b, a];
-        let spans = [cvkg_runic_text::TextSpan::new(text, style)];
-
-        if let Some(shaped) = self.shape_rich_text(
-            &spans,
-            None,
-            cvkg_runic_text::TextAlign::Start,
-            cvkg_runic_text::TextOverflow::Visible,
-        ) {
-            self.draw_shaped_text(&shaped, x, y);
-        }
-    }
-
-    fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        let style = cvkg_runic_text::TextStyle::new("Inter", size);
-        let spans = [cvkg_runic_text::TextSpan::new(text, style)];
-
-        if let Some(shaped) = self.shape_rich_text(
-            &spans,
-            None,
-            cvkg_runic_text::TextAlign::Start,
-            cvkg_runic_text::TextOverflow::Visible,
-        ) {
-            (shaped.width, shaped.height)
-        } else {
-            (0.0, 0.0)
-        }
-    }
-
-    fn shape_rich_text(
-        &mut self,
-        _spans: &[cvkg_runic_text::TextSpan],
-        _max_width: Option<f32>,
-        _align: cvkg_runic_text::TextAlign,
-        _overflow: cvkg_runic_text::TextOverflow,
-    ) -> Option<cvkg_runic_text::ShapedText> {
-        None
-    }
-
-    fn draw_shaped_text(&mut self, _text: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {}
-}
+/// Text layout and measurement.
+///
+/// All methods are defined in the main `Renderer` trait. This trait serves as
+/// a capability marker for consumer code that only needs text rendering.
+pub trait RendererText: Send {}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Images -- texture and image handling
@@ -142,14 +65,7 @@ pub trait RendererImages {
 
 /// Data-visualisation helpers.
 pub trait RendererDataViz {
-    fn upload_data_texture(
-        &mut self,
-        _id: &str,
-        _data: &[f32],
-        _width: u32,
-        _height: u32,
-    ) {
-    }
+    fn upload_data_texture(&mut self, _id: &str, _data: &[f32], _width: u32, _height: u32) {}
     fn draw_heatmap(&mut self, _texture_id: &str, _rect: Rect, _palette: &str) {}
 }
 
@@ -286,38 +202,11 @@ pub trait RendererExport {
 // ══════════════════════════════════════════════════════════════════════════════
 
 /// Cyberpunk-specific visual effects.
-pub trait RendererCyberpunk {
-    fn bifrost(&mut self, _rect: Rect, _blur: f32, _saturation: f32, _opacity: f32) {}
-    fn gungnir(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
-    /// Soft glow variant -- half the intensity of gungnir(). Use for hover highlights.
-    fn gungnir_soft(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32, _intensity: f32) {}
-    fn mani_glow(&mut self, _rect: Rect, _color: [f32; 4], _radius: f32) {}
-    fn push_mjolnir_slice(&mut self, _angle: f32, _offset: f32) {}
-    fn pop_mjolnir_slice(&mut self) {}
+///
+/// All methods except `memoize` are defined in the main `Renderer` trait.
+/// `memoize` is a cyberpunk-specific optimization.
+pub trait RendererCyberpunk: Send {
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn super::Renderer));
-    fn mjolnir_shatter(
-        &mut self,
-        _rect: Rect,
-        _pieces: u32,
-        _force: f32,
-        _color: [f32; 4],
-    ) {
-    }
-    fn mjolnir_fluid_shatter(
-        &mut self,
-        _rect: Rect,
-        _pieces: u32,
-        _force: f32,
-        _color: [f32; 4],
-    ) {
-    }
-    fn draw_mjolnir_bolt(
-        &mut self,
-        _from: [f32; 2],
-        _to: [f32; 2],
-        _color: [f32; 4],
-    ) {
-    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -413,10 +302,7 @@ pub trait RendererZIndex {
 
 /// Layout debugging helpers.
 pub trait RendererLayoutDebug {
-    fn query_layout(
-        &self,
-        _node_id: super::scene_graph::NodeId,
-    ) -> Option<Rect> {
+    fn query_layout(&self, _node_id: super::scene_graph::NodeId) -> Option<Rect> {
         None
     }
     fn set_debug_layout(&mut self, _enabled: bool) {}
@@ -493,5 +379,3 @@ pub fn renderer_capabilities() -> RendererCapabilities {
         cyberpunk: false,
     }
 }
-
-

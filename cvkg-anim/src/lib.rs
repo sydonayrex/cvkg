@@ -42,6 +42,7 @@ pub mod momentum;
 pub mod morph;
 pub mod physics;
 
+pub mod easing;
 pub mod spring_snap;
 
 pub mod verlet;

@@ -132,11 +132,7 @@ impl View for InputOTP {
             } else {
                 theme::border()
             };
-            let border_width = if i == char_count as u32 {
-                2.0
-            } else {
-                1.0
-            };
+            let border_width = if i == char_count as u32 { 2.0 } else { 1.0 };
 
             // Box background
             renderer.fill_rounded_rect(box_rect, RADIUS_MD, bg_color);

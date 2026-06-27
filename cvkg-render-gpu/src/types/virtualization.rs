@@ -87,7 +87,8 @@ impl Frustum {
     /// Test if a sphere is visible within this frustum.
     pub fn intersects_sphere(&self, center: &[f32; 3], radius: f32) -> bool {
         for plane in &self.planes {
-            let dist = plane[0] * center[0] + plane[1] * center[1] + plane[2] * center[2] + plane[3];
+            let dist =
+                plane[0] * center[0] + plane[1] * center[1] + plane[2] * center[2] + plane[3];
             if dist < -radius {
                 return false;
             }
@@ -163,16 +164,10 @@ impl SpatialHash {
     pub fn query_sphere(&self, center: &[f32; 3], radius: f32) -> Vec<u64> {
         let mut results = Vec::new();
         // Check cells that could contain entities within the sphere
-        let min_cell = self.world_to_cell(&[
-            center[0] - radius,
-            center[1] - radius,
-            center[2] - radius,
-        ]);
-        let max_cell = self.world_to_cell(&[
-            center[0] + radius,
-            center[1] + radius,
-            center[2] + radius,
-        ]);
+        let min_cell =
+            self.world_to_cell(&[center[0] - radius, center[1] - radius, center[2] - radius]);
+        let max_cell =
+            self.world_to_cell(&[center[0] + radius, center[1] + radius, center[2] + radius]);
 
         for x in min_cell.x..=max_cell.x {
             for y in min_cell.y..=max_cell.y {

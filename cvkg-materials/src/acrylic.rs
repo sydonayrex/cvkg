@@ -79,8 +79,8 @@ impl Default for AcrylicMaterial {
     fn default() -> Self {
         Self {
             blur_radius: 30.0,
-            tint: [1.0, 1.0, 1.0, 0.6],       // semi-transparent white
-            noise_opacity: 0.02,                 // subtle grain
+            tint: [1.0, 1.0, 1.0, 0.6], // semi-transparent white
+            noise_opacity: 0.02,        // subtle grain
             fallback_color: [0.95, 0.95, 0.95, 1.0], // light gray
         }
     }

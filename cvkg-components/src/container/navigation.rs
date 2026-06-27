@@ -1,5 +1,5 @@
-use crate::theme;
 use crate::RADIUS_XL;
+use crate::theme;
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -141,7 +141,7 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
             .get_component_state::<bool>(hover_hash)
             .and_then(|v| v.read().ok().map(|v| *v))
             .unwrap_or(false);
-        
+
         renderer.fill_rect(
             handle_rect,
             if is_hover_handle && !is_collapsed {

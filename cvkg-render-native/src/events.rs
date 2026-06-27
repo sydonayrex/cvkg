@@ -1,6 +1,6 @@
 use std::path::PathBuf;
-use winit::event::{KeyEvent, Ime, ElementState};
-use winit::keyboard::{PhysicalKey, ModifiersState};
+use winit::event::{ElementState, Ime, KeyEvent};
+use winit::keyboard::{ModifiersState, PhysicalKey};
 
 /// Converts a winit keyboard event into a CVKG event.
 pub fn convert_keyboard_event(

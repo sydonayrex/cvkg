@@ -1,73 +1,51 @@
 # How to Run a Demo
 
-Goal: Execute a CVKG demo application to see the framework in action.
+## Goal
 
-## Process Overview
-
-```mermaid
-graph TD
-    A["Install Rust & GPU Deps"] --> B["Clone CVKG Repository"]
-    B --> C["Build Workspace (cargo build)"]
-    C --> D{"Choose Target Environment"}
-    D -->|"Native GPU Desktop"| E["Run cargo run --example shatter_demo"]
-    D -->|"Web Canvas"| F["Run wasm-pack / demo server"]
-    D -->|"Headless Testing"| G["Run cargo test -p cvkg-test"]
-```
+Run one of the pre-built demo applications to see CVKG in action.
 
 ## Prerequisites
 
-
-- GPU with Vulkan, Metal, or DirectX 12 support
 - Rust toolchain installed
+- `cargo build --workspace` succeeds
 
 ## Steps
 
-### 1. Build the workspace
+### Native Demo (berserker)
 
 ```bash
-cd /path/to/cvkg
-cargo build --workspace
+cargo run -p berserker
 ```
 
-### 2. Run a GPU demo
+This launches the native tactical HUD application. A window should open showing the demo UI.
+
+### Web Demo (niflheim-web)
 
 ```bash
-# Shatter demo with visual effects
-cargo run --example shatter_demo -p cvkg --features gpu
-
-# Hit test demo showing pointer interactions
-cargo run --example hit_test_demo -p cvkg --features gpu
-
-# Berserker fire demo with particle effects
-cargo run --example berserker_fire_demo -p cvkg --features gpu
+cd demos/niflheim-web
+wasm-pack build --target web
+# Serve with any static file server:
+python3 -m http.server 8080 --dir pkg/
 ```
 
-### 3. Run a web demo
+Open `http://localhost:8080` in a browser with WebGPU or WebGL2 support.
+
+### Web Stress Test (berserker-fire-web)
 
 ```bash
-cargo run --example niflheim_demo -p cvkg-components --features web
+cd demos/berserker-fire-web
+wasm-pack build --target web
+python3 -m http.server 8080 --dir pkg/
 ```
-
-### 4. Running Headless Verification & Screenshots
-
-You can execute headless render tests to verify graphics pipelines or update the primary showcase screenshot (`docs/images/cvkg_hero.png`):
-
-```bash
-cargo test -p cvkg-test --test visual_regression -- --nocapture
-```
-
-This runs the Surtr renderer headlessly, maps the frame buffers, and writes the output directly.
 
 ## Expected Output
 
-A native window opens with the demo content. Running the headless regression test will regenerate `docs/images/cvkg_hero.png` from the latest `niflheim_demo()` layouts.
+- `berserker`: Native window with rendered UI components.
+- `niflheim-web`: Browser page displaying the CVKG component suite.
+- `berserker-fire-web`: Browser page with procedural fire and lightning rendering.
 
-## Recovery
+## What Can Go Wrong
 
-If the application crashes with "no adapter found":
-
-```bash
-# Try software rendering (Linux only)
-export WGPU_ADAPTER=mesa
-cargo run --example shatter_demo -p cvkg --features gpu
-```
+- **"GPU adapter not found"**: Your system lacks Vulkan/Metal/DX12 drivers. Install Mesa drivers (`sudo apt-get install mesa-utils`) or update GPU drivers.
+- **WASM build fails**: Ensure `wasm-pack` is installed: `curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh`.
+- **Blank page in browser**: Check browser console for WebGPU/WebGL2 errors. Try Chrome or Firefox with WebGPU enabled.

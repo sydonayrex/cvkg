@@ -29,7 +29,12 @@
     clippy::needless_borrow,
     ambiguous_glob_reexports,
     clippy::type_complexity,
-    clippy::unusual_byte_groupings
+    clippy::unusual_byte_groupings,
+    clippy::collapsible_if,
+    clippy::manual_range_contains,
+    clippy::derivable_impls,
+    clippy::match_like_matches_macro,
+    clippy::collapsible_match
 )]
 
 //! Built-in component library for CVKG
@@ -203,6 +208,7 @@ pub mod file_tree;
 pub mod flexiscope;
 pub mod flux_layout;
 pub mod gpu_charts;
+pub mod gradient;
 pub mod grid;
 pub mod holographic_runestone;
 pub mod hud;
@@ -256,7 +262,11 @@ pub use card::RunesCard;
 pub use clipped_corner::*;
 pub use collaboration::*;
 pub use command::*;
-pub use command_palette::{BifrostLauncher, MimirSpotlight, PaletteCommand};
+pub use command_palette::{Launcher, MimirSpotlight, PaletteCommand};
+
+/// Deprecated: Use `Launcher` instead.
+#[deprecated(note = "Use `Launcher` instead")]
+pub type BifrostLauncher = Launcher;
 pub use container::{
     Collapsible, DialogAction, FlexBox, GeriDialog, GjallarSplitter, GraniSheet, HStack,
     LazyVStack, NavigationSplitView, NavigationStack, SagaAccordion, ScrollView, SettingsForm,
@@ -306,7 +316,7 @@ pub use valkyrie_indicator::ValkyrieIndicator;
 pub use virtual_list::*;
 pub use visual::{
     AvatarStatus, ChartType, DraumaSkeleton, EmptyState, HatiCarousel, HatiSpinner, MerkiBadge,
-    MimirsWell, MuninAvatar, RuneScript, RunicTooltip, SkollProgress, SleipnirGait, SpinnerVariant,
+    MimirsWell, MuninAvatar, ProgressVariant, RuneScript, RunicTooltip, SkollProgress, SleipnirGait, SpinnerVariant,
     StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan,
 };
 pub use window::{GinnungagapWindow, HiminnModal, YggdrasilWindow};
@@ -346,6 +356,7 @@ pub mod toast;
 pub mod token_stream;
 
 pub mod anim;
+pub mod animation_triggers;
 pub mod trustmark;
 pub mod tyr_security;
 pub mod vtree;
@@ -401,7 +412,8 @@ pub use datepicker::*;
 pub use direction::DirectionProvider;
 pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
 pub use editable::Editable;
-pub use form_binder::{Binding, FormBinder};
+pub use form_binder::{FormBinder, FormBinding};
+pub use form_validation::FormField;
 pub use hover_card::{HoverCard, HoverCardPosition};
 pub use input_group::InputGroup;
 pub use input_otp::InputOTP;
@@ -411,8 +423,11 @@ pub use mention_input::MentionInput;
 pub use native_select::NativeSelect;
 pub use phone_input::PhoneInput;
 pub use popconfirm::Popconfirm;
+pub use popover::Popover;
 pub use qrcode::QRCode;
+pub use radio_group::RadioGroup;
 pub use sonner::{Sonner, SonnerPosition, SonnerToast, SonnerType};
+pub use toast::ToastManager;
 pub use toggle_group::ToggleGroup;
 
 pub use flexiscope::{ContainerLayout, FlexiScope, ScopeThreshold, fluid_typography};

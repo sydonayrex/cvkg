@@ -1,5 +1,5 @@
-use crate::theme;
 use crate::RADIUS_SM;
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 const RUNES: &[char] = &[
@@ -178,7 +178,13 @@ impl<V: View> View for VölvaScan<V> {
                     noise.push('\n');
                 }
             }
-            renderer.draw_text(&noise, rect.x, rect.y + 10.0, 10.0, theme::with_alpha(theme::accent(), 0.4));
+            renderer.draw_text(
+                &noise,
+                rect.x,
+                rect.y + 10.0,
+                10.0,
+                theme::with_alpha(theme::accent(), 0.4),
+            );
         } else {
             // Reveal Content
             let opacity = ((t - self.duration) * 2.0).min(1.0);

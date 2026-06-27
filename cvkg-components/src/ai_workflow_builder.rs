@@ -281,13 +281,7 @@ impl View for PromptChainVisualizer {
                 color,
             );
 
-            renderer.draw_text(
-                &step.name,
-                rect.x + 8.0,
-                y + 9.0,
-                11.0,
-                theme::text(),
-            );
+            renderer.draw_text(&step.name, rect.x + 8.0, y + 9.0, 11.0, theme::text());
 
             if step.status == PromptStatus::Completed {
                 renderer.draw_text(
@@ -899,13 +893,7 @@ impl View for AIWorkflowBuilder {
                 theme::border_strong(),
                 1.0,
             );
-            renderer.draw_text(
-                &node.title,
-                cx - 35.0,
-                cy - 2.0,
-                10.0,
-                theme::text(),
-            );
+            renderer.draw_text(&node.title, cx - 35.0, cy - 2.0, 10.0, theme::text());
         }
     }
 }

@@ -69,7 +69,12 @@ impl View for BifrostTabs {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(rect, 20.0, 1.0, 0.8);
         }
-        renderer.stroke_rounded_rect(rect, RADIUS_LG, theme::with_alpha(theme::border(), 0.3), 1.0);
+        renderer.stroke_rounded_rect(
+            rect,
+            RADIUS_LG,
+            theme::with_alpha(theme::border(), 0.3),
+            1.0,
+        );
 
         // 2. Liquid Selection Indicator (The Bifrost bridge)
         let target_x = rect.x + (self.selected_index as f32 * tab_width);
@@ -84,7 +89,11 @@ impl View for BifrostTabs {
         };
 
         renderer.gungnir(indicator_rect, [0.0, 0.8, 1.0, 0.6], 10.0, 0.8);
-        renderer.fill_rounded_rect(indicator_rect, RADIUS_MD, theme::with_alpha(theme::primary(), 0.4));
+        renderer.fill_rounded_rect(
+            indicator_rect,
+            RADIUS_MD,
+            theme::with_alpha(theme::primary(), 0.4),
+        );
 
         // 3. Tab Labels
         for (i, option) in self.options.iter().enumerate() {

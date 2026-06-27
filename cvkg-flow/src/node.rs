@@ -1,7 +1,7 @@
 use crate::port::FlowPort;
+use crate::types::{NodeId, NodeType};
 #[cfg(test)]
 use cvkg_core::KvasirId;
-use crate::types::{NodeId, NodeType};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -378,7 +378,9 @@ mod tests {
         node.set_glass_material(material);
         assert!(node.has_glass_material());
 
-        let gm = node.glass_material.expect("glass_material should be Some after set_glass_material");
+        let gm = node
+            .glass_material
+            .expect("glass_material should be Some after set_glass_material");
         assert_eq!(gm.backdrop_blur, 20.0);
         assert_eq!(gm.refraction, 0.3);
         assert_eq!(gm.frost, 0.5);

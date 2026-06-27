@@ -12,3 +12,18 @@ fn test_view_macro_expansion() {
     // The view_component macro generates a struct with the fields from the function arguments
     assert_eq!(v.label, "Hello");
 }
+
+#[test]
+#[should_panic(expected = "missing required field: name")]
+fn test_cvkg_component_builder_missing_field_includes_name() {
+    use cvkg_macros::cvkg_component;
+
+    #[cvkg_component]
+    struct TestComponent {
+        name: String,
+        value: u32,
+    }
+
+    // Build without setting the `name` field -- should panic with field name
+    let _ = TestComponent::builder().value(42).build();
+}

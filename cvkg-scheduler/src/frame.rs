@@ -34,7 +34,9 @@ use cvkg_core::KvasirId;
 /// # Ordering contract
 /// Phases advance monotonically within a frame via [`FrameScheduler::advance_phase`].
 /// Returning to an earlier phase within the same frame is not permitted.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum FramePhase {
     /// Raw input events are collected and dispatched (pointer, keyboard, touch).
     Input,
@@ -394,24 +396,42 @@ mod tests {
 
         // Input phase: nothing should run yet.
         fs.flush_current_phase();
-        assert!(!*ran_layout.lock().unwrap(), "layout should not run during Input");
-        assert!(!*ran_anim.lock().unwrap(), "anim should not run during Input");
+        assert!(
+            !*ran_layout.lock().unwrap(),
+            "layout should not run during Input"
+        );
+        assert!(
+            !*ran_anim.lock().unwrap(),
+            "anim should not run during Input"
+        );
 
         // Advance to State and flush.
         fs.advance_phase();
         fs.flush_current_phase();
-        assert!(!*ran_layout.lock().unwrap(), "layout should not run during State");
+        assert!(
+            !*ran_layout.lock().unwrap(),
+            "layout should not run during State"
+        );
 
         // Advance to Layout and flush.
         fs.advance_phase();
         fs.flush_current_phase();
-        assert!(*ran_layout.lock().unwrap(), "layout task should have run during Layout phase");
-        assert!(!*ran_anim.lock().unwrap(), "anim task should not have run yet");
+        assert!(
+            *ran_layout.lock().unwrap(),
+            "layout task should have run during Layout phase"
+        );
+        assert!(
+            !*ran_anim.lock().unwrap(),
+            "anim task should not have run yet"
+        );
 
         // Advance to Animation and flush.
         fs.advance_phase();
         fs.flush_current_phase();
-        assert!(*ran_anim.lock().unwrap(), "animation task should have run during Animation phase");
+        assert!(
+            *ran_anim.lock().unwrap(),
+            "animation task should have run during Animation phase"
+        );
     }
 
     #[test]
@@ -451,7 +471,11 @@ mod tests {
         }
 
         fs.flush_current_phase();
-        assert_eq!(*count.lock().unwrap(), 5, "all 5 Input tasks should have run");
+        assert_eq!(
+            *count.lock().unwrap(),
+            5,
+            "all 5 Input tasks should have run"
+        );
     }
 
     #[test]
@@ -476,6 +500,9 @@ mod tests {
             fs.advance_phase();
         }
 
-        assert!(!*ran.lock().unwrap(), "task from previous frame should have been dropped");
+        assert!(
+            !*ran.lock().unwrap(),
+            "task from previous frame should have been dropped"
+        );
     }
 }

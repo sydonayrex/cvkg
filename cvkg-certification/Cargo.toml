@@ -1,6 +1,6 @@
 [package]
 name = "cvkg-certification"
-version = "0.2.14"
+version = "0.2.15"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -13,6 +13,10 @@ path = "src/lib.rs"
 [dependencies]
 cvkg-core = { workspace = true }
 cvkg-scene = { workspace = true }
+cvkg-spatial = { workspace = true }
+cvkg-themes = { workspace = true }
+cvkg-svg-serialize = { workspace = true }
+cvkg-runic-text = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 

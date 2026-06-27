@@ -57,7 +57,14 @@ impl QuadNode {
         let hh = self.bounds.height * 0.5;
         let mx = self.bounds.x + hw;
         let my = self.bounds.y + hh;
-        let make = |x, y, w, h| Box::new(QuadNode::new(Rect { x, y, width: w, height: h }));
+        let make = |x, y, w, h| {
+            Box::new(QuadNode::new(Rect {
+                x,
+                y,
+                width: w,
+                height: h,
+            }))
+        };
         let mut children = Box::new([
             make(self.bounds.x, self.bounds.y, hw, hh), // NW
             make(mx, self.bounds.y, hw, hh),            // NE
@@ -111,11 +118,18 @@ impl QuadNode {
 impl LayoutSpatialIndex {
     /// Construct an empty index.
     pub fn new() -> Self {
-        Self { root: None, bounds: Rect::zero() }
+        Self {
+            root: None,
+            bounds: Rect::zero(),
+        }
     }
 
     /// Rebuild the index from a flat list of (hash, rect) pairs produced after a layout pass.
-    pub fn rebuild(&mut self, root_bounds: Rect, entries: impl IntoIterator<Item = LayoutSpatialEntry>) {
+    pub fn rebuild(
+        &mut self,
+        root_bounds: Rect,
+        entries: impl IntoIterator<Item = LayoutSpatialEntry>,
+    ) {
         self.bounds = root_bounds;
         let mut root = QuadNode::new(root_bounds);
         for e in entries {

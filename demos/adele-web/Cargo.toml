@@ -1,7 +1,7 @@
 [package]
 publish = false
 name = "adele-web-demo"
-version = "0.2.14"
+version = "0.2.15"
 edition = "2024"
 
 [features]
@@ -12,12 +12,12 @@ default = ["webgpu"]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-cvkg-core = { path = "../../cvkg-core", version = "0.2.12" }
-cvkg-render-gpu = { path = "../../cvkg-render-gpu", version = "0.2.12" }
-cvkg-vdom = { path = "../../cvkg-vdom", version = "0.2.12" }
-cvkg-components = { path = "../../cvkg-components", version = "0.2.12" }
-cvkg-themes = { path = "../../cvkg-themes", version = "0.2.12" }
-cvkg-layout = { path = "../../cvkg-layout", version = "0.2.12" }
+cvkg-core.workspace = true
+cvkg-render-gpu.workspace = true
+cvkg-vdom.workspace = true
+cvkg-components.workspace = true
+cvkg-themes.workspace = true
+cvkg-layout.workspace = true
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 console_error_panic_hook = "0.1"

@@ -1,5 +1,5 @@
-use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
 use cvkg_core::KvasirId;
+use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VDom, VDomPatch, VNode};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -282,7 +282,10 @@ fn p0_6_remove_handler_then_dispatch_does_not_invoke() {
         "handler should be cleared after apply"
     );
 
-    assert!(!*fired.lock().unwrap(), "no firing should have occurred yet");
+    assert!(
+        !*fired.lock().unwrap(),
+        "no firing should have occurred yet"
+    );
 }
 
 // =========================================================================
@@ -367,7 +370,10 @@ fn p0_7_handler_swap_emits_update_patch() {
     assert!(
         patches.iter().any(|p| matches!(
             p,
-            VDomPatch::Update { handlers: Some(_), .. }
+            VDomPatch::Update {
+                handlers: Some(_),
+                ..
+            }
         )),
         "different closures should trigger an Update patch with handlers, got: {patches:?}"
     );
@@ -614,10 +620,10 @@ fn berserker_click_box_regression() {
     let menu_x = [8.0_f32, 68.0, 128.0, 198.0, 278.0];
     let menu_w = [60.0_f32, 60.0, 70.0, 80.0, 60.0];
     let corner_positions: [(f32, f32); 4] = [
-        (20.0, 50.0),           // I: top-left
-        (1160.0, 50.0),         // II: top-right (1280-120)
-        (20.0, 530.0),          // III: bottom-left (720-190)
-        (1160.0, 530.0),        // IV: bottom-right
+        (20.0, 50.0),    // I: top-left
+        (1160.0, 50.0),  // II: top-right (1280-120)
+        (20.0, 530.0),   // III: bottom-left (720-190)
+        (1160.0, 530.0), // IV: bottom-right
     ];
 
     // Helper: build a VDom matching the berserker static chrome
@@ -641,7 +647,15 @@ fn berserker_click_box_regression() {
         let mut bar_children: Vec<KvasirId> = vec![];
         for i in 0..5 {
             let mid = menu_ids[i];
-            let m = interactive_node(mid.0, "NornirBarItem", menu_x[i], 0.0, menu_w[i], 28.0, "group");
+            let m = interactive_node(
+                mid.0,
+                "NornirBarItem",
+                menu_x[i],
+                0.0,
+                menu_w[i],
+                28.0,
+                "group",
+            );
             vdom.nodes.insert(mid, m);
             bar_children.push(mid);
             vdom.event_handlers.insert(
@@ -694,7 +708,15 @@ fn berserker_click_box_regression() {
 
         // Overlay
         let overlay_id = KvasirId(999);
-        let overlay = interactive_node(999, "DropdownOverlay", 0.0, 0.0, 1280.0, 720.0, "presentation");
+        let overlay = interactive_node(
+            999,
+            "DropdownOverlay",
+            0.0,
+            0.0,
+            1280.0,
+            720.0,
+            "presentation",
+        );
         root_children.push(overlay_id);
         vdom.event_handlers.insert(
             overlay_id,
@@ -745,7 +767,11 @@ fn berserker_click_box_regression() {
         let cy = 14.0;
         let hit = vdom.hit_test(cx, cy, 0.0).map(|(id, _)| id);
         // The overlay (999) is on top, so it absorbs the hit
-        assert_eq!(hit, Some(KvasirId(999)), "Overlay should block menu item {i} at ({cx}, {cy})");
+        assert_eq!(
+            hit,
+            Some(KvasirId(999)),
+            "Overlay should block menu item {i} at ({cx}, {cy})"
+        );
     }
 
     // Corner buttons -- click center of each
@@ -759,7 +785,11 @@ fn berserker_click_box_regression() {
         let cid = corner_ids[i];
         let (cx, cy) = corner_positions[i];
         let hit = vdom.hit_test(cx + 50.0, cy + 50.0, 0.0).map(|(id, _)| id);
-        assert_eq!(hit, Some(cid), "Corner button {i} should be hit (overlay should not block)");
+        assert_eq!(
+            hit,
+            Some(cid),
+            "Corner button {i} should be hit (overlay should not block)"
+        );
     }
 
     // Dock items -- click center of each
@@ -775,18 +805,37 @@ fn berserker_click_box_regression() {
     // 2. Verify event dispatch
     // ------------------------------------------------------------------
     let file_click = vdom.dispatch_event(cvkg_core::Event::PointerDown {
-        x: 30.0, y: 14.0, button: 0,
-        proximity_field: 0.0, tilt: None, azimuth: None,
-        pressure: Some(1.0), barrel_rotation: None, pointer_precision: 0.0,
+        x: 30.0,
+        y: 14.0,
+        button: 0,
+        proximity_field: 0.0,
+        tilt: None,
+        azimuth: None,
+        pressure: Some(1.0),
+        barrel_rotation: None,
+        pointer_precision: 0.0,
     });
-    assert_eq!(file_click, cvkg_core::EventResponse::Handled, "File menu click");
+    assert_eq!(
+        file_click,
+        cvkg_core::EventResponse::Handled,
+        "File menu click"
+    );
 
     let corner_click = vdom.dispatch_event(cvkg_core::Event::PointerClick {
-        x: 70.0, y: 100.0, button: 0,
-        tilt: None, azimuth: None, pressure: None,
-        barrel_rotation: None, pointer_precision: 0.0,
+        x: 70.0,
+        y: 100.0,
+        button: 0,
+        tilt: None,
+        azimuth: None,
+        pressure: None,
+        barrel_rotation: None,
+        pointer_precision: 0.0,
     });
-    assert_eq!(corner_click, cvkg_core::EventResponse::Handled, "Corner button click");
+    assert_eq!(
+        corner_click,
+        cvkg_core::EventResponse::Handled,
+        "Corner button click"
+    );
 
     // ------------------------------------------------------------------
     // 3. Verify handler survival across 100 rebuilds
@@ -803,7 +852,9 @@ fn berserker_click_box_regression() {
             new_corner_ids[0],
             vec![("pointerclick".to_string(), {
                 let f = Arc::clone(&f);
-                Arc::new(move |_| { *f.lock().unwrap() += 1; }) as _
+                Arc::new(move |_| {
+                    *f.lock().unwrap() += 1;
+                }) as _
             })]
             .into_iter()
             .collect(),
@@ -811,33 +862,62 @@ fn berserker_click_box_regression() {
 
         if let Some(prev_vdom) = prev.take() {
             let patches = prev_vdom.diff(&new_vdom);
-            assert!(patches.len() <= 10, "expected incremental diff, got {}", patches.len());
+            assert!(
+                patches.len() <= 10,
+                "expected incremental diff, got {}",
+                patches.len()
+            );
         }
 
         // Verify hit testing after rebuild
         let hit = new_vdom.hit_test(70.0, 100.0, 0.0).map(|(id, _)| id);
-        assert_eq!(hit, Some(new_corner_ids[0]), "Corner button should be hit after rebuild");
+        assert_eq!(
+            hit,
+            Some(new_corner_ids[0]),
+            "Corner button should be hit after rebuild"
+        );
 
         // Verify event dispatch after rebuild
         let resp = new_vdom.dispatch_event(cvkg_core::Event::PointerClick {
-            x: 70.0, y: 100.0, button: 0,
-            tilt: None, azimuth: None, pressure: None,
-            barrel_rotation: None, pointer_precision: 0.0,
+            x: 70.0,
+            y: 100.0,
+            button: 0,
+            tilt: None,
+            azimuth: None,
+            pressure: None,
+            barrel_rotation: None,
+            pointer_precision: 0.0,
         });
-        assert_eq!(resp, cvkg_core::EventResponse::Handled, "Click should be handled after rebuild");
+        assert_eq!(
+            resp,
+            cvkg_core::EventResponse::Handled,
+            "Click should be handled after rebuild"
+        );
 
         prev = Some(new_vdom);
     }
 
-    assert_eq!(*fired.lock().unwrap(), 100, "All 100 clicks should have fired");
+    assert_eq!(
+        *fired.lock().unwrap(),
+        100,
+        "All 100 clicks should have fired"
+    );
 
     // The overlay is a fullscreen dismiss layer at z-top. Under the new priority
     // policy, when y >= 28.0 (outside the menu bar), the DropdownOverlay is evaluated last
     // among siblings. Sibling interactive elements (such as corner buttons) intercept hits first.
     let hit_through = vdom.hit_test(70.0, 100.0, 0.0).map(|(id, _)| id);
-    assert_eq!(hit_through, Some(KvasirId(200)), "Corner button should be hit through the overlay priority policy outside the menu bar");
+    assert_eq!(
+        hit_through,
+        Some(KvasirId(200)),
+        "Corner button should be hit through the overlay priority policy outside the menu bar"
+    );
 
     // Clicking in an empty area where no sibling matches should fall back to the overlay.
     let hit_fallback = vdom.hit_test(500.0, 400.0, 0.0).map(|(id, _)| id);
-    assert_eq!(hit_fallback, Some(KvasirId(999)), "Overlay should capture clicks in empty areas to dismiss menu");
+    assert_eq!(
+        hit_fallback,
+        Some(KvasirId(999)),
+        "Overlay should capture clicks in empty areas to dismiss menu"
+    );
 }

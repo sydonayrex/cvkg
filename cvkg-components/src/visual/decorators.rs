@@ -1,5 +1,5 @@
-use crate::theme;
 use crate::RADIUS_SM;
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// MuninAvatar - A user representation component with status indicators.
@@ -294,7 +294,11 @@ impl View for DraumaSkeleton {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(rect, self.border_radius, 2.0, 0.8);
         }
-        renderer.fill_rounded_rect(rect, self.border_radius, theme::with_alpha(theme::surface(), 0.6));
+        renderer.fill_rounded_rect(
+            rect,
+            self.border_radius,
+            theme::with_alpha(theme::surface(), 0.6),
+        );
 
         // 2. Kinetic Shimmer Effect
         if self.shimmer {
@@ -308,7 +312,10 @@ impl View for DraumaSkeleton {
             };
 
             let shimmer_alpha = 0.15 * (1.0 - (shimmer_pos - 0.5).abs() * 2.0);
-            renderer.fill_rect(shimmer_rect, theme::with_alpha(theme::accent(), shimmer_alpha));
+            renderer.fill_rect(
+                shimmer_rect,
+                theme::with_alpha(theme::accent(), shimmer_alpha),
+            );
         }
 
         renderer.pop_vnode();

@@ -1,4 +1,4 @@
-use cvkg_runic_text::{TextEngine, TextSpan, TextStyle, TextAlign, TextOverflow, ShapedText};
+use cvkg_runic_text::{ShapedText, TextAlign, TextEngine, TextOverflow, TextSpan, TextStyle};
 
 /// Snap cursor selection index to the nearest grapheme boundary.
 /// Ensures we do not slice in the middle of complex graphemes like ZWJ emojis.
@@ -8,7 +8,7 @@ fn snap_to_grapheme_boundary(shaped: &ShapedText, index: usize) -> usize {
     }
     let mut closest = shaped.grapheme_boundaries[0];
     let mut min_diff = (index as isize - closest as isize).abs();
-    
+
     for &b in &shaped.grapheme_boundaries {
         let diff = (index as isize - b as isize).abs();
         if diff < min_diff {
@@ -29,7 +29,7 @@ fn test_ide_cursor_navigation() {
     // A (1 byte) + Emoji (25 bytes) + B (1 byte)
     let text = "A👨‍👩‍👧‍👦B";
     let spans = vec![TextSpan::new(text, style)];
-    
+
     let shaped = engine
         .shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip)
         .unwrap();
@@ -74,19 +74,25 @@ fn test_ide_cjk_monospace_alignment() {
 fn test_ide_knuth_plass_wrapping_stability() {
     let mut engine = TextEngine::new_test();
     let style = TextStyle::new("Jupiteroid", 16.0);
-    
+
     // A long text that must wrap given a tight width boundary
     let text = "The quick brown fox jumps over the lazy dog again and again.";
     let spans = vec![TextSpan::new(text, style)];
-    
+
     // Width limit of 150px
     let shaped = engine
         .shape_layout(&spans, Some(150.0), TextAlign::Start, TextOverflow::Clip)
         .unwrap();
 
     // Verify it wrapped into multiple lines
-    assert!(shaped.lines.len() > 1, "Layout must be wrapped into multiple lines");
+    assert!(
+        shaped.lines.len() > 1,
+        "Layout must be wrapped into multiple lines"
+    );
     for line in &shaped.lines {
-        assert!(line.width <= 155.0, "Line width must be bound to the limit plus minor margins");
+        assert!(
+            line.width <= 155.0,
+            "Line width must be bound to the limit plus minor margins"
+        );
     }
 }

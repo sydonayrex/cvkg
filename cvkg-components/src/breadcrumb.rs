@@ -1,5 +1,5 @@
 use crate::theme;
-use crate::{draw_focus_ring, FONT_SM, SPACE_XS};
+use crate::{FONT_SM, SPACE_XS, draw_focus_ring};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -120,8 +120,7 @@ impl View for Breadcrumb {
         };
 
         let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
-        let (focused_index, set_focused_index) =
-            cvkg_vdom::use_state(focused_index_hash, 0usize);
+        let (focused_index, set_focused_index) = cvkg_vdom::use_state(focused_index_hash, 0usize);
 
         renderer.push_vnode(rect, "Breadcrumb");
         renderer.set_aria_role("navigation");

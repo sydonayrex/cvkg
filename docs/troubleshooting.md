@@ -1,147 +1,126 @@
-# Troubleshooting Guide
+# Troubleshooting
 
-This guide provides diagnostics, symptoms, and resolution procedures for common compilation, runtime, and rendering failures encountered when building or running CVKG applications.
-
----
+This guide covers common compilation, runtime, and rendering failures sourced from the codebase.
 
 ## 1. Compilation Failures
 
 ### Target 'wasm32-unknown-unknown' Missing
-- **Symptoms**: The compiler throws errors during WASM compilation stating that target core libraries are missing:
-  ```
-  error[E0463]: can't find crate for `core` which `cvkg_render_web` depends on
-  ```
-- **Cause**: The standard library is not installed for the WebAssembly target.
-- **Resolution**:
-  Run the target addition tool via `rustup`:
+
+- **Symptom**: `error[E0463]: can't find crate for 'core'`
+- **Cause**: The WASM target is not installed.
+- **Fix**:
   ```bash
   rustup target add wasm32-unknown-unknown
   ```
 
-### Tool 'wasm-pack' is Not Found
-- **Symptoms**: Export scripts fail with:
-  ```
-  Failed to execute wasm-pack: No such file or directory (os error 2)
-  ```
-- **Cause**: The CLI requires `wasm-pack` for compiling, optimization, and generation of browser FFI bindings.
-- **Resolution**:
-  Install `wasm-pack` globally on your workstation:
+### wasm-pack Not Found
+
+- **Symptom**: `Failed to execute wasm-pack: No such file or directory (os error 2)`
+- **Cause**: `wasm-pack` is not installed.
+- **Fix**:
   ```bash
   curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
   ```
 
-### Cyclic Dependency Between Rendering Backend and Core
-- **Symptoms**: Cargo compilation stops with cyclical link warnings.
-- **Cause**: An application manifest has selected multiple mutually-exclusive rendering features (e.g. both `native` and `web` simultaneously).
-- **Resolution**:
-  Audit the application dependency tree using `cargo tree` to identify package mismatches:
-  ```bash
-  cargo tree -d
-  ```
-  Ensure only **one** backend feature is selected in your final manifest:
+### Cyclic Dependency
+
+- **Symptom**: Cargo reports circular dependency warnings.
+- **Cause**: Multiple mutually-exclusive features enabled simultaneously (e.g., `native` and `web`).
+- **Fix**: Check for duplicate features in your Cargo.toml. Enable only one backend:
   ```toml
-  cvkg = { version = "0.1.21", features = ["native"] }
+  cvkg = { version = "0.2.15", features = ["native"] }
   ```
 
----
+### "File Too Large" / Bus Error in CI
+
+- **Symptom**: `Bus error (core dumped)` during `cargo test` in CI.
+- **Cause**: Debug info exhausts memory in constrained environments.
+- **Fix**: The workspace sets `debug = 0` in `[profile.dev]` and `debug = 1` in `[profile.test]`. Do not override these in member crates.
 
 ## 2. Runtime Crashes
 
-### "GPU Device Not Found" (Native Desktop)
-- **Symptoms**: The application crashes during start with:
-  ```
-  [GPU] Fatal error: RequestAdapter failed
-  ```
-- **Cause**: WGPU cannot locate a compatible hardware adapter (Vulkan/Metal/DX12) or the required system drivers are missing.
-- **Resolution**:
-  1. On Linux systems, verify that Vulkan works correctly:
-     ```bash
-     vulkaninfo
-     ```
-  2. Confirm your drivers are updated (e.g. proprietary NVIDIA or Mesa drivers).
-  3. Force software rasterization on headless environments for basic verification:
+### GPU Device Not Found
+
+- **Symptom**: `[GPU] Fatal error: RequestAdapter failed`
+- **Cause**: WGPU cannot find a compatible hardware adapter.
+- **Fix**:
+  1. Verify Vulkan: `vulkaninfo`
+  2. Update GPU drivers (NVIDIA proprietary or Mesa).
+  3. Force software rasterization:
      ```bash
      export WGPU_ADAPTER=mesa
      cargo run
      ```
 
-### Winit Event Loop Collision (Wayland Linux)
-- **Symptoms**: The application halts immediately with Wayland environment link crashes.
-- **Cause**: Mismatches between operating system server environments (X11 vs Wayland).
-- **Resolution**:
-  Force the application to utilize XWayland compatibility mapping:
+### Wayland Event Loop Crash
+
+- **Symptom**: Application halts immediately on Wayland.
+- **Cause**: Mismatch between X11 and Wayland environments.
+- **Fix**:
   ```bash
   export WINIT_UNIX_BACKEND=x11
   cargo run
   ```
 
----
+### Panic: "Cannot start runtime from within a runtime"
+
+- **Symptom**: Panic when calling `tokio::runtime::Runtime::new()` inside an async context.
+- **Cause**: `cvkg-render-native` and `cvkg-cli` create their own tokio runtimes. Calling them from within an existing async context triggers this panic.
+- **Fix**: Use `tokio::task::block_in_place` or restructure to avoid nested runtimes.
 
 ## 3. Visual Artifacts
 
 ### Text Flickers or Missing Glyphs
-- **Symptoms**: Procedural runes or labels blink or display as empty rectangles during high-frequency scrolls.
-- **Cause**: The texture atlas is full, resulting in cache eviction thrashing.
-- **Resolution**:
-  1. Simplify the variety of font sizes active in the view.
-  2. Increase the texture dimension limits inside the WGPU renderer configurations.
-  3. Ensure that custom fonts are embedded and loaded directly to prevent system fallback discrepancies.
 
-### Glowing Outlines Do Not Align With Element Bounds
-- **Symptoms**: Glow shadows are displaced or warped relative to their parent components.
-- **Cause**: Mismatched coordinate proposal mappings or subpixel rounding issues on High-DPI screens.
-- **Resolution**:
-  Check high-DPI scaling factor configurations and lock view dimensions to float coordinates:
-  ```rust
-  // Force integer boundary rounding for high-DPI displays
-  let aligned_rect = rect.align_to_pixels(scale_factor);
-  ```
+- **Symptom**: Labels blink or display as empty rectangles during scroll.
+- **Cause**: Texture atlas is full, causing cache eviction thrashing.
+- **Fix**:
+  1. Reduce the number of active font sizes.
+  2. Increase texture dimension limits in `RendererConfig`.
+  3. Embed custom fonts directly to prevent system fallback.
 
----
+### Glow Misaligned With Element Bounds
 
-## 4. Performance Bottlenecks
+- **Symptom**: Glow shadows are displaced relative to parent components.
+- **Cause**: Mismatched coordinate mappings or subpixel rounding on High-DPI screens.
+- **Fix**: Check `scale_factor` configuration. Use float coordinates for layout, snap to pixel grid only when motion stops.
 
-### Low Frame Rate or Frame Jitter
-- **Symptoms**: Telemetry indicates frequent frames exceeding the 16.6ms rendering window.
-- **Cause**: Heavy synchronous database operations or file I/O executed inside reactive `body()` composition routines.
-- **Resolution**:
-  1. Move all synchronous data loading out of component composition loops.
-  2. Apply `.memoize()` on views that change infrequently to bypass full tree reconstruction.
-  3. Run the compiler in release mode:
-     ```bash
-     cargo run --release
-     ```
+### Blank Window
+
+- **Symptom**: Window opens but shows no content.
+- **Cause**: The render graph has no passes, or the scene graph is empty.
+- **Fix**: Verify that at least one `View` is returning a non-empty body. Check that `Renderer::submit()` is called.
+
+## 4. Performance
+
+### Low Frame Rate
+
+- **Symptom**: Frames exceeding 16.6ms rendering window.
+- **Cause**: Heavy synchronous work inside `body()` composition routines.
+- **Fix**:
+  1. Move data loading out of `body()`.
+  2. Use `State::memoize()` for views that change infrequently.
+  3. Build in release mode: `cargo run --release`.
 
 ### Render Graph Cache Thrashing
-- **Symptoms**: Frequent graph sorting cycles printed to telemetry logs on consecutive frames.
-- **Cause**: Dynamic additions of nodes/passes on every frame preventing execution plan hits.
-- **Resolution**:
-  1. Ensure conditional passes are compiled as static branches rather than being rebuilt dynamically.
-  2. Audit `SurtrRenderer` pass generation using the telemetry inspector.
 
-### Color Distortion in Highlights (Abney Effect)
-- **Symptoms**: Bright colored zones shift towards white or blue unexpectedly in highlight regions.
-- **Cause**: AgX Tonemapper is bypassed or active HDR color spaces are not properly declared on the target surface configuration.
-- **Resolution**:
-  1. Ensure the WGPU target format matches sRGB formats.
-  2. Confirm AgX is activated in target shader configurations.
+- **Symptom**: Frequent graph sorting cycles in telemetry logs.
+- **Cause**: Dynamic node/pass additions on every frame prevent cache hits.
+- **Fix**: Compile conditional passes as static branches rather than rebuilding dynamically.
 
-### Visual Jitter on Static Text
-- **Symptoms**: Small text glyphs appear blurry or vibrating when spring motions settle.
-- **Cause**: Velocity state of the animating mass/spring solver is not fully reset to static, bypassing sub-pixel grid alignment.
-- **Resolution**:
-  1. Audit the `SleipnirSolver` parameter states; ensure damping ratios allow final velocity settling.
-  2. Verify that `snap_to_pixel_grid` evaluates static checks on frame settle triggers.
+### Color Distortion in Highlights
 
----
+- **Symptom**: Bright colored zones shift toward white or blue.
+- **Cause**: AgX tonemapper is bypassed or HDR color spaces are not declared.
+- **Fix**: Ensure the WGPU target format matches sRGB. Confirm AgX is active in shader configuration.
 
+## 5. Diagnostic Data
 
-## 5. Diagnostic Data Collection
+To collect diagnostic logs:
 
-To gather diagnostic logs for maintainer review, execute the application with detailed tracing active:
 ```bash
-# Activate debug tracing
 export RUST_LOG=debug
 cargo run > cvkg_diagnostics.log 2>&1
 ```
-The resulting `cvkg_diagnostics.log` contains detailed reports on adapter selection, font mapping pipelines, and layout proposals.
+
+The log contains adapter selection, font mapping, and layout proposal data.

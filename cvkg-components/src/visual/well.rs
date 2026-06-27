@@ -82,17 +82,22 @@ impl View for MimirsWell {
             );
         }
         for edge in &self.edges {
-            if let Some(from) = self.nodes.iter().find(|n| n.id == edge.from) {
-                if let Some(to) = self.nodes.iter().find(|n| n.id == edge.to) {
-                    renderer.draw_line(
-                        rect.x + from.x * rect.width,
-                        rect.y + from.y * rect.height,
-                        rect.x + to.x * rect.width,
-                        rect.y + to.y * rect.height,
-                        [theme::text_dim()[0], theme::text_dim()[1], theme::text_dim()[2], 0.3],
-                        1.0,
-                    );
-                }
+            if let Some(from) = self.nodes.iter().find(|n| n.id == edge.from)
+                && let Some(to) = self.nodes.iter().find(|n| n.id == edge.to)
+            {
+                renderer.draw_line(
+                    rect.x + from.x * rect.width,
+                    rect.y + from.y * rect.height,
+                    rect.x + to.x * rect.width,
+                    rect.y + to.y * rect.height,
+                    [
+                        theme::text_dim()[0],
+                        theme::text_dim()[1],
+                        theme::text_dim()[2],
+                        0.3,
+                    ],
+                    1.0,
+                );
             }
         }
     }

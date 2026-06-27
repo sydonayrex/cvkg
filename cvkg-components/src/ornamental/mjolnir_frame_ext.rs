@@ -98,8 +98,22 @@ pub fn render_mjolnir_frame(
             ];
             for (cx, cy) in &corners {
                 let size = 8.0 + growth_progress * 12.0;
-                renderer.draw_line(*cx, *cy, *cx + size, *cy - size, theme::with_alpha(theme::accent(), 0.6), 1.5);
-                renderer.draw_line(*cx, *cy, *cx - size, *cy - size, theme::with_alpha(theme::accent(), 0.6), 1.5);
+                renderer.draw_line(
+                    *cx,
+                    *cy,
+                    *cx + size,
+                    *cy - size,
+                    theme::with_alpha(theme::accent(), 0.6),
+                    1.5,
+                );
+                renderer.draw_line(
+                    *cx,
+                    *cy,
+                    *cx - size,
+                    *cy - size,
+                    theme::with_alpha(theme::accent(), 0.6),
+                    1.5,
+                );
             }
         }
         MjolnirFrameStyle::VoidRift { rift_intensity } => {

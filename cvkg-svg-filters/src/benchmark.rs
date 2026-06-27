@@ -1,6 +1,6 @@
+use crate::diagnostics::FilterDiagnostics;
 use crate::graph::FilterGraph;
 use crate::pool::FilterPlanner;
-use crate::diagnostics::FilterDiagnostics;
 
 // =============================================================================
 // P2-34: Performance Regression Benchmarks
@@ -67,7 +67,7 @@ impl FilterBenchmark {
             <rect width="100" height="100" filter="url(#test)"/>
         </svg>"#;
         let options = usvg::Options::default();
-        let tree = usvg::Tree::from_str(&svg_str, &options).unwrap();
+        let tree = usvg::Tree::from_str(svg_str, &options).unwrap();
         let filter = &tree.filters()[0];
         FilterGraph::from_usvg_filter(filter).unwrap()
     }

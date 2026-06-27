@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use crate::types::FilterError;
 use crate::graph::{FilterGraph, FilterInput};
+use crate::types::FilterError;
+use std::collections::HashMap;
 
 /// A reusable texture buffer in the pool.
 #[derive(Debug)]
@@ -37,9 +37,11 @@ impl TransientFilterPool {
         height: u32,
         format: wgpu::TextureFormat,
     ) -> (&wgpu::Texture, &wgpu::TextureView) {
-        if let Some(pos) = self.available.iter().position(|p| {
-            !p.in_use && p.width == width && p.height == height
-        }) {
+        if let Some(pos) = self
+            .available
+            .iter()
+            .position(|p| !p.in_use && p.width == width && p.height == height)
+        {
             let pooled = &mut self.available[pos];
             pooled.in_use = true;
             self.total_reused += 1;
@@ -78,9 +80,11 @@ impl TransientFilterPool {
 
     /// Release a texture back to the pool for reuse.
     pub fn release(&mut self, width: u32, height: u32) {
-        if let Some(pooled) = self.available.iter_mut().find(|p| {
-            p.in_use && p.width == width && p.height == height
-        }) {
+        if let Some(pooled) = self
+            .available
+            .iter_mut()
+            .find(|p| p.in_use && p.width == width && p.height == height)
+        {
             pooled.in_use = false;
         }
     }

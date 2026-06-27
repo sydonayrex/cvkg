@@ -1,5 +1,6 @@
 use crate::theme;
-use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
+use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, Size, View};
 use std::sync::Arc as StdArc;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -194,6 +195,13 @@ impl View for Checkbox {
         }
     }
 
+    /// Expose this view to VStack/HStack layout by returning a LayoutView reference.
+    /// Without this, the stack's filter_map drops Checkbox from layout and the
+    /// render loop guard silently skips it (child.layout().is_some() == false).
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
+    }
+
     fn aria_properties(&self) -> Option<AriaProperties> {
         let label = self.label.as_deref().unwrap_or("Checkbox");
         let checked = match self.state {
@@ -312,3 +320,27 @@ impl<V: View> View for Tabs<V> {
         }
     }
 }
+
+impl LayoutView for Checkbox {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        // We use character count logic to avoid needing renderer inside layout
+        let label_width = self.label.as_ref().map_or(0.0, |l| l.len() as f32 * 14.0 * 0.55);
+        Size {
+            width: 18.0 + if self.label.is_some() { 8.0 + label_width } else { 0.0 },
+            height: 22.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+

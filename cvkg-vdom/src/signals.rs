@@ -63,7 +63,8 @@ impl<T: Clone> Signal<T> {
     /// Updates the value of the signal and synchronously triggers all subscribed effects.
     pub fn set(&self, new_value: T) {
         *self.value.write().unwrap() = new_value;
-        self.version.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.version
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let subs = self.subscribers.read().unwrap().clone();
         for sub in subs {
             sub.run();

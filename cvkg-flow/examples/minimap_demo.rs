@@ -1,5 +1,5 @@
-use cvkg_core::{Rect, Renderer};
 use cvkg_core::KvasirId;
+use cvkg_core::{Rect, Renderer};
 use cvkg_flow::*;
 
 /// This example shows how to render a FlowCanvas which automatically includes the mini-map.

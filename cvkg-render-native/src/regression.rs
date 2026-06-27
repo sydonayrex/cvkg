@@ -14,7 +14,11 @@ pub struct VisualRegressionTracker {
 
 impl VisualRegressionTracker {
     /// Creates a new `VisualRegressionTracker` with specified reference folder and tolerances.
-    pub fn new(reference_dir: PathBuf, pixel_tolerance: u8, max_mismatched_percentage: f64) -> Self {
+    pub fn new(
+        reference_dir: PathBuf,
+        pixel_tolerance: u8,
+        max_mismatched_percentage: f64,
+    ) -> Self {
         Self {
             reference_dir,
             pixel_tolerance,
@@ -29,7 +33,10 @@ impl VisualRegressionTracker {
     pub fn verify_frame(&self, test_name: &str, captured_png: &[u8]) -> bool {
         let reference_path = self.reference_dir.join(format!("{}.png", test_name));
         if !reference_path.exists() {
-            log::info!("Golden reference for '{}' not found. Recording current capture as reference.", test_name);
+            log::info!(
+                "Golden reference for '{}' not found. Recording current capture as reference.",
+                test_name
+            );
             if let Some(parent) = reference_path.parent() {
                 let _ = std::fs::create_dir_all(parent);
             }
@@ -41,13 +48,14 @@ impl VisualRegressionTracker {
         }
 
         // Load reference image
-        let ref_img = match image::load_from_memory(&std::fs::read(&reference_path).unwrap_or_default()) {
-            Ok(img) => img.to_rgba8(),
-            Err(e) => {
-                log::error!("Failed to decode reference image: {}", e);
-                return false;
-            }
-        };
+        let ref_img =
+            match image::load_from_memory(&std::fs::read(&reference_path).unwrap_or_default()) {
+                Ok(img) => img.to_rgba8(),
+                Err(e) => {
+                    log::error!("Failed to decode reference image: {}", e);
+                    return false;
+                }
+            };
 
         // Load captured image
         let cap_img = match image::load_from_memory(captured_png) {
@@ -59,7 +67,12 @@ impl VisualRegressionTracker {
         };
 
         if ref_img.dimensions() != cap_img.dimensions() {
-            log::warn!("Dimensions mismatch for test '{}': ref {:?}, cap {:?}", test_name, ref_img.dimensions(), cap_img.dimensions());
+            log::warn!(
+                "Dimensions mismatch for test '{}': ref {:?}, cap {:?}",
+                test_name,
+                ref_img.dimensions(),
+                cap_img.dimensions()
+            );
             return false;
         }
 
@@ -84,8 +97,12 @@ impl VisualRegressionTracker {
 
         let mismatch_pct = (mismatched_pixels as f64 / total_pixels) * 100.0;
         if mismatch_pct > self.max_mismatched_percentage {
-            log::warn!("Visual regression detected in test '{}': {:.2}% mismatched pixels (max allowed {:.2}%)",
-                test_name, mismatch_pct, self.max_mismatched_percentage);
+            log::warn!(
+                "Visual regression detected in test '{}': {:.2}% mismatched pixels (max allowed {:.2}%)",
+                test_name,
+                mismatch_pct,
+                self.max_mismatched_percentage
+            );
             false
         } else {
             true

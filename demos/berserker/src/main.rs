@@ -70,7 +70,14 @@ fn draw_valknut_triangle(
             glow_color[2] * alpha + dim_color[2] * (1.0 - alpha),
             alpha,
         ];
-        r.draw_line(p_start[0], p_start[1], p_end[0], p_end[1], seg_color, 3.0 + alpha * 2.0);
+        r.draw_line(
+            p_start[0],
+            p_start[1],
+            p_end[0],
+            p_end[1],
+            seg_color,
+            3.0 + alpha * 2.0,
+        );
     }
 
     // Draw a bright spark at the fuse head
@@ -124,7 +131,15 @@ struct Card {
 
 impl Card {
     fn new(x: f32, y: f32) -> Self {
-        Self { x, y, shattered: false, left_offset: 0.0, right_offset: 0.0, velocity_x: 0.0, velocity_y: 0.0 }
+        Self {
+            x,
+            y,
+            shattered: false,
+            left_offset: 0.0,
+            right_offset: 0.0,
+            velocity_x: 0.0,
+            velocity_y: 0.0,
+        }
     }
 }
 
@@ -170,30 +185,30 @@ impl FluidGrid {
             self.v[i] += dt * self.v_prev[i];
             self.d[i] += dt * self.d_prev[i];
         }
-        
+
         // Swap velocity fields for diffusion
         std::mem::swap(&mut self.u, &mut self.u_prev);
         diffuse(1, &mut self.u, &self.u_prev, viscosity, dt);
-        
+
         std::mem::swap(&mut self.v, &mut self.v_prev);
         diffuse(2, &mut self.v, &self.v_prev, viscosity, dt);
-        
+
         project(&mut self.u, &mut self.v, &mut self.u_prev, &mut self.v_prev);
-        
+
         // Swap velocity fields for advection
         std::mem::swap(&mut self.u, &mut self.u_prev);
         std::mem::swap(&mut self.v, &mut self.v_prev);
         advect(1, &mut self.u, &self.u_prev, &self.u_prev, &self.v_prev, dt);
         advect(2, &mut self.v, &self.v_prev, &self.u_prev, &self.v_prev, dt);
-        
+
         project(&mut self.u, &mut self.v, &mut self.u_prev, &mut self.v_prev);
-        
+
         // Density step
         std::mem::swap(&mut self.d, &mut self.d_prev);
         diffuse(0, &mut self.d, &self.d_prev, diffusion, dt);
         std::mem::swap(&mut self.d, &mut self.d_prev);
         advect(0, &mut self.d, &self.d_prev, &self.u_prev, &self.v_prev, dt);
-        
+
         // Decay velocity/density over time to prevent build-up
         for i in 0..self.u.len() {
             self.u[i] *= 0.95;
@@ -217,27 +232,27 @@ impl FluidGrid {
         let n = FLUID_GRID_SIZE;
         let gx = (px / w * n as f32).clamp(0.5, n as f32 - 1.5);
         let gy = (py / h * n as f32).clamp(0.5, n as f32 - 1.5);
-        
+
         let i0 = gx.floor() as usize;
         let i1 = i0 + 1;
         let j0 = gy.floor() as usize;
         let j1 = j0 + 1;
-        
+
         let tx = gx - i0 as f32;
         let ty = gy - j0 as f32;
-        
+
         let lerp_u = (1.0 - tx) * ((1.0 - ty) * self.u[i0 + j0 * n] + ty * self.u[i0 + j1 * n])
-                   + tx * ((1.0 - ty) * self.u[i1 + j0 * n] + ty * self.u[i1 + j1 * n]);
-                   
+            + tx * ((1.0 - ty) * self.u[i1 + j0 * n] + ty * self.u[i1 + j1 * n]);
+
         let lerp_v = (1.0 - tx) * ((1.0 - ty) * self.v[i0 + j0 * n] + ty * self.v[i0 + j1 * n])
-                   + tx * ((1.0 - ty) * self.v[i1 + j0 * n] + ty * self.v[i1 + j1 * n]);
-                   
+            + tx * ((1.0 - ty) * self.v[i1 + j0 * n] + ty * self.v[i1 + j1 * n]);
+
         [lerp_u, lerp_v]
     }
 }
 
 /// Applies boundary constraints to the fluid grid edges.
-/// 
+///
 /// # Arguments
 /// * `b` - Boundary type (0 for scalar, 1 for horizontal velocity, 2 for vertical velocity).
 /// * `x` - Grid values to clamp/reflect.
@@ -246,10 +261,18 @@ fn set_bnd(b: i32, x: &mut [f32]) {
     for i in 1..n - 1 {
         // Left and right edges
         x[0 * n + i] = if b == 1 { -x[1 * n + i] } else { x[1 * n + i] };
-        x[(n - 1) * n + i] = if b == 1 { -x[(n - 2) * n + i] } else { x[(n - 2) * n + i] };
+        x[(n - 1) * n + i] = if b == 1 {
+            -x[(n - 2) * n + i]
+        } else {
+            x[(n - 2) * n + i]
+        };
         // Top and bottom edges
         x[i * n + 0] = if b == 2 { -x[i * n + 1] } else { x[i * n + 1] };
-        x[i * n + n - 1] = if b == 2 { -x[i * n + n - 2] } else { x[i * n + n - 2] };
+        x[i * n + n - 1] = if b == 2 {
+            -x[i * n + n - 2]
+        } else {
+            x[i * n + n - 2]
+        };
     }
     // Corners
     x[0] = 0.5 * (x[1] + x[n]);
@@ -274,7 +297,8 @@ fn diffuse(b: i32, x: &mut [f32], x0: &[f32], diff: f32, dt: f32) {
         for j in 1..n - 1 {
             for i in 1..n - 1 {
                 let idx = i + j * n;
-                x[idx] = (x0[idx] + a * (x[idx - 1] + x[idx + 1] + x[idx - n] + x[idx + n])) / (1.0 + 4.0 * a);
+                x[idx] = (x0[idx] + a * (x[idx - 1] + x[idx + 1] + x[idx - n] + x[idx + n]))
+                    / (1.0 + 4.0 * a);
             }
         }
         set_bnd(b, x);
@@ -298,24 +322,32 @@ fn advect(b: i32, d: &mut [f32], d0: &[f32], u: &[f32], v: &[f32], dt: f32) {
             let idx = i + j * n;
             let mut x = i as f32 - dt0 * u[idx];
             let mut y = j as f32 - dt0 * v[idx];
-            
-            if x < 0.5 { x = 0.5; }
-            if x > n as f32 - 1.5 { x = n as f32 - 1.5; }
+
+            if x < 0.5 {
+                x = 0.5;
+            }
+            if x > n as f32 - 1.5 {
+                x = n as f32 - 1.5;
+            }
             let i0 = x.floor() as usize;
             let i1 = i0 + 1;
-            
-            if y < 0.5 { y = 0.5; }
-            if y > n as f32 - 1.5 { y = n as f32 - 1.5; }
+
+            if y < 0.5 {
+                y = 0.5;
+            }
+            if y > n as f32 - 1.5 {
+                y = n as f32 - 1.5;
+            }
             let j0 = y.floor() as usize;
             let j1 = j0 + 1;
-            
+
             let s1 = x - i0 as f32;
             let s0 = 1.0 - s1;
             let t1 = y - j0 as f32;
             let t0 = 1.0 - t1;
-            
+
             d[idx] = s0 * (t0 * d0[i0 + j0 * n] + t1 * d0[i0 + j1 * n])
-                   + s1 * (t0 * d0[i1 + j0 * n] + t1 * d0[i1 + j1 * n]);
+                + s1 * (t0 * d0[i1 + j0 * n] + t1 * d0[i1 + j1 * n]);
         }
     }
     set_bnd(b, d);
@@ -339,7 +371,7 @@ fn project(u: &mut [f32], v: &mut [f32], p: &mut [f32], div: &mut [f32]) {
     }
     set_bnd(0, div);
     set_bnd(0, p);
-    
+
     // 3 Jacobi iterations for the pressure projection pass.
     for _ in 0..3 {
         for j in 1..n - 1 {
@@ -350,7 +382,7 @@ fn project(u: &mut [f32], v: &mut [f32], p: &mut [f32], div: &mut [f32]) {
         }
         set_bnd(0, p);
     }
-    
+
     for j in 1..n - 1 {
         for i in 1..n - 1 {
             let idx = i + j * n;
@@ -373,15 +405,7 @@ fn project(u: &mut [f32], v: &mut [f32], p: &mut [f32], div: &mut [f32]) {
 /// * `cx` - Target position X.
 /// * `cy` - Target position Y.
 /// * `dt` - Time step.
-fn step_rk4(
-    x: &mut f32,
-    y: &mut f32,
-    vx: &mut f32,
-    vy: &mut f32,
-    cx: f32,
-    cy: f32,
-    dt: f32,
-) {
+fn step_rk4(x: &mut f32, y: &mut f32, vx: &mut f32, vy: &mut f32, cx: f32, cy: f32, dt: f32) {
     let k = 150.0;
     let c = 8.0;
 
@@ -392,9 +416,24 @@ fn step_rk4(
     };
 
     let (dx1, dy1, dvx1, dvy1) = f(*x, *y, *vx, *vy);
-    let (dx2, dy2, dvx2, dvy2) = f(*x + 0.5 * dt * dx1, *y + 0.5 * dt * dy1, *vx + 0.5 * dt * dvx1, *vy + 0.5 * dt * dvy1);
-    let (dx3, dy3, dvx3, dvy3) = f(*x + 0.5 * dt * dx2, *y + 0.5 * dt * dy2, *vx + 0.5 * dt * dvx2, *vy + 0.5 * dt * dvy2);
-    let (dx4, dy4, dvx4, dvy4) = f(*x + dt * dx3, *y + dt * dy3, *vx + dt * dvx3, *vy + dt * dvy3);
+    let (dx2, dy2, dvx2, dvy2) = f(
+        *x + 0.5 * dt * dx1,
+        *y + 0.5 * dt * dy1,
+        *vx + 0.5 * dt * dvx1,
+        *vy + 0.5 * dt * dvy1,
+    );
+    let (dx3, dy3, dvx3, dvy3) = f(
+        *x + 0.5 * dt * dx2,
+        *y + 0.5 * dt * dy2,
+        *vx + 0.5 * dt * dvx2,
+        *vy + 0.5 * dt * dvy2,
+    );
+    let (dx4, dy4, dvx4, dvy4) = f(
+        *x + dt * dx3,
+        *y + dt * dy3,
+        *vx + dt * dvx3,
+        *vy + dt * dvy3,
+    );
 
     *x += (dt / 6.0) * (dx1 + 2.0 * dx2 + 2.0 * dx3 + dx4);
     *y += (dt / 6.0) * (dy1 + 2.0 * dy2 + 2.0 * dy3 + dy4);
@@ -440,9 +479,9 @@ fn draw_valknut(r: &mut dyn cvkg_core::Renderer, cx: f32, cy: f32, size: f32, ti
     let t3_p3 = [cx - size * 0.117, cy + size * 0.225];
 
     // Colors matching the original SVG strokes
-    let c1 = [1.0, 0.25, 0.0, 1.0];    // #FF4000
-    let c2 = [1.0, 0.5, 0.0, 1.0];     // #FF8000
-    let c3 = [1.0, 0.75, 0.0, 1.0];    // #FFC000
+    let c1 = [1.0, 0.25, 0.0, 1.0]; // #FF4000
+    let c2 = [1.0, 0.5, 0.0, 1.0]; // #FF8000
+    let c3 = [1.0, 0.75, 0.0, 1.0]; // #FFC000
 
     let g1 = [1.0, 0.4, 0.1, 1.0];
     let g2 = [1.0, 0.6, 0.1, 1.0];
@@ -459,8 +498,15 @@ impl BerserkerState {
         let rng = Lcg::new(1337);
 
         // Glass cards — simple visual elements positioned across the screen
-        let card_positions = [[w * 0.15, h * 0.25], [w * 0.5, h * 0.4], [w * 0.85, h * 0.25]];
-        let cards: Vec<Card> = card_positions.iter().map(|pos| Card::new(pos[0], pos[1])).collect();
+        let card_positions = [
+            [w * 0.15, h * 0.25],
+            [w * 0.5, h * 0.4],
+            [w * 0.85, h * 0.25],
+        ];
+        let cards: Vec<Card> = card_positions
+            .iter()
+            .map(|pos| Card::new(pos[0], pos[1]))
+            .collect();
 
         let cx = w * 0.5;
         let cy = h * 0.5;
@@ -566,7 +612,15 @@ impl View for BerserkerFireView {
         // Draw background image (prewarmed on first frame via NativeRenderer::run assets)
         // Push the background's depth far away to prevent depth-buffer Z-fighting with 3D/2D elements.
         r.set_z_index(900.0);
-        r.draw_image("background", cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
+        r.draw_image(
+            "background",
+            cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: h,
+            },
+        );
         r.set_z_index(0.0);
 
         // Record telemetry data to the PerfOverlay
@@ -623,7 +677,12 @@ impl View for BerserkerFireView {
         let t_fire_start = std::time::Instant::now();
         if t > 0.0 {
             // Clip fire to content area (safe area top is now 0 in content coordinates)
-            r.push_clip_rect(cvkg_core::Rect { x: 0.0, y: 0.0, width: w, height: h });
+            r.push_clip_rect(cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: h,
+            });
             // Draw particles and Mjolnir lightning bolts
             draw_berserker_fire(r, &s, w, h, t);
             r.pop_clip_rect();
@@ -731,7 +790,13 @@ fn draw_nornir_bar(
     let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
     let title_y = (28.0 - tlh) * 0.5;
-    r.draw_text(&title_str, title_x + 1.0, title_y + 1.0, 14.0, [0.0, 0.0, 0.0, 0.35]);
+    r.draw_text(
+        &title_str,
+        title_x + 1.0,
+        title_y + 1.0,
+        14.0,
+        [0.0, 0.0, 0.0, 0.35],
+    );
     r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.35, 0.15, 1.0]);
 
     // Right-aligned, vertically centered rage meter
@@ -739,7 +804,13 @@ fn draw_nornir_bar(
     let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
     let rage_y = (28.0 - rlh) * 0.5;
-    r.draw_text(&rage_str, rage_x + 1.0, rage_y + 1.0, 12.0, [0.0, 0.0, 0.0, 0.35]);
+    r.draw_text(
+        &rage_str,
+        rage_x + 1.0,
+        rage_y + 1.0,
+        12.0,
+        [0.0, 0.0, 0.0, 0.35],
+    );
     r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.55, 1.0]);
 
     // Render the active dropdown menu if open
@@ -1032,10 +1103,16 @@ fn draw_glass_cards(
             card.right_offset = 0.0;
             // Restore position to original starting pos
             card.y = h * 0.25;
-            if i == 1 { card.y = h * 0.4; } // middle card
+            if i == 1 {
+                card.y = h * 0.4;
+            } // middle card
             card.x = w * 0.15;
-            if i == 1 { card.x = w * 0.5; }
-            if i == 2 { card.x = w * 0.85; }
+            if i == 1 {
+                card.x = w * 0.5;
+            }
+            if i == 2 {
+                card.x = w * 0.85;
+            }
         }
 
         if card.shattered {
@@ -1083,12 +1160,27 @@ fn draw_glass_cards(
     }
 }
 
-fn update_berserker_simulation(s: &mut BerserkerState, w: f32, h: f32, t: f32, dt: f32, _rage: f32) {
+fn update_berserker_simulation(
+    s: &mut BerserkerState,
+    w: f32,
+    h: f32,
+    t: f32,
+    dt: f32,
+    _rage: f32,
+) {
     let cx = w * 0.5 + (t * 1.2).cos() * (w * 0.3);
     let cy = h * 0.5 + (t * 0.8).sin() * (h * 0.25);
 
     // Update RK4 physics for spring-mass tail anchor
-    step_rk4(&mut s.flame_x, &mut s.flame_y, &mut s.flame_vx, &mut s.flame_vy, cx, cy, dt);
+    step_rk4(
+        &mut s.flame_x,
+        &mut s.flame_y,
+        &mut s.flame_vx,
+        &mut s.flame_vy,
+        cx,
+        cy,
+        dt,
+    );
     let d_x = s.flame_x - cx;
     let d_y = s.flame_y - cy;
 
@@ -1169,10 +1261,11 @@ fn draw_berserker_fire(
     // Primary flame direction: opposite to movement (tail) + thermal buoyancy (upward)
     let flame_dir_x = tail_nx * 0.7;
     let flame_dir_y = tail_ny * 0.7 - 0.7;
-    let flame_len = (flame_dir_x * flame_dir_x + flame_dir_y * flame_dir_y).sqrt().max(0.01);
+    let flame_len = (flame_dir_x * flame_dir_x + flame_dir_y * flame_dir_y)
+        .sqrt()
+        .max(0.01);
     let flame_nx = flame_dir_x / flame_len;
     let flame_ny = flame_dir_y / flame_len;
-
 
     // High-frequency phase for rapid oscillations visible at 120fps.
     let phase = t * 11.0;
@@ -1207,7 +1300,6 @@ fn draw_berserker_fire(
         [1.0, 0.30, 0.03, 0.0],
     );
 
-
     // Angle of the flame direction vector relative to screen-up (Y-axis).
     // flame_nx/flame_ny is the normalized direction the flame points.
     // atan2(flame_nx, -flame_ny) gives the clockwise rotation from screen-up.
@@ -1219,20 +1311,62 @@ fn draw_berserker_fire(
     // the center at (perp_offset, -reach/2) relative to the fireball pivot.
     // This means tongues naturally lean in the direction of travel.
     struct TongueDef {
-        perp_off: f32,   // lateral offset in local X (perpendicular to flame)
-        reach:    f32,   // length of the tongue in local Y (along flame)
-        half_w:   f32,   // half-width of the tongue base
-        phase_off: f32,  // per-tongue phase offset for independent wobble
-        color:    [f32; 4],
+        perp_off: f32,  // lateral offset in local X (perpendicular to flame)
+        reach: f32,     // length of the tongue in local Y (along flame)
+        half_w: f32,    // half-width of the tongue base
+        phase_off: f32, // per-tongue phase offset for independent wobble
+        color: [f32; 4],
     }
     let tongues = [
-        TongueDef { perp_off:  0.0, reach: 14.0, half_w: 3.5, phase_off: 0.0, color: [1.0, 0.96, 0.85, 0.95] },
-        TongueDef { perp_off: -2.5, reach: 12.0, half_w: 2.5, phase_off: 1.3, color: [1.0, 0.85, 0.25, 0.85] },
-        TongueDef { perp_off:  2.5, reach: 12.0, half_w: 2.5, phase_off: 2.6, color: [1.0, 0.85, 0.25, 0.85] },
-        TongueDef { perp_off: -4.5, reach:  8.5, half_w: 1.8, phase_off: 0.7, color: [1.0, 0.55, 0.08, 0.72] },
-        TongueDef { perp_off:  4.5, reach:  8.5, half_w: 1.8, phase_off: 3.9, color: [1.0, 0.55, 0.08, 0.72] },
-        TongueDef { perp_off: -6.5, reach:  5.0, half_w: 1.2, phase_off: 2.1, color: [1.0, 0.28, 0.04, 0.52] },
-        TongueDef { perp_off:  6.5, reach:  5.0, half_w: 1.2, phase_off: 4.7, color: [1.0, 0.28, 0.04, 0.52] },
+        TongueDef {
+            perp_off: 0.0,
+            reach: 14.0,
+            half_w: 3.5,
+            phase_off: 0.0,
+            color: [1.0, 0.96, 0.85, 0.95],
+        },
+        TongueDef {
+            perp_off: -2.5,
+            reach: 12.0,
+            half_w: 2.5,
+            phase_off: 1.3,
+            color: [1.0, 0.85, 0.25, 0.85],
+        },
+        TongueDef {
+            perp_off: 2.5,
+            reach: 12.0,
+            half_w: 2.5,
+            phase_off: 2.6,
+            color: [1.0, 0.85, 0.25, 0.85],
+        },
+        TongueDef {
+            perp_off: -4.5,
+            reach: 8.5,
+            half_w: 1.8,
+            phase_off: 0.7,
+            color: [1.0, 0.55, 0.08, 0.72],
+        },
+        TongueDef {
+            perp_off: 4.5,
+            reach: 8.5,
+            half_w: 1.8,
+            phase_off: 3.9,
+            color: [1.0, 0.55, 0.08, 0.72],
+        },
+        TongueDef {
+            perp_off: -6.5,
+            reach: 5.0,
+            half_w: 1.2,
+            phase_off: 2.1,
+            color: [1.0, 0.28, 0.04, 0.52],
+        },
+        TongueDef {
+            perp_off: 6.5,
+            reach: 5.0,
+            half_w: 1.2,
+            phase_off: 4.7,
+            color: [1.0, 0.28, 0.04, 0.52],
+        },
     ];
 
     // --- Ambient flame aura glow behind everything ---
@@ -1250,7 +1384,7 @@ fn draw_berserker_fire(
     for tongue in &tongues {
         // Independent high-freq wobble per tongue in local X (side lick)
         let wobble = (phase + tongue.phase_off).sin() * tongue.half_w * 0.40
-                   + (phase * 1.61 + tongue.phase_off).sin() * tongue.half_w * 0.18;
+            + (phase * 1.61 + tongue.phase_off).sin() * tongue.half_w * 0.18;
         // Stretch pulse along Y
         let stretch = 1.0 + (phase * 0.55 + tongue.phase_off).sin() * 0.13;
 
@@ -1268,11 +1402,7 @@ fn draw_berserker_fire(
             height: tongue.reach * stretch,
         };
         // Soft glowing flame gradient fading to transparent red/orange
-        r.draw_radial_gradient(
-            tongue_rect,
-            tongue.color,
-            [1.0, 0.25, 0.0, 0.0],
-        );
+        r.draw_radial_gradient(tongue_rect, tongue.color, [1.0, 0.25, 0.0, 0.0]);
         r.pop_transform();
     }
 
@@ -1401,7 +1531,13 @@ fn draw_corner_buttons(
         let (cw, ch) = r.measure_text(corner.2, 32.0);
         let text_x = corner.0 + (btn_size - cw) / 2.0;
         let text_y = corner.1 + (btn_size - ch) / 2.0;
-        r.draw_text(corner.2, text_x + 1.0, text_y + 1.0, 32.0, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text(
+            corner.2,
+            text_x + 1.0,
+            text_y + 1.0,
+            32.0,
+            [0.0, 0.0, 0.0, 0.35],
+        );
         r.draw_text(corner.2, text_x, text_y, 32.0, [1.0, 1.0, 1.0, 1.0]);
 
         let val = counters[i].get();
@@ -1409,7 +1545,13 @@ fn draw_corner_buttons(
         let (_vw, vh) = r.measure_text(&val_str, 24.0);
         let value_x = corner.0 + btn_size + 10.0;
         let value_y = corner.1 + (btn_size - vh) / 2.0;
-        r.draw_text(&val_str, value_x + 1.0, value_y + 1.0, 24.0, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text(
+            &val_str,
+            value_x + 1.0,
+            value_y + 1.0,
+            24.0,
+            [0.0, 0.0, 0.0, 0.35],
+        );
         r.draw_text(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.55, 1.0]);
 
         let c_signal = counters[i].clone();
@@ -1455,7 +1597,10 @@ fn find_cvkg_asset_path(name: &str) -> Option<PathBuf> {
 }
 
 fn main() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,cvkg=debug,berserker=debug")).init();
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info,cvkg=debug,berserker=debug"),
+    )
+    .init();
     log::info!("═══════════════════════════════════════════════════");
     log::info!(
         "  BERSERKER FIRE v{} — Cyberpunk Viking UI Demo",
@@ -1468,18 +1613,18 @@ fn main() {
     );
     log::info!("═══════════════════════════════════════════════════");
     // Load background image
-        let bg_image_data = find_cvkg_asset_path("background.jpg")
-            .map(fs::read)
-            .unwrap_or_else(|| {
-                Err(std::io::Error::other(
-                    "background.jpg not found in shared CVKG asset paths",
-                ))
-            })
-            .inspect(|data| log::info!("[Berserker] Loaded background image: {} bytes", data.len()))
-            .inspect_err(|e| log::warn!("[Berserker] Failed to load background image: {}", e))
-            .ok();
+    let bg_image_data = find_cvkg_asset_path("background.jpg")
+        .map(fs::read)
+        .unwrap_or_else(|| {
+            Err(std::io::Error::other(
+                "background.jpg not found in shared CVKG asset paths",
+            ))
+        })
+        .inspect(|data| log::info!("[Berserker] Loaded background image: {} bytes", data.len()))
+        .inspect_err(|e| log::warn!("[Berserker] Failed to load background image: {}", e))
+        .ok();
 
-        log::info!("[Berserker] CWD: {:?}", std::env::current_dir());
+    log::info!("[Berserker] CWD: {:?}", std::env::current_dir());
 
     std::panic::set_hook(Box::new(|info| {
         log::error!("CRITICAL_FAILURE: Application panicked: {}", info);
@@ -1487,8 +1632,5 @@ fn main() {
 
     log::info!("Launching with full debug logging enabled...");
     let prewarm_assets = bg_image_data.map(|data| vec![("background".to_string(), data)]);
-    cvkg::native::NativeRenderer::run(
-        BerserkerFireView::new(1280.0, 720.0),
-        prewarm_assets,
-    );
+    cvkg::native::NativeRenderer::run(BerserkerFireView::new(1280.0, 720.0), prewarm_assets);
 }

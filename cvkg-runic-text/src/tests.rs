@@ -1,6 +1,6 @@
 use super::*;
+use fontdb::{Stretch, Style, Weight};
 use rustybuzz::Direction;
-use fontdb::{Weight, Style, Stretch};
 
 const MAX_CACHE_SIZE: usize = 1024;
 
@@ -13,14 +13,25 @@ fn test_text_measure_render_sync() {
     let style = TextStyle::new("Jupiteroid", 16.0);
     let spans = vec![TextSpan::new(text, style)];
 
-    let shaped1 = engine1.shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip).unwrap();
-    let shaped2 = engine2.shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip).unwrap();
+    let shaped1 = engine1
+        .shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip)
+        .unwrap();
+    let shaped2 = engine2
+        .shape_layout(&spans, None, TextAlign::Start, TextOverflow::Clip)
+        .unwrap();
 
     assert_eq!(shaped1.width, shaped2.width, "Widths must match precisely");
-    assert_eq!(shaped1.glyphs.len(), shaped2.glyphs.len(), "Glyph counts must match");
+    assert_eq!(
+        shaped1.glyphs.len(),
+        shaped2.glyphs.len(),
+        "Glyph counts must match"
+    );
     for (g1, g2) in shaped1.glyphs.iter().zip(shaped2.glyphs.iter()) {
         assert_eq!(g1.x, g2.x, "Glyph X positions must match");
-        assert_eq!(g1.advance_width, g2.advance_width, "Glyph advances must match");
+        assert_eq!(
+            g1.advance_width, g2.advance_width,
+            "Glyph advances must match"
+        );
     }
 }
 
@@ -560,7 +571,12 @@ fn test_text_semantic_layer_and_virtualization() {
     let style = TextStyle::new("Jupiteroid", 16.0);
 
     let mut paragraph = Paragraph::new("First paragraph with code element.");
-    paragraph.add_run(TextRun::new(0, 34, "First paragraph with code element.", style.clone()));
+    paragraph.add_run(TextRun::new(
+        0,
+        34,
+        "First paragraph with code element.",
+        style.clone(),
+    ));
     paragraph.add_semantic_range(SemanticRange::new(21, 25, SemanticKind::Code, None));
 
     assert_eq!(paragraph.runs.len(), 1);

@@ -116,7 +116,12 @@ impl ScreenReaderBridge for NullScreenReaderBridge {
             AnnouncementPriority::Polite => "polite",
             AnnouncementPriority::Assertive => "assertive",
         };
-        log::debug!("[A11y] {} ({}): {}", "announce", priority, announcement.message);
+        log::debug!(
+            "[A11y] {} ({}): {}",
+            "announce",
+            priority,
+            announcement.message
+        );
     }
 
     /// Always returns `false` — no screen reader is active in this null bridge.

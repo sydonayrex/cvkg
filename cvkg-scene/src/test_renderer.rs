@@ -245,16 +245,29 @@ impl Renderer for TestRenderer {
 
     /// Records a pre-shaped rich text drawing operation as a DrawText command.
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
-        let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
-        let size = shaped.spans.first().map(|s| s.style.font_size).unwrap_or(14.0);
-        let color = shaped.spans.first().map(|s| {
-            [
-                s.style.color[0] as f32 / 255.0,
-                s.style.color[1] as f32 / 255.0,
-                s.style.color[2] as f32 / 255.0,
-                s.style.color[3] as f32 / 255.0,
-            ]
-        }).unwrap_or([1.0, 1.0, 1.0, 1.0]);
+        let text = shaped
+            .spans
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<&str>>()
+            .join("");
+        let size = shaped
+            .spans
+            .first()
+            .map(|s| s.style.font_size)
+            .unwrap_or(14.0);
+        let color = shaped
+            .spans
+            .first()
+            .map(|s| {
+                [
+                    s.style.color[0] as f32 / 255.0,
+                    s.style.color[1] as f32 / 255.0,
+                    s.style.color[2] as f32 / 255.0,
+                    s.style.color[3] as f32 / 255.0,
+                ]
+            })
+            .unwrap_or([1.0, 1.0, 1.0, 1.0]);
 
         self.commands.push(Command::DrawText {
             text,

@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use crate::types::{
-    FilterContext, FilterError, FilterResult, FilterUnits, GpuContext,
-    filter_padding, resolve_filter_region, ResolvedInput,
-};
 use crate::graph::FilterGraph;
+use crate::types::{
+    FilterContext, FilterError, FilterResult, FilterUnits, GpuContext, ResolvedInput,
+    filter_padding, resolve_filter_region,
+};
+use std::collections::HashMap;
 
 /// GPU-side uniform buffer matching the WGSL FilterParams struct.
 #[repr(C)]
@@ -441,7 +441,11 @@ impl FilterEngine {
         })
     }
 
-    pub(crate) fn get_temp_view(&mut self, width: u32, height: u32) -> Result<wgpu::TextureView, FilterError> {
+    pub(crate) fn get_temp_view(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Result<wgpu::TextureView, FilterError> {
         for (i, tex) in self.temp_textures.iter().enumerate() {
             if tex.width() == width && tex.height() == height {
                 return Ok(self.temp_views[i].clone());
@@ -507,9 +511,7 @@ impl FilterEngine {
                     ResolvedInput::SourceGraphic => {
                         Ok(std::sync::Arc::new(ctx.source_view.clone()))
                     }
-                    ResolvedInput::SourceAlpha => {
-                        Ok(std::sync::Arc::new(ctx.source_view.clone()))
-                    }
+                    ResolvedInput::SourceAlpha => Ok(std::sync::Arc::new(ctx.source_view.clone())),
                     ResolvedInput::BackdropImage | ResolvedInput::BackdropAlpha => {
                         if cached_backdrop.is_none() {
                             let bv = ctx.backdrop_view.ok_or_else(|| {
@@ -522,12 +524,9 @@ impl FilterEngine {
                         }
                         Ok(cached_backdrop.clone().unwrap())
                     }
-                    ResolvedInput::NodeIndex(idx) => results
-                        .get(&idx)
-                        .cloned()
-                        .ok_or_else(|| {
-                            FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))
-                        }),
+                    ResolvedInput::NodeIndex(idx) => results.get(&idx).cloned().ok_or_else(|| {
+                        FilterError::UnresolvedInput(format!("node {idx} not yet evaluated"))
+                    }),
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 

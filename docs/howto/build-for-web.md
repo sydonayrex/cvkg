@@ -1,79 +1,49 @@
 # How to Build for Web
 
-Goal: Compile a CVKG application to WebAssembly for browser deployment.
+## Goal
 
-## Process Flow
-
-```mermaid
-graph TD
-    A["Add WASM Target"] --> B["Build with cargo build --target wasm32-unknown-unknown"]
-    B --> C["Verify build artifact exists (.wasm)"]
-    C --> D["Construct HTML template including JS initializer"]
-    D --> E["Serve assets locally (Python server or cvkg-webkit-server)"]
-```
+Compile CVKG crates to WebAssembly for browser execution.
 
 ## Prerequisites
 
-
-- Rust WASM target installed
-- Web server for local testing
+- `rustup target add wasm32-unknown-unknown`
+- `wasm-pack` installed
+- A web server for serving the output
 
 ## Steps
 
-### 1. Add WASM target
+### Build a Web Demo
 
 ```bash
-rustup target add wasm32-unknown-unknown
+cd demos/niflheim-web
+wasm-pack build --target web --out-dir pkg
 ```
 
-### 2. Build for WebAssembly
+### Serve Locally
 
 ```bash
-cargo build --target wasm32-unknown-unknown --features web --release
+cd pkg
+python3 -m http.server 8080
 ```
 
-### 3. Locate output
+Open `http://localhost:8080` in a browser.
+
+### Build for Production
 
 ```bash
-ls target/wasm32-unknown-unknown/release/*.wasm
+wasm-pack build --target web --release --out-dir pkg
 ```
 
-### 4. Create HTML wrapper
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <title>CVKG App</title>
-</head>
-<body>
-  <canvas id="canvas"></canvas>
-  <script type="module">
-    import init from './cvkg.js';
-    init();
-  </script>
-</body>
-</html>
-```
-
-### 5. Serve locally
-
-```bash
-# Using Python
-python -m http.server 8000
-
-# Or using cvkg-webkit-server
-cvkg-webkit-server --port 8000 --root ./dist
-```
+The `--release` flag enables optimizations. The output includes a `.wasm` file and JavaScript glue code.
 
 ## Expected Output
 
-Navigate to `http://localhost:8000` to see the CVKG application running in the browser.
+- `pkg/` directory with `.wasm`, `.js`, and `.d.ts` files.
+- Browser page rendering CVKG components via WebGL2 or WebGPU.
 
-## Recovery
+## What Can Go Wrong
 
-If the page is blank:
-
-1. Check browser console for errors
-2. Verify WebGPU is supported (Chrome 113+, Firefox 115+)
-3. Ensure canvas element exists with correct ID
+- **`wasm-pack` not found**: Install it: `curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh`.
+- **`web-sys` feature errors**: Ensure you are targeting `wasm32-unknown-unknown`, not `wasm32-wasi`.
+- **Blank canvas**: Check browser console. Enable WebPU or WebGL2 in browser flags if needed.
+- **Large `.wasm` file**: Use `wasm-opt` for further optimization: `wasm-opt -Oz -o output.wasm input.wasm`.

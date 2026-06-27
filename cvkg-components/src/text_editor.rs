@@ -634,10 +634,16 @@ impl View for TextEditor {
             renderer.register_handler(
                 "keydown",
                 Arc::new(move |event| {
-                    if let cvkg_core::Event::KeyDown { ref key, modifiers, .. } = event {
+                    if let cvkg_core::Event::KeyDown {
+                        ref key, modifiers, ..
+                    } = event
+                    {
                         match key.as_str() {
                             // ── Undo: Cmd+Z (macOS) or Ctrl+Z (other) ──
-                            key if (key == "cmd+z" || key == "ctrl+z" || (modifiers.ctrl && key == "z" && !modifiers.shift)) => {
+                            key if (key == "cmd+z"
+                                || key == "ctrl+z"
+                                || (modifiers.ctrl && key == "z" && !modifiers.shift)) =>
+                            {
                                 info!("[TextEditor] Undo");
                                 update_system_state(|s| {
                                     let mut ns = s.clone();
@@ -659,7 +665,8 @@ impl View for TextEditor {
                             key if (key == "cmd+shift+z"
                                 || key == "ctrl+shift+z"
                                 || key == "ctrl+y"
-                                || (modifiers.ctrl && modifiers.shift && key == "z")) => {
+                                || (modifiers.ctrl && modifiers.shift && key == "z")) =>
+                            {
                                 info!("[TextEditor] Redo");
                                 update_system_state(|s| {
                                     let mut ns = s.clone();
@@ -745,7 +752,8 @@ impl View for TextEditor {
                                         let mut st = (*guard).clone();
                                         let (line, col) = pos_to_line_col(&st.text, st.cursor_pos);
                                         if line > 0 {
-                                            st.cursor_pos = line_col_to_pos(&st.text, line - 1, col);
+                                            st.cursor_pos =
+                                                line_col_to_pos(&st.text, line - 1, col);
                                         }
                                         st.selection_anchor = None;
                                         ns.set_component_state(state_id, st);
@@ -766,7 +774,8 @@ impl View for TextEditor {
                                         let (line, col) = pos_to_line_col(&st.text, st.cursor_pos);
                                         let total_lines = st.text.split('\n').count();
                                         if line + 1 < total_lines {
-                                            st.cursor_pos = line_col_to_pos(&st.text, line + 1, col);
+                                            st.cursor_pos =
+                                                line_col_to_pos(&st.text, line + 1, col);
                                         }
                                         st.selection_anchor = None;
                                         ns.set_component_state(state_id, st);
@@ -805,7 +814,8 @@ impl View for TextEditor {
                                         let (line, _col) = pos_to_line_col(&st.text, st.cursor_pos);
                                         let lines: Vec<&str> = st.text.split('\n').collect();
                                         if line < lines.len() {
-                                            st.cursor_pos = line_col_to_pos(&st.text, line, lines[line].len());
+                                            st.cursor_pos =
+                                                line_col_to_pos(&st.text, line, lines[line].len());
                                         }
                                         st.selection_anchor = None;
                                         ns.set_component_state(state_id, st);
@@ -891,8 +901,7 @@ impl View for TextEditor {
                 Arc::new(move |_event| {
                     update_system_state(|s| {
                         let ns = s.clone();
-                        if let Some(guard) =
-                            ns.get_component_state::<EditorState>(state_id)
+                        if let Some(guard) = ns.get_component_state::<EditorState>(state_id)
                             && let Ok(guard) = guard.read()
                         {
                             let st = (*guard).clone();
@@ -902,7 +911,10 @@ impl View for TextEditor {
                                     #[cfg(not(target_arch = "wasm32"))]
                                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                                         let _ = clipboard.set_text(selected);
-                                        info!("[TextEditor] Copied {} bytes to clipboard", selected.len());
+                                        info!(
+                                            "[TextEditor] Copied {} bytes to clipboard",
+                                            selected.len()
+                                        );
                                     }
                                 }
                             }
@@ -918,8 +930,7 @@ impl View for TextEditor {
                 Arc::new(move |_event| {
                     update_system_state(|s| {
                         let mut ns = s.clone();
-                        if let Some(guard) =
-                            ns.get_component_state::<EditorState>(state_id)
+                        if let Some(guard) = ns.get_component_state::<EditorState>(state_id)
                             && let Ok(guard) = guard.read()
                         {
                             let mut st = (*guard).clone();
@@ -930,7 +941,10 @@ impl View for TextEditor {
                                     #[cfg(not(target_arch = "wasm32"))]
                                     if let Ok(mut clipboard) = arboard::Clipboard::new() {
                                         let _ = clipboard.set_text(selected);
-                                        info!("[TextEditor] Cut {} bytes to clipboard", selected.len());
+                                        info!(
+                                            "[TextEditor] Cut {} bytes to clipboard",
+                                            selected.len()
+                                        );
                                     }
                                     // Delete the selection
                                     st.text.replace_range(start..end, "");
@@ -954,11 +968,13 @@ impl View for TextEditor {
                             return;
                         }
                         let paste_text = text.clone();
-                        info!("[TextEditor] Pasting {} bytes from clipboard", paste_text.len());
+                        info!(
+                            "[TextEditor] Pasting {} bytes from clipboard",
+                            paste_text.len()
+                        );
                         update_system_state(|s| {
                             let mut ns = s.clone();
-                            if let Some(guard) =
-                                ns.get_component_state::<EditorState>(state_id)
+                            if let Some(guard) = ns.get_component_state::<EditorState>(state_id)
                                 && let Ok(guard) = guard.read()
                             {
                                 let mut st = (*guard).clone();

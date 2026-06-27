@@ -33,8 +33,8 @@ use std::time::Instant;
 pub struct Framebuffer {
     width: u32,
     height: u32,
-    pixels: Vec<u32>,   // RGBA8 packed (R in lowest byte on little-endian)
-    depth: Vec<f32>,    // depth buffer (unused by 2D API, reserved for 3D)
+    pixels: Vec<u32>, // RGBA8 packed (R in lowest byte on little-endian)
+    depth: Vec<f32>,  // depth buffer (unused by 2D API, reserved for 3D)
 }
 
 impl Framebuffer {
@@ -57,14 +57,22 @@ impl Framebuffer {
         fb
     }
 
-    pub fn width(&self) -> u32 { self.width }
-    pub fn height(&self) -> u32 { self.height }
+    pub fn width(&self) -> u32 {
+        self.width
+    }
+    pub fn height(&self) -> u32 {
+        self.height
+    }
 
     /// Returns a reference to the raw RGBA8 pixel data.
-    pub fn pixels(&self) -> &[u32] { &self.pixels }
+    pub fn pixels(&self) -> &[u32] {
+        &self.pixels
+    }
 
     /// Returns a mutable reference to the raw RGBA8 pixel data.
-    pub fn pixels_mut(&mut self) -> &mut [u32] { &mut self.pixels }
+    pub fn pixels_mut(&mut self) -> &mut [u32] {
+        &mut self.pixels
+    }
 
     /// Clears the framebuffer to transparent black.
     pub fn clear(&mut self) {
@@ -105,7 +113,6 @@ impl Framebuffer {
         ];
         self.pixels[idx] = pack_rgba(out);
     }
-
 }
 
 fn pack_rgba(c: [f32; 4]) -> u32 {
@@ -154,9 +161,7 @@ impl SoftwareRenderer {
             #[cfg(feature = "text")]
             text_engine: {
                 let mut engine = cvkg_runic_text::TextEngine::new_light();
-                engine.load_font_data(
-                    include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(),
-                );
+                engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
                 engine
             },
             memoize_cache: None,
@@ -184,8 +189,6 @@ impl SoftwareRenderer {
     pub fn framebuffer(&self) -> &Framebuffer {
         &self.fb
     }
-
-    /// Returns the internal framebuffer, consuming the renderer.
 
     /// Returns the width of the framebuffer.
     pub fn width(&self) -> u32 {
@@ -317,22 +320,42 @@ impl Renderer for SoftwareRenderer {
         let sw = stroke_width.max(0.5);
         // Top
         self.fill_rect_internal(
-            Rect { x: rect.x, y: rect.y, width: rect.width, height: sw },
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: sw,
+            },
             color,
         );
         // Bottom
         self.fill_rect_internal(
-            Rect { x: rect.x, y: rect.y + rect.height - sw, width: rect.width, height: sw },
+            Rect {
+                x: rect.x,
+                y: rect.y + rect.height - sw,
+                width: rect.width,
+                height: sw,
+            },
             color,
         );
         // Left
         self.fill_rect_internal(
-            Rect { x: rect.x, y: rect.y, width: sw, height: rect.height },
+            Rect {
+                x: rect.x,
+                y: rect.y,
+                width: sw,
+                height: rect.height,
+            },
             color,
         );
         // Right
         self.fill_rect_internal(
-            Rect { x: rect.x + rect.width - sw, y: rect.y, width: sw, height: rect.height },
+            Rect {
+                x: rect.x + rect.width - sw,
+                y: rect.y,
+                width: sw,
+                height: rect.height,
+            },
             color,
         );
     }
@@ -350,7 +373,8 @@ impl Renderer for SoftwareRenderer {
                 let fx = px as f32 + 0.5;
                 let fy = py as f32 + 0.5;
                 let dx = (fx - (rect.x + r)).max(0.0) + (rect.x + rect.width - r - fx).max(0.0) - r;
-                let dy = (fy - (rect.y + r)).max(0.0) + (rect.y + rect.height - r - fy).max(0.0) - r;
+                let dy =
+                    (fy - (rect.y + r)).max(0.0) + (rect.y + rect.height - r - fy).max(0.0) - r;
                 let outside = (dx * dx + dy * dy).sqrt();
                 if outside <= r && outside >= r - sw {
                     let alpha = if outside > r - 1.0 {
@@ -398,7 +422,15 @@ impl Renderer for SoftwareRenderer {
         }
     }
 
-    fn draw_line(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, color: [f32; 4], stroke_width: f32) {
+    fn draw_line(
+        &mut self,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        color: [f32; 4],
+        stroke_width: f32,
+    ) {
         // Simple Bresenham-like line drawing (no AA for speed)
         let dx = (x2 - x1).abs();
         let dy = (y2 - y1).abs();
@@ -410,7 +442,12 @@ impl Renderer for SoftwareRenderer {
             let x = x1 + (x2 - x1) * t;
             let y = y1 + (y2 - y1) * t;
             // Draw a small square for each point to approximate stroke width
-            let r = Rect { x: x - sw, y: y - sw, width: stroke_width, height: stroke_width };
+            let r = Rect {
+                x: x - sw,
+                y: y - sw,
+                width: stroke_width,
+                height: stroke_width,
+            };
             self.fill_rect_internal(r, color);
         }
     }
@@ -452,7 +489,12 @@ impl Renderer for SoftwareRenderer {
                 start_color[2] + (end_color[2] - start_color[2]) * t,
                 start_color[3] + (end_color[3] - start_color[3]) * t,
             ];
-            let col = Rect { x: px as f32, y: rect.y, width: 1.0, height: rect.height };
+            let col = Rect {
+                x: px as f32,
+                y: rect.y,
+                width: 1.0,
+                height: rect.height,
+            };
             self.fill_rect_internal(col, color);
         }
     }
@@ -484,7 +526,9 @@ impl Renderer for SoftwareRenderer {
         #[cfg(feature = "text")]
         {
             // Phase 2 fix: use the long-lived text engine instead of creating a new one per call.
-            self.text_engine.shape_layout(spans, max_width, align, overflow).ok()
+            self.text_engine
+                .shape_layout(spans, max_width, align, overflow)
+                .ok()
         }
         #[cfg(not(feature = "text"))]
         {
@@ -528,12 +572,7 @@ impl Renderer for SoftwareRenderer {
         );
     }
 
-    fn draw_mesh_3d(
-        &mut self,
-        _mesh: &Mesh,
-        _material: &Material3D,
-        _transform: &Transform3D,
-    ) {
+    fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {
         log::warn!(
             "[SoftwareRenderer] draw_mesh_3d() is not implemented in software. \
              The 3D mesh will not appear in the output."
@@ -563,10 +602,11 @@ impl Renderer for SoftwareRenderer {
         // Simple cache: skip re-rendering if the data_hash hasn't changed.
         // We track (id, data_hash) pairs; if the same id is rendered with the
         // same hash, we skip the render call entirely.
-        if let Some(&(cached_id, cached_hash)) = self.memoize_cache.as_ref() {
-            if cached_id == id && cached_hash == data_hash {
-                return; // content unchanged, skip
-            }
+        if let Some(&(cached_id, cached_hash)) = self.memoize_cache.as_ref()
+            && cached_id == id
+            && cached_hash == data_hash
+        {
+            return; // content unchanged, skip
         }
         self.memoize_cache = Some((id, data_hash));
         render_fn(self);
@@ -602,7 +642,15 @@ mod tests {
     #[test]
     fn software_fill_rect() {
         let mut r = SoftwareRenderer::new(100, 100);
-        r.fill_rect(Rect { x: 10.0, y: 10.0, width: 20.0, height: 20.0 }, [1.0, 0.0, 0.0, 1.0]);
+        r.fill_rect(
+            Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 20.0,
+                height: 20.0,
+            },
+            [1.0, 0.0, 0.0, 1.0],
+        );
 
         let fb = r.framebuffer();
         // Inside rect should be red
@@ -620,7 +668,12 @@ mod tests {
     fn software_fill_rounded_rect() {
         let mut r = SoftwareRenderer::new(100, 100);
         r.fill_rounded_rect(
-            Rect { x: 10.0, y: 10.0, width: 40.0, height: 40.0 },
+            Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 40.0,
+                height: 40.0,
+            },
             8.0,
             [0.0, 1.0, 0.0, 1.0],
         );
@@ -635,7 +688,12 @@ mod tests {
     fn software_fill_ellipse() {
         let mut r = SoftwareRenderer::new(100, 100);
         r.fill_ellipse(
-            Rect { x: 20.0, y: 20.0, width: 60.0, height: 60.0 },
+            Rect {
+                x: 20.0,
+                y: 20.0,
+                width: 60.0,
+                height: 60.0,
+            },
             [0.0, 0.0, 1.0, 1.0],
         );
         let fb = r.framebuffer();
@@ -648,7 +706,16 @@ mod tests {
     #[test]
     fn software_glass_degrades_to_solid() {
         let mut r = SoftwareRenderer::new(100, 100);
-        r.fill_glass_rect(Rect { x: 10.0, y: 10.0, width: 40.0, height: 40.0 }, 8.0, 16.0);
+        r.fill_glass_rect(
+            Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 40.0,
+                height: 40.0,
+            },
+            8.0,
+            16.0,
+        );
         let fb = r.framebuffer();
         // Glass center should be semi-transparent white (degraded)
         let idx = (30 * 100 + 30) as usize;
@@ -661,7 +728,12 @@ mod tests {
     fn software_stroke_rect() {
         let mut r = SoftwareRenderer::new(100, 100);
         r.stroke_rect(
-            Rect { x: 10.0, y: 10.0, width: 30.0, height: 30.0 },
+            Rect {
+                x: 10.0,
+                y: 10.0,
+                width: 30.0,
+                height: 30.0,
+            },
             [1.0, 1.0, 1.0, 1.0],
             2.0,
         );
@@ -699,7 +771,12 @@ mod tests {
     fn software_gradient() {
         let mut r = SoftwareRenderer::new(100, 100);
         r.draw_linear_gradient(
-            Rect { x: 0.0, y: 0.0, width: 100.0, height: 1.0 },
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 1.0,
+            },
             [1.0, 0.0, 0.0, 1.0],
             [0.0, 0.0, 1.0, 1.0],
             0.0,
@@ -723,7 +800,15 @@ mod tests {
     #[test]
     fn p1_8_draw_image_does_not_panic() {
         let mut r = SoftwareRenderer::new(100, 100);
-        r.draw_image("test.png", cvkg_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        r.draw_image(
+            "test.png",
+            cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 50.0,
+                height: 50.0,
+            },
+        );
         // Framebuffer should be unmodified (all transparent).
         let fb = r.framebuffer();
         for pixel in fb.pixels() {
@@ -734,14 +819,30 @@ mod tests {
     #[test]
     fn p1_8_draw_svg_does_not_panic() {
         let mut r = SoftwareRenderer::new(100, 100);
-        r.draw_svg("icon", cvkg_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        r.draw_svg(
+            "icon",
+            cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 50.0,
+                height: 50.0,
+            },
+        );
         // Should not panic.
     }
 
     #[test]
     fn p1_8_draw_texture_does_not_panic() {
         let mut r = SoftwareRenderer::new(100, 100);
-        r.draw_texture(1, cvkg_core::Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        r.draw_texture(
+            1,
+            cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 50.0,
+                height: 50.0,
+            },
+        );
         // Should not panic.
     }
 }

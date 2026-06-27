@@ -8,6 +8,59 @@
 
 
 
+// --- Group 3: Gradient stop texture (for multi-stop gradients, material_id 30/31) ---
+@group(3) @binding(0) var t_grad_stops: texture_2d<f32>;
+@group(3) @binding(1) var s_grad_stops: sampler;
+
+/// Sample a multi-stop gradient from the stop texture.
+/// num_stops: number of gradient stops (max 32)
+/// t: interpolation parameter [0, 1]
+/// angle: angle in radians (used for linear gradient direction)
+/// is_radial: true for radial gradient, false for linear
+/// fallback_color: color to use if no stops are available
+fn sample_gradient(
+    num_stops: u32,
+    t: f32,
+    angle: f32,
+    is_radial: bool,
+    fallback_color: vec4<f32>,
+) -> vec4<f32> {
+    if num_stops == 0u {
+        return fallback_color;
+    }
+    if num_stops == 1u {
+        let stop0 = textureLoad(t_grad_stops, vec2<i32>(0, 0), 0);
+        return vec4<f32>(stop0.rgb, 1.0);
+    }
+
+    let clamped_t = clamp(t, 0.0, 1.0);
+
+    // Find the two surrounding stops and interpolate
+    for (var i = 0u; i < 31u; i = i + 1u) {
+        if i + 1u >= num_stops {
+            break;
+        }
+        let stop_i = textureLoad(t_grad_stops, vec2<i32>(i32(i), 0), 0);
+        let stop_j = textureLoad(t_grad_stops, vec2<i32>(i32(i + 1u), 0), 0);
+
+        let pos_i = stop_i.a;
+        let pos_j = stop_j.a;
+
+        if clamped_t >= pos_i && clamped_t <= pos_j {
+            let range = pos_j - pos_i;
+            let local_t = select((clamped_t - pos_i) / range, 0.0, range <= 0.0);
+            let c_i = vec4<f32>(stop_i.rgb, 1.0);
+            let c_j = vec4<f32>(stop_j.rgb, 1.0);
+            return mix(c_i, c_j, local_t);
+        }
+    }
+
+    // Fallback: if t is beyond all stops, return the last stop
+    let last_idx = num_stops - 1u;
+    let last_stop = textureLoad(t_grad_stops, vec2<i32>(i32(last_idx), 0), 0);
+    return vec4<f32>(last_stop.rgb, 1.0);
+}
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
@@ -117,6 +170,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let t = dot(in.logical / in.size - 0.5, vec2(cos(angle), sin(angle))) + 0.5;
         let end_color = vec4<f32>(in.slice.rgb, in.color.a);
         color = mix(in.color, end_color, clamp(t, 0.0, 1.0));
+    } else if in.material_id == 30u {
+        // ── Mode 30: Multi-stop Linear Gradient ──
+        // Computes linear interpolation parameter from UV and angle (stored in slice.x).
+        let grad_angle = in.slice.x;
+        let num_stops = u32(in.slice.y);
+        let dir = vec2<f32>(cos(grad_angle), sin(grad_angle));
+        let t_val = dot(in.uv - 0.5, dir) + 0.5;
+        color = sample_gradient(num_stops, t_val, grad_angle, false, in.color);
+    } else if in.material_id == 31u {
+        // ── Mode 31: Multi-stop Radial Gradient ──
+        // Computes radial interpolation parameter from UV distance to center.
+        let num_stops = u32(in.slice.y);
+        let t_val = length(in.uv - 0.5) * 2.0;
+        color = sample_gradient(num_stops, t_val, 0.0, true, in.color);
     } else if in.material_id == 18u {
         // ── Mode 18: Drop Shadow ──
         // Renders a soft drop shadow outside the margins of the rounded rectangle using smoothstep of the SDF.
@@ -201,6 +268,22 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         } else {
             discard;
         }
+    } else if in.material_id == 30u {
+        // ── Mode 30: Multi-stop Linear Gradient ──
+        // Gradient stops are stored in t_grad_stops: RGB = color, A = position (0-1).
+        // in.slice.x = angle in radians, in.slice.y = num_stops.
+        let num_stops = u32(in.slice.y);
+        let angle = in.slice.x;
+        let dir = vec2<f32>(cos(angle), sin(angle));
+        let t = dot(in.uv - 0.5, dir) + 0.5;
+        color = sample_gradient(num_stops, t, angle, false, in.color);
+    } else if in.material_id == 31u {
+        // ── Mode 31: Multi-stop Radial Gradient ──
+        // Gradient stops are stored in t_grad_stops: RGB = color, A = position (0-1).
+        // in.slice.x = unused, in.slice.y = num_stops.
+        let num_stops = u32(in.slice.y);
+        let t = length(in.uv - 0.5) * 2.0;
+        color = sample_gradient(num_stops, t, 0.0, true, in.color);
     }
 
     // Rage effect (applied to all opaque modes)

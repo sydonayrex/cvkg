@@ -35,7 +35,12 @@ impl View for StreamingText {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let visible_count = self.visible_chars.value.floor() as usize;
         let char_count = visible_count.min(self.text.chars().count());
-        let byte_end = self.text.char_indices().nth(char_count).map(|(i, _)| i).unwrap_or(self.text.len());
+        let byte_end = self
+            .text
+            .char_indices()
+            .nth(char_count)
+            .map(|(i, _)| i)
+            .unwrap_or(self.text.len());
         let current_text = &self.text[0..byte_end];
 
         // Draw the streaming text

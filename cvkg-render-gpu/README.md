@@ -1,38 +1,207 @@
 # cvkg-render-gpu
 
 ## Purpose
-Drives wgpu-based rendering pipelines, shader compilations, and command buffers.
+
+GPU-accelerated renderer for the CVKG UI framework. Translates scene graphs, SVG content, and compositor output into GPU draw calls via `wgpu`, targeting Vulkan, Metal, DX12, OpenGL, and WebGL2 from a single codebase.
 
 ## Boundaries
-- It does not run native desktop window loops; those are managed by cvkg-render-native.
-- It does not contain testing frameworks; quality checks are managed by `cvkg-test`.
 
-## Dependency Graph
+- Owns all GPU resource management: pipelines, buffers, textures, bind groups, and WGSL shader variants.
+- Consumes scene data from `cvkg-core`, `cvkg-compositor`, and `cvkg-svg-serialize`; does not own layout or DOM logic.
+- Exposes `GpuRenderer` as the primary entry point; callers provide a `winit` window/surface and a `RendererConfig`.
+- Accessibility tree construction is delegated to the `accessibility` module via AccessKit; input routing is the caller's responsibility.
+- The `material` module and its re-exports (`CompiledMaterial`, `MaterialCompiler`, `MaterialError`, `MaterialGraph`, `MaterialOp`) define the material graph that drives pipeline selection at draw time.
+- The `subsystems` module groups self-contained concerns (config, geometry, text, SVG, particles) that can be tested and modified independently.
+- WASM/WebGL2 is a first-class target; shader variants with `binding_array` are swapped for single-texture equivalents on `wasm32`.
+
+## Dependency graph
+
 ```mermaid
-graph TD
-    cvkg-render-gpu["cvkg-render-gpu (Focal Crate)"]
-    cvkg-test["cvkg-test"]
-    cvkg-test --> cvkg-render-gpu
-    classDef focal fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:2px
-    classDef sibling fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
-    class cvkg-render-gpu focal
-    class cvkg-test sibling
+graph LR
+  subgraph cvkg_render_gpu["cvkg-render-gpu"]
+    direction TB
+    RENDERER["GpuRenderer"]
+    MATERIAL["material (CompiledMaterial, MaterialCompiler, ...)"]
+    SUBSYS["subsystems (RendererConfig)"]
+    PASS["passes"]
+    DRAW["draw"]
+    FILTER["filter"]
+    PYRAMID["pyramid"]
+    VERTEX["vertex (Vertex, InstanceData)"]
+    TYPES["types (SvgAnimation, SvgModel)"]
+    ACCESS["accessibility (ShieldWallAdapter)"]
+    AI["ai"]
+    COLOR["color_blindness (ColorBlindMode)"]
+  end
+
+  WGPU["wgpu 29"]
+  WINIT["winit"]
+  ACCESSKIT["accesskit / accesskit_winit"]
+  CORE["cvkg-core (ColorTheme, SceneUniforms)"]
+  COMPOSITOR["cvkg-compositor"]
+  SVG_FILTERS["cvkg-svg-filters"]
+  SVG_SER["cvkg-svg-serialize"]
+  RUNIC["cvkg-runic-text"]
+  LYON["lyon"]
+  USVG["usvg"]
+  NAGA["naga 28"]
+  GLAM["glam"]
+  IMAGE["image"]
+  LRU["lru"]
+  RAYON["rayon"]
+  FUTURES["futures"]
+  SWASH["swash"]
+  ROXMLTREE["roxmltree"]
+  SERDE["serde / serde_json"]
+  LOG["log"]
+
+  RENDERER --> WGPU
+  RENDERER --> WINIT
+  RENDERER --> CORE
+  RENDERER --> COMPOSITOR
+  RENDERER --> SUBSYS
+  RENDERER --> PASS
+  RENDERER --> DRAW
+  RENDERER --> MATERIAL
+  RENDERER --> VERTEX
+  RENDERER --> TYPES
+  RENDERER --> ACCESS
+  RENDERER --> COLOR
+
+  PASS --> WGPU
+  PASS --> NAGA
+  PASS --> PYRAMID
+  PASS --> FILTER
+
+  DRAW --> WGPU
+  DRAW --> LYON
+  DRAW --> USVG
+  DRAW --> SVG_SER
+  DRAW --> SVG_FILTERS
+  DRAW --> ROXMLTREE
+
+  FILTER --> SVG_FILTERS
+  FILTER --> WGPU
+
+  PYRAMID --> WGPU
+  PYRAMID --> IMAGE
+
+  ACCESS --> ACCESSKIT
+  ACCESS --> WINIT
+
+  SUBSYS --> CORE
+  SUBSYS --> RUNIC
+  SUBSYS --> SWASH
+  SUBSYS --> LYON
+  SUBSYS --> USVG
+
+  MATERIAL --> NAGA
+  MATERIAL --> WGPU
+
+  RENDERER --> GLAM
+  RENDERER --> LRU
+  RENDERER --> RAYON
+  RENDERER --> FUTURES
+  RENDERER --> SERDE
+  RENDERER --> LOG
 ```
 
-## Public API Overview
-- `SurtrRenderer` — Central pipeline controller.
-- `Vertex` — Geometry vertex coordinates.
+## Public API overview
 
-## Usage Example
+### Re-exports (top-level)
+
+| Symbol | Source |
+|---|---|
+| `RendererConfig` | `subsystems` |
+| `CompiledMaterial` | `material` |
+| `MaterialCompiler` | `material` |
+| `MaterialError` | `material` |
+| `MaterialGraph` | `material` |
+| `MaterialOp` | `material` |
+| `SkylinePacker` | `heim` |
+| `GpuRenderer` | `renderer` |
+| `ColorBlindMode` | `color_blindness` |
+| `ColorTheme`, `SceneUniforms` | `cvkg-core` |
+| `SvgAnimation`, `SvgModel` | `types` |
+| `Vertex`, `InstanceData` | `vertex` |
+| `ActionHandler`, `ActionRequest`, `ActivationHandler`, `DeactivationHandler`, `Node`, `NodeId`, `Role`, `Tree`, `TreeId`, `TreeUpdate` | `accesskit` |
+| `ShieldWallAdapter` | `accesskit_winit` |
+
+### Modules
+
+| Module | Responsibility |
+|---|---|
+| `accessibility` | AccessKit integration; builds and updates the accessibility tree via `ShieldWallAdapter`. |
+| `ai` | AI-assisted rendering features (e.g. content-aware operations). |
+| `draw` | Draw call generation, path tessellation via `lyon`, SVG animation parsing. |
+| `filter` | SVG filter graph evaluation on GPU. |
+| `passes` | Render pass definitions (opaque, transparent, bloom, tonemap, color-blind, particles). |
+| `pyramid` | Mip-map and image pyramid generation. |
+| `renderer` | `GpuRenderer` — device initialization, surface configuration, frame submission. |
+| `types` | Shared types: `SvgAnimation`, `SvgModel`. |
+| `vertex` | Vertex and instance data layouts (`Vertex`, `InstanceData`). |
+| `subsystems` | Self-contained subsystems: config, geometry, text, SVG, particles. |
+
+## Usage example
+
 ```rust
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::{
+    GpuRenderer, RendererConfig,
+    CompiledMaterial, MaterialCompiler,
+    SkylinePacker,
+};
+use winit::event_loop::EventLoop;
+use winit::window::Window;
+
+fn main() {
+    let event_loop = EventLoop::new().unwrap();
+    let window = Window::new(&event_loop).unwrap();
+
+    // Initialize the renderer (blocking; uses pollster internally)
+    let config = RendererConfig::default();
+    let renderer = GpuRenderer::new(&window, config).expect("renderer init");
+
+    // The renderer now owns the wgpu device, queue, and surface.
+    // Call renderer.render(&scene) each frame with updated scene data.
+
+    // Material compilation (optional, for custom materials):
+    let compiler = MaterialCompiler::new();
+    // ... define a MaterialGraph, then:
+    // let compiled: CompiledMaterial = compiler.compile(&graph).unwrap();
+
+    // Atlas packing:
+    let mut packer = SkylinePacker::new(2048, 2048);
+    let pos = packer.pack(256, 128);
+    assert!(pos.is_some());
+}
 ```
 
-## Use Cases
-- Mapped as a core component inside the standard framework dependency tree.
+## Use cases
 
-## Edge Cases and Limitations
-- Under extreme scale or thread contention, ensure the host runtime balances cycles appropriately.
+- **Desktop and web UI rendering** — drives the full CVKG compositor pipeline on GPU, from SVG scene graphs to final composited frames.
+- **SVG filter effects** — hardware-accelerated SVG filters (blur, color matrix, displacement) via the `filter` module.
+- **Material-driven pipelines** — custom WGSL materials compiled through the material graph system (`MaterialCompiler` → `CompiledMaterial`).
+- **Accessibility** — produces an AccessKit tree from the rendered scene so screen readers and assistive tech can navigate the UI.
+- **Color-blind simulation** — `ColorBlindMode` applies Daltonization or simulation matrices in a tonemap pass.
+- **Particle systems** — GPU-driven particle simulation and rendering via the `particles` subsystem.
+- **Text rendering** — shaped and rasterized text via `cvkg-runic-text` and `swash`, packed into atlases with `SkylinePacker`.
+- **Multi-platform deployment** — native (Vulkan/Metal/DX12) and web (WebGL2) from the same crate, with automatic shader variant selection on `wasm32`.
 
-## Crate-Specific Build Flags
-This crate has no custom feature flags or compile-time options. It compiles under standard cargo parameters.
+## Edge cases and limitations
+
+- **WASM texture arrays** — `binding_array<texture_2d<f32>>` is not supported on WebGL2. Three shader files (`common`, `material_opaque`, `bloom`) have `_wasm` variants that use single textures instead. If you add new shaders that use binding arrays, you must also provide a WASM variant.
+- **Surface format negotiation** — `GpuRenderer` requests a surface format from `wgpu`; if the adapter cannot provide a compatible format, initialization fails. Headless or offscreen rendering requires a surface-compatible target.
+- **Atlas overflow** — `SkylinePacker::pack` returns `None` when a rectangle exceeds atlas dimensions. Callers must handle this (e.g. allocate a new atlas page).
+- **Thread safety on WASM** — `wgpu` on `wasm32` requires the `fragile-send-sync-non-atomic-wasm` feature. Types that are `Send + Sync` on native are intentionally `!Send` / `!Sync` on WASM. Do not share `GpuRenderer` across web workers.
+- **Rayon on WASM** — parallel iteration via `rayon` on `wasm32` requires `wasm-bindgen-rayon` and a `SharedArrayBuffer`-capable environment (COOP/COEP headers).
+- **naga in build scripts** — `naga` is a build dependency used to validate/translate WGSL at compile time. Build failures in `build.rs` will surface as compile errors even if the Rust source is correct.
+- **AccessKit platform backends** — on Linux/BSD, `accesskit_unix` is an optional dependency. Without it, the `accessibility` module cannot connect to AT-SPI; it will compile but tree updates are silently dropped.
+
+## Build flags / features / env vars
+
+| Name | Type | Default | Effect |
+|---|---|---|---|
+| `pillage` | Feature | off | Enables the `pillage` feature flag (crate-internal capability gate). |
+| `RUST_LOG` | Env var | — | Controls `log` crate output. Set to `cvkg_render_gpu=debug` for renderer diagnostics, or `wgpu=error` for GPU validation warnings. |
+| `WGPU_BACKEND` | Env var | — | Passed through to `wgpu`; e.g. `WGPU_BACKEND=vulkan` forces a specific backend. |
+| `naga` (build-dep) | Build dependency | — | Used in `build.rs` to validate WGSL shader source at compile time. No runtime effect. |

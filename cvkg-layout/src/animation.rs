@@ -51,8 +51,9 @@ impl AnimationEngine {
             let recent = self
                 .transition_generation
                 .get(hash)
-                .map_or(false, |g| current_gen - *g < threshold);
-            let unsettled = spring.velocity_a.length_sq() > 0.0001 || spring.velocity_b.length_sq() > 0.0001;
+                .is_some_and(|g| current_gen - *g < threshold);
+            let unsettled =
+                spring.velocity_a.length_sq() > 0.0001 || spring.velocity_b.length_sq() > 0.0001;
             recent || unsettled
         });
         self.transition_generation
@@ -82,7 +83,9 @@ pub fn apply_layout_animations(
                 }
             }
             cache.previous_rects.insert(hash, *target_rect);
-            cache.previous_rects_generation.insert(hash, cache.eviction_generation);
+            cache
+                .previous_rects_generation
+                .insert(hash, cache.eviction_generation);
         }
     }
 
@@ -133,7 +136,9 @@ pub fn apply_layout_animations(
             },
         );
         anim_engine.active_transitions.insert(hash, spring);
-        anim_engine.transition_generation.insert(hash, anim_engine.eviction_generation);
+        anim_engine
+            .transition_generation
+            .insert(hash, anim_engine.eviction_generation);
     }
 
     cache.evict_stale_entries();

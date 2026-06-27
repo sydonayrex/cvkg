@@ -16,46 +16,44 @@ impl FilterEngine {
 
         match kind {
             usvg::filter::Kind::GaussianBlur(gb) => {
-                self.apply_gaussian_blur(&*input_views[0], w, h, gb)
+                self.apply_gaussian_blur(&input_views[0], w, h, gb)
             }
             usvg::filter::Kind::ColorMatrix(cm) => {
-                self.apply_color_matrix(&*input_views[0], w, h, cm)
+                self.apply_color_matrix(&input_views[0], w, h, cm)
             }
             usvg::filter::Kind::Blend(blend) => {
-                self.apply_blend(&*input_views[0], &*input_views[1], w, h, blend)
+                self.apply_blend(&input_views[0], &input_views[1], w, h, blend)
             }
             usvg::filter::Kind::Composite(comp) => {
-                self.apply_composite(&*input_views[0], &*input_views[1], w, h, comp)
+                self.apply_composite(&input_views[0], &input_views[1], w, h, comp)
             }
             usvg::filter::Kind::Flood(flood) => self.apply_flood(w, h, flood),
             usvg::filter::Kind::Offset(offset) => {
-                self.apply_offset(&*input_views[0], w, h, rect, element_bbox, offset)
+                self.apply_offset(&input_views[0], w, h, rect, element_bbox, offset)
             }
-            usvg::filter::Kind::Merge(merge) => {
-                self.apply_merge(input_views, w, h, merge)
-            }
-            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(&*input_views[0], w, h, ds),
+            usvg::filter::Kind::Merge(merge) => self.apply_merge(input_views, w, h, merge),
+            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(&input_views[0], w, h, ds),
             usvg::filter::Kind::ComponentTransfer(ct) => {
-                self.apply_component_transfer(&*input_views[0], w, h, ct)
+                self.apply_component_transfer(&input_views[0], w, h, ct)
             }
             usvg::filter::Kind::ConvolveMatrix(cm) => {
-                self.apply_convolve_matrix(&*input_views[0], w, h, cm)
+                self.apply_convolve_matrix(&input_views[0], w, h, cm)
             }
             usvg::filter::Kind::DisplacementMap(dm) => {
-                self.apply_displacement_map(&*input_views[0], &*input_views[1], w, h, dm)
+                self.apply_displacement_map(&input_views[0], &input_views[1], w, h, dm)
             }
-            usvg::filter::Kind::Morphology(m) => self.apply_morphology(&*input_views[0], w, h, m),
+            usvg::filter::Kind::Morphology(m) => self.apply_morphology(&input_views[0], w, h, m),
             usvg::filter::Kind::Tile(tile) => {
-                self.apply_tile(&*input_views[0], w, h, rect, element_bbox, tile)
+                self.apply_tile(&input_views[0], w, h, rect, element_bbox, tile)
             }
             usvg::filter::Kind::Turbulence(t) => self.apply_turbulence(w, h, t),
             usvg::filter::Kind::DiffuseLighting(dl) => {
-                self.apply_diffuse_lighting(&*input_views[0], w, h, dl)
+                self.apply_diffuse_lighting(&input_views[0], w, h, dl)
             }
             usvg::filter::Kind::SpecularLighting(sl) => {
-                self.apply_specular_lighting(&*input_views[0], w, h, sl)
+                self.apply_specular_lighting(&input_views[0], w, h, sl)
             }
-            usvg::filter::Kind::Image(img) => self.apply_image(&*input_views[0], w, h, img),
+            usvg::filter::Kind::Image(img) => self.apply_image(&input_views[0], w, h, img),
         }
     }
 
@@ -1032,13 +1030,13 @@ impl FilterEngine {
         let root = img.root();
         if root.has_children() {
             let id = root.id();
-            if !id.is_empty() {
-                if let Some((_tex, view)) = self.image_textures.get(id) {
-                    return Ok(FilterResult {
-                        output_view: std::sync::Arc::new(view.clone()),
-                        region: (0, 0, w, h),
-                    });
-                }
+            if !id.is_empty()
+                && let Some((_tex, view)) = self.image_textures.get(id)
+            {
+                return Ok(FilterResult {
+                    output_view: std::sync::Arc::new(view.clone()),
+                    region: (0, 0, w, h),
+                });
             }
         }
         self.apply_passthrough(input, w, h)

@@ -1,6 +1,7 @@
 use crate::theme;
 use crate::{ButtonSize, ButtonVariant, FONT_BASE, RADIUS_MD};
-use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, View};
+use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, Size, View};
 use std::sync::Arc;
 
 /// Button with action callback, variant styling, size options, and disabled state.
@@ -384,7 +385,11 @@ impl View for Button {
             0.0
         };
 
-        let intensity = if self.disabled || self.loading { 0.0 } else { 0.25 };
+        let intensity = if self.disabled || self.loading {
+            0.0
+        } else {
+            0.1
+        };
         let mut offset_x = 0.0;
         let mut offset_y = 0.0;
         if dist < radius && dist > 0.0 && !self.disabled && !self.loading {
@@ -507,7 +512,12 @@ impl View for Button {
                     cy + dy * start_dist,
                     cx + dx * end_dist,
                     cy + dy * end_dist,
-                    [theme::accent()[0], theme::accent()[1], theme::accent()[2], alpha],
+                    [
+                        theme::accent()[0],
+                        theme::accent()[1],
+                        theme::accent()[2],
+                        alpha,
+                    ],
                     2.0,
                 );
             }
@@ -612,7 +622,10 @@ impl View for Button {
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(AriaProperties::new(AriaRole::Button, &self.label).disabled(self.disabled || self.loading))
+        Some(
+            AriaProperties::new(AriaRole::Button, &self.label)
+                .disabled(self.disabled || self.loading),
+        )
     }
 
     fn on_key_event(&self, key: &str, _modifiers: KeyModifiers) -> bool {
@@ -637,7 +650,7 @@ impl cvkg_core::layout::LayoutView for Button {
         _cache: &mut cvkg_core::layout::LayoutCache,
     ) -> cvkg_core::Size {
         cvkg_core::Size {
-            width: (self.label.len() as f32 * self.font_size() * 0.6 + self.h_padding() * 2.0)
+            width: (self.label.len() as f32 * self.font_size() * 0.55 + self.h_padding() * 2.0)
                 .max(self.height()),
             height: self.height(),
         }
@@ -845,6 +858,10 @@ impl View for Toggle {
         }
     }
 
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
+    }
+
     fn aria_properties(&self) -> Option<AriaProperties> {
         Some(
             AriaProperties::new(AriaRole::Switch, &self.label)
@@ -863,6 +880,29 @@ impl View for Toggle {
         }
     }
 }
+
+impl LayoutView for Toggle {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        let label_width = self.label.len() as f32 * 14.0 * 0.55;
+        Size {
+            width: 40.0 + 8.0 + label_width,
+            height: 24.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+
 
 #[derive(Clone)]
 pub struct Slider {
@@ -1034,13 +1074,36 @@ impl View for Slider {
         }
     }
 
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
+    }
+
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(
-            AriaProperties::new(AriaRole::Slider, "Slider")
-                .value(format!("{:.0}", self.value)),
-        )
+        Some(AriaProperties::new(AriaRole::Slider, "Slider").value(format!("{:.0}", self.value)))
     }
 }
+
+impl LayoutView for Slider {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 150.0,
+            height: 24.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+
 
 /// Stepper for discrete increment/decrement
 #[derive(Clone)]

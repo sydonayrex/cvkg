@@ -149,6 +149,5 @@ pub use conformance::{
 
 mod a11y_conformance;
 pub use a11y_conformance::{
-    A11yConformanceSuite, A11yConformanceTest, A11yProtocol, A11yRole, A11yValidator,
-    RoleMapping,
+    A11yConformanceSuite, A11yConformanceTest, A11yProtocol, A11yRole, A11yValidator, RoleMapping,
 };

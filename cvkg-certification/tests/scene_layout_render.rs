@@ -86,10 +86,7 @@ fn certify_scene_layer_batching() {
             if batches.len() == 2 {
                 check.pass();
             } else {
-                check.fail(format!(
-                    "Expected 2 layers in batch, got {}",
-                    batches.len()
-                ));
+                check.fail(format!("Expected 2 layers in batch, got {}", batches.len()));
             }
         },
     );

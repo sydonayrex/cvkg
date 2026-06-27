@@ -5,8 +5,8 @@
 //! glass, bloom, composite) with proper resource dependencies.
 
 use crate::kvasir::node::{ExecutionContext, KvasirNode};
-use crate::kvasir::resource::ResourceId;
 use crate::kvasir::nodes::RES_SCENE;
+use crate::kvasir::resource::ResourceId;
 
 /// Resource IDs for SVG filter intermediate results.
 pub const RES_FILTER_TEMP_A: ResourceId = ResourceId(100);

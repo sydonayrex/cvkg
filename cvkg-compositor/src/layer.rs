@@ -9,7 +9,9 @@ use cvkg_core::Rect;
 use std::collections::HashMap;
 
 /// Unique identifier for a layer in the tree.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, Default, serde::Serialize, serde::Deserialize,
+)]
 pub struct LayerId(pub u64);
 
 /// Material type that determines which GPU pass a layer's draw calls are routed to

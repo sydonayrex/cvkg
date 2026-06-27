@@ -178,7 +178,11 @@ impl View for TyrCalendar {
                 if is_selected {
                     renderer.fill_rounded_rect(cell_rect, RADIUS_SM, theme::accent());
                 } else if is_disabled {
-                    renderer.fill_rounded_rect(cell_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.2));
+                    renderer.fill_rounded_rect(
+                        cell_rect,
+                        RADIUS_SM,
+                        theme::with_alpha(theme::surface_elevated(), 0.2),
+                    );
                 }
 
                 let day_str = day_num.to_string();

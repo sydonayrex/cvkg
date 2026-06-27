@@ -366,8 +366,10 @@ mod tests {
 
     #[test]
     fn test_sph_max_particles() {
-        let mut config = SphConfig::default();
-        config.max_particles = 10;
+        let config = SphConfig {
+            max_particles: 10,
+            ..Default::default()
+        };
         let mut fluid = SphFluid::new(config);
         for _ in 0..20 {
             fluid.add_particle(Vec3::new(0.0, 1.0, 0.0));
@@ -391,8 +393,10 @@ mod tests {
 
     #[test]
     fn test_sph_density_computation() {
-        let mut config = SphConfig::default();
-        config.smoothing_radius = 10.0;
+        let config = SphConfig {
+            smoothing_radius: 10.0,
+            ..Default::default()
+        };
         let mut fluid = SphFluid::new(config);
 
         // Add two close particles

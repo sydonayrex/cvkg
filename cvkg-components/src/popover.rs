@@ -303,9 +303,18 @@ impl<V: View + Clone + 'static, C: View + Clone + 'static> View for Popover<V, C
                 renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
             }
             // Semi-transparent dark fill.
-            renderer.fill_rounded_rect(pop_rect, 10.0, theme::with_alpha(theme::surface_elevated(), 0.88));
+            renderer.fill_rounded_rect(
+                pop_rect,
+                10.0,
+                theme::with_alpha(theme::surface_elevated(), 0.88),
+            );
             // Subtle neon border.
-            renderer.stroke_rounded_rect(pop_rect, 10.0, theme::with_alpha(theme::border(), 0.7), 1.5);
+            renderer.stroke_rounded_rect(
+                pop_rect,
+                10.0,
+                theme::with_alpha(theme::border(), 0.7),
+                1.5,
+            );
 
             // Draw the arrow triangle.
             self.draw_arrow(renderer, pop_rect, position);

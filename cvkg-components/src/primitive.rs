@@ -49,6 +49,26 @@ impl Text {
     pub fn bold(self) -> Self {
         self.font_weight(FontWeight::Bold)
     }
+
+    /// Apply a complete TextStyle from cvkg-runic-text.
+    /// This sets font_size, font_weight, and color from the style.
+    /// The existing raw-`f32` modifiers (`.font_size()`, `.color()`) can still be used
+    /// after `.text_style()` to override individual fields.
+    pub fn text_style(mut self, style: runic::TextStyle) -> Self {
+        self.font_size = style.font_size;
+        self.color = [
+            style.color[0] as f32 / 255.0,
+            style.color[1] as f32 / 255.0,
+            style.color[2] as f32 / 255.0,
+            style.color[3] as f32 / 255.0,
+        ];
+        self.font_weight = match style.weight.0 {
+            0..=300 => FontWeight::Regular,
+            301..=600 => FontWeight::Regular,
+            _ => FontWeight::Bold,
+        };
+        self
+    }
 }
 
 impl View for Text {
@@ -71,7 +91,9 @@ impl View for Text {
         let span = runic::TextSpan::new(&self.content, style);
         if let Some(shaped) = renderer.shape_rich_text(
             &[span],
-            Some(rect.width),
+            None, // Do not hard-wrap: size_that_fits uses a constant approximation that is
+                  // narrower than real shaped metrics, so passing rect.width forces each
+                  // character onto its own line (vertical text). Natural width is correct here.
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         ) {
@@ -96,13 +118,16 @@ impl View for Text {
         let span = runic::TextSpan::new(&self.content, style);
         if let Some(shaped) = renderer.shape_rich_text(
             &[span],
-            proposal.width,
+            None, // Natural (unwrapped) width — same rationale as Text::render.
+                  // Passing proposal.width wraps text to the container width, so
+                  // intrinsic_size returns the full panel width and centering
+                  // produces zero offset (text lands at the left edge).
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         ) {
             Size {
-                width: shaped.width,
-                height: shaped.height,
+                width: shaped.width / renderer.text_scale_factor(),
+                height: shaped.height / renderer.text_scale_factor(),
             }
         } else {
             let (w, h) = renderer.measure_text(&self.content, self.font_size);
@@ -126,7 +151,7 @@ impl LayoutView for Text {
         _cache: &mut LayoutCache,
     ) -> Size {
         Size {
-            width: self.content.len() as f32 * self.font_size * 0.6,
+            width: self.content.len() as f32 * self.font_size * 0.55,
             height: self.font_size * 1.2,
         }
     }
@@ -508,7 +533,8 @@ impl View for Badge {
                 runic::TextAlign::Start,
                 runic::TextOverflow::Clip,
             ) {
-                (shaped.width, shaped.height)
+                let sf = renderer.text_scale_factor();
+                (shaped.width / sf, shaped.height / sf)
             } else {
                 renderer.measure_text(&self.text, font_size)
             };
@@ -557,7 +583,8 @@ impl View for Badge {
             runic::TextOverflow::Clip,
         );
         let (tw, th) = if let Some(ref shaped) = shaped_opt {
-            (shaped.width, shaped.height)
+            let sf = renderer.text_scale_factor();
+            (shaped.width / sf, shaped.height / sf)
         } else {
             renderer.measure_text(&self.text, font_size)
         };
@@ -616,7 +643,7 @@ impl View for Badge {
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         ) {
-            shaped.width
+            shaped.width / renderer.text_scale_factor()
         } else {
             renderer.measure_text(&self.text, font_size).0
         };
@@ -636,7 +663,48 @@ impl View for Badge {
 
         Size { width, height }
     }
+
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
+    }
 }
+
+impl LayoutView for Badge {
+    fn size_that_fits(
+        &self,
+        proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        let height = self.size.height();
+        let font_size = self.size.font_size();
+        let h_pad = self.size.h_padding();
+        let tw = self.text.len() as f32 * font_size * 0.55;
+
+        if self.count_only {
+            let diameter = height.max(tw + SPACE_SM);
+            return Size {
+                width: diameter,
+                height: diameter,
+            };
+        }
+
+        let mut width = tw + h_pad * 2.0;
+        if self.dot_indicator {
+            width += 8.0 + SPACE_XS;
+        }
+
+        Size { width, height }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+
 
 /// Skeleton component for displaying loading placeholders.
 #[derive(Clone)]

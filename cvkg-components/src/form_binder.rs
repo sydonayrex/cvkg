@@ -1,6 +1,6 @@
 //! Declarative Form Binder for CVKG Components.
 //!
-//! Provides state binding primitives (`Binding<T>`) and a controller (`FormBinder<T>`)
+//! Provides state binding primitives (`FormBinding<T>`) and a controller (`FormBinder<T>`)
 //! to achieve parity with SwiftUI `@Binding` and React `useForm`.
 
 use std::collections::HashMap;
@@ -11,14 +11,14 @@ use std::sync::Arc;
 /// This provides a declarative, state-sharing interface similar to SwiftUI's `@Binding`
 /// or React input handler state links.
 #[derive(Clone)]
-pub struct Binding<T> {
+pub struct FormBinding<T> {
     /// Retrieve the current value of the state.
     pub get: Arc<dyn Fn() -> T + Send + Sync>,
     /// Update the state to a new value.
     pub set: Arc<dyn Fn(T) + Send + Sync>,
 }
 
-impl<T: Clone + 'static> Binding<T> {
+impl<T: Clone + 'static> FormBinding<T> {
     /// Create a new binding from explicit getter and setter functions.
     ///
     /// # Contract
@@ -47,16 +47,19 @@ impl<T: Clone + 'static> Binding<T> {
     /// Project/map the binding to a different type using a bidirectional mapping function.
     ///
     /// This is highly useful for binding enum or integer fields to text inputs.
-    pub fn project<U: Clone + 'static, F, G>(self, to: F, from: G) -> Binding<U>
+    pub fn project<U: Clone + 'static, F, G>(self, to: F, from: G) -> FormBinding<U>
     where
         F: Fn(T) -> U + Send + Sync + 'static,
         G: Fn(U) -> T + Send + Sync + 'static,
     {
         let get_fn = self.get.clone();
         let set_fn = self.set.clone();
-        Binding::new(move || to(get_fn()), move |val| set_fn(from(val)))
+        FormBinding::new(move || to(get_fn()), move |val| set_fn(from(val)))
     }
 }
+
+/// Backward-compatible alias for `FormBinding`.
+pub type Binding<T> = FormBinding<T>;
 
 /// A declarative form controller with validation capabilities and state bindings.
 ///
@@ -136,7 +139,7 @@ impl<T: Clone + Send + Sync + 'static> FormBinder<T> {
         get_field: impl Fn(&T) -> U + Send + Sync + 'static,
         set_field: impl Fn(&mut T, U) + Send + Sync + 'static,
         on_change: impl Fn(T) + Send + Sync + 'static,
-    ) -> Binding<U> {
+    ) -> FormBinding<U> {
         let state_val = self.state.clone();
         let get_fn = Arc::new(get_field);
         let set_fn = Arc::new(set_field);
@@ -152,7 +155,7 @@ impl<T: Clone + Send + Sync + 'static> FormBinder<T> {
             change_fn(new_state);
         };
 
-        Binding::new(get, set)
+        FormBinding::new(get, set)
     }
 
     /// Serialize the current state using a serialization function.

@@ -109,7 +109,9 @@ fn persist_mode(mode: ThemeMode) {
 /// Load the persisted mode from `~/.cvkg/theme_mode`. Returns `None` if not found.
 fn load_persisted_mode() -> Option<ThemeMode> {
     let home = std::env::var_os("HOME")?;
-    let path = std::path::PathBuf::from(home).join(".cvkg").join("theme_mode");
+    let path = std::path::PathBuf::from(home)
+        .join(".cvkg")
+        .join("theme_mode");
     let contents = std::fs::read_to_string(&path).ok()?;
     Some(ThemeMode::from_str_lossy(&contents))
 }
@@ -251,12 +253,15 @@ impl View for ThemeSwitch {
             // Click handler
             let mode_copy = *mode;
             let on_change_cb = self.on_change.clone();
-            renderer.register_handler("pointerclick", StdArc::new(move |_event| {
-                set_mode(mode_copy);
-                if let Some(cb) = &on_change_cb {
-                    cb(mode_copy);
-                }
-            }));
+            renderer.register_handler(
+                "pointerclick",
+                StdArc::new(move |_event| {
+                    set_mode(mode_copy);
+                    if let Some(cb) = &on_change_cb {
+                        cb(mode_copy);
+                    }
+                }),
+            );
         }
 
         // Focus ring around the whole widget when focused
@@ -271,34 +276,37 @@ impl View for ThemeSwitch {
         }
 
         // Keyboard: ArrowLeft/Right to cycle, Enter to activate Light
-        renderer.register_handler("keydown", StdArc::new(move |event| {
-            if let Event::KeyDown { key, modifiers, .. } = event {
-                match key.as_str() {
-                    "ArrowLeft" => {
-                        let cur = current_mode();
-                        let next = match cur {
-                            ThemeMode::System => ThemeMode::Dark,
-                            ThemeMode::Dark => ThemeMode::Light,
-                            ThemeMode::Light => ThemeMode::System,
-                        };
-                        set_mode(next);
+        renderer.register_handler(
+            "keydown",
+            StdArc::new(move |event| {
+                if let Event::KeyDown { key, modifiers, .. } = event {
+                    match key.as_str() {
+                        "ArrowLeft" => {
+                            let cur = current_mode();
+                            let next = match cur {
+                                ThemeMode::System => ThemeMode::Dark,
+                                ThemeMode::Dark => ThemeMode::Light,
+                                ThemeMode::Light => ThemeMode::System,
+                            };
+                            set_mode(next);
+                        }
+                        "ArrowRight" => {
+                            let cur = current_mode();
+                            let next = match cur {
+                                ThemeMode::Light => ThemeMode::Dark,
+                                ThemeMode::Dark => ThemeMode::System,
+                                ThemeMode::System => ThemeMode::Light,
+                            };
+                            set_mode(next);
+                        }
+                        "Tab" if !modifiers.shift => {
+                            set_focused(false);
+                        }
+                        _ => {}
                     }
-                    "ArrowRight" => {
-                        let cur = current_mode();
-                        let next = match cur {
-                            ThemeMode::Light => ThemeMode::Dark,
-                            ThemeMode::Dark => ThemeMode::System,
-                            ThemeMode::System => ThemeMode::Light,
-                        };
-                        set_mode(next);
-                    }
-                    "Tab" if !modifiers.shift => {
-                        set_focused(false);
-                    }
-                    _ => {}
                 }
-            }
-        }));
+            }),
+        );
 
         renderer.pop_vnode();
     }

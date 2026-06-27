@@ -75,6 +75,23 @@ pub enum MaterialOp {
         end: [f32; 4],
     },
 
+    /// Multi-stop linear gradient.
+    /// Uploads stops as a texture, interpolates per-pixel in the shader.
+    /// stops: Vec of [r, g, b, a] where a encodes the stop position (0.0-1.0).
+    /// angle: gradient direction in radians.
+    LinearGradientMulti {
+        stops: Vec<[f32; 4]>,
+        angle: f32,
+    },
+
+    /// Multi-stop radial gradient.
+    /// stops: Vec of [r, g, b, a] where a encodes the stop position (0.0-1.0).
+    /// center: normalized center point [x, y] in [0.0, 1.0].
+    RadialGradientMulti {
+        stops: Vec<[f32; 4]>,
+        center: [f32; 2],
+    },
+
     /// Neon glow effect.
     /// Input: dist (Float), color (Color)
     /// Output: Color
@@ -338,7 +355,10 @@ impl Default for MaterialValidationConfig {
         // bound for typical material graphs. AI-generated or
         // untrusted graphs should use a stricter config (e.g.,
         // 512 nodes, 1024 edges) via validate_with_config.
-        Self { max_nodes: 1024, max_edges: 4096 }
+        Self {
+            max_nodes: 1024,
+            max_edges: 4096,
+        }
     }
 }
 
@@ -480,6 +500,12 @@ impl MaterialCompiler {
                         start[0], start[1], start[2], start[3],
                         end[0], end[1], end[2], end[3],
                     ).trim().to_string()
+                }
+                MaterialOp::LinearGradientMulti { .. } => {
+                    "__RESULT__ = col;".to_string()
+                }
+                MaterialOp::RadialGradientMulti { .. } => {
+                    "__RESULT__ = col;".to_string()
                 }
                 MaterialOp::NeonGlow { radius, intensity } => {
                     let dist_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
@@ -1164,10 +1190,15 @@ mod tests {
         graph.connect(1, MaterialSocket::Color, 2, MaterialSocket::Color);
         assert_eq!(graph.edges.len(), 2, "test setup: need 2 edges");
         // Configure max_edges=1, so 2 edges should be rejected.
-        let config = MaterialValidationConfig { max_nodes: 1024, max_edges: 1 };
+        let config = MaterialValidationConfig {
+            max_nodes: 1024,
+            max_edges: 1,
+        };
         let result = graph.validate_with_config(&config);
-        assert!(matches!(result, Err(MaterialError::TooManyEdges(2, 1))),
-                "expected TooManyEdges(2, 1), got {result:?}");
+        assert!(
+            matches!(result, Err(MaterialError::TooManyEdges(2, 1))),
+            "expected TooManyEdges(2, 1), got {result:?}"
+        );
     }
 
     #[test]
@@ -1175,8 +1206,11 @@ mod tests {
         // P1-4 regression: default config must have a non-zero
         // max_edges so the limit is actually enforced.
         let config = MaterialValidationConfig::default();
-        assert!(config.max_edges > 0,
-                "default max_edges must be > 0, got {}", config.max_edges);
+        assert!(
+            config.max_edges > 0,
+            "default max_edges must be > 0, got {}",
+            config.max_edges
+        );
     }
 
     #[test]
@@ -1201,8 +1235,18 @@ mod tests {
     fn p2_10_unreachable_node_detected() {
         let mut graph = MaterialGraph::new();
         let n0 = graph.add_node(MaterialOp::InputColor);
-        let n1 = graph.add_node(MaterialOp::ConstantColor { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
-        let n2 = graph.add_node(MaterialOp::ConstantColor { r: 0.0, g: 1.0, b: 0.0, a: 1.0 }); // unreachable
+        let n1 = graph.add_node(MaterialOp::ConstantColor {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        });
+        let n2 = graph.add_node(MaterialOp::ConstantColor {
+            r: 0.0,
+            g: 1.0,
+            b: 0.0,
+            a: 1.0,
+        }); // unreachable
         graph.connect(n0, MaterialSocket::Color, n1, MaterialSocket::Color);
         graph.set_output(n1);
         // n2 is not connected to the output path
@@ -1217,7 +1261,12 @@ mod tests {
     fn p2_10_all_reachable_passes() {
         let mut graph = MaterialGraph::new();
         let n0 = graph.add_node(MaterialOp::InputColor);
-        let n1 = graph.add_node(MaterialOp::ConstantColor { r: 1.0, g: 0.0, b: 0.0, a: 1.0 });
+        let n1 = graph.add_node(MaterialOp::ConstantColor {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        });
         graph.connect(n0, MaterialSocket::Color, n1, MaterialSocket::Color);
         graph.set_output(n1);
         // Both nodes reachable from output

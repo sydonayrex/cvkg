@@ -52,7 +52,13 @@ impl View for EmptyState {
 
         if !self.icon.is_empty() {
             let (tw, th) = renderer.measure_text(&self.icon, 32.0);
-            renderer.draw_text(&self.icon, cx - tw / 2.0, cy - th / 2.0, 32.0, theme::text_dim());
+            renderer.draw_text(
+                &self.icon,
+                cx - tw / 2.0,
+                cy - th / 2.0,
+                32.0,
+                theme::text_dim(),
+            );
             cy += 24.0;
         }
 
@@ -61,7 +67,13 @@ impl View for EmptyState {
         cy += th + 8.0;
 
         let (dw, dh) = renderer.measure_text(&self.description, 12.0);
-        renderer.draw_text(&self.description, cx - dw / 2.0, cy, 12.0, theme::text_dim());
+        renderer.draw_text(
+            &self.description,
+            cx - dw / 2.0,
+            cy,
+            12.0,
+            theme::text_dim(),
+        );
         cy += dh + 16.0;
 
         if let Some(ref action) = self.action_label {
@@ -73,7 +85,13 @@ impl View for EmptyState {
                 height: ah + 12.0,
             };
             renderer.fill_rounded_rect(btn_rect, 6.0, theme::accent());
-            renderer.draw_text(action, btn_rect.x + 12.0, btn_rect.y + 6.0, 14.0, theme::text());
+            renderer.draw_text(
+                action,
+                btn_rect.x + 12.0,
+                btn_rect.y + 6.0,
+                14.0,
+                theme::text(),
+            );
         }
     }
 }

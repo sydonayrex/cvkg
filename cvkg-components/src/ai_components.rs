@@ -789,20 +789,18 @@ impl View for GeriSpark {
         renderer.draw_line(cx, cy - 8.0, cx, cy + 8.0, spark_col, 2.0);
         renderer.draw_line(cx - 8.0, cy, cx + 8.0, cy, spark_col, 2.0);
 
-        if self.active {
-            if crate::theme::glassmorphism_enabled() {
-                renderer.bifrost(
-                    Rect::new(
-                        rect.x - 4.0,
-                        rect.y - 4.0,
-                        rect.width + 8.0,
-                        rect.height + 8.0,
-                    ),
-                    5.0,
-                    1.0,
-                    0.3,
-                );
-            }
+        if self.active && crate::theme::glassmorphism_enabled() {
+            renderer.bifrost(
+                Rect::new(
+                    rect.x - 4.0,
+                    rect.y - 4.0,
+                    rect.width + 8.0,
+                    rect.height + 8.0,
+                ),
+                5.0,
+                1.0,
+                0.3,
+            );
         }
         renderer.pop_vnode();
     }

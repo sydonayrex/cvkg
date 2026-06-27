@@ -1,5 +1,5 @@
 use crate::theme;
-use crate::{draw_focus_ring, FONT_BASE, RADIUS_LG, RADIUS_MD, RADIUS_XL};
+use crate::{FONT_BASE, RADIUS_LG, RADIUS_MD, RADIUS_XL, draw_focus_ring};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
@@ -30,6 +30,7 @@ impl SheetPosition {
 ///
 /// # Contract
 /// Manages slide-in dialogs positioned along viewport edges with spring physics.
+#[doc(alias = "Sheet")]
 pub struct GraniSheet<V> {
     pub(crate) content: V,
     pub(crate) position: SheetPosition,
@@ -107,11 +108,7 @@ impl<V: View> View for GraniSheet<V> {
                     let mut ns = s.clone();
                     ns.set_component_state(
                         solver_hash,
-                        cvkg_core::SpringSolver::new(
-                            cvkg_core::SpringParams::fluid(),
-                            1.0,
-                            0.0,
-                        ),
+                        cvkg_core::SpringSolver::new(cvkg_core::SpringParams::fluid(), 1.0, 0.0),
                     );
                     ns
                 });
@@ -174,7 +171,12 @@ impl<V: View> View for GraniSheet<V> {
             renderer.bifrost(sheet_rect, 16.0, 1.2, 0.9);
         }
         renderer.fill_rounded_rect(sheet_rect, RADIUS_XL, theme::surface_elevated());
-        renderer.stroke_rounded_rect(sheet_rect, RADIUS_XL, theme::with_alpha(theme::accent(), 0.3), 1.5);
+        renderer.stroke_rounded_rect(
+            sheet_rect,
+            RADIUS_XL,
+            theme::with_alpha(theme::accent(), 0.3),
+            1.5,
+        );
 
         // Push focus trap when sheet is open
         if self.is_open {
@@ -293,6 +295,7 @@ const DIALOG_OPEN_HASH: u64 = 0xB00_0001;
 ///
 /// # Contract
 /// Fully blocks interaction with the background, offering title/action controls and keyboard accessibility (ESC/Enter/Tab focus trap).
+#[doc(alias = "Dialog")]
 pub struct GeriDialog<V> {
     pub(crate) is_presented: bool,
     pub(crate) title: Option<String>,
@@ -468,15 +471,15 @@ impl<V: View> View for GeriDialog<V> {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if !mr.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            s.set_component_state(DIALOG_OPEN_HASH, false);
-                            s.set_component_state(anim_hash, 0.0);
-                            s
-                        });
-                    }
+                if let Event::PointerClick { x, y, .. } = event
+                    && !mr.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        s.set_component_state(DIALOG_OPEN_HASH, false);
+                        s.set_component_state(anim_hash, 0.0);
+                        s
+                    });
                 }
             }),
         );

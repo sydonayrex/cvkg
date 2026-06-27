@@ -260,15 +260,18 @@ impl<V: Clone + View> View for Select<V> {
             renderer.register_handler(
                 "pointermove",
                 Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerMove { x, y, .. } = event {
-                        if x >= pr.x && x <= pr.x + pr.width && y >= pr.y && y <= pr.y + pr.height {
-                            let hover_idx = ((y - pr.y) / item_height) as usize;
-                            cvkg_core::update_system_state(|s| {
-                                let mut s = s.clone();
-                                s.set_component_state(id_hash_hover, hover_idx);
-                                s
-                            });
-                        }
+                    if let cvkg_core::Event::PointerMove { x, y, .. } = event
+                        && x >= pr.x
+                        && x <= pr.x + pr.width
+                        && y >= pr.y
+                        && y <= pr.y + pr.height
+                    {
+                        let hover_idx = ((y - pr.y) / item_height) as usize;
+                        cvkg_core::update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id_hash_hover, hover_idx);
+                            s
+                        });
                     }
                 }),
             );
@@ -629,10 +632,10 @@ impl View for ColorPicker {
 
         // Color grid (4 demo colors -- user-facing swatches, not themed UI chrome)
         let colors = [
-            Color::new(0.0, 0.0, 0.0, 1.0),    // Black
-            Color::new(1.0, 1.0, 1.0, 1.0),    // White
-            Color::new(0.9, 0.2, 0.2, 1.0),    // Red
-            Color::new(0.0, 0.8, 0.9, 1.0),    // Cyan
+            Color::new(0.0, 0.0, 0.0, 1.0), // Black
+            Color::new(1.0, 1.0, 1.0, 1.0), // White
+            Color::new(0.9, 0.2, 0.2, 1.0), // Red
+            Color::new(0.0, 0.8, 0.9, 1.0), // Cyan
         ];
 
         let grid_relative_x = 8.0 + preview_w + 12.0;
@@ -655,10 +658,11 @@ impl View for ColorPicker {
             renderer.register_handler(
                 "pointerclick",
                 std::sync::Arc::new(move |event| {
-                    if let cvkg_core::Event::PointerClick { x, .. } = event {
-                        if x >= cell_rect.x && x <= cell_rect.x + cell_rect.width {
-                            (on_change)(col);
-                        }
+                    if let cvkg_core::Event::PointerClick { x, .. } = event
+                        && x >= cell_rect.x
+                        && x <= cell_rect.x + cell_rect.width
+                    {
+                        (on_change)(col);
                     }
                 }),
             );

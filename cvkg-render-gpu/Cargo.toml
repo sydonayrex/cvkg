@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-render-gpu"
-version = "0.2.14"
+version = "0.2.15"
 build = "build.rs"
 autolib = false
 autobins = false
@@ -41,6 +41,14 @@ path = "tests/hello_world.rs"
 name = "text_svg_trace"
 path = "tests/text_svg_trace.rs"
 
+[[test]]
+name = "integrated_ui_scenarios"
+path = "tests/integrated_ui_scenarios.rs"
+
+[[test]]
+name = "advanced_engine_scenarios"
+path = "tests/advanced_engine_scenarios.rs"
+
 [[bench]]
 name = "large_tree"
 path = "benches/large_tree.rs"
@@ -60,16 +68,16 @@ version = "1.14"
 features = ["derive"]
 
 [dependencies.cvkg-core]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-compositor]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-svg-filters]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-svg-serialize]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.futures]
 version = "0.3"
@@ -105,7 +113,7 @@ features = [
 version = "1.12"
 
 [dependencies.cvkg-runic-text]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.swash]
 version = "0.2"
@@ -135,6 +143,14 @@ version = "0.5"
 
 [dev-dependencies.pollster]
 version = "0.4.0"
+
+[dev-dependencies.cvkg-vdom]
+path = "../cvkg-vdom"
+version = "0.2.15"
+
+[dev-dependencies.cvkg-anim]
+path = "../cvkg-anim"
+version = "0.2.15"
 
 [build-dependencies.naga]
 version = "29"

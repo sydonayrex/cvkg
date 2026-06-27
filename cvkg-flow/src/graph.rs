@@ -1,8 +1,8 @@
 use crate::edge::FlowEdge;
 use crate::node::FlowNode;
+use crate::types::{EdgeId, NodeId, PortId};
 #[cfg(test)]
 use cvkg_core::KvasirId;
-use crate::types::{EdgeId, NodeId, PortId};
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
 use std::cell::{Cell, RefCell};

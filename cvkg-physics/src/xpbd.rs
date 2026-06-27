@@ -803,8 +803,8 @@ mod tests {
         assert!(!world.constraints().is_empty());
 
         // Top row should be fixed
-        for x in 0..5 {
-            let p = world.particle(indices[x]).unwrap();
+        for idx in indices.iter().take(5) {
+            let p = world.particle(*idx).unwrap();
             assert_eq!(p.inv_mass, 0.0);
         }
     }

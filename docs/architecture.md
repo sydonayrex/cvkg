@@ -1,92 +1,107 @@
-# Architecture Overview
+# Architecture
 
-This document describes the structure, data flow, and subsystems of the Cyber Viking Kvasir Graph (CVKG) framework.
-
----
+This document describes the crate topology, data flow, and design decisions of the CVKG framework.
 
 ## Crate Dependency Topology
 
-The CVKG framework is divided into independent crates to separate compositional logic, platform adapters, and visual drawing pipelines. The dependency flow is strictly directed downward toward the core.
+The workspace contains 35 crates organized into tiers. Dependency flow is directed: higher-level crates depend on lower-level ones, never the reverse.
 
 ```mermaid
 graph TD
-    %% Subgraphs for visual structure and tiering
-    subgraph Core ["Core Foundations"]
-        cvkg-core["cvkg-core<br/>(Core traits, state, telemetry)"]
-        cvkg-vdom["cvkg-vdom<br/>(Virtual DOM & diffing)"]
-        cvkg-scene["cvkg-scene<br/>(Scene graph & spatial partitioning)"]
-        cvkg-layout["cvkg-layout<br/>(Constraint layout & Taffy wrapper)"]
+    subgraph Core ["Core"]
+        cvkg-core["cvkg-core<br/>(View trait, state, geometry)"]
+        cvkg-scene["cvkg-scene<br/>(Scene graph, AABB culling)"]
+        cvkg-spatial["cvkg-spatial<br/>(QuadTree, BVH, SpatialHash)"]
     end
 
-    subgraph Graphics ["Graphics & Shaping Layer"]
-        cvkg-render-gpu["cvkg-render-gpu<br/>(wgpu rendering engine)"]
-        cvkg-compositor["cvkg-compositor<br/>(Compositor, layers, damage)"]
-        cvkg-runic-text["cvkg-runic-text<br/>(Text shaping & BiDi engine)"]
-        cvkg-svg-filters["cvkg-svg-filters<br/>(SVG filter effects)"]
-        cvkg-svg-serialize["cvkg-svg-serialize<br/>(SVG serialization)"]
+    subgraph Layout ["Layout"]
+        cvkg-layout["cvkg-layout<br/>(Taffy flexbox/grid)"]
+        cvkg-anim["cvkg-anim<br/>(Spring physics, particles)"]
     end
 
-    subgraph Platform ["Platform Integration"]
-        cvkg-render-native["cvkg-render-native<br/>(Native backend, windowing)"]
+    subgraph GPU ["GPU Rendering"]
+        cvkg-render-gpu["cvkg-render-gpu<br/>(wgpu render graph)"]
+        cvkg-compositor["cvkg-compositor<br/>(Layer tree, damage)"]
+        cvkg-svg-filters["cvkg-svg-filters<br/>(GPU SVG filters)"]
+        cvkg-svg-serialize["cvkg-svg-serialize<br/>(SVG write)"]
     end
 
-    subgraph Presentation ["UI & Interaction Layer"]
-        cvkg-themes["cvkg-themes<br/>(OKLCH color, premium materials)"]
-        cvkg-anim["cvkg-anim<br/>(Spring dynamics, particles)"]
-        cvkg-flow["cvkg-flow<br/>(Visual node graph engine)"]
-        cvkg-components["cvkg-components<br/>(Tahoe component library)"]
+    subgraph Text ["Text"]
+        cvkg-runic-text["cvkg-runic-text<br/>(HarfBuzz, BiDi, wrap)"]
     end
 
-    subgraph Infra ["Infrastructure & Tooling"]
-        cvkg-physics["cvkg-physics<br/>(XPBD physics solver)"]
-        cvkg-macros["cvkg-macros<br/>(hamr! DSL macro)"]
-        cvkg-cli["cvkg-cli<br/>(Dev Server & asset pipeline)"]
-        cvkg-webkit-server["cvkg-webkit-server<br/>(axum HTTP/WS server)"]
-        cvkg-test["cvkg-test<br/>(Visual regression comparator)"]
+    subgraph UI ["UI Layer"]
+        cvkg-components["cvkg-components<br/>(Widgets)"]
+        cvkg-themes["cvkg-themes<br/>(OKLCH tokens)"]
+        cvkg-flow["cvkg-flow<br/>(Node graph editor)"]
     end
 
-    subgraph Entry ["Umbrella Crate"]
-        cvkg["cvkg<br/>(Top-level umbrella)"]
+    subgraph Platform ["Platform"]
+        cvkg-render-native["cvkg-render-native<br/>(winit window/events)"]
+        cvkg-render-software["cvkg-render-software<br/>(CPU fallback)"]
     end
 
-    %% Dependency Connections
-    cvkg-vdom --> cvkg-core
-    cvkg-vdom --> cvkg-scene
+    subgraph Services ["Services"]
+        cvkg-cli["cvkg-cli<br/>(Dev server, pipeline)"]
+        cvkg-webkit-server["cvkg-webkit-server<br/>(axum HTTP/WS)"]
+        cvkg-physics["cvkg-physics<br/>(Rigid body)"]
+        cvkg-scheduler["cvkg-scheduler<br/>(Frame ordering)"]
+        cvkg-test["cvkg-test<br/>(Visual regression)"]
+    end
+
+    subgraph Meta ["Meta"]
+        cvkg-macros["cvkg-macros<br/>(hamr! macro)"]
+        cvkg-reflect["cvkg-reflect<br/>(Type reflection)"]
+        cvkg-materials["cvkg-materials<br/>(Material data)"]
+        cvkg-accessibility["cvkg-accessibility<br/>(A11y tree, focus)"]
+        cvkg-certification["cvkg-certification<br/>(Cross-crate tests)"]
+        cvkg-telemetry["cvkg-telemetry<br/>(Metrics)"]
+        cvkg-icons["cvkg-icons<br/>(Icon registry)"]
+    end
+
+    subgraph Entry ["Entry"]
+        cvkg["cvkg<br/>(Umbrella facade)"]
+    end
+
+    subgraph Demos ["Demos"]
+        berserker["berserker<br/>(Native HUD)"]
+        adele-web["demos/adele-web<br/>(Web explorer)"]
+        niflheim-web["demos/niflheim-web<br/>(WASM suite)"]
+        niflheim-wasi["demos/niflheim-wasi<br/>(WASI headless)"]
+        berserker-fire-web["demos/berserker-fire-web<br/>(WASM stress)"]
+        cvkg-gallery["cvkg-gallery<br/>(Gallery)"]
+        cvkg-game-hud["cvkg-game-hud<br/>(Game HUD)"]
+        cvkg-export-raster["cvkg-export-raster<br/>(PNG/GIF export)"]
+    end
+
+    cvkg-scene --> cvkg-core
+    cvkg-scene --> cvkg-spatial
+    cvkg-spatial --> cvkg-core
     cvkg-layout --> cvkg-core
     cvkg-layout --> cvkg-anim
-    cvkg-scene --> cvkg-core
-
+    cvkg-anim --> cvkg-core
     cvkg-render-gpu --> cvkg-core
     cvkg-render-gpu --> cvkg-compositor
     cvkg-render-gpu --> cvkg-svg-filters
     cvkg-render-gpu --> cvkg-svg-serialize
     cvkg-render-gpu --> cvkg-runic-text
-
-    cvkg-render-native --> cvkg-core
-    cvkg-render-native --> cvkg-render-gpu
-    cvkg-render-native --> cvkg-vdom
-    cvkg-render-native --> cvkg-themes
-
     cvkg-compositor --> cvkg-core
-
-    cvkg-themes --> cvkg-core
-    cvkg-themes --> cvkg-anim
-    cvkg-anim --> cvkg-core
-    cvkg-flow --> cvkg-core
-    cvkg-flow --> cvkg-scene
-    cvkg-flow --> cvkg-themes
-
     cvkg-runic-text --> cvkg-core
-    cvkg-svg-filters --> cvkg-core
-
     cvkg-components --> cvkg-core
-    cvkg-components --> cvkg-vdom
     cvkg-components --> cvkg-layout
     cvkg-components --> cvkg-themes
     cvkg-components --> cvkg-anim
     cvkg-components --> cvkg-runic-text
-
-    cvkg-macros --> cvkg-core
+    cvkg-themes --> cvkg-core
+    cvkg-themes --> cvkg-anim
+    cvkg-flow --> cvkg-core
+    cvkg-flow --> cvkg-scene
+    cvkg-flow --> cvkg-themes
+    cvkg-render-native --> cvkg-core
+    cvkg-render-native --> cvkg-render-gpu
+    cvkg-render-native --> cvkg-themes
+    cvkg-render-software --> cvkg-core
+    cvkg-render-software --> cvkg-runic-text
     cvkg-cli --> cvkg-core
     cvkg-cli --> cvkg-physics
     cvkg-cli --> cvkg-anim
@@ -94,136 +109,172 @@ graph TD
     cvkg-webkit-server --> cvkg-cli
     cvkg-physics --> cvkg-core
     cvkg-physics --> cvkg-scene
-
+    cvkg-scheduler --> cvkg-core
+    cvkg-test --> cvkg-core
+    cvkg-test --> cvkg-render-gpu
+    cvkg-macros --> cvkg-core
+    cvkg-accessibility --> cvkg-core
+    cvkg-certification --> cvkg-core
+    cvkg-certification --> cvkg-scene
+    cvkg-telemetry --> cvkg-core
+    cvkg-icons --> cvkg-core
+    cvkg-icons --> cvkg-components
     cvkg --> cvkg-core
-    cvkg --> cvkg-vdom
-    cvkg --> cvkg-scene
     cvkg --> cvkg-layout
     cvkg --> cvkg-themes
     cvkg --> cvkg-anim
     cvkg --> cvkg-macros
     cvkg --> cvkg-components
-    cvkg --> cvkg-render-gpu
-    cvkg --> cvkg-render-native
+    berserker --> cvkg
+    berserker --> cvkg-core
+    berserker --> cvkg-physics
+    berserker --> cvkg-anim
+    berserker --> cvkg-components
+    berserker --> cvkg-themes
+    adele-web --> cvkg-core
+    adele-web --> cvkg-render-gpu
+    adele-web --> cvkg-components
+    adele-web --> cvkg-themes
+    niflheim-web --> cvkg-core
+    niflheim-web --> cvkg-render-gpu
+    niflheim-web --> cvkg-components
+    niflheim-wasi --> cvkg-core
+    niflheim-wasi --> cvkg-components
+    berserker-fire-web --> cvkg-core
+    berserker-fire-web --> cvkg-render-gpu
+    cvkg-gallery --> cvkg
+    cvkg-gallery --> cvkg-components
+    cvkg-game-hud --> cvkg-components
+    cvkg-game-hud --> cvkg-core
+    cvkg-export-raster --> cvkg-render-gpu
 
-    %% Visual Styling Classes for Premium Design (High-Contrast, Harmonious)
     classDef core fill:#1a1a2e,stroke:#1e293b,color:#e2e8f0,stroke-width:1px
-    classDef render fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:1.5px
+    classDef layout fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-width:1px
+    classDef gpu fill:#0f172a,stroke:#3b82f6,color:#38bdf8,stroke-width:1.5px
+    classDef text fill:#1c1917,stroke:#78716c,color:#d6d3d1,stroke-width:1px
     classDef ui fill:#311042,stroke:#d946ef,color:#f472b6,stroke-width:1px
-    classDef infra fill:#1c1917,stroke:#78716c,color:#d6d3d1,stroke-width:1px
-    classDef platform fill:#1e1b4b,stroke:#6366f1,color:#a5b4fc,stroke-width:1.5px
-    classDef umbrella fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:2px
+    classDef platform fill:#0c4a6e,stroke:#0ea5e9,color:#7dd3fc,stroke-width:1px
+    classDef services fill:#14532d,stroke:#22c55e,color:#86efac,stroke-width:1px
+    classDef meta fill:#3f3f46,stroke:#a1a1aa,color:#d4d4d8,stroke-width:1px
+    classDef entry fill:#064e3b,stroke:#10b981,color:#a7f3d0,stroke-width:2px
+    classDef demo fill:#4a1d96,stroke:#a855f7,color:#c084fc,stroke-width:1.5px
 
-    class cvkg-core,cvkg-vdom,cvkg-scene,cvkg-layout core
-    class cvkg-render-gpu,cvkg-compositor,cvkg-runic-text,cvkg-svg-filters,cvkg-svg-serialize render
-    class cvkg-render-native platform
-    class cvkg-components,cvkg-themes,cvkg-anim,cvkg-flow ui
-    class cvkg-macros,cvkg-cli,cvkg-webkit-server,cvkg-test,cvkg-physics infra
-    class cvkg umbrella
+    class cvkg-core,cvkg-scene,cvkg-spatial core
+    class cvkg-layout,cvkg-anim layout
+    class cvkg-render-gpu,cvkg-compositor,cvkg-svg-filters,cvkg-svg-serialize gpu
+    class cvkg-runic-text text
+    class cvkg-components,cvkg-themes,cvkg-flow ui
+    class cvkg-render-native,cvkg-render-software platform
+    class cvkg-cli,cvkg-webkit-server,cvkg-physics,cvkg-scheduler,cvkg-test services
+    class cvkg-macros,cvkg-reflect,cvkg-materials,cvkg-accessibility,cvkg-certification,cvkg-telemetry,cvkg-icons meta
+    class cvkg entry
+    class berserker,adele-web,niflheim-web,niflheim-wasi,berserker-fire-web,cvkg-gallery,cvkg-game-hud,cvkg-export-raster demo
 ```
 
+## Subsystems
 
----
+### View Composition (cvkg-core)
 
-## Subsystems Reference
+The `View` trait is the fundamental building block. Every UI element implements `View` and returns a tree via `body()`. The trait requires `Send` but not `Sync`, enabling multi-threaded layout.
 
-The framework isolates functional responsibilities into distinct modules. Below is a description of the key types and traits that define each major subsystem.
+Key types: `View`, `Renderer`, `State<T>`, `Binding<T>`, `Color` (fields `.r`, `.g`, `.b`, `.a`), `Rect`, `KvasirId` (platform-wide unique ID), `LayoutCache`, `LayoutView`.
 
-### 1. View Composition & Reactivity
-Defines the declarative building blocks of the interface and manages data bindings.
-- **Primary Crate**: `cvkg-core`
-- **Key Traits**:
-  - `View` — The primary unit of UI composition. Every component implements this trait and returns a hierarchical tree via its `body()` method.
-  - `Renderer` — The drawing interface exposed to primitive views for geometric commands.
-  - `ViewModifier` — Trait for extending views with styling, positioning, or custom shader effects.
-- **Key Structs**:
-  - `Binding<T>` — Read/write pointer to a state location that triggers view updates on modification.
-  - `State<T>` — Authoritative storage container for reactive variables.
-  - `YggdrasilTokens` — Container for global styling parameters.
+### Virtual DOM (cvkg-vdom)
 
-### 2. State Reconciliation
-Manages UI tree transformations, tracking nodes and calculating visual updates.
-- **Primary Crate**: `cvkg-vdom`
-- **Key Structs**:
-  - `VNode` — A stateless representation of a view node including properties, geometry, and event handler keys.
-  - `VDom` — The hierarchical Virtual DOM tree.
-  - `VDomPatch` — Mutations (Create, Update, Delete, Move) computed by tree diffing.
-  - `VNodeRenderer` — Driver that evaluates a composed `View` tree to populate a logical `VDom`.
+Stateless tree diffing. `VNode` holds properties and geometry; `VDom` owns the tree; `VDomPatch` represents mutations (Create, Update, Delete, Move). Not a workspace member -- used by cvkg-components and cvkg-render-native.
 
-### 2.5. Layer Compositor
-Retained-mode layer orchestration engine that routes draw calls into multi-pass GPU buckets.
-- **Primary Crate**: `cvkg-compositor`
-- **Key Structs**:
-  - `CompositorEngine` — Evaluates damage tracking and routes layer rendering by material type.
-  - `LayerTree` — Z-sorted hierarchy of visual layers.
-  - `Material` — Determines GPU passes (e.g., Scene, Glass, Overlay).
+### Scene Graph (cvkg-scene)
 
-### 3. Layout Engine
-Calculates spatial positions and dimensions.
-- **Primary Crate**: `cvkg-layout`
-- **Key Structs**:
-  - `SizeProposal` — Dimensions proposed by a parent container to its children.
-  - `Size` — Bounding dimensions resolved by a child view.
-  - `HStack` / `VStack` / `Grid` — Primary layout containers that distribute viewport coordinates.
+Retained visual tree with AABB culling and dirty-rect tracking. Uses `cvkg-spatial` for spatial indexing. `SceneNode` holds pre-tessellated geometry for the GPU pipeline.
 
-### 4. Retained Scene Graph
-Accelerates frame rendering, culling, and interactive hit testing.
-- **Primary Crate**: `cvkg-scene`
-- **Key Structs**:
-  - `SceneGraph` — Retained visual tree holding pre-tessellated geometries.
-  - `SceneNode` — Individual spatial node containing absolute canvas bounds.
+### Spatial Indexing (cvkg-spatial)
 
-### 5. Animation Solver
-Calculates motion transitions using mathematical solvers.
-- **Primary Crate**: `cvkg-anim`
-- **Key Structs**:
-  - `SleipnirSolver` — A fourth-order Runge-Kutta (RK4) numerical integrator for spring physics.
-  - `SleipnirParams` — Configuration storing mass, stiffness, and damping coefficients.
-  - `RubberBand` — Logarithmic boundary resistance solver for scrolling or dragging overflow.
+Canonical `Quadtree`, `Bvh` (bounding volume hierarchy), and `SpatialHash` used across Scene, Physics, Flow, and Layout. Extracted during crosscrate audit to eliminate duplication.
 
-### 6. Text Shaping & Layout
-Translates unicode characters into positioned, renderable glyph instances.
-- **Primary Crate**: `cvkg-runic-text`
-- **Key Structs**:
-  - `RunicTextEngine` — High-performance shaper wrapping HarfBuzz and Swash rasterizers.
-  - `ShapedText` — A fully wrapped, positioned set of glyph outputs.
-  - `GlyphInstance` — Position offset and font index mapping for a single character glyph.
+### Layout (cvkg-layout)
 
-### 7. Graphics Pipeline (Surtr)
-Draws geometric meshes and compiles GPU rendering programs.
-- **Primary Crate**: `cvkg-render-gpu`
-- **Key Structs**:
-  - `SurtrRenderer` — WGPU pipeline manager driving command buffers, multi-pass filters, and render targets.
-  - `Vertex` — Vertex description including position coordinates, color vectors, and effect parameters.
-  - `DrawCall` — GPU execution request batched by texture and transparency level.
+Wraps the Taffy crate for flexbox and grid layout. `TaffyLayoutEngine` drives the solver. Containers: `HStack`, `VStack`, `ZStack`, `Grid`. Integrates with `cvkg-anim` for sub-pixel snapping during motion.
 
----
+Feature: `parallel` (enables Rayon parallelism).
+
+### Animation (cvkg-anim)
+
+RK4 spring-physics solver (`SleipnirSolver`, `SpringParams`), particle systems, morph/growth animations, Verlet integration. `SpringParams::snappy()` provides default UI animation parameters.
+
+### GPU Renderer (cvkg-render-gpu)
+
+WGPU-based render graph. Manages multi-pass pipelines, texture atlases, vertex/index buffers, and draw-call batching. `RendererConfig` controls pipeline settings. `MaterialCompiler` produces GPU-ready material data.
+
+Build: uses `naga` to compile WGSL shaders at build time.
+
+Feature: `pillage` (extended rendering features).
+
+### Compositor (cvkg-compositor)
+
+Sits between the VDOM and the GPU renderer. Routes draw calls into pass buckets (scene, glass, overlay) via `CompositorEngine`. `LayerTree` maintains Z-sorted hierarchy. `DamageInfo` tracks which layers changed.
+
+### Text Shaping (cvkg-runic-text)
+
+HarfBuzz-based shaper via `rustybuzz`. BiDi support via `unicode-bidi`. Word wrapping via `unicode-linebreak` and Knuth-Plass algorithm. Font discovery via `fontdb`. Glyph caching with LRU eviction.
+
+### SVG Filters (cvkg-svg-filters)
+
+Parses `usvg` filter trees into a DAG of GPU filter primitives. Each primitive (blur, color matrix, composite, etc.) maps to a WGPU render or compute pass.
+
+### SVG Serialization (cvkg-svg-serialize)
+
+Writes `usvg::Tree` to SVG XML. `SerializerConfig` controls indentation, float precision, inline style, and custom namespaces.
+
+### Components (cvkg-components)
+
+Widget library built on public CVKG APIs. Includes buttons, sliders, toggles, text inputs, AI workflow panels, error boundaries, and diagnostic displays. 14 example targets demonstrate usage patterns.
+
+### Themes (cvkg-themes)
+
+OKLCH color model with `OklchColor { l, c, h, a }`. Semantic design tokens for typography, spacing, radius, motion, and density. `Theme::from_seed` generates a complete theme from a single color.
+
+### Flow (cvkg-flow)
+
+Interactive node-graph editor. `FlowGraph` stores nodes and edges. `FlowCanvas` manages camera/viewport. Bezier edges via `tessellate_bezier`. Force-directed layout via `apply_force_directed_layout`.
+
+### Platform (cvkg-render-native)
+
+Desktop windowing via `winit`. Event loop, window lifecycle, clipboard (`arboard`), audio (`rodio`). Accessibility via `accesskit`.
+
+### CLI (cvkg-cli)
+
+Development tool with `cvkg` binary. Dev server with file watching, WebSocket hot-reload, project scaffolding, asset pipeline, token export, and raster export.
+
+### WebKit Server (cvkg-webkit-server)
+
+axum-based HTTP/WebSocket server for hot-reload workflows. WASM execution via `wasmtime`. Features: `backend-native`, `backend-wasm`, `backend-webgl2`, `backend-wgpu`.
+
+### Physics (cvkg-physics)
+
+2D rigid body simulation. Impulse-based constraint solving (distance, pin, hinge, angular limit). Broad-phase via spatial hash. Narrow-phase via GJK/EPA.
+
+### Certification (cvkg-certification)
+
+Cross-crate integration test framework. `CertificationSuite` runs named checks across crate boundaries (Scene -> Layout -> Render, Flow -> Scene -> Render, etc.). `CertResult::Pass` / `Fail` / `Skip` semantics.
 
 ## Design Decisions
 
-Several architectural choices separate CVKG from conventional UI systems.
+1. **VDOM and Scene Graph are separate**: Logical state diffing (VDOM) is distinct from spatial indexing (Scene Graph). This prevents state management code from polluting GPU-accelerated culling.
 
-1. **Separation of VDOM (`cvkg-vdom`) and Scene Graph (`cvkg-scene`)**:
-   Reconciliation operates on logical state diffs to determine which views have mutated. However, redrawing, hierarchical AABB culling, and sub-pixel event hit-testing require spatial indexing. Keeping these two structures distinct prevents state management code from polluting hardware-accelerated spatial calculations.
-2. **Spring Physics Solver Over Pre-baked Splines**:
-   Animation in CVKG is computed iteratively at runtime using `SleipnirSolver`'s RK4 integration. Pre-baked cubic Bezier curves cannot handle mid-motion interruptions gracefully. Spring solvers allow animations to change targets instantly while retaining velocity, eliminating visual hitching.
-3. **Stand-alone Text shaping (`cvkg-runic-text`)**:
-   Text shaping is computationally heavy and interacts with volatile operating system font databases. Isolate this complexity to prevent OS font-linking quirks and external library compilation cycles from impacting core framework compilation speed.
-4. **Vili Interaction Paradigm**:
-   Standard UI frameworks rely on discrete rectangular hitboxes (AABB) for mouse interactions. CVKG instead relies on continuous mathematical fields—evaluating exact distance metrics using Signed Distance Fields (SDFs). This approach unlocks rich, dynamic feedback where pointer velocity (`mimir_intent`), proximity (`mani_glow`), and layout adaptation (`fafnir_evolve`) directly influence visual elements before a click ever occurs.
-5. **AgX Tonemapping in Shader Pipelines**:
-   Standard color space mapping models cause color distortion (hue shifting/saturation loss) in bright highlights. CVKG incorporates logarithmic color conversions and cubic contrast curves to map wide-dynamic-range HDR spaces into sRGB target viewports, keeping color fidelity intact.
-6. **Render Graph Execution Plan Cache**:
-   Topological sorting of multi-pass pipelines using Kahn's algorithm is CPU-intensive. Since UI node connections and draw orders do not change on every frame, CVKG caches compiled `PassId`/`NodeKey` sequences in `CachedGraphPlan` structures, bypassing the sorting stage.
-7. **Temporal Sub-Pixel Snapping**:
-   Traditional UI toolkits snap element coordinates to integer pixels on every layout pass, creating visual jitter during slow spring animations. CVKG queries mass/spring velocities from `cvkg-anim` during layout passes to allow sub-pixel rendering on active motion, snapping to the physical pixel grid only when movement stops.
+2. **Spring physics over splines**: RK4 integration allows animations to change targets instantly while retaining velocity. Pre-baked Bezier curves cannot handle mid-motion interruptions.
 
----
+3. **Stand-alone text shaping**: Isolating HarfBuzz and font database interactions prevents OS font-linking quirks from impacting core compilation.
+
+4. **Spatial indexing in its own crate**: `cvkg-spatial` provides canonical structures used by Scene, Physics, Flow, and Layout, eliminating duplication found in the crosscrate audit.
+
+5. **OKLCH color model**: Perceptually uniform -- adjusting lightness produces consistent results across all hues, unlike HSL.
+
+6. **Compositor between VDOM and GPU**: Material routing and damage tracking avoid re-recording static content across frames.
+
+7. **Proc macros in separate crate**: `cvkg-macros` is a standalone proc-macro crate, keeping the core dependency tree clean.
 
 ## Out of Scope
 
-The CVKG project is focused strictly on highly interactive, custom graphic user interfaces. The following items are out of scope:
-
-- **HTML/CSS Browser Emulation**: CVKG does not parse CSS stylesheets or compile standard HTML structures. It is a direct GPU UI engine.
-- **Database Management & SQL Systems**: Crate libraries do not provide ORM layers or SQL drivers. Developers leverage standard database connectors.
-- **Operating System Control Wrappers**: The engine does not hook into platform-native widgets (like Cocoa NSView or Win32 Buttons). To guarantee visual identity across targets, all widgets are drawn procedurally from scratch on the GPU canvas.
+- HTML/CSS browser emulation. CVKG does not parse CSS or compile HTML.
+- Database management or SQL systems.
+- Platform-native widget wrappers (Cocoa NSView, Win32 Button). All widgets are drawn procedurally on the GPU canvas.

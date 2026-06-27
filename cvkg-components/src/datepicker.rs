@@ -1,6 +1,6 @@
-use crate::theme;
 use crate::lingua_tong;
-use crate::{RADIUS_MD, RADIUS_XL, RADIUS_SM};
+use crate::theme;
+use crate::{RADIUS_MD, RADIUS_SM, RADIUS_XL};
 use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
@@ -306,8 +306,17 @@ impl DatePicker {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
         }
-        renderer.fill_rounded_rect(pop_rect, RADIUS_XL, theme::with_alpha(theme::surface_elevated(), 0.9));
-        renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, theme::with_alpha(theme::primary(), 0.7), 1.5);
+        renderer.fill_rounded_rect(
+            pop_rect,
+            RADIUS_XL,
+            theme::with_alpha(theme::surface_elevated(), 0.9),
+        );
+        renderer.stroke_rounded_rect(
+            pop_rect,
+            RADIUS_XL,
+            theme::with_alpha(theme::primary(), 0.7),
+            1.5,
+        );
 
         let (display_month, display_year) = self.displayed_month_state();
 
@@ -336,11 +345,7 @@ impl DatePicker {
         );
 
         // Month/year label (centered)
-        let label = format!(
-            "{} {}",
-            month_name(display_month),
-            display_year
-        );
+        let label = format!("{} {}", month_name(display_month), display_year);
         let (tw, _th) = renderer.measure_text(&label, 14.0);
         let label_x = header_rect.x + (header_rect.width - tw) / 2.0;
         let label_y = header_rect.y + (header_h - 14.0) / 2.0;
@@ -490,7 +495,11 @@ impl DatePicker {
                             width: 24.0,
                             height: 24.0,
                         };
-                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, theme::with_alpha(theme::primary(), 0.9));
+                        renderer.fill_rounded_rect(
+                            highlight_rect,
+                            RADIUS_XL,
+                            theme::with_alpha(theme::primary(), 0.9),
+                        );
                     } else if is_range_end {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,
@@ -498,7 +507,11 @@ impl DatePicker {
                             width: 24.0,
                             height: 24.0,
                         };
-                        renderer.fill_rounded_rect(highlight_rect, RADIUS_XL, theme::with_alpha(theme::accent(), 0.85));
+                        renderer.fill_rounded_rect(
+                            highlight_rect,
+                            RADIUS_XL,
+                            theme::with_alpha(theme::accent(), 0.85),
+                        );
                     } else if is_in_range {
                         // Subtle range highlight
                         let range_rect = Rect {
@@ -507,7 +520,11 @@ impl DatePicker {
                             width: cell_w - 4.0,
                             height: 20.0,
                         };
-                        renderer.fill_rounded_rect(range_rect, RADIUS_SM, theme::with_alpha(theme::primary(), 0.15));
+                        renderer.fill_rounded_rect(
+                            range_rect,
+                            RADIUS_SM,
+                            theme::with_alpha(theme::primary(), 0.15),
+                        );
                     } else if is_today {
                         let highlight_rect = Rect {
                             x: cell_x + (cell_w - 24.0) / 2.0,

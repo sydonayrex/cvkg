@@ -6,19 +6,18 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 pub mod budget;
+pub mod golden;
 pub mod lod;
 pub mod shader_features;
 pub mod thermal;
 pub mod virtualization;
-pub mod golden;
 
 pub use budget::OffscreenBudget;
+pub use golden::{GoldenImageComparator, GoldenImageConfig, GoldenImageResult};
 pub use lod::EffectLod;
 pub use shader_features::ShaderFeatureFlags;
-pub use thermal::{ThermalState, ThermalConfig};
+pub use thermal::{ThermalConfig, ThermalState};
 pub use virtualization::{Frustum, SpatialCell, SpatialHash};
-pub use golden::{GoldenImageConfig, GoldenImageResult, GoldenImageComparator};
-
 
 /// SvgModel -- A collection of tessellated triangles representing a vector icon.
 /// Paths are stored as independent sub-models, each with its own vertex range
@@ -294,7 +293,6 @@ impl Default for GlassInstanceUniforms {
     }
 }
 
-
 // =========================================================================
 // P1-1: GeometryBuffers - encapsulates the three GPU draw buffers
 // =========================================================================
@@ -434,19 +432,31 @@ pub struct TextSubsystem {
     /// Shaped text cache keyed by (text, font_size). Bounded so it
     /// survives across frames without growing without limit.
     /// Stores Arc<ShapedText> so clones are cheap (atomic refcount bump).
-    pub shaped_cache:
-        LruCache<(String, u32), std::sync::Arc<cvkg_runic_text::ShapedText>>,
+    pub shaped_cache: LruCache<(String, u32), std::sync::Arc<cvkg_runic_text::ShapedText>>,
+    /// Size of each glyph atlas in pixels (width and height).
+    pub atlas_size: u32,
 }
 
 impl TextSubsystem {
     /// Create a text subsystem with the given LRU capacity for the
-    /// glyph cache. The shaped text cache is unbounded.
+    /// glyph cache and default 4096x4096 atlas size.
     pub fn forge(glyph_cache_capacity: NonZeroUsize) -> Self {
+        Self::with_atlas_size(glyph_cache_capacity, 4096)
+    }
+
+    /// Create a text subsystem with a custom atlas size (in pixels).
+    pub fn with_atlas_size(glyph_cache_capacity: NonZeroUsize, atlas_size: u32) -> Self {
         Self {
             engine: cvkg_runic_text::TextEngine::default(),
             glyph_cache: LruCache::new(glyph_cache_capacity),
             shaped_cache: LruCache::new(NonZeroUsize::new(2048).unwrap()),
+            atlas_size,
         }
+    }
+
+    /// Return the configured atlas size in pixels.
+    pub fn atlas_size(&self) -> u32 {
+        self.atlas_size
     }
 
     /// Clear both caches. Called on theme change.
@@ -531,8 +541,7 @@ impl SvgSubsystem {
 
     /// Check if a specific element is dirty.
     pub fn is_element_dirty(&self, element_id: &str) -> bool {
-        self.dirty_elements.contains(element_id)
-            || self.dirty_sources.contains(element_id)
+        self.dirty_elements.contains(element_id) || self.dirty_sources.contains(element_id)
     }
 
     /// Check if a source has any dirty elements.
@@ -589,7 +598,6 @@ impl ParticleSubsystem {
     }
 }
 
-
 #[cfg(test)]
 mod p1_1_geometry_buffers_tests {
     use super::*;
@@ -632,7 +640,6 @@ mod p1_1_geometry_buffers_tests {
     }
 }
 
-
 #[cfg(test)]
 mod p1_1_text_subsystem_tests {
     use super::TextSubsystem;
@@ -669,6 +676,20 @@ mod p1_1_text_subsystem_tests {
         assert!(subsystem.shaped_cache.is_empty());
         // The glyph cache should still have its original capacity.
         assert_eq!(subsystem.glyph_cache.cap().get(), 10);
+    }
+
+    #[test]
+    fn text_subsystem_default_atlas_size() {
+        use std::num::NonZeroUsize;
+        let sub = TextSubsystem::forge(NonZeroUsize::new(1024).unwrap());
+        assert_eq!(sub.atlas_size(), 4096, "Default atlas size should be 4096");
+    }
+
+    #[test]
+    fn text_subsystem_custom_atlas_size() {
+        use std::num::NonZeroUsize;
+        let sub = TextSubsystem::with_atlas_size(NonZeroUsize::new(1024).unwrap(), 2048);
+        assert_eq!(sub.atlas_size(), 2048, "Custom atlas size should be 2048");
     }
 
     #[test]
@@ -751,5 +772,3 @@ mod p1_24_incremental_svg_tests {
         assert!(!sources.contains("other.svg"));
     }
 }
-
-

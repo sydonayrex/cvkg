@@ -46,15 +46,9 @@ pub enum TelemetryEvent {
     /// User enabled `prefers-reduced-motion` (animation was too much).
     ReducedMotionEnabled,
     /// Frame time exceeded 16ms budget (60 FPS target).
-    FrameBudgetExceeded {
-        frame_time_ms: f32,
-        budget_ms: f32,
-    },
+    FrameBudgetExceeded { frame_time_ms: f32, budget_ms: f32 },
     /// Glass element rendered (count for density tracking).
-    GlassElementRendered {
-        blur_radius: f32,
-        rect_area: f32,
-    },
+    GlassElementRendered { blur_radius: f32, rect_area: f32 },
     /// Touch target smaller than 44x44.
     SmallTouchTarget {
         element: String,
@@ -62,36 +56,58 @@ pub enum TelemetryEvent {
         height: f32,
     },
     /// Focus ring not visible (APCA Lc < 30 against adjacent).
-    FocusRingInvisible {
-        element: String,
-        contrast: f32,
-    },
+    FocusRingInvisible { element: String, contrast: f32 },
 }
 
 impl TelemetryEvent {
     /// Returns a human-readable description of this event.
     pub fn description(&self) -> String {
         match self {
-            TelemetryEvent::ContrastFailure { element, apca_lc, .. } => {
-                format!("Contrast failure: {} (APCA Lc={:.1}, threshold=60)", element, apca_lc)
+            TelemetryEvent::ContrastFailure {
+                element, apca_lc, ..
+            } => {
+                format!(
+                    "Contrast failure: {} (APCA Lc={:.1}, threshold=60)",
+                    element, apca_lc
+                )
             }
             TelemetryEvent::ReducedTransparencyEnabled => {
                 "User enabled prefers-reduced-transparency".into()
             }
-            TelemetryEvent::ReducedMotionEnabled => {
-                "User enabled prefers-reduced-motion".into()
+            TelemetryEvent::ReducedMotionEnabled => "User enabled prefers-reduced-motion".into(),
+            TelemetryEvent::FrameBudgetExceeded {
+                frame_time_ms,
+                budget_ms,
+            } => {
+                format!(
+                    "Frame budget exceeded: {:.1}ms > {:.1}ms",
+                    frame_time_ms, budget_ms
+                )
             }
-            TelemetryEvent::FrameBudgetExceeded { frame_time_ms, budget_ms } => {
-                format!("Frame budget exceeded: {:.1}ms > {:.1}ms", frame_time_ms, budget_ms)
+            TelemetryEvent::GlassElementRendered {
+                blur_radius,
+                rect_area,
+            } => {
+                format!(
+                    "Glass element: blur={:.1}px area={:.0}px^2",
+                    blur_radius, rect_area
+                )
             }
-            TelemetryEvent::GlassElementRendered { blur_radius, rect_area } => {
-                format!("Glass element: blur={:.1}px area={:.0}px^2", blur_radius, rect_area)
-            }
-            TelemetryEvent::SmallTouchTarget { element, width, height } => {
-                format!("Small touch target: {} ({:.0}x{:.0}, min 44x44)", element, width, height)
+            TelemetryEvent::SmallTouchTarget {
+                element,
+                width,
+                height,
+            } => {
+                format!(
+                    "Small touch target: {} ({:.0}x{:.0}, min 44x44)",
+                    element, width, height
+                )
             }
             TelemetryEvent::FocusRingInvisible { element, contrast } => {
-                format!("Focus ring invisible: {} (APCA Lc={:.1}, threshold=30)", element, contrast)
+                format!(
+                    "Focus ring invisible: {} (APCA Lc={:.1}, threshold=30)",
+                    element, contrast
+                )
             }
         }
     }
@@ -201,12 +217,18 @@ impl Telemetry {
 
     /// Returns only accessibility-related events.
     pub fn accessibility_events(&self) -> Vec<&TelemetryEvent> {
-        self.events.iter().filter(|e| e.is_accessibility_issue()).collect()
+        self.events
+            .iter()
+            .filter(|e| e.is_accessibility_issue())
+            .collect()
     }
 
     /// Returns only performance-related events.
     pub fn performance_events(&self) -> Vec<&TelemetryEvent> {
-        self.events.iter().filter(|e| e.is_performance_issue()).collect()
+        self.events
+            .iter()
+            .filter(|e| e.is_performance_issue())
+            .collect()
     }
 
     /// Returns the elapsed time since creation.
@@ -228,7 +250,11 @@ impl Telemetry {
     pub fn log_summary(&self) {
         eprintln!("=== CVKG Telemetry Summary ===");
         eprintln!("  Elapsed: {:.1}s", self.elapsed_secs());
-        eprintln!("  Frames: {} ({:.0} FPS avg)", self.frame_count, self.average_fps());
+        eprintln!(
+            "  Frames: {} ({:.0} FPS avg)",
+            self.frame_count,
+            self.average_fps()
+        );
         eprintln!("  Glass elements: {}", self.glass_element_count);
         eprintln!("  Contrast failures: {}", self.contrast_failure_count);
         eprintln!("  Budget exceeded: {}", self.budget_exceeded_count);

@@ -56,10 +56,10 @@ pub struct FocusCandidate {
 pub fn compute_focus_order(mut candidates: Vec<FocusCandidate>) -> Vec<u64> {
     let mut explicit: Vec<FocusCandidate> = candidates
         .iter()
-        .filter(|c| c.tab_index.map_or(false, |t| t > 0))
+        .filter(|c| c.tab_index.is_some_and(|t| t > 0))
         .cloned()
         .collect();
-    candidates.retain(|c| !c.tab_index.map_or(false, |t| t > 0));
+    candidates.retain(|c| c.tab_index.is_none_or(|t| t <= 0));
 
     explicit.sort_by(|a, b| {
         let ta = a.tab_index.unwrap_or(i32::MAX);
@@ -87,7 +87,7 @@ pub fn compute_focus_order(mut candidates: Vec<FocusCandidate>) -> Vec<u64> {
 pub fn validate_reading_order(order: &[FocusCandidate]) -> Result<(), String> {
     let natural: Vec<&FocusCandidate> = order
         .iter()
-        .filter(|c| !c.tab_index.map_or(false, |t| t > 0))
+        .filter(|c| c.tab_index.is_none_or(|t| t <= 0))
         .collect();
 
     let row_bucket = |r: &Rect| (r.y / 8.0).floor() as i32;

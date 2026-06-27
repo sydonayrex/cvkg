@@ -6,7 +6,7 @@
 
 use crate::lingua_tong;
 use crate::theme;
-use crate::{RADIUS_XL, RADIUS_LG, RADIUS_2XL};
+use crate::{RADIUS_2XL, RADIUS_LG, RADIUS_XL};
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // =============================================================================
@@ -413,21 +413,24 @@ impl View for DateRangePicker {
         // Month/year header
         let header = format!(
             "{} {}",
-            lingua_tong::t(&format!("datepicker.month.{}", match self.month {
-                1 => "jan",
-                2 => "feb",
-                3 => "mar",
-                4 => "apr",
-                5 => "may_short",
-                6 => "jun",
-                7 => "jul",
-                8 => "aug",
-                9 => "sep",
-                10 => "oct",
-                11 => "nov",
-                12 => "dec",
-                _ => "jan",
-            })),
+            lingua_tong::t(&format!(
+                "datepicker.month.{}",
+                match self.month {
+                    1 => "jan",
+                    2 => "feb",
+                    3 => "mar",
+                    4 => "apr",
+                    5 => "may_short",
+                    6 => "jun",
+                    7 => "jul",
+                    8 => "aug",
+                    9 => "sep",
+                    10 => "oct",
+                    11 => "nov",
+                    12 => "dec",
+                    _ => "jan",
+                }
+            )),
             self.year
         );
         let (tw, _th) = renderer.measure_text(&header, 16.0);

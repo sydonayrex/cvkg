@@ -1,0 +1,24 @@
+--- cvkg-render-gpu/tests/integrated_ui_scenarios.rs
++++ cvkg-render-gpu/tests/integrated_ui_scenarios.rs
+@@ -42,6 +42,21 @@
+     count
+ }
+ 
++/// Benchmark and capture frame. Runs the provided layout function for 60 frames,
++/// measures average frame time to ensure >= 60 FPS, and returns the final captured pixels.
++fn benchmark_and_capture(
++    renderer: &mut GpuRenderer,
++    mut layout_fn: impl FnMut(&mut GpuRenderer),
++) -> Vec<u8> {
++    let start_time = std::time::Instant::now();
++    for _ in 0..60 {
++        layout_fn(renderer);
++    }
++    let elapsed = start_time.elapsed();
++    let avg_ms = (elapsed.as_secs_f32() / 60.0) * 1000.0;
++    assert!(avg_ms <= 16.7, "Performance degradation: UI rendering failed to maintain 60 FPS. Average frame took {:.2}ms", avg_ms);
++    capture_frame(renderer)
++}
++
+ /// Test: Verify complex integrated rendering mixing multiple textures, blurs,
+ /// holograms, SVG paths, and animations together.

@@ -169,11 +169,7 @@ impl View for RavenMessenger {
 
             // ── Role header (icon + label + timestamp) ──
             if !is_system {
-                let header_color = if is_user {
-                    theme::accent()
-                } else {
-                    theme::accent()
-                };
+                let header_color = theme::accent();
                 let header_text = format!("{} {}", icon, role_label);
                 renderer.draw_text(&header_text, bubble_x, current_y, 11.0, header_color);
 
@@ -236,7 +232,11 @@ impl View for RavenMessenger {
                             height: code_h,
                         };
                         // Dark code background
-                        renderer.fill_rounded_rect(code_rect, 4.0, theme::with_alpha(theme::surface_elevated(), 0.95));
+                        renderer.fill_rounded_rect(
+                            code_rect,
+                            4.0,
+                            theme::with_alpha(theme::surface_elevated(), 0.95),
+                        );
                         renderer.stroke_rounded_rect(code_rect, 4.0, theme::border(), 1.0);
 
                         // Language label

@@ -254,7 +254,11 @@ impl View for YggdrasilTree {
             if crate::theme::glassmorphism_enabled() {
                 renderer.bifrost(menu_rect, 15.0, 1.5, 0.95);
             }
-            renderer.fill_rounded_rect(menu_rect, RADIUS_MD, theme::with_alpha(theme::surface_elevated(), 0.9));
+            renderer.fill_rounded_rect(
+                menu_rect,
+                RADIUS_MD,
+                theme::with_alpha(theme::surface_elevated(), 0.9),
+            );
             renderer.stroke_rounded_rect(menu_rect, RADIUS_MD, theme::border(), 1.0);
 
             let options = ["Open", "Rename", "Delete", "Copy Path"];
@@ -504,7 +508,11 @@ impl YggdrasilTree {
                 width: width - (text_x - x) - 8.0,
                 height: row_h - 8.0,
             };
-            renderer.fill_rounded_rect(input_rect, RADIUS_SM, theme::with_alpha(theme::surface_elevated(), 0.85));
+            renderer.fill_rounded_rect(
+                input_rect,
+                RADIUS_SM,
+                theme::with_alpha(theme::surface_elevated(), 0.85),
+            );
             renderer.stroke_rounded_rect(input_rect, RADIUS_SM, theme::accent(), 1.0);
             renderer.draw_text(
                 &state.rename_text,

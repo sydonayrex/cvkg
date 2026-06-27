@@ -52,8 +52,8 @@ pub struct HeatmapAggregation {
 impl HeatmapAggregation {
     pub fn new(width: u32, height: u32, lod: HeatmapLod) -> Self {
         let cell_size = lod.cell_size();
-        let grid_width = (width + cell_size - 1) / cell_size;
-        let grid_height = (height + cell_size - 1) / cell_size;
+        let grid_width = width.div_ceil(cell_size);
+        let grid_height = height.div_ceil(cell_size);
         Self {
             lod,
             cells: vec![0.0; (grid_width * grid_height) as usize],

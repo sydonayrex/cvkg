@@ -210,9 +210,10 @@ impl CertificationSuite {
     /// surfaced explicitly rather than hiding behind a passing aggregate.
     pub fn all_pass(&self) -> bool {
         !self.checks.is_empty()
-            && self.checks.iter().all(|c| {
-                matches!(c.result, Some(CertResult::Pass))
-            })
+            && self
+                .checks
+                .iter()
+                .all(|c| matches!(c.result, Some(CertResult::Pass)))
     }
 
     /// Emit a human-readable summary to the log (via `log::info!`).
@@ -279,9 +280,7 @@ impl Default for CertificationReport {
 impl CertificationReport {
     /// Create an empty report to collect suites into.
     pub fn new() -> Self {
-        Self {
-            suites: Vec::new(),
-        }
+        Self { suites: Vec::new() }
     }
 
     /// Add a completed suite to the report.

@@ -1,8 +1,8 @@
 use crate::edge::FlowEdge;
 use crate::node::FlowNode;
+use crate::types::{NodeId, PortPosition};
 #[cfg(test)]
 use cvkg_core::KvasirId;
-use crate::types::{NodeId, PortPosition};
 use glam::Vec2;
 use std::collections::HashMap;
 

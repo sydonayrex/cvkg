@@ -1,7 +1,7 @@
 // Memory System Demo
 
 use cvkg_components::MemoryView;
-use cvkg_core::{KnowledgeFragment, AppState, Rect, Renderer, State, View};
+use cvkg_core::{AppState, KnowledgeFragment, Rect, Renderer, State, View};
 use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use winit::{

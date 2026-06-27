@@ -64,9 +64,10 @@ impl<'a> ExecutionContext<'a> {
         label: Option<&str>,
     ) -> wgpu::BindGroup {
         let mut cache = GpuRenderer::lock_or_clear_cache(&self.renderer.bind_group_cache);
+        let full_key = (self.renderer.current_window, key.0, key.1, key.2);
         // Use entry API: if key exists, return a clone of the cached bind group.
         // If not, create it, insert it, and return a clone.
-        if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(key) {
+        if let std::collections::hash_map::Entry::Vacant(e) = cache.entry(full_key) {
             let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label,
                 layout,
@@ -75,7 +76,7 @@ impl<'a> ExecutionContext<'a> {
             e.insert(bg.clone());
             bg
         } else {
-            cache.get(&key).unwrap().clone()
+            cache.get(&full_key).unwrap().clone()
         }
     }
 }

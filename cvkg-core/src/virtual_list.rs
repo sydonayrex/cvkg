@@ -149,10 +149,7 @@ impl DependencyGraph {
     }
 
     pub fn register(&mut self, component_id: u64, state_key: u64) {
-        let is_new = self.deps
-            .entry(state_key)
-            .or_default()
-            .insert(component_id);
+        let is_new = self.deps.entry(state_key).or_default().insert(component_id);
         if is_new {
             self.reverse
                 .entry(component_id)
@@ -179,9 +176,7 @@ impl DependencyGraph {
     }
 
     pub fn has_dependents(&self, state_key: u64) -> bool {
-        self.deps
-            .get(&state_key)
-            .map_or(false, |set| !set.is_empty())
+        self.deps.get(&state_key).is_some_and(|set| !set.is_empty())
     }
 
     pub fn edge_count(&self) -> usize {
@@ -262,24 +257,32 @@ impl FrameBudgetTracker {
         }
     }
 
-    pub fn total(&self) -> Duration { self.total }
-    pub fn allocations(&self) -> &[SubsystemBudget] { &self.allocations }
+    pub fn total(&self) -> Duration {
+        self.total
+    }
+    pub fn allocations(&self) -> &[SubsystemBudget] {
+        &self.allocations
+    }
 
     pub fn new_frame(&mut self) {
         self.start = Some(Instant::now());
-        for e in self.elapsed.iter_mut() { *e = Duration::ZERO; }
+        for e in self.elapsed.iter_mut() {
+            *e = Duration::ZERO;
+        }
     }
 
     pub fn subsystem_finish(&mut self, index: usize) {
-        if let Some(start) = self.start {
-            if index < self.elapsed.len() {
-                self.elapsed[index] = start.elapsed();
-            }
+        if let Some(start) = self.start
+            && index < self.elapsed.len()
+        {
+            self.elapsed[index] = start.elapsed();
         }
     }
 
     pub fn is_within_budget(&self, index: usize) -> bool {
-        if index >= self.allocations.len() || index >= self.elapsed.len() { return false; }
+        if index >= self.allocations.len() || index >= self.elapsed.len() {
+            return false;
+        }
         self.elapsed[index] <= self.allocations[index].time_slice
     }
 
@@ -293,7 +296,11 @@ impl FrameBudgetTracker {
     }
 
     pub fn elapsed(&self, index: usize) -> Duration {
-        if index < self.elapsed.len() { self.elapsed[index] } else { Duration::ZERO }
+        if index < self.elapsed.len() {
+            self.elapsed[index]
+        } else {
+            Duration::ZERO
+        }
     }
 
     pub fn total_elapsed(&self) -> Duration {
@@ -325,16 +332,29 @@ impl InputLatencyTracker {
     }
 
     pub fn record_frame(&mut self, event_time: Instant, render_time: Instant) {
-        if self.window_size == 0 { return; }
-        if self.samples.len() >= self.window_size { self.samples.pop_front(); }
+        if self.window_size == 0 {
+            return;
+        }
+        if self.samples.len() >= self.window_size {
+            self.samples.pop_front();
+        }
         self.samples.push_back((event_time, render_time));
     }
 
     pub fn percentile(&self, p: f64) -> Duration {
-        if self.samples.is_empty() || p < 0.0 || p > 100.0 { return Duration::ZERO; }
-        let mut latencies: Vec<Duration> = self.samples
+        if self.samples.is_empty() || !(0.0..=100.0).contains(&p) {
+            return Duration::ZERO;
+        }
+        let mut latencies: Vec<Duration> = self
+            .samples
             .iter()
-            .map(|&(e, r)| if r > e { r.duration_since(e) } else { Duration::ZERO })
+            .map(|&(e, r)| {
+                if r > e {
+                    r.duration_since(e)
+                } else {
+                    Duration::ZERO
+                }
+            })
             .collect();
         latencies.sort();
         let len = latencies.len();
@@ -344,16 +364,26 @@ impl InputLatencyTracker {
         latencies[index]
     }
 
-    pub fn clear(&mut self) { self.samples.clear(); }
-    pub fn window_size(&self) -> usize { self.window_size }
+    pub fn clear(&mut self) {
+        self.samples.clear();
+    }
+    pub fn window_size(&self) -> usize {
+        self.window_size
+    }
 
     pub fn set_window_size(&mut self, size: usize) {
         self.window_size = size;
-        while self.samples.len() > self.window_size { self.samples.pop_front(); }
+        while self.samples.len() > self.window_size {
+            self.samples.pop_front();
+        }
     }
 
-    pub fn len(&self) -> usize { self.samples.len() }
-    pub fn is_empty(&self) -> bool { self.samples.is_empty() }
+    pub fn len(&self) -> usize {
+        self.samples.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.samples.is_empty()
+    }
 }
 
 // =============================================================================
@@ -463,8 +493,16 @@ mod tests {
         #[test]
         fn render_is_essential_layout_is_skippable() {
             let fb = FrameBudgetTracker::default_60fps();
-            let render = fb.allocations().iter().find(|a| a.name == "render").unwrap();
-            let layout = fb.allocations().iter().find(|a| a.name == "layout").unwrap();
+            let render = fb
+                .allocations()
+                .iter()
+                .find(|a| a.name == "render")
+                .unwrap();
+            let layout = fb
+                .allocations()
+                .iter()
+                .find(|a| a.name == "layout")
+                .unwrap();
             assert!(!render.skippable);
             assert!(layout.skippable);
         }

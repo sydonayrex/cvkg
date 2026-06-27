@@ -1,6 +1,6 @@
+use crate::{CacheKey, GlyphInstance};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
-use crate::{CacheKey, GlyphInstance};
 
 const MAX_CACHE_SIZE: usize = 1024;
 
@@ -14,13 +14,16 @@ struct GlobalCacheInner {
 static GLOBAL_SHAPE_CACHE: OnceLock<Mutex<GlobalCacheInner>> = OnceLock::new();
 
 fn get_global_cache() -> std::sync::MutexGuard<'static, GlobalCacheInner> {
-    GLOBAL_SHAPE_CACHE.get_or_init(|| {
-        Mutex::new(GlobalCacheInner {
-            cache: HashMap::new(),
-            cache_order: Vec::new(),
-            glyph_index: HashMap::new(),
+    GLOBAL_SHAPE_CACHE
+        .get_or_init(|| {
+            Mutex::new(GlobalCacheInner {
+                cache: HashMap::new(),
+                cache_order: Vec::new(),
+                glyph_index: HashMap::new(),
+            })
         })
-    }).lock().unwrap()
+        .lock()
+        .unwrap()
 }
 
 pub fn global_cache_get(key: &CacheKey) -> Option<Vec<GlyphInstance>> {
@@ -33,19 +36,19 @@ pub fn global_cache_insert(key: CacheKey, value: Vec<GlyphInstance>) {
     // Remove existing entry from ordering if updating an existing key
     if cache.cache.contains_key(&key) {
         cache.cache_order.retain(|k| k != &key);
-    } else if cache.cache.len() >= MAX_CACHE_SIZE {
-        if let Some(oldest) = cache.cache_order.first().cloned() {
-            let old_keys_to_remove: Vec<u64> = cache
-                .cache
-                .get(&oldest)
-                .map(|glyphs| glyphs.iter().map(|g| g.cache_key).collect())
-                .unwrap_or_default();
-            for gk in &old_keys_to_remove {
-                cache.glyph_index.remove(gk);
-            }
-            cache.cache.remove(&oldest);
-            cache.cache_order.remove(0);
+    } else if cache.cache.len() >= MAX_CACHE_SIZE
+        && let Some(oldest) = cache.cache_order.first().cloned()
+    {
+        let old_keys_to_remove: Vec<u64> = cache
+            .cache
+            .get(&oldest)
+            .map(|glyphs| glyphs.iter().map(|g| g.cache_key).collect())
+            .unwrap_or_default();
+        for gk in &old_keys_to_remove {
+            cache.glyph_index.remove(gk);
         }
+        cache.cache.remove(&oldest);
+        cache.cache_order.remove(0);
     }
     for g in &value {
         cache.glyph_index.insert(g.cache_key, (key, *g));

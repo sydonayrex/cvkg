@@ -1,0 +1,14 @@
+[package]
+name = "cvkg-gallery"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cvkg = { workspace = true, features = ["native"] }
+cvkg-components = { workspace = true }
+stacker = "0.1"
+libc = "0.2"
+
+[dev-dependencies]
+cvkg-render-software = { workspace = true }
+cvkg-runic-text = { workspace = true }

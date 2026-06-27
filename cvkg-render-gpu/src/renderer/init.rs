@@ -1,17 +1,23 @@
-use std::sync::Arc;
+use crate::heim::SkylinePacker;
+use crate::renderer::context_helpers::{
+    compute_mip_levels, create_headless_context, create_surface_context,
+    load_pipeline_cache_with_integrity_check,
+};
+use crate::renderer::pipelines::compile_render_pipelines;
+use crate::renderer::{GpuRenderer, QualityLevel};
+use crate::types::{
+    GpuParticle, HeadlessContext, MAX_INDICES, MAX_PARTICLES, MAX_VERTICES, ParticleUniforms,
+    SurfaceContext,
+};
+use crate::{
+    WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND, WGSL_COMMON, WGSL_MATERIAL_GLASS,
+    WGSL_MATERIAL_OPAQUE, WGSL_SHAPES,
+};
+use cvkg_core::{ColorTheme, Rect, SceneUniforms};
+use lru::LruCache;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
-use lru::LruCache;
-use crate::types::{SurfaceContext, HeadlessContext, GpuParticle, ParticleUniforms, MAX_VERTICES, MAX_INDICES, MAX_PARTICLES};
-use crate::renderer::{GpuRenderer, QualityLevel};
-use crate::renderer::context_helpers::{load_pipeline_cache_with_integrity_check, compute_mip_levels, create_surface_context, create_headless_context};
-use crate::renderer::pipelines::compile_render_pipelines;
-use crate::heim::SkylinePacker;
-use crate::{
-    WGSL_COMMON, WGSL_SHAPES, WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND,
-    WGSL_MATERIAL_OPAQUE, WGSL_MATERIAL_GLASS
-};
-use cvkg_core::{ColorTheme, SceneUniforms, Rect};
+use std::sync::Arc;
 
 impl GpuRenderer {
     /// forge -- Initializes the Surtr GPU renderer from a winit window.
@@ -32,6 +38,8 @@ impl GpuRenderer {
         let surface = instance
             .create_surface(window.clone())
             .expect("Failed to create surface");
+
+        log::info!("[Surtr] Renderer backend: GpuRenderer (wgpu)");
 
         // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
         log::info!("[GPU] Requesting HighPerformance adapter...");
@@ -120,10 +128,8 @@ impl GpuRenderer {
         let info = adapter.get_info();
         // P1-26: detect GPU vendor for logging and future
         // capability-based shader selection.
-        let caps = crate::subsystems::GpuCapabilities::detect(
-            &info.name,
-            format!("{:?}", info.backend),
-        );
+        let caps =
+            crate::subsystems::GpuCapabilities::detect(&info.name, format!("{:?}", info.backend));
         log::info!(
             "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
             info.name,
@@ -192,8 +198,15 @@ impl GpuRenderer {
         // CONTRACT: Uses select_best_surface_format to safely fall back on mobile/legacy GPUs.
         let surface_format = Self::select_best_surface_format(&surface_caps.formats);
 
-        log::info!("[GPU] Available present modes: {:?}", surface_caps.present_modes);
-        log::info!("[GPU] Adapter: {} ({:?})", adapter.get_info().name, adapter.get_info().backend);
+        log::info!(
+            "[GPU] Available present modes: {:?}",
+            surface_caps.present_modes
+        );
+        log::info!(
+            "[GPU] Adapter: {} ({:?})",
+            adapter.get_info().name,
+            adapter.get_info().backend
+        );
         let present_mode = if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Immediate)
@@ -372,8 +385,7 @@ impl GpuRenderer {
         #[cfg(target_arch = "wasm32")]
         let texture_array_count: Option<std::num::NonZeroU32> = None;
         #[cfg(not(target_arch = "wasm32"))]
-        let texture_array_count: Option<std::num::NonZeroU32> =
-            std::num::NonZeroU32::new(32);
+        let texture_array_count: Option<std::num::NonZeroU32> = std::num::NonZeroU32::new(32);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -448,6 +460,29 @@ impl GpuRenderer {
                 label: Some("Surtr Berserker Bind Group Layout"),
             });
 
+        let gradient_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                ],
+                label: Some("Surtr Gradient Bind Group Layout"),
+            });
+
         let pipes = compile_render_pipelines(
             &device,
             format,
@@ -455,6 +490,7 @@ impl GpuRenderer {
             &texture_bind_group_layout,
             &env_bind_group_layout,
             &berserker_bind_group_layout,
+            &gradient_bind_group_layout,
             &shader,
             wgsl_opaque.as_str(),
             wgsl_glass.as_str(),
@@ -520,11 +556,61 @@ impl GpuRenderer {
         );
 
         let dummy_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Non-filtering sampler required by the gradient bind group layout.
+        let gradient_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        // Gradient bind group: requires non-filterable texture + non-filtering sampler.
+        // The gradient layout expects Float { filterable: false } texture.
+        let gradient_dummy_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Gradient Dummy Texture"),
+            size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba16Float,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let gradient_dummy_view = gradient_dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let gradient_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &gradient_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&gradient_dummy_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&gradient_sampler),
+                },
+            ],
+            label: Some("Gradient Dummy Bind Group"),
+        });
         let dummy_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        // Non-filtering sampler required by the gradient bind group layout.
+        let gradient_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
@@ -580,6 +666,38 @@ impl GpuRenderer {
             ],
             label: Some("Dummy Env Bind Group"),
         });
+        let dummy_depth_tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Surtr Dummy Depth Texture"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let dummy_depth_view = dummy_depth_tex.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let dummy_depth_tex_msaa = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Surtr Dummy Depth Texture MSAA"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 4,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let dummy_depth_view_msaa =
+            dummy_depth_tex_msaa.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut texture_registry = LruCache::new(NonZeroUsize::new(31).unwrap());
         let mut texture_bind_groups = Vec::new();
@@ -718,18 +836,26 @@ impl GpuRenderer {
             mega_heim_tex,
             mega_heim_bind_group,
             config: crate::subsystems::RendererConfig::default(),
-            text: crate::types::TextSubsystem::forge(
-                NonZeroUsize::new(8192).unwrap(),
-            ),
+            text: crate::types::TextSubsystem::forge(NonZeroUsize::new(8192).unwrap()),
             heim_packer: SkylinePacker::new(4096, 4096),
             image_uv_registry: {
                 let mut cache = LruCache::new(NonZeroUsize::new(256).unwrap());
-                cache.put("__mega_heim".to_string(), cvkg_core::Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 });
+                cache.put(
+                    "__mega_heim".to_string(),
+                    cvkg_core::Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        width: 1.0,
+                        height: 1.0,
+                    },
+                );
                 cache
             },
             texture_registry,
             texture_views: texture_views_list,
             dummy_sampler,
+            dummy_depth_view,
+            dummy_depth_view_msaa,
             svg: crate::types::SvgSubsystem::forge(
                 &device,
                 &queue,
@@ -737,6 +863,12 @@ impl GpuRenderer {
                 NonZeroUsize::new(512).unwrap(),
             ),
             dummy_texture_bind_group,
+            gradient_stop_texture: dummy_texture.clone(),
+            gradient_stop_texture_view: dummy_view.clone(),
+            gradient_bind_group,
+            gradient_texture_cache: std::collections::HashMap::new(),
+            gradient_stops_hash: 0,
+            gradient_bind_group_layout,
             dummy_env_bind_group,
             texture_bind_group_layout,
             texture_bind_groups,

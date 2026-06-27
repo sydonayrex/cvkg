@@ -144,18 +144,21 @@ pub fn compute_taffy_flex(
     subviews: &[&dyn LayoutView],
     cache: &mut LayoutCache,
 ) -> Vec<Rect> {
+
+
     if cache.is_over_budget() {
-        let mut rects = Vec::with_capacity(subviews.len());
-        for child in subviews {
+        let all_cached = subviews.iter().all(|child| {
             let hash = child.view_hash();
-            let r = if hash != 0 {
-                cache.previous_rects.get(&hash).copied().unwrap_or(Rect::zero())
-            } else {
-                Rect::zero()
-            };
-            rects.push(r);
+            hash != 0 && cache.previous_rects.contains_key(&hash)
+        });
+        if all_cached {
+            let mut rects = Vec::with_capacity(subviews.len());
+            for child in subviews {
+                let hash = child.view_hash();
+                rects.push(*cache.previous_rects.get(&hash).unwrap());
+            }
+            return rects;
         }
-        return rects;
     }
 
     let (hashes, flex_weights, sizes) = collect_child_sizes(subviews, params.bounds, cache);
@@ -741,7 +744,11 @@ impl Grid {
             for child in subviews {
                 let hash = child.view_hash();
                 let r = if hash != 0 {
-                    cache.previous_rects.get(&hash).copied().unwrap_or(Rect::zero())
+                    cache
+                        .previous_rects
+                        .get(&hash)
+                        .copied()
+                        .unwrap_or(Rect::zero())
                 } else {
                     Rect::zero()
                 };

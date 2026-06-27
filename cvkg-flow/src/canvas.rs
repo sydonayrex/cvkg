@@ -1,10 +1,10 @@
 use crate::edge::FlowEdge;
 use crate::graph::FlowGraph;
-#[cfg(test)]
-use cvkg_core::KvasirId;
 use crate::node::FlowNode;
 use crate::ribbon::{RibbonBatch, build_ribbon_batch};
 use crate::types::{EdgeId, LevelOfDetail, NodeId};
+#[cfg(test)]
+use cvkg_core::KvasirId;
 use cvkg_core::Rect;
 use glam::Vec2;
 use serde::{Deserialize, Serialize};
@@ -314,7 +314,8 @@ impl FlowCanvas {
     /// Nodes with higher z_index take priority when overlapping.
     pub fn node_at_screen(&self, screen_x: f32, screen_y: f32) -> Option<NodeId> {
         let canvas_pos = self.camera.screen_to_canvas(Vec2::new(screen_x, screen_y));
-        let mut candidates: Vec<_> = self.graph
+        let mut candidates: Vec<_> = self
+            .graph
             .nodes
             .iter()
             .filter(|(_, node)| {
@@ -325,7 +326,11 @@ impl FlowCanvas {
             })
             .collect();
         // Sort by z_index descending so topmost node is returned
-        candidates.sort_by(|a, b| b.1.z_index.partial_cmp(&a.1.z_index).unwrap_or(std::cmp::Ordering::Equal));
+        candidates.sort_by(|a, b| {
+            b.1.z_index
+                .partial_cmp(&a.1.z_index)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         candidates.first().map(|(id, _)| *id).copied()
     }
 

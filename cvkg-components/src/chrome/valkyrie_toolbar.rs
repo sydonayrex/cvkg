@@ -336,14 +336,7 @@ fn render_toolbar_item(
         ToolbarItem::Separator => {
             // Vertical separator line
             let sep_x = x + w / 2.0;
-            renderer.draw_line(
-                sep_x,
-                y + 4.0,
-                sep_x,
-                y + h - 4.0,
-                theme::border(),
-                1.0,
-            );
+            renderer.draw_line(sep_x, y + 4.0, sep_x, y + h - 4.0, theme::border(), 1.0);
         }
         ToolbarItem::Spacer => {
             // Empty space -- nothing to render

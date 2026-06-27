@@ -3,8 +3,8 @@
 //! Manages the persistent identity of views across render frames, enabling
 //! advanced features like shared-element transitions (Bifrost Bridge).
 
-use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 pub type NodeId = super::KvasirId;
@@ -33,6 +33,7 @@ impl BifrostRegistry {
 
     /// Get or create a persistent ID for a bridge name.
     pub fn get_or_create_bridge(&mut self, bridge_id: &str) -> NodeId {
+        #[allow(clippy::unwrap_or_default)]
         *self
             .bridges
             .entry(bridge_id.to_string())

@@ -2,7 +2,9 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{DeriveInput, Expr, FnArg, ItemFn, ItemStruct, Pat, braced, parse_macro_input};
+use syn::{
+    DeriveInput, Expr, ExprParen, FnArg, ItemFn, ItemStruct, Pat, Token, braced, parse_macro_input,
+};
 
 /// State attribute macro -- derives common traits for state structs
 ///
@@ -24,15 +26,65 @@ pub fn state(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// If the struct has a `body` method defined in an `impl` block, it will be used.
 /// Otherwise, it defaults to a primitive View (Body = Never).
+///
+/// # Warning
+/// `#[derive(View)]` generates `Body = Never` with `body()` panicking at runtime.
+/// You MUST implement `fn body(self) -> Self::Body` in a separate `impl View for MyType` block
+/// if your view has children or content. Use `#[derive(View)]` only for leaf/primitive views
+/// where `body()` is never called (e.g., simple wrappers that render via their View trait).
+///
+/// # Compile-time validation
+/// Applying `#[derive(View)]` to a struct with fields is a compile error:
+///
+/// ```compile_fail
+/// use cvkg_macros::View;
+/// #[derive(View)]
+/// struct BadView {
+///     x: f32,
+/// }
+/// ```
+///
+/// Unit structs and empty structs are accepted:
+///
+/// ```
+/// use cvkg_macros::View;
+/// #[derive(View)]
+/// struct GoodLeafView;
+/// ```
 #[proc_macro_derive(View)]
 pub fn derive_view(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
+
+    // Compile-time check: reject structs with fields at derive time.
+    // Types with fields always need a `body` method to describe their children.
+    let has_fields = match &input.data {
+        syn::Data::Struct(data) => !data.fields.is_empty(),
+        _ => true,
+    };
+
+    if has_fields {
+        return syn::Error::new(
+            name.span(),
+            format!(
+                "`#[derive(View)]` cannot be applied to `{}` because it has fields.\n\
+                 Types with fields must implement `fn body(self) -> Self::Body` manually.\n\
+                 Use `#[derive(View)]` only for leaf/primitive views with no fields.",
+                name
+            ),
+        )
+        .to_compile_error()
+        .into();
+    }
 
     let expanded = quote! {
         impl cvkg_core::View for #name {
             type Body = cvkg_core::Never;
-            fn body(self) -> Self::Body { unreachable!("Primitive view has no body") }
+            fn body(self) -> Self::Body {
+                // SAFETY: `Never` is uninhabitable. `body()` is only called on views
+                // that have children. Leaf views (no fields) never call body().
+                unreachable!()
+            }
         }
     };
 
@@ -188,7 +240,9 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             pub fn build(self) -> #name {
                 #name {
-                    #(#field_names: self.#field_names.expect("missing required field "),)*
+                    #(#field_names: self.#field_names.expect(
+                        concat!("missing required field: ", stringify!(#field_names))
+                    ),)*
                 }
             }
         }
@@ -217,6 +271,109 @@ impl Parse for HamrNode {
         } else {
             Ok(HamrNode::Expr(expr))
         }
+    }
+}
+
+/// Internal helper: parse the body of an if/else branch for hamr_if! macro.
+struct HamrIfBranch {
+    nodes: Vec<HamrNode>,
+}
+
+impl Parse for HamrIfBranch {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut nodes = Vec::new();
+        while !input.is_empty() {
+            nodes.push(input.parse()?);
+        }
+        Ok(HamrIfBranch { nodes })
+    }
+}
+
+/// hamr_if! macro -- conditional rendering inside hamr! blocks.
+///
+/// Syntax:
+/// ```ignore
+/// hamr_if!(condition { then_block })
+/// hamr_if!(condition { then_block } else { else_block })
+/// ```
+///
+/// This macro generates conditional rendering code that can be used
+/// inside hamr! blocks. It supports both `if` and `if/else` forms.
+///
+/// Example:
+/// ```ignore
+/// use cvkg_macros::{hamr, hamr_if};
+/// hamr! {
+///     VStack {
+///         hamr_if!(is_playing {
+///             Text::new("PAUSE")
+///         })
+///     }
+/// }
+/// ```
+#[proc_macro]
+pub fn hamr_if(input: TokenStream) -> TokenStream {
+    let parsed: HamrIfMacro = parse_macro_input!(input);
+    let cond = parsed.cond;
+    let then_branch = parsed.then_branch;
+    let else_branch = parsed.else_branch;
+
+    let then_tokens: Vec<proc_macro2::TokenStream> = then_branch
+        .nodes
+        .iter()
+        .map(|n| quote::ToTokens::to_token_stream(n))
+        .collect();
+
+    if let Some(else_nodes) = else_branch {
+        let else_tokens: Vec<proc_macro2::TokenStream> = else_nodes
+            .nodes
+            .iter()
+            .map(|n| quote::ToTokens::to_token_stream(n))
+            .collect();
+        TokenStream::from(quote::quote! {
+            if #cond {
+                #(#then_tokens)*
+            } else {
+                #(#else_tokens)*
+            }
+        })
+    } else {
+        TokenStream::from(quote::quote! {
+            if #cond {
+                #(#then_tokens)*
+            }
+        })
+    }
+}
+
+struct HamrIfMacro {
+    cond: Expr,
+    then_branch: HamrIfBranch,
+    else_branch: Option<HamrIfBranch>,
+}
+
+impl Parse for HamrIfMacro {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        // Parse condition wrapped in parens to avoid syn treating
+        // `if cond { ... }` as an Expr::If expression.
+        let cond = input.parse::<syn::ExprParen>()?.expr;
+        let then_content;
+        braced!(then_content in input);
+        let then_branch: HamrIfBranch = then_content.parse()?;
+        let else_branch = if input.peek(Token![else]) {
+            let _else_token: Token![else] = input.parse()?;
+            let else_content;
+            braced!(else_content in input);
+            let else_branch: HamrIfBranch = else_content.parse()?;
+            Some(else_branch)
+        } else {
+            None
+        };
+        Ok(HamrIfMacro {
+            cond: *cond,
+            then_branch,
+            else_branch,
+        })
     }
 }
 
@@ -258,6 +415,17 @@ impl quote::ToTokens for HamrNode {
 ///     VStack::new(16.0) {
 ///         Text::new("Hello")
 ///         Button::new("Click", || {})
+///     }
+/// }
+///
+/// Conditional rendering is available via hamr_if!:
+/// hamr! {
+///     VStack {
+///         hamr_if!(is_logged_in {
+///             Text::new("Welcome!")
+///         } else {
+///             Text::new("Please log in")
+///         })
 ///     }
 /// }
 #[proc_macro]

@@ -1,13 +1,13 @@
 [package]
 name = "cvkg-compositor"
-version = "0.2.14"
+version = "0.2.15"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 
 [dependencies]
-cvkg-core = "0.2.14"
+cvkg-core = "0.2.15"
 glam = { version = "0.30", features = ["serde", "bytemuck"] }
 log = "0.4"
 anyhow = "1.0"

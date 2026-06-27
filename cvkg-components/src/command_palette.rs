@@ -409,8 +409,8 @@ impl LayoutView for MimirSpotlight {
     }
 }
 
-/// BifrostLauncher provides a quick search and launch interface, representing the bridge between worlds.
-pub struct BifrostLauncher {
+/// Launcher provides a quick search and launch interface, representing the bridge between worlds.
+pub struct Launcher {
     pub(crate) items: Vec<QuickItem>,
     pub(crate) search: String,
 }
@@ -421,7 +421,7 @@ pub struct QuickItem {
     pub action: Arc<dyn Fn() + Send + Sync>,
 }
 
-impl BifrostLauncher {
+impl Launcher {
     /// Creates a new BifrostLauncher instance.
     pub fn new() -> Self {
         Self {
@@ -448,7 +448,7 @@ impl BifrostLauncher {
     }
 }
 
-impl View for BifrostLauncher {
+impl View for Launcher {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
@@ -503,7 +503,7 @@ impl View for BifrostLauncher {
     }
 }
 
-impl LayoutView for BifrostLauncher {
+impl LayoutView for Launcher {
     fn size_that_fits(
         &self,
         _proposal: SizeProposal,

@@ -1,73 +1,64 @@
 # How to Run Tests
 
-Goal: Execute the test suite for CVKG.
+## Goal
 
-## Process Overview
-
-```mermaid
-graph TD
-    A["Check dependencies"] --> B{"Choose Test Scope"}
-    B -->|"All workspace crates"| C["cargo test --workspace"]
-    B -->|"Single crate only"| D["cargo test -p <crate-name>"]
-    B -->|"Single test by name"| E["cargo test -p <crate-name> <test-name>"]
-    C --> F{"Test Results"}
-    D --> F
-    E --> F
-    F -->|"Success (Ok)"| G["All checks passed"]
-    F -->|"No adapter panic"| H["Apply: export WGPU_ADAPTER=mesa"]
-```
+Run the full test suite, a single crate's tests, or a specific test by name.
 
 ## Prerequisites
 
-
-- Build dependencies installed (see onboarding.md)
+- Rust toolchain installed
+- `cargo build --workspace` succeeds
 
 ## Steps
 
-### Run the full test suite
+### Full Workspace
 
 ```bash
 cargo test --workspace
 ```
 
-### Run a single crate's tests
+### Single Crate
 
 ```bash
-cargo test -p cvkg-core
-cargo test -p cvkg-render-gpu
-cargo test -p cvkg-components
+cargo test -p cvkg-layout
 ```
 
-### Run a single test by name
+### Single Test by Name
 
 ```bash
-cargo test -p cvkg-core test_view_trait
+cargo test -p cvkg-layout tests::test_hstack_basic
 ```
 
-### Run integration tests only
+### Visual Regression Tests
+
+`cvkg-test` provides pixel-level comparison. Run it with:
 
 ```bash
-cargo test --workspace --test '*'
+cargo test -p cvkg-test
 ```
 
-### Run with output visible
+Tests use `insta` for snapshot comparison. To review diffs:
 
 ```bash
-cargo test --workspace -- --nocapture
+cargo insta test -p cvkg-test --review
+```
+
+### Property-Based Tests
+
+`cvkg-test` includes property-based tests via `proptest`. These run automatically with `cargo test -p cvkg-test`.
+
+### Benchmarks
+
+```bash
+cargo bench -p cvkg-layout
 ```
 
 ## Expected Output
 
-```
-running N tests
-test result: ok. N passed; 0 failed; 0 ignored
-```
+All tests should pass. Warnings in dependencies are acceptable; warnings in your own code should be addressed.
 
-## Recovery
+## What Can Go Wrong
 
-If tests fail with "no adapter found":
-
-```bash
-export WGPU_ADAPTER=mesa
-cargo test -p cvkg-render-gpu
-```
+- **"can't find crate for `core`**: Add the WASM target: `rustup target add wasm32-unknown-unknown`.
+- **Snapshot mismatch**: If a visual change is intentional, update snapshots with `cargo insta accept -p cvkg-test`.
+- **Timeout in CI**: The `profile.test` setting limits debug info to prevent OOM. If a test needs more stack, add `#[serial]` and run sequentially.

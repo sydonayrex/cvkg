@@ -147,11 +147,7 @@ impl NiflheimSidebar {
         }
 
         // Label
-        let text_color = if is_selected {
-            theme::text()
-        } else {
-            theme::text()
-        };
+        let text_color = theme::text();
         renderer.draw_text(
             &item.label,
             rect.x + indent + 20.0,

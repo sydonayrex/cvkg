@@ -70,7 +70,10 @@ impl View for VStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let mut cache = self.layout_cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut cache = self
+            .layout_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let rects = cvkg_layout::VStack::compute_layout(
             self.spacing,
             self.alignment,
@@ -83,7 +86,8 @@ impl View for VStack {
         let mut rect_idx = 0;
         for child in self.children.iter() {
             if child.layout().is_some() && rect_idx < rects.len() {
-                child.render(renderer, rects[rect_idx]);
+                let child_rect = rects[rect_idx];
+                child.render(renderer, child_rect);
                 rect_idx += 1;
             }
         }
@@ -228,6 +232,7 @@ pub struct HStack {
     alignment: cvkg_core::Alignment,
     distribution: cvkg_core::Distribution,
     children: Vec<cvkg_core::AnyView>,
+    layout_cache: std::sync::Arc<std::sync::Mutex<LayoutCache>>,
     wrap: bool,
 }
 
@@ -239,6 +244,7 @@ impl HStack {
             alignment: cvkg_core::Alignment::Center,
             distribution: cvkg_core::Distribution::Fill,
             children: Vec::new(),
+            layout_cache: std::sync::Arc::new(std::sync::Mutex::new(LayoutCache::new())),
             wrap: false,
         }
     }
@@ -276,11 +282,16 @@ impl View for HStack {
     }
 
     fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: Rect) {
+        renderer.push_vnode(rect, "HStack");
         if self.children.is_empty() {
+            renderer.pop_vnode();
             return;
         }
 
-        let mut cache = LayoutCache::new();
+        let mut cache = self
+            .layout_cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
@@ -300,6 +311,7 @@ impl View for HStack {
                 rect_idx += 1;
             }
         }
+        renderer.pop_vnode();
     }
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
@@ -390,7 +402,10 @@ mod tests {
             _subviews: &[&dyn LayoutView],
             _cache: &mut LayoutCache,
         ) -> Size {
-            Size { width: 80.0, height: 20.0 }
+            Size {
+                width: 80.0,
+                height: 20.0,
+            }
         }
         fn place_subviews(
             &self,
@@ -405,6 +420,9 @@ mod tests {
     fn vstack_clone_shares_layout_cache() {
         let stack = VStack::new(8.0).child(FixedLayout);
         let cloned = stack.clone();
-        assert!(std::sync::Arc::ptr_eq(&stack.layout_cache, &cloned.layout_cache));
+        assert!(std::sync::Arc::ptr_eq(
+            &stack.layout_cache,
+            &cloned.layout_cache
+        ));
     }
 }

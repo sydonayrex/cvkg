@@ -22,7 +22,9 @@ use cvkg_core::KvasirId;
 /// - `Idle` is deferred work that runs in leftover frame time (telemetry, prefetch).
 ///
 /// The `u8` discriminant allows numeric comparison: lower value = higher priority.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 #[repr(u8)]
 pub enum Priority {
     /// Must complete before the frame proceeds (input processing, state resolution).
@@ -174,7 +176,11 @@ impl TaskScheduler {
         self.queue.sort_by_key(|t| t.priority);
         let tasks: Vec<Task> = std::mem::take(&mut self.queue);
         for task in tasks {
-            log::trace!("scheduler: running task '{}' ({:?})", task.name, task.priority);
+            log::trace!(
+                "scheduler: running task '{}' ({:?})",
+                task.name,
+                task.priority
+            );
             (task.work)();
         }
     }
@@ -263,16 +269,24 @@ mod tests {
         let order: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
 
         let o1 = order.clone();
-        s.submit(Priority::Idle, "idle", move || o1.lock().unwrap().push("idle"));
+        s.submit(Priority::Idle, "idle", move || {
+            o1.lock().unwrap().push("idle")
+        });
 
         let o2 = order.clone();
-        s.submit(Priority::Critical, "critical", move || o2.lock().unwrap().push("critical"));
+        s.submit(Priority::Critical, "critical", move || {
+            o2.lock().unwrap().push("critical")
+        });
 
         let o3 = order.clone();
-        s.submit(Priority::Normal, "normal", move || o3.lock().unwrap().push("normal"));
+        s.submit(Priority::Normal, "normal", move || {
+            o3.lock().unwrap().push("normal")
+        });
 
         let o4 = order.clone();
-        s.submit(Priority::High, "high", move || o4.lock().unwrap().push("high"));
+        s.submit(Priority::High, "high", move || {
+            o4.lock().unwrap().push("high")
+        });
 
         s.run_all();
 
@@ -287,7 +301,9 @@ mod tests {
         let ran: Arc<Mutex<Vec<&'static str>>> = Arc::new(Mutex::new(Vec::new()));
 
         let r1 = ran.clone();
-        s.submit(Priority::Critical, "c", move || r1.lock().unwrap().push("critical"));
+        s.submit(Priority::Critical, "c", move || {
+            r1.lock().unwrap().push("critical")
+        });
 
         let r2 = ran.clone();
         s.submit(Priority::Idle, "i", move || r2.lock().unwrap().push("idle"));

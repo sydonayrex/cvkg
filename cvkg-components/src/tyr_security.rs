@@ -183,13 +183,7 @@ impl View for TyrSecurity {
                 theme::surface_elevated(),
             );
             renderer.draw_text(level_str, rect.x + 20.0, y + 4.0, 9.0, theme::text());
-            renderer.draw_text(
-                &role.name,
-                rect.x + 80.0,
-                y + 4.0,
-                10.0,
-                theme::text(),
-            );
+            renderer.draw_text(&role.name, rect.x + 80.0, y + 4.0, 10.0, theme::text());
             y += 22.0;
         }
 

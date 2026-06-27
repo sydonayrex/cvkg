@@ -76,9 +76,7 @@ fn test_accessibility_validation_dark() {
         assert!(
             result.passes,
             "APCA FAIL on dark theme: {} Lc={:.1} (level={})",
-            result.level,
-            result.contrast,
-            result.level
+            result.level, result.contrast, result.level
         );
     }
 }
@@ -91,9 +89,7 @@ fn test_accessibility_validation_light() {
         assert!(
             result.passes,
             "APCA FAIL on light theme: {} Lc={:.1} (level={})",
-            result.level,
-            result.contrast,
-            result.level
+            result.level, result.contrast, result.level
         );
     }
 }
@@ -108,9 +104,7 @@ fn test_accessibility_validation_custom_seed() {
         assert!(
             result.passes,
             "APCA FAIL on seeded theme: {} Lc={:.1} (level={})",
-            result.level,
-            result.contrast,
-            result.level
+            result.level, result.contrast, result.level
         );
     }
 }

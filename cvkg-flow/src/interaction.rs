@@ -89,7 +89,6 @@ impl FlowContainer {
 mod tests {
     use super::*;
     use crate::node::FlowNode;
-    
 
     #[test]
     fn test_undo_redo() {

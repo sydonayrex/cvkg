@@ -202,7 +202,12 @@ impl View for Combobox {
 
         // Dropdown background
         renderer.fill_rounded_rect(dropdown_rect, 6.0, theme::input_bg());
-        renderer.stroke_rounded_rect(dropdown_rect, 6.0, theme::with_alpha(theme::border(), 0.8), 1.0);
+        renderer.stroke_rounded_rect(
+            dropdown_rect,
+            6.0,
+            theme::with_alpha(theme::border(), 0.8),
+            1.0,
+        );
 
         // ── Render search input ──
         let search_rect = Rect {
@@ -212,7 +217,12 @@ impl View for Combobox {
             height: search_height,
         };
         renderer.fill_rounded_rect(search_rect, 4.0, theme::surface());
-        renderer.stroke_rounded_rect(search_rect, 4.0, theme::with_alpha(theme::accent(), 0.6), 1.0);
+        renderer.stroke_rounded_rect(
+            search_rect,
+            4.0,
+            theme::with_alpha(theme::accent(), 0.6),
+            1.0,
+        );
 
         let display_text = if search_text.is_empty() {
             "Type to search..."

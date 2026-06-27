@@ -1,7 +1,8 @@
 /// Device thermal state for quality scaling.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ThermalState {
     /// Normal operation, no thermal pressure.
+    #[default]
     Nominal,
     /// Slight thermal pressure, reduce non-essential effects.
     Fair,
@@ -9,12 +10,6 @@ pub enum ThermalState {
     Serious,
     /// Critical thermal pressure, minimal rendering.
     Critical,
-}
-
-impl Default for ThermalState {
-    fn default() -> Self {
-        ThermalState::Nominal
-    }
 }
 
 impl ThermalState {

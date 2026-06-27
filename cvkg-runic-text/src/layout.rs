@@ -2,12 +2,12 @@ use rustybuzz::{Direction, Feature, UnicodeBuffer};
 use unicode_bidi::BidiInfo;
 use unicode_segmentation::UnicodeSegmentation;
 
-use crate::types::{GlyphInstance, LineInfo, ShapingError};
-use crate::style::{TextStyle, TextAlign, TextOverflow, DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT};
-use crate::span::{TextSpan, TextSpanKind, PortalAlignment};
-use crate::path::{TextPath, LayoutBoundary};
-use crate::engine::{TextEngine, CacheKey, ResolvedFont, line_bidi_level, reorder_line_rtl};
+use crate::engine::{CacheKey, ResolvedFont, TextEngine, line_bidi_level, reorder_line_rtl};
 use crate::global_cache;
+use crate::path::{LayoutBoundary, TextPath};
+use crate::span::{PortalAlignment, TextSpan, TextSpanKind};
+use crate::style::{DEFAULT_FONT_SIZE, DEFAULT_LINE_HEIGHT, TextAlign, TextOverflow, TextStyle};
+use crate::types::{GlyphInstance, LineInfo, ShapingError};
 use fontdb::Style;
 
 // ── ShapedText ───────────────────────────────────────────────────────────────
@@ -321,10 +321,10 @@ impl TextEngine {
         }
 
         // Monospace Integrity Enforcement (P0-39)
-        let is_monospace = style.family.to_lowercase().contains("mono") 
+        let is_monospace = style.family.to_lowercase().contains("mono")
             || style.family.to_lowercase() == "courier"
             || style.family.to_lowercase() == "consolas";
-        
+
         if is_monospace && !glyphs.is_empty() {
             let mut max_advance = 0.0f32;
             for g in &glyphs {
@@ -356,7 +356,10 @@ impl TextEngine {
     fn is_space_cluster(text: &str, cluster: u32) -> bool {
         let byte_idx = cluster as usize;
         if byte_idx < text.len() {
-            text[byte_idx..].chars().next().is_some_and(|c| c.is_ascii_whitespace())
+            text[byte_idx..]
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_whitespace())
         } else {
             false
         }
@@ -382,11 +385,14 @@ impl TextEngine {
                 let glyph_cluster = glyphs[i].cluster;
                 let glyph_is_rtl = glyphs[i].is_rtl;
                 let glyph_x = glyphs[i].x;
-                
+
                 let byte_idx = glyph_cluster as usize;
                 let grapheme = if byte_idx < text.len() {
                     use unicode_segmentation::UnicodeSegmentation;
-                    text[byte_idx..].graphemes(true).next().unwrap_or("\u{FFFD}")
+                    text[byte_idx..]
+                        .graphemes(true)
+                        .next()
+                        .unwrap_or("\u{FFFD}")
                 } else {
                     "\u{FFFD}"
                 };
@@ -406,23 +412,23 @@ impl TextEngine {
                         let infos = output.glyph_infos();
                         let positions = output.glyph_positions();
 
-                        if let (Some(info), Some(pos)) = (infos.first(), positions.first()) {
-                            if info.glyph_id != 0 {
-                                let scale = style.font_size / (resolved.units_per_em as f32);
-                                glyphs[i].glyph_id = info.glyph_id as u16;
-                                glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
-                                glyphs[i].y = (pos.y_offset as f32) * scale;
-                                glyphs[i].advance_width = (pos.x_advance as f32) * scale;
-                                
-                                let fallback_key = fallback.key;
-                                glyphs[i].cache_key = Self::calculate_glyph_cache_key(
-                                    fallback_key,
-                                    style.font_size,
-                                    info.glyph_id as u16,
-                                    style,
-                                );
-                                break;
-                            }
+                        if let (Some(info), Some(pos)) = (infos.first(), positions.first())
+                            && info.glyph_id != 0
+                        {
+                            let scale = style.font_size / (resolved.units_per_em as f32);
+                            glyphs[i].glyph_id = info.glyph_id as u16;
+                            glyphs[i].x = glyph_x + (pos.x_offset as f32) * scale;
+                            glyphs[i].y = (pos.y_offset as f32) * scale;
+                            glyphs[i].advance_width = (pos.x_advance as f32) * scale;
+
+                            let fallback_key = fallback.key;
+                            glyphs[i].cache_key = Self::calculate_glyph_cache_key(
+                                fallback_key,
+                                style.font_size,
+                                info.glyph_id as u16,
+                                style,
+                            );
+                            break;
                         }
                     }
                 }
@@ -487,7 +493,7 @@ impl TextEngine {
         let mut span_byte_offset = 0;
         for span in spans {
             let span_byte_end = span_byte_offset + span.text.len();
-            
+
             let mut chunk_start = span_byte_offset;
             while chunk_start < span_byte_end {
                 let current_level = if chunk_start < bidi.levels.len() {
@@ -495,7 +501,7 @@ impl TextEngine {
                 } else {
                     unicode_bidi::Level::ltr()
                 };
-                
+
                 let mut chunk_end = chunk_start + 1;
                 while chunk_end < span_byte_end {
                     let level = if chunk_end < bidi.levels.len() {
@@ -508,16 +514,16 @@ impl TextEngine {
                     }
                     chunk_end += 1;
                 }
-                
+
                 let direction = if current_level.is_rtl() {
                     has_rtl = true;
                     Direction::RightToLeft
                 } else {
                     Direction::LeftToRight
                 };
-                
+
                 let chunk_text = &full_text[chunk_start..chunk_end];
-                
+
                 let mut run_glyphs = match &span.kind {
                     TextSpanKind::Text => self.shape_run(chunk_text, &span.style, direction)?,
                     TextSpanKind::Portal { width, height, .. } => {
@@ -554,9 +560,9 @@ impl TextEngine {
                     glyph.glyph_index = global_glyph_index;
                     glyph.time_offset = global_glyph_index as f32 * 0.05;
                     global_glyph_index += 1;
-                    all_glyphs.push(glyph.clone());
+                    all_glyphs.push(*glyph);
                 }
-                
+
                 chunk_start = chunk_end;
             }
             span_byte_offset = span_byte_end;
@@ -711,22 +717,26 @@ impl TextEngine {
 
                     // BiDi Visual Reordering (P0-41)
                     let line_range = line_start_byte..break_byte.min(text.len());
-                    if !line_range.is_empty() && bidi.paragraphs.len() > 0 {
-                        let para = bidi.paragraphs.iter()
-                            .find(|p| p.range.start <= line_range.start && p.range.end >= line_range.end)
+                    if !line_range.is_empty() && !bidi.paragraphs.is_empty() {
+                        let para = bidi
+                            .paragraphs
+                            .iter()
+                            .find(|p| {
+                                p.range.start <= line_range.start && p.range.end >= line_range.end
+                            })
                             .unwrap_or(&bidi.paragraphs[0]);
-                        
+
                         let (_, visual_runs) = bidi.visual_runs(para, line_range.clone());
                         let mut visual_glyphs = Vec::with_capacity(break_glyph - line_start_glyph);
-                        
+
                         for run in visual_runs {
                             for g in &glyphs[line_start_glyph..break_glyph] {
                                 if run.contains(&(g.cluster as usize)) {
-                                    visual_glyphs.push(g.clone());
+                                    visual_glyphs.push(*g);
                                 }
                             }
                         }
-                        
+
                         if visual_glyphs.len() == break_glyph - line_start_glyph {
                             glyphs[line_start_glyph..break_glyph].clone_from_slice(&visual_glyphs);
                         }
@@ -812,22 +822,26 @@ impl TextEngine {
 
                 // BiDi Visual Reordering (P0-41)
                 let line_range = line_start_byte..text.len();
-                if !line_range.is_empty() && bidi.paragraphs.len() > 0 {
-                    let para = bidi.paragraphs.iter()
-                        .find(|p| p.range.start <= line_range.start && p.range.end >= line_range.end)
+                if !line_range.is_empty() && !bidi.paragraphs.is_empty() {
+                    let para = bidi
+                        .paragraphs
+                        .iter()
+                        .find(|p| {
+                            p.range.start <= line_range.start && p.range.end >= line_range.end
+                        })
                         .unwrap_or(&bidi.paragraphs[0]);
-                    
+
                     let (_, visual_runs) = bidi.visual_runs(para, line_range.clone());
                     let mut visual_glyphs = Vec::with_capacity(glyph_end - line_start_glyph);
-                    
+
                     for run in visual_runs {
                         for g in &glyphs[line_start_glyph..glyph_end] {
                             if run.contains(&(g.cluster as usize)) {
-                                visual_glyphs.push(g.clone());
+                                visual_glyphs.push(*g);
                             }
                         }
                     }
-                    
+
                     if visual_glyphs.len() == glyph_end - line_start_glyph {
                         glyphs[line_start_glyph..glyph_end].clone_from_slice(&visual_glyphs);
                     }

@@ -1,7 +1,7 @@
 use crate::draw::{parse_svg_animations, usvg_to_lyon};
 use crate::renderer::GpuRenderer;
-use crate::vertex::{CustomStrokeVertexConstructor, SceneVertexConstructor, Vertex};
 use crate::types::{SvgAnimation, SvgModel, SvgPath};
+use crate::vertex::{CustomStrokeVertexConstructor, SceneVertexConstructor, Vertex};
 use cvkg_core::Rect;
 use lyon::tessellation::{
     BuffersBuilder, FillOptions, FillTessellator, StrokeOptions, StrokeTessellator, VertexBuffers,
@@ -131,18 +131,26 @@ impl GpuRenderer {
                             c.blue as f32 / 255.0,
                             fill_opacity,
                         ];
-                        Self::tessellate_fill_solid(
-                            &lyon_path, color, &node_id, params, fill_rule,
-                        );
+                        Self::tessellate_fill_solid(&lyon_path, color, &node_id, params, fill_rule);
                     }
                     usvg::Paint::LinearGradient(g) => {
                         Self::tessellate_fill_gradient(
-                            &lyon_path, g, fill_opacity, &node_id, params, fill_rule,
+                            &lyon_path,
+                            g,
+                            fill_opacity,
+                            &node_id,
+                            params,
+                            fill_rule,
                         );
                     }
                     usvg::Paint::RadialGradient(g) => {
                         Self::tessellate_fill_radial_gradient(
-                            &lyon_path, g, fill_opacity, &node_id, params, fill_rule,
+                            &lyon_path,
+                            g,
+                            fill_opacity,
+                            &node_id,
+                            params,
+                            fill_rule,
                         );
                     }
                     usvg::Paint::Pattern(_) => {
@@ -151,9 +159,7 @@ impl GpuRenderer {
                             node_id
                         );
                         let color = [1.0, 1.0, 1.0, fill_opacity];
-                        Self::tessellate_fill_solid(
-                            &lyon_path, color, &node_id, params, fill_rule,
-                        );
+                        Self::tessellate_fill_solid(&lyon_path, color, &node_id, params, fill_rule);
                     }
                 }
             }
@@ -181,21 +187,32 @@ impl GpuRenderer {
                 };
 
                 // Build stroke options from SVG stroke properties
-                let mut stroke_opts = StrokeOptions::default()
-                    .with_line_width(stroke_width);
+                let mut stroke_opts = StrokeOptions::default().with_line_width(stroke_width);
 
                 // Line cap
                 stroke_opts = match stroke.linecap() {
-                    usvg::LineCap::Butt => stroke_opts.with_line_cap(lyon::tessellation::LineCap::Butt),
-                    usvg::LineCap::Round => stroke_opts.with_line_cap(lyon::tessellation::LineCap::Round),
-                    usvg::LineCap::Square => stroke_opts.with_line_cap(lyon::tessellation::LineCap::Square),
+                    usvg::LineCap::Butt => {
+                        stroke_opts.with_line_cap(lyon::tessellation::LineCap::Butt)
+                    }
+                    usvg::LineCap::Round => {
+                        stroke_opts.with_line_cap(lyon::tessellation::LineCap::Round)
+                    }
+                    usvg::LineCap::Square => {
+                        stroke_opts.with_line_cap(lyon::tessellation::LineCap::Square)
+                    }
                 };
 
                 // Line join
                 stroke_opts = match stroke.linejoin() {
-                    usvg::LineJoin::Miter => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Miter),
-                    usvg::LineJoin::Round => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Round),
-                    usvg::LineJoin::Bevel => stroke_opts.with_line_join(lyon::tessellation::LineJoin::Bevel),
+                    usvg::LineJoin::Miter => {
+                        stroke_opts.with_line_join(lyon::tessellation::LineJoin::Miter)
+                    }
+                    usvg::LineJoin::Round => {
+                        stroke_opts.with_line_join(lyon::tessellation::LineJoin::Round)
+                    }
+                    usvg::LineJoin::Bevel => {
+                        stroke_opts.with_line_join(lyon::tessellation::LineJoin::Bevel)
+                    }
                     _ => stroke_opts,
                 };
 
@@ -219,7 +236,11 @@ impl GpuRenderer {
                     &stroke_opts,
                     &mut BuffersBuilder::new(
                         &mut buffers,
-                        CustomStrokeVertexConstructor { color, clip, path_length },
+                        CustomStrokeVertexConstructor {
+                            color,
+                            clip,
+                            path_length,
+                        },
                     ),
                 ) {
                     log::warn!(
@@ -286,11 +307,7 @@ impl GpuRenderer {
     }
 
     /// Compute gradient color for a position in SVG space.
-    fn gradient_color_at(
-        stops: &[usvg::Stop],
-        pos: f32,
-        fill_opacity: f32,
-    ) -> [f32; 4] {
+    fn gradient_color_at(stops: &[usvg::Stop], pos: f32, fill_opacity: f32) -> [f32; 4] {
         if stops.is_empty() {
             return [1.0, 1.0, 1.0, fill_opacity];
         }
@@ -308,16 +325,31 @@ impl GpuRenderer {
         let eo = end.offset().get();
         if pos <= so {
             let c = start.color();
-            return [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, start.opacity().get() * fill_opacity];
+            return [
+                c.red as f32 / 255.0,
+                c.green as f32 / 255.0,
+                c.blue as f32 / 255.0,
+                start.opacity().get() * fill_opacity,
+            ];
         }
         if pos >= eo {
             let c = end.color();
-            return [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, end.opacity().get() * fill_opacity];
+            return [
+                c.red as f32 / 255.0,
+                c.green as f32 / 255.0,
+                c.blue as f32 / 255.0,
+                end.opacity().get() * fill_opacity,
+            ];
         }
         let range = eo - so;
         if range < 0.0001 {
             let c = start.color();
-            return [c.red as f32 / 255.0, c.green as f32 / 255.0, c.blue as f32 / 255.0, start.opacity().get() * fill_opacity];
+            return [
+                c.red as f32 / 255.0,
+                c.green as f32 / 255.0,
+                c.blue as f32 / 255.0,
+                start.opacity().get() * fill_opacity,
+            ];
         }
         let t = (pos - so) / range;
         let sc = start.color();
@@ -326,7 +358,8 @@ impl GpuRenderer {
             (sc.red as f32 + (ec.red as f32 - sc.red as f32) * t) / 255.0,
             (sc.green as f32 + (ec.green as f32 - sc.green as f32) * t) / 255.0,
             (sc.blue as f32 + (ec.blue as f32 - sc.blue as f32) * t) / 255.0,
-            (start.opacity().get() + (end.opacity().get() - start.opacity().get()) * t) * fill_opacity,
+            (start.opacity().get() + (end.opacity().get() - start.opacity().get()) * t)
+                * fill_opacity,
         ]
     }
 
@@ -352,9 +385,18 @@ impl GpuRenderer {
         if let Err(e) = params.fill_tessellator.tessellate_path(
             lyon_path,
             &FillOptions::default(),
-            &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color: [1.0, 1.0, 1.0, 1.0] }),
+            &mut BuffersBuilder::new(
+                &mut buffers,
+                SceneVertexConstructor {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+            ),
         ) {
-            log::warn!("SVG gradient fill tessellation failed for path '{}': {:?}, skipping", node_id, e);
+            log::warn!(
+                "SVG gradient fill tessellation failed for path '{}': {:?}, skipping",
+                node_id,
+                e
+            );
             return;
         }
 
@@ -362,8 +404,12 @@ impl GpuRenderer {
         for mut vertex in buffers.vertices {
             let px = vertex.position[0];
             let py = vertex.position[1];
-            let t = if grad_len_sq < 0.0001 { 0.5 } else { ((px - x1) * dx + (py - y1) * dy) / grad_len_sq };
-            vertex.color = Self::gradient_color_at(stops, t as f32, fill_opacity);
+            let t = if grad_len_sq < 0.0001 {
+                0.5
+            } else {
+                ((px - x1) * dx + (py - y1) * dy) / grad_len_sq
+            };
+            vertex.color = Self::gradient_color_at(stops, t, fill_opacity);
             params.vertices.push(vertex);
         }
         for idx in buffers.indices {
@@ -390,9 +436,18 @@ impl GpuRenderer {
         if let Err(e) = params.fill_tessellator.tessellate_path(
             lyon_path,
             &FillOptions::default(),
-            &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color: [1.0, 1.0, 1.0, 1.0] }),
+            &mut BuffersBuilder::new(
+                &mut buffers,
+                SceneVertexConstructor {
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+            ),
         ) {
-            log::warn!("SVG radial gradient fill tessellation failed for path '{}': {:?}, skipping", node_id, e);
+            log::warn!(
+                "SVG radial gradient fill tessellation failed for path '{}': {:?}, skipping",
+                node_id,
+                e
+            );
             return;
         }
 
@@ -401,7 +456,11 @@ impl GpuRenderer {
             let py = vertex.position[1];
             let dist = ((px - cx) * (px - cx) + (py - cy) * (py - cy)).sqrt();
             let r_val = r.get();
-            let t = if r_val < 0.001 { 0.5 } else { (dist / r_val).clamp(0.0, 1.0) };
+            let t = if r_val < 0.001 {
+                0.5
+            } else {
+                (dist / r_val).clamp(0.0, 1.0)
+            };
             vertex.color = Self::gradient_color_at(stops, t, fill_opacity);
             params.vertices.push(vertex);
         }
@@ -417,11 +476,26 @@ impl GpuRenderer {
         self.draw_svg_with_offset(name, rect, color, material_id, 0.0);
     }
 
-    pub fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32, animation_time_offset: f32) {
+    pub fn draw_svg_with_offset(
+        &mut self,
+        name: &str,
+        rect: Rect,
+        color: Option<[f32; 4]>,
+        material_id: u32,
+        animation_time_offset: f32,
+    ) {
         self.draw_svg_with_order(name, rect, color, material_id, animation_time_offset, 0);
     }
 
-    pub fn draw_svg_with_order(&mut self, name: &str, rect: Rect, color: Option<[f32; 4]>, material_id: u32, animation_time_offset: f32, draw_order: i32) {
+    pub fn draw_svg_with_order(
+        &mut self,
+        name: &str,
+        rect: Rect,
+        color: Option<[f32; 4]>,
+        material_id: u32,
+        animation_time_offset: f32,
+        draw_order: i32,
+    ) {
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
             y: -10000.0,
@@ -440,8 +514,13 @@ impl GpuRenderer {
             return;
         }
 
-        log::info!("DRAW_SVG '{}' called with rect: {:?}, model_view_box: {:?}", name, rect, self.svg.model_cache.get(name).map(|m| m.view_box));
-        
+        log::info!(
+            "DRAW_SVG '{}' called with rect: {:?}, model_view_box: {:?}",
+            name,
+            rect,
+            self.svg.model_cache.get(name).map(|m| m.view_box)
+        );
+
         if rect.x > screen_w
             || rect.x + rect.width < 0.0
             || rect.y > screen_h
@@ -470,7 +549,14 @@ impl GpuRenderer {
         if model.paths.is_empty() {
             // Fallback: no path data, treat all vertices as one blob.
             let mut local_vertices = model.vertices.clone();
-            Self::position_vertices(&mut local_vertices, model.view_box, rect, material_id, clip, snap);
+            Self::position_vertices(
+                &mut local_vertices,
+                model.view_box,
+                rect,
+                material_id,
+                clip,
+                snap,
+            );
             let base_vertex = self.vertices.len() as u32;
             self.vertices.extend(local_vertices);
             let index_count = model.indices.len();
@@ -479,13 +565,24 @@ impl GpuRenderer {
             }
             let material = Self::resolve_material(material_id);
             let tid = self.get_texture_id("__mega_heim");
-            Self::emit_draw_call(self, material, tid, clip_rect, index_count as u32, base_vertex);
+            Self::emit_draw_call(
+                self,
+                material,
+                tid,
+                clip_rect,
+                index_count as u32,
+                base_vertex,
+            );
         } else {
             // Per-path rendering: each path gets its own transform and draw call.
             for path in &model.paths {
-                let mut path_verts: Vec<Vertex> = model.vertices[path.vertex_range.clone()].to_vec();
+                let mut path_verts: Vec<Vertex> =
+                    model.vertices[path.vertex_range.clone()].to_vec();
                 // Apply local transform (translate, rotate, scale) in SVG space.
-                if path.local_transform.scale != 1.0 || path.local_transform.rotation != 0.0 || path.local_transform.translate != [0.0, 0.0] {
+                if path.local_transform.scale != 1.0
+                    || path.local_transform.rotation != 0.0
+                    || path.local_transform.translate != [0.0, 0.0]
+                {
                     let s = path.local_transform.scale;
                     let rad = path.local_transform.rotation.to_radians();
                     let c = rad.cos();
@@ -506,8 +603,10 @@ impl GpuRenderer {
                         let t = (effective_time % anim.duration) / anim.duration;
                         let val = anim.evaluate(t);
                         if anim.attribute_name == "transform" {
-                            let mut min_x = f32::MAX; let mut min_y = f32::MAX;
-                            let mut max_x = f32::MIN; let mut max_y = f32::MIN;
+                            let mut min_x = f32::MAX;
+                            let mut min_y = f32::MAX;
+                            let mut max_x = f32::MIN;
+                            let mut max_y = f32::MIN;
                             for v in &path_verts {
                                 min_x = min_x.min(v.position[0]);
                                 min_y = min_y.min(v.position[1]);
@@ -525,21 +624,33 @@ impl GpuRenderer {
                                 v.position[1] = cy + dx * s + dy * c;
                             }
                         } else if anim.attribute_name == "opacity" {
-                            for v in &mut path_verts { v.color[3] = val; }
+                            for v in &mut path_verts {
+                                v.color[3] = val;
+                            }
                         } else if anim.attribute_name == "stroke-dashoffset" {
-                            for v in &mut path_verts { v.slice[3] = 1.0 - val; }
+                            for v in &mut path_verts {
+                                v.slice[3] = 1.0 - val;
+                            }
                         }
                     }
                 }
                 // Position into output rect.
-                Self::position_vertices(&mut path_verts, model.view_box, rect, material_id, clip, snap);
+                Self::position_vertices(
+                    &mut path_verts,
+                    model.view_box,
+                    rect,
+                    material_id,
+                    clip,
+                    snap,
+                );
                 let base_vertex = self.vertices.len() as u32;
                 let index_start = self.indices.len();
                 self.vertices.extend(path_verts);
                 // Remap indices for this path's vertex offset.
                 let path_index_start = path.index_range.start;
                 for idx in &model.indices[path.index_range.clone()] {
-                    self.indices.push(base_vertex + *idx - path_index_start as u32);
+                    self.indices
+                        .push(base_vertex + *idx - path_index_start as u32);
                 }
                 let index_count = path.index_range.len() as u32;
                 let material = Self::resolve_material(material_id);

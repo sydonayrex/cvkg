@@ -16,6 +16,12 @@ impl BloomExtractNode {
     }
 }
 
+impl Default for BloomExtractNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for BloomExtractNode {
     fn label(&self) -> &'static str {
         "Bloom Extract"
@@ -96,6 +102,7 @@ impl KvasirNode for BloomExtractNode {
         p.set_bind_group(0, &bg, &[]);
         p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+        p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
         p.draw(0..3, 0..1);
     }
 }

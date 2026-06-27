@@ -93,7 +93,7 @@ impl GerdTelemetry {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|duration| duration.as_secs_f64())
                 .unwrap_or(0.0),
-                });
+        });
         self
     }
 }

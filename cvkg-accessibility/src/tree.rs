@@ -402,7 +402,11 @@ mod tests {
         let v = tree.version();
         let removed = tree.remove(KvasirId::new());
         assert!(removed.is_none());
-        assert_eq!(tree.version(), v, "version must not change on a no-op remove");
+        assert_eq!(
+            tree.version(),
+            v,
+            "version must not change on a no-op remove"
+        );
     }
 
     #[test]
@@ -436,19 +440,19 @@ mod tests {
 
         // Non-focusable: Generic role
         let generic_id = KvasirId::new();
-        tree.insert(AccessNode::new(generic_id, SemanticRole::Generic, make_rect()));
+        tree.insert(AccessNode::new(
+            generic_id,
+            SemanticRole::Generic,
+            make_rect(),
+        ));
 
         // Hidden button — must be excluded
         let hidden_id = KvasirId::new();
-        tree.insert(
-            AccessNode::new(hidden_id, SemanticRole::Button, make_rect()).hidden(),
-        );
+        tree.insert(AccessNode::new(hidden_id, SemanticRole::Button, make_rect()).hidden());
 
         // Disabled button — must be excluded
         let disabled_id = KvasirId::new();
-        tree.insert(
-            AccessNode::new(disabled_id, SemanticRole::Button, make_rect()).disabled(),
-        );
+        tree.insert(AccessNode::new(disabled_id, SemanticRole::Button, make_rect()).disabled());
 
         let focusable = tree.focusable_nodes();
         assert_eq!(focusable.len(), 1);

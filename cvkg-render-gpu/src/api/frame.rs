@@ -1,7 +1,7 @@
 use crate::renderer::GpuRenderer;
 use crate::types::{MAX_INDICES, MAX_VERTICES};
-use cvkg_core::Renderer;
 use cvkg_core::LAYOUT_DIRTY;
+use cvkg_core::Renderer;
 use std::sync::atomic::Ordering;
 
 impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
@@ -18,21 +18,20 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
     fn render_frame(&mut self) {
         // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
         // draw a 10px red border as a warning flash.
-        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel) {
-            if let Some(window_id) = self.current_window {
-                if let Some(surface_ctx) = self.surfaces.get(&window_id) {
-                    let w = surface_ctx.config.width as f32;
-                    let h = surface_ctx.config.height as f32;
-                    let border_rect = cvkg_core::Rect {
-                        x: 0.0,
-                        y: 0.0,
-                        width: w,
-                        height: h,
-                    };
-                    // Draw a thick red border to signal layout-thrashing
-                    self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
-                }
-            }
+        if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
+            && let Some(window_id) = self.current_window
+            && let Some(surface_ctx) = self.surfaces.get(&window_id)
+        {
+            let w = surface_ctx.config.width as f32;
+            let h = surface_ctx.config.height as f32;
+            let border_rect = cvkg_core::Rect {
+                x: 0.0,
+                y: 0.0,
+                width: w,
+                height: h,
+            };
+            // Draw a thick red border to signal layout-thrashing
+            self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
         }
 
         // Dynamic Buffer Growth (Up to 4x capacity)

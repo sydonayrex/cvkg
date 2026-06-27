@@ -1,5 +1,5 @@
+use crate::types::VariableAxis;
 use fontdb::{Stretch, Style, Weight};
-use crate::types::{VariableAxis};
 
 // ── Constants ──────────────────────────────────────────────────────────────
 

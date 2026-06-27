@@ -11,6 +11,7 @@ pub enum ChartType {
 }
 
 /// ValkyrieAnalytics - A real-time performance telemetry display with tactical aesthetics.
+#[doc(alias = "Analytics")]
 #[derive(Clone)]
 pub struct ValkyrieAnalytics {
     pub title: String,
@@ -52,13 +53,7 @@ impl View for ValkyrieAnalytics {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rounded_rect(rect, 8.0, theme::surface());
         let (_tw, _th) = renderer.measure_text(&self.title, 12.0);
-        renderer.draw_text(
-            &self.title,
-            rect.x + 8.0,
-            rect.y + 8.0,
-            12.0,
-            theme::text(),
-        );
+        renderer.draw_text(&self.title, rect.x + 8.0, rect.y + 8.0, 12.0, theme::text());
         // Simplified chart rendering
         for (i, (label, value)) in self.data.iter().enumerate() {
             let bar_h = value * (rect.height - 40.0);

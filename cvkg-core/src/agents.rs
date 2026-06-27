@@ -125,6 +125,10 @@ where
     CONFLICT_HANDLERS.lock().unwrap().push(Box::new(handler));
 }
 
+/// Notify registered conflict handlers of a conflict event.
+/// Reserved for future integration where agent-level write conflicts
+/// are surfaced to UI components (e.g., collaborative editing).
+#[allow(dead_code)]
 pub(crate) fn notify_conflict(event: ConflictEvent) {
     let handlers = CONFLICT_HANDLERS.lock().unwrap();
     for handler in handlers.iter() {

@@ -2,8 +2,7 @@
 // Demonstrates all major component types and their usage patterns
 
 use cvkg_components::{
-    Button, Checkbox, HStack, LokiGlitch, NiflheimFrost, Seiðr, Text, Toggle, VStack,
-    ValkyrieIndicator,
+    Button, Checkbox, HStack, Indicator, LokiGlitch, NiflheimFrost, Seiðr, Text, Toggle, VStack,
 };
 use cvkg_core::View;
 
@@ -27,7 +26,7 @@ fn showcase_view() -> impl View {
         )
         .child(Seiðr::default())
         .child(LokiGlitch::new("Digital Distortion"))
-        .child(ValkyrieIndicator::new(40.0))
+        .child(Indicator::new(40.0))
 }
 
 fn main() {

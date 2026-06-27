@@ -93,14 +93,7 @@ impl View for NornirBar {
                     x += label_w + 16.0;
                 }
                 MenuItem::Separator => {
-                    renderer.draw_line(
-                        x,
-                        rect.y + 6.0,
-                        x,
-                        rect.y + 22.0,
-                        theme::border(),
-                        1.0,
-                    );
+                    renderer.draw_line(x, rect.y + 6.0, x, rect.y + 22.0, theme::border(), 1.0);
                     x += 12.0;
                 }
             }

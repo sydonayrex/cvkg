@@ -245,7 +245,14 @@ impl CompositorEngine {
         visited: &mut HashSet<LayerId>,
     ) {
         for layer_id in layer_ids {
-            Self::flatten_layer(layer_tree, *layer_id, buffer, z_counter, has_active_shaders, visited);
+            Self::flatten_layer(
+                layer_tree,
+                *layer_id,
+                buffer,
+                z_counter,
+                has_active_shaders,
+                visited,
+            );
         }
     }
 
@@ -318,7 +325,14 @@ impl CompositorEngine {
 
         // Process children back-to-front (reverse order for painter's algorithm).
         for child_id in children.iter().rev() {
-            Self::flatten_layer(layer_tree, *child_id, buffer, z_counter, has_active_shaders, visited);
+            Self::flatten_layer(
+                layer_tree,
+                *child_id,
+                buffer,
+                z_counter,
+                has_active_shaders,
+                visited,
+            );
         }
 
         // Remove from visited set to allow the same layer in different branches.

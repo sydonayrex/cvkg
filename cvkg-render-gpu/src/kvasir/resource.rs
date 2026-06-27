@@ -33,10 +33,7 @@ impl ResourceAccess {
         //   Read  + Write = true  (WAR hazard)
         //   Write + Read  = true  (RAW hazard)
         //   Write + Write = true  (WAW hazard)
-        match (self, other) {
-            (ResourceAccess::Read, ResourceAccess::Read) => false,
-            _ => true,
-        }
+        !matches!((self, other), (ResourceAccess::Read, ResourceAccess::Read))
     }
 }
 
@@ -211,7 +208,7 @@ mod p2_7_scissor_rect_tests {
     /// Pure function that reproduces the scissor rect computation.
     /// Returns (x, y, w, h) where (0,0,0,0) means zero-area scissor.
     fn compute_scissor(
-        rect: Option<(f32, f32, f32, f32)>,  // (x, y, width, height)
+        rect: Option<(f32, f32, f32, f32)>, // (x, y, width, height)
         scale: f32,
         rt_w: i32,
         rt_h: i32,

@@ -1,11 +1,11 @@
 [package]
 name = "cvkg-icons"
-version = "0.2.14"
+version = "0.2.15"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "CVKG internal crate"
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.2.14" }
-cvkg-components = { path = "../cvkg-components", version = "0.2.14" }
+cvkg-core = { path = "../cvkg-core", version = "0.2.15" }
+cvkg-components = { path = "../cvkg-components", version = "0.2.15" }

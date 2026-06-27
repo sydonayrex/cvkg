@@ -340,7 +340,11 @@ impl Sonner {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(rect, 15.0, 1.5, 0.95);
         }
-        renderer.fill_rounded_rect(rect, CORNER_RADIUS, theme::with_alpha(theme::surface_elevated(), 0.88));
+        renderer.fill_rounded_rect(
+            rect,
+            CORNER_RADIUS,
+            theme::with_alpha(theme::surface_elevated(), 0.88),
+        );
 
         // Outer accent border
         renderer.stroke_rounded_rect(

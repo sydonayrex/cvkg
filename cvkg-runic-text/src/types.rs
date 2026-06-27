@@ -292,17 +292,17 @@ impl TextCapabilities {
     pub fn default_capabilities() -> Self {
         Self {
             variable_fonts: true,
-            color_fonts: false,  // Not yet implemented
+            color_fonts: false, // Not yet implemented
             open_type_features: true,
             subpixel_positioning: true,
             bidi: true,
-            vertical_text: false,  // Not yet implemented (P1-62)
+            vertical_text: false, // Not yet implemented (P1-62)
             font_fallback: true,
             hinting: true,
             shaping_cache: true,
-            multi_atlas: false,  // Not yet implemented (P1-60)
+            multi_atlas: false, // Not yet implemented (P1-60)
             max_atlases: 1,
-            atlas_defragmentation: false,  // Not yet implemented (P1-59)
+            atlas_defragmentation: false, // Not yet implemented (P1-59)
         }
     }
 
@@ -345,20 +345,11 @@ impl Default for FontFallbackChain {
             ],
         );
         // Arabic fallback
-        script_overrides.insert(
-            "Arabic",
-            vec!["Noto Sans Arabic".to_string()],
-        );
+        script_overrides.insert("Arabic", vec!["Noto Sans Arabic".to_string()]);
         // Emoji fallback
-        script_overrides.insert(
-            "Emoji",
-            vec!["Noto Color Emoji".to_string()],
-        );
+        script_overrides.insert("Emoji", vec!["Noto Color Emoji".to_string()]);
         Self {
-            families: vec![
-                "system-ui".to_string(),
-                "sans-serif".to_string(),
-            ],
+            families: vec!["system-ui".to_string(), "sans-serif".to_string()],
             script_overrides,
         }
     }
@@ -380,20 +371,15 @@ impl FontFallbackChain {
 
 /// Font matching strategy following CSS font-matching algorithm.
 /// Matches family name, weight, stretch, and style.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum FontMatchStrategy {
     /// Match by family name only (fastest).
     FamilyName,
     /// Match by family name, weight, and style (CSS-like).
+    #[default]
     CssLike,
     /// Match by family name, weight, stretch, and style (full).
     Full,
-}
-
-impl Default for FontMatchStrategy {
-    fn default() -> Self {
-        FontMatchStrategy::CssLike
-    }
 }
 
 // =============================================================================
@@ -401,18 +387,13 @@ impl Default for FontMatchStrategy {
 // =============================================================================
 
 /// Subpixel positioning mode.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum SubpixelMode {
     /// No subpixel positioning (integer pixel positions).
     None,
     /// Fractional pixel positions (1/64 pixel precision).
+    #[default]
     Fractional,
-}
-
-impl Default for SubpixelMode {
-    fn default() -> Self {
-        SubpixelMode::Fractional
-    }
 }
 
 // =============================================================================
@@ -420,7 +401,7 @@ impl Default for SubpixelMode {
 // =============================================================================
 
 /// Hinting strategy for small text sizes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum HintingStrategy {
     /// No hinting (best for large sizes, screens with high DPI).
     None,
@@ -429,13 +410,8 @@ pub enum HintingStrategy {
     /// TrueType hinting (follows font instructions, best quality at small sizes).
     TrueType,
     /// Autohinting for small sizes, none for large sizes.
+    #[default]
     AutoIfSmall,
-}
-
-impl Default for HintingStrategy {
-    fn default() -> Self {
-        HintingStrategy::AutoIfSmall
-    }
 }
 
 impl HintingStrategy {
@@ -529,18 +505,13 @@ impl Default for ShapingCacheConfig {
 // =============================================================================
 
 /// Vertical text layout mode.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum VerticalTextMode {
     /// Horizontal text layout (default).
+    #[default]
     Horizontal,
     /// Vertical text layout, right-to-left (traditional Japanese).
     VerticalRl,
     /// Vertical text layout, left-to-right (modern Chinese).
     VerticalLr,
-}
-
-impl Default for VerticalTextMode {
-    fn default() -> Self {
-        VerticalTextMode::Horizontal
-    }
 }

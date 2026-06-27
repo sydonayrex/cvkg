@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::events::{convert_mouse_event, convert_ime_event};
     use crate::asset_manager::NativeAssetManager;
+    use crate::events::{convert_ime_event, convert_mouse_event};
     use cvkg_core::AssetManager;
     use cvkg_vdom::{AriaProps, LayoutRect, VDom, VNode};
     use std::collections::HashMap;
@@ -88,7 +88,7 @@ mod tests {
                     barrel_rotation: None,
                     pointer_precision: 0.0,
                 })
-        });
+            });
 
         applied_vdom.apply_patches(pressed_vdom.diff(rebuilt_vdom));
 
@@ -132,7 +132,9 @@ mod tests {
     fn test_native_asset_manager_loading() {
         let manager = NativeAssetManager::new();
         let temp_path = std::env::temp_dir().join("cvkg_test_asset_loading.png");
-        let temp_file_path = temp_path.to_str().expect("temp path contains invalid UTF-8");
+        let temp_file_path = temp_path
+            .to_str()
+            .expect("temp path contains invalid UTF-8");
         let test_data = b"fake-image-data";
 
         let mut file = std::fs::File::create(temp_file_path).unwrap();
@@ -332,9 +334,12 @@ mod tests {
 
 #[cfg(test)]
 mod p1_46_47_49_51_tests {
-    use crate::window::{MonitorConfig, MultiMonitorManager};
-    use crate::contracts::{TranslationContractRegistry, RenderingMode, StateSyncRegistry, SyncDirection, WidgetVirtualizationConfig, SemanticRoleRegistry};
+    use crate::contracts::{
+        RenderingMode, SemanticRoleRegistry, StateSyncRegistry, SyncDirection,
+        TranslationContractRegistry, WidgetVirtualizationConfig,
+    };
     use crate::regression::VisualRegressionTracker;
+    use crate::window::{MonitorConfig, MultiMonitorManager};
 
     #[test]
     fn test_multi_monitor_manager_basics() {
@@ -373,7 +378,7 @@ mod p1_46_47_49_51_tests {
 
     #[test]
     fn test_visual_regression_tracker_comparison() {
-        use image::{RgbaImage, ImageFormat};
+        use image::{ImageFormat, RgbaImage};
         use std::io::Cursor;
 
         let mut img1 = RgbaImage::new(10, 10);
@@ -381,7 +386,8 @@ mod p1_46_47_49_51_tests {
             *p = image::Rgba([255, 0, 0, 255]);
         }
         let mut png1 = Vec::new();
-        img1.write_to(&mut Cursor::new(&mut png1), ImageFormat::Png).unwrap();
+        img1.write_to(&mut Cursor::new(&mut png1), ImageFormat::Png)
+            .unwrap();
 
         let temp_dir = std::env::temp_dir().join("cvkg_visual_regression_tests");
         let tracker = VisualRegressionTracker::new(temp_dir.clone(), 5, 1.0);
@@ -401,7 +407,8 @@ mod p1_46_47_49_51_tests {
             }
         }
         let mut png2 = Vec::new();
-        img2.write_to(&mut Cursor::new(&mut png2), ImageFormat::Png).unwrap();
+        img2.write_to(&mut Cursor::new(&mut png2), ImageFormat::Png)
+            .unwrap();
 
         let matched_tolerated = tracker.verify_frame("test_red_rect", &png2);
         assert!(matched_tolerated);
@@ -411,7 +418,8 @@ mod p1_46_47_49_51_tests {
             *p = image::Rgba([0, 255, 0, 255]);
         }
         let mut png3 = Vec::new();
-        img3.write_to(&mut Cursor::new(&mut png3), ImageFormat::Png).unwrap();
+        img3.write_to(&mut Cursor::new(&mut png3), ImageFormat::Png)
+            .unwrap();
 
         let matched_fail = tracker.verify_frame("test_red_rect", &png3);
         assert!(!matched_fail);
@@ -517,7 +525,10 @@ mod p1_46_47_49_51_tests {
         let _ = handle.join();
 
         let value = mutex.lock().unwrap_or_else(|p| p.into_inner());
-        assert_eq!(*value, 42, "poisoned mutex should still yield the inner value");
+        assert_eq!(
+            *value, 42,
+            "poisoned mutex should still yield the inner value"
+        );
     }
 
     #[test]

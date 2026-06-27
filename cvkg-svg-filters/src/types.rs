@@ -308,7 +308,11 @@ mod p1_33_alpha_mode_tests {
         let prem = AlphaMode::to_premultiplied(original[0], original[1], original[2], original[3]);
         let back = AlphaMode::to_straight(prem[0], prem[1], prem[2], prem[3]);
         for i in 0..4 {
-            assert!((original[i] - back[i]).abs() < 0.001, "component {} differs", i);
+            assert!(
+                (original[i] - back[i]).abs() < 0.001,
+                "component {} differs",
+                i
+            );
         }
     }
 

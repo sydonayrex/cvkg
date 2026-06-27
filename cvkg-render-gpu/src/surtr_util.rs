@@ -7,10 +7,17 @@ impl GpuRenderer {
     /// This is used for common icons to enable aggressive batching (1 draw call).
     pub fn load_image_to_heim(&mut self, name: &str, data: &[u8]) {
         if self.image_uv_registry.contains(name) {
-            log::info!("[Surtr] load_image_to_heim: '{}' already in registry, skipping", name);
+            log::info!(
+                "[Surtr] load_image_to_heim: '{}' already in registry, skipping",
+                name
+            );
             return;
         }
-        log::info!("[Surtr] load_image_to_heim: decoding '{}' ({} bytes)", name, data.len());
+        log::info!(
+            "[Surtr] load_image_to_heim: decoding '{}' ({} bytes)",
+            name,
+            data.len()
+        );
         let img_result = image::load_from_memory(data);
         let img = match img_result {
             Ok(img) => {

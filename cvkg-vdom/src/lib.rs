@@ -24,23 +24,23 @@
 
 //! Virtual DOM implementation for CVKG
 
+pub mod accesskit_bridge;
 pub mod animated;
+pub mod diff;
 pub mod physics;
 pub mod signals;
 pub mod vnode;
-pub mod diff;
-pub mod accesskit_bridge;
 
-use cvkg_core::Renderer;
 pub use cvkg_core::KvasirId;
+use cvkg_core::Renderer;
 use std::collections::HashMap;
 
 // Public re-exports to ensure zero breaking changes for callers
+pub use accesskit_bridge::A11yNodeEntry;
+pub use diff::VDomPatch;
 pub use vnode::{
     AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId, VNode,
 };
-pub use diff::VDomPatch;
-pub use accesskit_bridge::A11yNodeEntry;
 
 /// The root container for the Virtual DOM state.
 pub struct VDom {
@@ -385,13 +385,15 @@ impl VDom {
             // Hit test policy: if the click is outside the menu bar (y >= 28.0),
             // evaluate DropdownOverlay last so it doesn't block sibling interactive elements.
             let mut children_to_test = node.children.clone();
-            if y >= 28.0 {
-                if let Some(pos) = children_to_test.iter().position(|&cid| {
-                    self.nodes.get(&cid).map_or(false, |n| n.component_type == "DropdownOverlay")
-                }) {
-                    let overlay_id = children_to_test.remove(pos);
-                    children_to_test.insert(0, overlay_id);
-                }
+            if y >= 28.0
+                && let Some(pos) = children_to_test.iter().position(|&cid| {
+                    self.nodes
+                        .get(&cid)
+                        .is_some_and(|n| n.component_type == "DropdownOverlay")
+                })
+            {
+                let overlay_id = children_to_test.remove(pos);
+                children_to_test.insert(0, overlay_id);
             }
 
             for child_id in children_to_test.iter().rev() {
@@ -430,7 +432,11 @@ impl VDom {
 
         log::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
 
-        let captured_target = self.captured_node.lock().ok().and_then(|captured| *captured);
+        let captured_target = self
+            .captured_node
+            .lock()
+            .ok()
+            .and_then(|captured| *captured);
         let target_id = match event {
             cvkg_core::Event::PointerDown { x, y, .. }
             | cvkg_core::Event::PointerUp { x, y, .. }
@@ -452,7 +458,11 @@ impl VDom {
 
                 let (id, proximity) = if use_capture {
                     let captured = captured_target;
-                    log::trace!("[VDOM] Using captured target for {}: {:?}", event_name, captured);
+                    log::trace!(
+                        "[VDOM] Using captured target for {}: {:?}",
+                        event_name,
+                        captured
+                    );
                     (captured, 1.0)
                 } else {
                     log::trace!(
@@ -524,9 +534,7 @@ impl VDom {
             cvkg_core::Event::FocusIn | cvkg_core::Event::FocusOut => {
                 self.focused_node.lock().ok().and_then(|f| *f)
             }
-            _ => {
-                self.focused_node.lock().ok().and_then(|f| *f)
-            }
+            _ => self.focused_node.lock().ok().and_then(|f| *f),
         };
 
         if let Some(id) = target_id {
@@ -599,7 +607,8 @@ impl VDom {
                 if let Some(handler) = handlers.get(event_name) {
                     log::debug!(
                         "[VDOM] Executing handler for '{}' on node {:?}",
-                        event_name, current_id
+                        event_name,
+                        current_id
                     );
                     handler(event.clone());
                     processed = true;
@@ -616,18 +625,18 @@ impl VDom {
         if !processed {
             let mut stack = vec![target];
             while let Some(node_id) = stack.pop() {
-                if node_id != target {
-                    if let Some(handlers) = self.event_handlers.get(&node_id) {
-                        if let Some(handler) = handlers.get(event_name) {
-                            log::debug!(
-                                "[VDOM] Found descendant handler on {:?} for '{}'",
-                                node_id, event_name
-                            );
-                            handler(event.clone());
-                            processed = true;
-                            break;
-                        }
-                    }
+                if node_id != target
+                    && let Some(handlers) = self.event_handlers.get(&node_id)
+                    && let Some(handler) = handlers.get(event_name)
+                {
+                    log::debug!(
+                        "[VDOM] Found descendant handler on {:?} for '{}'",
+                        node_id,
+                        event_name
+                    );
+                    handler(event.clone());
+                    processed = true;
+                    break;
                 }
                 if let Some(node) = self.nodes.get(&node_id) {
                     for child_id in &node.children {
@@ -804,7 +813,9 @@ impl VNodeRenderer {
         component_type.hash(&mut hasher);
         key.hash(&mut hasher);
         let hash = hasher.finish();
-        Some(KvasirId(0x8000_0000_0000_0000 | (hash & 0x7FFF_FFFF_FFFF_FFFF)))
+        Some(KvasirId(
+            0x8000_0000_0000_0000 | (hash & 0x7FFF_FFFF_FFFF_FFFF),
+        ))
     }
 
     fn add_node(&mut self, mut node: VNode) -> NodeId {
@@ -873,31 +884,36 @@ impl VNodeRenderer {
                 portal_target: None,
                 sdf_shape: None,
             };
-            if let Some(parent_id) = self.stack.last() {
-                if let Some(parent) = self.nodes.get_mut(parent_id) {
-                    parent.children.push(id);
-                }
+            if let Some(parent_id) = self.stack.last()
+                && let Some(parent) = self.nodes.get_mut(parent_id)
+            {
+                parent.children.push(id);
             }
             self.nodes.insert(id, batch_node);
         }
     }
 
     fn expand_batch_rect(&mut self, rect: cvkg_core::Rect) {
-        if let Some(batch_id) = self.batch_node_id {
-            if let Some(node) = self.nodes.get_mut(&batch_id) {
-                let new_left = node.layout.x.min(rect.x);
-                let new_top = node.layout.y.min(rect.y);
-                let new_right = (node.layout.x + node.layout.width).max(rect.x + rect.width);
-                let new_bottom = (node.layout.y + node.layout.height).max(rect.y + rect.height);
-                node.layout.x = new_left;
-                node.layout.y = new_top;
-                node.layout.width = new_right - new_left;
-                node.layout.height = new_bottom - new_top;
-            }
+        if let Some(batch_id) = self.batch_node_id
+            && let Some(node) = self.nodes.get_mut(&batch_id)
+        {
+            let new_left = node.layout.x.min(rect.x);
+            let new_top = node.layout.y.min(rect.y);
+            let new_right = (node.layout.x + node.layout.width).max(rect.x + rect.width);
+            let new_bottom = (node.layout.y + node.layout.height).max(rect.y + rect.height);
+            node.layout.x = new_left;
+            node.layout.y = new_top;
+            node.layout.width = new_right - new_left;
+            node.layout.height = new_bottom - new_top;
         }
     }
 
-    fn push_decorative_cmd(&mut self, cmd_type: &str, rect: cvkg_core::Rect, props: HashMap<String, serde_json::Value>) {
+    fn push_decorative_cmd(
+        &mut self,
+        cmd_type: &str,
+        rect: cvkg_core::Rect,
+        props: HashMap<String, serde_json::Value>,
+    ) {
         self.expand_batch_rect(rect);
         self.decorative_batch.push(DecorativeCmd {
             cmd_type: cmd_type.to_string(),
@@ -935,14 +951,21 @@ impl cvkg_core::Renderer for VNodeRenderer {
         align: cvkg_runic_text::TextAlign,
         overflow: cvkg_runic_text::TextOverflow,
     ) -> Option<cvkg_runic_text::ShapedText> {
-        self.text_engine.shape_layout(spans, max_width, align, overflow).ok()
+        self.text_engine
+            .shape_layout(spans, max_width, align, overflow)
+            .ok()
     }
 
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
         self.flush_decorative_batch();
         let id = self.next_id();
         let mut props = HashMap::new();
-        let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
+        let text = shaped
+            .spans
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<&str>>()
+            .join("");
         props.insert("text".to_string(), serde_json::Value::String(text.clone()));
         self.add_node(VNode {
             id,
@@ -950,10 +973,18 @@ impl cvkg_core::Renderer for VNodeRenderer {
             component_type: "Primitive::Text".to_string(),
             props,
             state: None,
-            layout: LayoutRect { x, y, width: shaped.width, height: shaped.height },
+            layout: LayoutRect {
+                x,
+                y,
+                width: shaped.width,
+                height: shaped.height,
+            },
             children: Vec::new(),
             aria_role: "text".to_string(),
-            aria_props: AriaProps { label: Some(text), ..Default::default() },
+            aria_props: AriaProps {
+                label: Some(text),
+                ..Default::default()
+            },
             portal_target: None,
             sdf_shape: None,
         });
@@ -1120,8 +1151,14 @@ impl cvkg_core::Renderer for VNodeRenderer {
         };
         self.begin_decorative(rect);
         let mut props = HashMap::new();
-        props.insert("position".to_string(), serde_json::to_value(position).unwrap());
-        props.insert("rotation".to_string(), serde_json::to_value(rotation).unwrap());
+        props.insert(
+            "position".to_string(),
+            serde_json::to_value(position).unwrap(),
+        );
+        props.insert(
+            "rotation".to_string(),
+            serde_json::to_value(rotation).unwrap(),
+        );
         props.insert("scale".to_string(), serde_json::to_value(scale).unwrap());
         props.insert("color".to_string(), serde_json::to_value(color).unwrap());
         self.push_decorative_cmd("render_scene_node_3d", rect, props);

@@ -4,18 +4,16 @@ use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoopProxy};
 use winit::window::{Window, WindowId};
 
-use cvkg_core::{
-    AccessibilityPreferences, ColorTheme, FrameBudgetTracker,
-    RenderIntensityMode, TelemetryData, View, WindowConfig,
-    set_accessibility_preferences, detect_system_theme,
-    update_system_state, FocusableId,
-    Renderer, FrameRenderer,
-};
-use crate::window::{WindowManager, WindowStateDetector, WindowState, SafeAreaInsets};
-use crate::audio::{RodioAudioEngine, VisualHapticEngine};
 use crate::asset_manager::NativeAssetManager;
-use crate::events::{convert_keyboard_event, convert_ime_event};
-use crate::renderer::{NativeRenderer, GPU_FRAME_PTR};
+use crate::audio::{RodioAudioEngine, VisualHapticEngine};
+use crate::events::{convert_ime_event, convert_keyboard_event};
+use crate::renderer::{GPU_FRAME_PTR, NativeRenderer};
+use crate::window::{SafeAreaInsets, WindowManager, WindowState, WindowStateDetector};
+use cvkg_core::{
+    AccessibilityPreferences, ColorTheme, FocusableId, FrameBudgetTracker, FrameRenderer,
+    RenderIntensityMode, Renderer, TelemetryData, View, WindowConfig, detect_system_theme,
+    set_accessibility_preferences, update_system_state,
+};
 
 /// Custom events for the native application event loop, handling accessibility
 /// callbacks and routing window lifecycle control events from background threads.
@@ -127,7 +125,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 .core_to_winit
                 .get(&handle.id)
                 .copied()
-                .unwrap_or_else(|| panic!("winit_id not found for window handle: window may have been destroyed"));
+                .unwrap_or_else(|| {
+                    panic!("winit_id not found for window handle: window may have been destroyed")
+                });
             let window = self
                 .window_manager
                 .windows
@@ -239,15 +239,12 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     close_window = true;
                 }
                 WindowEvent::Resized(physical_size) => {
-                    gpu_arc
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .resize(
-                            id,
-                            physical_size.width,
-                            physical_size.height,
-                            state.window.scale_factor() as f32,
-                        );
+                    gpu_arc.lock().unwrap_or_else(|p| p.into_inner()).resize(
+                        id,
+                        physical_size.width,
+                        physical_size.height,
+                        state.window.scale_factor() as f32,
+                    );
                     state.window.request_redraw();
                 }
                 WindowEvent::Focused(focused) => {
@@ -282,17 +279,23 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let layout_start = std::time::Instant::now();
                     let view_changed = self.view.changed();
 
-                    let new_vdom: Option<cvkg_vdom::VDom> = if view_changed {
-                        let vdom_start = std::time::Instant::now();
-                        let vdom = cvkg_vdom::VDom::build(&self.view, rect);
-                        let vdom_elapsed = vdom_start.elapsed();
-                        if vdom_elapsed > std::time::Duration::from_millis(1) {
-                            log::warn!("[Native] VDom::build took {:?} ({} nodes)", vdom_elapsed, vdom.nodes.len());
-                        }
-                        Some(vdom)
-                    } else {
-                        None
-                    };
+                     let bounds_changed = state.last_bounds.map_or(true, |b| b != rect);
+                     let new_vdom: Option<cvkg_vdom::VDom> = if view_changed || bounds_changed {
+                         state.last_bounds = Some(rect);
+                         let vdom_start = std::time::Instant::now();
+                         let vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                         let vdom_elapsed = vdom_start.elapsed();
+                         if vdom_elapsed > std::time::Duration::from_millis(1) {
+                             log::warn!(
+                                 "[Native] VDom::build took {:?} ({} nodes)",
+                                 vdom_elapsed,
+                                 vdom.nodes.len()
+                             );
+                         }
+                         Some(vdom)
+                     } else {
+                         None
+                     };
 
                     if state.needs_cursor_update {
                         if let Some(vdom) = &state.vdom {
@@ -321,7 +324,11 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             let patches = prev_vdom.diff(&new_vdom);
                             let diff_elapsed = diff_start.elapsed();
                             if diff_elapsed > std::time::Duration::from_millis(1) {
-                                log::warn!("[Native] VDom::diff took {:?} ({} patches)", diff_elapsed, patches.len());
+                                log::warn!(
+                                    "[Native] VDom::diff took {:?} ({} patches)",
+                                    diff_elapsed,
+                                    patches.len()
+                                );
                             }
                             diff_patches = Some(patches);
                             let patches = diff_patches.as_ref().unwrap();
@@ -330,16 +337,27 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 if let cvkg_vdom::VDomPatch::Create(node)
                                 | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
                                 {
-                                    nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                                    nodes.push((
+                                        accesskit::NodeId(node.id.0),
+                                        node.to_accesskit_node(),
+                                    ));
                                 } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
                                     && let Some(node) = new_vdom.nodes.get(id)
                                 {
-                                    nodes.push((accesskit::NodeId(node.id.0), node.to_accesskit_node()));
+                                    nodes.push((
+                                        accesskit::NodeId(node.id.0),
+                                        node.to_accesskit_node(),
+                                    ));
                                 } else if let cvkg_vdom::VDomPatch::Remove(id) = patch {
-                                    state.focus_manager.unregister(&FocusableId::from(id.0.to_string()));
+                                    state
+                                        .focus_manager
+                                        .unregister(&FocusableId::from(id.0.to_string()));
                                 }
                             }
-                            let focused_id = state.focused_node_id.map(|id| accesskit::NodeId(id.0)).unwrap_or(accesskit::NodeId(1));
+                            let focused_id = state
+                                .focused_node_id
+                                .map(|id| accesskit::NodeId(id.0))
+                                .unwrap_or(accesskit::NodeId(1));
                             for patch in diff_patches.as_ref().unwrap() {
                                 if let cvkg_vdom::VDomPatch::Create(node)
                                 | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
@@ -380,8 +398,8 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         width: rect.width - safe_area.left - safe_area.right,
                         height: rect.height - safe_area.top - safe_area.bottom,
                     };
-                    let layout_deadline = std::time::Instant::now()
-                        + self.frame_budget.allocations()[1].time_slice;
+                    let layout_deadline =
+                        std::time::Instant::now() + self.frame_budget.allocations()[1].time_slice;
                     cvkg_core::LayoutCache::set_layout_budget_deadline(Some(layout_deadline));
 
                     let mut renderer = NativeRenderer::new(
@@ -400,12 +418,16 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
 
                     if let Some(assets) = self.pending_prewarm.take() {
-                        log::info!("[Native] Pre-warming {} assets on first frame", assets.len());
+                        log::info!(
+                            "[Native] Pre-warming {} assets on first frame",
+                            assets.len()
+                        );
                         gpu.prewarm_vram(assets);
                     }
 
                     let encoder = gpu.begin_frame(id);
-                    let begin_frame_time = cpu_draw_start.elapsed().as_secs_f32() * 1000.0 - gpu_lock_time;
+                    let begin_frame_time =
+                        cpu_draw_start.elapsed().as_secs_f32() * 1000.0 - gpu_lock_time;
 
                     {
                         let raw: *mut cvkg_render_gpu::GpuRenderer = &mut *gpu;
@@ -415,7 +437,12 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         let render_time = render_start.elapsed().as_secs_f32() * 1000.0;
                         GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
                         if render_time > 5.0 {
-                            log::warn!("[Native] view.render() took {:.2}ms (gpu_lock={:.2}ms, begin_frame={:.2}ms)", render_time, gpu_lock_time, begin_frame_time);
+                            log::warn!(
+                                "[Native] view.render() took {:.2}ms (gpu_lock={:.2}ms, begin_frame={:.2}ms)",
+                                render_time,
+                                gpu_lock_time,
+                                begin_frame_time
+                            );
                         }
                     }
                     let cpu_draw_end = std::time::Instant::now();
@@ -437,7 +464,10 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         let total = gpu_submit_end.duration_since(redraw_start);
                         log::info!(
                             "[Native] Frame breakdown: cpu_draw={:?} gpu_render={:?} gpu_submit(end_frame)={:?} total={:?}",
-                            cpu_draw, gpu_render, gpu_submit, total
+                            cpu_draw,
+                            gpu_render,
+                            gpu_submit,
+                            total
                         );
                     }
 
@@ -452,10 +482,8 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         * 1000.0;
                     telemetry.draw_time_ms =
                         cpu_draw_end.duration_since(cpu_draw_start).as_secs_f32() * 1000.0;
-                    telemetry.gpu_submit_time_ms = gpu_submit_end
-                        .duration_since(cpu_draw_end)
-                        .as_secs_f32()
-                        * 1000.0;
+                    telemetry.gpu_submit_time_ms =
+                        gpu_submit_end.duration_since(cpu_draw_end).as_secs_f32() * 1000.0;
 
                     let frame_time_ms =
                         gpu_submit_end.duration_since(redraw_start).as_secs_f32() * 1000.0;
@@ -467,7 +495,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         .frame_budget
                         .allocations()
                         .get(1)
-                        .map(|alloc| alloc.time_slice.as_secs_f32() * 1000.0 - telemetry.layout_time_ms)
+                        .map(|alloc| {
+                            alloc.time_slice.as_secs_f32() * 1000.0 - telemetry.layout_time_ms
+                        })
                         .unwrap_or(0.0);
                     telemetry.frame_over_budget = !self.frame_budget.frame_within_budget()
                         || telemetry.frame_budget_remaining_ms < 0.0;
@@ -593,7 +623,8 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     .map(|(id, _)| id);
                                 if let Some(target_id) = state.active_pointer_target {
                                     if let Some(node) = vdom.nodes.get(&target_id) {
-                                        state.active_pointer_target_type = Some(node.component_type.clone());
+                                        state.active_pointer_target_type =
+                                            Some(node.component_type.clone());
                                         state.active_pointer_target_key = node.key.clone();
                                     }
                                 }
@@ -615,8 +646,12 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 let fallback_target = state
                                     .active_pointer_pos
                                     .and_then(|pos| {
-                                        vdom.hit_test(pos[0], pos[1], state.active_pointer_precision)
-                                            .map(|(id, _)| id)
+                                        vdom.hit_test(
+                                            pos[0],
+                                            pos[1],
+                                            state.active_pointer_precision,
+                                        )
+                                        .map(|(id, _)| id)
                                     })
                                     .or_else(|| {
                                         vdom.hit_test(
@@ -673,10 +708,15 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 }
                                 if !state.is_dragging {
                                     if let Some(target) = target {
-                                        log::info!("[Native] Dispatching PointerClick to VDOM (target={:?})", target);
+                                        log::info!(
+                                            "[Native] Dispatching PointerClick to VDOM (target={:?})",
+                                            target
+                                        );
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
-                                        log::info!("[Native] Dispatching PointerClick to VDOM (no target, bubbling)");
+                                        log::info!(
+                                            "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
+                                        );
                                         vdom.dispatch_event(pointer_click);
                                     }
                                 } else {
@@ -729,10 +769,12 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.drag_button = touch_btn as u32;
                                 state.active_pointer_pos = Some([x, y]);
                                 state.active_pointer_precision = 150.0;
-                                state.active_pointer_target = vdom.hit_test(x, y, 150.0).map(|(id, _)| id);
+                                state.active_pointer_target =
+                                    vdom.hit_test(x, y, 150.0).map(|(id, _)| id);
                                 if let Some(target_id) = state.active_pointer_target {
                                     if let Some(node) = vdom.nodes.get(&target_id) {
-                                        state.active_pointer_target_type = Some(node.component_type.clone());
+                                        state.active_pointer_target_type =
+                                            Some(node.component_type.clone());
                                         state.active_pointer_target_key = node.key.clone();
                                     }
                                 }
@@ -776,15 +818,23 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 let fallback_target = state
                                     .active_pointer_pos
                                     .and_then(|pos| {
-                                        vdom.hit_test(pos[0], pos[1], state.active_pointer_precision)
-                                            .map(|(id, _)| id)
+                                        vdom.hit_test(
+                                            pos[0],
+                                            pos[1],
+                                            state.active_pointer_precision,
+                                        )
+                                        .map(|(id, _)| id)
                                     })
-                                    .or_else(|| vdom.hit_test(x, y, state.active_pointer_precision).map(|(id, _)| id));
+                                    .or_else(|| {
+                                        vdom.hit_test(x, y, state.active_pointer_precision)
+                                            .map(|(id, _)| id)
+                                    });
                                 let target = state
                                     .active_pointer_target
                                     .filter(|target| {
                                         vdom.nodes.get(target).map_or(false, |node| {
-                                            Some(&node.component_type) == state.active_pointer_target_type.as_ref()
+                                            Some(&node.component_type)
+                                                == state.active_pointer_target_type.as_ref()
                                                 && node.key == state.active_pointer_target_key
                                         })
                                     })
@@ -816,10 +866,15 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 }
                                 if !state.is_dragging {
                                     if let Some(target) = target {
-                                        log::info!("[Native] Dispatching PointerClick to VDOM (target={:?})", target);
+                                        log::info!(
+                                            "[Native] Dispatching PointerClick to VDOM (target={:?})",
+                                            target
+                                        );
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
-                                        log::info!("[Native] Dispatching PointerClick to VDOM (no target, bubbling)");
+                                        log::info!(
+                                            "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
+                                        );
                                         vdom.dispatch_event(pointer_click);
                                     }
                                 } else {
@@ -1000,11 +1055,20 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                                     let w = mode.size().width;
                                                     let h = mode.size().height;
                                                     let rr = mode.refresh_rate_millihertz();
-                                                    state.window.set_fullscreen(Some(winit::window::Fullscreen::Exclusive(mode)));
-                                                    log::info!("[Native] Fullscreen ON (exclusive: {}x{}@{:?}Hz)", w, h, rr);
+                                                    state.window.set_fullscreen(Some(
+                                                        winit::window::Fullscreen::Exclusive(mode),
+                                                    ));
+                                                    log::info!(
+                                                        "[Native] Fullscreen ON (exclusive: {}x{}@{:?}Hz)",
+                                                        w,
+                                                        h,
+                                                        rr
+                                                    );
                                                 }
                                             } else {
-                                                state.window.set_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
+                                                state.window.set_fullscreen(Some(
+                                                    winit::window::Fullscreen::Borderless(None),
+                                                ));
                                                 log::info!("[Native] Fullscreen ON (borderless)");
                                             }
                                         }
@@ -1034,15 +1098,23 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         if is_shift {
                                             if let Some(id) = state.focus_manager.focus_prev() {
                                                 if let Ok(node_id) = id.as_str().parse::<u64>() {
-                                                    state.focused_node_id = Some(cvkg_core::KvasirId(node_id));
-                                                    log::info!("[Native] Focus previous: {:?}", node_id);
+                                                    state.focused_node_id =
+                                                        Some(cvkg_core::KvasirId(node_id));
+                                                    log::info!(
+                                                        "[Native] Focus previous: {:?}",
+                                                        node_id
+                                                    );
                                                 }
                                             }
                                         } else {
                                             if let Some(id) = state.focus_manager.focus_next() {
                                                 if let Ok(node_id) = id.as_str().parse::<u64>() {
-                                                    state.focused_node_id = Some(cvkg_core::KvasirId(node_id));
-                                                    log::info!("[Native] Focus next: {:?}", node_id);
+                                                    state.focused_node_id =
+                                                        Some(cvkg_core::KvasirId(node_id));
+                                                    log::info!(
+                                                        "[Native] Focus next: {:?}",
+                                                        node_id
+                                                    );
                                                 }
                                             }
                                         }
@@ -1214,9 +1286,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     window_state.window.request_redraw();
                 }
             }
-            event_loop.set_control_flow(ControlFlow::WaitUntil(
-                now + target_interval,
-            ));
+            event_loop.set_control_flow(ControlFlow::WaitUntil(now + target_interval));
         } else {
             event_loop.set_control_flow(ControlFlow::WaitUntil(
                 self.last_frame_time + target_interval,

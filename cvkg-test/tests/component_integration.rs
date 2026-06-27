@@ -49,10 +49,17 @@ impl Renderer for MockRenderer {
         _overflow: cvkg_runic_text::TextOverflow,
     ) -> Option<cvkg_runic_text::ShapedText> {
         let mut engine = cvkg_runic_text::TextEngine::new();
-        engine.shape_layout(_spans, _max_width, _align, _overflow).ok()
+        engine
+            .shape_layout(_spans, _max_width, _align, _overflow)
+            .ok()
     }
     fn draw_shaped_text(&mut self, shaped: &cvkg_runic_text::ShapedText, _x: f32, _y: f32) {
-        let text = shaped.spans.iter().map(|s| s.text.as_str()).collect::<Vec<&str>>().join("");
+        let text = shaped
+            .spans
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<&str>>()
+            .join("");
         self.commands.push(format!("DrawText({})", text));
     }
 

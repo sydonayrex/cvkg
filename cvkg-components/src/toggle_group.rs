@@ -7,8 +7,8 @@
 use crate::theme;
 use crate::{FONT_SM, RADIUS_MD, RADIUS_SM, SPACE_XS};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// ToggleGroup - A group of toggle buttons with single or multi-select.
 ///

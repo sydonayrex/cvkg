@@ -184,7 +184,7 @@ pub fn button_primary_bg() -> [f32; 4] {
 /// Button background for the "secondary" variant.
 #[inline]
 pub fn button_secondary_bg() -> [f32; 4] {
-    surface_elevated()
+    surface_overlay()
 }
 
 /// Button background for the "danger" variant.

@@ -321,8 +321,7 @@ impl ToastManager {
 
             // Check if animation has settled
             let anim_hash = t.id.wrapping_add(88888);
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash)
-            {
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash) {
                 let solver = solver_arc.read().unwrap_or_else(|e| {
                     log::warn!("Lock poisoned, recovering...");
                     e.into_inner()
@@ -461,8 +460,7 @@ impl ToastManager {
         }
         {
             let s = cvkg_core::load_system_state();
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash)
-            {
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash) {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| {
                     log::warn!("Lock poisoned, recovering...");
                     e.into_inner()
@@ -484,7 +482,11 @@ impl ToastManager {
         }
 
         // 2. Semi-transparent dark fill
-        renderer.fill_rounded_rect(rect, CORNER_RADIUS, theme::with_alpha(theme::surface_elevated(), 0.85));
+        renderer.fill_rounded_rect(
+            rect,
+            CORNER_RADIUS,
+            theme::with_alpha(theme::surface_elevated(), 0.85),
+        );
 
         // 3. Subtle inner border for glass depth
         let inner_rect = rect.inset(1.0);

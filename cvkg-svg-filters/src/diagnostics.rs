@@ -25,7 +25,9 @@ pub struct FilterDiagnostics {
 
 impl FilterDiagnostics {
     pub fn new() -> Self {
-        Self { messages: Vec::new() }
+        Self {
+            messages: Vec::new(),
+        }
     }
 
     pub fn error(&mut self, node_index: usize, message: impl Into<String>) {
@@ -53,7 +55,9 @@ impl FilterDiagnostics {
     }
 
     pub fn has_errors(&self) -> bool {
-        self.messages.iter().any(|m| m.severity == DiagnosticSeverity::Error)
+        self.messages
+            .iter()
+            .any(|m| m.severity == DiagnosticSeverity::Error)
     }
 
     pub fn messages(&self) -> &[FilterDiagnostic] {
@@ -61,7 +65,10 @@ impl FilterDiagnostics {
     }
 
     pub fn for_node(&self, node_index: usize) -> Vec<&FilterDiagnostic> {
-        self.messages.iter().filter(|m| m.node_index == node_index).collect()
+        self.messages
+            .iter()
+            .filter(|m| m.node_index == node_index)
+            .collect()
     }
 
     pub fn clear(&mut self) {
@@ -137,7 +144,9 @@ impl FilterGraphView {
     pub fn to_json(&self) -> String {
         let mut json = String::from("{\n  \"nodes\": [\n");
         for (i, node) in self.nodes.iter().enumerate() {
-            if i > 0 { json.push_str(",\n"); }
+            if i > 0 {
+                json.push_str(",\n");
+            }
             json.push_str(&format!(
                 "    {{\"index\": {}, \"name\": \"{}\", \"kind\": \"{}\"}}",
                 node.index, node.label, node.kind
@@ -145,7 +154,9 @@ impl FilterGraphView {
         }
         json.push_str("\n  ],\n  \"edges\": [\n");
         for (i, edge) in self.edges.iter().enumerate() {
-            if i > 0 { json.push_str(",\n"); }
+            if i > 0 {
+                json.push_str(",\n");
+            }
             json.push_str(&format!(
                 "    {{\"from\": {}, \"to\": {}, \"resource\": \"{}\"}}",
                 edge.from, edge.to, edge.resource
@@ -161,10 +172,7 @@ impl FilterGraphView {
         dot.push_str("  node [shape=box];\n");
 
         for node in &self.nodes {
-            dot.push_str(&format!(
-                "  {} [label=\"{}\"];\n",
-                node.index, node.label
-            ));
+            dot.push_str(&format!("  {} [label=\"{}\"];\n", node.index, node.label));
         }
 
         for edge in &self.edges {

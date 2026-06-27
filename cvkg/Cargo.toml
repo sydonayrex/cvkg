@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg"
-version = "0.2.14"
+version = "0.2.15"
 build = false
 autolib = false
 autobins = false
@@ -52,36 +52,40 @@ path = "examples/shatter_demo.rs"
 name = "physics_3d_demo"
 path = "examples/physics_3d_demo.rs"
 
+[[example]]
+name = "declarative_dashboard"
+path = "examples/declarative_dashboard.rs"
+
 [dependencies.cvkg-anim]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-components]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-core]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-layout]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-macros]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-render-gpu]
-version = "0.2.14"
+version = "0.2.15"
 optional = true
 
 [dependencies.cvkg-render-native]
-version = "0.2.14"
+version = "0.2.15"
 optional = true
 
 
 
 [dependencies.cvkg-scene]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-themes]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.rand]
 version = "0.8"
@@ -101,3 +105,13 @@ version = "0.11"
 
 [dev-dependencies.log]
 version = "0.4"
+
+[[example]]
+name = "interactive_daw"
+path = "examples/interactive_daw.rs"
+required-features = ["native"]
+
+[[example]]
+name = "daw_perf"
+path = "examples/daw_perf.rs"
+required-features = ["native"]

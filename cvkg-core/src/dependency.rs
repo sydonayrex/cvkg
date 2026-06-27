@@ -39,10 +39,7 @@ impl DependencyGraph {
     /// Idempotent — calling this twice with the same arguments has no effect.
     /// To replace a component's full dependency set, call `unregister` first.
     pub fn register(&mut self, component_id: u64, state_key: u64) {
-        let is_new = self.deps
-            .entry(state_key)
-            .or_default()
-            .insert(component_id);
+        let is_new = self.deps.entry(state_key).or_default().insert(component_id);
         if is_new {
             self.reverse
                 .entry(component_id)
@@ -77,9 +74,7 @@ impl DependencyGraph {
 
     /// Return true if any component depends on `state_key`.
     pub fn has_dependents(&self, state_key: u64) -> bool {
-        self.deps
-            .get(&state_key)
-            .map_or(false, |set| !set.is_empty())
+        self.deps.get(&state_key).is_some_and(|set| !set.is_empty())
     }
 
     /// Total number of registered dependency edges.
@@ -210,11 +205,11 @@ impl FrameBudgetTracker {
     /// Mark a subsystem as finishing. Updates the elapsed
     /// time for that subsystem.
     pub fn subsystem_finish(&mut self, index: usize) {
-        if let Some(start) = self.start {
-            if index < self.elapsed.len() {
-                let now = Instant::now();
-                self.elapsed[index] = now.duration_since(start);
-            }
+        if let Some(start) = self.start
+            && index < self.elapsed.len()
+        {
+            let now = Instant::now();
+            self.elapsed[index] = now.duration_since(start);
         }
     }
 
@@ -236,10 +231,7 @@ impl FrameBudgetTracker {
     /// their allocations.
     pub fn frame_within_budget(&self) -> bool {
         for (i, alloc) in self.allocations.iter().enumerate() {
-            if i < self.elapsed.len()
-                && self.elapsed[i] > alloc.time_slice
-                && !alloc.skippable
-            {
+            if i < self.elapsed.len() && self.elapsed[i] > alloc.time_slice && !alloc.skippable {
                 return false;
             }
         }
@@ -303,10 +295,11 @@ impl InputLatencyTracker {
 
     /// Computes the latency value corresponding to the requested percentile.
     pub fn percentile(&self, p: f64) -> Duration {
-        if self.samples.is_empty() || p < 0.0 || p > 100.0 {
+        if self.samples.is_empty() || !(0.0..=100.0).contains(&p) {
             return Duration::ZERO;
         }
-        let mut latencies: Vec<Duration> = self.samples
+        let mut latencies: Vec<Duration> = self
+            .samples
             .iter()
             .map(|&(e, r)| {
                 if r > e {
@@ -380,7 +373,10 @@ mod tests {
             g.register(2, 10);
             g.unregister(1);
             let affected: Vec<u64> = g.affected_components(10).collect();
-            assert!(!affected.contains(&1), "component 1 must be gone after unregister");
+            assert!(
+                !affected.contains(&1),
+                "component 1 must be gone after unregister"
+            );
             assert!(affected.contains(&2), "component 2 must still be present");
         }
 
@@ -429,7 +425,9 @@ mod tests {
         #[test]
         fn default_allocations_sum_to_roughly_total() {
             let fb = FrameBudgetTracker::default_60fps();
-            let sum: u128 = fb.allocations().iter()
+            let sum: u128 = fb
+                .allocations()
+                .iter()
                 .map(|a| a.time_slice.as_micros())
                 .sum();
             // The 3 allocations (4+4+8 = 16ms) should sum to
@@ -442,8 +440,16 @@ mod tests {
         #[test]
         fn render_is_essential_layout_is_skippable() {
             let fb = FrameBudgetTracker::default_60fps();
-            let render = fb.allocations().iter().find(|a| a.name == "render").unwrap();
-            let layout = fb.allocations().iter().find(|a| a.name == "layout").unwrap();
+            let render = fb
+                .allocations()
+                .iter()
+                .find(|a| a.name == "render")
+                .unwrap();
+            let layout = fb
+                .allocations()
+                .iter()
+                .find(|a| a.name == "layout")
+                .unwrap();
             assert!(!render.skippable, "render must always run");
             assert!(layout.skippable, "layout can be skipped if over budget");
         }
@@ -498,11 +504,11 @@ mod tests {
             tracker.record_frame(now, now + Duration::from_millis(20));
             tracker.record_frame(now, now + Duration::from_millis(30));
             assert_eq!(tracker.len(), 3);
-            
+
             // This should evict the 10ms sample
             tracker.record_frame(now, now + Duration::from_millis(40));
             assert_eq!(tracker.len(), 3);
-            
+
             // Percentiles should be of [20ms, 30ms, 40ms]
             assert_eq!(tracker.percentile(50.0), Duration::from_millis(30));
             assert_eq!(tracker.percentile(0.0), Duration::from_millis(20));
@@ -517,14 +523,14 @@ mod tests {
                 tracker.record_frame(now, now + Duration::from_millis(i * 10));
             }
             assert_eq!(tracker.len(), 5);
-            
+
             tracker.set_window_size(3);
             assert_eq!(tracker.window_size(), 3);
             assert_eq!(tracker.len(), 3);
             // Retained samples should be [30ms, 40ms, 50ms]
             assert_eq!(tracker.percentile(0.0), Duration::from_millis(30));
             assert_eq!(tracker.percentile(100.0), Duration::from_millis(50));
-            
+
             tracker.clear();
             assert!(tracker.is_empty());
             assert_eq!(tracker.percentile(50.0), Duration::ZERO);

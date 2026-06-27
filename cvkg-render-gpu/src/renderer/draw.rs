@@ -1,7 +1,7 @@
 use super::GpuRenderer;
 use super::context_helpers::create_surface_context;
 use crate::types::{DrawCall, MAX_PARTICLES};
-use crate::vertex::{Vertex, InstanceData};
+use crate::vertex::{InstanceData, Vertex};
 use cvkg_core::{Rect, Renderer};
 use std::sync::Arc;
 
@@ -66,10 +66,7 @@ impl GpuRenderer {
         // volumetric pass is skipped by the frame budget system. This prevents
         // a visible time pop when the pass resumes after being skipped.
         let current_time = self.current_time();
-        let resolution = [
-            self.current_width() as f32,
-            self.current_height() as f32,
-        ];
+        let resolution = [self.current_width() as f32, self.current_height() as f32];
         let time_uniform: [f32; 4] = [
             current_time,
             resolution[0],
@@ -87,8 +84,7 @@ impl GpuRenderer {
         const MAX_MEMO_AGE: u64 = 1000;
         if self.frame_generation > MAX_MEMO_AGE {
             let cutoff = self.frame_generation - MAX_MEMO_AGE;
-            self.memo_cache
-                .retain(|_, entry| entry.frame_gen >= cutoff);
+            self.memo_cache.retain(|_, entry| entry.frame_gen >= cutoff);
         }
         self.last_frame_start = std::time::Instant::now();
         self.telemetry.draw_calls = 0;
@@ -102,11 +98,18 @@ impl GpuRenderer {
 
     /// Begin a frame without resetting per-frame state.
     /// Used when reusing the previous frame's draw calls (view unchanged).
-    pub fn begin_frame_reuse(&mut self, window_id: winit::window::WindowId) -> wgpu::CommandEncoder {
+    pub fn begin_frame_reuse(
+        &mut self,
+        window_id: winit::window::WindowId,
+    ) -> wgpu::CommandEncoder {
         self.begin_frame_internal(window_id, false)
     }
 
-    fn begin_frame_internal(&mut self, window_id: winit::window::WindowId, reset_state: bool) -> wgpu::CommandEncoder {
+    fn begin_frame_internal(
+        &mut self,
+        window_id: winit::window::WindowId,
+        reset_state: bool,
+    ) -> wgpu::CommandEncoder {
         // Drain AI material channel
         if let Some(rx) = &self.ai_material_rx {
             while let Ok(res) = rx.try_recv() {
@@ -412,15 +415,23 @@ impl GpuRenderer {
 
         // CRITICAL FIX: Only break batch on material/scissor/texture state changes.
         // Transform (translation/scale/rotation) is per-instance data.
+        let material =
+            Self::resolve_material_with_context(material_id, &self.current_draw_material);
+        let final_material_id = match material {
+            cvkg_core::DrawMaterial::Opaque => material_id,
+            cvkg_core::DrawMaterial::TopUI => crate::renderer::material_id::TOP_UI,
+            cvkg_core::DrawMaterial::Glass { .. } => crate::renderer::material_id::GLASS,
+            cvkg_core::DrawMaterial::Blend { mode } => 7 + mode,
+        };
+
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
             || last_call.unwrap().scissor_rect != scissor
-            || last_call.unwrap().material != Self::resolve_material_with_context(material_id, &self.current_draw_material)
+            || last_call.unwrap().material != material
             || {
                 let last_material = last_call.unwrap().material;
-                let current_material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
-                matches!((current_material, last_material),
+                matches!((material, last_material),
                     (cvkg_core::DrawMaterial::Glass { blur_radius: a, ior_override: b, glass_intensity: c },
                      cvkg_core::DrawMaterial::Glass { blur_radius: d, ior_override: e, glass_intensity: f })
                     if a != d || b != e || c != f)
@@ -436,7 +447,7 @@ impl GpuRenderer {
                 index_start: self.indices.len() as u32,
                 index_count: 0,
                 instance_count: 1,
-                material: Self::resolve_material_with_context(material_id, &self.current_draw_material),
+                material,
                 instance_start: (self.instance_data.len() - 1) as u32,
                 draw_order: 0,
             });
@@ -471,7 +482,7 @@ impl GpuRenderer {
                 normal: [0.0, 0.0, 1.0],
                 uv: uvs[i],
                 color,
-                material_id,
+                material_id: final_material_id,
                 radius: 0.0,
                 slice: [0.0, 0.0, 0.0, 1.0],
                 logical: [px - rect.x, py - rect.y],
@@ -483,7 +494,8 @@ impl GpuRenderer {
 
         // Push indices for the quad (two triangles: 0-1-2 and 0-2-3)
         let base = self.vertices.len() as u32 - 4;
-        self.indices.extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
+        self.indices
+            .extend_from_slice(&[base, base + 1, base + 2, base, base + 2, base + 3]);
 
         if let Some(call) = self.draw_calls.last_mut() {
             call.index_count += 6;
@@ -589,7 +601,14 @@ impl GpuRenderer {
 
         let scissor = self.clip_stack.last().copied();
 
-        let material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
+        let material =
+            Self::resolve_material_with_context(material_id, &self.current_draw_material);
+        let final_material_id = match material {
+            cvkg_core::DrawMaterial::Opaque => material_id,
+            cvkg_core::DrawMaterial::TopUI => crate::renderer::material_id::TOP_UI,
+            cvkg_core::DrawMaterial::Glass { .. } => crate::renderer::material_id::GLASS,
+            cvkg_core::DrawMaterial::Blend { mode } => 7 + mode,
+        };
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
         let (blur_radius, ior_override, glass_intensity) = if let cvkg_core::DrawMaterial::Glass {
@@ -679,7 +698,7 @@ impl GpuRenderer {
             normal,
             uv: [uv_rect.x, uv_rect.y],
             color,
-            material_id,
+            material_id: final_material_id,
             radius,
             slice,
             logical: [0.0, 0.0],
@@ -692,7 +711,7 @@ impl GpuRenderer {
             normal,
             uv: [uv_rect.x + uv_rect.width, uv_rect.y],
             color,
-            material_id,
+            material_id: final_material_id,
             radius,
             slice,
             logical: [rect.width, 0.0],
@@ -705,7 +724,7 @@ impl GpuRenderer {
             normal,
             uv: [uv_rect.x + uv_rect.width, uv_rect.y + uv_rect.height],
             color,
-            material_id,
+            material_id: final_material_id,
             radius,
             slice,
             logical: [rect.width, rect.height],
@@ -718,7 +737,7 @@ impl GpuRenderer {
             normal,
             uv: [uv_rect.x, uv_rect.y + uv_rect.height],
             color,
-            material_id,
+            material_id: final_material_id,
             radius,
             slice,
             logical: [0.0, rect.height],
@@ -834,7 +853,9 @@ impl GpuRenderer {
         // Auto-flush staging belt if render_frame() was not called but geometry was queued.
         // This ensures apps that forget render_frame() still see their draw calls rendered.
         if !self.frame_rendered && (!self.vertices.is_empty() || !self.indices.is_empty()) {
-            log::debug!("[GPU] Auto-flushing staging belt in end_frame (render_frame was not called)");
+            log::debug!(
+                "[GPU] Auto-flushing staging belt in end_frame (render_frame was not called)"
+            );
             let mut staging_encoder =
                 self.device
                     .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -902,8 +923,10 @@ impl GpuRenderer {
             let ctx = self.headless_context.as_ref().unwrap();
             (ctx.blur_tex_a, ctx.bloom_tex_a)
         };
-        self.registry.alias(crate::kvasir::nodes::RES_BLUR_A, blur_id);
-        self.registry.alias(crate::kvasir::nodes::RES_BLOOM_A, bloom_id);
+        self.registry
+            .alias(crate::kvasir::nodes::RES_BLUR_A, blur_id);
+        self.registry
+            .alias(crate::kvasir::nodes::RES_BLOOM_A, bloom_id);
         self.registry
             .alias_view(crate::kvasir::nodes::RES_SCENE, res.scene_texture.clone());
         self.registry.alias_view(
@@ -924,16 +947,17 @@ impl GpuRenderer {
         for offscreen in &self.active_offscreens {
             offscreen_hash = offscreen_hash.wrapping_add(
                 offscreen.target_id.wrapping_mul(31)
-                    ^ (offscreen.blend_mode as u64).wrapping_mul(17)
+                    ^ (offscreen.blend_mode as u64).wrapping_mul(17),
             );
         }
         let mut portal_hash: u64 = 0;
         for region in &self.portal_regions {
             portal_hash = portal_hash.wrapping_add(
-                (region.x.to_bits() as u64).wrapping_mul(7)
+                (region.x.to_bits() as u64)
+                    .wrapping_mul(7)
                     .wrapping_add((region.y.to_bits() as u64).wrapping_mul(13))
                     .wrapping_add((region.width.to_bits() as u64).wrapping_mul(19))
-                    .wrapping_add((region.height.to_bits() as u64).wrapping_mul(23))
+                    .wrapping_add((region.height.to_bits() as u64).wrapping_mul(23)),
             );
         }
 
@@ -957,17 +981,19 @@ impl GpuRenderer {
         };
 
         if !use_cache {
-            let render_graph = crate::kvasir::nodes::build_render_graph(&crate::kvasir::nodes::RenderGraphConfig {
-                has_glass,
-                has_bloom,
-                has_accessibility,
-                has_volumetric,
-                active_offscreens: &self.active_offscreens,
-                portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
-                width,
-                height,
-                scale,
-            });
+            let render_graph = crate::kvasir::nodes::build_render_graph(
+                &crate::kvasir::nodes::RenderGraphConfig {
+                    has_glass,
+                    has_bloom,
+                    has_accessibility,
+                    has_volumetric,
+                    active_offscreens: &self.active_offscreens,
+                    portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
+                    width,
+                    height,
+                    scale,
+                },
+            );
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);
             let compiled_plan = match planner.compile() {
                 Ok(plan) => plan,
@@ -979,11 +1005,12 @@ impl GpuRenderer {
                     // Present the frame with whatever was rendered (stale scene or blank).
                     if let Some(surface_texture) = res.surface_texture {
                         surface_texture.present();
+                        log::info!("[Surtr] Frame presented (graph compilation fallback)");
                     }
                     return;
                 }
             };
-            
+
             // Reuse the already-computed hashes (computed above for cache matching)
             self.cached_graph_plan = Some(crate::kvasir::graph_cache::CachedGraphPlan {
                 has_glass,
@@ -1024,23 +1051,23 @@ impl GpuRenderer {
             // (raymarched lighting) are true cosmetics and safe to degrade.
             if allow_degradation && budget_ms > 0.0 {
                 let elapsed_ms = frame_start.elapsed().as_secs_f32() * 1000.0;
-                if elapsed_ms > budget_ms {
-                    if let Some(node) = cached.graph.node(node_key) {
-                        match node.pass_id() {
-                            crate::kvasir::nodes::PassId::BloomExtract
-                            | crate::kvasir::nodes::PassId::BloomBlur
-                            | crate::kvasir::nodes::PassId::Volumetric => {
-                                log::trace!(
-                                    "[Kvasir] Skipping {} (over budget: {:.1}ms > {:.1}ms)",
-                                    node.label(),
-                                    elapsed_ms,
-                                    budget_ms
-                                );
-                                continue;
-                            }
-                            _ => {} // Always run: Glass, BackdropBlur, BackdropRegion,
-                                    // Accessibility, Geometry, UI, Composite, Present, ...
+                if elapsed_ms > budget_ms
+                    && let Some(node) = cached.graph.node(node_key)
+                {
+                    match node.pass_id() {
+                        crate::kvasir::nodes::PassId::BloomExtract
+                        | crate::kvasir::nodes::PassId::BloomBlur
+                        | crate::kvasir::nodes::PassId::Volumetric => {
+                            log::trace!(
+                                "[Kvasir] Skipping {} (over budget: {:.1}ms > {:.1}ms)",
+                                node.label(),
+                                elapsed_ms,
+                                budget_ms
+                            );
+                            continue;
                         }
+                        _ => {} // Always run: Glass, BackdropBlur, BackdropRegion,
+                                // Accessibility, Geometry, UI, Composite, Present, ...
                     }
                 }
             }
@@ -1087,7 +1114,9 @@ impl GpuRenderer {
 
                 // Write particles in ring-buffer fashion
                 let first_chunk = (max - write_start).min(effective_count);
-                let bytes = bytemuck::cast_slice(&self.particles.staging[drop_count..drop_count + first_chunk]);
+                let bytes = bytemuck::cast_slice(
+                    &self.particles.staging[drop_count..drop_count + first_chunk],
+                );
                 self.queue.write_buffer(
                     &self.particle_buffer,
                     (write_start * std::mem::size_of::<crate::types::GpuParticle>()) as u64,
@@ -1095,19 +1124,17 @@ impl GpuRenderer {
                 );
                 if first_chunk < effective_count {
                     let remaining = effective_count - first_chunk;
-                    let bytes2 = bytemuck::cast_slice(&self.particles.staging[drop_count + first_chunk..drop_count + first_chunk + remaining]);
-                    self.queue.write_buffer(
-                        &self.particle_buffer,
-                        0,
-                        bytes2,
+                    let bytes2 = bytemuck::cast_slice(
+                        &self.particles.staging
+                            [drop_count + first_chunk..drop_count + first_chunk + remaining],
                     );
+                    self.queue.write_buffer(&self.particle_buffer, 0, bytes2);
                     self.particles.write_head = remaining as u32;
                 } else {
-                    self.particles.write_head =
-                        ((write_start + effective_count) % max) as u32;
+                    self.particles.write_head = ((write_start + effective_count) % max) as u32;
                 }
-                self.particles.count = (self.particles.count as usize + effective_count)
-                    .min(max) as u32;
+                self.particles.count =
+                    (self.particles.count as usize + effective_count).min(max) as u32;
                 self.particles.staging.clear();
 
                 // Invalidate render bind group so it's recreated with new data
@@ -1139,33 +1166,30 @@ impl GpuRenderer {
             });
 
             let mut compute_encoder =
-                self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Particle Compute Encoder"),
-                });
+                self.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Particle Compute Encoder"),
+                    });
             {
-                let mut cpass = compute_encoder.begin_compute_pass(
-                    &wgpu::ComputePassDescriptor {
-                        label: Some("Particle Integration"),
-                        ..Default::default()
-                    },
-                );
+                let mut cpass = compute_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("Particle Integration"),
+                    ..Default::default()
+                });
                 cpass.set_pipeline(&self.particle_compute_pipeline);
                 cpass.set_bind_group(0, &compute_bind_group, &[]);
-                let workgroups = ((self.particles.count + 63) / 64).max(1);
+                let workgroups = self.particles.count.div_ceil(64).max(1);
                 cpass.dispatch_workgroups(workgroups, 1, 1);
             }
             self.staging_command_buffers.push(compute_encoder.finish());
         }
 
         // 3. Compact dead particles periodically (every 2 seconds)
-        if self.particles.count > 0
-            && self.particles.last_compact.elapsed().as_secs_f32() > 2.0
-        {
+        if self.particles.count > 0 && self.particles.last_compact.elapsed().as_secs_f32() > 2.0 {
             self.particles.last_compact = std::time::Instant::now();
             // Read back particle data to compact dead particles
-            let read_size =
-                (self.particles.count as usize * std::mem::size_of::<crate::types::GpuParticle>())
-                    as u64;
+            let read_size = (self.particles.count as usize
+                * std::mem::size_of::<crate::types::GpuParticle>())
+                as u64;
             let staging_buf = self.device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Particle Compact Staging"),
                 size: read_size,
@@ -1173,9 +1197,10 @@ impl GpuRenderer {
                 mapped_at_creation: false,
             });
             let mut compact_encoder =
-                self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: Some("Particle Compact Copy"),
-                });
+                self.device
+                    .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                        label: Some("Particle Compact Copy"),
+                    });
             compact_encoder.copy_buffer_to_buffer(
                 &self.particle_buffer,
                 0,
@@ -1208,28 +1233,27 @@ impl GpuRenderer {
             }
             if let Some(bg) = &self.particle_render_bind_group {
                 let mut render_encoder =
-                    self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                        label: Some("Particle Render Encoder"),
-                    });
+                    self.device
+                        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                            label: Some("Particle Render Encoder"),
+                        });
                 {
-                    let mut rpass = render_encoder.begin_render_pass(
-                        &wgpu::RenderPassDescriptor {
-                            label: Some("Particle Render"),
-                            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                                view: &res.target_view,
-                                resolve_target: None,
-                                ops: wgpu::Operations {
-                                    load: wgpu::LoadOp::Load,
-                                    store: wgpu::StoreOp::Store,
-                                },
-                                depth_slice: None,
-                            })],
-                            depth_stencil_attachment: None,
-                            timestamp_writes: None,
-                            occlusion_query_set: None,
-                            multiview_mask: None,
-                        },
-                    );
+                    let mut rpass = render_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("Particle Render"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &res.target_view,
+                            resolve_target: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Load,
+                                store: wgpu::StoreOp::Store,
+                            },
+                            depth_slice: None,
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
                     rpass.set_pipeline(&self.particle_render_pipeline);
                     rpass.set_bind_group(0, bg, &[]);
                     rpass.draw(0..self.particles.count, 0..1);
@@ -1271,6 +1295,7 @@ impl GpuRenderer {
 
         if let Some(f) = res.surface_texture {
             f.present();
+            log::info!("[Surtr] Frame presented");
         }
     }
 
@@ -1289,13 +1314,11 @@ impl GpuRenderer {
 
         // Collect and sort scene commands by (z_index, draw_order) for correct painter's order.
         let mut sorted_scene: Vec<_> = buckets.scene_commands.iter().collect();
-        sorted_scene.sort_by_key(|cmd| {
-            match cmd {
-                cvkg_compositor::engine::RenderCommand::Draw(routed) => {
-                    (routed.z_index as i64, routed.draw_order as i64)
-                }
-                _ => (0, 0),
+        sorted_scene.sort_by_key(|cmd| match cmd {
+            cvkg_compositor::engine::RenderCommand::Draw(routed) => {
+                (routed.z_index as i64, routed.draw_order as i64)
             }
+            _ => (0, 0),
         });
 
         for cmd in sorted_scene {
@@ -1415,11 +1438,18 @@ impl GpuRenderer {
         current: &cvkg_core::DrawMaterial,
     ) -> cvkg_core::DrawMaterial {
         use crate::renderer::material_id::*;
-        
+
         // If current context is TopUI, route all non-glass elements to the overlay pass.
         // This ensures dropdowns, popovers, and menus render crisp text/shapes on top of other content.
         if matches!(current, cvkg_core::DrawMaterial::TopUI) && material_id != GLASS {
             return cvkg_core::DrawMaterial::TopUI;
+        }
+
+        // If current context has an active Blend mode, route standard opaque quads to that Blend mode.
+        if let cvkg_core::DrawMaterial::Blend { mode } = current
+            && material_id == 0
+        {
+            return cvkg_core::DrawMaterial::Blend { mode: *mode };
         }
 
         match material_id {
@@ -1445,7 +1475,7 @@ impl GpuRenderer {
             }
             TOP_UI => cvkg_core::DrawMaterial::TopUI,
             BLEND_START..=BLEND_END => cvkg_core::DrawMaterial::Blend {
-                mode: (material_id - 7) as u32,
+                mode: (material_id - 7),
             },
             _ => cvkg_core::DrawMaterial::Opaque,
         }
@@ -1453,7 +1483,9 @@ impl GpuRenderer {
 
     /// Convert a compositor Material to a core DrawMaterial.
     /// Centralizes the mapping used by submit_buckets and submit_routed.
-    pub(crate) fn convert_compositor_material(mat: &cvkg_compositor::Material) -> cvkg_core::DrawMaterial {
+    pub(crate) fn convert_compositor_material(
+        mat: &cvkg_compositor::Material,
+    ) -> cvkg_core::DrawMaterial {
         match mat {
             cvkg_compositor::Material::Glass { blur_radius, .. } => {
                 cvkg_core::DrawMaterial::Glass {
@@ -1645,5 +1677,172 @@ impl GpuRenderer {
         } else {
             Err("Failed to capture frame".to_string())
         }
+    }
+
+    /// Hash a set of gradient stops for cache lookup.
+    /// Uses the position and color of each stop to produce a stable hash.
+    fn hash_gradient_stops(stops: &[[f32; 4]]) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for stop in stops {
+            for v in stop {
+                v.to_bits().hash(&mut hasher);
+            }
+        }
+        hasher.finish()
+    }
+
+    /// Upload gradient stops as a 32x1 RGBA8 texture.
+    /// RGB = stop color (linear-ish sRGB from the component), A = stop position (0-255 mapped to 0-1).
+    /// The texture is cached by hash; stops are only re-uploaded when the hash changes.
+    pub(crate) fn upload_gradient_stops(&mut self, stops: &[[f32; 4]]) {
+        if stops.is_empty() {
+            return;
+        }
+
+        let hash = Self::hash_gradient_stops(stops);
+
+        // Check if the texture is already cached with this hash
+        if hash == self.gradient_stops_hash {
+            if let Some((_, _, bg)) = self.gradient_texture_cache.get(&hash) {
+                self.gradient_bind_group = bg.clone();
+                return;
+            }
+        }
+
+        // Check if we have a cached texture for this hash (from a previous frame)
+        if let Some((_, view, bg)) = self.gradient_texture_cache.get(&hash) {
+            self.gradient_stop_texture = view.texture().clone();
+            self.gradient_stop_texture_view = view.clone();
+            self.gradient_bind_group = bg.clone();
+            self.gradient_stops_hash = hash;
+            return;
+        }
+
+        // Upload stops into a 32x1 RGBA8 texture
+        let max_stops = 32u32;
+        let num_stops = stops.len().min(max_stops as usize) as u32;
+
+        // Build RGBA8 data: pack position into alpha as u8
+        let mut data = vec![0u8; (max_stops as usize) * 4];
+        for (i, stop) in stops.iter().enumerate().take(max_stops as usize) {
+            // Convert linear-ish float color to sRGB u8
+            let r = (stop[0].clamp(0.0, 1.0) * 255.0).round() as u8;
+            let g = (stop[1].clamp(0.0, 1.0) * 255.0).round() as u8;
+            let b = (stop[2].clamp(0.0, 1.0) * 255.0).round() as u8;
+            let a = (stop[3].clamp(0.0, 1.0) * 255.0).round() as u8;
+            // Store position in the alpha channel (4th byte)
+            // The color goes in RGB (bytes 0-2), position in byte 3
+            data[i * 4 + 0] = r;
+            data[i * 4 + 1] = g;
+            data[i * 4 + 2] = b;
+            data[i * 4 + 3] = a;
+        }
+
+        // Create or reuse texture
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Gradient Stops Texture"),
+            size: wgpu::Extent3d {
+                width: max_stops,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &data,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(max_stops * 4),
+                rows_per_image: Some(1),
+            },
+            wgpu::Extent3d {
+                width: max_stops,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.gradient_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.dummy_sampler),
+                },
+            ],
+            label: Some("Gradient Bind Group"),
+        });
+
+        // Cache the texture
+        self.gradient_stops_hash = hash;
+        self.gradient_stop_texture = texture.clone();
+        self.gradient_stop_texture_view = texture_view.clone();
+        self.gradient_bind_group = bind_group.clone();
+        self.gradient_texture_cache
+            .insert(hash, (texture, texture_view, bind_group));
+    }
+
+    /// Draw a multi-stop gradient quad using the GPU shader.
+    /// rect: bounding rectangle in logical pixels
+    /// stops: array of [R, G, B, A] where A is the position (0.0-1.0)
+    /// angle: gradient angle in radians (for linear gradients)
+    /// is_radial: true for radial gradient, false for linear
+    pub fn draw_gradient_multi(
+        &mut self,
+        rect: Rect,
+        stops: &[[f32; 4]],
+        angle: f32,
+        is_radial: bool,
+    ) {
+        if stops.is_empty() {
+            return;
+        }
+
+        // Upload gradient stops (cached by hash)
+        self.upload_gradient_stops(stops);
+
+        let num_stops = stops.len().min(32) as f32;
+        let material_id = if is_radial { 31u32 } else { 30u32 };
+
+        // Use a white base color; the shader reads stops from the texture
+        let white = [1.0f32, 1.0, 1.0, 1.0];
+
+        // slice.x = angle (for linear), slice.y = num_stops
+        let slice = [angle, num_stops, 0.0, 1.0];
+
+        self.fill_rect_with_full_params_and_slice(
+            rect,
+            white,
+            material_id,
+            None,
+            0.0,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+            slice,
+            [0.0, 0.0],
+        );
     }
 }

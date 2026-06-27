@@ -36,8 +36,8 @@ use std::path::PathBuf;
 
 // Use the library's public API instead of re-declaring modules
 use cvkg_cli::{
-    CliConfig, asset_pipeline, build_pipeline, devtools_dashboard, scaffold, token_export,
-    webkit_server, ws_server,
+    CliConfig, asset_pipeline, build_pipeline, devtools_dashboard, raster_export, scaffold,
+    token_export, webkit_server, ws_server,
 };
 
 /// CVKG Command Line Interface
@@ -171,6 +171,21 @@ enum Commands {
         /// Output file path
         #[arg(long)]
         output: PathBuf,
+    },
+    /// Export rendered view to raster formats (png, gif)
+    ExportRaster {
+        /// Output format (png, gif)
+        #[arg(long, value_parser = ["png", "gif"])]
+        format: String,
+        /// Output file path
+        #[arg(long)]
+        output: PathBuf,
+        /// Number of frames (for gif)
+        #[arg(long, default_value_t = 1)]
+        frames: u16,
+        /// Frames per second (for gif)
+        #[arg(long, default_value_t = 30)]
+        fps: u16,
     },
 }
 
@@ -765,6 +780,36 @@ fn main() {
                 style("✅").green(),
                 style(output.display()).bold()
             );
+        }
+        Commands::ExportRaster {
+            format,
+            output,
+            frames,
+            fps,
+        } => {
+            use console::style;
+            println!(
+                "{} Exporting raster (format: {}, {} frames @ {} fps)...",
+                style("📸").cyan(),
+                style(&format).yellow(),
+                frames,
+                fps
+            );
+
+            let export = raster_export::RasterExport::new(format, output.clone(), frames, fps);
+            match export.execute() {
+                Ok(()) => {
+                    println!(
+                        "{} Raster exported to {}",
+                        style("✅").green(),
+                        style(output.display()).bold()
+                    );
+                }
+                Err(e) => {
+                    eprintln!("{} Raster export failed: {}", style("❌").red(), e);
+                    std::process::exit(1);
+                }
+            }
         }
     }
 }

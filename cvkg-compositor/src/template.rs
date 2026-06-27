@@ -49,11 +49,19 @@ impl RenderTemplate {
         for (id, layer) in tree.iter_layers().map(|l| (l.id, l)) {
             layers.push(SerializedLayer {
                 id,
-                bounds: [layer.bounds.x, layer.bounds.y, layer.bounds.width, layer.bounds.height],
+                bounds: [
+                    layer.bounds.x,
+                    layer.bounds.y,
+                    layer.bounds.width,
+                    layer.bounds.height,
+                ],
                 transform: layer.transform,
                 material: match &layer.material {
                     Material::Opaque => SerializedMaterial::Opaque,
-                    Material::Glass { blur_radius, depth_index } => SerializedMaterial::Glass {
+                    Material::Glass {
+                        blur_radius,
+                        depth_index,
+                    } => SerializedMaterial::Glass {
                         blur_radius: *blur_radius,
                         depth_index: *depth_index,
                     },
@@ -98,8 +106,7 @@ impl RenderTemplate {
 
     /// Load template from a JSON file.
     pub fn load_from_file(path: &std::path::Path) -> Result<Self, TemplateError> {
-        let json = std::fs::read_to_string(path)
-            .map_err(|e| TemplateError::Io(e.to_string()))?;
+        let json = std::fs::read_to_string(path).map_err(|e| TemplateError::Io(e.to_string()))?;
         let template: RenderTemplate = serde_json::from_str(&json)
             .map_err(|e| TemplateError::Deserialization(e.to_string()))?;
         if template.version > RenderTemplate::VERSION {
@@ -117,7 +124,10 @@ impl RenderTemplate {
         for layer in &self.layers {
             let material = match &layer.material {
                 SerializedMaterial::Opaque => Material::Opaque,
-                SerializedMaterial::Glass { blur_radius, depth_index } => Material::Glass {
+                SerializedMaterial::Glass {
+                    blur_radius,
+                    depth_index,
+                } => Material::Glass {
                     blur_radius: *blur_radius,
                     depth_index: *depth_index,
                 },

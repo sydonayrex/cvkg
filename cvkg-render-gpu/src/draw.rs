@@ -34,31 +34,48 @@ pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
                         .unwrap_or("transform")
                         .to_string();
 
-                    let (keyframe_values, key_times) = if let Some(values) = node.attribute("values") {
-                        let parts: Vec<&str> = values.split(';').collect();
-                        let vals: Vec<f32> = parts.iter()
-                            .map(|p| p.trim().parse::<f32>().unwrap_or(0.0))
-                            .collect();
-                        // Parse keyTimes if present
-                        let kt: Vec<f32> = if let Some(kt_str) = node.attribute("keyTimes") {
-                            kt_str.split(';').map(|p| p.trim().parse::<f32>().unwrap_or(0.0)).collect()
+                    let (keyframe_values, key_times) =
+                        if let Some(values) = node.attribute("values") {
+                            let parts: Vec<&str> = values.split(';').collect();
+                            let vals: Vec<f32> = parts
+                                .iter()
+                                .map(|p| p.trim().parse::<f32>().unwrap_or(0.0))
+                                .collect();
+                            // Parse keyTimes if present
+                            let kt: Vec<f32> = if let Some(kt_str) = node.attribute("keyTimes") {
+                                kt_str
+                                    .split(';')
+                                    .map(|p| p.trim().parse::<f32>().unwrap_or(0.0))
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            };
+                            (vals, kt)
                         } else {
-                            Vec::new()
+                            let f = node
+                                .attribute("from")
+                                .unwrap_or(if attr == "stroke-dashoffset" {
+                                    "1"
+                                } else {
+                                    "0"
+                                })
+                                .parse::<f32>()
+                                .unwrap_or(0.0);
+                            let t = node
+                                .attribute("to")
+                                .unwrap_or(if attr == "stroke-dashoffset" {
+                                    "0"
+                                } else {
+                                    "360"
+                                })
+                                .parse::<f32>()
+                                .unwrap_or(if attr == "stroke-dashoffset" {
+                                    0.0
+                                } else {
+                                    360.0
+                                });
+                            (vec![f, t], Vec::new())
                         };
-                        (vals, kt)
-                    } else {
-                        let f = node
-                            .attribute("from")
-                            .unwrap_or(if attr == "stroke-dashoffset" { "1" } else { "0" })
-                            .parse::<f32>()
-                            .unwrap_or(0.0);
-                        let t = node
-                            .attribute("to")
-                            .unwrap_or(if attr == "stroke-dashoffset" { "0" } else { "360" })
-                            .parse::<f32>()
-                            .unwrap_or(if attr == "stroke-dashoffset" { 0.0 } else { 360.0 });
-                        (vec![f, t], Vec::new())
-                    };
 
                     parsed_animations.push(SvgAnimation {
                         target_id,
@@ -80,7 +97,7 @@ pub fn parse_svg_animations(data: &[u8]) -> Vec<SvgAnimation> {
 pub(crate) fn usvg_to_lyon(path: &usvg::Path, transform: usvg::Transform) -> lyon::path::Path {
     let mut builder = lyon::path::Path::builder();
     let mut is_open = false;
-    
+
     // Helper to transform a point
     let tx = |p: usvg::tiny_skia_path::Point| -> lyon::math::Point {
         let nx = transform.sx * p.x + transform.kx * p.y + transform.tx;

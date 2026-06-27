@@ -8,7 +8,7 @@
 
 use crate::lingua_tong;
 use crate::theme;
-use crate::{RADIUS_XL, RADIUS_LG, RADIUS_MD};
+use crate::{RADIUS_LG, RADIUS_MD, RADIUS_XL};
 use cvkg_core::Event;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 use std::sync::Arc;

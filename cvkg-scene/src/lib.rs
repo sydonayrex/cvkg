@@ -145,8 +145,7 @@ impl SceneGraph {
 
     /// Generate a new unique NodeId.
     pub fn next_id(&mut self) -> NodeId {
-        let id = KvasirId::new();
-        id
+        KvasirId::new()
     }
 
     /// Add a node to the graph and mark its region as dirty.
@@ -718,18 +717,40 @@ mod tests {
         // Test with a single node at negative coord.
         let mut scene = SceneGraph::new();
         let id = scene.next_id();
-        let mut root = VNode::new(id, "R", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        let mut root = VNode::new(
+            id,
+            "R",
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+        );
         scene.add_node(root, None);
         scene.update_transforms();
-        scene.nodes.get_mut(&id).unwrap().world_rect =
-            Rect { x: -200.0, y: 0.0, width: 50.0, height: 50.0 };
+        scene.nodes.get_mut(&id).unwrap().world_rect = Rect {
+            x: -200.0,
+            y: 0.0,
+            width: 50.0,
+            height: 50.0,
+        };
         scene.rebuild_spatial_hash();
         // At cell_size=64, -200/64 = -3.125, floor = -4
         // Cell key for (-4, 0) should be (OFFSET-4, OFFSET+0)
         // Query at (-190, 0, 20, 20): cell x range is -3 to -2 (positive direction)
         // Hmm, the node at cell -4 with width 50 spans cells -4 to -3
-        let result = scene.query_region(Rect { x: -190.0, y: 0.0, width: 20.0, height: 20.0 });
-        assert!(result.contains(&id), "negative coord test failed, got {:?}", result);
+        let result = scene.query_region(Rect {
+            x: -190.0,
+            y: 0.0,
+            width: 20.0,
+            height: 20.0,
+        });
+        assert!(
+            result.contains(&id),
+            "negative coord test failed, got {:?}",
+            result
+        );
     }
 
     #[test]
@@ -738,7 +759,12 @@ mod tests {
         let id_a = scene.next_id();
         let id_b = scene.next_id();
         let id_c = scene.next_id();
-        let rect_small = Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 };
+        let rect_small = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
 
         // Three nodes at distinct world positions: A at (-5000, 0),
         // B at (5000, 0), C at (0, 0). We add them as siblings under
@@ -752,12 +778,24 @@ mod tests {
         scene.update_transforms();
 
         // Now manually set the world_rects to where we want them.
-        scene.nodes.get_mut(&id_a).unwrap().world_rect =
-            Rect { x: -5000.0, y: 0.0, width: 10.0, height: 10.0 };
-        scene.nodes.get_mut(&id_b).unwrap().world_rect =
-            Rect { x: 5000.0, y: 0.0, width: 10.0, height: 10.0 };
-        scene.nodes.get_mut(&id_c).unwrap().world_rect =
-            Rect { x: 0.0, y: 0.0, width: 10.0, height: 10.0 };
+        scene.nodes.get_mut(&id_a).unwrap().world_rect = Rect {
+            x: -5000.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        scene.nodes.get_mut(&id_b).unwrap().world_rect = Rect {
+            x: 5000.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
+        scene.nodes.get_mut(&id_c).unwrap().world_rect = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 10.0,
+            height: 10.0,
+        };
         scene.rebuild_spatial_hash();
 
         // Verify the world_rects are set as expected.
@@ -771,7 +809,12 @@ mod tests {
 
         // Query near A (overlapping, not just touching):
         // A spans x = [-5000, -4990]. Query must overlap, so use x = [-4995, -4975].
-        let query_a = Rect { x: -4995.0, y: 0.0, width: 20.0, height: 20.0 };
+        let query_a = Rect {
+            x: -4995.0,
+            y: 0.0,
+            width: 20.0,
+            height: 20.0,
+        };
         let result_a = scene.query_region(query_a);
         assert!(
             result_a.contains(&id_a),
@@ -790,14 +833,24 @@ mod tests {
         );
 
         // Query near C: must return C only.
-        let query_c = Rect { x: -5.0, y: -5.0, width: 20.0, height: 20.0 };
+        let query_c = Rect {
+            x: -5.0,
+            y: -5.0,
+            width: 20.0,
+            height: 20.0,
+        };
         let result_c = scene.query_region(query_c);
         assert!(result_c.contains(&id_c), "query near C must include C");
         assert!(!result_c.contains(&id_a), "query near C must NOT include A");
         assert!(!result_c.contains(&id_b), "query near C must NOT include B");
 
         // Query spanning A and C: must include both.
-        let query_span = Rect { x: -4995.0, y: 0.0, width: 5000.0, height: 20.0 };
+        let query_span = Rect {
+            x: -4995.0,
+            y: 0.0,
+            width: 5000.0,
+            height: 20.0,
+        };
         let result_span = scene.query_region(query_span);
         assert!(result_span.contains(&id_a), "span must include A");
         assert!(result_span.contains(&id_c), "span must include C");
@@ -808,14 +861,36 @@ mod tests {
         // Sanity check: spatial hash works for positive coords.
         let mut scene = SceneGraph::new();
         let id = scene.next_id();
-        let mut root = VNode::new(id, "R", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        let mut root = VNode::new(
+            id,
+            "R",
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 100.0,
+                height: 100.0,
+            },
+        );
         scene.add_node(root, None);
         scene.update_transforms();
-        scene.nodes.get_mut(&id).unwrap().world_rect =
-            Rect { x: 100.0, y: 100.0, width: 50.0, height: 50.0 };
+        scene.nodes.get_mut(&id).unwrap().world_rect = Rect {
+            x: 100.0,
+            y: 100.0,
+            width: 50.0,
+            height: 50.0,
+        };
         scene.rebuild_spatial_hash();
-        let result = scene.query_region(Rect { x: 110.0, y: 110.0, width: 10.0, height: 10.0 });
-        assert!(result.contains(&id), "positive coord test failed, got {:?}", result);
+        let result = scene.query_region(Rect {
+            x: 110.0,
+            y: 110.0,
+            width: 10.0,
+            height: 10.0,
+        });
+        assert!(
+            result.contains(&id),
+            "positive coord test failed, got {:?}",
+            result
+        );
     }
 
     #[test]

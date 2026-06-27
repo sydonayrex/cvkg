@@ -82,8 +82,6 @@ impl RendererConfig {
     /// Total VRAM cost of the Mega-Heim texture in bytes
     /// (RGBA8 = 4 bytes/pixel).
     pub fn mega_heim_vram_bytes(&self) -> u64 {
-        self.mega_heim_width as u64
-            * self.mega_heim_height as u64
-            * 4
+        self.mega_heim_width as u64 * self.mega_heim_height as u64 * 4
     }
 }

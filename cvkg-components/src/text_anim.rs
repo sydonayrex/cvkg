@@ -3,8 +3,8 @@
 //! Button components: ShimmerButton, RippleButton, StatefulButton.
 //! All components use the cvkg theme system (theme::* helpers) for full themability.
 
-use crate::theme;
 use crate::RADIUS_XL;
+use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // =============================================================================
@@ -411,7 +411,11 @@ impl View for CardStack {
                 height: self.card_height,
             };
             let alpha = 1.0 - (i as f32 * 0.15);
-            renderer.fill_rounded_rect(card_rect, RADIUS_XL, theme::with_alpha(self.base_color, self.base_color[3] * alpha));
+            renderer.fill_rounded_rect(
+                card_rect,
+                RADIUS_XL,
+                theme::with_alpha(self.base_color, self.base_color[3] * alpha),
+            );
             renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         }
         renderer.pop_vnode();
@@ -518,7 +522,11 @@ impl View for CardHoverEffect {
                 height: self.height,
             };
             let spot_color = theme::surface_overlay();
-            renderer.fill_rounded_rect(spot_rect, RADIUS_XL, theme::with_alpha(spot_color, 0.03 * self.hover));
+            renderer.fill_rounded_rect(
+                spot_rect,
+                RADIUS_XL,
+                theme::with_alpha(spot_color, 0.03 * self.hover),
+            );
         }
         // Label
         if !self.label.is_empty() {
@@ -915,7 +923,11 @@ impl View for ShimmerButton {
                 height: rect.height,
             };
             let shimmer_color = theme::accent();
-            renderer.fill_rounded_rect(shimmer_rect, RADIUS_XL, theme::with_alpha(shimmer_color, 0.15));
+            renderer.fill_rounded_rect(
+                shimmer_rect,
+                RADIUS_XL,
+                theme::with_alpha(shimmer_color, 0.15),
+            );
         }
         // Label
         let (tw, th) = renderer.measure_text(&self.label, 15.0);

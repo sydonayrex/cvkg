@@ -19,6 +19,12 @@ impl AccessibilityNode {
     }
 }
 
+impl Default for AccessibilityNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for AccessibilityNode {
     fn label(&self) -> &'static str {
         "Accessibility"
@@ -52,7 +58,10 @@ impl KvasirNode for AccessibilityNode {
         );
 
         // Sample from the scene texture, render to the swapchain target.
-        let scene_view = match ctx.registry.get_texture_view(crate::kvasir::nodes::RES_SCENE) {
+        let scene_view = match ctx
+            .registry
+            .get_texture_view(crate::kvasir::nodes::RES_SCENE)
+        {
             Some(v) => v,
             None => {
                 log::error!("[Accessibility] Missing scene texture view");

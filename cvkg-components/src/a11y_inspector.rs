@@ -174,7 +174,10 @@ impl View for A11yInspector {
         };
 
         // Panel background
-        renderer.fill_rect(panel_rect, theme::with_alpha(theme::surface_elevated(), 0.95));
+        renderer.fill_rect(
+            panel_rect,
+            theme::with_alpha(theme::surface_elevated(), 0.95),
+        );
         renderer.stroke_rect(
             Rect {
                 x: panel_rect.x,

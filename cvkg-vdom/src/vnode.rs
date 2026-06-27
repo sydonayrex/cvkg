@@ -116,8 +116,17 @@ impl VNode {
     pub fn is_focusable(&self) -> bool {
         matches!(
             self.aria_role.as_str(),
-            "button" | "checkbox" | "radio" | "slider" | "tab" |
-            "spinbutton" | "combobox" | "textbox" | "password" | "switch" | "scrollbar"
+            "button"
+                | "checkbox"
+                | "radio"
+                | "slider"
+                | "tab"
+                | "spinbutton"
+                | "combobox"
+                | "textbox"
+                | "password"
+                | "switch"
+                | "scrollbar"
         )
     }
 }

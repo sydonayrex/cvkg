@@ -1,6 +1,6 @@
-use std::collections::{HashMap, VecDeque};
 use crate::types::{FilterError, ResolvedInput};
 use crate::validators::{LightingValidator, TurbulenceValidator};
+use std::collections::{HashMap, VecDeque};
 
 // ── Filter Graph ─────────────────────────────────────────────────────────────
 
@@ -267,7 +267,6 @@ impl FilterGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     fn flood_kind() -> usvg::filter::Kind {
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">

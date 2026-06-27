@@ -14,11 +14,9 @@ pub mod geometry_buffers;
 pub mod gpu_capabilities;
 
 pub use config::RendererConfig;
-pub use gpu_capabilities::{detect_gpu_vendor, GpuCapabilities, GpuVendor};
+pub use gpu_capabilities::{GpuCapabilities, GpuVendor, detect_gpu_vendor};
 
 // Re-export the existing subsystem structs that still live in
 // types.rs. These will be moved to their own files in subsequent
 // commits.
-pub use crate::types::{
-    GeometryBuffers, ParticleSubsystem, SvgSubsystem, TextSubsystem,
-};
+pub use crate::types::{GeometryBuffers, ParticleSubsystem, SvgSubsystem, TextSubsystem};

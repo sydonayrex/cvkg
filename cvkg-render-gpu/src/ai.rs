@@ -110,8 +110,11 @@ impl MaterialGraphSpec {
             mat.connect(*from, MaterialSocket::Color, *to, MaterialSocket::Color);
         }
 
-        mat.validate_with_config(&MaterialValidationConfig { max_nodes: 32, max_edges: 64 })
-            .map_err(|e| GeneratorError::ValidationFailed(e.to_string()))?;
+        mat.validate_with_config(&MaterialValidationConfig {
+            max_nodes: 32,
+            max_edges: 64,
+        })
+        .map_err(|e| GeneratorError::ValidationFailed(e.to_string()))?;
 
         Ok(mat)
     }

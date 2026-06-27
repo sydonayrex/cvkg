@@ -1,9 +1,9 @@
 //! Bridging the internal renderer to `cvkg-core` traits.
 use crate::renderer::GpuRenderer;
 
+pub mod frame;
 pub mod shapes;
 pub mod text;
-pub mod frame;
 
 use crate::renderer::material_id;
 use crate::types::*;
@@ -78,14 +78,33 @@ impl cvkg_core::Renderer for GpuRenderer {
     /// Fill a rounded rect with glass material with explicit intensity control.
     /// `glass_intensity` ranges from 0.0 (solid, no glass effect) to 1.0 (full glass).
     /// This allows per-component control over glass strength.
-    fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
+    fn fill_glass_rect_with_intensity(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        blur_radius: f32,
+        glass_intensity: f32,
+    ) {
         // Default tint: neutral white with moderate alpha, matching pre-tint behavior
-        self.fill_glass_rect_with_tint(rect, radius, blur_radius, [1.0, 1.0, 1.0, 0.4], glass_intensity);
+        self.fill_glass_rect_with_tint(
+            rect,
+            radius,
+            blur_radius,
+            [1.0, 1.0, 1.0, 0.4],
+            glass_intensity,
+        );
     }
 
     /// Fill a rounded rect with glass material with explicit tint color and intensity.
     /// `tint_color` is the glass base color (RGBA). `glass_intensity` controls effect strength.
-    fn fill_glass_rect_with_tint(&mut self, rect: Rect, radius: f32, blur_radius: f32, tint_color: [f32; 4], glass_intensity: f32) {
+    fn fill_glass_rect_with_tint(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        blur_radius: f32,
+        tint_color: [f32; 4],
+        glass_intensity: f32,
+    ) {
         let gi = glass_intensity.clamp(0.0, 1.0);
         // Per-instance blur_radius drives the shader's blur_mip level.
         // Scale: 0-100 input maps to 0-4 mip levels for the Kawase blur chain.
@@ -129,7 +148,13 @@ impl cvkg_core::Renderer for GpuRenderer {
         self.current_draw_material = prev_material;
     }
 
-    fn fill_glass_rect_with_pressure(&mut self, rect: Rect, radius: f32, blur_radius: f32, pressure: f32) {
+    fn fill_glass_rect_with_pressure(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        blur_radius: f32,
+        pressure: f32,
+    ) {
         // Pressure scales both blur and tint: full pressure = full glass effect
         let p = pressure.clamp(0.0, 1.0);
         self.fill_glass_rect_with_intensity(rect, radius, blur_radius * p, p);
@@ -153,7 +178,12 @@ impl cvkg_core::Renderer for GpuRenderer {
             0,
             None,
             rect.width.min(rect.height) * 0.22 * (n / 4.0),
-            Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 },
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
         );
         self.current_draw_material = prev_material;
     }
@@ -168,14 +198,26 @@ impl cvkg_core::Renderer for GpuRenderer {
             material_id::SQUIRCLE_STROKE,
             None,
             rect.width.min(rect.height) * 0.22 * (n / 4.0),
-            Rect { x: stroke_width, y: 0.0, width: 0.0, height: 0.0 },
+            Rect {
+                x: stroke_width,
+                y: 0.0,
+                width: 0.0,
+                height: 0.0,
+            },
         );
         self.current_draw_material = prev_material;
     }
 
     /// Draw a focus ring around a rect (for keyboard navigation accessibility).
     /// `offset` is the gap between the rect and the ring, `width` is the ring thickness.
-    fn draw_focus_ring(&mut self, rect: Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
+    fn draw_focus_ring(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        offset: f32,
+        width: f32,
+        color: [f32; 4],
+    ) {
         let ring_rect = Rect {
             x: rect.x - offset,
             y: rect.y - offset,
@@ -399,6 +441,14 @@ impl cvkg_core::Renderer for GpuRenderer {
         );
     }
 
+    fn draw_linear_gradient_multi(&mut self, rect: Rect, stops: &[[f32; 4]], angle: f32) {
+        self.draw_gradient_multi(rect, stops, angle, false);
+    }
+
+    fn draw_radial_gradient_multi(&mut self, rect: Rect, stops: &[[f32; 4]]) {
+        self.draw_gradient_multi(rect, stops, 0.0, true);
+    }
+
     fn draw_drop_shadow(
         &mut self,
         rect: Rect,
@@ -415,7 +465,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             height: rect.height + margin * 2.0,
         };
         // uv.x = total margin (for SDF offset), uv.y = blur width (for falloff)
-        self.fill_rect_with_full_params(
+        self.fill_rect_with_full_params_and_slice(
             inflated,
             self.apply_opacity(color),
             material_id::DROP_SHADOW,
@@ -427,6 +477,8 @@ impl cvkg_core::Renderer for GpuRenderer {
                 width: 0.0,
                 height: 0.0,
             },
+            [0.0, 0.0, 0.0, 1.0],
+            [0.0, 0.0],
         );
     }
 
@@ -507,7 +559,17 @@ impl cvkg_core::Renderer for GpuRenderer {
             [x2 - nx, y2 - ny],
             [x1 - nx, y1 - ny],
         ];
-        self.push_oriented_quad(points, color, 1, Rect { x: 0.0, y: 0.0, width: 1.0, height: 1.0 });
+        self.push_oriented_quad(
+            points,
+            color,
+            1,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+        );
     }
 
     fn draw_image(&mut self, image_name: &str, rect: Rect) {
@@ -531,8 +593,6 @@ impl cvkg_core::Renderer for GpuRenderer {
             });
         self.fill_rect_with_full_params(rect, [1.0, 1.0, 1.0, 1.0], 2, tid, 0.0, uv_rect);
     }
-
-
 
     fn shape_rich_text(
         &mut self,
@@ -634,7 +694,11 @@ impl cvkg_core::Renderer for GpuRenderer {
 
         // Bounds guard: index must be in 1..32 (index 0 is the atlas).
         if index == 0 || index as usize >= self.texture_views.len() {
-            log::error!("[GPU] load_image: invalid texture index {} (registry has {} entries)", index, self.texture_registry.len());
+            log::error!(
+                "[GPU] load_image: invalid texture index {} (registry has {} entries)",
+                index,
+                self.texture_registry.len()
+            );
             return;
         }
 
@@ -687,7 +751,7 @@ impl cvkg_core::Renderer for GpuRenderer {
         let should_skip = self
             .memo_cache
             .get(&id)
-            .map_or(false, |entry| entry.hash == data_hash);
+            .is_some_and(|entry| entry.hash == data_hash);
 
         if should_skip {
             // Replay path: append cached buffers and remap cached DrawCall offsets.
@@ -697,8 +761,7 @@ impl cvkg_core::Renderer for GpuRenderer {
 
                 self.vertices.extend_from_slice(&entry.vertices);
                 self.indices.extend_from_slice(&entry.indices);
-                self.instance_data
-                    .extend_from_slice(&entry.instance_data);
+                self.instance_data.extend_from_slice(&entry.instance_data);
 
                 for dc in &entry.draw_calls {
                     let mut replayed = dc.clone();
@@ -727,12 +790,9 @@ impl cvkg_core::Renderer for GpuRenderer {
                     // saturating_sub guards against underflow if a draw call
                     // somehow already had an offset below the slice start
                     // (should not happen, but defensive).
-                    remapped.index_start = remapped
-                        .index_start
-                        .saturating_sub(i_start as u32);
-                    remapped.instance_start = remapped
-                        .instance_start
-                        .saturating_sub(inst_start as u32);
+                    remapped.index_start = remapped.index_start.saturating_sub(i_start as u32);
+                    remapped.instance_start =
+                        remapped.instance_start.saturating_sub(inst_start as u32);
                     remapped
                 })
                 .collect();
@@ -914,9 +974,13 @@ impl cvkg_core::Renderer for GpuRenderer {
             return;
         }
 
-        let mut rng_state = (now.elapsed().as_nanos() as u64).wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let mut rng_state = (now.elapsed().as_nanos() as u64)
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let mut rand_f32 = |range: std::ops::Range<f32>| -> f32 {
-            rng_state = rng_state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            rng_state = rng_state
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let t = (rng_state >> 33) as f32 / (1u64 << 31) as f32;
             range.start + t * (range.end - range.start)
         };
@@ -957,11 +1021,12 @@ impl cvkg_core::Renderer for GpuRenderer {
             time
         );
 
-        self.hologram_instances.push(crate::renderer::HologramInstance {
-            rect,
-            id_hash,
-            time,
-        });
+        self.hologram_instances
+            .push(crate::renderer::HologramInstance {
+                rect,
+                id_hash,
+                time,
+            });
         self.volumetric_enabled = true;
     }
 

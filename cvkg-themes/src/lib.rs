@@ -337,17 +337,17 @@ impl std::fmt::Display for ApcaResult {
 #[derive(Debug, Clone)]
 pub struct TypographyScale {
     // Apple HIG text styles
-    pub large_title: f32,   // 34px
-    pub title1: f32,        // 28px
-    pub title2: f32,        // 22px
-    pub title3: f32,        // 20px
-    pub headline: f32,      // 17px semibold
-    pub body: f32,          // 17px
-    pub callout: f32,       // 16px
-    pub subheadline: f32,   // 15px
-    pub footnote: f32,      // 13px
-    pub caption1: f32,      // 12px
-    pub caption2: f32,      // 11px
+    pub large_title: f32, // 34px
+    pub title1: f32,      // 28px
+    pub title2: f32,      // 22px
+    pub title3: f32,      // 20px
+    pub headline: f32,    // 17px semibold
+    pub body: f32,        // 17px
+    pub callout: f32,     // 16px
+    pub subheadline: f32, // 15px
+    pub footnote: f32,    // 13px
+    pub caption1: f32,    // 12px
+    pub caption2: f32,    // 11px
     // Legacy aliases
     pub hero: f32,
     pub h1: f32,
@@ -359,25 +359,25 @@ pub struct TypographyScale {
 /// Corner radius scale anchored to Tahoe's 12px standard
 #[derive(Debug, Clone)]
 pub struct RadiusScale {
-    pub xs: f32,    // 4px  -- small controls, tags
-    pub s: f32,     // 6px  -- buttons, text fields
-    pub m: f32,     // 8px  -- cards, alerts
-    pub l: f32,     // 10px -- panels, popovers
-    pub xl: f32,    // 12px -- windows, dialogs (Tahoe standard)
-    pub xxl: f32,   // 16px -- large panels, sheets
-    pub full: f32,  // 9999px -- circles, pills, squircle icons
+    pub xs: f32,   // 4px  -- small controls, tags
+    pub s: f32,    // 6px  -- buttons, text fields
+    pub m: f32,    // 8px  -- cards, alerts
+    pub l: f32,    // 10px -- panels, popovers
+    pub xl: f32,   // 12px -- windows, dialogs (Tahoe standard)
+    pub xxl: f32,  // 16px -- large panels, sheets
+    pub full: f32, // 9999px -- circles, pills, squircle icons
 }
 
 /// Spacing scale for layout consistency (4px grid)
 #[derive(Debug, Clone)]
 pub struct SpacingScale {
-    pub xs: f32,    // 4px
-    pub s: f32,     // 8px
-    pub m: f32,     // 12px
-    pub l: f32,     // 16px
-    pub xl: f32,    // 24px
-    pub xxl: f32,   // 32px
-    pub xxxl: f32,  // 48px
+    pub xs: f32,   // 4px
+    pub s: f32,    // 8px
+    pub m: f32,    // 12px
+    pub l: f32,    // 16px
+    pub xl: f32,   // 24px
+    pub xxl: f32,  // 32px
+    pub xxxl: f32, // 48px
 }
 
 /// Motion scale for standardized animation physics
@@ -608,10 +608,22 @@ impl Theme {
                 code: 12.0,
             },
             spacing: SpacingScale {
-                xs: 4.0, s: 8.0, m: 12.0, l: 16.0, xl: 24.0, xxl: 32.0, xxxl: 48.0,
+                xs: 4.0,
+                s: 8.0,
+                m: 12.0,
+                l: 16.0,
+                xl: 24.0,
+                xxl: 32.0,
+                xxxl: 48.0,
             },
             radius: RadiusScale {
-                xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0,
+                xs: 4.0,
+                s: 6.0,
+                m: 8.0,
+                l: 10.0,
+                xl: 12.0,
+                xxl: 16.0,
+                full: 9999.0,
             },
             motion: MotionScale {
                 snappy: cvkg_anim::SpringParams::snappy(),
@@ -674,10 +686,22 @@ impl Theme {
                 code: 12.0,
             },
             spacing: SpacingScale {
-                xs: 4.0, s: 8.0, m: 12.0, l: 16.0, xl: 24.0, xxl: 32.0, xxxl: 48.0,
+                xs: 4.0,
+                s: 8.0,
+                m: 12.0,
+                l: 16.0,
+                xl: 24.0,
+                xxl: 32.0,
+                xxxl: 48.0,
             },
             radius: RadiusScale {
-                xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0,
+                xs: 4.0,
+                s: 6.0,
+                m: 8.0,
+                l: 10.0,
+                xl: 12.0,
+                xxl: 16.0,
+                full: 9999.0,
             },
             motion: MotionScale {
                 snappy: cvkg_anim::SpringParams::snappy(),
@@ -718,13 +742,41 @@ impl Theme {
                 text_dim: Color::new(0.45, 0.45, 0.50, 1.0),
             },
             typography: TypographyScale {
-                large_title: 34.0, title1: 28.0, title2: 22.0, title3: 20.0,
-                headline: 17.0, body: 17.0, callout: 16.0, subheadline: 15.0,
-                footnote: 13.0, caption1: 12.0, caption2: 11.0,
-                hero: 48.0, h1: 32.0, h2: 24.0, caption: 12.0, code: 12.0,
+                large_title: 34.0,
+                title1: 28.0,
+                title2: 22.0,
+                title3: 20.0,
+                headline: 17.0,
+                body: 17.0,
+                callout: 16.0,
+                subheadline: 15.0,
+                footnote: 13.0,
+                caption1: 12.0,
+                caption2: 11.0,
+                hero: 48.0,
+                h1: 32.0,
+                h2: 24.0,
+                caption: 12.0,
+                code: 12.0,
             },
-            spacing: SpacingScale { xs: 4.0, s: 8.0, m: 12.0, l: 16.0, xl: 24.0, xxl: 32.0, xxxl: 48.0 },
-            radius: RadiusScale { xs: 4.0, s: 6.0, m: 8.0, l: 10.0, xl: 12.0, xxl: 16.0, full: 9999.0 },
+            spacing: SpacingScale {
+                xs: 4.0,
+                s: 8.0,
+                m: 12.0,
+                l: 16.0,
+                xl: 24.0,
+                xxl: 32.0,
+                xxxl: 48.0,
+            },
+            radius: RadiusScale {
+                xs: 4.0,
+                s: 6.0,
+                m: 8.0,
+                l: 10.0,
+                xl: 12.0,
+                xxl: 16.0,
+                full: 9999.0,
+            },
             motion: MotionScale {
                 snappy: cvkg_anim::SpringParams::snappy(),
                 fluid: cvkg_anim::SpringParams::fluid(),
@@ -748,20 +800,13 @@ impl Theme {
 
     /// Toggle between dark and light mode, returning a new Theme.
     ///
-    /// Preserves the current theme's typography/spacing/motion scales.
-    /// Switches the color palette and glass material.
+    /// Preserves the current theme's custom palette modifications, typography,
+    /// spacing, motion scale, radius scale, materials, accessibility overrides,
+    /// density, and glassmorphism setting. Only the `is_dark` flag is flipped
+    /// to trigger the renderer's light/dark shader path.
     pub fn toggle(&self) -> Self {
-        let mut new = if self.is_dark {
-            Self::light()
-        } else {
-            Self::dark()
-        };
-
-        // Preserve typography, spacing, motion from current theme
-        new.typography = self.typography.clone();
-        new.spacing = self.spacing.clone();
-        new.motion = self.motion.clone();
-
+        let mut new = self.clone();
+        new.is_dark = !self.is_dark;
         new
     }
 
@@ -877,17 +922,23 @@ pub struct ThemeBuilder {
 impl ThemeBuilder {
     /// Start with a dark theme base.
     pub fn dark() -> Self {
-        Self { base: Theme::dark() }
+        Self {
+            base: Theme::dark(),
+        }
     }
 
     /// Start with a light theme base.
     pub fn light() -> Self {
-        Self { base: Theme::light() }
+        Self {
+            base: Theme::light(),
+        }
     }
 
     /// Start from a custom seed color.
     pub fn from_seed(seed: OklchColor) -> Self {
-        Self { base: Theme::from_seed(seed) }
+        Self {
+            base: Theme::from_seed(seed),
+        }
     }
 
     /// Set primary color from a HEX string (e.g., "#FF6B35").
@@ -1204,9 +1255,9 @@ impl StateColors {
 
         // Neither pure white nor black works -- return whichever has higher contrast
         if white_contrast >= black_contrast {
-            return Color::new(1.0, 1.0, 1.0, 1.0);
+            Color::new(1.0, 1.0, 1.0, 1.0)
         } else {
-            return Color::new(0.0, 0.0, 0.0, 1.0);
+            Color::new(0.0, 0.0, 0.0, 1.0)
         }
     }
 

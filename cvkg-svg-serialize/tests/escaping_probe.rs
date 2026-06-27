@@ -1,13 +1,14 @@
+use quick_xml::Writer;
 /// Probe quick-xml's escaping behavior to verify security properties.
 /// Run with: cargo test --test escaping_probe -- --nocapture
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Writer;
 
 #[test]
 fn escaping_probe() {
     // === 1. BytesText escaping for CSS content (the <style> block) ===
     let mut w = Writer::new_with_indent(Vec::new(), b' ', 2);
-    w.write_event(Event::Start(BytesStart::new("style"))).unwrap();
+    w.write_event(Event::Start(BytesStart::new("style")))
+        .unwrap();
     let css = ".a > .b { color: red; }\n.c::before { content: \"<\"; }";
     w.write_event(Event::Text(BytesText::new(css))).unwrap();
     w.write_event(Event::End(BytesEnd::new("style"))).unwrap();
@@ -34,12 +35,18 @@ fn escaping_probe() {
     let mut w3 = Writer::new_with_indent(Vec::new(), b' ', 2);
     let mut root = BytesStart::new("svg");
     let malicious_prefix = r#"a" xmlns:evil="true""#;
-    root.push_attribute((format!("xmlns:{}", malicious_prefix).as_str(), "http://example.com"));
+    root.push_attribute((
+        format!("xmlns:{}", malicious_prefix).as_str(),
+        "http://example.com",
+    ));
     w3.write_event(Event::Empty(root)).unwrap();
     let out3 = String::from_utf8(w3.into_inner()).unwrap();
     println!("=== xmlns prefix injection test ===");
     println!("{}", out3);
-    println!("Injection succeeded (has 'evil'): {}", out3.contains("evil"));
+    println!(
+        "Injection succeeded (has 'evil'): {}",
+        out3.contains("evil")
+    );
     println!();
 
     // === 4. Control characters in attribute values ===
@@ -51,7 +58,10 @@ fn escaping_probe() {
     let out4 = w4.into_inner();
     println!("=== Control char test ===");
     println!("Bytes: {:02x?}", &out4[..out4.len().min(100)]);
-    println!("Is valid UTF-8: {}", String::from_utf8(out4.clone()).is_ok());
+    println!(
+        "Is valid UTF-8: {}",
+        String::from_utf8(out4.clone()).is_ok()
+    );
     println!();
 
     // === 5. Single quote vs double quote ===

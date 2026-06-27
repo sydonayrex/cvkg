@@ -63,9 +63,7 @@ impl NativeWasmServer {
 
         // Build hardened WASI context for Preview 1
         let mut wasi_builder = WasiCtxBuilder::new();
-        wasi_builder
-            .inherit_stdout()
-            .inherit_stderr();
+        wasi_builder.inherit_stdout().inherit_stderr();
 
         // Hardened: Preopen only the current working directory as a safe root.
         // This prevents the WASM guest from accessing the entire host filesystem.

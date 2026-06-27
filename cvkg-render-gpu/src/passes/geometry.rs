@@ -16,6 +16,12 @@ impl GeometryNode {
     }
 }
 
+impl Default for GeometryNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for GeometryNode {
     fn label(&self) -> &'static str {
         "Geometry"
@@ -101,6 +107,7 @@ impl KvasirNode for GeometryNode {
             p.set_bind_group(0, &ctx.renderer.dummy_texture_bind_group, &[]);
             p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+            p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
             p.draw(0..3, 0..1);
         }
 
@@ -127,6 +134,7 @@ impl KvasirNode for GeometryNode {
             );
             p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+            p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
 
             // P2-6: Geometry pass filtering contract
             // Only draws Opaque material calls with no render target binding.
@@ -137,7 +145,9 @@ impl KvasirNode for GeometryNode {
             // - Calls with target_id.is_some() are rendered in the offscreen pass.
             let mut opaque_calls_count = 0;
             for call in ctx.renderer.draw_calls.iter().filter(|c| {
-                matches!(c.material, cvkg_core::DrawMaterial::Opaque) && c.target_id.is_none()
+                (matches!(c.material, cvkg_core::DrawMaterial::Opaque)
+                    || matches!(c.material, cvkg_core::DrawMaterial::Blend { .. }))
+                    && c.target_id.is_none()
             }) {
                 opaque_calls_count += 1;
                 p.set_pipeline(&ctx.renderer.opaque_pipeline);

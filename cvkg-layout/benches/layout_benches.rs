@@ -1,6 +1,6 @@
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, SizeProposal};
-use cvkg_layout::{HStack, VStack};
+use cvkg_layout::HStack;
 
 // ---------------------------------------------------------------------------
 // MockView: a lightweight LayoutView for benchmarking

@@ -1,14 +1,16 @@
-use std::sync::Arc;
-use winit::window::Window;
-use winit::event_loop::{EventLoop, ControlFlow};
-use cvkg_core::{
-    FrameRenderer, RenderStateSnapshot, Renderer, ColorTheme,
-    RenderIntensityMode, Rect, DrawMaterial, TelemetryData, Mesh,
-};
-use crate::window::{WindowManager, SafeAreaInsets};
-use crate::audio::{RodioAudioEngine, VisualHapticEngine};
 use crate::asset_manager::NativeAssetManager;
+use crate::audio::{RodioAudioEngine, VisualHapticEngine};
 use crate::main_loop::{App, AppEvent};
+use crate::window::{SafeAreaInsets, WindowManager};
+use cvkg_core::{
+    ColorTheme, DrawMaterial, FrameRenderer, Mesh, Rect, RenderIntensityMode, RenderStateSnapshot,
+    Renderer, TelemetryData,
+};
+use std::sync::Arc;
+use winit::event_loop::{ControlFlow, EventLoop};
+#[cfg(target_os = "linux")]
+use winit::platform::wayland::EventLoopBuilderExtWayland;
+use winit::window::Window;
 
 // Thread-local raw pointer to the locked GpuRenderer for the duration of one render pass.
 // CONTRACT: Set to non-null only while the MutexGuard is live on the call stack.
@@ -92,8 +94,16 @@ impl NativeRenderer {
     /// Start the CVKG native application with the given view.
     /// `prewarm_assets` is a list of (name, raw_bytes) pairs uploaded to the GPU
     /// texture atlas on the first frame before any draw calls.
-    pub fn run<V: cvkg_core::View + 'static>(view: V, prewarm_assets: Option<Vec<(String, Vec<u8>)>>) {
+    pub fn run<V: cvkg_core::View + 'static>(
+        view: V,
+        prewarm_assets: Option<Vec<(String, Vec<u8>)>>,
+    ) {
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+            .format_timestamp_millis()
+            .init();
+
         let event_loop = EventLoop::<AppEvent>::with_user_event()
+            .with_any_thread(true)
             .build()
             .expect("failed to create winit event loop: platform initialization failed");
         event_loop.set_control_flow(ControlFlow::Wait);
@@ -116,13 +126,19 @@ impl NativeRenderer {
             pending_prewarm: prewarm_assets,
         };
 
-        event_loop.run_app(&mut app).expect("winit event loop terminated with error");
+        event_loop
+            .run_app(&mut app)
+            .expect("winit event loop terminated with error");
     }
 
     /// Convenience: run with a single background image loaded from a file path.
     /// The image is loaded from disk and pre-warmed on the first frame.
     /// `image_name` is the key used in `draw_image` / `draw_background_image`.
-    pub fn run_with_background<V: cvkg_core::View + 'static>(view: V, image_name: &str, image_path: &str) {
+    pub fn run_with_background<V: cvkg_core::View + 'static>(
+        view: V,
+        image_name: &str,
+        image_path: &str,
+    ) {
         let image_data = std::fs::read(image_path)
             .unwrap_or_else(|e| panic!("Failed to load background image '{}': {}", image_path, e));
         let assets = vec![(image_name.to_string(), image_data)];
@@ -194,14 +210,9 @@ impl cvkg_core::Renderer for NativeRenderer {
     fn stroke_rect(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32) {
         self.gpu_ref().stroke_rect(rect, color, stroke_width);
     }
-    fn stroke_rounded_rect(
-        &mut self,
-        rect: Rect,
-        radius: f32,
-        color: [f32; 4],
-        stroke_width: f32,
-    ) {
-        self.gpu_ref().stroke_rounded_rect(rect, radius, color, stroke_width);
+    fn stroke_rounded_rect(&mut self, rect: Rect, radius: f32, color: [f32; 4], stroke_width: f32) {
+        self.gpu_ref()
+            .stroke_rounded_rect(rect, radius, color, stroke_width);
     }
     fn stroke_ellipse(&mut self, rect: Rect, color: [f32; 4], stroke_width: f32) {
         self.gpu_ref().stroke_ellipse(rect, color, stroke_width);
@@ -220,31 +231,47 @@ impl cvkg_core::Renderer for NativeRenderer {
     }
 
     fn fill_glass_rect(&mut self, rect: Rect, radius: f32, blur_radius: f32) {
-        self.gpu_ref()
-            .fill_glass_rect(rect, radius, blur_radius);
+        self.gpu_ref().fill_glass_rect(rect, radius, blur_radius);
     }
 
-    fn fill_glass_rect_with_intensity(&mut self, rect: Rect, radius: f32, blur_radius: f32, glass_intensity: f32) {
+    fn fill_glass_rect_with_intensity(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        blur_radius: f32,
+        glass_intensity: f32,
+    ) {
         self.gpu_ref()
             .fill_glass_rect_with_intensity(rect, radius, blur_radius, glass_intensity);
     }
 
-    fn fill_glass_rect_with_pressure(&mut self, rect: Rect, radius: f32, blur_radius: f32, pressure: f32) {
+    fn fill_glass_rect_with_pressure(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        blur_radius: f32,
+        pressure: f32,
+    ) {
         self.gpu_ref()
             .fill_glass_rect_with_intensity(rect, radius, blur_radius, pressure);
     }
 
     fn fill_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4]) {
-        self.gpu_ref()
-            .fill_squircle(rect, n, color);
+        self.gpu_ref().fill_squircle(rect, n, color);
     }
 
     fn stroke_squircle(&mut self, rect: Rect, n: f32, color: [f32; 4], stroke_width: f32) {
-        self.gpu_ref()
-            .stroke_squircle(rect, n, color, stroke_width);
+        self.gpu_ref().stroke_squircle(rect, n, color, stroke_width);
     }
 
-    fn draw_focus_ring(&mut self, rect: Rect, radius: f32, offset: f32, width: f32, color: [f32; 4]) {
+    fn draw_focus_ring(
+        &mut self,
+        rect: Rect,
+        radius: f32,
+        offset: f32,
+        width: f32,
+        color: [f32; 4],
+    ) {
         self.gpu_ref()
             .draw_focus_ring(rect, radius, offset, width, color);
     }
@@ -259,42 +286,30 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.gpu_ref()
             .draw_linear_gradient(rect, start_color, end_color, angle);
     }
-    fn draw_radial_gradient(
-        &mut self,
-        rect: Rect,
-        inner_color: [f32; 4],
-        outer_color: [f32; 4],
-    ) {
+    fn draw_radial_gradient(&mut self, rect: Rect, inner_color: [f32; 4], outer_color: [f32; 4]) {
         self.gpu_ref()
             .draw_radial_gradient(rect, inner_color, outer_color);
     }
     fn draw_texture(&mut self, texture_id: u32, rect: Rect) {
-        self.gpu_ref()
-            .draw_texture(texture_id, rect);
+        self.gpu_ref().draw_texture(texture_id, rect);
     }
     fn draw_image(&mut self, image_name: &str, rect: Rect) {
-        self.gpu_ref()
-            .draw_image(image_name, rect);
+        self.gpu_ref().draw_image(image_name, rect);
     }
     fn load_image(&mut self, name: &str, data: &[u8]) {
-        self.gpu_ref()
-            .load_image(name, data);
+        self.gpu_ref().load_image(name, data);
     }
     fn push_clip_rect(&mut self, rect: Rect) {
-        self.gpu_ref()
-            .push_clip_rect(rect);
+        self.gpu_ref().push_clip_rect(rect);
     }
     fn pop_clip_rect(&mut self) {
-        self.gpu_ref()
-            .pop_clip_rect();
+        self.gpu_ref().pop_clip_rect();
     }
     fn push_opacity(&mut self, opacity: f32) {
-        self.gpu_ref()
-            .push_opacity(opacity);
+        self.gpu_ref().push_opacity(opacity);
     }
     fn draw_3d_cube(&mut self, rect: Rect, color: [f32; 4], rotation: [f32; 3]) {
-        self.gpu_ref()
-            .draw_3d_cube(rect, color, rotation);
+        self.gpu_ref().draw_3d_cube(rect, color, rotation);
     }
     fn render_scene_node_3d(
         &mut self,
@@ -308,86 +323,63 @@ impl cvkg_core::Renderer for NativeRenderer {
             .render_scene_node_3d(position, rotation, scale, color, meshes);
     }
     fn pop_opacity(&mut self) {
-        self.gpu_ref()
-            .pop_opacity();
+        self.gpu_ref().pop_opacity();
     }
     fn bifrost(&mut self, rect: Rect, blur: f32, saturation: f32, opacity: f32) {
-        self.gpu_ref()
-            .bifrost(rect, blur, saturation, opacity);
+        self.gpu_ref().bifrost(rect, blur, saturation, opacity);
     }
     fn push_mjolnir_slice(&mut self, angle: f32, offset: f32) {
-        self.gpu_ref()
-            .push_mjolnir_slice(angle, offset);
+        self.gpu_ref().push_mjolnir_slice(angle, offset);
     }
     fn pop_mjolnir_slice(&mut self) {
-        self.gpu_ref()
-            .pop_mjolnir_slice();
+        self.gpu_ref().pop_mjolnir_slice();
     }
     fn mjolnir_shatter(&mut self, rect: Rect, pieces: u32, force: f32, color: [f32; 4]) {
-        self.gpu_ref()
-            .mjolnir_shatter(rect, pieces, force, color);
+        self.gpu_ref().mjolnir_shatter(rect, pieces, force, color);
     }
-    fn mjolnir_fluid_shatter(
-        &mut self,
-        rect: Rect,
-        pieces: u32,
-        force: f32,
-        color: [f32; 4],
-    ) {
+    fn mjolnir_fluid_shatter(&mut self, rect: Rect, pieces: u32, force: f32, color: [f32; 4]) {
         self.gpu_ref()
             .mjolnir_fluid_shatter(rect, pieces, force, color);
     }
     fn draw_mjolnir_bolt(&mut self, from: [f32; 2], to: [f32; 2], color: [f32; 4]) {
-        self.gpu_ref()
-            .draw_mjolnir_bolt(from, to, color);
+        self.gpu_ref().draw_mjolnir_bolt(from, to, color);
     }
     fn gungnir(&mut self, rect: Rect, color: [f32; 4], radius: f32, intensity: f32) {
-        self.gpu_ref()
-            .gungnir(rect, color, radius, intensity);
+        self.gpu_ref().gungnir(rect, color, radius, intensity);
     }
     fn mani_glow(&mut self, rect: Rect, color: [f32; 4], radius: f32) {
-        self.gpu_ref()
-            .mani_glow(rect, color, radius);
+        self.gpu_ref().mani_glow(rect, color, radius);
     }
     fn register_handler(
         &mut self,
         event_type: &str,
         handler: Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
     ) {
-        self.gpu_ref()
-            .register_handler(event_type, handler);
+        self.gpu_ref().register_handler(event_type, handler);
     }
     fn push_vnode(&mut self, rect: Rect, name: &'static str) {
-        self.gpu_ref()
-            .push_vnode(rect, name);
+        self.gpu_ref().push_vnode(rect, name);
     }
     fn pop_vnode(&mut self) {
-        self.gpu_ref()
-            .pop_vnode();
+        self.gpu_ref().pop_vnode();
     }
     fn set_z_index(&mut self, z: f32) {
-        self.gpu_ref()
-            .set_z_index(z);
+        self.gpu_ref().set_z_index(z);
     }
     fn get_z_index(&self) -> f32 {
-        self.gpu_ref_shared()
-            .get_z_index()
+        self.gpu_ref_shared().get_z_index()
     }
     fn register_shared_element(&mut self, id: &str, rect: Rect) {
-        self.gpu_ref()
-            .register_shared_element(id, rect);
+        self.gpu_ref().register_shared_element(id, rect);
     }
     fn set_material(&mut self, material: DrawMaterial) {
-        self.gpu_ref()
-            .set_material(material);
+        self.gpu_ref().set_material(material);
     }
     fn current_material(&self) -> DrawMaterial {
-        self.gpu_ref_shared()
-            .current_material()
+        self.gpu_ref_shared().current_material()
     }
     fn serialize_svg(&mut self, name: &str) -> Result<String, String> {
-        self.gpu_ref()
-            .serialize_svg(name)
+        self.gpu_ref().serialize_svg(name)
     }
     fn apply_svg_filter(
         &mut self,
@@ -395,20 +387,16 @@ impl cvkg_core::Renderer for NativeRenderer {
         filter_id: &str,
         region: Rect,
     ) -> Result<String, String> {
-        self.gpu_ref()
-            .apply_svg_filter(name, filter_id, region)
+        self.gpu_ref().apply_svg_filter(name, filter_id, region)
     }
     fn push_shadow(&mut self, radius: f32, color: [f32; 4], offset: [f32; 2]) {
-        self.gpu_ref()
-            .push_shadow(radius, color, offset);
+        self.gpu_ref().push_shadow(radius, color, offset);
     }
     fn pop_shadow(&mut self) {
-        self.gpu_ref()
-            .pop_shadow();
+        self.gpu_ref().pop_shadow();
     }
     fn push_affine(&mut self, transform: [f32; 6]) {
-        self.gpu_ref()
-            .push_affine(transform);
+        self.gpu_ref().push_affine(transform);
     }
     fn enter_portal(&mut self, z_index: i32) {
         log::warn!(
@@ -429,45 +417,36 @@ impl cvkg_core::Renderer for NativeRenderer {
         log::info!("Accessibility announcement [{:?}]: {}", priority, message);
     }
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
-        self.gpu_ref()
-            .load_svg(name, svg_data);
+        self.gpu_ref().load_svg(name, svg_data);
     }
     fn draw_svg(&mut self, name: &str, rect: Rect) {
-        self.gpu_ref()
-            .draw_svg(name, rect, None, 0);
+        self.gpu_ref().draw_svg(name, rect, None, 0);
     }
     fn draw_svg_with_offset(&mut self, name: &str, rect: Rect, animation_time_offset: f32) {
         self.gpu_ref()
             .draw_svg_with_offset(name, rect, None, 0, animation_time_offset);
     }
     fn get_telemetry(&self) -> TelemetryData {
-        self.gpu_ref_shared()
-            .telemetry
-            .clone()
+        self.gpu_ref_shared().telemetry.clone()
     }
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
-        self.gpu_ref()
-            .prewarm_vram(assets);
+        self.gpu_ref().prewarm_vram(assets);
     }
 
     fn text_scale_factor(&self) -> f32 {
-        self.gpu_ref_shared()
-            .text_scale_factor()
+        self.gpu_ref_shared().text_scale_factor()
     }
 
     fn is_over_budget(&self) -> bool {
-        self.gpu_ref_shared()
-            .is_over_budget()
+        self.gpu_ref_shared().is_over_budget()
     }
 
     fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        self.gpu_ref()
-            .draw_text(text, x, y, size, color);
+        self.gpu_ref().draw_text(text, x, y, size, color);
     }
 
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        self.gpu_ref()
-            .measure_text(text, size)
+        self.gpu_ref().measure_text(text, size)
     }
 
     fn shape_rich_text(
@@ -482,8 +461,7 @@ impl cvkg_core::Renderer for NativeRenderer {
     }
 
     fn draw_shaped_text(&mut self, shaped: &runic_text::ShapedText, x: f32, y: f32) {
-        self.gpu_ref()
-            .draw_shaped_text(shaped, x, y);
+        self.gpu_ref().draw_shaped_text(shaped, x, y);
     }
 
     fn fill_glass_rect_with_tint(
@@ -494,46 +472,43 @@ impl cvkg_core::Renderer for NativeRenderer {
         tint_color: [f32; 4],
         glass_intensity: f32,
     ) {
-        self.gpu_ref()
-            .fill_glass_rect_with_tint(rect, radius, blur_radius, tint_color, glass_intensity);
+        self.gpu_ref().fill_glass_rect_with_tint(
+            rect,
+            radius,
+            blur_radius,
+            tint_color,
+            glass_intensity,
+        );
     }
 
     fn set_theme(&mut self, theme: ColorTheme) {
-        self.gpu_ref()
-            .set_theme(theme);
+        self.gpu_ref().set_theme(theme);
     }
 
     fn trigger_shatter_event(&mut self, origin: [f32; 2], force: f32) {
-        self.gpu_ref()
-            .trigger_shatter_event(origin, force);
+        self.gpu_ref().trigger_shatter_event(origin, force);
     }
 
     fn set_fireball_pos(&mut self, pos: [f32; 2]) {
-        self.gpu_ref()
-            .set_fireball_pos(pos);
+        self.gpu_ref().set_fireball_pos(pos);
     }
 
     fn set_scene(&mut self, scene: &str) {
-        self.gpu_ref()
-            .set_scene(scene);
+        self.gpu_ref().set_scene(scene);
     }
 
     fn set_scene_preset(&mut self, preset: u32) {
-        self.gpu_ref()
-            .set_scene_preset(preset);
+        self.gpu_ref().set_scene_preset(preset);
     }
 
     fn set_default_background_color(&mut self, color: [f32; 4]) {
-        self.gpu_ref()
-            .set_default_background_color(color);
+        self.gpu_ref().set_default_background_color(color);
     }
     fn push_transform(&mut self, translation: [f32; 2], scale: [f32; 2], rotation: f32) {
-        self.gpu_ref()
-            .push_transform(translation, scale, rotation);
+        self.gpu_ref().push_transform(translation, scale, rotation);
     }
     fn pop_transform(&mut self) {
-        self.gpu_ref()
-            .pop_transform();
+        self.gpu_ref().pop_transform();
     }
 
     fn set_berserker_mode(&mut self, state: RenderIntensityMode) {
@@ -552,29 +527,24 @@ impl cvkg_core::Renderer for NativeRenderer {
             }
         }
 
-        self.gpu_ref()
-            .set_berserker_mode(state);
+        self.gpu_ref().set_berserker_mode(state);
     }
 
     fn set_rage(&mut self, rage: f32) {
         self.rage = rage;
-        self.gpu_ref()
-            .set_rage(rage);
+        self.gpu_ref().set_rage(rage);
     }
 
     fn memoize(&mut self, id: u64, data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
-        self.gpu_ref()
-            .memoize(id, data_hash, render_fn);
+        self.gpu_ref().memoize(id, data_hash, render_fn);
     }
 
     fn snapshot_render_state(&self) -> RenderStateSnapshot {
-        self.gpu_ref_shared()
-            .snapshot_render_state()
+        self.gpu_ref_shared().snapshot_render_state()
     }
 
     fn restore_render_state(&mut self, snap: RenderStateSnapshot) {
-        self.gpu_ref()
-            .restore_render_state(snap);
+        self.gpu_ref().restore_render_state(snap);
     }
     fn request_redraw(&mut self) {
         self.window.request_redraw();

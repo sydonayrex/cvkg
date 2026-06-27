@@ -1,6 +1,7 @@
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD};
-use cvkg_core::{AriaProperties, AriaRole, Never, Rect, Renderer, View};
+use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{AriaProperties, AriaRole, Never, Rect, Renderer, Size, View};
 use std::sync::Arc;
 
 /// Input validation state.
@@ -203,11 +204,7 @@ impl View for Input {
                 width: x_end - x_start,
                 height: FONT_BASE + 4.0,
             };
-            renderer.fill_rounded_rect(
-                sel_rect,
-                2.0,
-                theme::list_item_selected(),
-            );
+            renderer.fill_rounded_rect(sel_rect, 2.0, theme::list_item_selected());
         }
 
         // Render text
@@ -496,12 +493,16 @@ impl View for Input {
     fn intrinsic_size(
         &self,
         _renderer: &mut dyn Renderer,
-        proposal: cvkg_core::SizeProposal,
+        _proposal: cvkg_core::SizeProposal,
     ) -> cvkg_core::Size {
         cvkg_core::Size {
-            width: proposal.width.unwrap_or(200.0),
+            width: 200.0,
             height: 44.0,
         }
+    }
+
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
@@ -521,3 +522,26 @@ impl Input {
         estimated.min(text.len())
     }
 }
+
+impl LayoutView for Input {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 200.0,
+            height: 44.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+
+

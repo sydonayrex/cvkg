@@ -1,124 +1,121 @@
 # Onboarding Guide
 
-Welcome to the Cyber Viking Kvasir Graph (CVKG) development environment. This guide will walk you through the setup and workflow to compile and test the project on your local system.
+This guide walks through cloning, building, and making a change to CVKG.
 
-## Getting Started
+## 1. Clone
 
-Follow these steps in order to download, install dependencies, and build the workspace.
-
-### 1. Clone the Repository
-Clone the repository to your local workspace and navigate to the directory:
 ```bash
 git clone https://github.com/sydonayrex/cvkg.git
 cd cvkg
 ```
 
-### 2. Install Rust Toolchain
-Ensure you have the Rust toolchain installed (minimum version 1.85.0) which supports the 2024 Edition:
+## 2. Install Rust Toolchain
+
+Requires Rust 1.85.0 or later (Edition 2024):
+
 ```bash
 rustup toolchain install stable
 rustup default stable
-rustup update
+rustup target add wasm32-unknown-unknown
 ```
 
-### 3. Install System Dependencies
-On Linux systems, specific packages are required to support windowing, font configuration, and the WGPU graphics pipeline:
+## 3. Install System Dependencies (Linux)
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y libwayland-dev libx11-dev libxkbcommon-dev libasound2-dev libfontconfig1-dev pkg-config
+sudo apt-get install -y libwayland-dev libx11-dev libxkbcommon-dev \
+    libasound2-dev libfontconfig1-dev pkg-config
 ```
 
-### 4. Build the Workspace
-Build all crates and binaries in the workspace:
+## 4. Build
+
 ```bash
 cargo build --workspace
 ```
 
-### 5. Run the Reference Application
-Execute the native tactical HUD launcher application:
+## 5. Run the Demo Application
+
 ```bash
 cargo run -p berserker
 ```
 
----
+## 6. Run Tests
 
-## Workspace Directory Layout
+Full workspace:
 
-The workspace is organized into modular tiers to separate core application logic from platform-specific integration.
-
-- `cvkg/` — Main public facade and backend selector.
-- `cvkg-core/` — Fundamental geometry types, environment maps, and rendering traits.
-- `cvkg-vdom/` — Stateless Virtual DOM manager, tree diffing, and accessibility bridges.
-- `cvkg-compositor/` — Retained-mode layer orchestration engine mapping UI to GPU passes.
-- `cvkg-scene/` — Retained scene graph with spatial subdivision and drawing buffers.
-- `cvkg-layout/` — Flexbox positioning engines and stack containers.
-- `cvkg-anim/` — Sleipnir spring-physics and RK4 animation solvers.
-- `cvkg-render-gpu/` — Surtr GPU renderer implementing WGPU pipelines and textures.
-- `cvkg-render-native/` — Desktop OS windowing support using `winit`.
-- `cvkg-render-web/` — Browser canvas and WebGPU/WebGL2 integration.
-- `cvkg-components/` — Standard widget library (Buttons, Sliders, Editors, diagnostic panels).
-- `cvkg-themes/` — Semantic design tokens for colors, typography, and spaces.
-- `cvkg-macros/` — Declarative syntax macros for views and state values.
-- `cvkg-runic-text/` — Text shaper, word-wrapping engine, and Swash bitmap generator.
-- `cvkg-cli/` — Scaffold and development tool for building and packing.
-- `cvkg-webkit-server/` — WebSocket host and server for local hot-reloading.
-- `cvkg-flow/` — Interactive node graphs and canvas grids.
-- `cvkg-test/` — Quality assurance suite and visual comparison regression tools.
-- `berserker/` — Native launcher bin showcase app.
-- `demos/` — Browser-facing showcase crates including Adele catalog and Niflheim views.
-
----
-
-## Running Tests
-
-Testing is divided into library unit tests, component integrations, and headless visual comparisons.
-
-### Run the Full Test Suite
-To run all tests in the workspace:
 ```bash
 cargo test --workspace
 ```
 
-### Run a Single Crate's Tests
-To test a specific crate, use the `-p` parameter:
+Single crate:
+
 ```bash
 cargo test -p cvkg-layout
 ```
 
-### Run a Specific Test by Name
-To isolate a single test execution:
+Single test by name:
+
 ```bash
 cargo test -p cvkg-layout tests::test_hstack_basic
 ```
 
----
+## 7. Verify a Change
 
-## Modifying Code & Verifying Changes
+After modifying code, run this sequence:
 
-When adding a feature or resolving an issue, use this checklist to ensure stability:
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets
+cargo check --workspace
+cargo test --workspace
+```
 
-1. **Verify Formatting**: Ensure all files conform to the standard style:
-   ```bash
-   cargo fmt --all --check
-   ```
-2. **Execute Lints**: Run compiler static analysis checks:
-   ```bash
-   cargo clippy --workspace --all-targets
-   ```
-3. **Verify Build**: Run target checks to ensure compile pipeline passes:
-   ```bash
-   cargo check --workspace
-   ```
-4. **Run Unit Tests**: Confirm that the change has not introduced regressions:
-   ```bash
-   cargo test --workspace
-   ```
+## Source Layout
 
----
+```
+cvkg/                  -- Umbrella facade crate
+cvkg-core/             -- View trait, state, geometry types
+cvkg-vdom/             -- Virtual DOM (not a workspace member)
+cvkg-scene/            -- Retained scene graph with AABB culling
+cvkg-spatial/          -- QuadTree, BVH, SpatialHash
+cvkg-layout/           -- Taffy flexbox/grid layout
+cvkg-anim/             -- Spring physics, particles
+cvkg-render-gpu/       -- WGPU render graph
+cvkg-compositor/       -- Layer tree, damage tracking
+cvkg-render-native/    -- Desktop windowing via winit
+cvkg-render-software/  -- CPU fallback renderer
+cvkg-runic-text/       -- HarfBuzz text shaper, BiDi
+cvkg-svg-filters/      -- GPU SVG filter primitives
+cvkg-svg-serialize/    -- SVG XML write
+cvkg-components/       -- Widget library
+cvkg-themes/           -- OKLCH color tokens
+cvkg-flow/             -- Node graph editor
+cvkg-cli/              -- Dev server, asset pipeline
+cvkg-webkit-server/    -- axum HTTP/WS server
+cvkg-physics/          -- Rigid body simulation
+cvkg-scheduler/        -- Frame update ordering
+cvkg-test/             -- Visual regression testing
+cvkg-macros/           -- hamr! proc macro
+cvkg-reflect/          -- Runtime type reflection
+cvkg-materials/        -- Glass, Mica, Acrylic data
+cvkg-accessibility/    -- Accessibility tree, focus
+cvkg-certification/    -- Cross-crate test suites
+cvkg-telemetry/        -- Opt-in metrics
+cvkg-icons/            -- Icon registry
+cvkg-gallery/           -- Component gallery demo
+cvkg-game-hud/         -- Game HUD components
+cvkg-export-raster/    -- PNG/GIF export
+berserker/             -- Native tactical HUD demo
+demos/adele-web/       -- Web design explorer
+demos/niflheim-web/    -- WASM component suite
+demos/niflheim-wasi/   -- WASI headless target
+demos/berserker-fire-web/ -- WASM stress test
+```
 
-## Support & Contacts
+## Troubleshooting
 
-If you experience unexpected build or runtime failures, consult [troubleshooting.md](./troubleshooting.md).
+See [troubleshooting.md](./troubleshooting.md) for common build errors, runtime crashes, and visual artifacts.
 
-For additional inquiries or maintainer feedback:
-- TODO: add maintainer contact
+## Maintainer Contact
+
+TODO: add maintainer contact

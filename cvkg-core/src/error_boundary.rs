@@ -98,16 +98,12 @@ impl<V: View> ErrorBoundary<V> {
 
     /// Returns `true` if a panic was caught during the last render pass.
     pub fn has_error(&self) -> bool {
-        self.has_error
-            .load(std::sync::atomic::Ordering::Relaxed)
+        self.has_error.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Returns the last captured panic message, if any.
     pub fn last_error(&self) -> Option<String> {
-        self.last_error
-            .lock()
-            .ok()
-            .and_then(|guard| guard.clone())
+        self.last_error.lock().ok().and_then(|guard| guard.clone())
     }
 
     /// Clear the error state, allowing the child to render again on the next pass.

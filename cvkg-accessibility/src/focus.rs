@@ -96,10 +96,10 @@ impl FocusManager {
     pub fn set_tab_order(&mut self, order: Vec<KvasirId>) {
         // Validate that the currently focused node still exists in the new order.
         // If it was removed, clear focus to avoid a dangling focus state.
-        if let Some(focused) = self.focused {
-            if !order.contains(&focused) {
-                self.focused = None;
-            }
+        if let Some(focused) = self.focused
+            && !order.contains(&focused)
+        {
+            self.focused = None;
         }
         self.tab_order = order;
     }
@@ -188,8 +188,12 @@ impl FocusManager {
             a.1.y
                 .partial_cmp(&b.1.y)
                 .unwrap_or(std::cmp::Ordering::Equal)
-                .then_with(|| a.1.x.partial_cmp(&b.1.x).unwrap_or(std::cmp::Ordering::Equal))
-                .then_with(|| a.0 .0.cmp(&b.0 .0))
+                .then_with(|| {
+                    a.1.x
+                        .partial_cmp(&b.1.x)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| a.0.0.cmp(&b.0.0))
         });
         let ids: Vec<KvasirId> = nodes.into_iter().map(|(id, _)| id).collect();
         self.set_tab_order(ids);
@@ -281,14 +285,23 @@ mod tests {
         let mut fm = FocusManager::new();
         fm.rebuild_from_tree(&tree);
 
-        assert_eq!(fm.move_focus(FocusDirection::First), FocusResult::Focused(ids[0]));
-        assert_eq!(fm.move_focus(FocusDirection::Last), FocusResult::Focused(ids[3]));
+        assert_eq!(
+            fm.move_focus(FocusDirection::First),
+            FocusResult::Focused(ids[0])
+        );
+        assert_eq!(
+            fm.move_focus(FocusDirection::Last),
+            FocusResult::Focused(ids[3])
+        );
     }
 
     #[test]
     fn move_focus_empty_returns_no_focusable() {
         let mut fm = FocusManager::new();
-        assert_eq!(fm.move_focus(FocusDirection::Forward), FocusResult::NoFocusableNode);
+        assert_eq!(
+            fm.move_focus(FocusDirection::Forward),
+            FocusResult::NoFocusableNode
+        );
     }
 
     #[test]
@@ -329,8 +342,16 @@ mod tests {
         // Add a non-focusable node — it must be excluded from tab order
         let label_id = KvasirId::new();
         tree.insert(AccessNode::new(btn_id, SemanticRole::Button, make_rect()));
-        tree.insert(AccessNode::new(txt_id, SemanticRole::TextInput, make_rect()));
-        tree.insert(AccessNode::new(label_id, SemanticRole::Generic, make_rect()));
+        tree.insert(AccessNode::new(
+            txt_id,
+            SemanticRole::TextInput,
+            make_rect(),
+        ));
+        tree.insert(AccessNode::new(
+            label_id,
+            SemanticRole::Generic,
+            make_rect(),
+        ));
 
         let mut fm = FocusManager::new();
         fm.rebuild_from_tree(&tree);

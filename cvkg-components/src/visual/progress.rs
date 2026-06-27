@@ -1,15 +1,17 @@
-use crate::theme;
 use crate::RADIUS_SM;
-use cvkg_core::{Never, Rect, Renderer, View};
+use crate::theme;
+use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 /// SkollProgress indicator component.
 ///
 /// # Examples
 /// ```
-/// use cvkg_components::SkollProgress;
+/// use cvkg_components::{SkollProgress, ProgressVariant};
 /// let progress = SkollProgress::new(0.75)
 ///     .variant(ProgressVariant::Linear);
 /// ```
+#[doc(alias = "Progress")]
 #[derive(Clone)]
 pub struct SkollProgress {
     pub value: f32,
@@ -22,17 +24,12 @@ pub struct SkollProgress {
 }
 
 /// Visual variants for progress indicators.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ProgressVariant {
+    #[default]
     Linear,
     Circular,
     Segmented,
-}
-
-impl Default for ProgressVariant {
-    fn default() -> Self {
-        ProgressVariant::Linear
-    }
 }
 
 impl SkollProgress {
@@ -85,8 +82,41 @@ impl View for SkollProgress {
             };
             renderer.fill_rounded_rect(fill_rect, self.border_radius, self.fill);
         }
+     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size {
+            width: 150.0,
+            height: self.height,
+        }
+    }
+
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
     }
 }
+
+impl LayoutView for SkollProgress {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: 150.0,
+            height: self.height,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+
 
 /// A horizontal status bar for system indicators.
 #[derive(Clone)]

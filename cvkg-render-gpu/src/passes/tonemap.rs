@@ -20,6 +20,12 @@ impl ToneMapNode {
     }
 }
 
+impl Default for ToneMapNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for ToneMapNode {
     fn label(&self) -> &'static str {
         "ToneMap"

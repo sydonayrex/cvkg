@@ -1,5 +1,5 @@
-use crate::vnode::{NodeId, VNode};
 use crate::VDom;
+use crate::vnode::{NodeId, VNode};
 use serde::{Deserialize, Serialize};
 
 /// A single node in the accessibility tree, extracted from the VDOM.
@@ -150,10 +150,7 @@ impl VDom {
     /// Traverses the VDOM tree from the root, collecting all nodes with
     /// ARIA roles and labels into a flat list suitable for display in
     /// the A11yInspector.
-    pub fn query_accessibility_tree(
-        &self,
-        root: Option<NodeId>,
-    ) -> Vec<A11yNodeEntry> {
+    pub fn query_accessibility_tree(&self, root: Option<NodeId>) -> Vec<A11yNodeEntry> {
         let mut result = Vec::new();
         if let Some(root_id) = root {
             self.collect_a11y_nodes(root_id, 0, &mut result);
@@ -162,12 +159,7 @@ impl VDom {
     }
 
     /// Recursively collect A11y nodes from the VDOM tree.
-    fn collect_a11y_nodes(
-        &self,
-        id: NodeId,
-        depth: u32,
-        result: &mut Vec<A11yNodeEntry>,
-    ) {
+    fn collect_a11y_nodes(&self, id: NodeId, depth: u32, result: &mut Vec<A11yNodeEntry>) {
         if let Some(node) = self.nodes.get(&id) {
             // Only include nodes that have meaningful ARIA roles
             // (skip "presentation" and "none" which are structural only)
@@ -184,11 +176,8 @@ impl VDom {
                     format!("{}%", pct)
                 });
 
-                let focused = *self
-                    .focused_node
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    == Some(id);
+                let focused =
+                    *self.focused_node.lock().unwrap_or_else(|e| e.into_inner()) == Some(id);
 
                 result.push(A11yNodeEntry {
                     role: node.aria_role.clone(),

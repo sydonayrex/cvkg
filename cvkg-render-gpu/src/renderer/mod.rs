@@ -12,11 +12,11 @@ use std::sync::Arc;
 // Re-export for test access
 pub use crate::subsystems::RendererConfig;
 
-pub(crate) mod pipelines;
-pub(crate) mod init;
-pub(crate) mod draw;
-pub(crate) mod svg;
 pub(crate) mod context_helpers;
+pub(crate) mod draw;
+pub(crate) mod init;
+pub(crate) mod pipelines;
+pub(crate) mod svg;
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -51,8 +51,9 @@ pub(crate) mod material_id {
 /// `High` matches the previous hardcoded behavior (MSAA 4x).
 /// `Medium` reduces MSAA to 2x for moderate savings on mobile.
 /// `Low` disables MSAA entirely for low-end GPUs (Adreno 3xx, etc.).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum QualityLevel {
+    #[default]
     High,
     Medium,
     Low,
@@ -66,12 +67,6 @@ impl QualityLevel {
             QualityLevel::Medium => 2,
             QualityLevel::Low => 1,
         }
-    }
-}
-
-impl Default for QualityLevel {
-    fn default() -> Self {
-        QualityLevel::High
     }
 }
 
@@ -111,6 +106,20 @@ pub struct GpuRenderer {
     pub(crate) texture_registry: LruCache<String, u32>,
     pub(crate) texture_views: Vec<wgpu::TextureView>,
     pub(crate) dummy_sampler: wgpu::Sampler,
+    /// Dummy single-sampled depth texture view.
+    ///
+    /// WHY: Used in the volumetric shader to bind a valid single-sampled depth view
+    /// when MSAA is enabled (since the actual scene depth view is multisampled).
+    ///
+    /// CONTRACT: Always sample_count = 1, format = Depth32Float.
+    pub(crate) dummy_depth_view: wgpu::TextureView,
+    /// Dummy multisampled depth texture view.
+    ///
+    /// WHY: Used in the volumetric shader to bind a valid multisampled depth view
+    /// when MSAA is disabled (since the actual scene depth view is single-sampled).
+    ///
+    /// CONTRACT: Always sample_count = 4, format = Depth32Float.
+    pub(crate) dummy_depth_view_msaa: wgpu::TextureView,
     pub(crate) svg: crate::types::SvgSubsystem,
 
     // Niflheim Resources (Shared)
@@ -309,6 +318,19 @@ pub struct GpuRenderer {
     /// Portal backdrop blur regions -- collected during portal enter/exit
     pub(crate) portal_regions: std::collections::VecDeque<cvkg_core::Rect>,
 
+    /// Gradient stop texture (32 x 1, RGBA) for multi-stop gradient rendering.
+    /// RGB = stop color, A = stop position (0-1). Cached per unique stop set.
+    pub(crate) gradient_stop_texture: wgpu::Texture,
+    pub(crate) gradient_stop_texture_view: wgpu::TextureView,
+    pub(crate) gradient_bind_group: wgpu::BindGroup,
+    /// Gradient texture cache: maps stop-hash to (texture, bind_group) to avoid re-uploading.
+    pub(crate) gradient_texture_cache:
+        std::collections::HashMap<u64, (wgpu::Texture, wgpu::TextureView, wgpu::BindGroup)>,
+    /// Last uploaded gradient stops hash, to detect when we need to re-upload.
+    pub(crate) gradient_stops_hash: u64,
+    /// Layout for the gradient bind group (texture + sampler).
+    pub(crate) gradient_bind_group_layout: wgpu::BindGroupLayout,
+
     /// Cache of the compiled Kvasir render graph execution plan.
     pub(crate) cached_graph_plan: Option<crate::kvasir::graph_cache::CachedGraphPlan>,
     /// Hash of the active material set, used to invalidate the graph plan
@@ -324,13 +346,25 @@ pub struct GpuRenderer {
     /// Thread-safe bind group cache to avoid per-frame allocations during render passes.
     pub(crate) bind_group_cache: std::sync::Mutex<
         std::collections::HashMap<
-            (crate::kvasir::resource::ResourceId, u32, bool),
+            (
+                Option<winit::window::WindowId>,
+                crate::kvasir::resource::ResourceId,
+                u32,
+                bool,
+            ),
             wgpu::BindGroup,
         >,
     >,
     /// Thread-safe texture view cache to avoid per-frame allocations of TextureViews.
     pub(crate) texture_view_cache: std::sync::Mutex<
-        std::collections::HashMap<(crate::kvasir::resource::ResourceId, u32), wgpu::TextureView>,
+        std::collections::HashMap<
+            (
+                Option<winit::window::WindowId>,
+                crate::kvasir::resource::ResourceId,
+                u32,
+            ),
+            wgpu::TextureView,
+        >,
     >,
 }
 
@@ -392,7 +426,7 @@ fn load_pipeline_cache_with_integrity_check(
             return Err(format!(
                 "sidecar hash file missing at {}",
                 hash_path.display()
-            ))
+            ));
         }
         Err(e) => return Err(format!("sidecar read failed: {e}")),
     };
@@ -427,29 +461,23 @@ struct Sha256 {
 
 impl Sha256 {
     const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
-        0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
-        0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
-        0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
-        0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
-        0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
-        0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
-        0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
+        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
+        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
+        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
+        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
+        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
+        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
+        0xc67178f2,
     ];
 
     fn new() -> Self {
         Self {
             state: [
-                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+                0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab,
+                0x5be0cd19,
             ],
             buffer: [0; 64],
             buffer_len: 0,
@@ -474,12 +502,16 @@ impl Sha256 {
         self.buffer[self.buffer_len] = 0x80;
         self.buffer_len += 1;
         if self.buffer_len > 56 {
-            for b in &mut self.buffer[self.buffer_len..] { *b = 0; }
+            for b in &mut self.buffer[self.buffer_len..] {
+                *b = 0;
+            }
             let block = self.buffer;
             self.compress(&block);
             self.buffer_len = 0;
         }
-        for b in &mut self.buffer[self.buffer_len..56] { *b = 0; }
+        for b in &mut self.buffer[self.buffer_len..56] {
+            *b = 0;
+        }
         let bit_len = self.total_len.wrapping_mul(8);
         self.buffer[56..64].copy_from_slice(&bit_len.to_be_bytes());
         let block = self.buffer;
@@ -487,7 +519,7 @@ impl Sha256 {
 
         let mut out = [0u8; 32];
         for (i, &s) in self.state.iter().enumerate() {
-            out[i*4..(i+1)*4].copy_from_slice(&s.to_be_bytes());
+            out[i * 4..(i + 1) * 4].copy_from_slice(&s.to_be_bytes());
         }
         out
     }
@@ -496,13 +528,19 @@ impl Sha256 {
         let mut w = [0u32; 64];
         for i in 0..16 {
             w[i] = u32::from_be_bytes([
-                block[i*4], block[i*4+1], block[i*4+2], block[i*4+3]
+                block[i * 4],
+                block[i * 4 + 1],
+                block[i * 4 + 2],
+                block[i * 4 + 3],
             ]);
         }
         for i in 16..64 {
-            let s0 = w[i-15].rotate_right(7) ^ w[i-15].rotate_right(18) ^ (w[i-15] >> 3);
-            let s1 = w[i-2].rotate_right(17) ^ w[i-2].rotate_right(19) ^ (w[i-2] >> 10);
-            w[i] = w[i-16].wrapping_add(s0).wrapping_add(w[i-7]).wrapping_add(s1);
+            let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
+            let s1 = w[i - 2].rotate_right(17) ^ w[i - 2].rotate_right(19) ^ (w[i - 2] >> 10);
+            w[i] = w[i - 16]
+                .wrapping_add(s0)
+                .wrapping_add(w[i - 7])
+                .wrapping_add(s1);
         }
         let mut a = self.state[0];
         let mut b = self.state[1];
@@ -512,16 +550,24 @@ impl Sha256 {
         let mut f = self.state[5];
         let mut g = self.state[6];
         let mut h = self.state[7];
-        for i in 0..64 {
+        for (i, wi) in w.iter().enumerate() {
             let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
             let ch = (e & f) ^ ((!e) & g);
-            let t1 = h.wrapping_add(s1).wrapping_add(ch).wrapping_add(Self::K[i]).wrapping_add(w[i]);
+            let t1 = h
+                .wrapping_add(s1)
+                .wrapping_add(ch)
+                .wrapping_add(Self::K[i])
+                .wrapping_add(*wi);
             let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
             let mj = (a & b) ^ (a & c) ^ (b & c);
             let t2 = s0.wrapping_add(mj);
-            h = g; g = f; f = e;
+            h = g;
+            g = f;
+            f = e;
             e = d.wrapping_add(t1);
-            d = c; c = b; b = a;
+            d = c;
+            c = b;
+            b = a;
             a = t1.wrapping_add(t2);
         }
         self.state[0] = self.state[0].wrapping_add(a);
@@ -540,8 +586,7 @@ fn compute_mip_levels(width: u32, height: u32) -> u32 {
     if max_dim <= 1 {
         return 1;
     }
-    let mips = (32 - max_dim.leading_zeros()).clamp(2, 8);
-    mips
+    (32 - max_dim.leading_zeros()).clamp(2, 8)
 }
 
 impl GpuRenderer {
@@ -625,13 +670,15 @@ impl GpuRenderer {
             }
             let style = cvkg_runic_text::TextStyle::new("Inter", *size);
             let spans = [cvkg_runic_text::TextSpan::new(text, style)];
-            if let Some(shaped) = self.text.engine.shape_layout(
+            if let Ok(shaped) = self.text.engine.shape_layout(
                 &spans,
                 None,
                 cvkg_runic_text::TextAlign::Start,
                 cvkg_runic_text::TextOverflow::Visible,
-            ).ok() {
-                self.text.shaped_cache.put(cache_key, std::sync::Arc::new(shaped));
+            ) {
+                self.text
+                    .shaped_cache
+                    .put(cache_key, std::sync::Arc::new(shaped));
                 count += 1;
             }
         }
@@ -694,14 +741,15 @@ impl GpuRenderer {
             + self.particle_uniform_buffer.size();
 
         let mut textures = self.config.mega_heim_vram_bytes();
-        textures += 1 * 1 * 4; // Dummy texture
+        textures += 4; // Dummy texture
 
         for surface in self.surfaces.values() {
             let width = surface.config.width;
             let height = surface.config.height;
             let format_bytes = 8; // Rgba16Float
             textures += (width * height * format_bytes) as u64; // Scene texture
-            textures += (width * height * format_bytes * self.quality_level.msaa_sample_count() as u32) as u64; // MSAA texture
+            textures +=
+                (width * height * format_bytes * self.quality_level.msaa_sample_count()) as u64; // MSAA texture
             textures += (width * height * 4) as u64; // Depth texture (Depth32Float)
 
             let blur_width = (width / 2).max(1);
@@ -713,7 +761,9 @@ impl GpuRenderer {
         if let Some(ref ctx) = self.headless_context {
             let format_bytes = 8; // Rgba16Float
             textures += (ctx.width * ctx.height * format_bytes) as u64; // Scene texture
-            textures += (ctx.width * ctx.height * format_bytes * self.quality_level.msaa_sample_count() as u32) as u64; // MSAA texture
+            textures +=
+                (ctx.width * ctx.height * format_bytes * self.quality_level.msaa_sample_count())
+                    as u64; // MSAA texture
             textures += (ctx.width * ctx.height * 4) as u64; // Depth texture
             textures += (ctx.width * ctx.height * 4) as u64; // Output texture
         }
@@ -896,7 +946,8 @@ impl GpuRenderer {
                 sample_count: self.quality_level.msaa_sample_count(),
                 dimension: wgpu::TextureDimension::D2,
                 format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
             ctx.depth_texture_view =
@@ -989,8 +1040,12 @@ impl GpuRenderer {
             }
         }
 
-        let text_entries: Vec<(u64, (Rect, f32, f32, f32, f32))> =
-            self.text.glyph_cache.iter().map(|(k, v)| (*k, *v)).collect();
+        let text_entries: Vec<(u64, (Rect, f32, f32, f32, f32))> = self
+            .text
+            .glyph_cache
+            .iter()
+            .map(|(k, v)| (*k, *v))
+            .collect();
         for (hash, (old_uv, w_f, h_f, x_off, y_off)) in text_entries {
             let w_px = (old_uv.width * 4096.0).round() as u32;
             let h_px = (old_uv.height * 4096.0).round() as u32;
@@ -1032,7 +1087,9 @@ impl GpuRenderer {
                     width: old_uv.width,
                     height: old_uv.height,
                 };
-                self.text.glyph_cache.put(hash, (new_uv, w_f, h_f, x_off, y_off));
+                self.text
+                    .glyph_cache
+                    .put(hash, (new_uv, w_f, h_f, x_off, y_off));
             }
         }
 
@@ -1063,12 +1120,11 @@ impl Drop for GpuRenderer {
             .unwrap_or_else(|| std::env::temp_dir().join("cvkg_pipeline_cache"));
         let _ = std::fs::create_dir_all(&cache_dir);
         let cache_path = cache_dir.join("cvkg_render_gpu.bin");
-        if let Some(cache) = &self.pipeline_cache {
-            if let Some(data) = cache.get_data() {
-                if let Err(e) = std::fs::write(&cache_path, data) {
-                    log::warn!("Failed to persist pipeline cache: {}", e);
-                }
-            }
+        if let Some(cache) = &self.pipeline_cache
+            && let Some(data) = cache.get_data()
+            && let Err(e) = std::fs::write(&cache_path, data)
+        {
+            log::warn!("Failed to persist pipeline cache: {}", e);
         }
 
         let _ = self.device.poll(wgpu::PollType::Wait {
@@ -1165,10 +1221,8 @@ impl GpuRenderer {
 
         let adapter = adapter.expect("Failed to find a suitable GPU for Surtr");
         let info = adapter.get_info();
-        let caps = crate::subsystems::GpuCapabilities::detect(
-            &info.name,
-            format!("{:?}", info.backend),
-        );
+        let caps =
+            crate::subsystems::GpuCapabilities::detect(&info.name, format!("{:?}", info.backend));
         log::info!(
             "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
             info.name,
@@ -1220,6 +1274,47 @@ impl GpuRenderer {
         Self::forge_internal(
             instance,
             adapter,
+            device,
+            queue,
+            None,
+            Some((width, height, wgpu::TextureFormat::Rgba8UnormSrgb)),
+        )
+        .await
+    }
+
+    /// Create a headless GpuRenderer from an existing device and surface.
+    ///
+    /// This constructor does not require an event loop and is suitable for
+    /// headless rendering (e.g., server-side rendering, tests).
+    /// It delegates to the existing `forge_internal` which handles all
+    /// pipeline, buffer, and bind group initialization.
+    pub async fn from_external(
+        device: Arc<wgpu::Device>,
+        queue: Arc<wgpu::Queue>,
+        surface: wgpu::Surface<'static>,
+        width: u32,
+        height: u32,
+    ) -> Self {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            flags: wgpu::InstanceFlags::default(),
+            backend_options: wgpu::BackendOptions::default(),
+            display: None,
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+        });
+
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
+            .await
+            .expect("No compatible adapter found");
+
+        Self::forge_internal(
+            Arc::new(instance),
+            Arc::new(adapter),
             device,
             queue,
             None,

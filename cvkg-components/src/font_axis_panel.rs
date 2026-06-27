@@ -5,16 +5,36 @@ use cvkg_runic_text::{FontAxisInfo, TextStyle, VariableAxis};
 use std::sync::Arc;
 
 /// Colors used by the font axis panel (resolved from theme tokens).
-fn color_panel_bg() -> [f32; 4] { theme::surface() }
-fn color_panel_border() -> [f32; 4] { theme::border() }
-fn color_text_title() -> [f32; 4] { theme::text() }
-fn color_text_label() -> [f32; 4] { theme::text_muted() }
-fn color_slider_bg() -> [f32; 4] { theme::surface_elevated() }
-fn color_slider_fill() -> [f32; 4] { theme::with_alpha(theme::accent(), 0.85) }
-fn color_slider_border() -> [f32; 4] { theme::border() }
-fn color_toggle_on() -> [f32; 4] { theme::with_alpha(theme::accent(), 0.9) }
-fn color_toggle_off() -> [f32; 4] { theme::surface_elevated() }
-fn color_toggle_knob() -> [f32; 4] { theme::text() }
+fn color_panel_bg() -> [f32; 4] {
+    theme::surface()
+}
+fn color_panel_border() -> [f32; 4] {
+    theme::border()
+}
+fn color_text_title() -> [f32; 4] {
+    theme::text()
+}
+fn color_text_label() -> [f32; 4] {
+    theme::text_muted()
+}
+fn color_slider_bg() -> [f32; 4] {
+    theme::surface_elevated()
+}
+fn color_slider_fill() -> [f32; 4] {
+    theme::with_alpha(theme::accent(), 0.85)
+}
+fn color_slider_border() -> [f32; 4] {
+    theme::border()
+}
+fn color_toggle_on() -> [f32; 4] {
+    theme::with_alpha(theme::accent(), 0.9)
+}
+fn color_toggle_off() -> [f32; 4] {
+    theme::surface_elevated()
+}
+fn color_toggle_knob() -> [f32; 4] {
+    theme::text()
+}
 
 /// A slider panel for controlling variable font axes.
 ///

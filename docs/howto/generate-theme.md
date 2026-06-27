@@ -1,84 +1,68 @@
-# How to Generate a Theme from Design Tokens
+# How to Generate a Theme
 
-Goal: Generate a type-safe Rust styling theme module from a JSON design tokens specification file.
+## Goal
 
-## Process Flow
-
-```mermaid
-graph TD
-    A["Prepare JSON file containing RGBA color float arrays"] --> B["Run theme compiler via: cargo run -p cvkg-cli -- theme"]
-    B --> C["Verify generated theme.rs file contains structs and constants"]
-    C --> D["Import module and use token constant values in views"]
-```
+Create a complete theme from a brand color using `cvkg-themes`.
 
 ## Prerequisites
 
-- Rust compiler and Cargo setup active in the CVKG workspace.
-- A JSON file containing valid design color token entries (RGBA float arrays).
-
----
+- `cvkg-themes` in your project dependencies
 
 ## Steps
 
-### 1. Create a Token JSON File
-Draft a `tokens.json` file containing your custom palette coordinates:
-```json
-{
-  "viking_gold": [0.85, 0.65, 0.12, 1.0],
-  "tactical_obsidian": [0.03, 0.03, 0.05, 1.0],
-  "bifrost_teal": [0.0, 0.8, 0.8, 0.6]
-}
-```
+### 1. Generate from a Seed Color
 
-### 2. Generate the Rust Source Theme
-Run the CVKG theme compiler, directing the inputs and compiling the output theme file:
-```bash
-cargo run -p cvkg-cli -- theme --input ./tokens.json --output ./src/theme.rs
-```
-
-### 3. Integrate in Your View Tree
-Import the compiled Rust output in your view file and apply it using environment variables:
 ```rust
-mod theme;
-use cvkg::prelude::*;
+use cvkg_themes::Theme;
 
-fn render_hud() -> impl View {
-    VStack::new(10.0) {
-        Text::new("Status System")
-            .foregroundColor(theme::CUSTOM_THEME.viking_gold);
-    }
-    .background(theme::CUSTOM_THEME.tactical_obsidian)
-}
+let theme = Theme::from_seed(0x3B82F6); // Blue brand color
 ```
 
----
+This generates a full theme with light/dark variants, semantic colors, typography scale, spacing, and radius tokens.
 
-## Expected Output
-The generator writes the Rust file `src/theme.rs` containing a struct with your defined token fields and a static constant:
+### 2. Build from a Brand Hex
+
 ```rust
-/// Generated CVKG Theme
-pub struct Theme {
-    pub viking_gold: [f32; 4],
-    pub tactical_obsidian: [f32; 4],
-    pub bifrost_teal: [f32; 4],
-}
+use cvkg_themes::ThemeBuilder;
 
-pub const CUSTOM_THEME: Theme = Theme {
-    viking_gold: [0.85, 0.65, 0.12, 1.00],
-    tactical_obsidian: [0.03, 0.03, 0.05, 1.00],
-    bifrost_teal: [0.00, 0.80, 0.80, 0.60],
+let theme = ThemeBuilder::from_brand_hex(0x3B82F6)
+    .density(cvkg_themes::Density::Compact)
+    .build();
+```
+
+### 3. Customize Specific Tokens
+
+```rust
+use cvkg_themes::{Theme, SpacingScale};
+
+let mut theme = Theme::from_seed(0x3B82F6);
+theme.spacing = SpacingScale {
+    xs: 2.0,
+    sm: 4.0,
+    md: 8.0,
+    lg: 16.0,
+    xl: 32.0,
 };
 ```
 
----
+### 4. Validate Accessibility
 
-## Recovery and Debugging
+```rust
+use cvkg_themes::ApcaResult;
 
-### Compilation Fails on Invalid JSON Structure
-If the parsing engine reports that the tokens format is corrupt:
-1. Verify that all values are structured precisely as an array of four numeric values.
-2. Confirm there are no trailing commas in the JSON keys.
-3. Validate syntax using JSON parsing linters:
-   ```bash
-   python3 -m json.tool tokens.json
-   ```
+let result = theme.validate_contrast();
+match result {
+    ApcaResult::Pass => println!("All text meets APCA contrast requirements"),
+    ApcaResult::Fail { element, .. } => println!("{} fails contrast", element),
+}
+```
+
+## Expected Output
+
+A `Theme` object with complete design tokens ready for use by components.
+
+## What Can Go Wrong
+
+- **Clamping**: OKLCH chroma is clamped to [0.0, ~0.4]. Highly saturated seed colors may produce slightly different hues.
+- **Float equality**: Theme comparison uses float equality. Avoid comparing themes computed from different code paths.
+- **Empty materials**: `ThemeBuilder::build()` with no materials produces a no-op theme. Add at least one material.

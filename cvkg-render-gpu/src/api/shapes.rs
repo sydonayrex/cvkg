@@ -7,11 +7,16 @@ use std::hash::Hasher;
 
 impl GpuRenderer {
     /// Inherent method: stroke a lyon path using wgpu.
-    pub fn stroke_path_impl(&mut self, path: &lyon::path::Path, color: [f32; 4], stroke_width: f32) {
+    pub fn stroke_path_impl(
+        &mut self,
+        path: &lyon::path::Path,
+        color: [f32; 4],
+        stroke_width: f32,
+    ) {
         let c = self.apply_opacity(color);
         let base_vertex_idx = self.vertices.len() as u32;
         let base_index_idx = self.indices.len() as u32;
-        
+
         let path_hash = {
             let mut h = std::collections::hash_map::DefaultHasher::new();
             let num_elements = path.iter().count();

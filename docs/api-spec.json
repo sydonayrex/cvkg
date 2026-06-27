@@ -1,0 +1,6211 @@
+{
+  "generated_at": "2024-06-24",
+  "source": "cvkg-components/src",
+  "component_count": 282,
+  "components": [
+    {
+      "name": "A11yInspector",
+      "file": "a11y_inspector.rs",
+      "fields": [
+        {
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "name": "panel_width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "A11yNode",
+      "file": "a11y_inspector.rs",
+      "fields": [
+        {
+          "name": "role",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "Option<String>"
+        },
+        {
+          "name": "focused",
+          "type": "bool"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "name": "depth",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "AIExecutionDebugger",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "breakpoints",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "_current_line",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "AgentChat",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "messages",
+          "type": "Vec<(String, String)>"
+        },
+        {
+          "name": "input_text",
+          "type": "String"
+        },
+        {
+          "name": "is_streaming",
+          "type": "bool"
+        },
+        {
+          "name": "suggestions",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "model_index",
+          "type": "usize"
+        }
+      ]
+    },
+    {
+      "name": "AgentConfig",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "model",
+          "type": "String"
+        },
+        {
+          "name": "system_prompt",
+          "type": "String"
+        },
+        {
+          "name": "prompt_template",
+          "type": "String"
+        },
+        {
+          "name": "temperature",
+          "type": "f32"
+        },
+        {
+          "name": "max_tokens",
+          "type": "u32"
+        },
+        {
+          "name": "top_p",
+          "type": "f32"
+        },
+        {
+          "name": "frequency_penalty",
+          "type": "f32"
+        },
+        {
+          "name": "presence_penalty",
+          "type": "f32"
+        },
+        {
+          "name": "stop_sequences",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "skills",
+          "type": "Vec<String>"
+        }
+      ]
+    },
+    {
+      "name": "AgentInfo",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "AgentStatus"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "current_task",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "AgentMessage",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "from_node",
+          "type": "String"
+        },
+        {
+          "name": "to_node",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "f64"
+        },
+        {
+          "name": "message_type",
+          "type": "MessageType"
+        }
+      ]
+    },
+    {
+      "name": "Alert",
+      "file": "gerd_telemetry.rs",
+      "fields": [
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "severity",
+          "type": "AlertSeverity"
+        },
+        {
+          "name": "timestamp",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "Alert",
+      "file": "alert.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "variant",
+          "type": "AlertVariant"
+        },
+        {
+          "name": "action",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "AlertDialog",
+      "file": "dialog.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "confirm_label",
+          "type": "String"
+        },
+        {
+          "name": "cancel_label",
+          "type": "String"
+        },
+        {
+          "name": "open",
+          "type": "bool"
+        },
+        {
+          "name": "variant",
+          "type": "AlertVariant"
+        },
+        {
+          "name": "on_close",
+          "type": "Option<Arc<dyn Fn() + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "Animated",
+      "file": "anim.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "transition",
+          "type": "Option<Transition>"
+        },
+        {
+          "name": "easing",
+          "type": "Easing"
+        },
+        {
+          "name": "duration",
+          "type": "f32"
+        },
+        {
+          "name": "state_hash",
+          "type": "Option<u64>"
+        },
+        {
+          "name": "spring_params",
+          "type": "SpringParams"
+        },
+        {
+          "name": "target_translate_x",
+          "type": "Option<f32>"
+        },
+        {
+          "name": "target_translate_y",
+          "type": "Option<f32>"
+        },
+        {
+          "name": "target_scale",
+          "type": "Option<f32>"
+        }
+      ]
+    },
+    {
+      "name": "ArrowNav",
+      "file": "keyboard_nav.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "on_arrow",
+          "type": "Arc<dyn Fn(ArrowDirection) + Send + Sync>"
+        },
+        {
+          "name": "require_focus",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "AspectRatio",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "ratio",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "radius",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "AssetItem",
+      "file": "asset_browser.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "icon",
+          "type": "String"
+        },
+        {
+          "name": "item_type",
+          "type": "AssetType"
+        }
+      ]
+    },
+    {
+      "name": "AssistantMessage",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "avatar",
+          "type": "String"
+        },
+        {
+          "name": "show_actions",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "AuditEntry",
+      "file": "tyr_security.rs",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type": "f64"
+        },
+        {
+          "name": "user",
+          "type": "String"
+        },
+        {
+          "name": "action",
+          "type": "String"
+        },
+        {
+          "name": "resource",
+          "type": "String"
+        },
+        {
+          "name": "success",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "BackgroundPattern",
+      "file": "display.rs",
+      "fields": [
+        {
+          "name": "pattern",
+          "type": "BgPattern"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "spacing",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "BentoGrid",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "cols",
+          "type": "usize"
+        },
+        {
+          "name": "rows",
+          "type": "usize"
+        },
+        {
+          "name": "cells",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "gap",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "BgMediaHero",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "subtitle",
+          "type": "String"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "overlay",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "BifrostColorPicker",
+      "file": "hringrpagination.rs",
+      "fields": [
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "BifrostTabs",
+      "file": "bifrost_tabs.rs",
+      "fields": [
+        {
+          "name": "options",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected_index",
+          "type": "usize"
+        },
+        {
+          "name": "on_select",
+          "type": "Arc<dyn Fn(usize) + Send + Sync>"
+        },
+        {
+          "name": "on_close",
+          "type": "Option<Arc<dyn Fn(usize) + Send + Sync>>"
+        },
+        {
+          "name": "closable",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "BragiCreative",
+      "file": "bragi_creative.rs",
+      "fields": [
+        {
+          "name": "components",
+          "type": "Vec<CreativeComponent>"
+        },
+        {
+          "name": "active_editor",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "BreadcrumbItem",
+      "file": "breadcrumb.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "href",
+          "type": "Option<String>"
+        },
+        {
+          "name": "is_current",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "Candle",
+      "file": "candlestick.rs",
+      "fields": [
+        {
+          "name": "open",
+          "type": "f32"
+        },
+        {
+          "name": "high",
+          "type": "f32"
+        },
+        {
+          "name": "low",
+          "type": "f32"
+        },
+        {
+          "name": "close",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "CanvasItem",
+      "file": "infinite_canvas.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "AnyView"
+        },
+        {
+          "name": "x",
+          "type": "f32"
+        },
+        {
+          "name": "y",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "CardHoverEffect",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "hover",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "CardStack",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "count",
+          "type": "usize"
+        },
+        {
+          "name": "offset_per_card",
+          "type": "f32"
+        },
+        {
+          "name": "card_width",
+          "type": "f32"
+        },
+        {
+          "name": "card_height",
+          "type": "f32"
+        },
+        {
+          "name": "base_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "Carousel",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "count",
+          "type": "usize"
+        },
+        {
+          "name": "current",
+          "type": "f32"
+        },
+        {
+          "name": "page_width",
+          "type": "f32"
+        },
+        {
+          "name": "page_height",
+          "type": "f32"
+        },
+        {
+          "name": "labels",
+          "type": "Vec<String>"
+        }
+      ]
+    },
+    {
+      "name": "ChatMessage",
+      "file": "raven_messenger.rs",
+      "fields": [
+        {
+          "name": "role",
+          "type": "ChatRole"
+        },
+        {
+          "name": "content",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "String"
+        },
+        {
+          "name": "is_streaming",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ClippedCornerNode",
+      "file": "clipped_corner.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "border_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "border_width",
+          "type": "f32"
+        },
+        {
+          "name": "clip_size",
+          "type": "f32"
+        },
+        {
+          "name": "background_opacity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Codeblock",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "code",
+          "type": "String"
+        },
+        {
+          "name": "language",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "CommandItem",
+      "file": "command.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "shortcut",
+          "type": "Option<String>"
+        },
+        {
+          "name": "on_select",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "ComponentAttr",
+      "file": "gullveig_inspector.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "String"
+        },
+        {
+          "name": "editable",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ComponentErrorBoundary",
+      "file": "error.rs",
+      "fields": [
+        {
+          "name": "error_state",
+          "type": "State<ComponentErrorState>"
+        },
+        {
+          "name": "content",
+          "type": "V"
+        }
+      ]
+    },
+    {
+      "name": "Confetti",
+      "file": "confetti.rs",
+      "fields": [
+        {
+          "name": "origin",
+          "type": "[f32; 2]"
+        },
+        {
+          "name": "particle_count",
+          "type": "u32"
+        },
+        {
+          "name": "colors",
+          "type": "Vec<[f32; 4]>"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "spread",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ConfirmationDialog",
+      "file": "dialog.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "confirm_label",
+          "type": "String"
+        },
+        {
+          "name": "open",
+          "type": "bool"
+        },
+        {
+          "name": "on_confirm",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        },
+        {
+          "name": "on_cancel",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "ConstraintOverlay",
+      "file": "devtools.rs",
+      "fields": [
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "name": "constraint_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "padding_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "show_margins",
+          "type": "bool"
+        },
+        {
+          "name": "show_padding",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ContextMenuItem",
+      "file": "context_menu.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "shortcut",
+          "type": "Option<String>"
+        },
+        {
+          "name": "disabled",
+          "type": "bool"
+        },
+        {
+          "name": "on_click",
+          "type": "Option<Arc<dyn Fn() + Send + Sync>>"
+        },
+        {
+          "name": "children",
+          "type": "Vec<ContextMenuItem>"
+        }
+      ]
+    },
+    {
+      "name": "CooldownOverlay",
+      "file": "cooldown.rs",
+      "fields": [
+        {
+          "name": "total",
+          "type": "f32"
+        },
+        {
+          "name": "remaining",
+          "type": "f32"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "ring_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "track_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "stroke_width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "CopyToolbar",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "name": "actions",
+          "type": "Vec<String>"
+        }
+      ]
+    },
+    {
+      "name": "CreativeComponent",
+      "file": "bragi_creative.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "component_type",
+          "type": "CreativeType"
+        },
+        {
+          "name": "data",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "DataGridColumn",
+      "file": "data_grid.rs",
+      "fields": [
+        {
+          "name": "header",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "sortable",
+          "type": "bool"
+        },
+        {
+          "name": "cell_builder",
+          "type": "Box<dyn Fn(&D) -> AnyView + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "DataTrail",
+      "file": "consent_gate.rs",
+      "fields": [
+        {
+          "name": "sources",
+          "type": "Vec<TrailSource>"
+        }
+      ]
+    },
+    {
+      "name": "Date",
+      "file": "calendar.rs",
+      "fields": [
+        {
+          "name": "year",
+          "type": "i32"
+        },
+        {
+          "name": "month",
+          "type": "u32"
+        },
+        {
+          "name": "day",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "DateRange",
+      "file": "datepicker.rs",
+      "fields": [
+        {
+          "name": "start",
+          "type": "(u32, u32, u32)"
+        },
+        {
+          "name": "end",
+          "type": "(u32, u32, u32)"
+        }
+      ]
+    },
+    {
+      "name": "DateRangePicker",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "month",
+          "type": "u8"
+        },
+        {
+          "name": "year",
+          "type": "u32"
+        },
+        {
+          "name": "range_start",
+          "type": "u8"
+        },
+        {
+          "name": "range_end",
+          "type": "u8"
+        },
+        {
+          "name": "hovered",
+          "type": "u8"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "DateTimePicker",
+      "file": "form_controls.rs",
+      "fields": [
+        {
+          "name": "hour",
+          "type": "u8"
+        },
+        {
+          "name": "minute",
+          "type": "u8"
+        },
+        {
+          "name": "day",
+          "type": "u8"
+        },
+        {
+          "name": "month",
+          "type": "u8"
+        },
+        {
+          "name": "year",
+          "type": "u32"
+        },
+        {
+          "name": "open",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "DesignToken",
+      "file": "njord_theme.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "DialogAction",
+      "file": "modal.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "style",
+          "type": "DialogActionStyle"
+        },
+        {
+          "name": "on_click",
+          "type": "std::sync::Arc<dyn Fn() + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "DisclosureGroup",
+      "file": "navigation.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "String"
+        },
+        {
+          "name": "expanded",
+          "type": "bool"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "DockItem",
+      "file": "heimdall_dock.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "badge",
+          "type": "Option<u32>"
+        },
+        {
+          "name": "is_running",
+          "type": "bool"
+        },
+        {
+          "name": "on_click",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "DraggableCard",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "is_dragging",
+          "type": "bool"
+        },
+        {
+          "name": "drag_x",
+          "type": "f32"
+        },
+        {
+          "name": "drag_y",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "DraumaSkeleton",
+      "file": "decorators.rs",
+      "fields": [
+        {
+          "name": "border_radius",
+          "type": "f32"
+        },
+        {
+          "name": "shimmer",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "Drawer",
+      "file": "navigation.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "open",
+          "type": "bool"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "position",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "DropVault",
+      "file": "drop_vault.rs",
+      "fields": [
+        {
+          "name": "accepted_types",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "max_files",
+          "type": "usize"
+        },
+        {
+          "name": "max_file_size",
+          "type": "u64"
+        },
+        {
+          "name": "on_files_selected",
+          "type": "Option<Arc<dyn Fn(Vec<VaultFile>) + Send + Sync>>"
+        },
+        {
+          "name": "uploads",
+          "type": "Arc<Mutex<Vec<VaultEntry>>>"
+        },
+        {
+          "name": "is_drag_over",
+          "type": "Arc<Mutex<bool>>"
+        }
+      ]
+    },
+    {
+      "name": "DropdownItem",
+      "file": "dropdown_menu.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "on_click",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        },
+        {
+          "name": "icon",
+          "type": "Option<String>"
+        },
+        {
+          "name": "shortcut",
+          "type": "Option<String>"
+        },
+        {
+          "name": "is_divider",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "DropdownMenu",
+      "file": "dropdown_menu.rs",
+      "fields": [
+        {
+          "name": "trigger",
+          "type": "T"
+        },
+        {
+          "name": "items",
+          "type": "Vec<DropdownItem>"
+        },
+        {
+          "name": "is_open",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "DynamicIsland",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "expanded_label",
+          "type": "String"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "min_width",
+          "type": "f32"
+        },
+        {
+          "name": "max_width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ExpandableCard",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "summary",
+          "type": "String"
+        },
+        {
+          "name": "detail",
+          "type": "String"
+        },
+        {
+          "name": "expanded",
+          "type": "bool"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ExtendedFAB",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "icon",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "text_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "pressed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "FAB",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "icon",
+          "type": "String"
+        },
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "icon_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "pressed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "FileItem",
+      "file": "file_tree.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "kind",
+          "type": "FileKind"
+        },
+        {
+          "name": "children",
+          "type": "Option<Vec<FileItem>>"
+        },
+        {
+          "name": "is_expanded",
+          "type": "bool"
+        },
+        {
+          "name": "is_selected",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "FlexBox",
+      "file": "flex.rs",
+      "fields": [
+        {
+          "name": "orientation",
+          "type": "cvkg_core::Orientation"
+        },
+        {
+          "name": "spacing",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "FloatingNavbar",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "usize"
+        },
+        {
+          "name": "glass",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "FloatingText",
+      "file": "floating_text.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "origin",
+          "type": "[f32; 2]"
+        },
+        {
+          "name": "velocity",
+          "type": "[f32; 2]"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "lifetime",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "FocusTrap",
+      "file": "keyboard_nav.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "is_active",
+          "type": "bool"
+        },
+        {
+          "name": "on_escape",
+          "type": "Option<Arc<dyn Fn() + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "Focusable",
+      "file": "keyboard_nav.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "focus_id",
+          "type": "FocusId"
+        },
+        {
+          "name": "is_focusable",
+          "type": "bool"
+        },
+        {
+          "name": "on_key",
+          "type": "Option<KeyHandler>"
+        },
+        {
+          "name": "on_focus",
+          "type": "Option<Arc<dyn Fn() + Send + Sync>>"
+        },
+        {
+          "name": "on_blur",
+          "type": "Option<Arc<dyn Fn() + Send + Sync>>"
+        },
+        {
+          "name": "tab_index",
+          "type": "i32"
+        }
+      ]
+    },
+    {
+      "name": "FontAxisPanel",
+      "file": "font_axis_panel.rs",
+      "fields": [
+        {
+          "name": "family",
+          "type": "String"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "axis_values",
+          "type": "Vec<(FontAxisInfo, f32)>"
+        },
+        {
+          "name": "colr_enabled",
+          "type": "bool"
+        },
+        {
+          "name": "on_axis_change",
+          "type": "Option<Arc<dyn Fn(u32, f32) + Send + Sync>>"
+        },
+        {
+          "name": "on_colr_toggle",
+          "type": "Option<Arc<dyn Fn(bool) + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "FormBinder",
+      "file": "form_binder.rs",
+      "fields": [
+        {
+          "name": "state",
+          "type": "T"
+        },
+        {
+          "name": "errors",
+          "type": "HashMap<String, String>"
+        },
+        {
+          "name": "rules",
+          "type": "HashMap<String, Vec<Arc<dyn Fn(&T) -> Result<(), String> + Send + Sync>>>"
+        }
+      ]
+    },
+    {
+      "name": "FormBinding",
+      "file": "form_binder.rs",
+      "fields": [
+        {
+          "name": "get",
+          "type": "Arc<dyn Fn() -> T + Send + Sync>"
+        },
+        {
+          "name": "set",
+          "type": "Arc<dyn Fn(T) + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "FormField",
+      "file": "form_validation.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "error_message",
+          "type": "Option<String>"
+        },
+        {
+          "name": "is_required",
+          "type": "bool"
+        },
+        {
+          "name": "is_valid",
+          "type": "bool"
+        },
+        {
+          "name": "is_dirty",
+          "type": "bool"
+        },
+        {
+          "name": "rules",
+          "type": "Vec<ValidationRule>"
+        }
+      ]
+    },
+    {
+      "name": "FreyrInspector",
+      "file": "freyr_inspector.rs",
+      "fields": [
+        {
+          "name": "properties",
+          "type": "Vec<Property>"
+        },
+        {
+          "name": "title",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "FullScreenCover",
+      "file": "dialog.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "presented",
+          "type": "bool"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "FutharkFlow",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "speed",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "GanttTask",
+      "file": "scheduler.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "start_day",
+          "type": "f32"
+        },
+        {
+          "name": "duration_days",
+          "type": "f32"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "GinnungagapWindow",
+      "file": "window.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "primary",
+          "type": "V1"
+        },
+        {
+          "name": "secondary",
+          "type": "V2"
+        },
+        {
+          "name": "fold_progress",
+          "type": "f32, // 0.0 (Primary) to 1.0 (Secondary)"
+        },
+        {
+          "name": "border_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "GjallarAlert",
+      "file": "hud.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "kind",
+          "type": "AlertKind"
+        }
+      ]
+    },
+    {
+      "name": "GjallarSplitter",
+      "file": "disclosure.rs",
+      "fields": [
+        {
+          "name": "first",
+          "type": "V1"
+        },
+        {
+          "name": "second",
+          "type": "V2"
+        },
+        {
+          "name": "split_ratio",
+          "type": "f32"
+        },
+        {
+          "name": "orientation",
+          "type": "cvkg_core::Orientation"
+        }
+      ]
+    },
+    {
+      "name": "GradientStop",
+      "file": "gradient.rs",
+      "fields": [
+        {
+          "name": "color",
+          "type": "Color"
+        },
+        {
+          "name": "position",
+          "type": "f32, // 0.0 - 1.0"
+        }
+      ]
+    },
+    {
+      "name": "GraphEdge",
+      "file": "node_graph_editor.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "from_node",
+          "type": "String"
+        },
+        {
+          "name": "from_port",
+          "type": "String"
+        },
+        {
+          "name": "to_node",
+          "type": "String"
+        },
+        {
+          "name": "to_port",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "GraphNode",
+      "file": "node_graph_editor.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "x",
+          "type": "f32"
+        },
+        {
+          "name": "y",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "input_ports",
+          "type": "Vec<Port>"
+        },
+        {
+          "name": "output_ports",
+          "type": "Vec<Port>"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "Group",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "padding",
+          "type": "f32"
+        },
+        {
+          "name": "radius",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "GroupBox",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HatiCarousel",
+      "file": "carousel.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<Box<dyn Fn(&mut dyn Renderer, Rect) + Send + Sync>>"
+        },
+        {
+          "name": "item_width",
+          "type": "f32"
+        },
+        {
+          "name": "item_height",
+          "type": "f32"
+        },
+        {
+          "name": "spacing",
+          "type": "f32"
+        },
+        {
+          "name": "scroll_offset",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HatiSpinner",
+      "file": "spinner.rs",
+      "fields": [
+        {
+          "name": "variant",
+          "type": "SpinnerVariant"
+        },
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "speed",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HeimdallDock",
+      "file": "heimdall_dock.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<DockItem>"
+        },
+        {
+          "name": "position",
+          "type": "DockPosition"
+        },
+        {
+          "name": "auto_hide",
+          "type": "bool"
+        },
+        {
+          "name": "magnification",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HeimdallSweep",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "sweep_speed",
+          "type": "f32, // Rotations per second"
+        },
+        {
+          "name": "glow_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "HeroColorPanels",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "cols",
+          "type": "usize"
+        },
+        {
+          "name": "rows",
+          "type": "usize"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HighlightSegment",
+      "file": "token_stream.rs",
+      "fields": [
+        {
+          "name": "start",
+          "type": "usize"
+        },
+        {
+          "name": "len",
+          "type": "usize"
+        },
+        {
+          "name": "arrived_at",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HiminnModal",
+      "file": "window.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "is_open",
+          "type": "bool"
+        },
+        {
+          "name": "blur_radius",
+          "type": "f32"
+        },
+        {
+          "name": "border_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "HlinAccessibility",
+      "file": "hlin_accessibility.rs",
+      "fields": [
+        {
+          "name": "tree",
+          "type": "Vec<HlinNode>"
+        },
+        {
+          "name": "focus_state",
+          "type": "FocusState"
+        },
+        {
+          "name": "high_contrast",
+          "type": "bool"
+        },
+        {
+          "name": "reduced_motion",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "HlinNode",
+      "file": "hlin_accessibility.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "role",
+          "type": "AriaRole"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "children",
+          "type": "Vec<HlinNode>"
+        }
+      ]
+    },
+    {
+      "name": "HolographicRunestone",
+      "file": "holographic_runestone.rs",
+      "fields": [
+        {
+          "name": "rune",
+          "type": "char"
+        },
+        {
+          "name": "size",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "HringrPagination",
+      "file": "hringrpagination.rs",
+      "fields": [
+        {
+          "name": "current_page",
+          "type": "usize"
+        },
+        {
+          "name": "total_pages",
+          "type": "usize"
+        },
+        {
+          "name": "on_change",
+          "type": "std::sync::Arc<dyn Fn(usize) + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "HrungnirSegmented",
+      "file": "hrungnirsegmented.rs",
+      "fields": [
+        {
+          "name": "segments",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "usize"
+        },
+        {
+          "name": "style",
+          "type": "SegmentedStyle"
+        }
+      ]
+    },
+    {
+      "name": "Hvergelmir",
+      "file": "shapes.rs",
+      "fields": [
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "stroke_width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Icon",
+      "file": "display.rs",
+      "fields": [
+        {
+          "name": "glyph",
+          "type": "String"
+        },
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "Idavoll",
+      "file": "shapes.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "stroke_width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "IdunnPersistence",
+      "file": "idunn_persistence.rs",
+      "fields": [
+        {
+          "name": "snapshots",
+          "type": "Vec<WorkspaceSnapshot>"
+        },
+        {
+          "name": "active_session",
+          "type": "Option<SessionRestore>"
+        },
+        {
+          "name": "auto_restore",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "InputBar",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "placeholder",
+          "type": "String"
+        },
+        {
+          "name": "is_streaming",
+          "type": "bool"
+        },
+        {
+          "name": "max_chars",
+          "type": "usize"
+        }
+      ]
+    },
+    {
+      "name": "InputRef",
+      "file": "computed_signal.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "Kanban",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "columns",
+          "type": "Vec<KanbanColumn>"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "column_width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "KanbanCard",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "KanbanColumn",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "cards",
+          "type": "Vec<KanbanCard>"
+        }
+      ]
+    },
+    {
+      "name": "Label",
+      "file": "form_controls.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "required",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "Layer",
+      "file": "layer_system.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "name": "locked",
+          "type": "bool"
+        },
+        {
+          "name": "opacity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "LazyHGrid",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "rows",
+          "type": "usize"
+        },
+        {
+          "name": "cells",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "gap",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "LazyHStack",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "item_width",
+          "type": "f32"
+        },
+        {
+          "name": "gap",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "LazyVGrid",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "cols",
+          "type": "usize"
+        },
+        {
+          "name": "cells",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "gap",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Link",
+      "file": "form_controls.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "visited",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "List",
+      "file": "navigation.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "Option<usize>"
+        },
+        {
+          "name": "row_height",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ListItem",
+      "file": "virtual_list.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "subtitle",
+          "type": "Option<String>"
+        },
+        {
+          "name": "icon",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "Loader",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        },
+        {
+          "name": "variant",
+          "type": "LoaderVariant"
+        },
+        {
+          "name": "color",
+          "type": "Option<[f32; 4]>"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "LogoCarousel",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "logos",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "speed",
+          "type": "f32"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "logo_width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "LokiGlitch",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "String"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "base_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "glitch_intensity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Markdown",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "source",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "MarkdownEditor",
+      "file": "bragi_creative.rs",
+      "fields": [
+        {
+          "name": "source",
+          "type": "String"
+        },
+        {
+          "name": "preview_mode",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "Marquee",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "speed",
+          "type": "f32"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "MemoryCluster",
+      "file": "semantic_memory_explorer.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "topic",
+          "type": "String"
+        },
+        {
+          "name": "strength",
+          "type": "f32"
+        },
+        {
+          "name": "connections",
+          "type": "Vec<String>"
+        }
+      ]
+    },
+    {
+      "name": "MemoryEdge",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "from",
+          "type": "String"
+        },
+        {
+          "name": "to",
+          "type": "String"
+        },
+        {
+          "name": "strength",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "MemoryGraphViewer",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "nodes",
+          "type": "Vec<MemoryNode>"
+        },
+        {
+          "name": "edges",
+          "type": "Vec<MemoryEdge>"
+        }
+      ]
+    },
+    {
+      "name": "MemoryNode",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "weight",
+          "type": "f32"
+        },
+        {
+          "name": "node_type",
+          "type": "NodeType"
+        }
+      ]
+    },
+    {
+      "name": "MemoryView",
+      "file": "memory.rs",
+      "fields": [
+        {
+          "name": "state",
+          "type": "State<AppState>"
+        }
+      ]
+    },
+    {
+      "name": "Menubar",
+      "file": "navigation.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<(String, Vec<String>)>"
+        },
+        {
+          "name": "selected",
+          "type": "Option<usize>"
+        },
+        {
+          "name": "dropdown_open",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "MerkiBadge",
+      "file": "decorators.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "MessageList",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "messages",
+          "type": "Vec<(String, String)>"
+        },
+        {
+          "name": "scroll_offset",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "MicroFeedback",
+      "file": "lib.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "haptic",
+          "type": "std::sync::Arc<dyn cvkg_core::HapticEngine>"
+        },
+        {
+          "name": "audio",
+          "type": "std::sync::Arc<dyn cvkg_core::AudioEngine>"
+        }
+      ]
+    },
+    {
+      "name": "MidgardLines",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "speed",
+          "type": "f32"
+        },
+        {
+          "name": "density",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "MimirsWell",
+      "file": "well.rs",
+      "fields": [
+        {
+          "name": "nodes",
+          "type": "Vec<WellNode>"
+        },
+        {
+          "name": "edges",
+          "type": "Vec<WellEdge>"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "MjolnirFrame",
+      "file": "mjolnir_frame.rs",
+      "fields": [
+        {
+          "name": "border_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "border_width",
+          "type": "f32"
+        },
+        {
+          "name": "bevel_size",
+          "type": "f32"
+        },
+        {
+          "name": "glitch_intensity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "MjolnirSlider",
+      "file": "mjolnir_slider.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "range",
+          "type": "std::ops::RangeInclusive<f32>"
+        },
+        {
+          "name": "on_change",
+          "type": "Arc<dyn Fn(f32) + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "ModelPicker",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "models",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "usize"
+        },
+        {
+          "name": "is_open",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "Morphed",
+      "file": "morph.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "morph_id",
+          "type": "u64"
+        },
+        {
+          "name": "spring_params",
+          "type": "SpringParams"
+        }
+      ]
+    },
+    {
+      "name": "MultiAgentOrchestrator",
+      "file": "mod.rs",
+      "fields": [
+        {
+          "name": "state",
+          "type": "OrchestratorState"
+        },
+        {
+          "name": "engine",
+          "type": "ExecutionEngine"
+        },
+        {
+          "name": "instance_id",
+          "type": "u64"
+        },
+        {
+          "name": "last_tick",
+          "type": "Option<Instant>"
+        },
+        {
+          "name": "dragging",
+          "type": "Option<String>"
+        },
+        {
+          "name": "drag_offset",
+          "type": "(f32, f32)"
+        },
+        {
+          "name": "pending_edge",
+          "type": "Option<(String, String)>"
+        },
+        {
+          "name": "pointer_pos",
+          "type": "(f32, f32)"
+        }
+      ]
+    },
+    {
+      "name": "MultiAgentPanel",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "agents",
+          "type": "Vec<AgentInfo>"
+        },
+        {
+          "name": "title",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "MultiStepLoader",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "steps",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "current",
+          "type": "usize"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "MuninAvatar",
+      "file": "decorators.rs",
+      "fields": [
+        {
+          "name": "src",
+          "type": "Option<String>"
+        },
+        {
+          "name": "fallback",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "Option<AvatarStatus>"
+        }
+      ]
+    },
+    {
+      "name": "NavbarMenu",
+      "file": "layout_components.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "usize"
+        },
+        {
+          "name": "dropdown_open",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "NavigationMenu",
+      "file": "navigation.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<(String, Vec<String>)>"
+        },
+        {
+          "name": "selected",
+          "type": "usize"
+        },
+        {
+          "name": "sub_open",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "NiflheimFrost",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "frost_intensity",
+          "type": "f32"
+        },
+        {
+          "name": "blur_radius",
+          "type": "f32"
+        },
+        {
+          "name": "morph_progress",
+          "type": "f32"
+        },
+        {
+          "name": "corner_radius_rest",
+          "type": "f32"
+        },
+        {
+          "name": "corner_radius_hover",
+          "type": "f32"
+        },
+        {
+          "name": "edge_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "clean_glass",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "NiflheimSidebar",
+      "file": "niflheim_sidebar.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<SidebarItem>"
+        },
+        {
+          "name": "selected_id",
+          "type": "Option<String>"
+        },
+        {
+          "name": "vibrancy",
+          "type": "SidebarVibrancy"
+        },
+        {
+          "name": "source_list_style",
+          "type": "bool"
+        },
+        {
+          "name": "on_select",
+          "type": "Option<Arc<dyn Fn(&str) + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "NjordTheme",
+      "file": "njord_theme.rs",
+      "fields": [
+        {
+          "name": "tokens",
+          "type": "Vec<DesignToken>"
+        },
+        {
+          "name": "variants",
+          "type": "Vec<ThemeVariant>"
+        },
+        {
+          "name": "active_variant",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "NodeMetrics",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "total_runs",
+          "type": "u64"
+        },
+        {
+          "name": "successful_runs",
+          "type": "u64"
+        },
+        {
+          "name": "failed_runs",
+          "type": "u64"
+        },
+        {
+          "name": "total_tokens_in",
+          "type": "u64"
+        },
+        {
+          "name": "total_tokens_out",
+          "type": "u64"
+        },
+        {
+          "name": "total_cost",
+          "type": "f64"
+        },
+        {
+          "name": "avg_duration_ms",
+          "type": "f64"
+        },
+        {
+          "name": "last_duration_ms",
+          "type": "f64"
+        },
+        {
+          "name": "node_id",
+          "type": "String"
+        },
+        {
+          "name": "max_duration_ms",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "NornirBar",
+      "file": "nornir_bar.rs",
+      "fields": [
+        {
+          "name": "menu_bar",
+          "type": "MenuBar"
+        },
+        {
+          "name": "floating",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "NumberTicker",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "value",
+          "type": "f64"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "decimals",
+          "type": "usize"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "prefix",
+          "type": "String"
+        },
+        {
+          "name": "suffix",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "OnEnter",
+      "file": "animation_triggers.rs",
+      "fields": [
+        {
+          "name": "inner",
+          "type": "V"
+        },
+        {
+          "name": "spring",
+          "type": "TriggerSpring"
+        }
+      ]
+    },
+    {
+      "name": "OnExit",
+      "file": "animation_triggers.rs",
+      "fields": [
+        {
+          "name": "inner",
+          "type": "V"
+        },
+        {
+          "name": "spring",
+          "type": "TriggerSpring"
+        }
+      ]
+    },
+    {
+      "name": "OnHover",
+      "file": "animation_triggers.rs",
+      "fields": [
+        {
+          "name": "inner",
+          "type": "V"
+        },
+        {
+          "name": "spring",
+          "type": "TriggerSpring"
+        }
+      ]
+    },
+    {
+      "name": "OnScroll",
+      "file": "animation_triggers.rs",
+      "fields": [
+        {
+          "name": "inner",
+          "type": "V"
+        },
+        {
+          "name": "spring",
+          "type": "TriggerSpring"
+        }
+      ]
+    },
+    {
+      "name": "OracleOrb",
+      "file": "oracle_orb.rs",
+      "fields": [
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "activity",
+          "type": "f32, // 0.0 to 1.0"
+        }
+      ]
+    },
+    {
+      "name": "OrchestratorEdge",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "source_node",
+          "type": "String"
+        },
+        {
+          "name": "source_port",
+          "type": "String"
+        },
+        {
+          "name": "target_node",
+          "type": "String"
+        },
+        {
+          "name": "target_port",
+          "type": "String"
+        },
+        {
+          "name": "condition",
+          "type": "Option<String>"
+        },
+        {
+          "name": "is_active",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "OrchestratorLog",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type": "Instant"
+        },
+        {
+          "name": "node_id",
+          "type": "String"
+        },
+        {
+          "name": "level",
+          "type": "LogLevel"
+        },
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "data",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "OrchestratorNode",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "node_type",
+          "type": "OrchestratorNodeType"
+        },
+        {
+          "name": "position",
+          "type": "(f32, f32)"
+        },
+        {
+          "name": "size",
+          "type": "(f32, f32)"
+        },
+        {
+          "name": "inputs",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "outputs",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "agent_config",
+          "type": "Option<AgentConfig>"
+        },
+        {
+          "name": "retry_config",
+          "type": "RetryConfig"
+        },
+        {
+          "name": "timeout",
+          "type": "Option<Duration>"
+        },
+        {
+          "name": "metadata",
+          "type": "HashMap<String, String>"
+        },
+        {
+          "name": "webhook_config",
+          "type": "WebhookConfig"
+        },
+        {
+          "name": "schedule_config",
+          "type": "ScheduleConfig"
+        },
+        {
+          "name": "node_metrics",
+          "type": "NodeMetrics"
+        }
+      ]
+    },
+    {
+      "name": "OrchestratorRun",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "started_at",
+          "type": "Instant"
+        },
+        {
+          "name": "ended_at",
+          "type": "Option<Instant>"
+        },
+        {
+          "name": "status",
+          "type": "RunStatus"
+        },
+        {
+          "name": "node_states",
+          "type": "HashMap<String, NodeExecutionState>"
+        },
+        {
+          "name": "total_usage",
+          "type": "TokenUsage"
+        },
+        {
+          "name": "total_cost",
+          "type": "f64"
+        },
+        {
+          "name": "duration",
+          "type": "Option<std::time::Duration>"
+        },
+        {
+          "name": "logs",
+          "type": "Vec<OrchestratorLog>"
+        },
+        {
+          "name": "metadata",
+          "type": "HashMap<String, String>"
+        }
+      ]
+    },
+    {
+      "name": "OutlineNode",
+      "file": "outline_view.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "icon",
+          "type": "Option<String>"
+        },
+        {
+          "name": "children",
+          "type": "Vec<OutlineNode>"
+        },
+        {
+          "name": "expanded",
+          "type": "bool"
+        },
+        {
+          "name": "selectable",
+          "type": "bool"
+        },
+        {
+          "name": "data",
+          "type": "Option<Arc<dyn std::any::Any + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "OutlineView",
+      "file": "outline_view.rs",
+      "fields": [
+        {
+          "name": "roots",
+          "type": "Vec<OutlineNode>"
+        },
+        {
+          "name": "selected_index",
+          "type": "Option<usize>"
+        },
+        {
+          "name": "on_select",
+          "type": "Option<Arc<dyn Fn(usize) + Send + Sync>>"
+        },
+        {
+          "name": "on_toggle",
+          "type": "Option<Arc<dyn Fn(usize) + Send + Sync>>"
+        },
+        {
+          "name": "state_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "PaletteCommand",
+      "file": "command_palette.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "shortcut",
+          "type": "Option<String>"
+        },
+        {
+          "name": "action",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "Panel",
+      "file": "docking_workspace.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "AnyView"
+        },
+        {
+          "name": "is_floating",
+          "type": "bool"
+        },
+        {
+          "name": "is_docked",
+          "type": "bool"
+        },
+        {
+          "name": "position",
+          "type": "PanelPosition"
+        }
+      ]
+    },
+    {
+      "name": "Participant",
+      "file": "collaboration.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "avatar",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "ParticipantStatus"
+        },
+        {
+          "name": "cursor",
+          "type": "Option<(f32, f32)>"
+        }
+      ]
+    },
+    {
+      "name": "PeerCursor",
+      "file": "sync_weave.rs",
+      "fields": [
+        {
+          "name": "site_id",
+          "type": "u64"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "position",
+          "type": "usize"
+        }
+      ]
+    },
+    {
+      "name": "PendingEdge",
+      "file": "node_graph_editor.rs",
+      "fields": [
+        {
+          "name": "from_node",
+          "type": "String"
+        },
+        {
+          "name": "from_port",
+          "type": "String"
+        },
+        {
+          "name": "cursor_x",
+          "type": "f32"
+        },
+        {
+          "name": "cursor_y",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "PerfOverlay",
+      "file": "perf_overlay.rs",
+      "fields": [
+        {
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "name": "sample_window",
+          "type": "usize"
+        },
+        {
+          "name": "draw_calls",
+          "type": "u32"
+        },
+        {
+          "name": "triangles",
+          "type": "u32"
+        },
+        {
+          "name": "vertices",
+          "type": "u32"
+        },
+        {
+          "name": "gpu_time_ms",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "PolygonFrame",
+      "file": "shapes.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "sides",
+          "type": "u32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "stroke_width",
+          "type": "f32"
+        },
+        {
+          "name": "rotation",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Port",
+      "file": "node_graph_editor.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "port_type",
+          "type": "PortType"
+        }
+      ]
+    },
+    {
+      "name": "PromptChainVisualizer",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "prompts",
+          "type": "Vec<PromptStep>"
+        },
+        {
+          "name": "_current_step",
+          "type": "usize"
+        }
+      ]
+    },
+    {
+      "name": "PromptStep",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "PromptStatus"
+        },
+        {
+          "name": "input_tokens",
+          "type": "usize"
+        },
+        {
+          "name": "output_tokens",
+          "type": "usize"
+        },
+        {
+          "name": "latency_ms",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Property",
+      "file": "freyr_inspector.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "PropertyValue"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "QuickItem",
+      "file": "command_palette.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "icon",
+          "type": "String"
+        },
+        {
+          "name": "action",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "RadialMenu",
+      "file": "radial_menu.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<RadialMenuItem>"
+        },
+        {
+          "name": "center",
+          "type": "[f32; 2]"
+        },
+        {
+          "name": "inner_radius",
+          "type": "f32"
+        },
+        {
+          "name": "outer_radius",
+          "type": "f32"
+        },
+        {
+          "name": "hovered",
+          "type": "Option<usize>"
+        },
+        {
+          "name": "is_visible",
+          "type": "bool"
+        },
+        {
+          "name": "on_select",
+          "type": "Option<Arc<dyn Fn(usize) + Send + Sync>>"
+        },
+        {
+          "name": "on_dismiss",
+          "type": "Option<Arc<dyn Fn() + Send + Sync>>"
+        },
+        {
+          "name": "angle_offset",
+          "type": "f32"
+        },
+        {
+          "name": "scale",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "RadialMenuItem",
+      "file": "radial_menu.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "icon",
+          "type": "Option<String>"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "RadioOption",
+      "file": "radio_group.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "RavenMessenger",
+      "file": "raven_messenger.rs",
+      "fields": [
+        {
+          "name": "messages",
+          "type": "Vec<ChatMessage>"
+        },
+        {
+          "name": "is_huginn",
+          "type": "bool, // Top position flag for backward compat"
+        },
+        {
+          "name": "duration",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ReasoningStep",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "confidence",
+          "type": "f32"
+        },
+        {
+          "name": "conclusion",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "ReasoningTraceInspector",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "steps",
+          "type": "Vec<ReasoningStep>"
+        }
+      ]
+    },
+    {
+      "name": "RecurringRun",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "interval_seconds",
+          "type": "f32"
+        },
+        {
+          "name": "last_run_time",
+          "type": "f32"
+        },
+        {
+          "name": "next_run_time",
+          "type": "f32"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "name": "run_count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "RenderStats",
+      "file": "gullveig_inspector.rs",
+      "fields": [
+        {
+          "name": "render_time_ms",
+          "type": "f32"
+        },
+        {
+          "name": "memory_bytes",
+          "type": "usize"
+        },
+        {
+          "name": "update_count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "Resizable",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "min_width",
+          "type": "f32"
+        },
+        {
+          "name": "max_width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "is_resizing",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "RetryConfig",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "max_retries",
+          "type": "u32"
+        },
+        {
+          "name": "initial_delay",
+          "type": "Duration"
+        },
+        {
+          "name": "max_delay",
+          "type": "Duration"
+        },
+        {
+          "name": "backoff_multiplier",
+          "type": "f32"
+        },
+        {
+          "name": "exponential_backoff",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "RippleButton",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "ripple",
+          "type": "f32"
+        },
+        {
+          "name": "ripple_cx",
+          "type": "f32"
+        },
+        {
+          "name": "ripple_cy",
+          "type": "f32"
+        },
+        {
+          "name": "disabled",
+          "type": "bool"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "text_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "RuneGlyph",
+      "file": "mjolnir_frame_ext.rs",
+      "fields": [
+        {
+          "name": "character",
+          "type": "char"
+        },
+        {
+          "name": "position",
+          "type": "f32"
+        },
+        {
+          "name": "glow_intensity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "RuneInspector",
+      "file": "rune_inspector.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "position",
+          "type": "InspectorPosition"
+        },
+        {
+          "name": "size",
+          "type": "(f32, f32)"
+        },
+        {
+          "name": "is_expanded",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "RuneScript",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "speed",
+          "type": "f32, // Characters per second"
+        }
+      ]
+    },
+    {
+      "name": "RunestoneDecoder",
+      "file": "runestone_decoder.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "duration",
+          "type": "Duration"
+        },
+        {
+          "name": "start_time",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "RunestoneEditor",
+      "file": "runestone_editor.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "language",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "RunicTooltip",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "is_visible",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "SagaAccordion",
+      "file": "disclosure.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<SagaItem<V>>"
+        },
+        {
+          "name": "allow_multiple",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "SagaItem",
+      "file": "disclosure.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "is_expanded",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ScheduleConfig",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "cron_expression",
+          "type": "String"
+        },
+        {
+          "name": "interval_seconds",
+          "type": "f32"
+        },
+        {
+          "name": "next_trigger_time",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "SchedulerEvent",
+      "file": "scheduler.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "start_hour",
+          "type": "f32"
+        },
+        {
+          "name": "duration_hours",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "Option<[f32; 4]>"
+        }
+      ]
+    },
+    {
+      "name": "ScopeThreshold",
+      "file": "flexiscope.rs",
+      "fields": [
+        {
+          "name": "min_width",
+          "type": "f32"
+        },
+        {
+          "name": "mode",
+          "type": "B"
+        }
+      ]
+    },
+    {
+      "name": "ScribingStone",
+      "file": "scribing_stone.rs",
+      "fields": [
+        {
+          "name": "strokes",
+          "type": "Arc<Mutex<Vec<Vec<[f32; 2]>>>>"
+        }
+      ]
+    },
+    {
+      "name": "ScriptConnection",
+      "file": "skadi_scripting.rs",
+      "fields": [
+        {
+          "name": "from",
+          "type": "usize"
+        },
+        {
+          "name": "to",
+          "type": "usize"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "ScriptNode",
+      "file": "skadi_scripting.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "usize"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "node_type",
+          "type": "ScriptNodeType"
+        },
+        {
+          "name": "position",
+          "type": "(f32, f32)"
+        },
+        {
+          "name": "code",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "ScrollArea",
+      "file": "display.rs",
+      "fields": [
+        {
+          "name": "content_height",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "scroll_y",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "show_scrollbar",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "SearchField",
+      "file": "form_controls.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "placeholder",
+          "type": "String"
+        },
+        {
+          "name": "focused",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "SearchSuggestions",
+      "file": "form_controls.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "Option<usize>"
+        },
+        {
+          "name": "visible",
+          "type": "bool"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Section",
+      "file": "navigation.rs",
+      "fields": [
+        {
+          "name": "header",
+          "type": "String"
+        },
+        {
+          "name": "items",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "row_height",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "SecurityRole",
+      "file": "tyr_security.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "level",
+          "type": "PermissionLevel"
+        },
+        {
+          "name": "permissions",
+          "type": "Vec<String>"
+        }
+      ]
+    },
+    {
+      "name": "Sei\u00f0r",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "base_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "scanline_speed",
+          "type": "f32"
+        },
+        {
+          "name": "flicker_intensity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Separator",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "horizontal",
+          "type": "bool"
+        },
+        {
+          "name": "length",
+          "type": "f32"
+        },
+        {
+          "name": "thickness",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "SessionInfo",
+      "file": "tyr_security.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "user",
+          "type": "String"
+        },
+        {
+          "name": "created_at",
+          "type": "f64"
+        },
+        {
+          "name": "expires_at",
+          "type": "f64"
+        },
+        {
+          "name": "ip_address",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "SessionRestore",
+      "file": "idunn_persistence.rs",
+      "fields": [
+        {
+          "name": "session_id",
+          "type": "String"
+        },
+        {
+          "name": "workspace_id",
+          "type": "String"
+        },
+        {
+          "name": "restore_time",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "ShieldWall",
+      "file": "shield_wall.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "border_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "glow_intensity",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ShimmerButton",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        },
+        {
+          "name": "disabled",
+          "type": "bool"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "text_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "Shortcut",
+      "file": "keyboard_nav.rs",
+      "fields": [
+        {
+          "name": "keys",
+          "type": "String"
+        },
+        {
+          "name": "action",
+          "type": "Arc<dyn Fn() + Send + Sync>"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "SidePanel",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "position",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "SidebarItem",
+      "file": "niflheim_sidebar.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "icon",
+          "type": "Option<String>"
+        },
+        {
+          "name": "badge",
+          "type": "Option<u32>"
+        },
+        {
+          "name": "children",
+          "type": "Vec<SidebarItem>"
+        },
+        {
+          "name": "is_expanded",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "SkadiScripting",
+      "file": "skadi_scripting.rs",
+      "fields": [
+        {
+          "name": "nodes",
+          "type": "Vec<ScriptNode>"
+        },
+        {
+          "name": "connections",
+          "type": "Vec<ScriptConnection>"
+        },
+        {
+          "name": "selected_node",
+          "type": "Option<usize>"
+        }
+      ]
+    },
+    {
+      "name": "SkillDef",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "base_token_cost",
+          "type": "u32"
+        },
+        {
+          "name": "base_duration_ms",
+          "type": "u32"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "Skjaldborg",
+      "file": "shapes.rs",
+      "fields": [
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "SkollProgress",
+      "file": "progress.rs",
+      "fields": [
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "variant",
+          "type": "ProgressVariant"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "background",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "fill",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "border_radius",
+          "type": "f32"
+        },
+        {
+          "name": "animated",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "SleipnirGait",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "children",
+          "type": "Vec<cvkg_core::AnyView>"
+        },
+        {
+          "name": "stagger_delay",
+          "type": "f32, // Delay between child reveals in seconds"
+        }
+      ]
+    },
+    {
+      "name": "SonnerToast",
+      "file": "sonner.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "title",
+          "type": "Option<String>"
+        },
+        {
+          "name": "toast_type",
+          "type": "SonnerType"
+        },
+        {
+          "name": "duration_ms",
+          "type": "u64"
+        },
+        {
+          "name": "created_at",
+          "type": "f32"
+        },
+        {
+          "name": "dismissed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "StatefulButton",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "state",
+          "type": "ButtonState"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "spinner_angle",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "StatusBar",
+      "file": "status_bar.rs",
+      "fields": [
+        {
+          "name": "segments",
+          "type": "Vec<StatusSegment>"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "StatusBar",
+      "file": "progress.rs",
+      "fields": [
+        {
+          "name": "segments",
+          "type": "Vec<StatusSegment>"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "StatusSegment",
+      "file": "status_bar.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "StatusSegment",
+      "file": "progress.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "SuggestionChips",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "chips",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "Option<usize>"
+        }
+      ]
+    },
+    {
+      "name": "SvgCanvas",
+      "file": "bragi_creative.rs",
+      "fields": [
+        {
+          "name": "elements",
+          "type": "Vec<SvgElement>"
+        }
+      ]
+    },
+    {
+      "name": "SvgElement",
+      "file": "bragi_creative.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "element_type",
+          "type": "SvgType"
+        },
+        {
+          "name": "properties",
+          "type": "Vec<(String, String)>"
+        }
+      ]
+    },
+    {
+      "name": "Tab",
+      "file": "docking_workspace.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "AnyView"
+        }
+      ]
+    },
+    {
+      "name": "TableColumn",
+      "file": "virtual_table.rs",
+      "fields": [
+        {
+          "name": "header",
+          "type": "String"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "cell_builder",
+          "type": "Box<dyn Fn(&D) -> AnyView + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "TacticalGauge",
+      "file": "hud.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f32, // [0.0, 1.0]"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "warning_level",
+          "type": "f32"
+        },
+        {
+          "name": "critical_level",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Tag",
+      "file": "form_controls.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "dismissible",
+          "type": "bool"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "TelemetryPoint",
+      "file": "gerd_telemetry.rs",
+      "fields": [
+        {
+          "name": "timestamp",
+          "type": "f64"
+        },
+        {
+          "name": "metric",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f64"
+        },
+        {
+          "name": "unit",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "TelemetrySeries",
+      "file": "gerd_telemetry.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "points",
+          "type": "Vec<TelemetryPoint>"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "TelemetryView",
+      "file": "telemetry.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "max_value",
+          "type": "f32"
+        },
+        {
+          "name": "unit",
+          "type": "String"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "TextAnimate",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "effect",
+          "type": "TextAnimEffect"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "TextEditor",
+      "file": "text_editor.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "on_change",
+          "type": "Arc<dyn Fn(String) + Send + Sync>"
+        },
+        {
+          "name": "on_commit",
+          "type": "Option<Arc<dyn Fn(String) + Send + Sync>>"
+        },
+        {
+          "name": "placeholder",
+          "type": "String"
+        },
+        {
+          "name": "is_focused",
+          "type": "bool"
+        },
+        {
+          "name": "state_id",
+          "type": "u64"
+        },
+        {
+          "name": "visible_lines",
+          "type": "u32"
+        },
+        {
+          "name": "tab_width",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "name": "TextShimmer",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "time",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "TextStyle",
+      "file": "richtext.rs",
+      "fields": [
+        {
+          "name": "bold",
+          "type": "bool"
+        },
+        {
+          "name": "italic",
+          "type": "bool"
+        },
+        {
+          "name": "underline",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ThemeVariant",
+      "file": "njord_theme.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "colors",
+          "type": "HashMap<String, [f32; 4]>"
+        }
+      ]
+    },
+    {
+      "name": "TimePicker",
+      "file": "m3_components.rs",
+      "fields": [
+        {
+          "name": "hour",
+          "type": "u8"
+        },
+        {
+          "name": "minute",
+          "type": "u8"
+        },
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "show_hours",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "TimelineKeyframe",
+      "file": "timeline_editor.rs",
+      "fields": [
+        {
+          "name": "time",
+          "type": "f32"
+        },
+        {
+          "name": "value",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "TimelineTrack",
+      "file": "timeline_editor.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "keyframes",
+          "type": "Vec<TimelineKeyframe>"
+        }
+      ]
+    },
+    {
+      "name": "Toast",
+      "file": "toast.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "u64"
+        },
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "kind",
+          "type": "ToastKind"
+        },
+        {
+          "name": "duration",
+          "type": "f32"
+        },
+        {
+          "name": "created_at",
+          "type": "f32"
+        },
+        {
+          "name": "dismissed",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ToastManager",
+      "file": "toast.rs",
+      "fields": [
+        {
+          "name": "toasts",
+          "type": "Vec<Toast>"
+        },
+        {
+          "name": "next_id",
+          "type": "u64"
+        },
+        {
+          "name": "max_visible",
+          "type": "usize"
+        },
+        {
+          "name": "on_dismiss",
+          "type": "Option<Arc<dyn Fn(u64) + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "TokenInfo",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "token_type",
+          "type": "TokenType"
+        }
+      ]
+    },
+    {
+      "name": "TokenStreamViewer",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "tokens",
+          "type": "Vec<TokenInfo>"
+        },
+        {
+          "name": "is_streaming",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "TokenUsage",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "input_tokens",
+          "type": "u64"
+        },
+        {
+          "name": "output_tokens",
+          "type": "u64"
+        },
+        {
+          "name": "total_tokens",
+          "type": "u64"
+        },
+        {
+          "name": "estimated_cost",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "ToolCard",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "args_summary",
+          "type": "String"
+        },
+        {
+          "name": "status",
+          "type": "String"
+        },
+        {
+          "name": "result",
+          "type": "String"
+        },
+        {
+          "name": "expanded",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ToolInvocation",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "tool_name",
+          "type": "String"
+        },
+        {
+          "name": "parameters",
+          "type": "Vec<(String, String)>"
+        },
+        {
+          "name": "result_preview",
+          "type": "String"
+        },
+        {
+          "name": "duration_ms",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ToolInvocationInspector",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "invocations",
+          "type": "Vec<ToolInvocation>"
+        }
+      ]
+    },
+    {
+      "name": "ToolbarSearchField",
+      "file": "valkyrie_toolbar.rs",
+      "fields": [
+        {
+          "name": "placeholder",
+          "type": "String"
+        },
+        {
+          "name": "query",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "ToolbarSegmented",
+      "file": "valkyrie_toolbar.rs",
+      "fields": [
+        {
+          "name": "options",
+          "type": "Vec<String>"
+        },
+        {
+          "name": "selected",
+          "type": "usize"
+        }
+      ]
+    },
+    {
+      "name": "TrailSource",
+      "file": "consent_gate.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "item_count",
+          "type": "u32"
+        },
+        {
+          "name": "kind",
+          "type": "TrailKind"
+        }
+      ]
+    },
+    {
+      "name": "TreeViewNode",
+      "file": "tree_view.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "icon",
+          "type": "Option<String>"
+        },
+        {
+          "name": "children",
+          "type": "Vec<TreeViewNode>"
+        },
+        {
+          "name": "is_expanded",
+          "type": "bool"
+        },
+        {
+          "name": "is_selected",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "TreemapNode",
+      "file": "treemap.rs",
+      "fields": [
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "children",
+          "type": "Vec<TreemapNode>"
+        },
+        {
+          "name": "color",
+          "type": "Option<[f32; 4]>"
+        }
+      ]
+    },
+    {
+      "name": "TriggerSpring",
+      "file": "animation_triggers.rs",
+      "fields": [
+        {
+          "name": "params",
+          "type": "SpringParams"
+        },
+        {
+          "name": "target_on_trigger",
+          "type": "f32"
+        },
+        {
+          "name": "target_on_release",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "TypewriterEffect",
+      "file": "text_anim.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "revealed",
+          "type": "usize"
+        },
+        {
+          "name": "font_size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        },
+        {
+          "name": "show_cursor",
+          "type": "bool"
+        },
+        {
+          "name": "cursor_time",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "Typography",
+      "file": "display.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "variant",
+          "type": "TypographyVariant"
+        },
+        {
+          "name": "color",
+          "type": "Option<[f32; 4]>"
+        }
+      ]
+    },
+    {
+      "name": "TyrSecurity",
+      "file": "tyr_security.rs",
+      "fields": [
+        {
+          "name": "roles",
+          "type": "Vec<SecurityRole>"
+        },
+        {
+          "name": "audit_log",
+          "type": "Vec<AuditEntry>"
+        },
+        {
+          "name": "current_session",
+          "type": "Option<SessionInfo>"
+        }
+      ]
+    },
+    {
+      "name": "UrdrEvent",
+      "file": "decorators.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "Option<String>"
+        }
+      ]
+    },
+    {
+      "name": "UrdrTimeline",
+      "file": "decorators.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<UrdrEvent>"
+        }
+      ]
+    },
+    {
+      "name": "UserMessage",
+      "file": "agent_chat.rs",
+      "fields": [
+        {
+          "name": "text",
+          "type": "String"
+        },
+        {
+          "name": "avatar",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "VTree",
+      "file": "vtree.rs",
+      "fields": [
+        {
+          "name": "root",
+          "type": "VTreeNode"
+        },
+        {
+          "name": "item_height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "VTreeNode",
+      "file": "vtree.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "children",
+          "type": "Vec<VTreeNode>"
+        }
+      ]
+    },
+    {
+      "name": "ValhallaRating",
+      "file": "hringrpagination.rs",
+      "fields": [
+        {
+          "name": "value",
+          "type": "f32"
+        },
+        {
+          "name": "max",
+          "type": "usize"
+        }
+      ]
+    },
+    {
+      "name": "ValidationError",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "message",
+          "type": "String"
+        },
+        {
+          "name": "is_error",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ValidationResult",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "issues",
+          "type": "Vec<ValidationError>"
+        },
+        {
+          "name": "is_valid",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "ValidationRule",
+      "file": "advanced_forms.rs",
+      "fields": [
+        {
+          "name": "field",
+          "type": "String"
+        },
+        {
+          "name": "validator",
+          "type": "Arc<dyn Fn(&str) -> bool + Send + Sync>"
+        },
+        {
+          "name": "error_message",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "ValkyrieAnalytics",
+      "file": "analytics.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "data",
+          "type": "Vec<(String, f32)>"
+        },
+        {
+          "name": "chart_type",
+          "type": "ChartType"
+        },
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "ValkyrieIndicator",
+      "file": "valkyrie_indicator.rs",
+      "fields": [
+        {
+          "name": "size",
+          "type": "f32"
+        },
+        {
+          "name": "color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "ValkyrieToolbar",
+      "file": "valkyrie_toolbar.rs",
+      "fields": [
+        {
+          "name": "leading",
+          "type": "Vec<ToolbarItem>"
+        },
+        {
+          "name": "center",
+          "type": "Vec<ToolbarItem>"
+        },
+        {
+          "name": "trailing",
+          "type": "Vec<ToolbarItem>"
+        },
+        {
+          "name": "radius",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "VaultEntry",
+      "file": "drop_vault.rs",
+      "fields": [
+        {
+          "name": "file_info",
+          "type": "VaultFile"
+        },
+        {
+          "name": "progress",
+          "type": "f32"
+        },
+        {
+          "name": "status",
+          "type": "VaultStatus"
+        }
+      ]
+    },
+    {
+      "name": "VaultFile",
+      "file": "drop_vault.rs",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "size",
+          "type": "u64"
+        },
+        {
+          "name": "mime_type",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "Vegv\u00edsir",
+      "file": "hud.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<Vegv\u00edsirItem>"
+        },
+        {
+          "name": "is_open",
+          "type": "bool"
+        },
+        {
+          "name": "on_select",
+          "type": "Arc<dyn Fn(usize) + Send + Sync>"
+        }
+      ]
+    },
+    {
+      "name": "Vegv\u00edsirItem",
+      "file": "hud.rs",
+      "fields": [
+        {
+          "name": "icon",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "V\u00f6lvaScan",
+      "file": "effects.rs",
+      "fields": [
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "duration",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "WebhookConfig",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "url",
+          "type": "String"
+        },
+        {
+          "name": "method",
+          "type": "String"
+        },
+        {
+          "name": "headers",
+          "type": "Vec<(String, String)>"
+        },
+        {
+          "name": "body_template",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "WellEdge",
+      "file": "well.rs",
+      "fields": [
+        {
+          "name": "from",
+          "type": "String"
+        },
+        {
+          "name": "to",
+          "type": "String"
+        },
+        {
+          "name": "strength",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "WellNode",
+      "file": "well.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "label",
+          "type": "String"
+        },
+        {
+          "name": "x",
+          "type": "f32"
+        },
+        {
+          "name": "y",
+          "type": "f32"
+        },
+        {
+          "name": "weight",
+          "type": "f32"
+        }
+      ]
+    },
+    {
+      "name": "WorkflowEdge",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "from",
+          "type": "String"
+        },
+        {
+          "name": "to",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "WorkflowNode",
+      "file": "ai_workflow_builder.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "node_type",
+          "type": "WorkflowNodeType"
+        },
+        {
+          "name": "position",
+          "type": "(f32, f32)"
+        }
+      ]
+    },
+    {
+      "name": "WorkflowTemplate",
+      "file": "types.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "description",
+          "type": "String"
+        },
+        {
+          "name": "nodes",
+          "type": "Vec<OrchestratorNode>"
+        },
+        {
+          "name": "edges",
+          "type": "Vec<OrchestratorEdge>"
+        },
+        {
+          "name": "version",
+          "type": "String"
+        },
+        {
+          "name": "tags",
+          "type": "Vec<String>"
+        }
+      ]
+    },
+    {
+      "name": "WorkspaceSnapshot",
+      "file": "idunn_persistence.rs",
+      "fields": [
+        {
+          "name": "id",
+          "type": "String"
+        },
+        {
+          "name": "name",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "f64"
+        },
+        {
+          "name": "component_states",
+          "type": "HashMap<String, String>"
+        },
+        {
+          "name": "layout",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "name": "WyrdHUD",
+      "file": "wyrd_hud.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "values",
+          "type": "Vec<(String, String)>"
+        },
+        {
+          "name": "rage_mode",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "YggdrasilTree",
+      "file": "file_tree.rs",
+      "fields": [
+        {
+          "name": "items",
+          "type": "Vec<FileItem>"
+        },
+        {
+          "name": "on_toggle",
+          "type": "Arc<dyn Fn(String) + Send + Sync>"
+        },
+        {
+          "name": "on_select",
+          "type": "Arc<dyn Fn(String) + Send + Sync>"
+        },
+        {
+          "name": "on_hover",
+          "type": "Option<Arc<dyn Fn(Option<String>) + Send + Sync>>"
+        },
+        {
+          "name": "on_drag_start",
+          "type": "Option<Arc<dyn Fn(String) + Send + Sync>>"
+        },
+        {
+          "name": "on_drop",
+          "type": "Option<Arc<dyn Fn(String, String) + Send + Sync>>"
+        },
+        {
+          "name": "on_rename",
+          "type": "Option<Arc<dyn Fn(String, String) + Send + Sync>>"
+        },
+        {
+          "name": "on_delete",
+          "type": "Option<Arc<dyn Fn(String) + Send + Sync>>"
+        },
+        {
+          "name": "on_open",
+          "type": "Option<Arc<dyn Fn(String) + Send + Sync>>"
+        },
+        {
+          "name": "on_copy_path",
+          "type": "Option<Arc<dyn Fn(String) + Send + Sync>>"
+        }
+      ]
+    },
+    {
+      "name": "YggdrasilWindow",
+      "file": "window.rs",
+      "fields": [
+        {
+          "name": "title",
+          "type": "String"
+        },
+        {
+          "name": "content",
+          "type": "V"
+        },
+        {
+          "name": "is_minimized",
+          "type": "bool"
+        },
+        {
+          "name": "border_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "ZStack",
+      "file": "layout_primitives.rs",
+      "fields": [
+        {
+          "name": "width",
+          "type": "f32"
+        },
+        {
+          "name": "height",
+          "type": "f32"
+        },
+        {
+          "name": "bg_color",
+          "type": "[f32; 4]"
+        }
+      ]
+    },
+    {
+      "name": "\u00c6ttiFrame",
+      "file": "aetti_frame.rs",
+      "fields": [
+        {
+          "name": "style",
+          "type": "RunicStyle"
+        },
+        {
+          "name": "intensity",
+          "type": "f32"
+        },
+        {
+          "name": "animate",
+          "type": "bool"
+        }
+      ]
+    }
+  ]
+}

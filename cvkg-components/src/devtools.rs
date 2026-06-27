@@ -35,7 +35,10 @@ impl View for VdomInspector {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(panel_rect, 20.0, 0.5, 0.8);
         }
-        renderer.fill_rect(panel_rect, theme::with_alpha(theme::surface_elevated(), 0.8));
+        renderer.fill_rect(
+            panel_rect,
+            theme::with_alpha(theme::surface_elevated(), 0.8),
+        );
         renderer.stroke_rect(panel_rect, theme::accent(), 1.0);
 
         // Title
@@ -116,7 +119,10 @@ impl View for TelemetryOverlay {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(panel_rect, 15.0, 0.3, 0.7);
         }
-        renderer.fill_rect(panel_rect, theme::with_alpha(theme::surface_elevated(), 0.8));
+        renderer.fill_rect(
+            panel_rect,
+            theme::with_alpha(theme::surface_elevated(), 0.8),
+        );
         renderer.stroke_rect(panel_rect, theme::with_alpha(theme::accent(), 0.5), 1.0);
 
         let mut y = panel_rect.y + 20.0;

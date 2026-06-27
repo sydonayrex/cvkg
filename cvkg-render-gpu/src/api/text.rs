@@ -56,13 +56,19 @@ impl GpuRenderer {
             }
         }
         let scaled_max_width = max_width.map(|w| w * sf);
-        self.text.engine
+        self.text
+            .engine
             .shape_layout(&scaled_spans, scaled_max_width, align, overflow)
             .ok()
     }
 
     /// Draw shaped text to the renderer buffers.
-    pub(crate) fn draw_shaped_text_impl(&mut self, shaped: &cvkg_runic_text::ShapedText, x: f32, y: f32) {
+    pub(crate) fn draw_shaped_text_impl(
+        &mut self,
+        shaped: &cvkg_runic_text::ShapedText,
+        x: f32,
+        y: f32,
+    ) {
         for glyph in &shaped.glyphs {
             let byte_idx = shaped
                 .grapheme_boundaries
@@ -84,7 +90,8 @@ impl GpuRenderer {
             let c = self.apply_opacity(span_color);
 
             let cache_key = glyph.cache_key;
-            let (uv_rect, w, h, x_off, y_off) = if let Some(info) = self.text.glyph_cache.get(&cache_key)
+            let (uv_rect, w, h, x_off, y_off) = if let Some(info) =
+                self.text.glyph_cache.get(&cache_key)
             {
                 *info
             } else {
@@ -129,7 +136,7 @@ impl GpuRenderer {
                             }
                         }
                     };
-                    
+
                     self.queue.write_texture(
                         wgpu::TexelCopyTextureInfo {
                             texture: &self.mega_heim_tex,
@@ -173,10 +180,9 @@ impl GpuRenderer {
 
             if w > 0.0 {
                 let sf = self.current_scale_factor();
-                let baseline_y = y + shaped.ascent / sf;
                 let glyph_rect = Rect {
                     x: x + (glyph.x + x_off) / sf,
-                    y: baseline_y + (glyph.y - y_off) / sf,
+                    y: y + (glyph.y - y_off) / sf,
                     width: w / sf,
                     height: h / sf,
                 };
@@ -202,7 +208,14 @@ impl GpuRenderer {
     }
 
     /// Draw text using shaped text cache lookups.
-    pub(crate) fn draw_text_impl(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    pub(crate) fn draw_text_impl(
+        &mut self,
+        text: &str,
+        x: f32,
+        y: f32,
+        size: f32,
+        color: [f32; 4],
+    ) {
         let cache_key = (text.to_string(), (size * 100.0) as u32);
         let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
         let g = (color[1] * 255.0).clamp(0.0, 255.0) as u8;
@@ -210,7 +223,9 @@ impl GpuRenderer {
         let a = (color[3] * 255.0).clamp(0.0, 255.0) as u8;
         let cached = self.text.shaped_cache.get(&cache_key).cloned();
         if let Some(shaped) = cached {
-            let color_matches = shaped.spans.first()
+            let color_matches = shaped
+                .spans
+                .first()
                 .map(|s| s.style.color == [r, g, b, a])
                 .unwrap_or(false);
             if color_matches {

@@ -68,8 +68,7 @@ impl View for NotificationCenterPanel {
         // Tick solver and retrieve current interpolation value
         {
             let s = cvkg_core::load_system_state();
-            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash)
-            {
+            if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash) {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| {
                     log::warn!("Lock poisoned, recovering...");
                     e.into_inner()
@@ -102,7 +101,11 @@ impl View for NotificationCenterPanel {
         }
 
         // 2. Translucent panel fill
-        renderer.fill_rounded_rect(panel_rect, 0.0, theme::with_alpha(theme::surface_elevated(), 0.85));
+        renderer.fill_rounded_rect(
+            panel_rect,
+            0.0,
+            theme::with_alpha(theme::surface_elevated(), 0.85),
+        );
 
         // 3. Leading border/separator line
         renderer.draw_line(

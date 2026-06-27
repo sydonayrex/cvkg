@@ -1,6 +1,6 @@
 use crate::theme;
-use cvkg_core::{Never, Rect, Renderer, Size, View};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 pub struct SankeyChart {
     pub(crate) flows: Vec<(String, String, f32)>,

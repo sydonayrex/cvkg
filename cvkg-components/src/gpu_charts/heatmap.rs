@@ -1,7 +1,7 @@
-use crate::theme;
 use crate::RADIUS_XS;
-use cvkg_core::{Never, Rect, Renderer, Size, View};
+use crate::theme;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 pub struct HeatmapChart {
     pub(crate) grid: Vec<Vec<f32>>,

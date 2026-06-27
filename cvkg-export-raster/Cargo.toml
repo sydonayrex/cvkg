@@ -1,0 +1,9 @@
+[package]
+name = "cvkg-export-raster"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+image = { workspace = true, features = ["png"] }
+gif = { workspace = true }
+cvkg-render-gpu = { workspace = true }

@@ -1,30 +1,26 @@
 use crate::theme;
-use cvkg_core::{Never, Rect, Renderer, View};
+use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
+use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 /// HatiSpinner variant determining the visual style of the loading animation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SpinnerVariant {
+    #[default]
     Dots,
     Pulse,
-    Bars,
     Ring,
-}
-
-impl Default for SpinnerVariant {
-    fn default() -> Self {
-        SpinnerVariant::Dots
-    }
 }
 
 /// HatiSpinner - Animated loading indicator with multiple variants.
 ///
 /// # Examples
 /// ```
-/// use cvkg_components::HatiSpinner;
+/// use cvkg_components::{HatiSpinner, SpinnerVariant};
 /// let spinner = HatiSpinner::new()
 ///     .size(32.0)
 ///     .variant(SpinnerVariant::Ring);
 /// ```
+#[doc(alias = "Spinner")]
 #[derive(Clone)]
 pub struct HatiSpinner {
     pub variant: SpinnerVariant,
@@ -86,7 +82,7 @@ impl View for HatiSpinner {
                             height: dot_r * 2.0,
                         },
                         self.color,
-                    );
+                     );
                 }
             }
             SpinnerVariant::Ring => {
@@ -115,4 +111,37 @@ impl View for HatiSpinner {
             }
         }
     }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
+        Size {
+            width: self.size,
+            height: self.size,
+        }
+    }
+
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
+    }
 }
+
+impl LayoutView for HatiSpinner {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        Size {
+            width: self.size,
+            height: self.size,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {}
+}
+

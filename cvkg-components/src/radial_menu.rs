@@ -308,11 +308,7 @@ impl View for RadialMenu {
             let label_y = cy + angle_mid.sin() * label_r;
 
             let label_color = if item.enabled {
-                if is_hovered {
-                    theme::text()
-                } else {
-                    theme::text()
-                }
+                theme::text()
             } else {
                 theme::with_alpha(theme::text_muted(), 0.6)
             };
@@ -336,7 +332,10 @@ impl View for RadialMenu {
             width: inner_r * 2.0,
             height: inner_r * 2.0,
         };
-        renderer.fill_ellipse(center_circle, theme::with_alpha(theme::surface_elevated(), 0.8));
+        renderer.fill_ellipse(
+            center_circle,
+            theme::with_alpha(theme::surface_elevated(), 0.8),
+        );
         renderer.stroke_ellipse(center_circle, theme::with_alpha(theme::border(), 0.5), 1.0);
     }
 }

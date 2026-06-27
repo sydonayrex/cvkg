@@ -52,13 +52,29 @@ impl fmt::Display for GpuVendor {
 /// the user-customized name).
 pub fn detect_gpu_vendor(adapter_name: &str) -> GpuVendor {
     let name = adapter_name.to_lowercase();
-    if name.contains("nvidia") || name.contains("geforce") || name.contains("quadro") || name.contains("tesla") {
+    if name.contains("nvidia")
+        || name.contains("geforce")
+        || name.contains("quadro")
+        || name.contains("tesla")
+    {
         GpuVendor::Nvidia
-    } else if name.contains("amd") || name.contains("radeon") || name.contains("rx ") || name.contains("firepro") {
+    } else if name.contains("amd")
+        || name.contains("radeon")
+        || name.contains("rx ")
+        || name.contains("firepro")
+    {
         GpuVendor::Amd
-    } else if name.contains("intel") || name.contains("uhd") || name.contains("iris") || name.contains("hd graphics") {
+    } else if name.contains("intel")
+        || name.contains("uhd")
+        || name.contains("iris")
+        || name.contains("hd graphics")
+    {
         GpuVendor::Intel
-    } else if name.contains("apple") || name.contains("m1") || name.contains("m2") || name.contains("m3") {
+    } else if name.contains("apple")
+        || name.contains("m1")
+        || name.contains("m2")
+        || name.contains("m3")
+    {
         GpuVendor::Apple
     } else if name.contains("qualcomm") || name.contains("adreno") {
         GpuVendor::Qualcomm
@@ -117,7 +133,10 @@ mod tests {
 
     #[test]
     fn detects_nvidia() {
-        assert_eq!(detect_gpu_vendor("NVIDIA GeForce RTX 3080"), GpuVendor::Nvidia);
+        assert_eq!(
+            detect_gpu_vendor("NVIDIA GeForce RTX 3080"),
+            GpuVendor::Nvidia
+        );
         assert_eq!(detect_gpu_vendor("Quadro P4000"), GpuVendor::Nvidia);
     }
 
@@ -129,7 +148,10 @@ mod tests {
 
     #[test]
     fn detects_intel() {
-        assert_eq!(detect_gpu_vendor("Intel UHD Graphics 630"), GpuVendor::Intel);
+        assert_eq!(
+            detect_gpu_vendor("Intel UHD Graphics 630"),
+            GpuVendor::Intel
+        );
         assert_eq!(detect_gpu_vendor("Intel Iris Xe"), GpuVendor::Intel);
     }
 
@@ -141,7 +163,10 @@ mod tests {
 
     #[test]
     fn detects_qualcomm() {
-        assert_eq!(detect_gpu_vendor("Qualcomm Adreno 660"), GpuVendor::Qualcomm);
+        assert_eq!(
+            detect_gpu_vendor("Qualcomm Adreno 660"),
+            GpuVendor::Qualcomm
+        );
     }
 
     #[test]
@@ -162,7 +187,10 @@ mod tests {
 
     #[test]
     fn case_insensitive() {
-        assert_eq!(detect_gpu_vendor("nvidia geforce gtx 1080"), GpuVendor::Nvidia);
+        assert_eq!(
+            detect_gpu_vendor("nvidia geforce gtx 1080"),
+            GpuVendor::Nvidia
+        );
         assert_eq!(detect_gpu_vendor("AMD RADEON VII"), GpuVendor::Amd);
     }
 

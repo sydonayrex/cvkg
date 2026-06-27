@@ -110,9 +110,8 @@ impl View for HoverCard {
         };
 
         // Only show card after delay has elapsed
-        let show_card = hover_start.map_or(false, |start| {
-            start.elapsed().as_millis() as u64 >= self.delay_ms
-        });
+        let show_card =
+            hover_start.is_some_and(|start| start.elapsed().as_millis() as u64 >= self.delay_ms);
 
         // Compute card dimensions
         let (tw, _) = renderer.measure_text(&self.content, FONT_SM);

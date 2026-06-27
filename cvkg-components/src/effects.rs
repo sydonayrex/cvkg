@@ -27,7 +27,11 @@ impl View for Seiðr {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
-            renderer.fill_rounded_rect(rect, 4.0, theme::with_alpha(theme::surface_elevated(), 0.5));
+            renderer.fill_rounded_rect(
+                rect,
+                4.0,
+                theme::with_alpha(theme::surface_elevated(), 0.5),
+            );
             return;
         }
 
@@ -45,7 +49,14 @@ impl View for Seiðr {
         let scan_y = (t * self.scanline_speed).fract() * rect.height;
         for i in 0..5 {
             let y = rect.y + (scan_y + i as f32 * 20.0) % rect.height;
-            renderer.draw_line(rect.x, y, rect.x + rect.width, y, theme::with_alpha(theme::accent(), 0.4), 1.0);
+            renderer.draw_line(
+                rect.x,
+                y,
+                rect.x + rect.width,
+                y,
+                theme::with_alpha(theme::accent(), 0.4),
+                1.0,
+            );
         }
     }
 }
@@ -227,7 +238,11 @@ impl<V: View> View for NiflheimFrost<V> {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
-            renderer.fill_rounded_rect(rect, 4.0, theme::with_alpha(theme::surface_elevated(), 0.9));
+            renderer.fill_rounded_rect(
+                rect,
+                4.0,
+                theme::with_alpha(theme::surface_elevated(), 0.9),
+            );
             renderer.stroke_rounded_rect(rect, 4.0, theme::with_alpha(theme::border(), 0.8), 1.0);
             self.content.render(renderer, rect);
             return;

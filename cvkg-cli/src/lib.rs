@@ -9,6 +9,7 @@ pub mod error;
 pub mod native_shell;
 pub mod patch_engine;
 pub mod plugin;
+pub mod raster_export;
 pub mod runtime_connection;
 pub mod scaffold;
 pub mod token_export;

@@ -1,0 +1,9 @@
+[package]
+name = "cvkg-game-hud"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+cvkg-anim = { workspace = true }
+cvkg-components = { workspace = true }
+cvkg-core = { workspace = true }

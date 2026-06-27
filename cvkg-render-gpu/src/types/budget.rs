@@ -52,7 +52,9 @@ impl OffscreenBudget {
 
     /// Release an offscreen target.
     pub fn release(&mut self, width: u32, height: u32) {
-        self.current_pixels = self.current_pixels.saturating_sub(width as u64 * height as u64);
+        self.current_pixels = self
+            .current_pixels
+            .saturating_sub(width as u64 * height as u64);
         self.current_targets = self.current_targets.saturating_sub(1);
     }
 

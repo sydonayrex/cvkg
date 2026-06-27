@@ -1,5 +1,5 @@
-use crate::vnode::{AriaProps, EventHandlerMap, LayoutRect, NodeId, VNode};
 use crate::VDom;
+use crate::vnode::{AriaProps, EventHandlerMap, LayoutRect, NodeId, VNode};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -93,10 +93,7 @@ impl std::fmt::Debug for VDomPatch {
                 .field("new_index", new_index)
                 .finish(),
             Self::SetRoot(id) => f.debug_tuple("SetRoot").field(id).finish(),
-            Self::ClearHandlers { id } => f
-                .debug_struct("ClearHandlers")
-                .field("id", id)
-                .finish(),
+            Self::ClearHandlers { id } => f.debug_struct("ClearHandlers").field("id", id).finish(),
         }
     }
 }
@@ -317,7 +314,7 @@ impl VDom {
                 a.len() != b.len()
                     || a.keys().any(|k| {
                         b.get(k)
-                            .map_or(true, |bv| !std::sync::Arc::ptr_eq(a.get(k).unwrap(), bv))
+                            .is_none_or(|bv| !std::sync::Arc::ptr_eq(a.get(k).unwrap(), bv))
                     })
             }
         };

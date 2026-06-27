@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-vdom"
-version = "0.2.14"
+version = "0.2.15"
 build = false
 autolib = false
 autobins = false
@@ -40,10 +40,10 @@ cvkg-runic-text.workspace = true
 version = "0.24"
 
 [dependencies.cvkg-core]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.cvkg-scene]
-version = "0.2.14"
+version = "0.2.15"
 
 [dependencies.log]
 version = "0.4"

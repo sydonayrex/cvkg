@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "berserker"
-version = "0.2.14"
+version = "0.2.15"
 publish = false
 build = false
 autolib = false
@@ -34,33 +34,14 @@ publisher = "SydonayRex"
 name = "berserker"
 path = "src/main.rs"
 
-[dependencies.cvkg]
-features = ["native"]
-version = "0.2.12"
-
-[dependencies.cvkg-core]
-version = "0.2.12"
-
-[dependencies.cvkg-vdom]
-version = "0.2.12"
-
-[dependencies.cvkg-physics]
-version = "0.2.12"
-
-[dependencies.cvkg-anim]
-version = "0.2.12"
-
-[dependencies.cvkg-components]
-version = "0.2.12"
-
-[dependencies.cvkg-themes]
-version = "0.2.12"
-
-[dependencies.env_logger]
-version = "0.10"
-
-[dependencies.log]
-version = "0.4"
-
-[dependencies.glam]
-version = "0.30"
+[dependencies]
+cvkg = { workspace = true, features = ["native"] }
+cvkg-core.workspace = true
+cvkg-vdom.workspace = true
+cvkg-physics.workspace = true
+cvkg-anim.workspace = true
+cvkg-components.workspace = true
+cvkg-themes.workspace = true
+env_logger = "0.10"
+log = "0.4"
+glam = "0.30"

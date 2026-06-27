@@ -1,89 +1,66 @@
 # How to Use the CVKG CLI
 
-Goal: Scaffold, audit, compile, and inspect a CVKG application using the unified command-line toolchain.
+## Goal
 
-## Process Flow
-
-```mermaid
-graph TD
-    A["Run CLI command"] --> B{"Choose Action"}
-    B -->|"New project"| C["cargo run -p cvkg-cli -- new <name>"]
-    B -->|"Build target"| D["cargo run -p cvkg-cli -- build --target <platform>"]
-    B -->|"Development"| E["cargo run -p cvkg-cli -- dev --port <port>"]
-    B -->|"Telemetry"| F["cargo run -p cvkg-cli -- inspect --url <url>"]
-    B -->|"Theme compile"| G["cargo run -p cvkg-cli -- theme --input <file>"]
-```
+Use the `cvkg` command-line tool to scaffold projects, start dev servers, and run telemetry.
 
 ## Prerequisites
 
-- Rust toolchain (1.85+) installed.
-- System dependencies (Vulkan/Metal/DX12 GPU drivers, `libfontconfig1-dev` and `pkg-config` on Linux) installed.
-
----
+- `cargo build -p cvkg-cli` succeeds
+- The `cvkg` binary is available on your PATH
 
 ## Steps
 
 ### 1. Scaffold a New Project
-Initialize a fresh application workspace using the default scaffolding template:
+
 ```bash
-cargo run -p cvkg-cli -- new my_new_app --git
+cvkg new my-app
 ```
 
-### 2. Start the Development Server
-Launch the compiler and start the background web server with reactive reload capabilities:
+This creates a new directory `my-app/` with a basic CVKG project structure.
+
+### 2. Start the Dev Server
+
 ```bash
-cargo run -p cvkg-cli -- dev --target wasm --port 3000 --inspector
+cd my-app
+cvkg serve
 ```
 
-### 3. Run Static Code and Layout Audits
-Execute type-checking and verify the workspace status:
+The dev server watches for file changes and triggers hot-reload via WebSocket.
+
+### 3. Export Design Tokens
+
 ```bash
-cargo run -p cvkg-cli -- check
+cvkg export-tokens --format json
 ```
 
-### 4. Build for Platform Targets
-Compile the application for native rendering or web platforms:
+Exports the current theme's design tokens to stdout or a file.
+
+### 4. Build for Production
+
 ```bash
-cargo run -p cvkg-cli -- build --target native --release
+cvkg build --release
 ```
 
-### 5. Launch the Telemetry Inspector
-Attach the diagnostic inspector to monitor real-time frame rates, Virtual DOM updates, and video memory consumption:
+Compiles the project with optimizations.
+
+### 5. Run Telemetry
+
 ```bash
-cargo run -p cvkg-cli -- inspect --url http://localhost:3000 --ws-port 8081
+cvkg telemetry
 ```
 
-### 6. Export for Web Production
-Bundle compile outputs and write a target-ready index file to the production assets folder:
-```bash
-cargo run -p cvkg-cli -- export --base-path /assets/ --optimize
-```
-
----
+Displays performance metrics and accessibility audit results.
 
 ## Expected Output
-For a successful new project scaffolding, a directory structure is created containing the Cargo manifests, an assets pipeline configuration, and an initial source layout tree. When running the inspector, real-time FPS telemetry is printed directly to the console:
-```
-📊 FPS: 60 | VRAM: 124 MB | VDOM Diff: 1 ms
-```
 
----
+- `cvkg new`: New project directory with Cargo.toml, src/, and assets/.
+- `cvkg serve`: Running server with file watcher. Output shows WebSocket URL.
+- `cvkg export-tokens`: JSON or TOML token output.
+- `cvkg build`: Compiled binary in `target/release/`.
 
-## Recovery and Debugging
+## What Can Go Wrong
 
-### Telemetry Connection Failures
-If the telemetry inspector fails to connect to the stream:
-1. Verify the development server is active on the expected host port.
-2. Confirm no firewall or localhost proxy rules are blocking the WebSocket port.
-3. Relaunch with logging output active:
-   ```bash
-   RUST_LOG=debug cargo run -p cvkg-cli -- inspect --url http://localhost:3000
-   ```
-
-### Scaffold target already exists
-If the scaffolding script fails because the directory already exists:
-1. Move or rename the conflicting directory:
-   ```bash
-   mv my_new_app my_new_app_backup
-   ```
-2. Re-run the scaffolding command.
+- **"command not found"**: Build the CLI first: `cargo build -p cvkg-cli`. The binary is at `target/debug/cvkg`.
+- **Port already in use**: The dev server defaults to port 3000. Use `--port 8080` to change.
+- **File watcher errors**: Ensure `inotify` limits are sufficient on Linux: `echo 524288 | sudo tee /proc/sys/fs/inotify/max_user_watches`.

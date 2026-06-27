@@ -1,8 +1,6 @@
-use crate::types::{GpuParticle, ParticleUniforms, MAX_PARTICLES};
-use crate::vertex::{Vertex, InstanceData};
-use crate::{
-    WGSL_TONEMAP, WGSL_PARTICLES
-};
+use crate::types::{GpuParticle, MAX_PARTICLES, ParticleUniforms};
+use crate::vertex::{InstanceData, Vertex};
+use crate::{WGSL_PARTICLES, WGSL_TONEMAP};
 
 pub(crate) struct CompiledPipelines {
     pub(crate) pipeline: wgpu::RenderPipeline,
@@ -35,6 +33,7 @@ pub(crate) struct CompiledPipelines {
     pub(crate) tonemap_pipeline: wgpu::RenderPipeline,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn compile_render_pipelines(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
@@ -42,6 +41,7 @@ pub(crate) fn compile_render_pipelines(
     texture_bind_group_layout: &wgpu::BindGroupLayout,
     env_bind_group_layout: &wgpu::BindGroupLayout,
     berserker_bind_group_layout: &wgpu::BindGroupLayout,
+    gradient_bind_group_layout: &wgpu::BindGroupLayout,
     shader: &wgpu::ShaderModule,
     wgsl_opaque: &str,
     wgsl_glass: &str,
@@ -53,6 +53,7 @@ pub(crate) fn compile_render_pipelines(
             Some(texture_bind_group_layout),
             Some(env_bind_group_layout),
             Some(berserker_bind_group_layout),
+            Some(gradient_bind_group_layout),
         ],
         immediate_size: 0,
     });
@@ -63,6 +64,7 @@ pub(crate) fn compile_render_pipelines(
             Some(texture_bind_group_layout),
             Some(env_bind_group_layout),
             Some(berserker_bind_group_layout),
+            Some(gradient_bind_group_layout),
         ],
         immediate_size: 0,
     });
@@ -73,6 +75,7 @@ pub(crate) fn compile_render_pipelines(
             Some(texture_bind_group_layout),
             Some(env_bind_group_layout),
             Some(berserker_bind_group_layout),
+            Some(gradient_bind_group_layout),
         ],
         immediate_size: 0,
     });
@@ -474,11 +477,12 @@ pub(crate) fn compile_render_pipelines(
         ],
     });
 
-    let color_blind_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: Some("Color Blind Pipeline Layout"),
-        bind_group_layouts: &[Some(&color_blind_bgl)],
-        immediate_size: 0,
-    });
+    let color_blind_pipeline_layout =
+        device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Color Blind Pipeline Layout"),
+            bind_group_layouts: &[Some(&color_blind_bgl)],
+            immediate_size: 0,
+        });
 
     let color_blind_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Surtr Color Blind Shader"),
@@ -520,49 +524,50 @@ pub(crate) fn compile_render_pipelines(
         ))),
     });
 
-    let volumetric_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some("Volumetric Bind Group Layout"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(
-                        std::mem::size_of::<[f32; 24]>() as u64
-                    ),
+    let volumetric_bgl =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Volumetric Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<[f32; 24]>() as u64
+                        ),
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Depth,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 2,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Depth,
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: true,
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: true,
+                    },
+                    count: None,
                 },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 3,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                count: None,
-            },
-        ],
-    });
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        });
 
     let volumetric_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Surtr Volumetric Layout"),
@@ -621,9 +626,7 @@ pub(crate) fn compile_render_pipelines(
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(
-                        std::mem::size_of::<[f32; 4]>() as u64
-                    ),
+                    min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<[f32; 4]>() as u64),
                 },
                 count: None,
             },
@@ -750,14 +753,15 @@ pub(crate) fn compile_render_pipelines(
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_PARTICLES)),
     });
 
-    let particle_compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("Particle Compute Pipeline"),
-        layout: Some(&particle_compute_layout),
-        module: &particle_shader,
-        entry_point: Some("cs_main"),
-        compilation_options: wgpu::PipelineCompilationOptions::default(),
-        cache: pipeline_cache,
-    });
+    let particle_compute_pipeline =
+        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Particle Compute Pipeline"),
+            layout: Some(&particle_compute_layout),
+            module: &particle_shader,
+            entry_point: Some("cs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: pipeline_cache,
+        });
 
     let particle_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Particle Storage Buffer"),
@@ -777,20 +781,18 @@ pub(crate) fn compile_render_pipelines(
 
     let particle_render_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Particle Render BGL"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(
-                        (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64,
-                    ),
-                },
-                count: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: wgpu::BufferSize::new(
+                    (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64,
+                ),
             },
-        ],
+            count: None,
+        }],
     });
 
     let particle_render_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

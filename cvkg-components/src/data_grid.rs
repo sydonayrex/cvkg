@@ -407,7 +407,11 @@ where
                 width: rect.width - 40.0,
                 height: 40.0,
             };
-            renderer.fill_rounded_rect(bar_rect, 6.0, theme::with_alpha(theme::surface_elevated(), 0.95));
+            renderer.fill_rounded_rect(
+                bar_rect,
+                6.0,
+                theme::with_alpha(theme::surface_elevated(), 0.95),
+            );
             renderer.stroke_rounded_rect(bar_rect, 6.0, theme::accent(), 1.5);
             renderer.draw_text(
                 &format!("{} items selected", self.bulk_selected.len()),

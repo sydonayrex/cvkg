@@ -157,13 +157,7 @@ impl View for TacticalGauge {
 
         renderer.set_aria_role("meter");
         // 1. Label
-        renderer.draw_text(
-            &self.label,
-            rect.x,
-            rect.y - 5.0,
-            10.0,
-            theme::text(),
-        );
+        renderer.draw_text(&self.label, rect.x, rect.y - 5.0, 10.0, theme::text());
 
         // 2. Background Track
         renderer.fill_rect(

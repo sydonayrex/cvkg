@@ -65,7 +65,11 @@ impl<H: View, C: View> View for FafnirAccordion<H, C> {
                     Rect::new(rect.x, rect.y + y_offset, rect.width, content_size.height);
 
                 // Content background
-                renderer.fill_rounded_rect(content_rect, RADIUS_LG, theme::with_alpha(theme::surface_elevated(), 0.6));
+                renderer.fill_rounded_rect(
+                    content_rect,
+                    RADIUS_LG,
+                    theme::with_alpha(theme::surface_elevated(), 0.6),
+                );
 
                 content.render(renderer, content_rect.inset(12.0));
                 y_offset += content_size.height + spacing;

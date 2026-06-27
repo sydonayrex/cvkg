@@ -23,6 +23,12 @@ impl UINode {
     }
 }
 
+impl Default for UINode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for UINode {
     fn label(&self) -> &'static str {
         "UI"
@@ -77,6 +83,7 @@ impl KvasirNode for UINode {
         );
         p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+        p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
 
         for call in ctx
             .renderer

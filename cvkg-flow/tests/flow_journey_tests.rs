@@ -1,5 +1,5 @@
-use cvkg_flow::edge::FlowEdge;
 use cvkg_core::KvasirId;
+use cvkg_flow::edge::FlowEdge;
 use cvkg_flow::graph::FlowGraph;
 use cvkg_flow::node::FlowNode;
 use cvkg_flow::port::FlowPort;

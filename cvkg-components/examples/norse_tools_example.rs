@@ -3,18 +3,18 @@
 //
 // Run with: cargo run --example norse_tools_example
 
-use cvkg_core::AriaRole;
 use cvkg_components::{
-    Animated, BragiCreative, Easing, HlinAccessibility, PermissionLevel, Text,
-    Transition, TyrSecurity,
+    Animated, CreativeTools, Easing, HlinAccessibility, PermissionLevel, Text, Transition,
+    TyrSecurity,
 };
+use cvkg_core::AriaRole;
 
 fn main() {
     println!("CVKG Norse Tools Example");
     println!("========================\n");
 
     // Bragi Creative - Creative suite
-    let bragi = BragiCreative::new()
+    let bragi = CreativeTools::new()
         .rich_text("main_doc", "Welcome to CVKG")
         .markdown("readme", "# Header\nContent here")
         .svg("logo")

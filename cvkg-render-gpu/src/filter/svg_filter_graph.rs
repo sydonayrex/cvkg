@@ -76,15 +76,9 @@ pub enum FilterPrimitive {
         result: String,
     },
     /// feFlood — Fills the filter region with a solid color.
-    Flood {
-        color: [f32; 4],
-        result: String,
-    },
+    Flood { color: [f32; 4], result: String },
     /// feMerge — Merges multiple filter results.
-    Merge {
-        inputs: Vec<String>,
-        result: String,
-    },
+    Merge { inputs: Vec<String>, result: String },
 }
 
 /// SVG blend mode for feBlend.
@@ -98,7 +92,7 @@ pub enum BlendMode {
 }
 
 impl BlendMode {
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_name(s: &str) -> Self {
         match s {
             "multiply" => BlendMode::Multiply,
             "screen" => BlendMode::Screen,
@@ -110,7 +104,14 @@ impl BlendMode {
 
     /// Returns the GPU blend factor for this mode.
     /// Returns (src_factor, dst_factor, src_alpha_factor, dst_alpha_factor).
-    pub fn to_wgpu_blend(&self) -> (wgpu::BlendFactor, wgpu::BlendFactor, wgpu::BlendFactor, wgpu::BlendFactor) {
+    pub fn to_wgpu_blend(
+        &self,
+    ) -> (
+        wgpu::BlendFactor,
+        wgpu::BlendFactor,
+        wgpu::BlendFactor,
+        wgpu::BlendFactor,
+    ) {
         match self {
             BlendMode::Normal => (
                 wgpu::BlendFactor::SrcAlpha,
@@ -158,7 +159,7 @@ pub enum CompositeOperator {
 }
 
 impl CompositeOperator {
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_name(s: &str) -> Self {
         match s {
             "in" => CompositeOperator::In,
             "out" => CompositeOperator::Out,
@@ -181,6 +182,12 @@ pub struct FilterEngine {
     width: u32,
     /// Height of the filter region.
     height: u32,
+}
+
+impl Default for FilterEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FilterEngine {
@@ -220,7 +227,13 @@ impl FilterEngine {
             FilterPrimitive::GaussianBlur { std_deviation, .. } => {
                 self.execute_gaussian_blur(*std_deviation, ctx);
             }
-            FilterPrimitive::DropShadow { dx, dy, std_deviation, flood_color, .. } => {
+            FilterPrimitive::DropShadow {
+                dx,
+                dy,
+                std_deviation,
+                flood_color,
+                ..
+            } => {
                 self.execute_drop_shadow(*dx, *dy, *std_deviation, *flood_color, ctx);
             }
             FilterPrimitive::Offset { dx, dy, .. } => {
@@ -285,7 +298,8 @@ impl FilterEngine {
         ];
 
         if let Some(blur_uniform) = ctx.renderer.blur_uniform.as_ref() {
-            ctx.queue.write_buffer(blur_uniform, 0, bytemuck::cast_slice(&uniform_data));
+            ctx.queue
+                .write_buffer(blur_uniform, 0, bytemuck::cast_slice(&uniform_data));
         }
 
         // Create bind group for input texture
@@ -332,12 +346,21 @@ impl FilterEngine {
 
         log::trace!(
             "[FilterEngine] feGaussianBlur std_deviation={} completed ({}x{})",
-            std_deviation, self.width, self.height
+            std_deviation,
+            self.width,
+            self.height
         );
     }
 
     /// Execute feDropShadow: offset the input, blur it, then composite with original.
-    fn execute_drop_shadow(&mut self, dx: f32, dy: f32, std_deviation: f32, flood_color: [f32; 4], ctx: &mut ExecutionContext) {
+    fn execute_drop_shadow(
+        &mut self,
+        dx: f32,
+        dy: f32,
+        std_deviation: f32,
+        flood_color: [f32; 4],
+        ctx: &mut ExecutionContext,
+    ) {
         // Step 1: Apply flood color to the alpha channel (shadow colorization)
         // Step 2: Offset the shadow
         // Step 3: Blur the shadow
@@ -348,7 +371,10 @@ impl FilterEngine {
 
         log::trace!(
             "[FilterEngine] feDropShadow dx={} dy={} std={} color={:?}",
-            dx, dy, std_deviation, flood_color
+            dx,
+            dy,
+            std_deviation,
+            flood_color
         );
     }
 
@@ -484,7 +510,12 @@ impl FilterEngine {
             pass.draw(0..3, 0..1);
         }
 
-        log::trace!("[FilterEngine] feBlend mode={:?} src={:?} dst={:?}", mode, src_factor, dst_factor);
+        log::trace!(
+            "[FilterEngine] feBlend mode={:?} src={:?} dst={:?}",
+            mode,
+            src_factor,
+            dst_factor
+        );
     }
 
     /// Execute feComposite: composite two images using Porter-Duff operations.
@@ -614,59 +645,45 @@ pub fn build_filter_graph(
 
     for prim in primitives {
         let filter_prim = match prim.primitive_type {
-            pillage_doc::node::FilterPrimitiveType::GaussianBlur => {
-                FilterPrimitive::GaussianBlur {
-                    std_deviation: prim.std_deviation.unwrap_or(0.0),
-                    input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                    result: prim.result.clone().unwrap_or_else(|| "blur".into()),
-                }
-            }
-            pillage_doc::node::FilterPrimitiveType::DropShadow => {
-                FilterPrimitive::DropShadow {
-                    dx: prim.dx.unwrap_or(0.0),
-                    dy: prim.dy.unwrap_or(0.0),
-                    std_deviation: prim.std_deviation.unwrap_or(0.0),
-                    flood_color: prim.flood_color.unwrap_or([0.0, 0.0, 0.0, 0.5]),
-                    input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                    result: prim.result.clone().unwrap_or_else(|| "shadow".into()),
-                }
-            }
-            pillage_doc::node::FilterPrimitiveType::Offset => {
-                FilterPrimitive::Offset {
-                    dx: prim.offset_x.unwrap_or(0.0),
-                    dy: prim.offset_y.unwrap_or(0.0),
-                    input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                    result: prim.result.clone().unwrap_or_else(|| "offset".into()),
-                }
-            }
-            pillage_doc::node::FilterPrimitiveType::Blend => {
-                FilterPrimitive::Blend {
-                    mode: BlendMode::from_str(prim.blend_mode.as_deref().unwrap_or("normal")),
-                    in1: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                    in2: "background".into(),
-                    result: prim.result.clone().unwrap_or_else(|| "blend".into()),
-                }
-            }
-            pillage_doc::node::FilterPrimitiveType::Composite => {
-                FilterPrimitive::Composite {
-                    operator: CompositeOperator::Over,
-                    in1: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                    in2: "background".into(),
-                    result: prim.result.clone().unwrap_or_else(|| "composite".into()),
-                }
-            }
-            pillage_doc::node::FilterPrimitiveType::Flood => {
-                FilterPrimitive::Flood {
-                    color: prim.flood_color.unwrap_or([0.0, 0.0, 0.0, 1.0]),
-                    result: prim.result.clone().unwrap_or_else(|| "flood".into()),
-                }
-            }
-            pillage_doc::node::FilterPrimitiveType::Merge => {
-                FilterPrimitive::Merge {
-                    inputs: vec!["source".into()],
-                    result: prim.result.clone().unwrap_or_else(|| "merge".into()),
-                }
-            }
+            pillage_doc::node::FilterPrimitiveType::GaussianBlur => FilterPrimitive::GaussianBlur {
+                std_deviation: prim.std_deviation.unwrap_or(0.0),
+                input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
+                result: prim.result.clone().unwrap_or_else(|| "blur".into()),
+            },
+            pillage_doc::node::FilterPrimitiveType::DropShadow => FilterPrimitive::DropShadow {
+                dx: prim.dx.unwrap_or(0.0),
+                dy: prim.dy.unwrap_or(0.0),
+                std_deviation: prim.std_deviation.unwrap_or(0.0),
+                flood_color: prim.flood_color.unwrap_or([0.0, 0.0, 0.0, 0.5]),
+                input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
+                result: prim.result.clone().unwrap_or_else(|| "shadow".into()),
+            },
+            pillage_doc::node::FilterPrimitiveType::Offset => FilterPrimitive::Offset {
+                dx: prim.offset_x.unwrap_or(0.0),
+                dy: prim.offset_y.unwrap_or(0.0),
+                input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
+                result: prim.result.clone().unwrap_or_else(|| "offset".into()),
+            },
+            pillage_doc::node::FilterPrimitiveType::Blend => FilterPrimitive::Blend {
+                mode: BlendMode::from_name(prim.blend_mode.as_deref().unwrap_or("normal")),
+                in1: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
+                in2: "background".into(),
+                result: prim.result.clone().unwrap_or_else(|| "blend".into()),
+            },
+            pillage_doc::node::FilterPrimitiveType::Composite => FilterPrimitive::Composite {
+                operator: CompositeOperator::Over,
+                in1: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
+                in2: "background".into(),
+                result: prim.result.clone().unwrap_or_else(|| "composite".into()),
+            },
+            pillage_doc::node::FilterPrimitiveType::Flood => FilterPrimitive::Flood {
+                color: prim.flood_color.unwrap_or([0.0, 0.0, 0.0, 1.0]),
+                result: prim.result.clone().unwrap_or_else(|| "flood".into()),
+            },
+            pillage_doc::node::FilterPrimitiveType::Merge => FilterPrimitive::Merge {
+                inputs: vec!["source".into()],
+                result: prim.result.clone().unwrap_or_else(|| "merge".into()),
+            },
             _ => {
                 log::warn!(
                     "[FilterEngine] Unsupported filter primitive: {:?}",
@@ -693,7 +710,12 @@ impl SvgFilterGraphBuilder {
     }
 
     /// Add a filter pass that reads from `input` and writes to `output`.
-    pub fn add_pass(mut self, input: ResourceId, output: ResourceId, graph: SvgFilterGraph) -> Self {
+    pub fn add_pass(
+        mut self,
+        input: ResourceId,
+        output: ResourceId,
+        graph: SvgFilterGraph,
+    ) -> Self {
         self.nodes.push((input, output, Some(graph)));
         self
     }

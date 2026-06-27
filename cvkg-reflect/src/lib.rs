@@ -181,7 +181,12 @@ impl std::fmt::Display for ReflectError {
                     field, expected, got
                 )
             }
-            ReflectError::OutOfRange { field, min, max, got } => {
+            ReflectError::OutOfRange {
+                field,
+                min,
+                max,
+                got,
+            } => {
                 write!(
                     f,
                     "reflect: value {} on field '{}' is out of range [{}, {}]",
@@ -369,14 +374,12 @@ impl Reflected for ColorStop {
     fn set_field(&mut self, name: &str, value: Value) -> Result<(), ReflectError> {
         match name {
             "position" => {
-                let v = value
-                    .as_f64()
-                    .ok_or_else(|| ReflectError::TypeMismatch {
-                        field: "position".into(),
-                        expected: "number".into(),
-                        got: json_kind_name(&value).into(),
-                    })?;
-                if !v.is_finite() || v < 0.0 || v > 1.0 {
+                let v = value.as_f64().ok_or_else(|| ReflectError::TypeMismatch {
+                    field: "position".into(),
+                    expected: "number".into(),
+                    got: json_kind_name(&value).into(),
+                })?;
+                if !v.is_finite() || !(0.0..=1.0).contains(&v) {
                     return Err(ReflectError::OutOfRange {
                         field: "position".into(),
                         min: 0.0,
@@ -388,13 +391,11 @@ impl Reflected for ColorStop {
                 Ok(())
             }
             "label" => {
-                let v = value
-                    .as_str()
-                    .ok_or_else(|| ReflectError::TypeMismatch {
-                        field: "label".into(),
-                        expected: "string".into(),
-                        got: json_kind_name(&value).into(),
-                    })?;
+                let v = value.as_str().ok_or_else(|| ReflectError::TypeMismatch {
+                    field: "label".into(),
+                    expected: "string".into(),
+                    got: json_kind_name(&value).into(),
+                })?;
                 self.label = v.to_string();
                 Ok(())
             }
@@ -534,7 +535,11 @@ mod tests {
         let mut cs = ColorStop::new(0.0, "x");
         let err = cs.set_field("position", json!("not_a_number")).unwrap_err();
         match err {
-            ReflectError::TypeMismatch { field, expected, got } => {
+            ReflectError::TypeMismatch {
+                field,
+                expected,
+                got,
+            } => {
                 assert_eq!(field, "position");
                 assert_eq!(expected, "number");
                 assert_eq!(got, "string");
@@ -638,8 +643,7 @@ mod tests {
     #[test]
     fn reflect_error_is_std_error() {
         // Verify the Error impl compiles and the source chain is available.
-        let e: Box<dyn std::error::Error> =
-            Box::new(ReflectError::FieldNotFound("z".into()));
+        let e: Box<dyn std::error::Error> = Box::new(ReflectError::FieldNotFound("z".into()));
         assert!(e.source().is_none());
     }
 

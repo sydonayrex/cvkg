@@ -74,11 +74,7 @@ impl<'a> ProgressiveLayoutContext<'a> {
         (self.is_complete(), new_rects)
     }
 
-    fn layout_next_batch_inner(
-        &mut self,
-        batch_size: usize,
-        mut cache: Option<&mut LayoutCache>,
-    ) {
+    fn layout_next_batch_inner(&mut self, batch_size: usize, mut cache: Option<&mut LayoutCache>) {
         let mut processed = 0;
         let mut batch_indices = Vec::new();
         for (i, entry) in self.entries.iter().enumerate() {
@@ -96,10 +92,8 @@ impl<'a> ProgressiveLayoutContext<'a> {
             return;
         }
 
-        let batch_subviews: Vec<&dyn LayoutView> = batch_indices
-            .iter()
-            .map(|&i| self.children[i])
-            .collect();
+        let batch_subviews: Vec<&dyn LayoutView> =
+            batch_indices.iter().map(|&i| self.children[i]).collect();
 
         let rects = match cache {
             Some(ref mut c) => crate::taffy_engine::HStack::compute_layout_incremental(
@@ -109,7 +103,7 @@ impl<'a> ProgressiveLayoutContext<'a> {
                 self.bounds,
                 0,
                 &batch_subviews,
-                *c,
+                c,
             ),
             None => {
                 let mut tmp = LayoutCache::new();
@@ -172,27 +166,23 @@ impl<'a> ProgressiveLayoutContext<'a> {
         }
 
         let cols = (remaining.len() as f32).sqrt().ceil() as usize;
-        let rows = (remaining.len() + cols - 1) / cols;
+        let rows = remaining.len().div_ceil(cols);
         let cell_w = self.bounds.width / cols as f32;
         let cell_h = self.bounds.height / rows as f32;
 
         for (offset, &idx) in remaining.iter().enumerate() {
             let hash = self.entries[idx].hash;
             let rect = if hash != 0 {
-                cache
-                    .previous_rects
-                    .get(&hash)
-                    .copied()
-                    .unwrap_or_else(|| {
-                        let col = offset % cols;
-                        let row = offset / cols;
-                        Rect {
-                            x: self.bounds.x + col as f32 * cell_w,
-                            y: self.bounds.y + row as f32 * cell_h,
-                            width: cell_w,
-                            height: cell_h,
-                        }
-                    })
+                cache.previous_rects.get(&hash).copied().unwrap_or_else(|| {
+                    let col = offset % cols;
+                    let row = offset / cols;
+                    Rect {
+                        x: self.bounds.x + col as f32 * cell_w,
+                        y: self.bounds.y + row as f32 * cell_h,
+                        width: cell_w,
+                        height: cell_h,
+                    }
+                })
             } else {
                 let col = offset % cols;
                 let row = offset / cols;

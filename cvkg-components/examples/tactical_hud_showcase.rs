@@ -30,7 +30,7 @@ fn tactical_hud_showcase() -> impl View {
             // 2. Data Visualization
             HStack::new(20.0)
                 .child(
-                    ValkyrieAnalytics::new("Radar")
+                    Analytics::new("Radar")
                         .chart_type(ChartType::Radar)
                         .data(vec![
                             ("A".to_string(), 0.8),
@@ -51,10 +51,10 @@ fn tactical_hud_showcase() -> impl View {
         )
         .child(
             // 3. Narrative & History
-            SagaAccordion::new()
+            Accordion::new()
                 .item(
                     "Mission Log: Ragnarok Init",
-                    UrdrTimeline::new()
+                    Timeline::new()
                         .event("System Boot", "08:00")
                         .event("Niflheim Connection Established", "08:05")
                         .event("Anomaly Detected", "08:15")
@@ -66,8 +66,8 @@ fn tactical_hud_showcase() -> impl View {
         .child(
             // 4. Interactive Tools
             HStack::new(20.0)
-                .child(ValhallaRating::new(4.5).max(5).erase())
-                .child(BifrostColorPicker::new([0.0, 0.8, 1.0, 1.0]).erase())
+                .child(Rating::new(4.5).max(5).erase())
+                .child(ColorPicker::new([0.0, 0.8, 1.0, 1.0]).erase())
                 .erase(),
         )
 }

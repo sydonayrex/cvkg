@@ -1,16 +1,18 @@
-use std::collections::HashMap;
 use fontdb::{Database, Family, Query, Source, Stretch, Style, Weight};
+use std::collections::HashMap;
 use swash::FontRef;
 use swash::scale::{Render, ScaleContext, Source as SwashSource};
 
 use rustybuzz::Direction;
 use unicode_bidi::BidiInfo;
 
-use crate::types::{ShapingError, FontAxisInfo, GlyphInstance, RunicPathSegment, GlyphImage, FontMetrics, LineInfo};
-use crate::style::{TextStyle, RenderMode, TextAlign, TextOverflow};
-use crate::span::{TextSpan, Paragraph};
-use crate::layout::ShapedText;
 use crate::global_cache;
+use crate::layout::ShapedText;
+use crate::span::{Paragraph, TextSpan};
+use crate::style::{RenderMode, TextAlign, TextOverflow, TextStyle};
+use crate::types::{
+    FontAxisInfo, FontMetrics, GlyphImage, GlyphInstance, LineInfo, RunicPathSegment, ShapingError,
+};
 
 // ── CacheKey ─────────────────────────────────────────────────────────────────
 
@@ -235,7 +237,13 @@ impl TextEngine {
         for face in db.faces() {
             let id = face.id;
             let face_index = face.index;
-            font_data.insert(id, FontData::new(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(), face_index));
+            font_data.insert(
+                id,
+                FontData::new(
+                    include_bytes!("../Fonts/Jupiteroid.ttf").to_vec(),
+                    face_index,
+                ),
+            );
         }
 
         TextEngine {
@@ -323,22 +331,20 @@ impl TextEngine {
         }
         for face in self.db.faces() {
             let id = face.id;
-            if !self.font_data.contains_key(&id) {
-                if let Some((source, face_index)) = self.db.face_source(id) {
-                    let bytes = match source {
-                        Source::Binary(arc_data) => {
-                            arc_data.as_ref().as_ref().to_vec()
+            if !self.font_data.contains_key(&id)
+                && let Some((source, face_index)) = self.db.face_source(id)
+            {
+                let bytes = match source {
+                    Source::Binary(arc_data) => arc_data.as_ref().as_ref().to_vec(),
+                    Source::File(path) | Source::SharedFile(path, _) => {
+                        if let Ok(data) = std::fs::read(&path) {
+                            data
+                        } else {
+                            continue;
                         }
-                        Source::File(path) | Source::SharedFile(path, _) => {
-                            if let Ok(data) = std::fs::read(&path) {
-                                data
-                            } else {
-                                continue;
-                            }
-                        }
-                    };
-                    self.font_data.insert(id, FontData::new(bytes, face_index));
-                }
+                    }
+                };
+                self.font_data.insert(id, FontData::new(bytes, face_index));
             }
         }
     }
@@ -455,7 +461,14 @@ impl TextEngine {
         }
 
         if let Some(image) = render.render(&mut scaler, glyph_id) {
-            log::info!("Swash rendered image for glyph {}. content: {:?}, size: {}x{}, data len: {}", glyph_id, image.content, image.placement.width, image.placement.height, image.data.len());
+            log::info!(
+                "Swash rendered image for glyph {}. content: {:?}, size: {}x{}, data len: {}",
+                glyph_id,
+                image.content,
+                image.placement.width,
+                image.placement.height,
+                image.data.len()
+            );
             return Ok(GlyphImage {
                 glyph_id,
                 width: image.placement.width,
@@ -642,7 +655,7 @@ impl TextEngine {
 
         let mut current_y = 0.0;
 
-        for (_p_idx, para) in paragraphs.iter().enumerate() {
+        for para in paragraphs.iter() {
             let char_count = para.text.chars().count();
             let est_lines = if let Some(_mw) = max_width {
                 ((char_count as f32 / 80.0).ceil() as usize).max(1)
@@ -655,12 +668,15 @@ impl TextEngine {
             let para_y_end = para_y_start + para_h;
 
             if para_y_end >= y_start && para_y_start <= y_end {
-                let spans: Vec<TextSpan> = para.runs.iter().map(|run| {
-                    TextSpan::at(&run.text, run.style.clone(), run.start)
-                }).collect();
+                let spans: Vec<TextSpan> = para
+                    .runs
+                    .iter()
+                    .map(|run| TextSpan::at(&run.text, run.style.clone(), run.start))
+                    .collect();
 
                 if !spans.is_empty() {
-                    let shaped = self.shape_layout(&spans, max_width, align, TextOverflow::WordWrap)?;
+                    let shaped =
+                        self.shape_layout(&spans, max_width, align, TextOverflow::WordWrap)?;
                     if primary_ascent == 0.0 {
                         primary_ascent = shaped.ascent;
                         primary_descent = shaped.descent;
@@ -706,7 +722,10 @@ impl TextEngine {
             total_height = current_y;
         }
 
-        let max_w = visible_lines.iter().map(|l| l.width).fold(0.0f32, |a, b| a.max(b));
+        let max_w = visible_lines
+            .iter()
+            .map(|l| l.width)
+            .fold(0.0f32, |a, b| a.max(b));
 
         Ok(ShapedText {
             glyphs: visible_glyphs,

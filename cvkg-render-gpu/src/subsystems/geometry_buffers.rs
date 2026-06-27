@@ -27,11 +27,7 @@ impl GeometryBuffers {
     /// Create the three geometry buffers on the given device with
     /// the given capacities. The buffers are immediately usable
     /// for COPY_DST writes.
-    pub fn forge(
-        device: &wgpu::Device,
-        max_vertices: usize,
-        max_indices: usize,
-    ) -> Self {
+    pub fn forge(device: &wgpu::Device, max_vertices: usize, max_indices: usize) -> Self {
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Surtr Vertex Anvil"),
             size: (max_vertices * std::mem::size_of::<Vertex>()) as u64,
@@ -63,8 +59,7 @@ impl GeometryBuffers {
     pub fn vram_bytes(&self) -> u64 {
         let vertex_bytes = self.max_vertices * std::mem::size_of::<Vertex>();
         let index_bytes = self.max_indices * std::mem::size_of::<u32>();
-        let instance_bytes =
-            (self.max_vertices / 4) * std::mem::size_of::<InstanceData>();
+        let instance_bytes = (self.max_vertices / 4) * std::mem::size_of::<InstanceData>();
         (vertex_bytes + index_bytes + instance_bytes) as u64
     }
 
@@ -79,8 +74,7 @@ impl GeometryBuffers {
         min_capacity: usize,
         max_capacity: usize,
     ) -> bool {
-        let current = self.vertex_buffer.size() as usize
-            / std::mem::size_of::<Vertex>();
+        let current = self.vertex_buffer.size() as usize / std::mem::size_of::<Vertex>();
         if min_capacity <= current {
             return false;
         }
@@ -104,8 +98,7 @@ impl GeometryBuffers {
         min_capacity: usize,
         max_capacity: usize,
     ) -> bool {
-        let current = self.index_buffer.size() as usize
-            / std::mem::size_of::<u32>();
+        let current = self.index_buffer.size() as usize / std::mem::size_of::<u32>();
         if min_capacity <= current {
             return false;
         }

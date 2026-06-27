@@ -13,7 +13,7 @@ fn test_text_svg_rendering_trace() {
     let height: u32 = 256;
 
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
-    
+
     // Load a dummy SVG
     let svg_data = br#"<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
         <rect width="100" height="100" fill="red"/>
@@ -35,13 +35,7 @@ fn test_text_svg_rendering_trace() {
     );
 
     // Render Text (should write to atlas)
-    renderer.draw_text(
-        "Trace Text",
-        32.0,
-        32.0,
-        24.0,
-        [1.0, 1.0, 1.0, 1.0],
-    );
+    renderer.draw_text("Trace Text", 32.0, 32.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
 
     // Draw the whole atlas to the screen
     renderer.draw_image(
@@ -51,7 +45,7 @@ fn test_text_svg_rendering_trace() {
             y: 0.0,
             width: 256.0,
             height: 256.0,
-        }
+        },
     );
 
     renderer.render_frame();
@@ -68,13 +62,7 @@ fn test_text_svg_rendering_trace() {
         },
         [0.0, 0.0, 0.0, 1.0],
     );
-    renderer.draw_text(
-        "Trace Text",
-        32.0,
-        32.0,
-        24.0,
-        [1.0, 1.0, 1.0, 1.0],
-    );
+    renderer.draw_text("Trace Text", 32.0, 32.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
     renderer.draw_image(
         "__mega_heim",
         Rect {
@@ -82,7 +70,7 @@ fn test_text_svg_rendering_trace() {
             y: 0.0,
             width: 256.0,
             height: 256.0,
-        }
+        },
     );
     renderer.render_frame();
     renderer.end_frame(encoder2);
@@ -91,9 +79,12 @@ fn test_text_svg_rendering_trace() {
 
     println!("--- TRACE RESULTS ---");
     println!("Telemetry: {:?}", renderer.telemetry);
-    
+
     // Check for Text (White)
-    let white_pixels = pixels.chunks_exact(4).filter(|p| p[0] > 200 && p[1] > 200 && p[2] > 200).count();
+    let white_pixels = pixels
+        .chunks_exact(4)
+        .filter(|p| p[0] > 200 && p[1] > 200 && p[2] > 200)
+        .count();
     println!("White pixels (Text): {}", white_pixels);
 
     // If both text and atlas fail, we'll see 0 counts.

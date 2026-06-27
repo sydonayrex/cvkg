@@ -47,6 +47,7 @@ pub struct CachedGraphPlan {
 
 impl CachedGraphPlan {
     /// Check if the cached graph configuration matches the incoming parameters.
+    #[allow(clippy::too_many_arguments)]
     pub fn matches(
         &self,
         has_glass: bool,

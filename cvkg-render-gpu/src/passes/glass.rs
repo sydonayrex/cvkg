@@ -17,6 +17,12 @@ impl BackdropCopyNode {
     }
 }
 
+impl Default for BackdropCopyNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KvasirNode for BackdropCopyNode {
     fn label(&self) -> &'static str {
         "Backdrop Copy"
@@ -45,7 +51,7 @@ impl KvasirNode for BackdropCopyNode {
         let target_view = {
             let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
             cache
-                .entry((RES_BLUR_A, 0))
+                .entry((ctx.renderer.current_window, RES_BLUR_A, 0))
                 .or_insert_with(|| {
                     target_texture.create_view(&wgpu::TextureViewDescriptor {
                         label: Some("backdrop_copy_mip0"),
@@ -88,7 +94,7 @@ impl KvasirNode for BackdropCopyNode {
         let source_bind_group = {
             let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
             cache
-                .entry((RES_SCENE, 0, false))
+                .entry((ctx.renderer.current_window, RES_SCENE, 0, false))
                 .or_insert_with(|| {
                     ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                         label: Some("backdrop_copy_bg"),
@@ -116,6 +122,7 @@ impl KvasirNode for BackdropCopyNode {
         p.set_bind_group(0, &source_bind_group, &[]);
         p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+        p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
         p.draw(0..3, 0..1);
     }
 }
@@ -182,7 +189,7 @@ impl KvasirNode for BackdropBlurNode {
             .map(|mip| {
                 let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.texture_view_cache);
                 cache
-                    .entry((RES_BLUR_A, mip as u32))
+                    .entry((ctx.renderer.current_window, RES_BLUR_A, mip as u32))
                     .or_insert_with(|| {
                         blur_tex.create_view(&wgpu::TextureViewDescriptor {
                             label: Some(&format!("blur_mip_{}", mip)),
@@ -442,6 +449,7 @@ impl KvasirNode for GlassNode {
         p.set_bind_group(0, &ctx.renderer.dummy_texture_bind_group, &[]);
         p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+        p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
 
         let scale = self.scale;
         for call in ctx
@@ -479,8 +487,9 @@ impl KvasirNode for GlassNode {
             let env_bg = if let Some(portal_idx) = portal_index {
                 let portal_res_id = ResourceId(2000 + portal_idx as u32);
                 if let Some(portal_view) = ctx.registry.get_texture_view(portal_res_id) {
-                    let cache_key = (portal_res_id, 0, false);
-                    let mut cache = GpuRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
+                    let cache_key = (ctx.renderer.current_window, portal_res_id, 0, false);
+                    let mut cache =
+                        GpuRenderer::lock_or_clear_cache(&ctx.renderer.bind_group_cache);
                     let bg = cache.entry(cache_key).or_insert_with(|| {
                         ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
                             label: Some(&format!("portal_blur_env_bg_{}", portal_idx)),

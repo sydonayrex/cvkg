@@ -518,8 +518,7 @@ pub async fn start_server(addr: SocketAddr) -> Result<(), Box<dyn std::error::Er
     // Spawn animation tick task
     let animation_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(16)); // ~60fps
-        let mut solver =
-            cvkg_anim::SpringSolver::new(cvkg_anim::SpringParams::default(), 0.0, 0.0);
+        let mut solver = cvkg_anim::SpringSolver::new(cvkg_anim::SpringParams::default(), 0.0, 0.0);
         let mut physics_world =
             cvkg_physics::PhysicsWorld::new(cvkg_physics::WorldConfig::default());
         loop {

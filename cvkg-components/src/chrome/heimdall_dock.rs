@@ -138,7 +138,11 @@ impl View for HeimdallDock {
         if crate::theme::glassmorphism_enabled() {
             renderer.bifrost(platter_rect, 25.0, 1.2, 0.7);
         }
-        renderer.fill_rounded_rect(platter_rect, 16.0, theme::with_alpha(theme::surface_elevated(), 0.85));
+        renderer.fill_rounded_rect(
+            platter_rect,
+            16.0,
+            theme::with_alpha(theme::surface_elevated(), 0.85),
+        );
 
         // Render each item with magnification
         let base_size = 48.0;
@@ -160,7 +164,11 @@ impl View for HeimdallDock {
             };
 
             // Icon background (rounded rect)
-            renderer.fill_rounded_rect(item_rect, 12.0, theme::with_alpha(theme::surface_elevated(), 0.9));
+            renderer.fill_rounded_rect(
+                item_rect,
+                12.0,
+                theme::with_alpha(theme::surface_elevated(), 0.9),
+            );
 
             // Running indicator dot
             if item.is_running {

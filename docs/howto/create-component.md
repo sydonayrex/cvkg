@@ -1,84 +1,66 @@
-# How to Create a Component
+# How to Create a Component (Manual)
 
-Goal: Implement a custom UI component in CVKG.
+## Goal
 
-## Process Flow
-
-```mermaid
-graph TD
-    A["Define target struct with fields and constructor builder methods"] --> B["Implement the View trait"]
-    B --> C["Define render method using Renderer draw APIs"]
-    C --> D["Define intrinsic_size to return bounding width and height"]
-    D --> E["Insert component inside container stack views (VStack, HStack)"]
-```
+Create a custom UI component by implementing the `View` trait manually, without using macros.
 
 ## Prerequisites
 
-
-- Understanding of the `View` trait
-- Basic Rust knowledge
+- Understanding of the `View` trait from `cvkg-core`
+- A working CVKG project
 
 ## Steps
 
-### 1. Define the component struct
+### 1. Define the Component Struct
 
 ```rust
-use cvkg_core::{View, Rect, Renderer, Size, SizeProposal};
+use cvkg_core::{Color, Never, Rect, Renderer, View};
 
-pub struct MyComponent {
+pub struct MyButton {
     label: String,
-    on_click: Option<Box<dyn Fn() + Send + Sync>>,
+    color: Color,
 }
+```
 
-impl MyComponent {
-    pub fn new(label: impl Into<String>) -> Self {
-        Self { label: label.into(), on_click: None }
-    }
-    
-    pub fn on_click<F: Fn() + Send + Sync + 'static>(mut self, f: F) -> Self {
-        self.on_click = Some(Box::new(f));
-        self
-    }
-}```
-
-### 2. Implement the View trait
+### 2. Implement `View`
 
 ```rust
-impl View for MyComponent {
-    type Body = Self;
-    
-    fn body(self) -> Self::Body { self }
-    
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.fill_rounded_rect(rect, 8.0, [0.2, 0.6, 1.0, 1.0]);
-        renderer.draw_text(&self.label, rect.x + 16.0, rect.y + 16.0, 16.0, [1.0, 1.0, 1.0, 1.0]);
-    }
-    
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
-        Size { width: 120.0, height: 44.0 }
+impl View for MyButton {
+    type Body = Never; // Primitive view -- no child body
+
+    fn body(self) -> Self::Body {
+        unreachable!("Primitive view renders directly via Renderer")
     }
 }
 ```
 
-### 3. Use the component
+### 3. Implement Custom Rendering
+
+Use the `Renderer` trait to issue draw commands. The renderer provides methods for drawing rectangles, text, and paths.
+
+### 4. Add to a Parent View
 
 ```rust
-use cvkg_components::{VStack, Text};
-use cvkg_core::View;
+struct App;
 
-let view = VStack::new(16.0)
-    .child(MyComponent::new("Click me").on_click(|| println!("clicked")))
-    .child(Text::new("Static text"));
+impl View for App {
+    type Body = MyButton;
+
+    fn body(self) -> Self::Body {
+        MyButton {
+            label: "Click me".into(),
+            color: Color { r: 0.2, g: 0.6, b: 1.0, a: 1.0 },
+        }
+    }
+}
 ```
 
 ## Expected Output
 
-The custom component renders with the specified appearance and handles click events.
+A rendered button in the application window.
 
-## Recovery
+## What Can Go Wrong
 
-If the component does not appear:
-
-1. Verify `intrinsic_size()` returns non-zero dimensions
-2. Check that `render()` is actually drawing content
-3. Ensure parent container has proper layout constraints
+- **Forgetting `type Body = Never`**: Primitive views must use `Never` as the body type. Composite views use a concrete child type.
+- **State in `body()`**: The `body()` method must be pure and side-effect free. Store state in `State<T>` fields, not in local variables.
+- **Not calling renderer methods**: If you implement `body()` without issuing draw commands, nothing appears on screen.

@@ -88,29 +88,63 @@ impl IconRegistry {
     fn load_defaults(&mut self) {
         // Navigation
         self.register("close", IconData::Svg("M6 6 L18 18 M18 6 L6 18".into()));
-        self.register("menu", IconData::Svg("M3 6 L21 6 M3 12 L21 12 M3 18 L21 18".into()));
+        self.register(
+            "menu",
+            IconData::Svg("M3 6 L21 6 M3 12 L21 12 M3 18 L21 18".into()),
+        );
         self.register("chevron-right", IconData::Svg("M9 6 L15 12 L9 18".into()));
         self.register("chevron-down", IconData::Svg("M6 9 L12 15 L18 9".into()));
         self.register("chevron-left", IconData::Svg("M15 6 L9 12 L15 18".into()));
         self.register("chevron-up", IconData::Svg("M6 15 L12 9 L18 15".into()));
-        self.register("arrow-right", IconData::Svg("M5 12 L19 12 M13 6 L19 12 L13 18".into()));
-        self.register("arrow-left", IconData::Svg("M19 12 L5 12 M11 6 L5 12 L11 18".into()));
+        self.register(
+            "arrow-right",
+            IconData::Svg("M5 12 L19 12 M13 6 L19 12 L13 18".into()),
+        );
+        self.register(
+            "arrow-left",
+            IconData::Svg("M19 12 L5 12 M11 6 L5 12 L11 18".into()),
+        );
 
         // Actions
         self.register("add", IconData::Svg("M12 5 L12 19 M5 12 L19 12".into()));
         self.register("remove", IconData::Svg("M5 12 L19 12".into()));
-        self.register("search", IconData::Svg("M11 4 A7 7 0 1 0 11 18 A7 7 0 1 0 11 4 M16 16 L21 21".into()));
+        self.register(
+            "search",
+            IconData::Svg("M11 4 A7 7 0 1 0 11 18 A7 7 0 1 0 11 4 M16 16 L21 21".into()),
+        );
         self.register("settings", IconData::Svg("M12 8 A4 4 0 1 0 12 16 A4 4 0 1 0 12 8 M12 1 L12 4 M12 20 L12 23 M1 12 L4 12 M20 12 L23 12".into()));
-        self.register("edit", IconData::Svg("M3 21 L3 17 L17 7 L21 11 L7 21 Z".into()));
+        self.register(
+            "edit",
+            IconData::Svg("M3 21 L3 17 L17 7 L21 11 L7 21 Z".into()),
+        );
         self.register("delete", IconData::Svg("M6 6 L18 18 M18 6 L6 18".into()));
-        self.register("copy", IconData::Svg("M8 4 L8 16 L20 16 L20 8 L16 4 Z M8 8 L16 8 L16 4".into()));
+        self.register(
+            "copy",
+            IconData::Svg("M8 4 L8 16 L20 16 L20 8 L16 4 Z M8 8 L16 8 L16 4".into()),
+        );
         self.register("check", IconData::Svg("M4 12 L10 18 L20 6".into()));
 
         // Status
-        self.register("info", IconData::Svg("M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 M12 11 L12 17 M12 8 L12 8.5".into()));
-        self.register("warning", IconData::Svg("M12 3 L22 21 L2 21 Z M12 10 L12 15 M12 17 L12 17.5".into()));
-        self.register("error", IconData::Svg("M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 M12 8 L12 13 M12 16 L12 16.5".into()));
-        self.register("success", IconData::Svg("M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 M8 12 L11 15 L16 9".into()));
+        self.register(
+            "info",
+            IconData::Svg(
+                "M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 M12 11 L12 17 M12 8 L12 8.5".into(),
+            ),
+        );
+        self.register(
+            "warning",
+            IconData::Svg("M12 3 L22 21 L2 21 Z M12 10 L12 15 M12 17 L12 17.5".into()),
+        );
+        self.register(
+            "error",
+            IconData::Svg(
+                "M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 M12 8 L12 13 M12 16 L12 16.5".into(),
+            ),
+        );
+        self.register(
+            "success",
+            IconData::Svg("M12 4 A8 8 0 1 0 12 20 A8 8 0 1 0 12 4 M8 12 L11 15 L16 9".into()),
+        );
 
         // Media
         self.register("play", IconData::Svg("M8 5 L19 12 L8 19 Z".into()));
@@ -118,10 +152,22 @@ impl IconRegistry {
         self.register("stop", IconData::Svg("M5 5 L19 5 L19 19 L5 19 Z".into()));
 
         // Misc
-        self.register("home", IconData::Svg("M3 12 L12 3 L21 12 L21 21 L3 21 Z".into()));
-        self.register("user", IconData::Svg("M12 4 A4 4 0 1 0 12 12 A4 4 0 1 0 12 4 M4 21 A8 8 0 1 1 20 21".into()));
-        self.register("calendar", IconData::Svg("M4 4 L20 4 L20 20 L4 20 Z M4 10 L20 10 M8 4 L8 2 M16 4 L16 2".into()));
-        self.register("mail", IconData::Svg("M3 5 L21 5 L21 19 L3 19 Z M3 5 L12 13 L21 5".into()));
+        self.register(
+            "home",
+            IconData::Svg("M3 12 L12 3 L21 12 L21 21 L3 21 Z".into()),
+        );
+        self.register(
+            "user",
+            IconData::Svg("M12 4 A4 4 0 1 0 12 12 A4 4 0 1 0 12 4 M4 21 A8 8 0 1 1 20 21".into()),
+        );
+        self.register(
+            "calendar",
+            IconData::Svg("M4 4 L20 4 L20 20 L4 20 Z M4 10 L20 10 M8 4 L8 2 M16 4 L16 2".into()),
+        );
+        self.register(
+            "mail",
+            IconData::Svg("M3 5 L21 5 L21 19 L3 19 Z M3 5 L12 13 L21 5".into()),
+        );
     }
 }
 
@@ -221,7 +267,8 @@ impl<'a> View for Icon<'a> {
         if self.aria_hidden {
             return Some(AriaProperties::new(AriaRole::Presentation, ""));
         }
-        self.aria_label.map(|label| AriaProperties::new(AriaRole::Img, label))
+        self.aria_label
+            .map(|label| AriaProperties::new(AriaRole::Img, label))
     }
 }
 
