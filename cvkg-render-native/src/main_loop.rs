@@ -126,7 +126,8 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 .get(&handle.id)
                 .copied()
                 .unwrap_or_else(|| {
-                    panic!("winit_id not found for window handle: window may have been destroyed")
+                    log::error!("[Native] winit_id not found for window handle: window may have been destroyed");
+                    std::process::exit(1);
                 });
             let window = self
                 .window_manager
@@ -331,7 +332,8 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 );
                             }
                             diff_patches = Some(patches);
-                            let patches = diff_patches.as_ref().unwrap();
+                            // ponytail: if diff returned None/empty, skip patching (no UI change this frame)
+                            let patches = diff_patches.as_deref().unwrap_or_default();
                             let mut nodes = Vec::new();
                             for patch in patches {
                                 if let cvkg_vdom::VDomPatch::Create(node)
@@ -358,7 +360,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 .focused_node_id
                                 .map(|id| accesskit::NodeId(id.0))
                                 .unwrap_or(accesskit::NodeId(1));
-                            for patch in diff_patches.as_ref().unwrap() {
+                            for patch in diff_patches.as_deref().unwrap_or_default() {
                                 if let cvkg_vdom::VDomPatch::Create(node)
                                 | cvkg_vdom::VDomPatch::Replace { node, .. } = patch
                                 {
@@ -377,7 +379,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     });
                                 }
                             }
-                            prev_vdom.apply_patches(diff_patches.unwrap());
+                            prev_vdom.apply_patches(diff_patches.unwrap_or_default());
                             state.vdom = Some(new_vdom);
                         }
                         (Some(new_vdom), None) => {

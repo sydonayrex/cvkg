@@ -212,7 +212,10 @@ This crate has no optional Cargo features. All dependencies are always compiled.
 - `tokio` uses only `sync`, `rt`, `macros`, `rt-multi-thread` features (no `net`, `time`, `io-util`, etc.).
 - `accesskit_unix` is compiled with `default-features = false`.
 
-**Environment variables:** None. The crate does not read any environment variables at runtime.
+**Environment variables:** The crate itself does not read environment variables. However, the GPU renderer it depends on (`cvkg-render-gpu`) reads:
+- `WGPU_ADAPTER_NAME` — case-insensitive substring match to force a specific GPU adapter.
+- `WGPU_BACKEND` — force a specific wgpu backend (e.g. `vulkan`, `metal`).
+- `RUST_LOG` — controls log output; set to `cvkg_render_gpu=debug` for renderer diagnostics.
 
 **Build requirements:**
 - Rust 2024 edition (`rustc` >= 1.85).

@@ -36,7 +36,7 @@ cargo build --workspace
 ## 5. Run the Demo Application
 
 ```bash
-cargo run -p berserker
+cargo run -p demos/berserker
 ```
 
 ## 6. Run Tests

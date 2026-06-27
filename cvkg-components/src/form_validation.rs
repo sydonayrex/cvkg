@@ -241,6 +241,8 @@ impl cvkg_core::ElapsedTime for DummyRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for DummyRenderer {}
+
 impl Renderer for DummyRenderer {
     fn fill_rect(&mut self, _rect: Rect, _color: [f32; 4]) {}
     fn fill_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4]) {}

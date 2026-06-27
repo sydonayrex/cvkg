@@ -30,6 +30,18 @@ pub enum CvkgError {
         reason: String,
         suggestion: String,
     },
+    /// Runtime renderer error from a backend
+    RendererError {
+        backend: String,
+        message: String,
+        suggestion: String,
+    },
+    /// Layout constraint violation or computation failure
+    LayoutError {
+        node_id: Option<u64>,
+        message: String,
+        suggestion: String,
+    },
 }
 
 impl fmt::Display for CvkgError {
@@ -77,6 +89,29 @@ impl fmt::Display for CvkgError {
                     f,
                     "Failed to initialize {} renderer: {}. {}",
                     backend, reason, suggestion
+                )
+            }
+            CvkgError::RendererError {
+                backend,
+                message,
+                suggestion,
+            } => {
+                write!(
+                    f,
+                    "[{}] {}. {}",
+                    backend, message, suggestion
+                )
+            }
+            CvkgError::LayoutError {
+                node_id,
+                message,
+                suggestion,
+            } => {
+                let node = node_id.map_or_else(|| "unknown".to_string(), |n| format!("0x{n:X}"));
+                write!(
+                    f,
+                    "Layout error (node {}): {}. {}",
+                    node, message, suggestion
                 )
             }
         }
@@ -159,5 +194,85 @@ impl fmt::Display for SpannedError {
             self.span.end_col,
             self.help
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_geometry_display_includes_reason_and_suggestion() {
+        let err = CvkgError::InvalidGeometry {
+            rect: "Rect { x: 0, y: 0, w: -1, h: 10 }".into(),
+            reason: "negative width".into(),
+            suggestion: "Ensure width and height are positive".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("negative width"), "should contain reason");
+        assert!(msg.contains("positive"), "should contain suggestion");
+    }
+
+    #[test]
+    fn renderer_error_display_includes_backend_and_message() {
+        let err = CvkgError::RendererError {
+            backend: "gpu".into(),
+            message: "device lost".into(),
+            suggestion: "recreate renderer".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("[gpu]"), "should tag backend");
+        assert!(msg.contains("device lost"), "should contain message");
+        assert!(msg.contains("recreate renderer"), "should contain suggestion");
+    }
+
+    #[test]
+    fn layout_error_display_includes_node_id() {
+        let err = CvkgError::LayoutError {
+            node_id: Some(0xABCD),
+            message: "constraint conflict".into(),
+            suggestion: "check flex properties".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("0xABCD"), "should format node ID as hex");
+        assert!(msg.contains("constraint conflict"), "should contain message");
+    }
+
+    #[test]
+    fn layout_error_display_handles_none_node_id() {
+        let err = CvkgError::LayoutError {
+            node_id: None,
+            message: "NaN propagated".into(),
+            suggestion: "check floats".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("unknown"), "should handle None node ID");
+    }
+
+    #[test]
+    fn spanned_error_includes_location_info() {
+        let err = SpannedError {
+            error: CvkgError::MissingFeature {
+                feature: "gpu".into(),
+                crate_name: "cvkg-render-gpu".into(),
+                suggestion: "enable gpu feature".into(),
+            },
+            span: ErrorSpan::new("button.rs", 42, 10),
+            help: "Add feature to Cargo.toml".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("button.rs"), "should contain file");
+        assert!(msg.contains("42"), "should contain line");
+        assert!(msg.contains("Add feature to Cargo.toml"), "should contain help");
+    }
+
+    #[test]
+    fn error_trait_bound_satisfied() {
+        // Verify CvkgError satisfies std::error::Error
+        let _boxed: Box<dyn std::error::Error> = Box::new(CvkgError::RendererInitFailed {
+            backend: "test".into(),
+            reason: "test failure".into(),
+            suggestion: "fix it".into(),
+        });
     }
 }

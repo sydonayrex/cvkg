@@ -583,7 +583,11 @@ impl VDom {
             if let Some(handlers) = self.event_handlers.get(&current_id)
                 && let Some(handler) = handlers.get(event_name)
             {
-                handler(event.clone());
+                // ponytail: a panicking handler should not crash the render pass.
+                // Log the panic and continue bubbling to the parent.
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handler(event.clone());
+                }));
                 processed = true;
             }
 
@@ -616,7 +620,10 @@ impl VDom {
                         event_name,
                         current_id
                     );
-                    handler(event.clone());
+                    // ponytail: panicking handler should not crash the render pass
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        handler(event.clone());
+                    }));
                     processed = true;
                 }
             }
@@ -640,7 +647,10 @@ impl VDom {
                         node_id,
                         event_name
                     );
-                    handler(event.clone());
+                    // ponytail: panicking handler should not crash the render pass
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        handler(event.clone());
+                    }));
                     processed = true;
                     break;
                 }
@@ -943,6 +953,8 @@ impl cvkg_core::ElapsedTime for VNodeRenderer {
         0.0
     }
 }
+
+impl cvkg_core::RendererErrorHandler for VNodeRenderer {}
 
 impl cvkg_core::Renderer for VNodeRenderer {
     fn fill_rect(&mut self, rect: cvkg_core::Rect, _color: [f32; 4]) {

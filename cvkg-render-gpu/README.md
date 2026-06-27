@@ -18,92 +18,44 @@ GPU-accelerated renderer for the CVKG UI framework. Translates scene graphs, SVG
 
 ```mermaid
 graph LR
-  subgraph cvkg_render_gpu["cvkg-render-gpu"]
-    direction TB
-    RENDERER["GpuRenderer"]
-    MATERIAL["material (CompiledMaterial, MaterialCompiler, ...)"]
-    SUBSYS["subsystems (RendererConfig)"]
-    PASS["passes"]
-    DRAW["draw"]
-    FILTER["filter"]
-    PYRAMID["pyramid"]
-    VERTEX["vertex (Vertex, InstanceData)"]
-    TYPES["types (SvgAnimation, SvgModel)"]
-    ACCESS["accessibility (ShieldWallAdapter)"]
-    AI["ai"]
-    COLOR["color_blindness (ColorBlindMode)"]
-  end
+    cvkg_render_gpu[cvkg-render-gpu]
 
-  WGPU["wgpu 29"]
-  WINIT["winit"]
-  ACCESSKIT["accesskit / accesskit_winit"]
-  CORE["cvkg-core (ColorTheme, SceneUniforms)"]
-  COMPOSITOR["cvkg-compositor"]
-  SVG_FILTERS["cvkg-svg-filters"]
-  SVG_SER["cvkg-svg-serialize"]
-  RUNIC["cvkg-runic-text"]
-  LYON["lyon"]
-  USVG["usvg"]
-  NAGA["naga 28"]
-  GLAM["glam"]
-  IMAGE["image"]
-  LRU["lru"]
-  RAYON["rayon"]
-  FUTURES["futures"]
-  SWASH["swash"]
-  ROXMLTREE["roxmltree"]
-  SERDE["serde / serde_json"]
-  LOG["log"]
+    %% Workspace dependencies
+    cvkg_render_gpu --> cvkg_core[cvkg-core]
+    cvkg_render_gpu --> cvkg_compositor[cvkg-compositor]
+    cvkg_render_gpu --> cvkg_svg_filters[cvkg-svg-filters]
+    cvkg_render_gpu --> cvkg_svg_serialize[cvkg-svg-serialize]
+    cvkg_render_gpu --> cvkg_runic_text[cvkg-runic-text]
 
-  RENDERER --> WGPU
-  RENDERER --> WINIT
-  RENDERER --> CORE
-  RENDERER --> COMPOSITOR
-  RENDERER --> SUBSYS
-  RENDERER --> PASS
-  RENDERER --> DRAW
-  RENDERER --> MATERIAL
-  RENDERER --> VERTEX
-  RENDERER --> TYPES
-  RENDERER --> ACCESS
-  RENDERER --> COLOR
+    %% External dependencies
+    cvkg_render_gpu --> wgpu[wgpu 29]
+    cvkg_render_gpu --> winit[winit 0.30]
+    cvkg_render_gpu --> accesskit[accesskit 0.24]
+    cvkg_render_gpu --> accesskit_winit[accesskit_winit 0.33]
+    cvkg_render_gpu --> accesskit_unix["accesskit_unix 0.21<br/>optional, linux only"]
+    cvkg_render_gpu --> glam[glam 0.30]
+    cvkg_render_gpu --> naga[naga 29]
+    cvkg_render_gpu --> lyon[lyon 1.0]
+    cvkg_render_gpu --> usvg[usvg 0.47]
+    cvkg_render_gpu --> image[image 0.25]
+    cvkg_render_gpu --> lru[lru 0.12]
+    cvkg_render_gpu --> rayon[rayon 1.12]
+    cvkg_render_gpu --> swash[swash 0.2]
+    cvkg_render_gpu --> roxmltree[roxmltree 0.21]
+    cvkg_render_gpu --> serde[serde 1.0]
+    cvkg_render_gpu --> serde_json[serde_json 1.0]
+    cvkg_render_gpu --> futures[futures 0.3]
+    cvkg_render_gpu --> bytemuck[bytemuck 1.14]
+    cvkg_render_gpu --> log[log 0.4]
 
-  PASS --> WGPU
-  PASS --> NAGA
-  PASS --> PYRAMID
-  PASS --> FILTER
-
-  DRAW --> WGPU
-  DRAW --> LYON
-  DRAW --> USVG
-  DRAW --> SVG_SER
-  DRAW --> SVG_FILTERS
-  DRAW --> ROXMLTREE
-
-  FILTER --> SVG_FILTERS
-  FILTER --> WGPU
-
-  PYRAMID --> WGPU
-  PYRAMID --> IMAGE
-
-  ACCESS --> ACCESSKIT
-  ACCESS --> WINIT
-
-  SUBSYS --> CORE
-  SUBSYS --> RUNIC
-  SUBSYS --> SWASH
-  SUBSYS --> LYON
-  SUBSYS --> USVG
-
-  MATERIAL --> NAGA
-  MATERIAL --> WGPU
-
-  RENDERER --> GLAM
-  RENDERER --> LRU
-  RENDERER --> RAYON
-  RENDERER --> FUTURES
-  RENDERER --> SERDE
-  RENDERER --> LOG
+    %% Reverse dependents
+    cvkg_render_native[cvkg-render-native] --> cvkg_render_gpu
+    cvkg_test[cvkg-test] --> cvkg_render_gpu
+    cvkg_gallery[cvkg-gallery] --> cvkg_render_gpu
+    cvkg[cvkg] --> cvkg_render_gpu
+    berserker[berserker] --> cvkg_render_gpu
+    adele_web[demos/adele-web] --> cvkg_render_gpu
+    berserker_fire_web[demos/berserker-fire-web] --> cvkg_render_gpu
 ```
 
 ## Public API overview
@@ -200,8 +152,9 @@ fn main() {
 ## Build flags / features / env vars
 
 | Name | Type | Default | Effect |
-|---|---|---|---|
+|---|---|---|
 | `pillage` | Feature | off | Enables the `pillage` feature flag (crate-internal capability gate). |
 | `RUST_LOG` | Env var | — | Controls `log` crate output. Set to `cvkg_render_gpu=debug` for renderer diagnostics, or `wgpu=error` for GPU validation warnings. |
+| `WGPU_ADAPTER_NAME` | Env var | — | Non-wasm32 only. Case-insensitive substring match against adapter/driver name. Forces selection of a specific GPU adapter (e.g. `WGPU_ADAPTER_NAME=nvidia`). |
 | `WGPU_BACKEND` | Env var | — | Passed through to `wgpu`; e.g. `WGPU_BACKEND=vulkan` forces a specific backend. |
 | `naga` (build-dep) | Build dependency | — | Used in `build.rs` to validate WGSL shader source at compile time. No runtime effect. |

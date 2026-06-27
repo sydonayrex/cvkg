@@ -310,6 +310,10 @@ pub struct GpuRenderer {
         Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>,
     >,
 
+    // Error tracking (set via RendererErrorHandler trait)
+    pub(crate) render_error_count: u64,
+    pub(crate) has_fatal_error: bool,
+
     /// Bind group layout for reading blur output in glass composite pass.
     pub(crate) glass_output_bind_group_layout: wgpu::BindGroupLayout,
     /// Current material state -- draw calls are tagged with this material.

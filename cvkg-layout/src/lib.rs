@@ -23,6 +23,7 @@
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
 
 pub mod animation;
+pub mod error;
 pub mod focus;
 pub mod primitives;
 pub mod progressive;
@@ -30,6 +31,7 @@ pub mod spatial;
 pub mod taffy_engine;
 
 pub use cvkg_core::layout::EdgeInsets;
+pub use error::LayoutError;
 use cvkg_core::{LayoutCache, LayoutView};
 use std::cell::RefCell;
 use std::collections::HashSet;

@@ -287,6 +287,8 @@ impl ElapsedTime for DummyRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for DummyRenderer {}
+
 impl Renderer for DummyRenderer {
     fn push_vnode(&mut self, _rect: Rect, _name: &str) {}
     fn pop_vnode(&mut self) {}

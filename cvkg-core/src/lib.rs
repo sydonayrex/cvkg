@@ -40,6 +40,7 @@ pub mod future_views;
 pub mod security;
 
 pub use future_views::{HologramView, ParticleEmitter, StreamingText};
+pub use error_types::CvkgError;
 
 // P1-13: extracted modules
 pub mod asset;

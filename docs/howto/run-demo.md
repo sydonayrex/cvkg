@@ -14,7 +14,7 @@ Run one of the pre-built demo applications to see CVKG in action.
 ### Native Demo (berserker)
 
 ```bash
-cargo run -p berserker
+cargo run -p demos/berserker
 ```
 
 This launches the native tactical HUD application. A window should open showing the demo UI.

@@ -253,6 +253,8 @@ impl ElapsedTime for SoftwareRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for SoftwareRenderer {}
+
 impl Renderer for SoftwareRenderer {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.fill_rect_internal(rect, color);

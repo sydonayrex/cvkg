@@ -63,7 +63,7 @@ graph TD
         cvkg["cvkg<br/>(Umbrella facade)"]
         berserker["berserker<br/>(Native tactical HUD)"]
         adele-web["adele-web<br/>(Web design explorer)"]
-        niflheim-wasi["niflheim-wasi<br/>(WASI headless)"]
+        niflheim_wasi["niflheim-wasi<br/>(WASI headless)"]
         berserker-fire-web["berserker-fire-web<br/>(WASM stress test)"]
         cvkg-gallery["cvkg-gallery<br/>(Component gallery)"]
         cvkg-game-hud["cvkg-game-hud<br/>(Game HUD overlay)"]
@@ -197,8 +197,8 @@ graph TD
     adele-web --> cvkg-vdom
     adele-web --> cvkg-layout
 
-    niflheim-wasi --> cvkg-core
-    niflheim-wasi --> cvkg-components
+    niflheim_wasi --> cvkg-core
+    niflheim_wasi --> cvkg-components
 
     berserker-fire-web --> cvkg-core
     berserker-fire-web --> cvkg-render-gpu
@@ -234,7 +234,7 @@ graph TD
     class cvkg-render-native,cvkg-render-software platform
     class cvkg-cli,cvkg-webkit-server,cvkg-physics,cvkg-scheduler,cvkg-test,cvkg-macros services
     class cvkg-reflect,cvkg-materials,cvkg-accessibility,cvkg-certification,cvkg-telemetry,cvkg-icons meta
-    class cvkg,berserker,adele-web,niflheim-wasi,berserker-fire-web,cvkg-gallery,cvkg-game-hud,cvkg-export-raster demo
+    class cvkg,berserker,adele-web,niflheim_wasi,berserker-fire-web,cvkg-gallery,cvkg-game-hud,cvkg-export-raster demo
 ```
 
 ## Problem and Audience
@@ -255,7 +255,7 @@ git clone https://github.com/sydonayrex/cvkg.git && cd cvkg
 rustup target add wasm32-unknown-unknown
 cargo build --workspace
 cargo test --workspace
-cargo run -p berserker
+cargo run -p demos/berserker
 ```
 
 ## Workspace Crate Map
@@ -290,9 +290,8 @@ cargo run -p berserker
 | cvkg-certification | Cross-crate integration test suites |
 | cvkg-telemetry | Metrics collection |
 | cvkg-icons | Icon component library |
-| berserker | Native tactical HUD demo application |
+| demos/berserker | Native tactical HUD demo application |
 | demos/adele-web | Web design system explorer |
-| demos/niflheim-web | WASM component suite showcase |
 | demos/niflheim-wasi | Headless WASI validation target |
 | demos/berserker-fire-web | WASM stress test (procedural fire/lightning) |
 | cvkg-gallery | Component gallery browser |

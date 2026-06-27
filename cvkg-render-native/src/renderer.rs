@@ -197,6 +197,8 @@ impl cvkg_core::ElapsedTime for NativeRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for NativeRenderer {}
+
 impl cvkg_core::Renderer for NativeRenderer {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.gpu_ref().fill_rect(rect, color);

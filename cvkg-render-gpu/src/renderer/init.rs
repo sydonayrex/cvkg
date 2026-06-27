@@ -964,6 +964,10 @@ impl GpuRenderer {
             blend_bind_group_layout: None,
             flood_pipeline: None,
             copy_bind_group_layout: None,
+
+            // Error tracking
+            render_error_count: 0,
+            has_fatal_error: false,
         }
     }
 }

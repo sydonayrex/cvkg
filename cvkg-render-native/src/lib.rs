@@ -44,6 +44,7 @@
 pub mod asset_manager;
 pub mod audio;
 pub mod contracts;
+pub mod error;
 pub mod events;
 pub mod main_loop;
 pub mod regression;

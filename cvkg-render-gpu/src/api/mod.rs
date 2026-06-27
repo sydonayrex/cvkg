@@ -25,6 +25,22 @@ impl cvkg_core::ElapsedTime for GpuRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for GpuRenderer {
+    fn on_render_error(&mut self, error: &cvkg_core::CvkgError) {
+        log::error!("[GpuRenderer] {error}");
+        self.render_error_count += 1;
+    }
+
+    fn on_fatal_error(&mut self, error: &cvkg_core::CvkgError) {
+        log::error!("[GpuRenderer FATAL] {error}");
+        self.has_fatal_error = true;
+    }
+
+    fn has_error(&self) -> bool {
+        self.has_fatal_error
+    }
+}
+
 impl cvkg_core::Renderer for GpuRenderer {
     fn is_over_budget(&self) -> bool {
         self.frame_budget.allow_degradation

@@ -33,6 +33,7 @@
 
 mod kvasir;
 mod material;
+pub mod error;
 
 // Re-export material types for downstream users
 pub use material::builtins;

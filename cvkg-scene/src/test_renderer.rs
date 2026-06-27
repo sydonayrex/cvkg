@@ -154,6 +154,8 @@ impl ElapsedTime for TestRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for TestRenderer {}
+
 impl Renderer for TestRenderer {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.commands.push(Command::FillRect { rect, color });

@@ -183,6 +183,7 @@ impl RendererZIndex for MockRenderer {}
 impl RendererMaterial for MockRenderer {}
 impl RendererLayoutDebug for MockRenderer {}
 impl RendererPointer for MockRenderer {}
+impl RendererErrorHandler for MockRenderer {}
 
 impl Renderer for MockRenderer {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {

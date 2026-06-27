@@ -24,6 +24,8 @@ impl ElapsedTime for MockRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for MockRenderer {}
+
 impl Renderer for MockRenderer {
     fn fill_rect(&mut self, rect: Rect, _color: [f32; 4]) {
         self.commands.push(format!("FillRect({:?})", rect));

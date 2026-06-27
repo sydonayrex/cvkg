@@ -1,4 +1,5 @@
 use crate::*;
+use crate::error_types::CvkgError;
 
 pub trait ElapsedTime {
     /// Returns the cumulative time since the renderer started in seconds.
@@ -19,7 +20,35 @@ pub trait ElapsedTime {
 /// capability markers. Backends implement the monolithic `Renderer` trait.
 /// The sub-traits exist so consumer code can depend on only the capability
 /// slice it needs (e.g., `fn render<R: RendererShapes>(shapes: R)`).
-pub trait Renderer: ElapsedTime + Send {
+/// Callback interface for renderer error reporting.
+///
+/// Backends override `on_render_error` to intercept non-fatal errors that occur
+/// during drawing operations. The default implementation logs the error.
+///
+/// Design note: `render()` stays infallible to avoid proliferating `Result`
+/// through the entire View trait hierarchy. Errors that cannot be recovered from
+/// within a draw call are routed through this trait method instead.
+pub trait RendererErrorHandler {
+    /// Called when a non-fatal render error occurs during a draw operation.
+    /// The renderer continues operating. Backends should log and optionally
+    /// track error counts for health monitoring.
+    fn on_render_error(&mut self, error: &CvkgError) {
+        log::error!("[RenderError] {error}");
+    }
+
+    /// Called when a fatal error occurs that prevents further rendering.
+    /// The backend should attempt graceful shutdown.
+    fn on_fatal_error(&mut self, error: &CvkgError) {
+        log::error!("[Fatal] {error}");
+    }
+
+    /// Returns true if the backend is in an error state.
+    fn has_error(&self) -> bool {
+        false
+    }
+}
+
+pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     /// Requests that the renderer redraws as soon as possible.
     /// Used for continuous animations.
     fn request_redraw(&mut self) {}

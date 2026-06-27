@@ -206,12 +206,20 @@ pub fn compute_taffy_flex(
                 let _ = engine.tree.set_style(existing, style);
                 existing
             } else {
-                let new_node = engine.tree.new_leaf(style).unwrap();
+                let new_node = engine.tree.new_leaf(style)
+                    .unwrap_or_else(|e| {
+                        log::warn!("[Layout] new_leaf failed: {e}, using fallback node");
+                        taffy::NodeId::new(0)
+                    });
                 engine.node_map.insert(hash, new_node);
                 new_node
             }
         } else {
-            engine.tree.new_leaf(style).unwrap()
+            engine.tree.new_leaf(style)
+                .unwrap_or_else(|e| {
+                    log::warn!("[Layout] new_leaf failed: {e}, using fallback node");
+                    taffy::NodeId::new(0)
+                })
         };
         child_nodes.push(node);
     }
@@ -264,17 +272,32 @@ pub fn compute_taffy_flex(
     engine
         .tree
         .compute_layout(root_node, taffy::Size::MAX_CONTENT)
-        .unwrap();
+        .unwrap_or_else(|e| {
+            log::warn!("[Layout] compute_layout failed: {e}, using zero rects");
+        });
 
     let mut rects = Vec::with_capacity(subviews.len());
     for &node in &child_nodes {
-        let layout = engine.tree.layout(node).unwrap();
-        rects.push(Rect {
-            x: params.bounds.x + layout.location.x,
-            y: params.bounds.y + layout.location.y,
-            width: layout.size.width,
-            height: layout.size.height,
-        });
+        match engine.tree.layout(node) {
+            Ok(layout) => {
+                let rect = Rect {
+                    x: params.bounds.x + layout.location.x,
+                    y: params.bounds.y + layout.location.y,
+                    width: layout.size.width,
+                    height: layout.size.height,
+                };
+                if !rect.x.is_finite() || !rect.y.is_finite() || !rect.width.is_finite() || !rect.height.is_finite() {
+                    log::warn!("[Layout] NaN/Inf rect at node {:?}, using zero", node);
+                    rects.push(Rect::zero());
+                } else {
+                    rects.push(rect);
+                }
+            }
+            Err(e) => {
+                log::warn!("[Layout] layout failed for node {:?}: {e}, using zero", node);
+                rects.push(Rect::zero());
+            }
+        }
     }
 
     if params.container_hash == 0 {
