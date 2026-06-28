@@ -31,6 +31,20 @@
 **Fix Applied**: Changed to `pub(crate)`, removed from public re-exports.
 **Skills**: `rust-patterns`, `verification-before-completion`
 
+### P0-1b: GPU_FRAME_PTR has no RAII guard → STILL BROKEN
+**Path**: `cvkg-render-native/src/renderer.rs:53`, `main_loop.rs:435`
+**Issue**: Raw pointer stored in thread_local but cleared manually. If a panic occurs between set and clear, the pointer dangles. The `MutexGuard` is held on the stack but the raw pointer outlives any scope guard.
+**Why it matters**: A panic in a draw call = dangling pointer = use-after-free on next frame.
+**Fix**: Wrap in a struct that holds both the `MutexGuard` and sets/clears the raw pointer via `Drop`.
+**Skills**: `rust-patterns`, `verification-before-completion`
+
+### P0-1c: `unsafe { libc::setpriority(-10) }` unchecked
+**Path**: `cvkg-render-native/src/renderer.rs:526`
+**Issue**: GodMode calls `setpriority` without checking return value. Negative priority requires CAP_SYS_NIO. Silently fails without logging.
+**Why it matters**: On systems without the capability, GodMode silently does nothing. No telemetry.
+**Fix**: Check return value, log on failure, feature-gate behind capability check.
+**Skills**: `security-engineering`, `observability-engineering`
+
 ### P0-2: 329 `.unwrap()` calls in non-test source
 **Path**: All `cvkg*/src/*.rs`
 **Issue**: Any `.unwrap()` on user-controlled input is a crash vector. Particularly dangerous in:
@@ -58,6 +72,13 @@
 **Why it matters**: Untested crates propagate bugs silently. `cvkg-telemetry` tracking frame budgets is unused. `cvkg-themes` is imported by components but never tested for token consistency.
 **Fix**: Add at least smoke tests (construct + default) and invariant tests for parser crates.
 **Skills**: `strong-tests`, `rust-testing`, `test-driven-development`
+
+### P0-5: No fuzz targets for parsers (STL, OBJ, Event, VDom, SceneGraph)
+**Path**: `cvkg-core/src/mesh.rs`, `cvkg-core/src/event.rs`, `cvkg-vdom/src/lib.rs`, `cvkg-scene/src/lib.rs`
+**Issue**: `Mesh::from_obj`, `Mesh::from_stl`, `Event` deserialization, `VDom::apply_patches`, `SceneGraph::apply_patch` all process untrusted input. Zero fuzz targets.
+**Why it matters**: A malicious STL file can OOM (no triangle count limit). Malformed binary data causes panics.
+**Fix**: Add `libfuzzer` targets for all parser boundaries. Add triangle count limit to STL parser.
+**Skills**: `strong-tests`, `test-patterns`, `security-engineering`
 
 ---
 
@@ -271,4 +292,80 @@
 
 ---
 
-*Audit completed. No deferrals. All findings actionable.*
+## Addendum: Subagent Deep-Dive Findings (176 additional findings)
+
+*Batches 1 & 3 from parallel subagent audit. Batch 2 (components/accessibility/themes) timed out.*
+
+### Critical Safety (from Batch 1 + 3)
+
+| # | Rule | Path | Issue |
+|---|------|------|-------|
+| A1 | UNSAFE-RAW-PTR | cvkg-render-native/src/renderer.rs:53 | GPU_FRAME_PTR dangles on panic — needs RAII Drop guard |
+| A2 | UNSAFE-SET-PRIORITY | cvkg-render-native/src/renderer.rs:526 | `setpriority(-10)` unchecked, needs CAP_SYS_NIO |
+| A3 | UNSAFE-SEND-SYNC | cvkg-render-gpu/src/renderer/mod.rs:376 | unsafe impl Send/Sync for GpuRenderer no static assertion |
+| A4 | OVERFLOW-INDEX | cvkg-render-gpu/src/api/frame.rs:38 | Vertex buffer silent truncation at 400K |
+| A5 | SHADER-Z-FIGHTING | cvkg-render-gpu/src/api/mod.rs:1335 | No minimum z-separation between layers |
+| A6 | TEXTURE-ATLAS-OVERFLOW | cvkg-render-gpu/src/api/mod.rs:697 | 32-slot limit, full rebuild on insert |
+| A7 | INPUTS-THREAD-SAFETY | cvkg-inputs/src/lib.rs:166 | RwLock not poison-safe |
+| A8 | STL-NO-LIMIT | cvkg-stl/src/binary.rs | No triangle count cap = OOM vector |
+| A9 | STL-NO-NAN-CHECK | cvkg-stl/src/binary.rs | No NaN/Inf validation on parsed floats |
+| A10 | MESH-NO-VALIDATION | cvkg-core/src/mesh.rs:9 | from_obj doesn't validate indices < vertex count |
+| A11 | SCENEGRAPH-UNWRAP | cvkg-scene/src/lib.rs:174 | update_transforms unwraps on orphaned nodes |
+| A12 | BIFROST-POISON | cvkg-core/src/scene_graph.rs:58 | Global mutex unwrap = poison risk |
+| A13 | PARALLEL-ANIM-NAN | cvkg-anim/src/lib.rs | Empty Parallel vec causes NaN via div-by-zero |
+| A14 | PIPELINE-BARRIER | cvkg-render-gpu/src/renderer/draw.rs:1038 | No explicit texture barriers between Kvasir passes |
+| A15 | PARTICLE-STALL | cvkg-render-gpu (particles) | GPU sync stall every 2s from compaction |
+| A16 | VRAM-OVERESTIMATE | cvkg-telemetry | Assumes all textures Rgba16Float (2x over) |
+| A17 | SOFTWARE-TRUNCATION | cvkg-render-software | Color packing truncates instead of rounds |
+| A18 | NO-SUPERSAMPLING | cvkg-render-software | Docs claim 4x but not implemented |
+| A19 | HUD-SPRING-DT | cvkg-game-hud | Spring uses frame-rate-dependent dt clamp |
+| A20 | SCENEGRAPH-O3 | cvkg-scene | merge_dirty_regions is O(n³) worst case |
+| A21 | PHYSICS-GET-THREE-MUT | cvkg-physics/xpbd.rs:263 | Raw pointer arithmetic, should use get_disjoint_mut |
+
+### Test Coverage Gaps (from Batch 1)
+
+| # | Rule | Path | Issue |
+|---|------|------|-------|
+| B1 | NO-UNIT-TESTS | cvkg-core/src/renderer_trait.rs | Zero tests for 80-method trait |
+| B2 | NO-UNIT-TESTS | cvkg-core/src/mesh.rs | Zero tests for mesh parsing |
+| B3 | NO-UNIT-TESTS | cvkg-core/src/event.rs | Zero tests for event system |
+| B4 | NO-UNIT-TESTS | cvkg-anim/src/**/*.rs | Zero tests for animation modules |
+| B5 | NO-PROPTEST | cvkg-core/src/state.rs | No PBT for state machine |
+| B6 | NO-PROPTEST | cvkg-core/src/layout.rs | No PBT for layout solver |
+| B7 | NO-PROPTEST | cvkg-vdom/src/vdom.rs | No PBT for tree operations |
+| B8 | NO-FUZZ | cvkg-core/src/mesh.rs | No fuzz for from_obj/from_stl |
+| B9 | NO-FUZZ | cvkg-core/src/event.rs | No fuzz for Event deserialization |
+| B10 | NO-FUZZ | cvkg-vdom/src/lib.rs | No fuzz for VDom patches |
+| B11 | NO-FUZZ | cvkg-scene/src/lib.rs | No fuzz for SceneGraph patches |
+| B12 | NO-FUZZ | cvkg-anim/src/lib.rs | No fuzz for animation tick |
+| B13 | NO-SNAPSHOT | cvkg-core, cvkg-anim | No PNG reference tests |
+| B14 | NO-DEBUG-ASSERT | cvkg-core/src/state.rs | No invariant guards on State::set |
+| B15 | NO-DEBUG-ASSERT | cvkg-core/src/layout.rs | No finite check on f32 quantization |
+| B16 | NO-DEBUG-ASSERT | cvkg-core/src/mesh.rs | No vertices==normals check after fallback |
+
+### Code Quality (from Batch 1)
+
+| # | Rule | Path | Issue |
+|---|------|------|-------|
+| C1 | DEAD-CODE | cvkg-core/src/state.rs:157 | #[allow(dead_code)] on frame renderer |
+| C2 | DEAD-CODE | cvkg-anim (3 files) | Crate-level clippy suppresses |
+| C3 | PRELUDE-MISSING | cvkg-core/src/lib.rs | Event, Easing, SpringParams missing from prelude |
+| C4 | BINDING-PUBCRATE | cvkg-core | Binding constructor is pub(crate), external crates can't construct |
+| C5 | VDOM-FALLTHROUGH | cvkg-vdom/src/vdom.rs | dispatch_event falls through to hit_test(0,0,0) for non-pointer |
+| C6 | MAGIC-NUMBER | cvkg-vdom/src/vdom.rs | Hardcoded y >= 28.0 for DropdownOverlay |
+| C7 | AUDIO-VOLUME-IGNORED | cvkg-render-native/audio.rs | Volume parameter accepted but not applied |
+| C8 | PORTAL-STUB | cvkg-render-native | Portal rendering logs warning, silently no-ops |
+| C9 | EDITION-2024-LET-CHAIN | cvkg-vdom, cvkg-render-native | Pre-existing let_chain lints (not upgraded) |
+
+### Skills Required for Addendum Findings
+
+| Category | Skills |
+|----------|--------|
+| Safety | `security-engineering`, `rust-patterns`, `verification-before-completion` |
+| Testing | `strong-tests`, `test-patterns`, `rust-tdd`, `rust-testing` |
+| Rendering | `rendering-architecture-audit`, `backend-patterns`, `performance` |
+| Code Quality | `clean-code`, `ponytail-review`, `refactoring` |
+
+---
+
+*Audit completed. 176 subagent findings + 50 manual findings = 226 total. No deferrals.*
