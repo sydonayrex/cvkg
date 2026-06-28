@@ -524,7 +524,13 @@ impl cvkg_core::Renderer for NativeRenderer {
             log::info!("ENTERING GOD MODE: Activating Berserker Determinism (High Priority)");
             #[cfg(target_os = "linux")]
             unsafe {
-                let _ = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
+                let ret = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
+                if ret != 0 {
+                    log::warn!(
+                        "GodMode: setpriority failed (errno: {}) — need CAP_SYS_NIO",
+                        std::io::Error::last_os_error()
+                    );
+                }
             }
         } else {
             #[cfg(target_os = "linux")]
