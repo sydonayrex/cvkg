@@ -34,6 +34,8 @@ impl View for HringrPagination {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HringrPagination");
+        renderer.set_aria_role("navigation");
+        renderer.set_aria_label("Pagination");
 
         let btn_w = 32.0;
         let spacing = 4.0;
@@ -199,6 +201,8 @@ impl View for BifrostColorPicker {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "BifrostColorPicker");
+        renderer.set_aria_role("slider");
+        renderer.set_aria_label("Color picker");
 
         // 1. Rainbow Track (Bifrost Bridge)
         let track_h = rect.height * 0.2;
@@ -284,6 +288,9 @@ impl<T: Clone + View> View for GeriTransfer<T> {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "GeriTransfer");
+        renderer.set_aria_role("list");
+        renderer.set_aria_label("Transfer list");
+
         renderer.fill_rounded_rect(rect, 4.0, theme::surface_elevated());
 
         let half_w = rect.width / 2.0;

@@ -325,6 +325,8 @@ impl View for Dropdown {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Dropdown");
+        renderer.set_aria_role("combobox");
+        renderer.set_aria_label("Dropdown selection");
 
         let id_hash = {
             use std::hash::{Hash, Hasher};

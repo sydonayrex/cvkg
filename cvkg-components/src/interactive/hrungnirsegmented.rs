@@ -50,6 +50,9 @@ impl View for HrungnirSegmented {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        renderer.set_aria_role("radiogroup");
+        renderer.set_aria_label("Segmented control");
+
         // Glass platter background
         let radius = match self.style {
             SegmentedStyle::Capsule => rect.height / 2.0,

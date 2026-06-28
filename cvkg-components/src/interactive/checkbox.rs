@@ -280,6 +280,8 @@ impl<V: View> View for Tabs<V> {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Tabs");
+        renderer.set_aria_role("tablist");
+        renderer.set_aria_label("Tab navigation");
         let tab_height = 36.0;
         for (idx, (label, _)) in self.tabs.iter().enumerate() {
             let tab_rect = Rect {
