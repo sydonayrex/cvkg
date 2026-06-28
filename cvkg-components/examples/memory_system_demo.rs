@@ -1,8 +1,8 @@
 // Memory System Demo
 
 use cvkg_components::MemoryView;
-use cvkg_core::{AppState, KnowledgeFragment, Rect, Renderer, State, View};
-use cvkg_render_gpu::GpuRenderer;
+use cvkg_core::{KnowledgeFragment, KnowledgeState, Rect, Renderer, State, View};
+use cvkg_render_gpu::SurtrRenderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,8 +13,8 @@ use winit::{
 
 struct MemoryApp {
     window: Option<Arc<Window>>,
-    renderer: Option<GpuRenderer>,
-    memory_state: State<AppState>,
+    renderer: Option<SurtrRenderer>,
+    memory_state: State<KnowledgeState>,
 }
 
 impl ApplicationHandler for MemoryApp {
@@ -29,12 +29,12 @@ impl ApplicationHandler for MemoryApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone())).expect("Failed to initialize GPU");
         self.window = Some(window);
         self.renderer = Some(renderer);
 
         // Seed some initial knowledge
-        let mut initial_state = AppState::default();
+        let mut initial_state = KnowledgeState::default();
         initial_state.remember(KnowledgeFragment {
             id: "1".to_string(),
             summary: "Project Bifrost Security Protocol".to_string(),
@@ -91,7 +91,7 @@ impl ApplicationHandler for MemoryApp {
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id()).expect("Failed to begin frame");
 
                 // ── Background ──
                 renderer.fill_rect(
@@ -158,7 +158,7 @@ fn main() {
     let mut app = MemoryApp {
         window: None,
         renderer: None,
-        memory_state: State::new(AppState::default()),
+        memory_state: State::new(KnowledgeState::default()),
     };
     event_loop.run_app(&mut app).unwrap();
 }

@@ -528,8 +528,8 @@ mod smoke_tests {
     }
 
     #[test]
-    fn minimap_default_constructs() {
-        let mm = Minimap::default();
+    fn minimap_new_constructs() {
+        let mm = Minimap::new();
         assert_eq!(mm.size, 120.0);
     }
 }

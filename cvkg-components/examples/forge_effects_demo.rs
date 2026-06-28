@@ -2,8 +2,8 @@
 
 use cvkg_core::{Rect, Renderer};
 use cvkg_render_gpu::{
-    ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, GpuRenderer, Node,
-    NodeId, Role, ShieldWallAdapter, Tree, TreeId, TreeUpdate,
+    ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role,
+    ShieldWallAdapter, SurtrRenderer, Tree, TreeId, TreeUpdate,
 };
 use std::sync::Arc;
 use winit::{
@@ -15,7 +15,7 @@ use winit::{
 
 struct ForgeEffectsApp {
     window: Option<Arc<Window>>,
-    renderer: Option<GpuRenderer>,
+    renderer: Option<SurtrRenderer>,
     shieldwall: Option<ShieldWallAdapter>,
 }
 
@@ -23,16 +23,15 @@ struct ShieldWallActivation(NodeId);
 impl ActivationHandler for ShieldWallActivation {
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
         let root_id = self.0;
-        let ak_root_id = NodeId(root_id.0);
         Some(TreeUpdate {
-            nodes: vec![(ak_root_id, {
+            nodes: vec![(root_id, {
                 let mut n = Node::new(Role::Window);
                 n.set_label("CVKG Forge Effects Demo");
                 n
             })],
-            tree: Some(Tree::new(ak_root_id)),
+            tree: Some(Tree::new(root_id)),
             tree_id: TreeId::ROOT,
-            focus: ak_root_id,
+            focus: root_id,
         })
     }
 }
@@ -60,19 +59,18 @@ impl ApplicationHandler for ForgeEffectsApp {
                 .unwrap(),
         );
 
-        let root_id = cvkg_core::NodeId::new();
-        let ak_root_id = NodeId(root_id.0);
+        let root_id = NodeId(1);
         let shieldwall = ShieldWallAdapter::with_direct_handlers(
             event_loop,
             &window,
-            ShieldWallActivation(ak_root_id),
+            ShieldWallActivation(root_id),
             ShieldWallAction,
             ShieldWallDeactivation,
         );
 
         window.set_visible(true);
 
-        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone())).expect("Failed to initialize GPU");
         self.window = Some(window);
         self.renderer = Some(renderer);
         self.shieldwall = Some(shieldwall);
@@ -88,7 +86,7 @@ impl ApplicationHandler for ForgeEffectsApp {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id()).expect("Failed to begin frame");
 
                 // ── Background Void ──
                 renderer.fill_rect(

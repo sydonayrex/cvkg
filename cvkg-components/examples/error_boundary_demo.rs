@@ -1,8 +1,8 @@
 // Error Boundary Demo
 
-use cvkg_components::{Color, ComponentErrorBoundary};
+use cvkg_components::{Color, ErrorBoundary};
 use cvkg_core::{ComponentErrorState, Rect, Renderer, State, View};
-use cvkg_render_gpu::GpuRenderer;
+use cvkg_render_gpu::SurtrRenderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,7 +13,7 @@ use winit::{
 
 struct ErrorApp {
     window: Option<Arc<Window>>,
-    renderer: Option<GpuRenderer>,
+    renderer: Option<SurtrRenderer>,
     error_state: State<ComponentErrorState>,
 }
 
@@ -29,7 +29,7 @@ impl ApplicationHandler for ErrorApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
+        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone())).expect("Failed to initialize GPU");
         self.window = Some(window);
         self.renderer = Some(renderer);
     }
@@ -59,7 +59,7 @@ impl ApplicationHandler for ErrorApp {
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id()).expect("Failed to begin frame");
 
                 // ── Background ──
                 renderer.fill_rect(
@@ -84,7 +84,7 @@ impl ApplicationHandler for ErrorApp {
                 let content = Color::new(0.0, 0.8, 1.0, 0.5); // Cyan semi-transparent
 
                 // Wrap in boundary
-                let boundary = ComponentErrorBoundary::new(self.error_state.clone(), content);
+                let boundary = ErrorBoundary::new(self.error_state.clone(), content);
 
                 boundary.render(renderer, error_rect);
 

@@ -919,7 +919,7 @@ mod smoke_tests {
 
     #[test]
     fn id_tracker_constructs() {
-        let tracker = IdTracker::new();
+        let mut tracker = IdTracker::new();
         assert_eq!(tracker.register("test"), "test");
     }
 
