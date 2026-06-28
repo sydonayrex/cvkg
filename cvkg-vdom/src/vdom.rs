@@ -137,6 +137,23 @@ impl VDom {
         }
         let _span = tracing::info_span!("vdom_apply_patches").entered();
         for patch in patches {
+            // Debug invariant: patch targets must exist (except Create)
+            if !matches!(patch, VDomPatch::Create(_)) {
+                let target_id = match &patch {
+                    VDomPatch::Update { id, .. } => *id,
+                    VDomPatch::Remove(id) => *id,
+                    VDomPatch::Replace { id, .. } => *id,
+                    VDomPatch::Move { id, .. } => *id,
+                    VDomPatch::SetRoot(id) => *id,
+                    VDomPatch::ClearHandlers(id) => *id,
+                    VDomPatch::Create(_) => unreachable!(),
+                };
+                debug_assert!(
+                    self.nodes.contains_key(&target_id),
+                    "patch targets non-existent node {:?}",
+                    target_id
+                );
+            }
             match patch {
                 VDomPatch::Create(node) => {
                     for child_id in &node.children {

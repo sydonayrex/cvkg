@@ -30,6 +30,14 @@ impl Mesh {
                 indices: mesh.indices,
             });
         }
+        // Debug invariant: every mesh must have matching vertex/normal counts
+        for m in &meshes {
+            debug_assert_eq!(
+                m.vertices.len(),
+                m.normals.len(),
+                "Mesh vertex/normal count mismatch after normal generation"
+            );
+        }
         Ok(meshes)
     }
     pub fn from_stl(data: &[u8]) -> anyhow::Result<Self> {
