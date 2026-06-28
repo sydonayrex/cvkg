@@ -175,3 +175,49 @@ impl<T: Clone + Send + Sync + 'static> Binding<T> {
         self.version.fetch_add(1, Ordering::Release);
     }
 }
+
+#[cfg(test)]
+mod proptest_tests {
+    use super::*;
+    use proptest::prelude::*;
+    use std::sync::atomic::AtomicUsize;
+
+    proptest! {
+        #[test]
+        fn test_state_version_monotonic(values in prop::collection::vec(any::<u32>(), 1..100)) {
+            let state = State::new(0u32);
+            let mut last_version = 0u64;
+            for v in values {
+                state.set(v);
+                let current = state.version.load(Ordering::Relaxed);
+                prop_assert!(current > last_version, "version must increase: {} <= {}", current, last_version);
+                last_version = current;
+            }
+        }
+
+        #[test]
+        fn test_state_subscriber_called_on_set(
+            vals in prop::collection::vec(any::<u32>(), 1..50)
+        ) {
+            let state = State::new(0u32);
+            let call_count = Arc::new(AtomicUsize::new(0));
+            let cc = call_count.clone();
+            state.subscribe(move |_| { cc.fetch_add(1, Ordering::Relaxed); });
+            let total = vals.len();
+            for v in vals {
+                state.set(v);
+            }
+            prop_assert_eq!(call_count.load(Ordering::Relaxed), total,
+                "subscriber must be called once per set()");
+        }
+
+        #[test]
+        fn test_state_value_roundtrip(vals in prop::collection::vec(any::<u32>(), 1..50)) {
+            let state = State::new(0u32);
+            for v in vals {
+                state.set(v);
+                prop_assert_eq!(state.get(), v);
+            }
+        }
+    }
+}
