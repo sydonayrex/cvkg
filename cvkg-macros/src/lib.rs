@@ -457,3 +457,12 @@ pub fn cvkg_model(input: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    #[test]
+    fn test_compiles() {
+        // Proc-macro crates cannot unit test macro expansion in-process.
+        // This placeholder verifies the crate compiles and the test harness works.
+    }
+}

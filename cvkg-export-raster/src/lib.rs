@@ -41,3 +41,34 @@ pub fn encode_gif(frames: &[CapturedFrame], fps: u16) -> Result<Vec<u8>, String>
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn captured_frame_constructs() {
+        let frame = CapturedFrame {
+            width: 100,
+            height: 100,
+            rgba: vec![0u8; 100 * 100 * 4],
+        };
+        assert_eq!(frame.width, 100);
+        assert_eq!(frame.height, 100);
+        assert_eq!(frame.rgba.len(), 40_000);
+    }
+
+    #[test]
+    fn encode_png_produces_valid_output() {
+        let frame = CapturedFrame {
+            width: 10,
+            height: 10,
+            rgba: vec![255u8; 10 * 10 * 4],
+        };
+        let result = encode_png(&frame);
+        assert!(result.is_ok());
+        let png_bytes = result.unwrap();
+        // PNG magic bytes: 0x89 0x50 0x4E 0x47
+        assert_eq!(&png_bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+    }
+}

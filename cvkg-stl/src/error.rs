@@ -13,6 +13,20 @@ pub enum StlError {
     InvalidAscii(String),
     /// Face with != 3 vertices encountered.
     NonTriangleFace,
+    /// Triangle count exceeds safe limit.
+    TooManyTriangles {
+        /// The triangle count declared in the file.
+        count: u32,
+        /// The maximum allowed triangle count.
+        max: u32,
+    },
+    /// Parsed float is NaN or Inf.
+    InvalidFloat {
+        /// The invalid float value.
+        value: f32,
+        /// Description of where the value was found.
+        context: String,
+    },
 }
 
 impl fmt::Display for StlError {
@@ -23,6 +37,12 @@ impl fmt::Display for StlError {
             Self::NotAscii => write!(f, "not ASCII STL"),
             Self::InvalidAscii(msg) => write!(f, "invalid ASCII STL: {msg}"),
             Self::NonTriangleFace => write!(f, "face with != 3 vertices"),
+            Self::TooManyTriangles { count, max } => {
+                write!(f, "triangle count {count} exceeds maximum {max}")
+            }
+            Self::InvalidFloat { value, context } => {
+                write!(f, "invalid float ({value}) in {context}")
+            }
         }
     }
 }

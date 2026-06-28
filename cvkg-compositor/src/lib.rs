@@ -34,3 +34,29 @@ pub use template::{RenderTemplate, TemplateError};
 
 /// Current version of the cvkg-compositor crate.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn compositor_engine_constructs() {
+        let engine = CompositorEngine::new();
+        let _ = engine; // just verify it constructs without panicking
+    }
+
+    #[test]
+    fn command_buckets_default_is_empty() {
+        let buckets = CommandBuckets::default();
+        assert!(buckets.is_empty());
+        assert_eq!(buckets.total_count(), 0);
+    }
+
+    #[test]
+    fn damage_info_default() {
+        let damage = DamageInfo::default();
+        assert!(damage.dirty_layers.is_empty());
+        assert_eq!(damage.frame_generation, 0);
+        assert!(!damage.full_rebuild_needed);
+    }
+}
