@@ -133,7 +133,7 @@ impl VDom {
     #[tracing::instrument(skip(self, patches))]
     pub fn apply_patches(&mut self, patches: Vec<VDomPatch>) {
         if !patches.is_empty() {
-            println!("VDom: Applying {} patches", patches.len());
+            tracing::debug!("VDom: Applying {} patches", patches.len());
         }
         let _span = tracing::info_span!("vdom_apply_patches").entered();
         for patch in patches {

@@ -12,12 +12,16 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::wayland::EventLoopBuilderExtWayland;
 use winit::window::Window;
 
-// Thread-local raw pointer to the locked GpuRenderer for the duration of one render pass.
-// CONTRACT: Set to non-null only while the MutexGuard is live on the call stack.
-// All NativeRenderer draw calls use this pointer to avoid per-call mutex lock overhead.
-// SAFETY: The pointer is valid because the MutexGuard is held for the entire duration the pointer is set.
 thread_local! {
-    pub static GPU_FRAME_PTR: std::cell::Cell<*mut cvkg_render_gpu::GpuRenderer> =
+    /// Thread-local raw pointer to the locked GpuRenderer for the duration of one render pass.
+    ///
+    /// # Safety
+    /// This pointer is ONLY valid when a `MutexGuard<GpuRenderer>` is held on the same thread's
+    /// call stack. It is set at the start of `begin_frame` and cleared at the end of `end_frame`.
+    /// Accessing the pointer when no guard is held is undefined behavior.
+    ///
+    /// PRIVATE: Not `pub` to prevent external crates from creating dangling references.
+    pub(crate) static GPU_FRAME_PTR: std::cell::Cell<*mut cvkg_render_gpu::GpuRenderer> =
         const { std::cell::Cell::new(std::ptr::null_mut()) };
 }
 
@@ -563,6 +567,6 @@ impl cvkg_core::Renderer for NativeRenderer {
 
     fn print(&mut self) {
         log::info!("PRINT_BRIDGE: Spooling mission status to native printer...");
-        println!("[BRIDGE] PRINTER_READY // SPOOLING_DATA...");
+        log::debug!("[BRIDGE] PRINTER_READY // SPOOLING_DATA...");
     }
 }

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "cvkg",
     "cvkg-core",
+    "cvkg-vdom",
     "cvkg-scene",
     "cvkg-layout",
     "cvkg-anim",
@@ -41,7 +42,7 @@ members = [
 [workspace.package]
 version = "0.2.15"
 edition = "2024"
-license = "EPL-2.0"
+license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 [workspace.dependencies]

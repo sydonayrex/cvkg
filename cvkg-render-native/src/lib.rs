@@ -64,7 +64,7 @@ pub use contracts::{
 pub use events::{convert_ime_event, convert_keyboard_event, convert_mouse_event, load_icon};
 pub use main_loop::{AppEvent, ShieldWall};
 pub use regression::VisualRegressionTracker;
-pub use renderer::{GPU_FRAME_PTR, NativeRenderer};
+pub use renderer::NativeRenderer;
 pub use window::{
     MonitorConfig, MultiMonitorManager, NativeWindowWrapper, ResizeHitTest, SafeAreaInsets,
     WindowCapabilityMatrix, WindowData, WindowManager, WindowState, WindowStateDetector,
