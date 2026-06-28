@@ -1,7 +1,7 @@
 use crate::*;
 use std::sync::Arc;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Size {
     pub width: f32,
     pub height: f32,

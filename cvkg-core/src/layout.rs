@@ -149,12 +149,37 @@ impl LayoutCache {
     }
 
     pub fn get_size(&self, view_hash: u64, proposal: SizeProposal) -> Option<Size> {
+        debug_assert!(
+            proposal.width.map_or(true, |v| v.is_finite()),
+            "layout proposal width is not finite: {:?}",
+            proposal.width
+        );
+        debug_assert!(
+            proposal.height.map_or(true, |v| v.is_finite()),
+            "layout proposal height is not finite: {:?}",
+            proposal.height
+        );
         let pw = (proposal.width.unwrap_or(-1.0) * 100.0) as u32;
         let ph = (proposal.height.unwrap_or(-1.0) * 100.0) as u32;
         self.size_cache.get(&(view_hash, pw, ph)).copied()
     }
 
     pub fn set_size(&mut self, view_hash: u64, proposal: SizeProposal, size: Size) {
+        debug_assert!(
+            proposal.width.map_or(true, |v| v.is_finite()),
+            "layout proposal width is not finite: {:?}",
+            proposal.width
+        );
+        debug_assert!(
+            proposal.height.map_or(true, |v| v.is_finite()),
+            "layout proposal height is not finite: {:?}",
+            proposal.height
+        );
+        debug_assert!(
+            size.width.is_finite() && size.height.is_finite(),
+            "layout size is not finite: {:?}",
+            size
+        );
         let pw = (proposal.width.unwrap_or(-1.0) * 100.0) as u32;
         let ph = (proposal.height.unwrap_or(-1.0) * 100.0) as u32;
         self.size_cache.insert((view_hash, pw, ph), size);

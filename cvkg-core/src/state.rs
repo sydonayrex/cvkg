@@ -66,6 +66,11 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
     /// Set the value via arc_swap (fast path). Notifies subscribers.
     /// Respects conflict resolution strategy (PriorityWins skips lower-priority writes).
     pub fn set(&self, value: T) {
+        // Debug-only invariant: version must never overflow in practice.
+        debug_assert!(
+            self.version.load(Ordering::Acquire) < u64::MAX,
+            "State version overflow"
+        );
         #[cfg(not(target_arch = "wasm32"))]
         {
             let result = stm::atomically(|tx| {
