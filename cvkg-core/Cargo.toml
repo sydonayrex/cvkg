@@ -100,3 +100,6 @@ version = "0.4"
 
 [dev-dependencies]
 proptest = { workspace = true }
+
+[dependencies.tracing]
+version = "0.1"

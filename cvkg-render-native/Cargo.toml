@@ -58,6 +58,12 @@ version = "0.2.15"
 [dependencies.cvkg-themes]
 version = "0.2.15"
 
+[dependencies.cvkg-telemetry]
+version = "0.2.15"
+
+[dependencies.tracing]
+version = "0.1"
+
 [dependencies.image]
 version = "0.25"
 features = ["jpeg"]

@@ -67,6 +67,7 @@ cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.15" }
 cvkg-compositor = { path = "cvkg-compositor", version = "0.2.15" }
 cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.15" }
 cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.15" }
+cvkg-telemetry = { path = "cvkg-telemetry", version = "0.2.15" }
 proptest = "1"
 cvkg-cli = { path = "cvkg-cli", version = "0.2.15" }
 cvkg = { path = "cvkg", version = "0.2.15" }

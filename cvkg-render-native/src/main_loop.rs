@@ -507,6 +507,16 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     telemetry.layout_over_budget = !self.frame_budget.is_within_budget(1)
                         || telemetry.layout_budget_remaining_ms < 0.0;
 
+                    // Record frame budget telemetry
+                    if telemetry.frame_over_budget {
+                        log::warn!(
+                            "[Telemetry] Frame budget exceeded by {:.2}ms (frame={:.2}ms budget={:.2}ms)",
+                            telemetry.frame_time_ms - telemetry.frame_budget_ms,
+                            telemetry.frame_time_ms,
+                            telemetry.frame_budget_ms
+                        );
+                    }
+
                     log::info!(
                         "[Native] Frame timings: layout={:.2}ms state={:.2}ms draw={:.2}ms submit={:.2}ms total={:.2}ms",
                         telemetry.layout_time_ms,
