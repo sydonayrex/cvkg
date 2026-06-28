@@ -119,7 +119,7 @@ impl View for BifrostTabs {
             let font_size = 14.0;
 
             let text_color = if i == self.selected_index {
-                [1.0, 1.0, 0.0, alpha] // neon yellow
+                [0.0, 0.0, 0.0, alpha] // black — visible against bloom-lit tab
             } else {
                 [1.0, 1.0, 1.0, alpha]
             };

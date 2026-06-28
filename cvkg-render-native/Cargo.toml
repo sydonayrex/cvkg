@@ -38,12 +38,13 @@ version = "0.33"
 [target.'cfg(target_os = "linux")'.dependencies.accesskit_unix]
 version = "0.21"
 default-features = false
+features = ["tokio"]
 
 [dependencies.arc-swap]
 version = "1.9"
 
 [dependencies.arboard]
-version = "=3.4.0"
+version = "3.6"
 
 [dependencies.cvkg-core]
 version = "0.2.15"
@@ -91,5 +92,5 @@ default-features = false
 version = "0.30"
 
 [dependencies.rodio]
-version = "0.21"
+version = "0.22"
 

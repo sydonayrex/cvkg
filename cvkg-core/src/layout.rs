@@ -29,6 +29,7 @@ pub struct LayoutCache {
     /// to be treated as invalid without eagerly clearing the entire cache.
     generation: u64,
     /// Opaque pointer to the active layout engine (e.g. Taffy)
+    /// Opaque pointer to the active layout engine (e.g. Taffy)
     pub engine: Option<Box<dyn std::any::Any + Send + Sync>>,
     /// Opaque pointer to the active animation orchestrator
     pub animators: Option<Box<dyn std::any::Any + Send + Sync>>,

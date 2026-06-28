@@ -33,7 +33,7 @@ path = "src/lib.rs"
 version = "0.2.15"
 
 [dependencies.glam]
-version = "0.30"
+version = "0.33"
 features = [
     "serde",
     "bytemuck",

@@ -145,14 +145,14 @@ version = "1.47.2"
 version = "0.3"
 
 [dev-dependencies.cvkg-render-native]
-version = "0.2.15"
+version = ">=0.2.14"
 
 
 [dev-dependencies.cvkg-macros]
-version = "0.2.15"
+version = ">=0.2.14"
 
 [dev-dependencies.cvkg-render-gpu]
-version = "0.2.15"
+version = ">=0.2.14"
 
 [dev-dependencies.winit]
 version = "0.30"

@@ -1,0 +1,36 @@
+[package]
+name = "cvkg-inputs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CVKG HID interconnect — gamepad, keyboard, mouse, touch input backends"
+
+[features]
+default = ["gilrs"]
+gilrs = ["dep:gilrs"]
+evdev = ["dep:evdev", "dep:input", "dep:glob"]
+rumble = ["gilrs"]
+serde = ["dep:serde"]
+
+[dependencies]
+cvkg-core = { workspace = true }
+cfg-if = "1"
+tracing = "0.1"
+
+# Gamepad (cross-platform)
+gilrs = { version = "0.11", optional = true }
+
+# Serialization
+serde = { version = "1", features = ["derive"], optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = { version = "0.12", optional = true }
+input = { version = "0.8", optional = true }
+glob = { version = "0.3", optional = true }
+
+[dev-dependencies]
+cvkg-test = { workspace = true }
+proptest = "1"
+serde_json = "1"
+toml = "0.8"

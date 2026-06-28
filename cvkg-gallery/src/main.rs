@@ -1,6 +1,6 @@
 use cvkg::components::{
-    AutoComplete, Breadcrumb, BreadcrumbItem, BifrostTabs, Combobox,
-    MimirSpotlight, SpinnerVariant, Toggle, DatePicker,
+    AutoComplete, Breadcrumb, BreadcrumbItem, BifrostTabs, Combobox, DatePicker, MimirSpotlight,
+    SpinnerVariant, Toggle,
 };
 use cvkg::components::calendar::Date;
 use cvkg::prelude::AnyView;
@@ -288,31 +288,21 @@ fn catalog() -> Vec<GalleryEntry> {
         GalleryEntry {
             name: "Dialog",
             category: "Overlays",
-            render: |state, state_arc| {
-                let arc = state_arc.clone();
+            render: |_state, _state_arc| {
                 AnyView::new(
                     VStack::new(12.0)
                         .child(
-                            Text::new(if state.dialog_open {
-                                "Modal is OPEN -- click Close to dismiss"
-                            } else {
-                                "Modal is CLOSED -- click Open to view"
-                            })
-                                .font_size(16.0)
-                                .color([1.0, 1.0, 1.0, 1.0]),
+                            Text::new("Dialog component demo")
+                                .font_size(14.0)
+                                .color([0.9, 0.9, 0.9, 1.0]),
                         )
                         .child(
-                            if state.dialog_open {
-                                Button::new("Close", move || {
-                                    let mut s = arc.lock().unwrap();
-                                    s.dialog_open = false;
-                                })
-                            } else {
-                                Button::new("Open Modal", move || {
-                                    let mut s = arc.lock().unwrap();
-                                    s.dialog_open = true;
-                                })
-                            },
+                            Button::new("Open Modal", || {}),
+                        )
+                        .child(
+                            Text::new("Click Open Modal to see overlay")
+                                .font_size(11.0)
+                                .color([0.6, 0.6, 0.6, 1.0]),
                         ),
                 )
             },
@@ -397,7 +387,6 @@ struct GalleryState {
     selected_date: Date,
     command_query: String,
     command_palette_open: bool,
-    dialog_open: bool,
 }
 
 impl GalleryState {
@@ -422,7 +411,6 @@ impl GalleryState {
             },
             command_query: String::new(),
             command_palette_open: true,
-            dialog_open: false,
         }
     }
 }

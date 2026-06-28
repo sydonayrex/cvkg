@@ -64,7 +64,7 @@ version = "0.24"
 version = "0.33"
 
 [dependencies.bytemuck]
-version = "1.14"
+version = "1.25"
 features = ["derive"]
 
 [dependencies.cvkg-core]
@@ -83,7 +83,7 @@ version = "0.2.15"
 version = "0.3"
 
 [dependencies.glam]
-version = "0.30"
+version = "0.33"
 features = [
     "serde",
     "bytemuck",
@@ -97,7 +97,7 @@ features = ["jpeg"]
 version = "0.4"
 
 [dependencies.lru]
-version = "0.12"
+version = "0.18"
 
 [dependencies.lyon]
 version = "1.0"
@@ -146,11 +146,11 @@ version = "0.4.0"
 
 [dev-dependencies.cvkg-vdom]
 path = "../cvkg-vdom"
-version = "0.2.15"
+version = ">=0.2.14"
 
 [dev-dependencies.cvkg-anim]
 path = "../cvkg-anim"
-version = "0.2.15"
+version = ">=0.2.14"
 
 [build-dependencies.naga]
 version = "29"
@@ -160,7 +160,7 @@ features = [
 ]
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "openbsd", target_os = "netbsd"))'.dependencies.accesskit_unix]
-version = "0.21"
+version = "0.22"
 optional = true
 
 [features]

@@ -33,20 +33,12 @@ impl Mesh {
         Ok(meshes)
     }
     pub fn from_stl(data: &[u8]) -> anyhow::Result<Self> {
-        let mut cursor = std::io::Cursor::new(data);
-        let stl = stl_io::read_stl(&mut cursor)?;
-        let vertices: Vec<[f32; 3]> = stl.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();
-        let mut indices = Vec::new();
-        for face in stl.faces {
-            indices.push(face.vertices[0] as u32);
-            indices.push(face.vertices[1] as u32);
-            indices.push(face.vertices[2] as u32);
-        }
-        let normals = vec![[0.0, 0.0, 1.0]; vertices.len()];
-        Ok(Mesh {
-            vertices,
-            normals,
-            indices,
+        let stl = cvkg_stl::parse_bytes(data)
+            .map_err(|e| anyhow::anyhow!("STL parse failed: {e}"))?;
+        Ok(Self {
+            vertices: stl.vertices,
+            normals: stl.normals,
+            indices: stl.indices,
         })
     }
 }

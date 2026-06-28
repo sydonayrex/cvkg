@@ -36,11 +36,11 @@ version = "1.0"
 version = "1.9"
 
 [dependencies.bytemuck]
-version = "1.14"
+version = "1.25"
 features = ["derive"]
 
 [dependencies.glam]
-version = "0.30"
+version = "0.33"
 features = [
     "serde",
     "bytemuck",
@@ -50,7 +50,7 @@ features = [
 version = "0.4"
 
 [dependencies.once_cell]
-version = "1.19"
+version = "1.21"
 
 [dependencies.serde]
 version = "1.0"
@@ -59,11 +59,12 @@ features = ["derive"]
 [dependencies.serde_json]
 version = "1.0"
 
+[dependencies.cvkg-stl]
+workspace = true
+
 [dependencies.cvkg-runic-text]
 version = "0.2.15"
 
-[dependencies.stl_io]
-version = "0.7"
 
 [dependencies.thiserror]
 version = "2.0"

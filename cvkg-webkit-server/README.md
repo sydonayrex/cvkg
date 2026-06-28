@@ -121,7 +121,7 @@ Accepted message types from the client: `Patch`, `Event`, `State` (deserialized 
 - HMR file watching polls at 500 ms intervals. Rapid successive changes may be coalesced into a single reload event.
 - The HMR broadcast channel is created with a default capacity. Slow or disconnected clients may cause broadcast sends to fail silently (logged at error level).
 - `tick()` uses `catch_unwind`, which requires the WASM module to be `UnwindSafe`. Modules that poison the session store will return an error but the session is still reinserted.
-- `wgpu` is an optional dependency. The `backend-wgpu` feature enables `webgpu` and `wgsl` wgpu features, but the crate does not expose a wgpu device or surface directly.
+- `wgpu` was removed as a dependency in 0.2.15. Rendering is handled by `cvkg-render-gpu` (which uses wgpu 29), not by this crate. The `backend-native`, `backend-wgpu`, and `backend-webgl2` features no longer exist; only `backend-wasm` remains.
 
 ## Build flags / features / env vars
 
@@ -129,11 +129,7 @@ Accepted message types from the client: `Patch`, `Event`, `State` (deserialized 
 
 | Feature | Description |
 |---|---|
-| `backend-native` | Enables `wgpu/metal`, `wgpu/dx12`, `wgpu/vulkan-portability` for native GPU rendering. |
 | `backend-wasm` | No additional dependencies. Targets WASM output. |
-| `backend-webgl2` | Enables `wgpu/webgl` for WebGL2 support. |
-| `backend-wgpu` | Enables `wgpu/webgpu` and `wgpu/wgsl` for WebGPU support. |
-| *(default)* | No features enabled. `wgpu` is optional and not compiled by default. |
 
 ### Environment variables (binary only)
 

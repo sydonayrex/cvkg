@@ -39,6 +39,7 @@ graph TD
     subgraph Platform ["Platform"]
         cvkg-render-native["cvkg-render-native<br/>(winit window/events)"]
         cvkg-render-software["cvkg-render-software<br/>(CPU fallback)"]
+        cvkg-inputs["cvkg-inputs<br/>(HID/gamepad/touch)"]
     end
 
     subgraph Services ["Services"]
@@ -102,6 +103,7 @@ graph TD
     cvkg-render-native --> cvkg-themes
     cvkg-render-software --> cvkg-core
     cvkg-render-software --> cvkg-runic-text
+    cvkg-inputs --> cvkg-core
     cvkg-cli --> cvkg-core
     cvkg-cli --> cvkg-physics
     cvkg-cli --> cvkg-anim
@@ -241,13 +243,27 @@ Interactive node-graph editor. `FlowGraph` stores nodes and edges. `FlowCanvas` 
 
 Desktop windowing via `winit`. Event loop, window lifecycle, clipboard (`arboard`), audio (`rodio`). Accessibility via `accesskit`.
 
+### Inputs (cvkg-inputs)
+
+HID interconnect for gamepads, keyboards, mice, and touch. Three backends:
+
+- **gilrs** (default): Cross-platform gamepad via the `gilrs` crate. Supports connection/disconnection events, axis/button mapping to standard layout (Xbox/PS/Switch), and force-feedback rumble.
+- **evdev** (Linux-only): Raw `/dev/input/event*` access for keyboards, mice, and gamepads. Enables low-latency input and device enumeration.
+- **noop**: Headless/testing fallback that produces no events.
+
+The `InputBackend` trait abstracts over all backends. `InputSystem` owns one or more backends and aggregates their events into a shared `InputState` (`Arc<RwLock<InputState>>`). The `ActionMap` provides a configurable layer for binding physical inputs to abstract actions ("jump", "move_x") with per-action sensitivity, axis inversion, and chord (multi-input combo) support. Deadzone math (`deadzone::apply`, `deadzone::radial`) handles stick drift compensation.
+
+Conversion functions `into_cvkg_event()` and `from_cvkg_event()` bridge `cvkg-inputs` events to `cvkg_core::Event` variants (`GamepadConnected`, `GamepadDisconnected`, `GamepadButton`, `GamepadAxis`).
+
+Feature flags: `gilrs` (default), `evdev`, `rumble`, `serde`.
+
 ### CLI (cvkg-cli)
 
 Development tool with `cvkg` binary. Dev server with file watching, WebSocket hot-reload, project scaffolding, asset pipeline, token export, and raster export.
 
 ### WebKit Server (cvkg-webkit-server)
 
-axum-based HTTP/WebSocket server for hot-reload workflows. WASM execution via `wasmtime`. Features: `backend-native`, `backend-wasm`, `backend-webgl2`, `backend-wgpu`.
+axum-based HTTP/WebSocket server for hot-reload workflows. WASM execution via `wasmtime`. Feature: `backend-wasm`. Rendering is handled by `cvkg-render-gpu` (wgpu 29), not this crate.
 
 ### Physics (cvkg-physics)
 

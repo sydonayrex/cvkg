@@ -11,8 +11,8 @@ description = "Automated visual regression testing harness for CVKG"
 cvkg-core = { path = "../cvkg-core", version = "0.2.15" }
 cvkg-render-gpu = { path = "../cvkg-render-gpu", version = "0.2.15" }
 image = "0.25"
-bytemuck = "1.14"
-pollster = "0.3"
+bytemuck = "1.25"
+pollster = "0.4"
 log = "0.4"
 env_logger = "0.11"
 tokio = { version = "1.0", features = ["full"] }
@@ -35,4 +35,4 @@ arbitrary = { version = "1.3", features = ["derive"] }
 # Fuzz testing support
 libfuzzer-sys = "0.4"
 cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.2.15" }
-glam = { version = "0.30" }
+glam = { version = "0.33" }

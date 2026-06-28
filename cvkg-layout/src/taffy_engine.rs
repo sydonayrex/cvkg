@@ -2,10 +2,24 @@ use cvkg_core::{Alignment, Distribution, LayoutCache, LayoutView, Rect, Size, Si
 use std::collections::HashMap;
 use taffy::prelude::*;
 
+/// Wrapper that makes TaffyTree Send+Sync.
+/// taffy 0.11's CompactLengthInner uses *const () for NaN-boxing (tag, not a real pointer).
+/// ponytail: unsafe Send+Sync — the pointer is a data tag, never dereferenced.
+pub struct SyncTaffyTree(taffy::TaffyTree);
+unsafe impl Send for SyncTaffyTree {}
+unsafe impl Sync for SyncTaffyTree {}
+impl std::ops::Deref for SyncTaffyTree {
+    type Target = taffy::TaffyTree;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl std::ops::DerefMut for SyncTaffyTree {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
 /// The central Taffy engine that computes flexbox and grid layouts.
 /// Stored opaquely inside `cvkg_core::LayoutCache::engine`.
 pub struct TaffyLayoutEngine {
-    pub tree: taffy::TaffyTree,
+    pub tree: SyncTaffyTree,
     pub node_map: HashMap<u64, taffy::NodeId>,
 }
 
@@ -19,7 +33,7 @@ impl TaffyLayoutEngine {
     /// Creates a new TaffyLayoutEngine.
     pub fn new() -> Self {
         Self {
-            tree: taffy::TaffyTree::new(),
+            tree: SyncTaffyTree(taffy::TaffyTree::new()),
             node_map: HashMap::new(),
         }
     }
@@ -40,21 +54,21 @@ impl TaffyLayoutEngine {
 
 pub fn taffy_alignment(alignment: cvkg_core::Alignment) -> Option<taffy::AlignItems> {
     match alignment {
-        cvkg_core::Alignment::Leading => Some(taffy::AlignItems::Start),
-        cvkg_core::Alignment::Center => Some(taffy::AlignItems::Center),
-        cvkg_core::Alignment::Trailing => Some(taffy::AlignItems::End),
-        cvkg_core::Alignment::Top => Some(taffy::AlignItems::Start),
-        cvkg_core::Alignment::Bottom => Some(taffy::AlignItems::End),
+        cvkg_core::Alignment::Leading => Some(taffy::AlignItems::START),
+        cvkg_core::Alignment::Center => Some(taffy::AlignItems::CENTER),
+        cvkg_core::Alignment::Trailing => Some(taffy::AlignItems::END),
+        cvkg_core::Alignment::Top => Some(taffy::AlignItems::START),
+        cvkg_core::Alignment::Bottom => Some(taffy::AlignItems::END),
     }
 }
 
 pub fn taffy_distribution(dist: cvkg_core::Distribution) -> Option<taffy::JustifyContent> {
     match dist {
-        cvkg_core::Distribution::Leading => Some(taffy::JustifyContent::Start),
-        cvkg_core::Distribution::Center => Some(taffy::JustifyContent::Center),
-        cvkg_core::Distribution::Trailing => Some(taffy::JustifyContent::End),
-        cvkg_core::Distribution::SpaceBetween => Some(taffy::JustifyContent::SpaceBetween),
-        cvkg_core::Distribution::Fill => Some(taffy::JustifyContent::Stretch),
+        cvkg_core::Distribution::Leading => Some(taffy::JustifyContent::START),
+        cvkg_core::Distribution::Center => Some(taffy::JustifyContent::CENTER),
+        cvkg_core::Distribution::Trailing => Some(taffy::JustifyContent::END),
+        cvkg_core::Distribution::SpaceBetween => Some(taffy::JustifyContent::SPACE_BETWEEN),
+        cvkg_core::Distribution::Fill => Some(taffy::JustifyContent::STRETCH),
         _ => None,
     }
 }
@@ -177,25 +191,25 @@ pub fn compute_taffy_flex(
             taffy::Style {
                 size: taffy::Size {
                     width: if params.dir == taffy::FlexDirection::Row {
-                        taffy::Dimension::Auto
+                        taffy::Dimension::auto()
                     } else {
-                        taffy::Dimension::Length(size.width)
+                        taffy::Dimension::length(size.width)
                     },
                     height: if params.dir == taffy::FlexDirection::Column {
-                        taffy::Dimension::Auto
+                        taffy::Dimension::auto()
                     } else {
-                        taffy::Dimension::Length(size.height)
+                        taffy::Dimension::length(size.height)
                     },
                 },
                 flex_grow: flex_weight,
-                flex_basis: taffy::Dimension::Percent(0.0),
+                flex_basis: taffy::Dimension::percent(0.0),
                 ..Default::default()
             }
         } else {
             taffy::Style {
                 size: taffy::Size {
-                    width: taffy::Dimension::Length(size.width),
-                    height: taffy::Dimension::Length(size.height),
+                    width: taffy::Dimension::length(size.width),
+                    height: taffy::Dimension::length(size.height),
                 },
                 ..Default::default()
             }
@@ -224,7 +238,7 @@ pub fn compute_taffy_flex(
         child_nodes.push(node);
     }
 
-    let gap_val = taffy::LengthPercentage::Length(params.spacing);
+    let gap_val = taffy::LengthPercentage::length(params.spacing);
     let container_style = taffy::Style {
         display: taffy::Display::Flex,
         flex_direction: params.dir,
@@ -232,19 +246,19 @@ pub fn compute_taffy_flex(
             width: if params.dir == taffy::FlexDirection::Row {
                 gap_val
             } else {
-                taffy::LengthPercentage::Length(0.0)
+                taffy::LengthPercentage::length(0.0)
             },
             height: if params.dir == taffy::FlexDirection::Column {
                 gap_val
             } else {
-                taffy::LengthPercentage::Length(0.0)
+                taffy::LengthPercentage::length(0.0)
             },
         },
         align_items: taffy_alignment(params.alignment),
         justify_content: taffy_distribution(params.distribution),
         size: taffy::Size {
-            width: taffy::Dimension::Length(params.bounds.width),
-            height: taffy::Dimension::Length(params.bounds.height),
+            width: taffy::Dimension::length(params.bounds.width),
+            height: taffy::Dimension::length(params.bounds.height),
         },
         ..Default::default()
     };
@@ -796,8 +810,8 @@ impl Grid {
             let style = if let Some(p) = placement.as_ref() {
                 taffy::Style {
                     size: taffy::Size {
-                        width: taffy::Dimension::Auto,
-                        height: taffy::Dimension::Auto,
+                        width: taffy::Dimension::auto(),
+                        height: taffy::Dimension::auto(),
                     },
                     grid_column: taffy::Line {
                         start: taffy::prelude::line((p.column + 1) as i16),
@@ -812,8 +826,8 @@ impl Grid {
             } else {
                 taffy::Style {
                     size: taffy::Size {
-                        width: taffy::Dimension::Auto,
-                        height: taffy::Dimension::Auto,
+                        width: taffy::Dimension::auto(),
+                        height: taffy::Dimension::auto(),
                     },
                     ..Default::default()
                 }
@@ -836,15 +850,15 @@ impl Grid {
 
         let container_style = taffy::Style {
             display: taffy::Display::Grid,
-            grid_template_columns: self.columns.iter().copied().map(taffy_track).collect(),
-            grid_template_rows: self.rows.iter().copied().map(taffy_track).collect(),
+            grid_template_columns: self.columns.iter().copied().map(|t| taffy::GridTemplateComponent::Single(taffy_track(t))).collect(),
+            grid_template_rows: self.rows.iter().copied().map(|t| taffy::GridTemplateComponent::Single(taffy_track(t))).collect(),
             gap: taffy::Size {
-                width: taffy::LengthPercentage::Length(self.column_gap),
-                height: taffy::LengthPercentage::Length(self.row_gap),
+                width: taffy::LengthPercentage::length(self.column_gap),
+                height: taffy::LengthPercentage::length(self.row_gap),
             },
             size: taffy::Size {
-                width: taffy::Dimension::Length(bounds.width),
-                height: taffy::Dimension::Length(bounds.height),
+                width: taffy::Dimension::length(bounds.width),
+                height: taffy::Dimension::length(bounds.height),
             },
             ..Default::default()
         };

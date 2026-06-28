@@ -54,7 +54,7 @@ version = "0.2.15"
 version = "0.2.15"
 
 [dependencies.glam]
-version = "0.30"
+version = "0.33"
 features = [
     "serde",
     "bytemuck",
@@ -68,8 +68,8 @@ features = ["derive"]
 version = "1.0"
 
 [dev-dependencies]
-cvkg-components = { path = "../cvkg-components", version = "0.2.15" }
-cvkg-vdom = { path = "../cvkg-vdom", version = "0.2.15" }
+cvkg-components = { path = "../cvkg-components", version = ">=0.2.14" }
+cvkg-vdom = { path = "../cvkg-vdom", version = ">=0.2.14" }
 
 [dev-dependencies.insta]
 version = "1.34"

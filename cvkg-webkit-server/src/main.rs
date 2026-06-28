@@ -282,7 +282,7 @@ async fn handle_socket(mut ws: WebSocket) {
         }
     });
     if let Err(e) = ws
-        .send(axum::extract::ws::Message::Text(handshake.to_string()))
+        .send(axum::extract::ws::Message::Text(handshake.to_string().into()))
         .await
     {
         error!("Failed to send handshake: {}", e);
@@ -332,7 +332,7 @@ async fn handle_hmr_socket(mut ws: WebSocket, state: Arc<AppState>) {
         }
     });
     if let Err(e) = ws
-        .send(axum::extract::ws::Message::Text(handshake.to_string()))
+        .send(axum::extract::ws::Message::Text(handshake.to_string().into()))
         .await
     {
         error!("Failed to send HMR handshake: {}", e);
@@ -345,7 +345,7 @@ async fn handle_hmr_socket(mut ws: WebSocket, state: Arc<AppState>) {
         tokio::select! {
             // Listen for broadcast messages from the watcher
             Ok(msg_str) = rx.recv() => {
-                if let Err(e) = ws.send(axum::extract::ws::Message::Text(msg_str)).await {
+                if let Err(e) = ws.send(axum::extract::ws::Message::Text(msg_str.into())).await {
                     error!("Failed to send HMR update: {}", e);
                     break;
                 }
@@ -360,7 +360,7 @@ async fn handle_hmr_socket(mut ws: WebSocket, state: Arc<AppState>) {
                     Some(Ok(axum::extract::ws::Message::Text(text))) if text.contains("ping") => {
                         let _ = ws
                             .send(axum::extract::ws::Message::Text(
-                                r#"{"type":"pong"}"#.to_string(),
+                                r#"{"type":"pong"}"#.into(),
                             ))
                             .await;
                     }

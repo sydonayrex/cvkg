@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 cvkg-core.workspace = true
 cvkg-render-gpu.workspace = true
-glam = "0.29"
+glam = "0.33"
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

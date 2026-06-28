@@ -30,14 +30,14 @@ name = "cvkg_runic_text"
 path = "src/lib.rs"
 
 [dependencies.bytemuck]
-version = "1.14"
+version = "1.25"
 features = ["derive"]
 
 [dependencies.fontdb]
 version = "0.23"
 
 [dependencies.glam]
-version = "0.30"
+version = "0.33"
 features = [
     "serde",
     "bytemuck",
@@ -47,7 +47,7 @@ features = [
 version = "0.4"
 
 [dependencies.lru]
-version = "0.12"
+version = "0.18"
 
 [dependencies.rustybuzz]
 version = "0.20"

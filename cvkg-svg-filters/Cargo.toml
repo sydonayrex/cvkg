@@ -8,10 +8,10 @@ description = "WGPU-based SVG filter primitives for CVKG"
 
 [dependencies]
 wgpu = "29"
-bytemuck = { version = "1.14", features = ["derive"] }
+bytemuck = { version = "1.25", features = ["derive"] }
 thiserror = "2.0"
 log = "0.4"
 usvg = "0.47"
 
 [dev-dependencies]
-strict-num = "0.1"
+strict-num = "0.2"

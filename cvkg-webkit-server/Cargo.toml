@@ -26,17 +26,7 @@ repository = "https://github.com/sydonayrex/cvkg"
 resolver = "2"
 
 [features]
-backend-native = [
-    "wgpu/metal",
-    "wgpu/dx12",
-    "wgpu/vulkan-portability",
-]
 backend-wasm = []
-backend-webgl2 = ["wgpu/webgl"]
-backend-wgpu = [
-    "wgpu/webgpu",
-    "wgpu/wgsl",
-]
 default = []
 
 [lib]
@@ -62,14 +52,14 @@ version = "1.0"
 version = "1.9"
 
 [dependencies.axum]
-version = "0.7"
+version = "0.8"
 features = ["ws"]
 
 [dependencies.bytes]
 version = "1.0"
 
 [dependencies.clap]
-version = "4.4"
+version = "4.6"
 features = [
     "derive",
     "env",
@@ -88,10 +78,10 @@ version = "0.3.32"
 version = "0.1"
 
 [dependencies.metrics]
-version = "0.23"
+version = "0.24"
 
 [dependencies.metrics-exporter-prometheus]
-version = "0.15"
+version = "0.18"
 
 [dependencies.mime_guess]
 version = "2.0.5"
@@ -118,14 +108,14 @@ features = [
 default-features = false
 
 [dependencies.tower]
-version = "0.4"
+version = "0.5"
 features = [
     "util",
     "limit",
 ]
 
 [dependencies.tower-http]
-version = "0.5"
+version = "0.7"
 features = [
     "cors",
     "fs",
@@ -137,7 +127,7 @@ features = [
 ]
 
 [dependencies.tower_governor]
-version = "0.3"
+version = "0.8"
 
 [dependencies.tracing]
 version = "0.1"
@@ -151,7 +141,7 @@ version = "0.20.0"
 features = ["derive"]
 
 [dependencies.wasmtime]
-version = "44.0"
+version = "46"
 features = [
     "cranelift",
     "runtime",
@@ -159,19 +149,14 @@ features = [
 ]
 
 [dependencies.wasmtime-wasi]
-version = "44.0"
+version = "46"
 features = ["p1"]
-
-[dependencies.wgpu]
-version = "0.20"
-features = []
-optional = true
 
 [dependencies.wry]
 version = "0.55.0"
 
 [dev-dependencies.reqwest]
-version = "0.12"
+version = "0.13"
 features = ["json"]
 
 [dev-dependencies.tokio]

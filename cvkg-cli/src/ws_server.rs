@@ -97,7 +97,7 @@ async fn agent_ws(State(state): State<AppState>, ws: WebSocketUpgrade) -> impl I
 async fn send_ws(ws: &mut WebSocket, msg: &WsMessage) {
     match serde_json::to_string(msg) {
         Ok(json) => {
-            if let Err(e) = ws.send(Message::Text(json)).await {
+            if let Err(e) = ws.send(Message::Text(json.into())).await {
                 error!("Failed to send WS message: {}", e);
             }
         }

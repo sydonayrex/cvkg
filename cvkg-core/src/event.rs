@@ -168,6 +168,36 @@ pub enum Event {
         y: f32,
         path: String,
     },
+    /// Gamepad connected.
+    GamepadConnected {
+        /// Gamepad device ID.
+        id: u64,
+        /// Human-readable name.
+        name: String,
+    },
+    /// Gamepad disconnected.
+    GamepadDisconnected {
+        /// Gamepad device ID.
+        id: u64,
+    },
+    /// Gamepad button pressed or released.
+    GamepadButton {
+        /// Gamepad device ID.
+        id: u64,
+        /// Button index.
+        button: u32,
+        /// Pressure in [0.0, 1.0].
+        pressure: f32,
+    },
+    /// Gamepad axis moved.
+    GamepadAxis {
+        /// Gamepad device ID.
+        id: u64,
+        /// Axis index.
+        axis: u32,
+        /// Axis value in [-1.0, 1.0].
+        value: f32,
+    },
 }
 
 impl Event {
@@ -238,6 +268,10 @@ impl Event {
             Self::GesturePinch { .. } => "gesturepinch",
             Self::GestureSwipe { .. } => "gestureswipe",
             Self::FileDrop { .. } => "filedrop",
+            Self::GamepadConnected { .. } => "gamepadconnected",
+            Self::GamepadDisconnected { .. } => "gamepaddisconnected",
+            Self::GamepadButton { .. } => "gamepadbutton",
+            Self::GamepadAxis { .. } => "gamepadaxis",
         }
     }
 }

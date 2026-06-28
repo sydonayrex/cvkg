@@ -1,0 +1,15 @@
+[package]
+name = "cvkg-stl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "STL file parser — binary and ASCII formats, zero external deps"
+
+[lib]
+name = "cvkg_stl"
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]

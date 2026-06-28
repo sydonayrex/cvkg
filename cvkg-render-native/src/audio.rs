@@ -5,13 +5,13 @@ use std::sync::Arc;
 // =============================================================================
 
 /// Cross-platform audio engine using rodio for spatialized sound cues.
-/// Uses rodio 0.21 API: OutputStreamBuilder::open_default_stream() returns
-/// OutputStream directly. Playback via Sink::try_new(&stream.mixer()) + append.
+/// Rodio 0.22 API: DeviceSinkBuilder::open_default_sink() → MixerDeviceSink.
+/// Playback via rodio::play(&mixer, cursor).
 pub struct RodioAudioEngine {
-    _stream: rodio::OutputStream,
+    sink: rodio::MixerDeviceSink,
 }
 
-// OutputStream is not Send+Sync on macOS due to CoreAudio, but we only use it
+// MixerDeviceSink is not Send+Sync on some platforms, but we only use it
 // from the main thread. The AudioEngine trait requires Send+Sync for use in
 // App struct fields, which is safe here because we never move it across threads.
 unsafe impl Send for RodioAudioEngine {}
@@ -20,10 +20,10 @@ unsafe impl Sync for RodioAudioEngine {}
 impl RodioAudioEngine {
     /// Create a new audio engine. Falls back to None if audio init fails.
     pub fn new() -> Option<Self> {
-        match rodio::OutputStreamBuilder::open_default_stream() {
-            Ok(stream) => {
+        match rodio::DeviceSinkBuilder::open_default_sink() {
+            Ok(sink) => {
                 log::info!("[Native] Audio engine initialized (rodio)");
-                Some(Self { _stream: stream })
+                Some(Self { sink })
             }
             Err(e) => {
                 log::warn!("[Native] Audio init failed (no sound): {}", e);
@@ -50,7 +50,7 @@ impl cvkg_core::AudioEngine for RodioAudioEngine {
     fn play_buffer(&self, data: &[u8], _volume: f32) {
         use std::io::Cursor;
         let cursor = Cursor::new(data.to_vec());
-        let mixer = self._stream.mixer();
+        let mixer = self.sink.mixer();
         match rodio::play(mixer, cursor) {
             Ok(_sink) => {}
             Err(e) => log::warn!("[Native] Audio play failed: {}", e),

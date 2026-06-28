@@ -2,6 +2,9 @@
 name = "cvkg-export-raster"
 version.workspace = true
 edition.workspace = true
+description = "Raster image export (PNG, GIF) for the CVKG UI framework"
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 image = { workspace = true, features = ["png"] }
