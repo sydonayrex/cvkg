@@ -20,7 +20,7 @@ where
     let guard = match subs.lock() {
         Ok(g) => g,
         Err(poisoned) => {
-            eprintln!("[invoke_subscribers_safely] subscriber lock poisoned, recovering");
+            tracing::warn!("[invoke_subscribers_safely] subscriber lock poisoned, recovering");
             poisoned.into_inner()
         }
     };
