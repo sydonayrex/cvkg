@@ -1695,6 +1695,7 @@ impl GpuRenderer {
     /// Upload gradient stops as a 32x1 RGBA8 texture.
     /// RGB = stop color (linear-ish sRGB from the component), A = stop position (0-255 mapped to 0-1).
     /// The texture is cached by hash; stops are only re-uploaded when the hash changes.
+    #[allow(clippy::collapsible_if)]
     pub(crate) fn upload_gradient_stops(&mut self, stops: &[[f32; 4]]) {
         if stops.is_empty() {
             return;
@@ -1733,10 +1734,13 @@ impl GpuRenderer {
             let a = (stop[3].clamp(0.0, 1.0) * 255.0).round() as u8;
             // Store position in the alpha channel (4th byte)
             // The color goes in RGB (bytes 0-2), position in byte 3
-            data[i * 4 + 0] = r;
-            data[i * 4 + 1] = g;
-            data[i * 4 + 2] = b;
-            data[i * 4 + 3] = a;
+            #[allow(clippy::identity_op)]
+            {
+                data[i * 4 + 0] = r;
+                data[i * 4 + 1] = g;
+                data[i * 4 + 2] = b;
+                data[i * 4 + 3] = a;
+            }
         }
 
         // Create or reuse texture

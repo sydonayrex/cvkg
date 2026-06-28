@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_if)]
 use serde::{Deserialize, Serialize};
 
 /// Base attribute structure used throughout design system data

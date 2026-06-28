@@ -1,4 +1,4 @@
-#![allow(dead_code, clippy::approx_constant)]
+#![allow(dead_code, clippy::approx_constant, clippy::assign_op_pattern, clippy::too_many_arguments, clippy::identity_op, clippy::needless_return, clippy::let_and_return, clippy::unnested_or_patterns)]
 
 use cvkg::prelude::*;
 use cvkg_components::context_menu::{ContextMenu, ContextMenuItem};
@@ -16,7 +16,7 @@ fn get_triangle_point(pts: &[[f32; 2]; 4], mut t: f32) -> [f32; 2] {
     while t < 0.0 {
         t += total_len;
     }
-    t = t % total_len;
+    t %= total_len;
     let segment_idx = t.floor() as usize;
     let local_t = t.fract();
     let p_start = pts[segment_idx];

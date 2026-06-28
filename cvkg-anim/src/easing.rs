@@ -120,12 +120,6 @@ impl Easing {
     }
 }
 
-impl Default for Easing {
-    fn default() -> Self {
-        Easing::EaseInOut
-    }
-}
-
 /// Convenience: ease-in-out evaluation.
 pub fn ease_in_out(t: f32) -> f32 {
     Easing::EaseInOut.evaluate(t)

@@ -439,10 +439,10 @@ fn spawn_file_watcher(state: Arc<AppState>) {
                     let p = entry.path();
                     if p.is_dir() {
                         scan_dir(&p.to_string_lossy(), files);
-                    } else if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            files.insert(p, modified);
-                        }
+                    } else if let Ok(metadata) = entry.metadata()
+                        && let Ok(modified) = metadata.modified()
+                    {
+                        files.insert(p, modified);
                     }
                 }
             }

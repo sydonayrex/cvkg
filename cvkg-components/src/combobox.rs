@@ -119,9 +119,69 @@ impl View for Combobox {
         unreachable!()
     }
 
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(220.0),
+            height: 38.0,
+        }
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Combobox");
         renderer.set_aria_role("combobox");
+
+        // ── Click on trigger → toggle open ──
+        let on_change_click = self.on_change.clone();
+        let options_click = self.options.clone();
+        let rect_clone = rect;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |evt| {
+                if let Event::PointerClick { x, y, .. } = evt {
+                    if x >= rect_clone.x
+                        && x <= rect_clone.x + rect_clone.width
+                        && y >= rect_clone.y
+                        && y <= rect_clone.y + rect_clone.height
+                    {
+                        let state = load_system_state();
+                        let currently_open = state
+                            .get_component_state::<bool>(COMBO_OPEN_HASH)
+                            .and_then(|v| v.read().ok().map(|g| *g))
+                            .unwrap_or(false);
+                        if currently_open {
+                            // Close and confirm current selection
+                            let sel: usize = state
+                                .get_component_state::<usize>(COMBO_SELECTED_HASH)
+                                .and_then(|v| v.read().ok().map(|g| *g))
+                                .unwrap_or(usize::MAX);
+                            let sel_option = if sel < options_click.len() {
+                                Some(sel)
+                            } else {
+                                None
+                            };
+                            update_system_state(|s| {
+                                let mut s = s.clone();
+                                s.set_component_state(COMBO_OPEN_HASH, false);
+                                s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                                s
+                            });
+                            (on_change_click)(sel_option);
+                        } else {
+                            update_system_state(|s| {
+                                let mut s = s.clone();
+                                s.set_component_state(COMBO_OPEN_HASH, true);
+                                s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                                s
+                            });
+                        }
+                    }
+                }
+            }),
+        );
 
         // ── Sync builder-API state into system state on first render ──
         {
@@ -201,12 +261,12 @@ impl View for Combobox {
         };
 
         // Dropdown background
-        renderer.fill_rounded_rect(dropdown_rect, 6.0, theme::input_bg());
+        renderer.fill_rounded_rect(dropdown_rect, 6.0, [0.05, 0.05, 0.07, 1.0]);
         renderer.stroke_rounded_rect(
             dropdown_rect,
             6.0,
-            theme::with_alpha(theme::border(), 0.8),
-            1.0,
+            [0.3, 0.3, 0.35, 1.0],
+            1.5,
         );
 
         // ── Render search input ──
@@ -255,15 +315,11 @@ impl View for Combobox {
                 height: item_height,
             };
 
-            let is_selected = i == display_selected;
-            let bg = if is_selected {
-                theme::border_strong()
-            } else {
-                theme::button_ghost_bg()
-            };
-            renderer.fill_rounded_rect(item_rect, 4.0, bg);
+            renderer.push_vnode(item_rect, "ComboboxItem");
 
+            let is_selected = i == display_selected;
             if is_selected {
+                renderer.fill_rounded_rect(item_rect, 4.0, [0.2, 0.2, 0.25, 1.0]);
                 renderer.stroke_rounded_rect(item_rect, 4.0, theme::accent(), 1.0);
             }
 
@@ -279,6 +335,23 @@ impl View for Combobox {
                 13.0,
                 opt_text_color,
             );
+
+            let on_change_item = self.on_change.clone();
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |_| {
+                    update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(COMBO_OPEN_HASH, false);
+                        s.set_component_state(COMBO_SELECTED_HASH, original_idx);
+                        s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                        s
+                    });
+                    (on_change_item)(Some(original_idx));
+                }),
+            );
+
+            renderer.pop_vnode();
         }
 
         // ── Keyboard: ArrowUp / ArrowDown ──
@@ -396,46 +469,6 @@ impl View for Combobox {
             }),
         );
 
-        // ── Click on trigger → toggle open ──
-        let on_change_click = self.on_change.clone();
-        let options_click = self.options.clone();
-        renderer.register_handler(
-            "pointerclick",
-            Arc::new(move |_| {
-                let state = load_system_state();
-                let currently_open = state
-                    .get_component_state::<bool>(COMBO_OPEN_HASH)
-                    .and_then(|v| v.read().ok().map(|g| *g))
-                    .unwrap_or(false);
-                if currently_open {
-                    // Close and confirm current selection
-                    let sel: usize = state
-                        .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                        .and_then(|v| v.read().ok().map(|g| *g))
-                        .unwrap_or(usize::MAX);
-                    let sel_option = if sel < options_click.len() {
-                        Some(sel)
-                    } else {
-                        None
-                    };
-                    update_system_state(|s| {
-                        let mut s = s.clone();
-                        s.set_component_state(COMBO_OPEN_HASH, false);
-                        s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                        s
-                    });
-                    (on_change_click)(sel_option);
-                } else {
-                    update_system_state(|s| {
-                        let mut s = s.clone();
-                        s.set_component_state(COMBO_OPEN_HASH, true);
-                        s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                        s
-                    });
-                }
-            }),
-        );
-
         renderer.pop_vnode();
     }
 }
@@ -447,18 +480,13 @@ impl Combobox {
             Some(idx) if idx < self.options.len() => &self.options[idx],
             _ => &self.placeholder,
         };
-        let text_color = if self.selected.is_some() {
-            theme::text()
-        } else {
-            theme::with_alpha(theme::text_muted(), 0.7)
-        };
 
         // Background
-        renderer.fill_rounded_rect(rect, 6.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(rect, 6.0, theme::with_alpha(theme::border(), 0.8), 1.0);
+        renderer.fill_rounded_rect(rect, 6.0, [0.06, 0.06, 0.08, 1.0]);
+        renderer.stroke_rounded_rect(rect, 6.0, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         // Text
-        renderer.draw_text(display_text, rect.x + 12.0, rect.y + 12.0, 14.0, text_color);
+        renderer.draw_text(display_text, rect.x + 12.0, rect.y + 12.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
 
         // Chevron indicator
         let chevron = "▾";
@@ -468,7 +496,28 @@ impl Combobox {
             rect.x + rect.width - tw - 12.0,
             rect.y + 12.0,
             14.0,
-            theme::with_alpha(theme::text_muted(), 0.8),
+            [1.0, 1.0, 1.0, 0.9],
         );
     }
+}
+
+impl cvkg_core::layout::LayoutView for Combobox {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::layout::SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(220.0),
+            height: 38.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) {}
 }

@@ -27,7 +27,7 @@ pub fn encode_gif(frames: &[CapturedFrame], fps: u16) -> Result<Vec<u8>, String>
             .map(|f| (f.width as u16, f.height as u16))
             .ok_or("no frames to encode")?;
         let mut encoder = gif::Encoder::new(&mut out, w, h, &[]).map_err(|e| e.to_string())?;
-        let delay_cs = (100 / fps.max(1)) as u16;
+        let delay_cs = 100 / fps.max(1);
         for frame in frames {
             let mut gif_frame = gif::Frame::from_rgba_speed(
                 frame.width as u16,

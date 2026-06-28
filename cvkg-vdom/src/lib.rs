@@ -378,48 +378,46 @@ impl VDom {
             0.0
         };
 
-        if proximity > 0.0 {
-            // Search children in reverse (front-to-back) to maintain proper Z-ordering.
-            let mut best_child_hit: Option<(NodeId, f32)> = None;
+        // Search children in reverse (front-to-back) to maintain proper Z-ordering.
+        let mut best_child_hit: Option<(NodeId, f32)> = None;
 
-            // Hit test policy: if the click is outside the menu bar (y >= 28.0),
-            // evaluate DropdownOverlay last so it doesn't block sibling interactive elements.
-            let mut children_to_test = node.children.clone();
-            if y >= 28.0
-                && let Some(pos) = children_to_test.iter().position(|&cid| {
-                    self.nodes
-                        .get(&cid)
-                        .is_some_and(|n| n.component_type == "DropdownOverlay")
-                })
+        // Hit test policy: if the click is outside the menu bar (y >= 28.0),
+        // evaluate DropdownOverlay last so it doesn't block sibling interactive elements.
+        let mut children_to_test = node.children.clone();
+        if y >= 28.0
+            && let Some(pos) = children_to_test.iter().position(|&cid| {
+                self.nodes
+                    .get(&cid)
+                    .is_some_and(|n| n.component_type == "DropdownOverlay")
+            })
+        {
+            let overlay_id = children_to_test.remove(pos);
+            children_to_test.insert(0, overlay_id);
+        }
+
+        for child_id in children_to_test.iter().rev() {
+            if let Some((hit, hit_prox)) =
+                self.hit_test_recursive(*child_id, x, y, pointer_precision)
             {
-                let overlay_id = children_to_test.remove(pos);
-                children_to_test.insert(0, overlay_id);
-            }
-
-            for child_id in children_to_test.iter().rev() {
-                if let Some((hit, hit_prox)) =
-                    self.hit_test_recursive(*child_id, x, y, pointer_precision)
-                {
-                    // Direct hit (point inside child's SDF): return immediately
-                    if hit_prox >= 1.0 {
-                        return Some((hit, hit_prox));
-                    }
-                    // Track best partial hit among children
-                    if best_child_hit.is_none() || hit_prox > best_child_hit.unwrap().1 {
-                        best_child_hit = Some((hit, hit_prox));
-                    }
+                // Direct hit (point inside child's SDF): return immediately
+                if hit_prox >= 1.0 {
+                    return Some((hit, hit_prox));
+                }
+                // Track best partial hit among children
+                if best_child_hit.is_none() || hit_prox > best_child_hit.unwrap().1 {
+                    best_child_hit = Some((hit, hit_prox));
                 }
             }
+        }
 
-            // If any child matched (even partially), prefer the best child hit
-            if let Some(bh) = best_child_hit {
-                return Some(bh);
-            }
+        // If any child matched (even partially), prefer the best child hit
+        if let Some(bh) = best_child_hit {
+            return Some(bh);
+        }
 
-            // No child matched at all -- return this node if it's interactive
-            if dist <= 0.0 || self.event_handlers.contains_key(&node_id) {
-                return Some((node_id, proximity));
-            }
+        // No child matched at all -- return this node if it's interactive and the point is inside
+        if proximity > 0.0 && (dist <= 0.0 || self.event_handlers.contains_key(&node_id)) {
+            return Some((node_id, proximity));
         }
 
         None
@@ -1279,11 +1277,82 @@ impl cvkg_core::Renderer for VNodeRenderer {
     fn register_shared_element(&mut self, _id: &str, _rect: cvkg_core::Rect) {}
 
     fn set_key(&mut self, key: &str) {
-        if let Some(id) = self.stack.last()
-            && let Some(node) = self.nodes.get_mut(id)
-        {
-            node.key = Some(key.to_string());
+        // Determine which node is currently on top of the stack.
+        let old_id = match self.stack.last().copied() {
+            Some(id) => id,
+            None => return,
+        };
+
+        // Compute the stable ID from the component type and key.
+        let component_type = match self.nodes.get(&old_id) {
+            Some(n) => n.component_type.clone(),
+            None => return,
+        };
+        let stable_id = match self.stable_id_for(&component_type, Some(key)) {
+            Some(id) => id,
+            None => {
+                // Fallback: just set the key field without remapping.
+                if let Some(node) = self.nodes.get_mut(&old_id) {
+                    node.key = Some(key.to_string());
+                }
+                return;
+            }
+        };
+
+        // If the IDs already match (push_vnode was called with key set), nothing to do.
+        if stable_id == old_id {
+            return;
         }
+
+        // ── Migrate the node from old_id to stable_id ──
+
+        // 1. Remove the node from the map and update its id + key.
+        let mut node = match self.nodes.remove(&old_id) {
+            Some(n) => n,
+            None => return,
+        };
+        node.id = stable_id;
+        node.key = Some(key.to_string());
+
+        // 2. Re-insert under the stable id.
+        self.nodes.insert(stable_id, node);
+
+        // 3. Migrate any event handlers registered under the old id.
+        if let Some(handlers) = self.event_handlers.remove(&old_id) {
+            self.event_handlers.insert(stable_id, handlers);
+        }
+
+        // 4. Update the stack entry (the node is still being built).
+        if let Some(top) = self.stack.last_mut() {
+            if *top == old_id {
+                *top = stable_id;
+            }
+        }
+
+        // 5. Update the parent's children list so the tree stays consistent.
+        // During building, the parent is the second-to-last item on the stack.
+        let parent_id = if self.stack.len() >= 2 {
+            self.stack.get(self.stack.len() - 2).copied()
+        } else {
+            None
+        };
+        if let Some(parent_id) = parent_id {
+            if let Some(parent) = self.nodes.get_mut(&parent_id) {
+                for child_ref in &mut parent.children {
+                    if *child_ref == old_id {
+                        *child_ref = stable_id;
+                    }
+                }
+            }
+        } else {
+            // This is the root node.
+            if self.root == Some(old_id) {
+                self.root = Some(stable_id);
+            }
+        }
+
+        // 6. Children's parent pointers are built by into_vdom(), not here,
+        //    so no action needed for the renderer's build phase.
     }
 
     fn register_handler(

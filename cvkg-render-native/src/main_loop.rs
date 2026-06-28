@@ -768,7 +768,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 log::info!("[Native] Dispatching PointerDown (Touch) to VDOM");
                                 state.drag_start_pos = [x, y];
                                 state.is_dragging = false;
-                                state.drag_button = touch_btn as u32;
+                                state.drag_button = touch_btn;
                                 state.active_pointer_pos = Some([x, y]);
                                 state.active_pointer_precision = 150.0;
                                 state.active_pointer_target =

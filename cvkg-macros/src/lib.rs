@@ -321,14 +321,14 @@ pub fn hamr_if(input: TokenStream) -> TokenStream {
     let then_tokens: Vec<proc_macro2::TokenStream> = then_branch
         .nodes
         .iter()
-        .map(|n| quote::ToTokens::to_token_stream(n))
+        .map(quote::ToTokens::to_token_stream)
         .collect();
 
     if let Some(else_nodes) = else_branch {
         let else_tokens: Vec<proc_macro2::TokenStream> = else_nodes
             .nodes
             .iter()
-            .map(|n| quote::ToTokens::to_token_stream(n))
+            .map(quote::ToTokens::to_token_stream)
             .collect();
         TokenStream::from(quote::quote! {
             if #cond {

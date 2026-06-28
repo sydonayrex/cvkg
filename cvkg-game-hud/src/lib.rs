@@ -360,7 +360,7 @@ impl View for DamageNumber {
 }
 
 /// Minimap placeholder.
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct Minimap {
     size: f32,
 }

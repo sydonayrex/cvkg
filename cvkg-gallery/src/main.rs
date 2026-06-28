@@ -1,7 +1,15 @@
-use cvkg::components::{Badge, BadgeVariant, BifrostTabs, ButtonVariant, SpinnerVariant, Toggle};
+use cvkg::components::{
+    AutoComplete, Breadcrumb, BreadcrumbItem, BifrostTabs, Combobox,
+    MimirSpotlight, SpinnerVariant, Toggle, DatePicker,
+};
+use cvkg::components::calendar::Date;
 use cvkg::prelude::AnyView;
 use cvkg::prelude::*;
 use cvkg::core::{Event, Renderer, View};
+use cvkg_core::update_system_state;
+
+// Shared system-state key for the command palette open flag (must match command_palette.rs).
+const SPOTLIGHT_OPEN_HASH: u64 = 0xD00_0001;
 
 // -- Component catalog ------------------------------------------------
 
@@ -105,85 +113,73 @@ fn catalog() -> Vec<GalleryEntry> {
             },
         },
         GalleryEntry {
-            name: "Select",
+            name: "Combobox",
             category: "Forms",
-            render: |_state, _state_arc| {
+            render: |state, state_arc| {
+                let arc = state_arc.clone();
                 AnyView::new(
-                    VStack::new(4.0)
-                        .child(Text::new("Select: Berserker").font_size(14.0).color([1.0, 1.0, 1.0, 1.0]))
-                        .child(Text::new("▼ Shieldmaiden · Runecaster · Valkyrie").font_size(11.0).color([0.8, 0.7, 0.9, 1.0])),
+                    VStack::new(8.0)
+                        .child(Combobox::new(vec![
+                            "Odin".to_string(),
+                            "Tyr".to_string(),
+                            "Bor".to_string(),
+                        ]).selected(state.combobox_index).on_change(move |idx| {
+                            let mut s = arc.lock().unwrap();
+                            s.combobox_index = idx;
+                        }).frame(Some(220.0), Some(38.0))),
                 )
             },
         },
-        // -- Layout --
         GalleryEntry {
-            name: "VStack",
-            category: "Layout",
-            render: |_state, _state_arc| {
+            name: "AutoComplete",
+            category: "Forms",
+            render: |_state, state_arc| {
+                let arc = state_arc.clone();
+                let suggestions = vec![
+                    "Astrid".to_string(),
+                    "Bjorn".to_string(),
+                    "Freya".to_string(),
+                    "Odin".to_string(),
+                    "Thor".to_string(),
+                ];
+                AnyView::new(VStack::new(8.0).child(
+                    AutoComplete::new(
+                        "Search warriors...".to_string(),
+                        suggestions,
+                        move |query| {
+                            let mut s = arc.lock().unwrap();
+                            s.autocomplete_query = query;
+                        },
+                        move |_selected| {},
+                    )
+                    .frame(Some(220.0), Some(38.0))
+                ))
+            },
+        },
+        GalleryEntry {
+            name: "DatePicker",
+            category: "Forms",
+            render: |state, state_arc| {
+                let arc = state_arc.clone();
                 AnyView::new(
                     VStack::new(8.0)
                         .child(
-                            Text::new("Item 1")
+                            Text::new(format!("Selected: {}", state.selected_date.format()))
                                 .font_size(14.0)
                                 .color([1.0, 1.0, 1.0, 1.0]),
                         )
                         .child(
-                            Text::new("Item 2")
-                                .font_size(14.0)
-                                .color([0.8, 0.8, 0.8, 1.0]),
+                            DatePicker::new(move |d, m, y| {
+                                let mut s = arc.lock().unwrap();
+                                s.selected_date = Date { year: y as i32, month: m, day: d };
+                            })
+                            .selected(state.selected_date.day, state.selected_date.month, state.selected_date.year as u32)
+                            .frame(Some(220.0), Some(38.0))
                         )
                         .child(
-                            Text::new("Item 3")
-                                .font_size(14.0)
+                            Text::new("Date picker component")
+                                .font_size(11.0)
                                 .color([0.6, 0.6, 0.6, 1.0]),
-                        ),
-                )
-            },
-        },
-        GalleryEntry {
-            name: "HStack",
-            category: "Layout",
-            render: |_state, _state_arc| {
-                AnyView::new(
-                    HStack::new(8.0)
-                        .child(
-                            Text::new("Left")
-                                .font_size(14.0)
-                                .color([1.0, 1.0, 1.0, 1.0]),
-                        )
-                        .child(
-                            Text::new("Center")
-                                .font_size(14.0)
-                                .color([0.8, 0.8, 0.8, 1.0]),
-                        )
-                        .child(
-                            Text::new("Right")
-                                .font_size(14.0)
-                                .color([0.6, 0.6, 0.6, 1.0]),
-                        ),
-                )
-            },
-        },
-        GalleryEntry {
-            name: "Text",
-            category: "Layout",
-            render: |_state, _state_arc| {
-                AnyView::new(
-                    VStack::new(4.0)
-                        .child(
-                            Text::new("Heading")
-                                .font_size(24.0)
-                                .color([1.0, 1.0, 1.0, 1.0]),
-                        )
-                        .child(
-                            Text::new("Body text")
-                                .font_size(14.0)
-                                .color([0.7, 0.7, 0.7, 1.0]),
-                        )
-                        .child(
-                            Text::new("Caption")
-                                .font_size(10.0)
-                                .color([0.5, 0.5, 0.5, 1.0]),
                         ),
                 )
             },
@@ -206,6 +202,20 @@ fn catalog() -> Vec<GalleryEntry> {
                 )
             },
         },
+        GalleryEntry {
+            name: "Breadcrumb",
+            category: "Navigation",
+            render: |_state, _state_arc| {
+                AnyView::new(
+                    VStack::new(8.0)
+                        .child(Breadcrumb::new(vec![
+                            BreadcrumbItem::new("Home"),
+                            BreadcrumbItem::new("Loadout"),
+                            BreadcrumbItem::new("Berserker"),
+                        ]))
+                )
+            },
+        },
         // -- Overlays --
         GalleryEntry {
             name: "Tooltip",
@@ -219,12 +229,99 @@ fn catalog() -> Vec<GalleryEntry> {
                 )
             },
         },
+        GalleryEntry {
+            name: "Command Palette",
+            category: "Overlays",
+            render: |state, state_arc| {
+                let arc = state_arc.clone();
+                AnyView::new(
+                    VStack::new(12.0)
+                        .child(
+                            Text::new(if state.command_palette_open {
+                                "Command Palette is OPEN — select an item or click backdrop to close"
+                            } else {
+                                "Command Palette is CLOSED — click Open to launch it"
+                            })
+                                .font_size(14.0)
+                                .color([1.0, 1.0, 1.0, 0.8]),
+                        )
+                        .child(
+                            Button::new("Open Command Palette", move || {
+                                // Mark open in gallery state
+                                arc.lock().unwrap().command_palette_open = true;
+                                // Drive the MimirSpotlight system state directly.
+                                update_system_state(|s| {
+                                    let mut s = s.clone();
+                                    s.set_component_state(SPOTLIGHT_OPEN_HASH, true);
+                                    s
+                                });
+                            }),
+                        )
+                        .child(
+                            // The palette reads its own open state from system state.
+                            // .open() only seeds on first render; after that, state owns it.
+                            MimirSpotlight::new()
+                                .open()
+                                .command("Save File", Some("Ctrl+S"), {
+                                    let arc = state_arc.clone();
+                                    move || {
+                                        arc.lock().unwrap().command_palette_open = false;
+                                    }
+                                })
+                                .command("Open Preferences", Some("Ctrl+P"), {
+                                    let arc = state_arc.clone();
+                                    move || {
+                                        arc.lock().unwrap().command_palette_open = false;
+                                    }
+                                })
+                                .command("Toggle Fullscreen", Some("F11"), {
+                                    let arc = state_arc.clone();
+                                    move || {
+                                        arc.lock().unwrap().command_palette_open = false;
+                                    }
+                                })
+                                .search(state.command_query.as_str()),
+                        ),
+                )
+            },
+        },
+        GalleryEntry {
+            name: "Dialog",
+            category: "Overlays",
+            render: |state, state_arc| {
+                let arc = state_arc.clone();
+                AnyView::new(
+                    VStack::new(12.0)
+                        .child(
+                            Text::new(if state.dialog_open {
+                                "Modal is OPEN -- click Close to dismiss"
+                            } else {
+                                "Modal is CLOSED -- click Open to view"
+                            })
+                                .font_size(16.0)
+                                .color([1.0, 1.0, 1.0, 1.0]),
+                        )
+                        .child(
+                            if state.dialog_open {
+                                Button::new("Close", move || {
+                                    let mut s = arc.lock().unwrap();
+                                    s.dialog_open = false;
+                                })
+                            } else {
+                                Button::new("Open Modal", move || {
+                                    let mut s = arc.lock().unwrap();
+                                    s.dialog_open = true;
+                                })
+                            },
+                        ),
+                )
+            },
+        },
         // -- Data Display --
         GalleryEntry {
             name: "Progress",
             category: "Data Display",
             render: |state, _state_arc| {
-                // Animate progress 0→1 cycling every 3 seconds using wall-clock time.
                 let t = state.start_time.elapsed().as_secs_f32();
                 let progress = (t % 3.0) / 3.0;
                 let pct = (progress * 100.0) as u32;
@@ -242,11 +339,8 @@ fn catalog() -> Vec<GalleryEntry> {
         GalleryEntry {
             name: "Spinner",
             category: "Data Display",
-            render: |state, _state_arc| {
-                // Compute rotation from wall-clock time; the Spinner render
-                // also reads elapsed_time() internally for its arc offset.
-                let _t = state.start_time.elapsed().as_secs_f32();
-                // Use Ring variant at larger size so the spin animation is clearly visible
+            render: |_state, _state_arc| {
+                let _t = _state.start_time.elapsed().as_secs_f32();
                 AnyView::new(
                     HStack::new(8.0)
                         .child(Spinner::new().variant(SpinnerVariant::Ouroboros).size(48.0))
@@ -255,18 +349,6 @@ fn catalog() -> Vec<GalleryEntry> {
                                 .font_size(14.0)
                                 .color([0.7, 0.7, 0.7, 1.0]),
                         ),
-                )
-            },
-        },
-        GalleryEntry {
-            name: "Badge",
-            category: "Data Display",
-            render: |_state, _state_arc| {
-                AnyView::new(
-                    HStack::new(8.0)
-                        .child(Badge::new("Default"))
-                        .child(Badge::new("Info").variant(BadgeVariant::Secondary))
-                        .child(Badge::new("Outline").variant(BadgeVariant::Outline)),
                 )
             },
         },
@@ -294,78 +376,6 @@ fn catalog() -> Vec<GalleryEntry> {
                 )
             },
         },
-        GalleryEntry {
-            name: "Dialog",
-            category: "Overlays",
-            render: |_state, _state_arc| {
-                AnyView::new(
-                    VStack::new(12.0)
-                        .child(
-                            Text::new("Confirm Rite of Passage?")
-                                .font_size(16.0)
-                                .color([1.0, 1.0, 1.0, 1.0]),
-                        )
-                        .child(
-                            Text::new("This action cannot be undone.")
-                                .font_size(12.0)
-                                .color([0.7, 0.7, 0.7, 1.0]),
-                        )
-                        .child(
-                            HStack::new(12.0)
-                                .child(Button::new("Accept", || {}).variant(ButtonVariant::TintedGlass))
-                                .child(Button::new("Decline", || {}).variant(ButtonVariant::Ghost)),
-                        ),
-                )
-            },
-        },
-        GalleryEntry {
-            name: "Avatar",
-            category: "Data Display",
-            render: |_state, _state_arc| {
-                AnyView::new(
-                    HStack::new(16.0)
-                        .child(
-                            VStack::new(4.0)
-                                .child(
-                                    Text::new("[A]")
-                                        .font_size(24.0)
-                                        .color([0.0, 1.0, 1.0, 1.0]),
-                                )
-                                .child(
-                                    Text::new("Astrid")
-                                        .font_size(10.0)
-                                        .color([0.7, 0.7, 0.7, 1.0]),
-                                ),
-                        )
-                        .child(
-                            VStack::new(4.0)
-                                .child(
-                                    Text::new("[B]")
-                                        .font_size(24.0)
-                                        .color([1.0, 0.5, 0.0, 1.0]),
-                                )
-                                .child(
-                                    Text::new("Bjorn")
-                                        .font_size(10.0)
-                                        .color([0.7, 0.7, 0.7, 1.0]),
-                                ),
-                        )
-                        .child(
-                            VStack::new(4.0)
-                                .child(
-                                    Text::new("[F]")
-                                        .font_size(24.0)
-                                        .color([0.5, 0.3, 1.0, 1.0]),
-                                )
-                                .child(
-                                    Text::new("Freya")
-                                        .font_size(10.0)
-                                        .color([0.7, 0.7, 0.7, 1.0]),
-                                ),
-                        ),
-                )
-            },
-        },
     ]
 }
 
@@ -380,9 +390,14 @@ struct GalleryState {
     checkbox_2: bool,
     slider_value: f32,
     input_text: String,
-    /// Wall-clock start time so render closures can compute elapsed seconds.
     start_time: std::time::Instant,
     tab_index: usize,
+    combobox_index: Option<usize>,
+    autocomplete_query: String,
+    selected_date: Date,
+    command_query: String,
+    command_palette_open: bool,
+    dialog_open: bool,
 }
 
 impl GalleryState {
@@ -398,6 +413,16 @@ impl GalleryState {
             input_text: "Placeholder text".to_string(),
             start_time: std::time::Instant::now(),
             tab_index: 0,
+            combobox_index: None,
+            autocomplete_query: String::new(),
+            selected_date: Date {
+                year: 2026,
+                month: 6,
+                day: 27,
+            },
+            command_query: String::new(),
+            command_palette_open: true,
+            dialog_open: false,
         }
     }
 }
@@ -430,7 +455,6 @@ impl View for GalleryApp {
         renderer.push_vnode(rect, "GalleryApp");
 
         // 2. Draw 3D Carousel (Top Panel)
-        // Depth-sort indices to draw background cards first
         let mut draw_order: Vec<usize> = (0..num_entries).collect();
         draw_order.sort_by(|&a, &b| {
             let mut diff_a = (a as i32 - selected as i32) as f32;
@@ -455,21 +479,9 @@ impl View for GalleryApp {
             height: carousel_height,
         };
 
-        // Pre-calculate active card's rect for occlusion clipping
-        let active_scale = 1.0; // cos_a = 1.0 for selected
-        let active_w = 190.0 * active_scale;
-        let active_h = 110.0 * active_scale;
         let center_x = carousel_rect.x + carousel_rect.width / 2.0;
         let center_y = carousel_rect.y + carousel_rect.height / 2.0;
-        let _active_rect = Rect {
-            x: center_x - active_w / 2.0,
-            y: center_y - active_h / 2.0,
-            width: active_w,
-            height: active_h,
-        };
 
-        // We use Z-index layering to ensure cards drawn later (closer to camera)
-        // correctly occlude the text of cards drawn earlier.
         for i in draw_order {
             let mut diff = (i as i32 - selected as i32) as f32;
             while diff > half { diff -= num_entries as f32; }
@@ -482,8 +494,6 @@ impl View for GalleryApp {
                 let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
                 let card_w = 190.0 * scale * cos_a;
                 let card_h = 110.0 * scale;
-                let center_x = carousel_rect.x + carousel_rect.width / 2.0;
-                let center_y = carousel_rect.y + carousel_rect.height / 2.0;
                 Rect {
                     x: center_x + 360.0 * sin_a * scale - card_w / 2.0,
                     y: center_y + 12.0 * (1.0 - cos_a) * scale - card_h / 2.0,
@@ -492,39 +502,31 @@ impl View for GalleryApp {
                 }
             };
 
-            // Math for cylindrical projection
-            let angle = diff * 0.42; // angle spacing
+            let angle = diff * 0.42;
             let cos_a = angle.cos();
             let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
             let card_rect = calculate_card_rect(diff);
 
-            // Assign Z-index based on depth (closest card = Z 0.0, furthest = higher Z)
             let z_index = diff.abs() * 10.0;
             renderer.set_z_index(z_index);
 
-            // Render Card — reflective ceramic black / dull dark metal
             let is_selected = i == selected;
 
-            // Base: near-black ceramic. Active card is just barely warmer.
             let bg_color = if is_selected {
-                [0.06, 0.055, 0.06, 1.0] // very dark ceramic — active
+                [0.06, 0.055, 0.06, 1.0]
             } else {
-                [0.02, 0.018, 0.02, 1.0] // near pure black — inactive
+                [0.02, 0.018, 0.02, 1.0]
             };
 
-            // Border: active gets a warm amber rim; inactive nearly disappears into black
             let border_color = if is_selected {
-                [0.65, 0.58, 0.42, 1.0] // warm forged-steel rim on active
+                [0.65, 0.58, 0.42, 1.0]
             } else {
-                [0.14, 0.13, 0.12, 1.0] // near-black, barely visible
+                [0.14, 0.13, 0.12, 1.0]
             };
 
             renderer.push_vnode(card_rect, "CarouselCard");
-
-            // 1. Solid near-black ceramic base
             renderer.fill_rounded_rect(card_rect, 6.0, bg_color);
 
-            // 2. Top-edge bevel: the only visible "reflection" on ceramic black
             let bevel_h = if is_selected { 2.0 } else { 1.0 };
             let bevel_top = Rect {
                 x: card_rect.x + 6.0,
@@ -535,7 +537,6 @@ impl View for GalleryApp {
             let bevel_alpha = if is_selected { 0.65 } else { 0.22 };
             renderer.fill_rounded_rect(bevel_top, 1.0, [0.80, 0.72, 0.55, bevel_alpha]);
 
-            // 3. Left-edge secondary catch-light
             let left_bevel = Rect {
                 x: card_rect.x + 1.0,
                 y: card_rect.y + 6.0,
@@ -544,7 +545,6 @@ impl View for GalleryApp {
             };
             renderer.fill_rounded_rect(left_bevel, 1.0, [0.60, 0.52, 0.38, bevel_alpha * 0.45]);
 
-            // 4. Bottom anvil shadow
             let shadow_bottom = Rect {
                 x: card_rect.x + 6.0,
                 y: card_rect.y + card_rect.height - 2.0,
@@ -553,13 +553,8 @@ impl View for GalleryApp {
             };
             renderer.fill_rounded_rect(shadow_bottom, 1.0, [0.0, 0.0, 0.0, 0.95]);
 
-            // 5. Border rim
             renderer.stroke_rounded_rect(card_rect, 6.0, border_color, if is_selected { 1.5 } else { 0.8 });
 
-            // Text: now safely drawn inside the loop.
-            // Since CVKG batches text at the end of the frame, Z-index is ignored for text depth.
-            // To prevent side cards' text from bleeding through the active card, we must
-            // explicitly clip it to the visible region outside the active card.
             let abs_diff = diff.abs();
             let text_alpha = if is_selected {
                 1.0
@@ -568,21 +563,19 @@ impl View for GalleryApp {
             } else if abs_diff <= 2.05 {
                 0.25
             } else {
-                0.0 // too far back
+                0.0
             };
 
             let text_color = if is_selected {
-                [0.0, 1.0, 0.95, text_alpha] // neon cyan
+                [0.0, 1.0, 0.95, text_alpha]
             } else {
-                [0.75, 0.70, 0.62, text_alpha] // warm off-white, faded by depth
+                [0.75, 0.70, 0.62, text_alpha]
             };
 
             if !is_selected {
                 let covering_diff = if diff < 0.0 { diff + 1.0 } else { diff - 1.0 };
                 let covering_rect = calculate_card_rect(covering_diff);
-
                 let clip_rect = if diff < 0.0 {
-                    // Card is on the left, clip right side where it overlaps its right neighbor
                     Rect {
                         x: card_rect.x,
                         y: card_rect.y,
@@ -590,7 +583,6 @@ impl View for GalleryApp {
                         height: card_rect.height,
                     }
                 } else {
-                    // Card is on the right, clip left side where it overlaps its left neighbor
                     let start_x = covering_rect.x + covering_rect.width;
                     Rect {
                         x: start_x,
@@ -626,7 +618,6 @@ impl View for GalleryApp {
                 renderer.pop_clip_rect();
             }
 
-            // Register card select click handler
             let state_arc_clone = self.state.clone();
             renderer.register_handler(
                 "pointerclick",
@@ -638,7 +629,7 @@ impl View for GalleryApp {
 
             renderer.pop_vnode();
         }
-        
+
         // Reset Z-index to default for the rest of the UI
         renderer.set_z_index(0.0);
 
@@ -713,7 +704,7 @@ impl GalleryApp {
 }
 
 fn main() {
-    // Install panic hook that writes crash dump to disk instead of segfaulting silently.
+    // Install panic hook that writes crash dump to disk
     std::panic::set_hook(Box::new(|info| {
         let msg = if let Some(s) = info.payload().downcast_ref::<&str>() {
             s.to_string()
@@ -724,12 +715,14 @@ fn main() {
         };
         let bt = std::backtrace::Backtrace::force_capture();
         eprintln!("[CVKG PANIC] {msg}");
-        eprintln!("[CVKG PANIC] Backtrace:\n{bt}");
+        eprintln!("[CVKG PANIC] Backtrace:
+{bt}");
         if let Ok(mut file) = std::fs::File::create("cvkg-crash.log") {
             use std::io::Write;
             let _ = writeln!(file, "CVKG Panic Dump");
             let _ = writeln!(file, "Message: {msg}");
-            let _ = writeln!(file, "Backtrace:\n{bt}");
+            let _ = writeln!(file, "Backtrace:
+{bt}");
         }
     }));
 

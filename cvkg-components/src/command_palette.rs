@@ -14,6 +14,7 @@ const SPOTLIGHT_SEARCH_HASH: u64 = 0xD00_0003;
 
 /// A command palette for searching and executing commands.
 #[doc(alias = "CommandPalette")]
+#[derive(Clone)]
 pub struct MimirSpotlight {
     /// The full list of registered commands (never modified at render time).
     pub(crate) all_commands: Vec<PaletteCommand>,
@@ -25,6 +26,7 @@ pub struct MimirSpotlight {
     pub(crate) is_open: bool,
 }
 
+#[derive(Clone)]
 pub struct PaletteCommand {
     pub label: String,
     pub shortcut: Option<String>,
@@ -140,26 +142,40 @@ impl MimirSpotlight {
 
 impl View for MimirSpotlight {
     type Body = Never;
+
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+        let height = self.all_commands.len() as f32 * 36.0;
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(480.0),
+            height: height + 64.0,
+        }
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "MimirSpotlight");
+        renderer.set_key("mimir_spotlight");
 
         // ── Sync builder-API state into system state on first render ──
+        // Rule: .open() only seeds initial state on first render.
+        // After that, system state owns the open/close flag — interaction
+        // (clicking a command or the backdrop) can close it without the
+        // builder fighting to reopen it every frame.
         {
             let state = load_system_state();
-            let sys_open: bool = state
-                .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
-                .and_then(|v| v.read().ok().map(|g| *g))
-                .unwrap_or(self.is_open);
 
-            // Seed system state from builder values on first render.
             if state
                 .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
                 .is_none()
             {
+                // First render: seed all state from builder values.
                 update_system_state(|s| {
                     let mut s = s.clone();
                     s.set_component_state(SPOTLIGHT_OPEN_HASH, self.is_open);
@@ -169,7 +185,12 @@ impl View for MimirSpotlight {
                 });
             }
 
-            if !sys_open {
+            let effective_open = state
+                .get_component_state::<bool>(SPOTLIGHT_OPEN_HASH)
+                .and_then(|v| v.read().ok().map(|g| *g))
+                .unwrap_or(self.is_open);
+
+            if !effective_open {
                 renderer.pop_vnode();
                 return;
             }
@@ -286,14 +307,11 @@ impl View for MimirSpotlight {
             );
         }
 
-        // ── Render overlay background ──
-        renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.6));
-
         // ── Calculate palette dimensions ──
-        let palette_width = 480.0;
-        let item_height = 36.0;
-        let top_padding = 56.0;
-        let palette_height = (filtered_count as f32 * item_height).min(rect.height - 40.0);
+        let palette_width = 480.0_f32;
+        let item_height = 36.0_f32;
+        let top_padding = 56.0_f32;
+        let palette_height = (filtered_count as f32 * item_height + top_padding + 8.0).min(rect.height);
         let palette_x = rect.x + (rect.width - palette_width) / 2.0;
         let palette_y = rect.y + (rect.height - palette_height) / 2.0;
 
@@ -304,9 +322,38 @@ impl View for MimirSpotlight {
             height: palette_height,
         };
 
-        // ── Render palette background ──
-        renderer.fill_rounded_rect(palette_rect, 8.0, theme::surface_elevated());
-        renderer.stroke_rounded_rect(palette_rect, 8.0, theme::accent(), 1.0);
+        // ── Render backdrop: dark overlay that closes on click outside the panel ──
+        // Push a separate VNode for the backdrop so only clicks *outside* the
+        // palette panel trigger close. The panel VNode below will intercept
+        // clicks inside it before they reach the backdrop.
+        renderer.push_vnode(rect, "MimirBackdrop");
+        renderer.set_key("mimir_backdrop");
+        renderer.fill_rect(rect, [0.02, 0.02, 0.04, 0.6]);
+        let pr = palette_rect;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |event| {
+                if let Event::PointerClick { x, y, .. } = event {
+                    // Only close if the click was outside the palette panel.
+                    if !pr.contains(x, y) {
+                        update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(SPOTLIGHT_OPEN_HASH, false);
+                            s.set_component_state(SPOTLIGHT_SELECTED_HASH, 0u64);
+                            s.set_component_state(SPOTLIGHT_SEARCH_HASH, String::new());
+                            s
+                        });
+                    }
+                }
+            }),
+        );
+        renderer.pop_vnode();
+
+        // ── Render palette panel (separate VNode so it captures its own clicks) ──
+        renderer.push_vnode(palette_rect, "MimirPanel");
+        renderer.set_key("mimir_panel");
+        renderer.fill_rounded_rect(palette_rect, 8.0, [0.05, 0.05, 0.07, 1.0]);
+        renderer.stroke_rounded_rect(palette_rect, 8.0, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         // ── Render search input ──
         let search_rect = Rect {
@@ -315,7 +362,7 @@ impl View for MimirSpotlight {
             width: palette_width - 24.0,
             height: 36.0,
         };
-        renderer.fill_rounded_rect(search_rect, 6.0, theme::input_bg());
+        renderer.fill_rounded_rect(search_rect, 6.0, [0.06, 0.06, 0.08, 1.0]);
 
         // Focus ring around the search input to indicate it is active/focused.
         let outline_rect = Rect {
@@ -331,8 +378,14 @@ impl View for MimirSpotlight {
             search_rect.x + 8.0,
             search_rect.y + 12.0,
             14.0,
-            theme::text_muted(),
+            [1.0, 1.0, 1.0, 1.0],
         );
+
+        renderer.pop_vnode(); // MimirPanel (search bar portion done)
+
+        // Re-push panel so command items are children of it
+        renderer.push_vnode(palette_rect, "MimirPanelItems");
+        renderer.set_key("mimir_panel_items");
 
         // ── Render commands ──
         let start_y = palette_rect.y + top_padding;
@@ -344,23 +397,48 @@ impl View for MimirSpotlight {
                 height: item_height,
             };
 
+            renderer.push_vnode(cmd_rect, "MimirSpotlightItem");
+            renderer.set_key(&format!("spotlight_item_{}", i));
+
+            let action = cmd.action.clone();
+            renderer.register_handler(
+                "pointerclick",
+                Arc::new(move |event| {
+                    if let Event::PointerClick { .. } = event {
+                        // Update selection highlight on hover/click
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(SPOTLIGHT_SELECTED_HASH, i as u64);
+                            s
+                        });
+                        // Execute action and close
+                        (action)();
+                        update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(SPOTLIGHT_OPEN_HASH, false);
+                            s.set_component_state(SPOTLIGHT_SELECTED_HASH, 0u64);
+                            s.set_component_state(SPOTLIGHT_SEARCH_HASH, String::new());
+                            s
+                        });
+                    }
+                }),
+            );
+
             let is_selected = i == selected_index;
             let bg = if is_selected {
-                theme::border_strong()
+                [0.2, 0.2, 0.25, 1.0]
             } else {
-                theme::surface()
+                [0.0, 0.0, 0.0, 0.0]
             };
-            renderer.fill_rounded_rect(cmd_rect, 4.0, bg);
-
-            // Selection highlight stroke (focus ring for selected item)
             if is_selected {
+                renderer.fill_rounded_rect(cmd_rect, 4.0, bg);
                 renderer.stroke_rounded_rect(cmd_rect, 4.0, theme::accent(), 1.0);
             }
 
             let text_color = if is_selected {
-                theme::text()
+                [1.0, 1.0, 1.0, 1.0]
             } else {
-                theme::text_muted()
+                [0.7, 0.7, 0.7, 1.0]
             };
             renderer.draw_text(
                 &cmd.label,
@@ -380,9 +458,11 @@ impl View for MimirSpotlight {
                     theme::text_muted(),
                 );
             }
+            renderer.pop_vnode(); // MimirSpotlightItem
         }
 
-        renderer.pop_vnode();
+        renderer.pop_vnode(); // MimirPanelItems
+        renderer.pop_vnode(); // MimirSpotlight
     }
 }
 

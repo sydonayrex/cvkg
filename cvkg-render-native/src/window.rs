@@ -150,8 +150,8 @@ impl ResizeHitTest {
         let r = corner_radius + self.expansion;
         let w = self.window_size.width as f32;
         let h = self.window_size.height as f32;
-        let px = pos.x as f32;
-        let py = pos.y as f32;
+        let px = pos.x;
+        let py = pos.y;
 
         if px <= r && py <= r {
             return true;

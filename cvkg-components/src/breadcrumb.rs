@@ -96,8 +96,34 @@ impl Breadcrumb {
 
 impl View for Breadcrumb {
     type Body = Never;
+
     fn body(self) -> Self::Body {
         unreachable!()
+    }
+
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+        let mut total_width = 24.0; // padding left & right
+        for (i, item) in self.items.iter().enumerate() {
+            let (w, _) = renderer.measure_text(&item.label, self.font_size);
+            total_width += w;
+            if i < self.items.len() - 1 {
+                let (sep_w, _) = renderer.measure_text(&self.separator, self.font_size);
+                total_width += sep_w + SPACE_XS;
+            }
+        }
+        let w = if let Some(p_w) = proposal.width {
+            total_width.min(p_w)
+        } else {
+            total_width
+        };
+        cvkg_core::Size {
+            width: w,
+            height: self.font_size + 16.0, // extra height padding
+        }
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
@@ -126,8 +152,12 @@ impl View for Breadcrumb {
         renderer.set_aria_role("navigation");
         renderer.set_aria_label("Breadcrumb");
 
-        let mut x = rect.x;
-        let y = rect.y;
+        // Container background and border
+        renderer.fill_rounded_rect(rect, 6.0, [0.06, 0.06, 0.08, 1.0]);
+        renderer.stroke_rounded_rect(rect, 6.0, [0.25, 0.25, 0.28, 1.0], 1.5);
+
+        let mut x = rect.x + 12.0;
+        let y = rect.y + (rect.height - self.font_size) / 2.0;
         let total = self.items.len();
 
         // Track each item's x-position for click targeting.
@@ -222,6 +252,7 @@ impl View for Breadcrumb {
         );
 
         // ── Pointer click handlers per item ──
+        let rect_clone = rect;
         for (i, &(item_x, item_w)) in item_rects.iter().enumerate() {
             let on_select_click = self.on_select.clone();
             let target_idx = i;
@@ -229,9 +260,11 @@ impl View for Breadcrumb {
             renderer.register_handler(
                 "pointerclick",
                 Arc::new(move |event| {
-                    if let Event::PointerClick { x, .. } = event
+                    if let Event::PointerClick { x, y, .. } = event
                         && x >= item_x
                         && x <= item_x + item_w
+                        && y >= rect_clone.y
+                        && y <= rect_clone.y + rect_clone.height
                     {
                         set_idx_click(target_idx);
                         if let Some(ref cb) = on_select_click {
@@ -260,5 +293,39 @@ impl View for Breadcrumb {
         );
 
         renderer.pop_vnode();
+    }
+}
+
+impl cvkg_core::layout::LayoutView for Breadcrumb {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::layout::SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> cvkg_core::Size {
+        let mut estimated_width = 24.0;
+        for (i, item) in self.items.iter().enumerate() {
+            estimated_width += item.label.len() as f32 * (self.font_size * 0.55);
+            if i < self.items.len() - 1 {
+                estimated_width += self.separator.len() as f32 * (self.font_size * 0.55) + SPACE_XS;
+            }
+        }
+        let w = if let Some(p_w) = proposal.width {
+            estimated_width.min(p_w)
+        } else {
+            estimated_width
+        };
+        cvkg_core::Size {
+            width: w,
+            height: self.font_size + 16.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) {
     }
 }

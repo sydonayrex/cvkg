@@ -280,13 +280,13 @@ fn month_name(m: u32) -> String {
 }
 
 /// DatePicker component using a popover TyrCalendar.
-pub struct DatePicker {
+pub struct LegacyDatePicker {
     pub(crate) selected_date: Date,
     pub(crate) placeholder: String,
     pub(crate) on_date_change: Arc<dyn Fn(Date) + Send + Sync>,
 }
 
-impl DatePicker {
+impl LegacyDatePicker {
     /// Creates a new DatePicker with the given change handler.
     pub fn new(on_date_change: impl Fn(Date) + Send + Sync + 'static) -> Self {
         Self {
@@ -301,14 +301,14 @@ impl DatePicker {
     }
 }
 
-impl View for DatePicker {
+impl View for LegacyDatePicker {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "DatePicker");
+        renderer.push_vnode(rect, "LegacyDatePicker");
         renderer.fill_rounded_rect(rect, RADIUS_SM, theme::surface());
         renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
@@ -390,7 +390,7 @@ impl View for DatePicker {
     }
 }
 
-impl LayoutView for DatePicker {
+impl LayoutView for LegacyDatePicker {
     fn size_that_fits(
         &self,
         proposal: SizeProposal,

@@ -30,6 +30,7 @@
 //! - `DEBUG` (99999): Debug overlays, development tools
 
 /// Elevation level constants (0-25 scale).
+#[allow(clippy::module_inception)]
 pub mod elevation {
     /// No elevation — flat baseline elements with no shadow.
     pub const FLAT: u8 = 0;

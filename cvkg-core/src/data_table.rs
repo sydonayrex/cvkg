@@ -161,7 +161,7 @@ impl<T: Clone + Send + Sync + 'static> View for DataTable<T> {
 
             // Draw row cells
             let mut cell_x = rect.x + 12.0;
-            for (_col_idx, col) in self.columns.iter().enumerate() {
+            for col in self.columns.iter() {
                 let col_width = rect.width * col.width / num_cols as f32;
                 let value = (col.accessor)(item);
                 renderer.draw_text(

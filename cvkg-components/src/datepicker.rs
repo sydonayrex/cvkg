@@ -2,7 +2,6 @@ use crate::lingua_tong;
 use crate::theme;
 use crate::{RADIUS_MD, RADIUS_SM, RADIUS_XL};
 use cvkg_core::{Event, Never, Rect, Renderer, View, load_system_state, update_system_state};
-use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 /// Mode for DatePicker: single date or range selection.
@@ -23,39 +22,36 @@ pub struct DateRange {
     pub end: (u32, u32, u32),
 }
 
-/// Global counter for generating unique DatePicker instance IDs.
-static DATEPICKER_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-
 /// Return the translated month name for a given month (1-12).
 fn month_name(month: u32) -> String {
-    let key = match month {
-        1 => "datepicker.month.january",
-        2 => "datepicker.month.february",
-        3 => "datepicker.month.march",
-        4 => "datepicker.month.april",
-        5 => "datepicker.month.may",
-        6 => "datepicker.month.june",
-        7 => "datepicker.month.july",
-        8 => "datepicker.month.august",
-        9 => "datepicker.month.september",
-        10 => "datepicker.month.october",
-        11 => "datepicker.month.november",
-        12 => "datepicker.month.december",
-        _ => "datepicker.month.january",
+    let name = match month {
+        1 => "January",
+        2 => "February",
+        3 => "March",
+        4 => "April",
+        5 => "May",
+        6 => "June",
+        7 => "July",
+        8 => "August",
+        9 => "September",
+        10 => "October",
+        11 => "November",
+        12 => "December",
+        _ => "January",
     };
-    lingua_tong::t(key)
+    name.to_string()
 }
 
 /// Return translated day-of-week column headers.
 fn day_headers() -> [String; 7] {
     [
-        lingua_tong::t("datepicker.day.su"),
-        lingua_tong::t("datepicker.day.mo"),
-        lingua_tong::t("datepicker.day.tu"),
-        lingua_tong::t("datepicker.day.we"),
-        lingua_tong::t("datepicker.day.th"),
-        lingua_tong::t("datepicker.day.fr"),
-        lingua_tong::t("datepicker.day.sa"),
+        "Su".to_string(),
+        "Mo".to_string(),
+        "Tu".to_string(),
+        "We".to_string(),
+        "Th".to_string(),
+        "Fr".to_string(),
+        "Sa".to_string(),
     ]
 }
 
@@ -122,6 +118,7 @@ fn today_date() -> (u32, u32, u32) {
 /// })
 /// .selected(15, 6, 2025);
 /// ```
+#[derive(Clone)]
 pub struct DatePicker {
     /// The currently selected date as (day, month, year).
     selected_date: Option<(u32, u32, u32)>,
@@ -146,12 +143,6 @@ impl DatePicker {
     ///
     /// The picker defaults to no selected date, closed state, and Single mode.
     pub fn new(on_change: impl Fn(u32, u32, u32) + Send + Sync + 'static) -> Self {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        let counter = DATEPICKER_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        counter.hash(&mut hasher);
-        std::any::type_name::<DatePicker>().hash(&mut hasher);
-        let id_hash = hasher.finish();
-
         Self {
             selected_date: None,
             range_end: None,
@@ -160,7 +151,7 @@ impl DatePicker {
             range_picking_end: false,
             on_change: Arc::new(on_change),
             on_range_change: None,
-            id_hash,
+            id_hash: 0xE00_0000,
         }
     }
 
@@ -257,21 +248,18 @@ impl DatePicker {
     /// Render the text field portion of the date picker.
     fn render_text_field(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePickerField");
+        renderer.set_key(&format!("dp_field_{}", self.id_hash));
         renderer.set_aria_role("textbox");
         renderer.set_aria_label(&lingua_tong::t("datepicker.label"));
 
         // Background
-        renderer.fill_rounded_rect(rect, RADIUS_MD, theme::surface_elevated());
+        renderer.fill_rounded_rect(rect, RADIUS_MD, [0.06, 0.06, 0.08, 1.0]);
         // Border
-        renderer.stroke_rounded_rect(rect, RADIUS_MD, theme::border(), 1.5);
+        renderer.stroke_rounded_rect(rect, RADIUS_MD, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         // Date text
         let text = self.format_date();
-        let text_color = if self.selected_date.is_some() {
-            theme::text()
-        } else {
-            theme::text_muted()
-        };
+        let text_color = [1.0, 1.0, 1.0, 1.0];
         let text_x = rect.x + 10.0;
         let text_y = rect.y + (rect.height - 14.0) / 2.0;
         renderer.draw_text(&text, text_x, text_y, 14.0, text_color);
@@ -279,7 +267,7 @@ impl DatePicker {
         // Calendar icon on the right
         let icon_x = rect.x + rect.width - 28.0;
         let icon_y = rect.y + (rect.height - 14.0) / 2.0;
-        renderer.draw_text("\u{1F4C5}", icon_x, icon_y, 14.0, theme::text_muted());
+        renderer.draw_text("\u{1F4C5}", icon_x, icon_y, 14.0, [1.0, 1.0, 1.0, 0.8]);
 
         renderer.pop_vnode();
     }
@@ -292,29 +280,24 @@ impl DatePicker {
 
         let pop_rect = Rect {
             x: anchor_rect.x,
-            y: anchor_rect.y + anchor_rect.height + gap,
+            y: anchor_rect.y - pop_h - gap,
             width: pop_w,
             height: pop_h,
         };
 
-        renderer.set_z_index(500.0);
+        renderer.set_z_index(-900.0);
 
         // Semi-transparent backdrop behind the popover
         renderer.fill_rect(anchor_rect, theme::with_alpha(theme::bg(), 0.25));
-
-        // Glassmorphic background
-        if crate::theme::glassmorphism_enabled() {
-            renderer.bifrost(pop_rect, 20.0, 1.2, 0.92);
-        }
         renderer.fill_rounded_rect(
             pop_rect,
             RADIUS_XL,
-            theme::with_alpha(theme::surface_elevated(), 0.9),
+            [0.05, 0.05, 0.07, 1.0],
         );
         renderer.stroke_rounded_rect(
             pop_rect,
             RADIUS_XL,
-            theme::with_alpha(theme::primary(), 0.7),
+            [0.25, 0.25, 0.28, 1.0],
             1.5,
         );
 
@@ -570,12 +553,13 @@ impl DatePicker {
         let prev_r = prev_btn_rect;
         let dm = display_month;
         let dy = display_year;
+        renderer.push_vnode(prev_btn_rect, "DatePickerPrev");
+        renderer.set_key(&format!("dp_prev_{}", id));
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event
-                    && prev_r.contains(x, y)
-                {
+                if let Event::PointerClick { x, y, .. } = event {
+                    log::info!("[DatePicker] Prev Month click at ({}, {}), prev_r={:?}", x, y, prev_r);
                     let (new_m, new_y) = if dm == 1 { (12, dy - 1) } else { (dm - 1, dy) };
                     update_system_state(move |s| {
                         let mut s = s.clone();
@@ -585,17 +569,19 @@ impl DatePicker {
                 }
             }),
         );
+        renderer.pop_vnode();
 
         // Next month button click
         let next_r = next_btn_rect;
         let dm2 = display_month;
         let dy2 = display_year;
+        renderer.push_vnode(next_btn_rect, "DatePickerNext");
+        renderer.set_key(&format!("dp_next_{}", id));
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event
-                    && next_r.contains(x, y)
-                {
+                if let Event::PointerClick { x, y, .. } = event {
+                    log::info!("[DatePicker] Next Month click at ({}, {}), next_r={:?}", x, y, next_r);
                     let (new_m, new_y) = if dm2 == 12 {
                         (1, dy2 + 1)
                     } else {
@@ -609,6 +595,7 @@ impl DatePicker {
                 }
             }),
         );
+        renderer.pop_vnode();
 
         // Day cell clicks
         let mode = self.mode;
@@ -632,12 +619,13 @@ impl DatePicker {
                         let oc = on_change.clone();
                         let id2 = id;
                         let orc = on_range_change.clone();
+                        renderer.push_vnode(cell_rect, "DatePickerDay");
+                        renderer.set_key(&format!("dp_day_{}_{}", id, d));
                         renderer.register_handler(
                             "pointerclick",
                             Arc::new(move |event: Event| {
-                                if let Event::PointerClick { x, y, .. } = event
-                                    && cell_rect.contains(x, y)
-                                {
+                                if let Event::PointerClick { x, y, .. } = event {
+                                    log::info!("[DatePicker] Day {} click at ({}, {}), cell_rect={:?}", d, x, y, cell_rect);
                                     (oc)(d, display_month, display_year);
                                     if mode == DatePickerMode::Range {
                                         // In range mode, toggle between picking start and end
@@ -684,6 +672,7 @@ impl DatePicker {
                                 }
                             }),
                         );
+                        renderer.pop_vnode();
                     }
                 }
             }
@@ -717,10 +706,37 @@ impl View for DatePicker {
         unreachable!()
     }
 
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "DatePicker");
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
 
+    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(220.0),
+            height: 38.0,
+        }
+    }
+
+    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let is_open = self.is_open_state() || self.is_open;
+
+        // Calculate combined bounding box for input field + popped up calendar above it
+        let combined_rect = if is_open {
+            let pop_w: f32 = 280.0;
+            let pop_h: f32 = 260.0;
+            let gap = 6.0;
+            Rect {
+                x: rect.x,
+                y: rect.y - pop_h - gap,
+                width: rect.width.max(pop_w),
+                height: rect.height + pop_h + gap,
+            }
+        } else {
+            rect
+        };
+
+        renderer.push_vnode(combined_rect, "DatePicker");
+        renderer.set_key(&format!("dp_main_{}", self.id_hash));
 
         // Render the text field
         self.render_text_field(renderer, rect);
@@ -755,5 +771,27 @@ impl View for DatePicker {
         }
 
         renderer.pop_vnode();
+    }
+}
+
+impl cvkg_core::layout::LayoutView for DatePicker {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::layout::SizeProposal,
+        _subviews: &[&dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(220.0),
+            height: 38.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
+        _cache: &mut cvkg_core::layout::LayoutCache,
+    ) {
     }
 }
