@@ -11,7 +11,13 @@ static TRANSLATIONS: OnceLock<Mutex<HashMap<String, HashMap<String, String>>>> =
 
 /// Set the active locale. Should be called once at app startup.
 pub fn set_locale(locale: &str) {
-    let _ = LOCALE.get_or_init(|| Mutex::new(locale.to_string()));
+    if let Some(mutex) = LOCALE.get() {
+        if let Ok(mut guard) = mutex.lock() {
+            *guard = locale.to_string();
+        }
+    } else {
+        let _ = LOCALE.get_or_init(|| Mutex::new(locale.to_string()));
+    }
 }
 
 /// Get the current locale.
@@ -397,4 +403,51 @@ pub fn init_english() {
     en.insert("status.success".to_string(), "Success".to_string());
     en.insert("status.empty".to_string(), "No data".to_string());
     load_translations("en", en);
+}
+
+#[cfg(test)]
+mod i18n_tests {
+    use super::*;
+
+    #[test]
+    fn test_non_ascii_japanese() {
+        let mut ja = HashMap::new();
+        ja.insert("hello".to_string(), "こんにちは".to_string());
+        load_translations("ja", ja);
+        set_locale("ja");
+        assert_eq!(t("hello"), "こんにちは");
+        set_locale("en");
+    }
+
+    #[test]
+    fn test_non_ascii_chinese() {
+        let mut zh = HashMap::new();
+        zh.insert("hello".to_string(), "你好".to_string());
+        load_translations("zh", zh);
+        set_locale("zh");
+        assert_eq!(t("hello"), "你好");
+        set_locale("en");
+    }
+
+    #[test]
+    fn test_rtl_arabic() {
+        let mut ar = HashMap::new();
+        ar.insert("hello".to_string(), "مرحبا".to_string());
+        load_translations("ar", ar);
+        set_locale("ar");
+        assert_eq!(t("hello"), "مرحبا");
+        set_locale("en");
+    }
+
+    #[test]
+    fn test_missing_key_fallback() {
+        set_locale("en");
+        assert_eq!(t("nonexistent_key"), "nonexistent_key");
+    }
+
+    #[test]
+    fn test_locale_fallback_to_key() {
+        set_locale("fr");
+        assert_eq!(t("unknown_key_xyz"), "unknown_key_xyz");
+    }
 }
