@@ -494,3 +494,28 @@ mod tests {
         assert!(tel.average_fps() > 0.0);
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn telemetry_default_constructs() {
+        let tel = Telemetry::default();
+        assert_eq!(tel.event_count(), 0);
+        assert_eq!(tel.frame_count(), 0);
+    }
+
+    #[test]
+    fn telemetry_event_description() {
+        let e = TelemetryEvent::ReducedMotionEnabled;
+        assert!(e.description().contains("reduced-motion"));
+    }
+
+    #[test]
+    fn telemetry_event_is_accessibility() {
+        let e = TelemetryEvent::ReducedTransparencyEnabled;
+        assert!(e.is_accessibility_issue());
+        assert!(!e.is_performance_issue());
+    }
+}

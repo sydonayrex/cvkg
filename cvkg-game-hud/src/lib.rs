@@ -498,3 +498,38 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn health_bar_constructs() {
+        let bar = HealthBar::new(100.0, 100.0);
+        assert!(!bar.is_animating());
+    }
+
+    #[test]
+    fn mana_bar_constructs() {
+        let bar = ManaBar::new(50.0, 100.0);
+        assert!(!bar.is_animating());
+    }
+
+    #[test]
+    fn cooldown_indicator_constructs() {
+        let cd = CooldownIndicator::new(5.0, 10.0);
+        assert!(!cd.is_animating());
+    }
+
+    #[test]
+    fn damage_number_constructs() {
+        let dmg = DamageNumber::new(42);
+        assert!(!dmg.is_animating());
+    }
+
+    #[test]
+    fn minimap_default_constructs() {
+        let mm = Minimap::default();
+        assert_eq!(mm.size, 120.0);
+    }
+}

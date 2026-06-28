@@ -898,3 +898,34 @@ mod tests {
         assert!(xml.contains(r#"id="empty_node""#));
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn serializer_config_default() {
+        let config = SerializerConfig::default();
+        assert_eq!(config.indent, 2);
+        assert_eq!(config.decimal_places, 3);
+    }
+
+    #[test]
+    fn serialization_stats_default() {
+        let stats = SerializationStats::default();
+        assert_eq!(stats.element_count, 0);
+        assert_eq!(stats.xml_size_bytes, 0);
+    }
+
+    #[test]
+    fn id_tracker_constructs() {
+        let tracker = IdTracker::new();
+        assert_eq!(tracker.register("test"), "test");
+    }
+
+    #[test]
+    fn svg_serialize_error_display() {
+        let err = SvgSerializeError::WriteError("fail".into());
+        assert!(err.to_string().contains("fail"));
+    }
+}

@@ -848,3 +848,30 @@ mod tests {
         // Should not panic.
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn framebuffer_constructs() {
+        let fb = Framebuffer::new(64, 64);
+        assert_eq!(fb.width(), 64);
+        assert_eq!(fb.height(), 64);
+        assert_eq!(fb.pixels().len(), 64 * 64);
+    }
+
+    #[test]
+    fn software_renderer_constructs() {
+        let r = SoftwareRenderer::new(64, 64);
+        assert_eq!(r.width(), 64);
+        assert_eq!(r.height(), 64);
+    }
+
+    #[test]
+    fn software_renderer_with_color_constructs() {
+        let r = SoftwareRenderer::with_color(32, 32, [0.5, 0.5, 0.5, 1.0]);
+        assert_eq!(r.width(), 32);
+        assert_eq!(r.height(), 32);
+    }
+}

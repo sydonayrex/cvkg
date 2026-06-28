@@ -71,4 +71,18 @@ mod smoke_tests {
         // PNG magic bytes: 0x89 0x50 0x4E 0x47
         assert_eq!(&png_bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
     }
+
+    #[test]
+    fn encode_gif_produces_valid_output() {
+        let frame = CapturedFrame {
+            width: 10,
+            height: 10,
+            rgba: vec![255u8; 10 * 10 * 4],
+        };
+        let result = encode_gif(&[frame], 30);
+        assert!(result.is_ok());
+        let gif_bytes = result.unwrap();
+        // GIF magic bytes: "GIF89a" or "GIF87a"
+        assert_eq!(&gif_bytes[..3], b"GIF");
+    }
 }

@@ -349,6 +349,30 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn icon_registry_default_constructs() {
+        let reg = IconRegistry::default();
+        assert!(!reg.is_empty());
+        assert!(reg.len() >= 20);
+    }
+
+    #[test]
+    fn icon_data_svg_constructs() {
+        let data = IconData::Svg("M0 0 L1 1".into());
+        assert_eq!(data.svg_path(), Some("M0 0 L1 1"));
+    }
+
+    #[test]
+    fn icon_data_glyph_constructs() {
+        let data = IconData::Glyph(65);
+        assert_eq!(data.svg_path(), None);
+    }
+}
+
 impl IconData {
     /// Returns the SVG path string if this is an Svg variant.
     pub fn svg_path(&self) -> Option<&str> {

@@ -1449,3 +1449,46 @@ mod state_color_tests {
         let _success = states.success;
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn oklch_color_constructs() {
+        let c = OklchColor::new(0.5, 0.1, 180.0, 1.0);
+        assert_eq!(c.l, 0.5);
+        assert_eq!(c.c, 0.1);
+    }
+
+    #[test]
+    fn oklch_from_rgb_constructs() {
+        let c = OklchColor::from_rgb(1.0, 0.0, 0.0);
+        assert!(c.l >= 0.0 && c.l <= 1.0);
+    }
+
+    #[test]
+    fn theme_dark_constructs() {
+        let theme = Theme::dark();
+        assert!(theme.is_dark());
+    }
+
+    #[test]
+    fn theme_light_constructs() {
+        let theme = Theme::light();
+        assert!(!theme.is_dark());
+    }
+
+    #[test]
+    fn glass_material_default() {
+        let mat = GlassMaterial::default_glass();
+        assert!(mat.backdrop_blur_radius > 0.0);
+    }
+
+    #[test]
+    fn density_multiplier() {
+        assert_eq!(Density::Compact.multiplier(), 0.75);
+        assert_eq!(Density::Default.multiplier(), 1.0);
+        assert_eq!(Density::Spacious.multiplier(), 1.25);
+    }
+}

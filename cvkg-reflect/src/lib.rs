@@ -663,3 +663,41 @@ mod tests {
         assert_eq!(k, k2);
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn field_meta_constructs() {
+        let f = FieldMeta {
+            name: "test",
+            kind: FieldKind::Float,
+            doc: "a test field",
+            read_only: false,
+        };
+        assert_eq!(f.name, "test");
+        assert_eq!(f.kind, FieldKind::Float);
+    }
+
+    #[test]
+    fn type_meta_field_lookup() {
+        let meta = ColorStop::type_meta();
+        assert_eq!(meta.type_name, "ColorStop");
+        assert!(meta.field("position").is_some());
+        assert!(meta.field("nonexistent").is_none());
+    }
+
+    #[test]
+    fn reflect_registry_constructs() {
+        let reg = ReflectRegistry::new();
+        assert!(reg.get("Anything").is_none());
+    }
+
+    #[test]
+    fn color_stop_reflected_roundtrip() {
+        let cs = ColorStop::new(0.5, "mid");
+        let snap = cs.snapshot();
+        assert_eq!(snap.len(), 2);
+    }
+}

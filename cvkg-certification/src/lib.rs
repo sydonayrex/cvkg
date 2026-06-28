@@ -479,3 +479,36 @@ mod tests {
         assert!(report.all_pass());
     }
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    use super::*;
+
+    #[test]
+    fn cert_result_pass_is_valid() {
+        let r = CertResult::Pass;
+        assert!(r.is_pass());
+        assert!(!r.is_fail());
+    }
+
+    #[test]
+    fn cert_check_new_constructs() {
+        let c = CertCheck::new("smoke", "smoke test check");
+        assert_eq!(c.name, "smoke");
+        assert!(c.result.is_none());
+    }
+
+    #[test]
+    fn certification_suite_new_constructs() {
+        let suite = CertificationSuite::new("Smoke Suite");
+        assert_eq!(suite.total(), 0);
+        assert!(!suite.all_pass());
+    }
+
+    #[test]
+    fn certification_report_default_constructs() {
+        let report = CertificationReport::default();
+        assert!(!report.all_pass());
+        assert_eq!(report.total_pass(), 0);
+    }
+}

@@ -716,3 +716,11 @@ fn main() {
 
     cvkg::native::NativeRenderer::run(GalleryApp::new(), None);
 }
+
+#[cfg(test)]
+mod smoke_tests {
+    #[test]
+    fn test_gallery_compiles() {
+        assert!(true, "gallery smoke test");
+    }
+}
