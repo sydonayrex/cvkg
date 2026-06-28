@@ -7,7 +7,7 @@ use winit::window::{Window, WindowId};
 use crate::asset_manager::NativeAssetManager;
 use crate::audio::{RodioAudioEngine, VisualHapticEngine};
 use crate::events::{convert_ime_event, convert_keyboard_event};
-use crate::renderer::{GPU_FRAME_PTR, NativeRenderer};
+use crate::renderer::{GpuFramePtrGuard, GPU_FRAME_PTR, NativeRenderer};
 use crate::window::{SafeAreaInsets, WindowManager, WindowState, WindowStateDetector};
 use cvkg_core::{
     AccessibilityPreferences, ColorTheme, FocusableId, FrameBudgetTracker, FrameRenderer,
@@ -433,11 +433,12 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     {
                         let raw: *mut cvkg_render_gpu::GpuRenderer = &mut *gpu;
-                        GPU_FRAME_PTR.with(|ptr| ptr.set(raw));
+                        // SAFETY: `gpu` MutexGuard outlives this guard (scope ends after render)
+                        let _guard = unsafe { GpuFramePtrGuard::set(raw) };
                         let render_start = std::time::Instant::now();
                         self.view.render(&mut renderer, content_rect);
                         let render_time = render_start.elapsed().as_secs_f32() * 1000.0;
-                        GPU_FRAME_PTR.with(|ptr| ptr.set(std::ptr::null_mut()));
+                        // _guard drops here, clearing GPU_FRAME_PTR even on panic
                         if render_time > 5.0 {
                             log::warn!(
                                 "[Native] view.render() took {:.2}ms (gpu_lock={:.2}ms, begin_frame={:.2}ms)",

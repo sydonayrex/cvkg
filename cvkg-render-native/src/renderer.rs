@@ -25,6 +25,29 @@ thread_local! {
         const { std::cell::Cell::new(std::ptr::null_mut()) };
 }
 
+/// RAII guard that clears `GPU_FRAME_PTR` on drop.
+///
+/// # Safety
+/// Construct ONLY while holding a `MutexGuard<GpuRenderer>` that outlives this guard.
+pub(crate) struct GpuFramePtrGuard;
+
+impl GpuFramePtrGuard {
+    /// Set the thread-local raw pointer. Cleared automatically on drop.
+    ///
+    /// # Safety
+    /// `ptr` must reference memory that outlives this guard (typically a MutexGuard).
+    pub(crate) unsafe fn set(ptr: *mut cvkg_render_gpu::GpuRenderer) -> Self {
+        GPU_FRAME_PTR.with(|cell| cell.set(ptr));
+        Self
+    }
+}
+
+impl Drop for GpuFramePtrGuard {
+    fn drop(&mut self) {
+        GPU_FRAME_PTR.with(|cell| cell.set(std::ptr::null_mut()));
+    }
+}
+
 /// Native renderer backend implementing the Renderer trait.
 /// It wraps a shared GpuRenderer for high-performance GPU drawing.
 /// During a render pass, GPU_FRAME_PTR is set so draw calls bypass the mutex.
