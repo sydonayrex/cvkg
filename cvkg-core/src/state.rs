@@ -219,5 +219,56 @@ mod proptest_tests {
                 prop_assert_eq!(state.get(), v);
             }
         }
+
+        /// Multiple subscribers must ALL be called on every set.
+        #[test]
+        fn test_state_multiple_subscribers_all_called(
+            vals in prop::collection::vec(any::<u32>(), 1..20),
+            subscriber_count in 1..5usize,
+        ) {
+            let state = State::new(0u32);
+            let counts: Vec<Arc<AtomicUsize>> = (0..subscriber_count)
+                .map(|_| Arc::new(AtomicUsize::new(0)))
+                .collect();
+            for c in &counts {
+                let cc = c.clone();
+                state.subscribe(move |_| { cc.fetch_add(1, Ordering::Relaxed); });
+            }
+            for v in &vals {
+                state.set(*v);
+            }
+            for (i, c) in counts.iter().enumerate() {
+                prop_assert_eq!(
+                    c.load(Ordering::Relaxed),
+                    vals.len(),
+                    "subscriber {} must be called {} times",
+                    i,
+                    vals.len()
+                );
+            }
+        }
+
+        /// Get always returns the most recently set value.
+        #[test]
+        fn test_state_get_returns_last_set(
+            a in any::<u32>(),
+            b in any::<u32>(),
+        ) {
+            let state = State::new(a);
+            prop_assert_eq!(state.get(), a);
+            state.set(b);
+            prop_assert_eq!(state.get(), b);
+        }
+
+        /// Empty subscription list must not panic on set.
+        #[test]
+        fn test_state_no_subscribers_ok(vals in prop::collection::vec(any::<u32>(), 1..20)) {
+            let state = State::new(0u32);
+            for v in vals {
+                state.set(v);
+            }
+            // Just verifying no panic occurred
+            prop_assert!(true);
+        }
     }
 }
