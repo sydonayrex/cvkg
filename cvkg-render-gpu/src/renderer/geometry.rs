@@ -405,7 +405,7 @@ impl GpuRenderer {
         let y1 = snap(rect.y);
         let x2 = snap(rect.x + rect.width);
         let y2 = snap(rect.y + rect.height);
-        let z = self.current_z;
+        let z = -self.current_z; // Negate: higher z-index = closer (wins under GreaterEqual)
         let normal = [0.0, 0.0, 1.0];
         let clip_rect = self.clip_stack.last().copied().unwrap_or(cvkg_core::Rect {
             x: -10000.0,
