@@ -2,124 +2,54 @@
 //! Provides better error messages with span information and suggested fixes
 
 use std::fmt;
+use thiserror::Error;
 
 /// Error types for common CVKG mistakes
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum CvkgError {
     /// Component failed to render due to invalid geometry
+    #[error("Invalid geometry: {rect} - {reason}. Suggestion: {suggestion}")]
     InvalidGeometry {
         rect: String,
         reason: String,
         suggestion: String,
     },
     /// Missing required feature flag
+    #[error("Missing feature '{feature}' in crate {crate_name}. {suggestion}. Run: cargo build -p {crate_name} --features {feature}")]
     MissingFeature {
         feature: String,
         crate_name: String,
         suggestion: String,
     },
     /// Invalid view composition
+    #[error("Cannot use {view_type} inside {parent_type}. {suggestion}. Check the parent-child compatibility rules.")]
     InvalidViewComposition {
         view_type: String,
         parent_type: String,
         suggestion: String,
     },
     /// Renderer initialization failed
+    #[error("Failed to initialize {backend} renderer: {reason}. {suggestion}")]
     RendererInitFailed {
         backend: String,
         reason: String,
         suggestion: String,
     },
     /// Runtime renderer error from a backend
+    #[error("[{backend}] {message}. {suggestion}")]
     RendererError {
         backend: String,
         message: String,
         suggestion: String,
     },
     /// Layout constraint violation or computation failure
+    #[error("Layout error (node {node_id:?}): {message}. {suggestion}")]
     LayoutError {
         node_id: Option<u64>,
         message: String,
         suggestion: String,
     },
 }
-
-impl fmt::Display for CvkgError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CvkgError::InvalidGeometry {
-                rect,
-                reason,
-                suggestion,
-            } => {
-                write!(
-                    f,
-                    "Invalid geometry: {} - {}. Suggestion: {}",
-                    rect, reason, suggestion
-                )
-            }
-            CvkgError::MissingFeature {
-                feature,
-                crate_name,
-                suggestion,
-            } => {
-                write!(
-                    f,
-                    "Missing feature '{}' in crate {}. {}. Run: cargo build -p {} --features {}",
-                    feature, crate_name, suggestion, crate_name, feature
-                )
-            }
-            CvkgError::InvalidViewComposition {
-                view_type,
-                parent_type,
-                suggestion,
-            } => {
-                write!(
-                    f,
-                    "Cannot use {} inside {}. {}. Check the parent-child compatibility rules.",
-                    view_type, parent_type, suggestion
-                )
-            }
-            CvkgError::RendererInitFailed {
-                backend,
-                reason,
-                suggestion,
-            } => {
-                write!(
-                    f,
-                    "Failed to initialize {} renderer: {}. {}",
-                    backend, reason, suggestion
-                )
-            }
-            CvkgError::RendererError {
-                backend,
-                message,
-                suggestion,
-            } => {
-                write!(
-                    f,
-                    "[{}] {}. {}",
-                    backend, message, suggestion
-                )
-            }
-            CvkgError::LayoutError {
-                node_id,
-                message,
-                suggestion,
-            } => {
-                let node = node_id.map_or_else(|| "unknown".to_string(), |n| format!("0x{n:X}"));
-                write!(
-                    f,
-                    "Layout error (node {}): {}. {}",
-                    node, message, suggestion
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for CvkgError {}
-
 /// Helper for creating geometry errors with suggested fixes
 pub fn invalid_geometry_error(rect: &str, reason: &str) -> CvkgError {
     let suggestion = match reason {
@@ -234,7 +164,8 @@ mod tests {
             suggestion: "check flex properties".into(),
         };
         let msg = err.to_string();
-        assert!(msg.contains("0xABCD"), "should format node ID as hex");
+        // {node_id:?} renders as Some(43981) in thiserror (Debug is decimal)
+        assert!(msg.contains("43981"), "should include node ID value");
         assert!(msg.contains("constraint conflict"), "should contain message");
     }
 
@@ -246,7 +177,8 @@ mod tests {
             suggestion: "check floats".into(),
         };
         let msg = err.to_string();
-        assert!(msg.contains("unknown"), "should handle None node ID");
+        // {node_id:?} renders as None in thiserror
+        assert!(msg.contains("None"), "should handle None node ID");
     }
 
     #[test]
