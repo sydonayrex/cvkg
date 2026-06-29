@@ -12,3 +12,4 @@ telemetry = []
 
 [dependencies]
 cvkg-core.workspace = true
+tracing.workspace = true

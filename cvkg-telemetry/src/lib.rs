@@ -248,34 +248,34 @@ impl Telemetry {
 
     /// Logs a summary of all recorded events to stderr.
     pub fn log_summary(&self) {
-        eprintln!("=== CVKG Telemetry Summary ===");
-        eprintln!("  Elapsed: {:.1}s", self.elapsed_secs());
-        eprintln!(
+        tracing::info!("=== CVKG Telemetry Summary ===");
+        tracing::info!("  Elapsed: {:.1}s", self.elapsed_secs());
+        tracing::info!(
             "  Frames: {} ({:.0} FPS avg)",
             self.frame_count,
             self.average_fps()
         );
-        eprintln!("  Glass elements: {}", self.glass_element_count);
-        eprintln!("  Contrast failures: {}", self.contrast_failure_count);
-        eprintln!("  Budget exceeded: {}", self.budget_exceeded_count);
-        eprintln!("  Total events: {}", self.events.len());
+        tracing::info!("  Glass elements: {}", self.glass_element_count);
+        tracing::info!("  Contrast failures: {}", self.contrast_failure_count);
+        tracing::info!("  Budget exceeded: {}", self.budget_exceeded_count);
+        tracing::info!("  Total events: {}", self.events.len());
 
         let a11y = self.accessibility_events();
         if !a11y.is_empty() {
-            eprintln!("  Accessibility issues:");
+            tracing::info!("  Accessibility issues:");
             for event in &a11y {
-                eprintln!("    - {}", event.description());
+                tracing::info!("    - {}", event.description());
             }
         }
 
         let perf = self.performance_events();
         if !perf.is_empty() {
-            eprintln!("  Performance issues:");
+            tracing::info!("  Performance issues:");
             for event in &perf {
-                eprintln!("    - {}", event.description());
+                tracing::info!("    - {}", event.description());
             }
         }
-        eprintln!("=== End Telemetry Summary ===");
+        tracing::info!("=== End Telemetry Summary ===");
     }
 
     /// Clears all recorded events.

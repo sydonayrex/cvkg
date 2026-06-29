@@ -200,7 +200,7 @@ impl ViewModifier for FrameModifier {
                     width: child_size.width,
                     height: child_size.height,
                 };
-                eprintln!(
+                tracing::debug!(
                     "DEBUG CENTER: rect={:?}, child_size=({}, {}), child_rect={:?}",
                     rect,
                     child_size.width,

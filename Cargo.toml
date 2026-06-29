@@ -92,6 +92,7 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 web-sys = "0.3"
 log = "0.4"
+tracing = "0.1"
 notify = "8.0"
 anyhow = "1.0"
 bytemuck = { version = "1.25", features = ["derive"] }
