@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-macros"
-version = "0.2.15"
+version = "0.2.16"
 build = false
 autolib = false
 autobins = false

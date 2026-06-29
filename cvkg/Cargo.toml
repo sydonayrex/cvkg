@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg"
-version = "0.2.15"
+version = "0.2.16"
 build = false
 autolib = false
 autobins = false
@@ -57,35 +57,35 @@ name = "declarative_dashboard"
 path = "examples/declarative_dashboard.rs"
 
 [dependencies.cvkg-anim]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-components]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-core]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-layout]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-macros]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-render-gpu]
-version = "0.2.15"
+version = "0.2.16"
 optional = true
 
 [dependencies.cvkg-render-native]
-version = "0.2.15"
+version = "0.2.16"
 optional = true
 
 
 
 [dependencies.cvkg-scene]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-themes]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.rand]
 version = "0.8"

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-vdom"
-version = "0.2.15"
+version = "0.2.16"
 build = false
 autolib = false
 autobins = false
@@ -43,10 +43,10 @@ workspace = true
 
 
 [dependencies.cvkg-core]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.cvkg-scene]
-version = "0.2.15"
+version = "0.2.16"
 
 [dependencies.log]
 version = "0.4"

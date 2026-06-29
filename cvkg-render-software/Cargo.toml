@@ -1,6 +1,6 @@
 [package]
 name = "cvkg-render-software"
-version = "0.2.15"
+version = "0.2.16"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -11,8 +11,8 @@ default = ["text"]
 text = ["cvkg-runic-text"]
 
 [dependencies]
-cvkg-core = { path = "../cvkg-core", version = "0.2.15" }
+cvkg-core = { path = "../cvkg-core", version = "0.2.16" }
 tracing = { workspace = true }
-cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.2.15", optional = true }
+cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.2.16", optional = true }
 glam = "0.33"
 log = "0.4"

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "berserker"
-version = "0.2.15"
+version = "0.2.16"
 publish = false
 build = false
 autolib = false
