@@ -19,22 +19,14 @@
 //! Sources:
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
+#![warn(missing_docs)]
 #![allow(
     clippy::too_many_arguments,
-    clippy::new_without_default,
     clippy::needless_range_loop,
     clippy::large_enum_variant,
     clippy::manual_clamp,
-    clippy::doc_lazy_continuation,
-    clippy::needless_borrow,
-    ambiguous_glob_reexports,
     clippy::type_complexity,
-    clippy::unusual_byte_groupings,
-    clippy::collapsible_if,
-    clippy::manual_range_contains,
-    clippy::derivable_impls,
-    clippy::match_like_matches_macro,
-    clippy::collapsible_match
+    clippy::doc_lazy_continuation,
 )]
 
 //! Built-in component library for CVKG

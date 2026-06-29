@@ -111,8 +111,8 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 image = "0.25"
 gif = "0.14"
 rayon = "1.12"
-wgpu = { version = "29", features = ["spirv"] }
-naga = { version = "29", features = ["wgsl-in", "spv-out"] }
+wgpu = { version = "=29.0.0", features = ["spirv"] }
+naga = { version = "=29.0.0", features = ["wgsl-in", "spv-out"] }
 
 # SVG Editor external dependencies
 # SVG/XML parsing
