@@ -58,7 +58,7 @@ pub struct RuntimeEvent {
 pub fn apply_patch(patch: RuntimePatch) {
     match patch {
         RuntimePatch::ReplaceView { node_id, new_view } => {
-            log::info!(
+            tracing::info!(
                 "Runtime: Replacing view subgraph for node {}. (Serialized: {})",
                 node_id,
                 new_view
@@ -70,7 +70,7 @@ pub fn apply_patch(patch: RuntimePatch) {
             field,
             value,
         } => {
-            log::info!(
+            tracing::info!(
                 "Runtime: Updating state for node {} field '{}' to {}",
                 node_id,
                 field,

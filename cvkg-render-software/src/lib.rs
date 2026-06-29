@@ -544,7 +544,7 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_texture(&mut self, texture_id: u32, _rect: Rect) {
-        log::warn!(
+        tracing::warn!(
             "[SoftwareRenderer] draw_texture({}) is not implemented in software. \
              The texture will not appear in the output.",
             texture_id
@@ -552,7 +552,7 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_image(&mut self, image_name: &str, _rect: Rect) {
-        log::warn!(
+        tracing::warn!(
             "[SoftwareRenderer] draw_image('{}') is not implemented in software. \
              The image will not appear in the output.",
             image_name
@@ -560,7 +560,7 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_svg(&mut self, name: &str, _rect: Rect) {
-        log::warn!(
+        tracing::warn!(
             "[SoftwareRenderer] draw_svg('{}') is not implemented in software. \
              The SVG will not appear in the output.",
             name
@@ -568,14 +568,14 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_mesh(&mut self, _mesh: &Mesh, _color: [f32; 4], _transform: glam::Mat4) {
-        log::warn!(
+        tracing::warn!(
             "[SoftwareRenderer] draw_mesh() is not implemented in software. \
              The mesh will not appear in the output."
         );
     }
 
     fn draw_mesh_3d(&mut self, _mesh: &Mesh, _material: &Material3D, _transform: &Transform3D) {
-        log::warn!(
+        tracing::warn!(
             "[SoftwareRenderer] draw_mesh_3d() is not implemented in software. \
              The 3D mesh will not appear in the output."
         );
@@ -593,7 +593,7 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_hologram(&mut self, _rect: Rect, hologram_id: &str, _time: f32) {
-        log::warn!(
+        tracing::warn!(
             "[SoftwareRenderer] draw_hologram('{}') is not implemented in software. \
              Holograms require GPU compute shaders.",
             hologram_id
@@ -795,7 +795,7 @@ mod tests {
     // ==========================================
     // Verify that the unimplemented methods at least exist
     // (don't panic at the trait level) and return without
-    // modifying the framebuffer. The log::warn! calls are
+    // modifying the framebuffer. The tracing::warn! calls are
     // not asserted (would require log capture infrastructure),
     // but the tests prove the methods don't crash the renderer.
 

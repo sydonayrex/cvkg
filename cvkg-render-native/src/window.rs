@@ -363,7 +363,7 @@ impl WindowManager {
 
         #[cfg(target_os = "linux")]
         {
-            log::info!("[Accessibility] AT-SPI backend available (accesskit_unix)");
+            tracing::info!("[Accessibility] AT-SPI backend available (accesskit_unix)");
         }
 
         let accesskit_adapter = Some(accesskit_winit::Adapter::with_event_loop_proxy(

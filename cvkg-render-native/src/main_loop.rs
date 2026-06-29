@@ -82,7 +82,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 || a11y_prefs.reduce_transparency
                 || a11y_prefs.increase_contrast
             {
-                log::info!(
+                tracing::info!(
                     "[Native] Accessibility prefs: motion={} transparency={} contrast={}",
                     a11y_prefs.reduce_motion,
                     a11y_prefs.reduce_transparency,
@@ -91,14 +91,14 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
             }
 
             let system_theme = detect_system_theme();
-            log::info!("[Native] System theme detected: {:?}", system_theme);
+            tracing::info!("[Native] System theme detected: {:?}", system_theme);
 
             self.audio_engine =
                 RodioAudioEngine::new().map(|e| Arc::new(e) as Arc<dyn cvkg_core::AudioEngine>);
 
             self.haptic_engine = Arc::new(VisualHapticEngine::new());
 
-            log::info!("[Native] App instance (resumed): {:p}", self);
+            tracing::info!("[Native] App instance (resumed): {:p}", self);
 
             let config = WindowConfig {
                 title: "CVKG Gallery".to_string(),
@@ -126,7 +126,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 .get(&handle.id)
                 .copied()
                 .unwrap_or_else(|| {
-                    log::error!("[Native] winit_id not found for window handle: window may have been destroyed");
+                    tracing::error!("[Native] winit_id not found for window handle: window may have been destroyed");
                     std::process::exit(1);
                 });
             let window = self
@@ -161,14 +161,14 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
             self.gpu = Some(Arc::new(std::sync::Mutex::new(gpu)));
 
-            log::info!("[Native] Initialization complete.");
+            tracing::info!("[Native] Initialization complete.");
             window.request_redraw();
         }
     }
 
     fn new_events(&mut self, _event_loop: &ActiveEventLoop, cause: winit::event::StartCause) {
         if !matches!(cause, winit::event::StartCause::Poll) {
-            log::trace!("[Native] Event Loop Wake: {:?}", cause);
+            tracing::trace!("[Native] Event Loop Wake: {:?}", cause);
         }
     }
 
@@ -179,7 +179,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
         event: DeviceEvent,
     ) {
         if !matches!(event, DeviceEvent::MouseMotion { .. }) {
-            log::trace!("[Native] DEVICE EVENT: {:?}", event);
+            tracing::trace!("[Native] DEVICE EVENT: {:?}", event);
         }
     }
 
@@ -187,7 +187,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
         if !matches!(event, WindowEvent::RedrawRequested)
             && !matches!(event, WindowEvent::CursorMoved { .. })
         {
-            log::info!(
+            tracing::info!(
                 "[Native] App instance: {:p} | WINDOW EVENT: {:?}",
                 self,
                 event
@@ -197,7 +197,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
         let gpu_arc = if let Some(g) = &self.gpu {
             g.clone()
         } else {
-            log::warn!("[Native] DROPPING EVENT: GPU not initialized yet");
+            tracing::warn!("[Native] DROPPING EVENT: GPU not initialized yet");
             return;
         };
 
@@ -221,7 +221,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     if speed > 0.1 {
                         self.rage = (self.rage + 0.2).min(1.0);
-                        log::info!("[Native] Kinetic Injection! Rage: {}", self.rage);
+                        tracing::info!("[Native] Kinetic Injection! Rage: {}", self.rage);
                     }
 
                     state.last_pos = Some([pos.x, pos.y]);
@@ -249,7 +249,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     state.window.request_redraw();
                 }
                 WindowEvent::Focused(focused) => {
-                    log::info!("[Native] Window focus changed: {}", focused);
+                    tracing::info!("[Native] Window focus changed: {}", focused);
                     state
                         .is_key_focused
                         .store(focused, std::sync::atomic::Ordering::SeqCst);
@@ -259,7 +259,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 }
                 WindowEvent::RedrawRequested => {
                     if state.frame_count % 60 == 0 {
-                        log::info!("[Native] RedrawRequested (frame {})", state.frame_count);
+                        tracing::info!("[Native] RedrawRequested (frame {})", state.frame_count);
                     }
                     let size = state.window.inner_size();
                     let scale = state.window.scale_factor();
@@ -287,7 +287,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                          let vdom = cvkg_vdom::VDom::build(&self.view, rect);
                          let vdom_elapsed = vdom_start.elapsed();
                          if vdom_elapsed > std::time::Duration::from_millis(1) {
-                             log::warn!(
+                             tracing::warn!(
                                  "[Native] VDom::build took {:?} ({} nodes)",
                                  vdom_elapsed,
                                  vdom.nodes.len()
@@ -325,7 +325,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                             let patches = prev_vdom.diff(&new_vdom);
                             let diff_elapsed = diff_start.elapsed();
                             if diff_elapsed > std::time::Duration::from_millis(1) {
-                                log::warn!(
+                                tracing::warn!(
                                     "[Native] VDom::diff took {:?} ({} patches)",
                                     diff_elapsed,
                                     patches.len()
@@ -420,7 +420,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     gpu.update_mouse(state.cursor_pos, state.cursor_velocity);
 
                     if let Some(assets) = self.pending_prewarm.take() {
-                        log::info!(
+                        tracing::info!(
                             "[Native] Pre-warming {} assets on first frame",
                             assets.len()
                         );
@@ -440,7 +440,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         let render_time = render_start.elapsed().as_secs_f32() * 1000.0;
                         // _guard drops here, clearing GPU_FRAME_PTR even on panic
                         if render_time > 5.0 {
-                            log::warn!(
+                            tracing::warn!(
                                 "[Native] view.render() took {:.2}ms (gpu_lock={:.2}ms, begin_frame={:.2}ms)",
                                 render_time,
                                 gpu_lock_time,
@@ -465,7 +465,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         let gpu_render = gpu_render_end.duration_since(gpu_render_start);
                         let gpu_submit = gpu_submit_end.duration_since(gpu_render_end);
                         let total = gpu_submit_end.duration_since(redraw_start);
-                        log::info!(
+                        tracing::info!(
                             "[Native] Frame breakdown: cpu_draw={:?} gpu_render={:?} gpu_submit(end_frame)={:?} total={:?}",
                             cpu_draw,
                             gpu_render,
@@ -509,7 +509,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     // Record frame budget telemetry
                     if telemetry.frame_over_budget {
-                        log::warn!(
+                        tracing::warn!(
                             "[Telemetry] Frame budget exceeded by {:.2}ms (frame={:.2}ms budget={:.2}ms)",
                             telemetry.frame_time_ms - telemetry.frame_budget_ms,
                             telemetry.frame_time_ms,
@@ -517,7 +517,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         );
                     }
 
-                    log::info!(
+                    tracing::info!(
                         "[Native] Frame timings: layout={:.2}ms state={:.2}ms draw={:.2}ms submit={:.2}ms total={:.2}ms",
                         telemetry.layout_time_ms,
                         telemetry.state_flush_time_ms,
@@ -548,7 +548,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     telemetry.hardware_stall_detected = telemetry.frame_jitter_ms > 20.0;
                     if telemetry.frame_over_budget {
-                        log::warn!(
+                        tracing::warn!(
                             "[Native] Frame budget exceeded by {:.2}ms (layout remaining {:.2}ms)",
                             -telemetry.frame_budget_remaining_ms,
                             telemetry.layout_budget_remaining_ms
@@ -563,14 +563,14 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     state.window.request_redraw();
                 }
                 WindowEvent::CursorEntered { .. } => {
-                    log::info!("[Native] Cursor ENTERED window");
+                    tracing::info!("[Native] Cursor ENTERED window");
                     if let Some(vdom) = &state.vdom {
                         vdom.dispatch_event(cvkg_core::Event::PointerEnter);
                     }
                     state.window.request_redraw();
                 }
                 WindowEvent::CursorLeft { .. } => {
-                    log::info!("[Native] Cursor LEFT window");
+                    tracing::info!("[Native] Cursor LEFT window");
                     if let Some(vdom) = &state.vdom {
                         vdom.dispatch_event(cvkg_core::Event::PointerLeave);
                     }
@@ -602,7 +602,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     button,
                     ..
                 } => {
-                    log::info!(
+                    tracing::info!(
                         "[Native] MOUSE INPUT: {:?} button={:?} pos={:?}",
                         mouse_state,
                         button,
@@ -610,7 +610,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     );
                     if let Some(touch_time) = state.last_touch_time {
                         if touch_time.elapsed().as_millis() < 500 {
-                            log::info!("[Native] Ignoring MouseInput (synthesized from Touch)");
+                            tracing::info!("[Native] Ignoring MouseInput (synthesized from Touch)");
                             return;
                         }
                     }
@@ -641,7 +641,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.active_pointer_target_key = node.key.clone();
                                     }
                                 }
-                                log::info!("[Native] Dispatching PointerDown to VDOM");
+                                tracing::info!("[Native] Dispatching PointerDown to VDOM");
                                 vdom.dispatch_event(cvkg_core::Event::PointerDown {
                                     x: state.cursor_pos[0],
                                     y: state.cursor_pos[1],
@@ -655,7 +655,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 });
                             }
                             winit::event::ElementState::Released => {
-                                log::info!("[Native] Dispatching PointerUp to VDOM");
+                                tracing::info!("[Native] Dispatching PointerUp to VDOM");
                                 let fallback_target = state
                                     .active_pointer_pos
                                     .and_then(|pos| {
@@ -678,18 +678,18 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     .active_pointer_target
                                     .filter(|target| {
                                         if state.active_pointer_target_key.is_none() {
-                                            log::debug!("[Native] Target verification: key is None, skipping cache");
+                                            tracing::debug!("[Native] Target verification: key is None, skipping cache");
                                             return false;
                                         }
                                         let verified = vdom.nodes.get(target).map_or(false, |node| {
                                             let type_match = Some(&node.component_type) == state.active_pointer_target_type.as_ref();
                                             let key_match = node.key == state.active_pointer_target_key;
-                                            log::debug!("[Native] Target verify: id={:?} type={} key={:?} type_match={} key_match={}",
+                                            tracing::debug!("[Native] Target verify: id={:?} type={} key={:?} type_match={} key_match={}",
                                                 target, node.component_type, node.key, type_match, key_match);
                                             type_match && key_match
                                         });
                                         if !verified {
-                                            log::debug!("[Native] Target verification failed for {:?}, using fallback", target);
+                                            tracing::debug!("[Native] Target verification failed for {:?}, using fallback", target);
                                         }
                                         verified
                                     })
@@ -721,19 +721,19 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 }
                                 if !state.is_dragging {
                                     if let Some(target) = target {
-                                        log::info!(
+                                        tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (target={:?})",
                                             target
                                         );
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
-                                        log::info!(
+                                        tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
                                         );
                                         vdom.dispatch_event(pointer_click);
                                     }
                                 } else {
-                                    log::info!("[Native] Skipping PointerClick (is_dragging=true)");
+                                    tracing::info!("[Native] Skipping PointerClick (is_dragging=true)");
                                 }
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
@@ -744,7 +744,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         }
                         state.window.request_redraw();
                     } else {
-                        log::warn!("[Native] Mouse input received but state.vdom is None!");
+                        tracing::warn!("[Native] Mouse input received but state.vdom is None!");
                     }
                 }
                 WindowEvent::MouseWheel { delta, .. } => {
@@ -776,7 +776,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                         match touch.phase {
                             winit::event::TouchPhase::Started => {
-                                log::info!("[Native] Dispatching PointerDown (Touch) to VDOM");
+                                tracing::info!("[Native] Dispatching PointerDown (Touch) to VDOM");
                                 state.drag_start_pos = [x, y];
                                 state.is_dragging = false;
                                 state.drag_button = touch_btn;
@@ -879,19 +879,19 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 }
                                 if !state.is_dragging {
                                     if let Some(target) = target {
-                                        log::info!(
+                                        tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (target={:?})",
                                             target
                                         );
                                         vdom.dispatch_event_to_target(target, pointer_click);
                                     } else {
-                                        log::info!(
+                                        tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
                                         );
                                         vdom.dispatch_event(pointer_click);
                                     }
                                 } else {
-                                    log::info!("[Native] Skipping PointerClick (is_dragging=true)");
+                                    tracing::info!("[Native] Skipping PointerClick (is_dragging=true)");
                                 }
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
@@ -960,7 +960,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 match code {
                                     winit::keyboard::KeyCode::KeyZ => {
                                         if is_shift {
-                                            log::info!("[Native] Shortcut: Redo (Cmd+Shift+Z)");
+                                            tracing::info!("[Native] Shortcut: Redo (Cmd+Shift+Z)");
                                             let mut redo_action = None;
                                             update_system_state(|s| {
                                                 let mut s = s.clone();
@@ -972,7 +972,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             }
                                             state.window.request_redraw();
                                         } else {
-                                            log::info!("[Native] Shortcut: Undo (Cmd+Z)");
+                                            tracing::info!("[Native] Shortcut: Undo (Cmd+Z)");
                                             let mut undo_action = None;
                                             update_system_state(|s| {
                                                 let mut s = s.clone();
@@ -988,7 +988,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     winit::keyboard::KeyCode::KeyY
                                         if !cfg!(target_os = "macos") =>
                                     {
-                                        log::info!("[Native] Shortcut: Redo (Ctrl+Y)");
+                                        tracing::info!("[Native] Shortcut: Redo (Ctrl+Y)");
                                         let mut redo_action = None;
                                         update_system_state(|s| {
                                             let mut s = s.clone();
@@ -1001,11 +1001,11 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyN => {
-                                        log::info!("[Native] Shortcut: New Window (Cmd+N)");
+                                        tracing::info!("[Native] Shortcut: New Window (Cmd+N)");
                                         create_new_window = true;
                                     }
                                     winit::keyboard::KeyCode::KeyO => {
-                                        log::info!("[Native] Shortcut: Open File (Cmd+O)");
+                                        tracing::info!("[Native] Shortcut: Open File (Cmd+O)");
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+o".to_string(),
@@ -1015,7 +1015,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyS => {
-                                        log::info!("[Native] Shortcut: Save (Cmd+S)");
+                                        tracing::info!("[Native] Shortcut: Save (Cmd+S)");
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+s".to_string(),
@@ -1025,22 +1025,22 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyW => {
-                                        log::info!("[Native] Shortcut: Close Window (Cmd+W)");
+                                        tracing::info!("[Native] Shortcut: Close Window (Cmd+W)");
                                         close_window = true;
                                     }
                                     winit::keyboard::KeyCode::KeyQ => {
-                                        log::info!("[Native] Shortcut: Quit (Cmd+Q)");
+                                        tracing::info!("[Native] Shortcut: Quit (Cmd+Q)");
                                         quit_all = true;
                                     }
                                     winit::keyboard::KeyCode::KeyC => {
-                                        log::info!("[Native] Shortcut: Copy (Cmd+C)");
+                                        tracing::info!("[Native] Shortcut: Copy (Cmd+C)");
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::Copy);
                                         }
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyV => {
-                                        log::info!("[Native] Shortcut: Paste (Cmd+V)");
+                                        tracing::info!("[Native] Shortcut: Paste (Cmd+V)");
                                         let text = arboard::Clipboard::new()
                                             .ok()
                                             .and_then(|mut cb| cb.get_text().ok())
@@ -1051,7 +1051,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyX => {
-                                        log::info!("[Native] Shortcut: Cut (Cmd+X)");
+                                        tracing::info!("[Native] Shortcut: Cut (Cmd+X)");
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::Cut);
                                         }
@@ -1061,7 +1061,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         let is_fullscreen = state.window.fullscreen().is_some();
                                         if is_fullscreen {
                                             state.window.set_fullscreen(None);
-                                            log::info!("[Native] Fullscreen OFF");
+                                            tracing::info!("[Native] Fullscreen OFF");
                                         } else {
                                             if let Some(monitor) = state.window.current_monitor() {
                                                 if let Some(mode) = monitor.video_modes().next() {
@@ -1071,7 +1071,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                                     state.window.set_fullscreen(Some(
                                                         winit::window::Fullscreen::Exclusive(mode),
                                                     ));
-                                                    log::info!(
+                                                    tracing::info!(
                                                         "[Native] Fullscreen ON (exclusive: {}x{}@{:?}Hz)",
                                                         w,
                                                         h,
@@ -1082,13 +1082,13 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                                 state.window.set_fullscreen(Some(
                                                     winit::window::Fullscreen::Borderless(None),
                                                 ));
-                                                log::info!("[Native] Fullscreen ON (borderless)");
+                                                tracing::info!("[Native] Fullscreen ON (borderless)");
                                             }
                                         }
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyA => {
-                                        log::info!("[Native] Shortcut: Select All (Cmd+A)");
+                                        tracing::info!("[Native] Shortcut: Select All (Cmd+A)");
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+a".to_string(),
@@ -1098,7 +1098,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyF => {
-                                        log::info!("[Native] Shortcut: Find (Cmd+F)");
+                                        tracing::info!("[Native] Shortcut: Find (Cmd+F)");
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::KeyDown {
                                                 key: "cmd+f".to_string(),
@@ -1113,7 +1113,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                                 if let Ok(node_id) = id.as_str().parse::<u64>() {
                                                     state.focused_node_id =
                                                         Some(cvkg_core::KvasirId(node_id));
-                                                    log::info!(
+                                                    tracing::info!(
                                                         "[Native] Focus previous: {:?}",
                                                         node_id
                                                     );
@@ -1124,7 +1124,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                                 if let Ok(node_id) = id.as_str().parse::<u64>() {
                                                     state.focused_node_id =
                                                         Some(cvkg_core::KvasirId(node_id));
-                                                    log::info!(
+                                                    tracing::info!(
                                                         "[Native] Focus next: {:?}",
                                                         node_id
                                                     );

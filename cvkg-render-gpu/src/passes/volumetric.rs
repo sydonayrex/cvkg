@@ -49,7 +49,7 @@ impl KvasirNode for VolumetricNode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[GPU] Volumetric: missing scene texture view");
+                tracing::error!("[GPU] Volumetric: missing scene texture view");
                 return;
             }
         };

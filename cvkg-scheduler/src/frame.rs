@@ -195,7 +195,7 @@ impl FrameScheduler {
         self.current_phase = FramePhase::Input;
         // Drop any unflushed tasks from the previous frame.
         self.phase_queue.clear();
-        log::trace!(
+        tracing::trace!(
             "FrameScheduler: begin_frame #{} (phase = {:?})",
             self.frame_number,
             self.current_phase
@@ -214,7 +214,7 @@ impl FrameScheduler {
         if let Some(next) = self.current_phase.next() {
             self.current_phase = next;
         }
-        log::trace!(
+        tracing::trace!(
             "FrameScheduler: advance_phase → {:?} (frame #{})",
             self.current_phase,
             self.frame_number
@@ -323,7 +323,7 @@ impl FrameScheduler {
             self.task_scheduler.run_all();
         }
 
-        log::trace!(
+        tracing::trace!(
             "FrameScheduler: flushed phase {:?} (frame #{})",
             current,
             self.frame_number

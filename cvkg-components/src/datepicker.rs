@@ -559,7 +559,7 @@ impl DatePicker {
             "pointerclick",
             Arc::new(move |event: Event| {
                 if let Event::PointerClick { x, y, .. } = event {
-                    log::info!("[DatePicker] Prev Month click at ({}, {}), prev_r={:?}", x, y, prev_r);
+                    tracing::info!("[DatePicker] Prev Month click at ({}, {}), prev_r={:?}", x, y, prev_r);
                     let (new_m, new_y) = if dm == 1 { (12, dy - 1) } else { (dm - 1, dy) };
                     update_system_state(move |s| {
                         let mut s = s.clone();
@@ -581,7 +581,7 @@ impl DatePicker {
             "pointerclick",
             Arc::new(move |event: Event| {
                 if let Event::PointerClick { x, y, .. } = event {
-                    log::info!("[DatePicker] Next Month click at ({}, {}), next_r={:?}", x, y, next_r);
+                    tracing::info!("[DatePicker] Next Month click at ({}, {}), next_r={:?}", x, y, next_r);
                     let (new_m, new_y) = if dm2 == 12 {
                         (1, dy2 + 1)
                     } else {
@@ -625,7 +625,7 @@ impl DatePicker {
                             "pointerclick",
                             Arc::new(move |event: Event| {
                                 if let Event::PointerClick { x, y, .. } = event {
-                                    log::info!("[DatePicker] Day {} click at ({}, {}), cell_rect={:?}", d, x, y, cell_rect);
+                                    tracing::info!("[DatePicker] Day {} click at ({}, {}), cell_rect={:?}", d, x, y, cell_rect);
                                     (oc)(d, display_month, display_year);
                                     if mode == DatePickerMode::Range {
                                         // In range mode, toggle between picking start and end

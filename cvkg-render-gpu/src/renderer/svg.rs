@@ -30,7 +30,7 @@ impl GpuRenderer {
         let tree = match usvg::Tree::from_data(data, &opt) {
             Ok(t) => t,
             Err(e) => {
-                log::error!("Failed to parse SVG '{}': {:?}, skipping load", name, e);
+                tracing::error!("Failed to parse SVG '{}': {:?}, skipping load", name, e);
                 return;
             }
         };
@@ -106,7 +106,7 @@ impl GpuRenderer {
 
             // If neither fill nor stroke, log and skip
             if !has_fill && !has_stroke {
-                log::debug!("SVG path '{}' has no fill or stroke, skipping", node_id);
+                tracing::debug!("SVG path '{}' has no fill or stroke, skipping", node_id);
                 return;
             }
 
@@ -154,7 +154,7 @@ impl GpuRenderer {
                         );
                     }
                     usvg::Paint::Pattern(_) => {
-                        log::warn!(
+                        tracing::warn!(
                             "SVG path '{}' uses pattern fill which is not supported, using white fallback",
                             node_id
                         );
@@ -178,7 +178,7 @@ impl GpuRenderer {
                     usvg::Paint::LinearGradient(_)
                     | usvg::Paint::RadialGradient(_)
                     | usvg::Paint::Pattern(_) => {
-                        log::warn!(
+                        tracing::warn!(
                             "SVG path '{}' uses gradient/pattern stroke which is not supported, using white fallback",
                             node_id
                         );
@@ -243,7 +243,7 @@ impl GpuRenderer {
                         },
                     ),
                 ) {
-                    log::warn!(
+                    tracing::warn!(
                         "SVG stroke tessellation failed for path '{}': {:?}, skipping",
                         node_id,
                         e
@@ -293,7 +293,7 @@ impl GpuRenderer {
             &FillOptions::default().with_fill_rule(fill_rule),
             &mut BuffersBuilder::new(&mut buffers, SceneVertexConstructor { color }),
         ) {
-            log::warn!(
+            tracing::warn!(
                 "SVG fill tessellation failed for path '{}': {:?}, skipping",
                 node_id,
                 e
@@ -392,7 +392,7 @@ impl GpuRenderer {
                 },
             ),
         ) {
-            log::warn!(
+            tracing::warn!(
                 "SVG gradient fill tessellation failed for path '{}': {:?}, skipping",
                 node_id,
                 e
@@ -443,7 +443,7 @@ impl GpuRenderer {
                 },
             ),
         ) {
-            log::warn!(
+            tracing::warn!(
                 "SVG radial gradient fill tessellation failed for path '{}': {:?}, skipping",
                 node_id,
                 e
@@ -514,7 +514,7 @@ impl GpuRenderer {
             return;
         }
 
-        log::info!(
+        tracing::info!(
             "DRAW_SVG '{}' called with rect: {:?}, model_view_box: {:?}",
             name,
             rect,

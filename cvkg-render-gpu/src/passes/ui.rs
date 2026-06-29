@@ -54,7 +54,7 @@ impl KvasirNode for UINode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                tracing::error!("Missing texture view for {}", stringify!(RES_SCENE));
                 return;
             }
         };

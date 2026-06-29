@@ -39,20 +39,20 @@ impl GpuRenderer {
             .create_surface(window.clone())
             .expect("Failed to create surface");
 
-        log::info!("[Surtr] Renderer backend: GpuRenderer (wgpu)");
+        tracing::info!("[Surtr] Renderer backend: GpuRenderer (wgpu)");
 
         // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
-        log::info!("[GPU] Requesting HighPerformance adapter...");
+        tracing::info!("[GPU] Requesting HighPerformance adapter...");
 
         let mut adapter = None;
 
         #[cfg(not(target_arch = "wasm32"))]
         if let Ok(filter) = std::env::var("WGPU_ADAPTER_NAME") {
             let adapters = instance.enumerate_adapters(wgpu::Backends::all()).await;
-            log::info!("[GPU] Available adapters:");
+            tracing::info!("[GPU] Available adapters:");
             for a in &adapters {
                 let info = a.get_info();
-                log::info!(
+                tracing::info!(
                     "  - Name: '{}' | Driver: '{}' | Backend: {:?}",
                     info.name,
                     info.driver,
@@ -65,7 +65,7 @@ impl GpuRenderer {
                 let match_found = info.name.to_lowercase().contains(&filter.to_lowercase())
                     || info.driver.to_lowercase().contains(&filter.to_lowercase());
                 if match_found {
-                    log::info!(
+                    tracing::info!(
                         "[GPU] Manual selection match: {} | Driver: {}",
                         info.name,
                         info.driver
@@ -75,12 +75,12 @@ impl GpuRenderer {
             });
 
             if adapter.is_some() {
-                log::info!(
+                tracing::info!(
                     "[GPU] Forced adapter selection via WGPU_ADAPTER_NAME='{}'",
                     filter
                 );
             } else {
-                log::warn!(
+                tracing::warn!(
                     "[GPU] WGPU_ADAPTER_NAME='{}' provided but no matching adapter found. Falling back...",
                     filter
                 );
@@ -99,7 +99,7 @@ impl GpuRenderer {
         }
 
         if adapter.is_none() {
-            log::warn!(
+            tracing::warn!(
                 "[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower..."
             );
             adapter = instance
@@ -113,7 +113,7 @@ impl GpuRenderer {
         }
 
         if adapter.is_none() {
-            log::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
+            tracing::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
             adapter = instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::LowPower,
@@ -130,14 +130,14 @@ impl GpuRenderer {
         // capability-based shader selection.
         let caps =
             crate::subsystems::GpuCapabilities::detect(&info.name, format!("{:?}", info.backend));
-        log::info!(
+        tracing::info!(
             "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
             info.name,
             info.device_type,
             info.backend,
             caps.vendor
         );
-        log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        tracing::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let supports_timestamps = adapter.features().contains(wgpu::Features::TIMESTAMP_QUERY);
         let supports_pipeline_cache = adapter.features().contains(wgpu::Features::PIPELINE_CACHE);
         #[cfg(not(target_arch = "wasm32"))]
@@ -156,7 +156,7 @@ impl GpuRenderer {
         // Enable validation layer in debug builds for better error reporting
         #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
         {
-            log::info!("[GPU] Validation layer enabled (debug build)");
+            tracing::info!("[GPU] Validation layer enabled (debug build)");
         }
 
         let (device, queue) = adapter
@@ -179,7 +179,7 @@ impl GpuRenderer {
         let adapter = Arc::new(adapter);
 
         device.on_uncaptured_error(Arc::new(|error| {
-            log::error!(
+            tracing::error!(
                 "[GPU] Uncaptured device error (Device Lost or Panic): {:?}",
                 error
             );
@@ -198,11 +198,11 @@ impl GpuRenderer {
         // CONTRACT: Uses select_best_surface_format to safely fall back on mobile/legacy GPUs.
         let surface_format = Self::select_best_surface_format(&surface_caps.formats);
 
-        log::info!(
+        tracing::info!(
             "[GPU] Available present modes: {:?}",
             surface_caps.present_modes
         );
-        log::info!(
+        tracing::info!(
             "[GPU] Adapter: {} ({:?})",
             adapter.get_info().name,
             adapter.get_info().backend
@@ -211,16 +211,16 @@ impl GpuRenderer {
             .present_modes
             .contains(&wgpu::PresentMode::Immediate)
         {
-            log::info!("[GPU] Selected: Immediate (no vsync, uncapped)");
+            tracing::info!("[GPU] Selected: Immediate (no vsync, uncapped)");
             wgpu::PresentMode::Immediate
         } else if surface_caps
             .present_modes
             .contains(&wgpu::PresentMode::Mailbox)
         {
-            log::info!("[GPU] Selected: Mailbox (no vsync)");
+            tracing::info!("[GPU] Selected: Mailbox (no vsync)");
             wgpu::PresentMode::Mailbox
         } else {
-            log::info!("[GPU] Selected: Fifo (V-Sync capped at compositor rate)");
+            tracing::info!("[GPU] Selected: Fifo (V-Sync capped at compositor rate)");
             wgpu::PresentMode::Fifo
         };
 
@@ -238,7 +238,7 @@ impl GpuRenderer {
             surface_caps.alpha_modes[0]
         };
 
-        log::info!(
+        tracing::info!(
             "[GPU] Configuring surface: {}x{} | {:?} | {:?}",
             width,
             height,
@@ -257,7 +257,7 @@ impl GpuRenderer {
             desired_maximum_frame_latency: 1,
         };
         surface.configure(&device, &config);
-        log::info!("[GPU] Surface configuration successful.");
+        tracing::info!("[GPU] Surface configuration successful.");
 
         let renderer = Self::forge_internal(
             instance,
@@ -268,7 +268,7 @@ impl GpuRenderer {
             None,
         )
         .await;
-        log::info!("[GPU] Forge internal complete.");
+        tracing::info!("[GPU] Forge internal complete.");
         renderer
     }
 
@@ -328,7 +328,7 @@ impl GpuRenderer {
             let cache_data = match load_pipeline_cache_with_integrity_check(&cache_path) {
                 Ok(data) => data,
                 Err(reason) => {
-                    log::warn!(
+                    tracing::warn!(
                         "[GPU] pipeline cache integrity check failed: {reason}; using empty cache"
                     );
                     None
@@ -342,7 +342,7 @@ impl GpuRenderer {
                 })
             })
         } else {
-            log::debug!(
+            tracing::debug!(
                 "[GPU] device does not expose PIPELINE_CACHE; compiling pipelines without cache"
             );
             None

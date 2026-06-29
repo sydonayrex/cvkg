@@ -182,7 +182,7 @@ impl<V: View> View for ErrorBoundary<V> {
                     *guard = Some(msg.clone());
                 }
 
-                log::error!("ErrorBoundary caught panic: {msg}");
+                tracing::error!("ErrorBoundary caught panic: {msg}");
                 self.render_fallback(renderer, rect);
             }
         }
@@ -213,7 +213,7 @@ impl<V: View> View for ErrorBoundary<V> {
                     *guard = Some(msg.clone());
                 }
 
-                log::error!("ErrorBoundary caught panic in intrinsic_size: {msg}");
+                tracing::error!("ErrorBoundary caught panic in intrinsic_size: {msg}");
                 Size::ZERO
             }
         }

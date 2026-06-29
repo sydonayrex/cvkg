@@ -49,7 +49,7 @@ impl GpuRenderer {
                     ),
                 );
                 if let Err(e) = result {
-                    log::warn!("Failed to tessellate stroke path: {:?}", e);
+                    tracing::warn!("Failed to tessellate stroke path: {:?}", e);
                     return;
                 }
                 let vert_count = buffers.vertices.len();

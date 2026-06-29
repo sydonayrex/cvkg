@@ -123,6 +123,9 @@ workspace = true
 [dependencies.cvkg-anim]
 version = "0.2.15"
 
+[dependencies.tracing]
+workspace = true
+
 [dependencies.cvkg-core]
 version = "0.2.15"
 
@@ -144,8 +147,12 @@ version = "1.47.2"
 [dev-dependencies.pollster]
 version = "0.3"
 
+[dev-dependencies.proptest]
+workspace = true
+
 [dev-dependencies.cvkg-render-native]
 version = ">=0.2.14"
+
 
 
 [dev-dependencies.cvkg-macros]
@@ -153,6 +160,3 @@ version = ">=0.2.14"
 
 [dev-dependencies.cvkg-render-gpu]
 version = ">=0.2.14"
-
-[dev-dependencies.winit]
-version = "0.30"

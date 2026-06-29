@@ -42,10 +42,10 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
             max_v_capacity,
         );
         if grown {
-            log::info!("Grew vertex buffer to fit {} vertices", self.vertices.len());
+            tracing::info!("Grew vertex buffer to fit {} vertices", self.vertices.len());
         }
         if self.vertices.len() > max_v_capacity {
-            log::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
+            tracing::error!("Exceeded dynamic vertex buffer max capacity! Capping geometry.");
             self.vertices.truncate(max_v_capacity);
         }
 
@@ -56,10 +56,10 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
             max_i_capacity,
         );
         if grown {
-            log::info!("Grew index buffer to fit {} indices", self.indices.len());
+            tracing::info!("Grew index buffer to fit {} indices", self.indices.len());
         }
         if self.indices.len() > max_i_capacity {
-            log::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
+            tracing::error!("Exceeded dynamic index buffer max capacity! Capping geometry.");
             self.indices.truncate(max_i_capacity);
         }
 
@@ -134,7 +134,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
         self.telemetry.vertices = self.vertices.len() as u32;
         self.frame_rendered = true;
 
-        log::debug!(
+        tracing::debug!(
             "[Perf] draw_calls={} vertices={} instances={} staging_cmds={}",
             self.draw_calls.len(),
             self.vertices.len(),

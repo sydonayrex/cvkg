@@ -44,7 +44,7 @@ impl KvasirNode for BackdropCopyNode {
         let target_texture = match ctx.registry.get_texture(RES_BLUR_A) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture for {}", stringify!(RES_BLUR_A));
+                tracing::error!("Missing texture for {}", stringify!(RES_BLUR_A));
                 return;
             }
         };
@@ -87,7 +87,7 @@ impl KvasirNode for BackdropCopyNode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                tracing::error!("Missing texture view for {}", stringify!(RES_SCENE));
                 return;
             }
         };
@@ -166,7 +166,7 @@ impl KvasirNode for BackdropBlurNode {
         let blur_tex = match ctx.registry.get_texture(RES_BLUR_A) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture for {}", stringify!(RES_BLUR_A));
+                tracing::error!("Missing texture for {}", stringify!(RES_BLUR_A));
                 return;
             }
         };
@@ -346,7 +346,7 @@ impl KvasirNode for BackdropBlurNode {
             p.draw(0..3, 0..1);
         }
 
-        log::trace!(
+        tracing::trace!(
             "[Kvasir] backdrop_blur: Kawase pyramid ({}x{})",
             blur_width,
             blur_height
@@ -394,7 +394,7 @@ impl KvasirNode for GlassNode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                tracing::error!("Missing texture view for {}", stringify!(RES_SCENE));
                 return;
             }
         };
@@ -404,7 +404,7 @@ impl KvasirNode for GlassNode {
         {
             Some(v) => v,
             None => {
-                log::error!(
+                tracing::error!(
                     "Missing texture view for {}",
                     stringify!(crate::kvasir::nodes::RES_SCENE_MSAA)
                 );
@@ -414,7 +414,7 @@ impl KvasirNode for GlassNode {
         let blur_view = match ctx.registry.get_texture_view(RES_BLUR_A) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(RES_BLUR_A));
+                tracing::error!("Missing texture view for {}", stringify!(RES_BLUR_A));
                 return;
             }
         };

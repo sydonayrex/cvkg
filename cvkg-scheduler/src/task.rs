@@ -176,7 +176,7 @@ impl TaskScheduler {
         self.queue.sort_by_key(|t| t.priority);
         let tasks: Vec<Task> = std::mem::take(&mut self.queue);
         for task in tasks {
-            log::trace!(
+            tracing::trace!(
                 "scheduler: running task '{}' ({:?})",
                 task.name,
                 task.priority
@@ -212,7 +212,7 @@ impl TaskScheduler {
 
         to_run.sort_by_key(|t| t.priority);
         for task in to_run {
-            log::trace!(
+            tracing::trace!(
                 "scheduler: running priority-filtered task '{}' ({:?})",
                 task.name,
                 task.priority

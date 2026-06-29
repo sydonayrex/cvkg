@@ -7,6 +7,7 @@ repository = "https://github.com/sydonayrex/cvkg"
 description = "Rigid body physics simulation for CVKG — collision detection, constraint solving, scene graph bridge"
 
 [dependencies]
+tracing = { workspace = true }
 cvkg-core = { path = "../cvkg-core", version = "0.2.15" }
 cvkg-scene = { path = "../cvkg-scene", version = "0.2.15" }
 glam = { workspace = true }

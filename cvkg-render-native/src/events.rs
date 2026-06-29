@@ -75,7 +75,7 @@ pub fn convert_mouse_event(
 /// Returns a winit Icon if found and decodable, None otherwise.
 pub fn load_icon() -> Option<winit::window::Icon> {
     let base = std::env::current_dir().unwrap_or_else(|e| {
-        log::warn!(
+        tracing::warn!(
             "[Native] Failed to get current directory for icon search: {}",
             e
         );
@@ -106,7 +106,7 @@ pub fn load_icon() -> Option<winit::window::Icon> {
 
     for path in candidates {
         if !path.exists() {
-            log::debug!("[Native] Icon candidate not found: {:?}", path);
+            tracing::debug!("[Native] Icon candidate not found: {:?}", path);
             continue;
         }
 
@@ -116,21 +116,21 @@ pub fn load_icon() -> Option<winit::window::Icon> {
                 let (width, height) = rgba.dimensions();
                 match winit::window::Icon::from_rgba(rgba.into_raw(), width, height) {
                     Ok(icon) => {
-                        log::info!("[Native] Successfully loaded app icon from: {:?}", path);
+                        tracing::info!("[Native] Successfully loaded app icon from: {:?}", path);
                         return Some(icon);
                     }
                     Err(e) => {
-                        log::warn!("[Native] Icon format error at {:?}: {}", path, e);
+                        tracing::warn!("[Native] Icon format error at {:?}: {}", path, e);
                     }
                 }
             }
             Err(e) => {
-                log::warn!("[Native] Failed to open icon image at {:?}: {}", path, e);
+                tracing::warn!("[Native] Failed to open icon image at {:?}: {}", path, e);
             }
         }
     }
 
-    log::warn!(
+    tracing::warn!(
         "[Native] Failed to find icon.png in any search path (CWD: {:?})",
         base
     );

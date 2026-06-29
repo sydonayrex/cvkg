@@ -67,7 +67,7 @@ impl cvkg_core::AssetManager for NativeAssetManager {
             let key_inner = key.clone();
 
             std::thread::spawn(move || {
-                log::debug!("[Native] Asynchronously loading asset: {}", key_inner);
+                tracing::debug!("[Native] Asynchronously loading asset: {}", key_inner);
                 let result = match std::fs::read(&key_inner) {
                     Ok(data) => cvkg_core::AssetState::Ready(std::sync::Arc::new(data)),
                     Err(e) => cvkg_core::AssetState::Error(e.to_string()),
@@ -112,7 +112,7 @@ impl cvkg_core::AssetManager for NativeAssetManager {
 
         if we_inserted {
             std::thread::spawn(move || {
-                log::debug!("[Native] Preloading asset: {}", key);
+                tracing::debug!("[Native] Preloading asset: {}", key);
                 let result = match std::fs::read(&key) {
                     Ok(data) => cvkg_core::AssetState::Ready(std::sync::Arc::new(data)),
                     Err(e) => cvkg_core::AssetState::Error(e.to_string()),

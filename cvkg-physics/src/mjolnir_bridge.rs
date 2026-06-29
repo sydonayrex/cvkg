@@ -47,7 +47,7 @@ pub fn shatter_at_constraint_break<F>(
     });
 
     let (Some(a), Some(b)) = (pos_a, pos_b) else {
-        log::warn!("Mjolnir shatter: one or both bodies not found");
+        tracing::warn!("Mjolnir shatter: one or both bodies not found");
         return;
     };
 

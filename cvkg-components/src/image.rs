@@ -60,7 +60,7 @@ impl<P: View> View for AsyncImage<P> {
             cvkg_core::AssetState::Error(msg) => {
                 // For now, draw a red border to indicate error
                 renderer.stroke_rect(rect, theme::error_color(), 2.0);
-                log::error!("AsyncImage error loading {}: {}", self.url, msg);
+                tracing::error!("AsyncImage error loading {}: {}", self.url, msg);
             }
         }
     }

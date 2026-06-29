@@ -11,6 +11,7 @@ name = "cvkg_scheduler"
 path = "src/lib.rs"
 
 [dependencies]
+tracing = { workspace = true }
 cvkg-core = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }

@@ -65,10 +65,10 @@ impl AutoSaveManager {
                     match doc.write_to(path) {
                         Ok(()) => {
                             doc.mark_clean();
-                            log::info!("[AutoSaveManager] Auto-saved document to {:?}", path);
+                            tracing::info!("[AutoSaveManager] Auto-saved document to {:?}", path);
                         }
                         Err(e) => {
-                            log::error!(
+                            tracing::error!(
                                 "[AutoSaveManager] Failed to auto-save document to {:?}: {:?}",
                                 path,
                                 e

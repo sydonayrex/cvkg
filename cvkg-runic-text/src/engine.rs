@@ -461,7 +461,7 @@ impl TextEngine {
         }
 
         if let Some(image) = render.render(&mut scaler, glyph_id) {
-            log::info!(
+            tracing::info!(
                 "Swash rendered image for glyph {}. content: {:?}, size: {}x{}, data len: {}",
                 glyph_id,
                 image.content,

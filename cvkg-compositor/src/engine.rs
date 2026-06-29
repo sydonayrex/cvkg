@@ -13,7 +13,7 @@
 
 use crate::layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 use cvkg_core::Rect;
-use log::warn;
+use tracing::warn;
 use std::collections::HashSet;
 
 /// Draw command tagged with its source layer material.
@@ -266,7 +266,7 @@ impl CompositorEngine {
     ) {
         // Cycle detection: if we've already visited this layer, there's a cycle.
         if !visited.insert(layer_id) {
-            log::error!(
+            tracing::error!(
                 "Compositor: cyclic layer reference detected at {:?}",
                 layer_id
             );

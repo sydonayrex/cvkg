@@ -105,17 +105,17 @@ impl VDom {
     /// Apply a set of patches to the host's DOM environment.
     pub fn apply_to_dom(&self, patches: &[VDomPatch]) {
         // This is a bridge to the platform-specific accessibility tree (ShieldWall).
-        log::debug!("Applying {} patches to host ShieldWall", patches.len());
+        tracing::debug!("Applying {} patches to host ShieldWall", patches.len());
         for patch in patches {
             match patch {
-                VDomPatch::Create(node) => log::debug!("ShieldWall: Create node {}", node.id.0),
-                VDomPatch::Update { id, .. } => log::debug!("ShieldWall: Update node {}", id.0),
-                VDomPatch::Remove(id) => log::debug!("ShieldWall: Remove node {}", id.0),
-                VDomPatch::Replace { id, .. } => log::debug!("ShieldWall: Replace node {}", id.0),
-                VDomPatch::Move { id, .. } => log::debug!("ShieldWall: Move node {}", id.0),
-                VDomPatch::SetRoot(id) => log::debug!("ShieldWall: SetRoot {:?}", id),
+                VDomPatch::Create(node) => tracing::debug!("ShieldWall: Create node {}", node.id.0),
+                VDomPatch::Update { id, .. } => tracing::debug!("ShieldWall: Update node {}", id.0),
+                VDomPatch::Remove(id) => tracing::debug!("ShieldWall: Remove node {}", id.0),
+                VDomPatch::Replace { id, .. } => tracing::debug!("ShieldWall: Replace node {}", id.0),
+                VDomPatch::Move { id, .. } => tracing::debug!("ShieldWall: Move node {}", id.0),
+                VDomPatch::SetRoot(id) => tracing::debug!("ShieldWall: SetRoot {:?}", id),
                 VDomPatch::ClearHandlers { id } => {
-                    log::debug!("ShieldWall: ClearHandlers for node {}", id.0)
+                    tracing::debug!("ShieldWall: ClearHandlers for node {}", id.0)
                 }
             }
         }
@@ -428,7 +428,7 @@ impl VDom {
         let _span = tracing::info_span!("vdom_dispatch_event").entered();
         let event_name = event.name();
 
-        log::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
+        tracing::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
 
         let captured_target = self
             .captured_node
@@ -456,14 +456,14 @@ impl VDom {
 
                 let (id, proximity) = if use_capture {
                     let captured = captured_target;
-                    log::trace!(
+                    tracing::trace!(
                         "[VDOM] Using captured target for {}: {:?}",
                         event_name,
                         captured
                     );
                     (captured, 1.0)
                 } else {
-                    log::trace!(
+                    tracing::trace!(
                         "[VDOM] Hit testing at ({}, {}) with precision {}",
                         x,
                         y,
@@ -473,7 +473,7 @@ impl VDom {
                         Some((i, p)) => (Some(i), p),
                         None => (None, 0.0),
                     };
-                    log::trace!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
+                    tracing::trace!("[VDOM] Hit test result: {:?}, proximity: {}", id, proximity);
                     (id, proximity)
                 };
 
@@ -536,7 +536,7 @@ impl VDom {
         };
 
         if let Some(id) = target_id {
-            log::trace!(
+            tracing::trace!(
                 "[VDOM] Dispatching {} to node {:?} ({})",
                 event_name,
                 id,
@@ -547,7 +547,7 @@ impl VDom {
             );
             self.bubble_event_response(id, event)
         } else {
-            log::trace!("[VDOM] No hit for event {} at {:?}", event_name, event);
+            tracing::trace!("[VDOM] No hit for event {} at {:?}", event_name, event);
             cvkg_core::EventResponse::Ignored
         }
     }
@@ -611,9 +611,9 @@ impl VDom {
 
         loop {
             if let Some(handlers) = self.event_handlers.get(&current_id) {
-                log::trace!("[VDOM] Checking node {:?} for handlers", current_id);
+                tracing::trace!("[VDOM] Checking node {:?} for handlers", current_id);
                 if let Some(handler) = handlers.get(event_name) {
-                    log::debug!(
+                    tracing::debug!(
                         "[VDOM] Executing handler for '{}' on node {:?}",
                         event_name,
                         current_id
@@ -640,7 +640,7 @@ impl VDom {
                     && let Some(handlers) = self.event_handlers.get(&node_id)
                     && let Some(handler) = handlers.get(event_name)
                 {
-                    log::debug!(
+                    tracing::debug!(
                         "[VDOM] Found descendant handler on {:?} for '{}'",
                         node_id,
                         event_name
@@ -795,7 +795,7 @@ impl VNodeRenderer {
     /// Convert the captured nodes into a VDom instance.
     pub fn into_vdom(mut self) -> VDom {
         self.flush_decorative_batch();
-        log::debug!("[VDOM] Built VDOM with {} nodes", self.nodes.len());
+        tracing::debug!("[VDOM] Built VDOM with {} nodes", self.nodes.len());
         let mut parents = HashMap::new();
         for (id, node) in &self.nodes {
             for child_id in &node.children {
@@ -837,7 +837,7 @@ impl VNodeRenderer {
             node.id = stable_id;
         }
         let id = node.id;
-        log::trace!(
+        tracing::trace!(
             "[VDOM] Adding node {:?} ({}): {:?}",
             id,
             node.component_type,
@@ -1362,7 +1362,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
     ) {
         self.flush_decorative_batch();
         if let Some(node_id) = self.stack.last() {
-            log::trace!(
+            tracing::trace!(
                 "[VDOM] Registering handler '{}' on node {:?}",
                 event_type,
                 node_id

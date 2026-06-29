@@ -155,7 +155,7 @@ impl View for Checkbox {
                         && y >= rect_clone.y
                         && y <= rect_clone.y + rect_clone.height
                     {
-                        log::debug!("Checkbox clicked: {:?}", lbl);
+                        tracing::debug!("Checkbox clicked: {:?}", lbl);
                         (on_change)(!is_checked);
                     }
                 }

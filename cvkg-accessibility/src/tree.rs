@@ -300,7 +300,7 @@ impl AccessibilityTree {
     /// must re-announce the root on every structural change.
     pub fn set_root(&mut self, id: KvasirId) {
         if !self.nodes.contains_key(&id) {
-            log::warn!(
+            tracing::warn!(
                 "AccessibilityTree::set_root: node {:?} does not exist in the tree",
                 id
             );

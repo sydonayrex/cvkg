@@ -38,6 +38,9 @@ cvkg-runic-text.workspace = true
 
 [dependencies.accesskit]
 version = "0.24"
+[dependencies.tracing]
+workspace = true
+
 
 [dependencies.cvkg-core]
 version = "0.2.15"
@@ -56,6 +59,3 @@ features = [
 
 [dependencies.serde_json]
 version = "1.0"
-
-[dependencies.tracing]
-version = "0.1"

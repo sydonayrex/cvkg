@@ -27,12 +27,12 @@ impl cvkg_core::ElapsedTime for GpuRenderer {
 
 impl cvkg_core::RendererErrorHandler for GpuRenderer {
     fn on_render_error(&mut self, error: &cvkg_core::CvkgError) {
-        log::error!("[GpuRenderer] {error}");
+        tracing::error!("[GpuRenderer] {error}");
         self.render_error_count += 1;
     }
 
     fn on_fatal_error(&mut self, error: &cvkg_core::CvkgError) {
-        log::error!("[GpuRenderer FATAL] {error}");
+        tracing::error!("[GpuRenderer FATAL] {error}");
         self.has_fatal_error = true;
     }
 
@@ -52,7 +52,7 @@ impl cvkg_core::Renderer for GpuRenderer {
     }
 
     fn prewarm_vram(&mut self, assets: Vec<(String, Vec<u8>)>) {
-        log::info!(
+        tracing::info!(
             "[Surtr] Pre-warming Mega-Heim with {} assets...",
             assets.len()
         );
@@ -591,7 +591,7 @@ impl cvkg_core::Renderer for GpuRenderer {
     fn draw_image(&mut self, image_name: &str, rect: Rect) {
         // Guard: skip if image not loaded -- avoids rendering garbage from uninitialized atlas regions
         if !self.image_uv_registry.contains(image_name) {
-            log::warn!("[Surtr] draw_image: '{}' not loaded, skipping", image_name);
+            tracing::warn!("[Surtr] draw_image: '{}' not loaded, skipping", image_name);
             return;
         }
         let tid = self
@@ -652,7 +652,7 @@ impl cvkg_core::Renderer for GpuRenderer {
         let img = match img_result {
             Ok(img) => img.to_rgba8(),
             Err(e) => {
-                log::error!("Failed to load image {}: {}", name, e);
+                tracing::error!("Failed to load image {}: {}", name, e);
                 image::RgbaImage::from_pixel(1, 1, image::Rgba([255, 255, 255, 255]))
             }
         };
@@ -703,14 +703,14 @@ impl cvkg_core::Renderer for GpuRenderer {
                 self.image_uv_registry.pop(&old_name);
                 old_index
             } else {
-                log::warn!("[GPU] texture registry full and no LRU entry to evict");
+                tracing::warn!("[GPU] texture registry full and no LRU entry to evict");
                 return;
             }
         };
 
         // Bounds guard: index must be in 1..32 (index 0 is the atlas).
         if index == 0 || index as usize >= self.texture_views.len() {
-            log::error!(
+            tracing::error!(
                 "[GPU] load_image: invalid texture index {} (registry has {} entries)",
                 index,
                 self.texture_registry.len()
@@ -1015,7 +1015,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             self.particles.staging.push(particle);
         }
 
-        log::debug!(
+        tracing::debug!(
             "[Surtr] dispatch_particles: {} {} particles at {:?} (staged, {} total pending)",
             count,
             effect_type,
@@ -1030,7 +1030,7 @@ impl cvkg_core::Renderer for GpuRenderer {
         hologram_id.hash(&mut hasher);
         let id_hash = hasher.finish() as u32;
 
-        log::debug!(
+        tracing::debug!(
             "[Surtr] draw_hologram: {} at {:?} t={} (hologram pipeline)",
             hologram_id,
             rect,

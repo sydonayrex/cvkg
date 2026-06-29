@@ -96,12 +96,12 @@ fn persist_mode(mode: ThemeMode) {
     if let Some(home) = std::env::var_os("HOME") {
         let dir = std::path::PathBuf::from(home).join(".cvkg");
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            log::debug!("theme_switch: could not create ~/.cvkg: {e}");
+            tracing::debug!("theme_switch: could not create ~/.cvkg: {e}");
             return;
         }
         let path = dir.join("theme_mode");
         if let Err(e) = std::fs::write(&path, mode.as_str()) {
-            log::debug!("theme_switch: could not write theme mode: {e}");
+            tracing::debug!("theme_switch: could not write theme mode: {e}");
         }
     }
 }

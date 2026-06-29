@@ -70,7 +70,7 @@ impl View for NotificationCenterPanel {
             let s = cvkg_core::load_system_state();
             if let Some(solver_arc) = s.get_component_state::<cvkg_anim::SpringSolver>(anim_hash) {
                 let mut solver = solver_arc.write().unwrap_or_else(|e| {
-                    log::warn!("Lock poisoned, recovering...");
+                    tracing::warn!("Lock poisoned, recovering...");
                     e.into_inner()
                 });
                 solver.set_target(target);
@@ -306,7 +306,7 @@ impl View for NotificationCenterPanel {
                                         && y >= btn_rect.y
                                         && y <= btn_rect.y + btn_rect.height
                                     {
-                                        log::info!(
+                                        tracing::info!(
                                             "Notification action triggered: ID={}, Action={}",
                                             notif_id_act,
                                             action_id

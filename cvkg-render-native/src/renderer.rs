@@ -428,13 +428,13 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.gpu_ref().push_affine(transform);
     }
     fn enter_portal(&mut self, z_index: i32) {
-        log::warn!(
+        tracing::warn!(
             "Portal rendering (enter_portal) not yet implemented in GPU backend; z_index={}",
             z_index
         );
     }
     fn exit_portal(&mut self) {
-        log::warn!("Portal rendering (exit_portal) not yet implemented in GPU backend");
+        tracing::warn!("Portal rendering (exit_portal) not yet implemented in GPU backend");
     }
     fn viewport_size(&self) -> Rect {
         let size = self.window.inner_size();
@@ -443,7 +443,7 @@ impl cvkg_core::Renderer for NativeRenderer {
         Rect::new(0.0, 0.0, logical.width, logical.height)
     }
     fn announce(&mut self, message: &str, priority: cvkg_core::AnnouncementPriority) {
-        log::info!("Accessibility announcement [{:?}]: {}", priority, message);
+        tracing::info!("Accessibility announcement [{:?}]: {}", priority, message);
     }
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
         self.gpu_ref().load_svg(name, svg_data);
@@ -544,12 +544,12 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.berserker_mode = state;
 
         if state == RenderIntensityMode::GodMode {
-            log::info!("ENTERING GOD MODE: Activating Berserker Determinism (High Priority)");
+            tracing::info!("ENTERING GOD MODE: Activating Berserker Determinism (High Priority)");
             #[cfg(target_os = "linux")]
             unsafe {
                 let ret = libc::setpriority(libc::PRIO_PROCESS, 0, -10);
                 if ret != 0 {
-                    log::warn!(
+                    tracing::warn!(
                         "GodMode: setpriority failed (errno: {}) — need CAP_SYS_NIO",
                         std::io::Error::last_os_error()
                     );
@@ -586,16 +586,16 @@ impl cvkg_core::Renderer for NativeRenderer {
     }
 
     fn capture_png(&mut self) -> Vec<u8> {
-        log::info!("CAPTURING_FRAME: Initiating GPU readback...");
+        tracing::info!("CAPTURING_FRAME: Initiating GPU readback...");
         let gpu = self.gpu.lock().unwrap_or_else(|p| p.into_inner());
         pollster::block_on(gpu.capture_frame()).unwrap_or_else(|e| {
-            log::error!("GPU frame capture failed: {}", e);
+            tracing::error!("GPU frame capture failed: {}", e);
             Vec::new()
         })
     }
 
     fn print(&mut self) {
-        log::info!("PRINT_BRIDGE: Spooling mission status to native printer...");
-        log::debug!("[BRIDGE] PRINTER_READY // SPOOLING_DATA...");
+        tracing::info!("PRINT_BRIDGE: Spooling mission status to native printer...");
+        tracing::debug!("[BRIDGE] PRINTER_READY // SPOOLING_DATA...");
     }
 }

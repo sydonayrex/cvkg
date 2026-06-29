@@ -223,7 +223,7 @@ impl View for DropVault {
                     }
                     #[cfg(target_arch = "wasm32")]
                     {
-                        log::warn!("rfd::FileDialog is not supported on WebAssembly target.");
+                        tracing::warn!("rfd::FileDialog is not supported on WebAssembly target.");
                     }
                 }
             }),

@@ -216,19 +216,19 @@ impl CertificationSuite {
                 .all(|c| matches!(c.result, Some(CertResult::Pass)))
     }
 
-    /// Emit a human-readable summary to the log (via `log::info!`).
+    /// Emit a human-readable summary to the log (via `tracing::info!`).
     ///
     /// The report includes the suite name, per-check outcomes, and a
     /// final tally. This is intended to appear in CI test output.
     pub fn report(&self) {
-        log::info!("=== Certification Suite: {} ===", self.name);
+        tracing::info!("=== Certification Suite: {} ===", self.name);
         for check in &self.checks {
             match &check.result {
                 Some(CertResult::Pass) => {
-                    log::info!("  [PASS] {} — {}", check.name, check.description);
+                    tracing::info!("  [PASS] {} — {}", check.name, check.description);
                 }
                 Some(CertResult::Fail { reason }) => {
-                    log::info!(
+                    tracing::info!(
                         "  [FAIL] {} — {} | Reason: {}",
                         check.name,
                         check.description,
@@ -236,7 +236,7 @@ impl CertificationSuite {
                     );
                 }
                 Some(CertResult::Skip { reason }) => {
-                    log::info!(
+                    tracing::info!(
                         "  [SKIP] {} — {} | Reason: {}",
                         check.name,
                         check.description,
@@ -244,7 +244,7 @@ impl CertificationSuite {
                     );
                 }
                 None => {
-                    log::info!(
+                    tracing::info!(
                         "  [???] {} — {} | No result recorded",
                         check.name,
                         check.description
@@ -252,7 +252,7 @@ impl CertificationSuite {
                 }
             }
         }
-        log::info!(
+        tracing::info!(
             "  Result: {}/{} passed, {} failed, {} skipped",
             self.pass_count(),
             self.total(),
@@ -308,11 +308,11 @@ impl CertificationReport {
 
     /// Emit a consolidated report for all suites to the log.
     pub fn report(&self) {
-        log::info!("====== CVKG Certification Report ======");
+        tracing::info!("====== CVKG Certification Report ======");
         for suite in &self.suites {
             suite.report();
         }
-        log::info!(
+        tracing::info!(
             "====== Total: {} passed, {} failed ======",
             self.total_pass(),
             self.total_fail()

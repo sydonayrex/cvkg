@@ -35,6 +35,9 @@ path = "src/lib.rs"
 
 [dependencies.cvkg-core]
 version = "0.2.15"
+[dependencies.tracing]
+workspace = true
+
 
 [dependencies.cvkg-anim]
 version = "0.2.15"

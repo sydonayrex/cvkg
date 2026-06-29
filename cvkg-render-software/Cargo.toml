@@ -12,6 +12,7 @@ text = ["cvkg-runic-text"]
 
 [dependencies]
 cvkg-core = { path = "../cvkg-core", version = "0.2.15" }
+tracing = { workspace = true }
 cvkg-runic-text = { path = "../cvkg-runic-text", version = "0.2.15", optional = true }
 glam = "0.33"
 log = "0.4"

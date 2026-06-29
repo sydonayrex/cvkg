@@ -22,11 +22,11 @@ impl RodioAudioEngine {
     pub fn new() -> Option<Self> {
         match rodio::DeviceSinkBuilder::open_default_sink() {
             Ok(sink) => {
-                log::info!("[Native] Audio engine initialized (rodio)");
+                tracing::info!("[Native] Audio engine initialized (rodio)");
                 Some(Self { sink })
             }
             Err(e) => {
-                log::warn!("[Native] Audio init failed (no sound): {}", e);
+                tracing::warn!("[Native] Audio init failed (no sound): {}", e);
                 None
             }
         }
@@ -40,7 +40,7 @@ impl cvkg_core::AudioEngine for RodioAudioEngine {
             "success_chime" => cvkg_core::sounds::SUCCESS_CHIME,
             "warning_tone" => cvkg_core::sounds::WARNING_TONE,
             _ => {
-                log::warn!("[Native] Unknown sound: {}", name);
+                tracing::warn!("[Native] Unknown sound: {}", name);
                 return;
             }
         };
@@ -53,7 +53,7 @@ impl cvkg_core::AudioEngine for RodioAudioEngine {
         let mixer = self.sink.mixer();
         match rodio::play(mixer, cursor) {
             Ok(_sink) => {}
-            Err(e) => log::warn!("[Native] Audio play failed: {}", e),
+            Err(e) => tracing::warn!("[Native] Audio play failed: {}", e),
         }
     }
 

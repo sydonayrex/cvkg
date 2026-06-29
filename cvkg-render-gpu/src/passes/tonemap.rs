@@ -48,6 +48,6 @@ impl KvasirNode for ToneMapNode {
     fn execute(&self, _ctx: &mut ExecutionContext) {
         // Tone mapping is handled by the dedicated tonemap pipeline in end_frame.
         // This node exists to reserve the PassId slot in the render graph.
-        log::trace!("[Kvasir] ToneMap: pass executed (pipeline in end_frame)");
+        tracing::trace!("[Kvasir] ToneMap: pass executed (pipeline in end_frame)");
     }
 }

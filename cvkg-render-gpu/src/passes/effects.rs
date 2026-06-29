@@ -38,7 +38,7 @@ impl KvasirNode for OffscreenGeometryNode {
         let view = match ctx.registry.get_texture_view(self.output_texture) {
             Some(v) => v,
             None => {
-                log::error!(
+                tracing::error!(
                     "Missing texture view for {}",
                     stringify!(self.output_texture)
                 );
@@ -158,7 +158,7 @@ impl KvasirNode for EffectCompositeNode {
         let input_view = match ctx.registry.get_texture_view(self.input_texture) {
             Some(v) => v,
             None => {
-                log::error!(
+                tracing::error!(
                     "Missing texture view for {}",
                     stringify!(self.input_texture)
                 );
@@ -168,7 +168,7 @@ impl KvasirNode for EffectCompositeNode {
         let scene_view = match ctx.registry.get_texture_view(self.output_scene) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(self.output_scene));
+                tracing::error!("Missing texture view for {}", stringify!(self.output_scene));
                 return;
             }
         };

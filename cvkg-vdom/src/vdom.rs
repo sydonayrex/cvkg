@@ -62,17 +62,17 @@ impl VDom {
 
     /// Apply a set of patches to the host's DOM environment.
     pub fn apply_to_dom(&self, patches: &[VDomPatch]) {
-        log::debug!("Applying {} patches to host ShieldWall", patches.len());
+        tracing::debug!("Applying {} patches to host ShieldWall", patches.len());
         for patch in patches {
             match patch {
-                VDomPatch::Create(node) => log::debug!("ShieldWall: Create node {}", node.id.0),
-                VDomPatch::Update { id, .. } => log::debug!("ShieldWall: Update node {}", id.0),
-                VDomPatch::Remove(id) => log::debug!("ShieldWall: Remove node {}", id.0),
-                VDomPatch::Replace { id, .. } => log::debug!("ShieldWall: Replace node {}", id.0),
-                VDomPatch::Move { id, .. } => log::debug!("ShieldWall: Move node {}", id.0),
-                VDomPatch::SetRoot(id) => log::debug!("ShieldWall: SetRoot {:?}", id),
+                VDomPatch::Create(node) => tracing::debug!("ShieldWall: Create node {}", node.id.0),
+                VDomPatch::Update { id, .. } => tracing::debug!("ShieldWall: Update node {}", id.0),
+                VDomPatch::Remove(id) => tracing::debug!("ShieldWall: Remove node {}", id.0),
+                VDomPatch::Replace { id, .. } => tracing::debug!("ShieldWall: Replace node {}", id.0),
+                VDomPatch::Move { id, .. } => tracing::debug!("ShieldWall: Move node {}", id.0),
+                VDomPatch::SetRoot(id) => tracing::debug!("ShieldWall: SetRoot {:?}", id),
                 VDomPatch::ClearHandlers { id } => {
-                    log::debug!("ShieldWall: ClearHandlers for node {}", id.0)
+                    tracing::debug!("ShieldWall: ClearHandlers for node {}", id.0)
                 }
             }
         }
@@ -307,7 +307,7 @@ impl VDom {
     pub fn dispatch_event(&self, mut event: cvkg_core::Event) -> cvkg_core::EventResponse {
         let _span = tracing::info_span!("vdom_dispatch_event").entered();
         let event_name = event.name();
-        log::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
+        tracing::trace!("[VDOM] DISPATCH: {} (root={:?})", event_name, self.root);
         let captured_target = self.captured_node.lock().ok().and_then(|captured| *captured);
         let target_id = match event {
             cvkg_core::Event::PointerDown { x, y, .. }

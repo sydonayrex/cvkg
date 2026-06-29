@@ -621,7 +621,7 @@ impl GpuRenderer {
         match lock.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
-                log::warn!("[GPU] lock_or_clear_cache: mutex poisoned, clearing cache...");
+                tracing::warn!("[GPU] lock_or_clear_cache: mutex poisoned, clearing cache...");
                 let mut guard = poisoned.into_inner();
                 guard.clear_into();
                 guard
@@ -687,7 +687,7 @@ impl GpuRenderer {
             }
         }
         if count > 0 {
-            log::info!("[Surtr] prewarm_text_cache: pre-shaped {} labels", count);
+            tracing::info!("[Surtr] prewarm_text_cache: pre-shaped {} labels", count);
         }
     }
 
@@ -796,7 +796,7 @@ impl GpuRenderer {
                 return;
             }
 
-            log::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
+            tracing::info!("[GPU] Reconfiguring surface: {}x{}", width, height);
             GpuRenderer::lock_or_clear_cache(&self.bind_group_cache).clear();
             GpuRenderer::lock_or_clear_cache(&self.texture_view_cache).clear();
             self.text.shaped_cache.clear();
@@ -964,7 +964,7 @@ impl GpuRenderer {
     }
 
     pub fn reclaim_vram(&mut self) {
-        log::warn!("[GPU] Sundr Compaction: Compacting Mega-Heim...");
+        tracing::warn!("[GPU] Sundr Compaction: Compacting Mega-Heim...");
 
         let new_mega_heim_tex = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Sundr Mega-Heim (Compacted)"),
@@ -1128,7 +1128,7 @@ impl Drop for GpuRenderer {
             && let Some(data) = cache.get_data()
             && let Err(e) = std::fs::write(&cache_path, data)
         {
-            log::warn!("Failed to persist pipeline cache: {}", e);
+            tracing::warn!("Failed to persist pipeline cache: {}", e);
         }
 
         let _ = self.device.poll(wgpu::PollType::Wait {
@@ -1187,7 +1187,7 @@ impl GpuRenderer {
         });
 
         // Request adapter with robust multi-stage fallback for Bumblebee/Optimus compatibility
-        log::info!("[GPU] Requesting HighPerformance adapter (headless)...");
+        tracing::info!("[GPU] Requesting HighPerformance adapter (headless)...");
         let mut adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -1198,7 +1198,7 @@ impl GpuRenderer {
             .ok();
 
         if adapter.is_none() {
-            log::warn!(
+            tracing::warn!(
                 "[GPU] HighPerformance adapter failed (possible Bumblebee/Optimus), trying LowPower..."
             );
             adapter = instance
@@ -1212,7 +1212,7 @@ impl GpuRenderer {
         }
 
         if adapter.is_none() {
-            log::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
+            tracing::warn!("[GPU] Hardware adapters failed, trying Software fallback...");
             adapter = instance
                 .request_adapter(&wgpu::RequestAdapterOptions {
                     power_preference: wgpu::PowerPreference::LowPower,
@@ -1227,14 +1227,14 @@ impl GpuRenderer {
         let info = adapter.get_info();
         let caps =
             crate::subsystems::GpuCapabilities::detect(&info.name, format!("{:?}", info.backend));
-        log::info!(
+        tracing::info!(
             "[GPU] Selected adapter: {} ({:?}) on backend: {:?} -- detected as {}",
             info.name,
             info.device_type,
             info.backend,
             caps.vendor
         );
-        log::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        tracing::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
         let required_features = adapter.features()
             & (wgpu::Features::TIMESTAMP_QUERY
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -1266,7 +1266,7 @@ impl GpuRenderer {
         let adapter = Arc::new(adapter);
 
         device.on_uncaptured_error(Arc::new(|error| {
-            log::error!(
+            tracing::error!(
                 "[GPU] Uncaptured device error (Device Lost or Panic): {:?}",
                 error
             );

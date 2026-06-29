@@ -114,8 +114,8 @@ impl GpuRenderer {
         if let Some(rx) = &self.ai_material_rx {
             while let Ok(res) = rx.try_recv() {
                 match res {
-                    Ok(_) => log::info!("[Surtr] Received AI generated material"),
-                    Err(e) => log::warn!("[Surtr] AI material generation error: {:?}", e),
+                    Ok(_) => tracing::info!("[Surtr] Received AI generated material"),
+                    Err(e) => tracing::warn!("[Surtr] AI material generation error: {:?}", e),
                 }
             }
         }
@@ -170,7 +170,7 @@ impl GpuRenderer {
         let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
             wgpu::PresentMode::Mailbox
         } else {
-            log::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync)");
+            tracing::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync)");
             wgpu::PresentMode::Fifo
         };
 
@@ -188,7 +188,7 @@ impl GpuRenderer {
             caps.alpha_modes[0]
         };
 
-        log::info!(
+        tracing::info!(
             "[GPU] Configuring surface: {}x{} | {:?} | {:?}",
             size.width,
             size.height,
@@ -783,7 +783,7 @@ impl GpuRenderer {
 
         let res = if let Some(window_id) = self.current_window {
             let Some(ctx) = self.surfaces.get(&window_id) else {
-                log::error!("[GPU] Missing surface context for end_frame");
+                tracing::error!("[GPU] Missing surface context for end_frame");
                 return;
             };
             let frame = match ctx.surface.get_current_texture() {
@@ -793,7 +793,7 @@ impl GpuRenderer {
                     t
                 }
                 other => {
-                    log::warn!(
+                    tracing::warn!(
                         "[GPU] Surface texture acquisition failed ({:?}), reconfiguring surface",
                         other
                     );
@@ -806,7 +806,7 @@ impl GpuRenderer {
                             t
                         }
                         retry_failed => {
-                            log::error!(
+                            tracing::error!(
                                 "[GPU] Surface texture retry also failed ({:?}), skipping frame",
                                 retry_failed
                             );
@@ -833,7 +833,7 @@ impl GpuRenderer {
             }
         } else {
             let Some(ctx) = self.headless_context.as_ref() else {
-                log::error!("[GPU] No headless context for end_frame");
+                tracing::error!("[GPU] No headless context for end_frame");
                 return;
             };
 
@@ -853,7 +853,7 @@ impl GpuRenderer {
         // Auto-flush staging belt if render_frame() was not called but geometry was queued.
         // This ensures apps that forget render_frame() still see their draw calls rendered.
         if !self.frame_rendered && (!self.vertices.is_empty() || !self.indices.is_empty()) {
-            log::debug!(
+            tracing::debug!(
                 "[GPU] Auto-flushing staging belt in end_frame (render_frame was not called)"
             );
             let mut staging_encoder =
@@ -998,14 +998,14 @@ impl GpuRenderer {
             let compiled_plan = match planner.compile() {
                 Ok(plan) => plan,
                 Err(e) => {
-                    log::error!(
+                    tracing::error!(
                         "[Kvasir] Render graph compilation failed ({}), skipping render passes",
                         e
                     );
                     // Present the frame with whatever was rendered (stale scene or blank).
                     if let Some(surface_texture) = res.surface_texture {
                         surface_texture.present();
-                        log::info!("[Surtr] Frame presented (graph compilation fallback)");
+                        tracing::info!("[Surtr] Frame presented (graph compilation fallback)");
                     }
                     return;
                 }
@@ -1058,7 +1058,7 @@ impl GpuRenderer {
                         crate::kvasir::nodes::PassId::BloomExtract
                         | crate::kvasir::nodes::PassId::BloomBlur
                         | crate::kvasir::nodes::PassId::Volumetric => {
-                            log::trace!(
+                            tracing::trace!(
                                 "[Kvasir] Skipping {} (over budget: {:.1}ms > {:.1}ms)",
                                 node.label(),
                                 elapsed_ms,
@@ -1072,7 +1072,7 @@ impl GpuRenderer {
                 }
             }
             if let Some(node) = cached.graph.node(node_key) {
-                log::trace!("[Kvasir] Executing node: {}", node.label());
+                tracing::trace!("[Kvasir] Executing node: {}", node.label());
                 let mut ctx = crate::kvasir::node::ExecutionContext {
                     device: &self.device,
                     queue: &self.queue,
@@ -1295,7 +1295,7 @@ impl GpuRenderer {
 
         if let Some(f) = res.surface_texture {
             f.present();
-            log::info!("[Surtr] Frame presented");
+            tracing::info!("[Surtr] Frame presented");
         }
     }
 
@@ -1665,7 +1665,7 @@ impl GpuRenderer {
                 result.extend_from_slice(&data[start..end]);
             }
 
-            log::trace!(
+            tracing::trace!(
                 "[GPU] capture_frame: data len={}, first 4 bytes={:?}",
                 data.len(),
                 &data[0..4.min(data.len())]

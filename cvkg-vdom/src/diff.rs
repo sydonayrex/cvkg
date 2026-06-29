@@ -215,7 +215,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                         // The actual handler closures cannot be serialized.
                         map.insert(
                             key,
-                            std::sync::Arc::new(|_| log::warn!("Cannot invoke serialized handler")),
+                            std::sync::Arc::new(|_| tracing::warn!("Cannot invoke serialized handler")),
                         );
                     }
                     map

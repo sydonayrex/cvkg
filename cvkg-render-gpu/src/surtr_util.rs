@@ -7,13 +7,13 @@ impl GpuRenderer {
     /// This is used for common icons to enable aggressive batching (1 draw call).
     pub fn load_image_to_heim(&mut self, name: &str, data: &[u8]) {
         if self.image_uv_registry.contains(name) {
-            log::info!(
+            tracing::info!(
                 "[Surtr] load_image_to_heim: '{}' already in registry, skipping",
                 name
             );
             return;
         }
-        log::info!(
+        tracing::info!(
             "[Surtr] load_image_to_heim: decoding '{}' ({} bytes)",
             name,
             data.len()
@@ -21,11 +21,11 @@ impl GpuRenderer {
         let img_result = image::load_from_memory(data);
         let img = match img_result {
             Ok(img) => {
-                log::info!("[Surtr] decode OK: {}x{}", img.width(), img.height());
+                tracing::info!("[Surtr] decode OK: {}x{}", img.width(), img.height());
                 img.to_rgba8()
             }
             Err(e) => {
-                log::error!("[Surtr] Failed to load image {} to heim: {}", name, e);
+                tracing::error!("[Surtr] Failed to load image {} to heim: {}", name, e);
                 return;
             }
         };
@@ -66,10 +66,10 @@ impl GpuRenderer {
             self.image_uv_registry.put(name.to_string(), uv_rect);
             // Index 0 = mega-heim texture (stored in texture_views[0])
             self.texture_registry.put(name.to_string(), 0);
-            log::info!("[Surtr] Packed '{}' into Mega-Heim at ({}, {})", name, x, y);
-            log::info!("[Surtr] Registry now contains '{}'", name);
+            tracing::info!("[Surtr] Packed '{}' into Mega-Heim at ({}, {})", name, x, y);
+            tracing::info!("[Surtr] Registry now contains '{}'", name);
         } else {
-            log::warn!(
+            tracing::warn!(
                 "HEIM_FULL: Failed to pack '{}' into Mega-Heim. Falling back to Texture Array.",
                 name
             );

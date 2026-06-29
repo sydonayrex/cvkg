@@ -116,7 +116,7 @@ impl ScreenReaderBridge for NullScreenReaderBridge {
             AnnouncementPriority::Polite => "polite",
             AnnouncementPriority::Assertive => "assertive",
         };
-        log::debug!(
+        tracing::debug!(
             "[A11y] {} ({}): {}",
             "announce",
             priority,

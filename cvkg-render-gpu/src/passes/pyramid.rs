@@ -20,7 +20,7 @@ impl GpuRenderer {
             match self.registry.get_texture_view(pyramid.mips[mip]) {
                 Some(v) => views.push(v),
                 None => {
-                    log::error!("[Pyramid] Missing mip {} view, skipping", mip);
+                    tracing::error!("[Pyramid] Missing mip {} view, skipping", mip);
                     continue;
                 }
             };
@@ -104,6 +104,6 @@ impl GpuRenderer {
             current_h = next_h;
         }
 
-        log::trace!("[Kvasir] ImagePyramid build: {} levels", pyramid.levels);
+        tracing::trace!("[Kvasir] ImagePyramid build: {} levels", pyramid.levels);
     }
 }

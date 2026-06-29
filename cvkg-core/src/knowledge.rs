@@ -315,7 +315,7 @@ where
 
     let _lock = STATE_WRITE_MUTEX.lock().unwrap_or_else(|p| p.into_inner());
     if is_rendering() {
-        log::warn!(
+        tracing::warn!(
             "LAYOUT THRASH DETECTED: System state mutated during render phase. This may trigger redundant layout passes and impact performance."
         );
     }

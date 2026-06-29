@@ -33,13 +33,13 @@ pub trait RendererErrorHandler {
     /// The renderer continues operating. Backends should log and optionally
     /// track error counts for health monitoring.
     fn on_render_error(&mut self, error: &CvkgError) {
-        log::error!("[RenderError] {error}");
+        tracing::error!("[RenderError] {error}");
     }
 
     /// Called when a fatal error occurs that prevents further rendering.
     /// The backend should attempt graceful shutdown.
     fn on_fatal_error(&mut self, error: &CvkgError) {
-        log::error!("[Fatal] {error}");
+        tracing::error!("[Fatal] {error}");
     }
 
     /// Returns true if the backend is in an error state.

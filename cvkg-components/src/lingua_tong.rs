@@ -451,3 +451,31 @@ mod i18n_tests {
         assert_eq!(t("unknown_key_xyz"), "unknown_key_xyz");
     }
 }
+
+#[cfg(test)]
+mod proptest_i18n {
+    use crate::{load_translations, set_locale, t};
+    use proptest::prelude::*;
+
+    #[test]
+    fn test_t_never_panics_loads_arbitrary() {
+        load_translations("en", std::collections::HashMap::new());
+        set_locale("ja");
+        let _ = t("any_key");
+        set_locale("en");
+    }
+
+    proptest! {
+        #[test]
+        fn test_t_roundtrip(
+            key in "[a-zA-Z0-9_]{1,20}",
+            value in "[a-zA-Z0-9_]{1,30}",
+        ) {
+            let mut table = std::collections::HashMap::new();
+            table.insert(key.clone(), value.clone());
+            load_translations("pt_locale", table);
+            set_locale("pt_locale");
+            prop_assert_eq!(t(&key), value);
+        }
+    }
+}

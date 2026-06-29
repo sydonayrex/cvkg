@@ -68,7 +68,7 @@ impl SecurityPolicy {
         if self.check_capability(cap) {
             Ok(())
         } else {
-            log::error!(
+            tracing::error!(
                 "SECURITY VIOLATION: Unauthorized access to capability {:?}",
                 cap
             );

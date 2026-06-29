@@ -518,21 +518,21 @@ impl<K: EnvKey> Environment<K> {
                 if let Some(typed_val) = val.downcast_ref::<K::Value>() {
                     return typed_val.clone();
                 } else {
-                    log::warn!(
+                    tracing::warn!(
                         "Environment: Downcast failed for key type {:?}",
                         std::any::type_name::<K>()
                     );
                 }
             } else {
                 // Lowered to trace to avoid terminal logging overhead under standard debug runs
-                log::trace!(
+                tracing::trace!(
                     "Environment: Key not found: {:?}. Returning default.",
                     std::any::type_name::<K>()
                 );
             }
         } else {
             // Lowered to trace to avoid terminal logging overhead under standard debug runs
-            log::trace!(
+            tracing::trace!(
                 "Environment: Store not initialized. Key: {:?}. Returning default.",
                 std::any::type_name::<K>()
             );

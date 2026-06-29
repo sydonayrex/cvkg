@@ -35,6 +35,9 @@ path = "tests/themes_tests.rs"
 
 [dependencies.cvkg-anim]
 version = "0.2.15"
+[dependencies.tracing]
+workspace = true
+
 
 [dependencies.cvkg-core]
 version = "0.2.15"

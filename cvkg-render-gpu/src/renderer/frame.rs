@@ -113,8 +113,8 @@ impl GpuRenderer {
         if let Some(rx) = &self.ai_material_rx {
             while let Ok(res) = rx.try_recv() {
                 match res {
-                    Ok(_) => log::info!("[Surtr] Received AI generated material"),
-                    Err(e) => log::warn!("[Surtr] AI material generation error: {:?}", e),
+                    Ok(_) => tracing::info!("[Surtr] Received AI generated material"),
+                    Err(e) => tracing::warn!("[Surtr] AI material generation error: {:?}", e),
                 }
             }
         }
@@ -169,7 +169,7 @@ impl GpuRenderer {
         let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
             wgpu::PresentMode::Mailbox
         } else {
-            log::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync)");
+            tracing::warn!("[GPU] Mailbox not supported, falling back to Fifo (V-Sync)");
             wgpu::PresentMode::Fifo
         };
 
@@ -187,7 +187,7 @@ impl GpuRenderer {
             caps.alpha_modes[0]
         };
 
-        log::info!(
+        tracing::info!(
             "[GPU] Configuring surface: {}x{} | {:?} | {:?}",
             size.width,
             size.height,

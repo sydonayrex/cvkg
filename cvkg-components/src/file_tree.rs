@@ -153,7 +153,7 @@ where
     let s = cvkg_core::load_system_state();
     if let Some(state_arc) = s.get_component_state::<YggdrasilTreeState>(tree_id) {
         let mut lock = state_arc.write().unwrap_or_else(|e| {
-            log::warn!("Lock poisoned, recovering...");
+            tracing::warn!("Lock poisoned, recovering...");
             e.into_inner()
         });
         f(&mut lock);

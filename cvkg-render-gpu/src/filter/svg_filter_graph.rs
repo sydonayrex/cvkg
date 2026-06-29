@@ -262,7 +262,7 @@ impl FilterEngine {
         let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing input texture for GaussianBlur");
+                tracing::error!("[FilterEngine] Missing input texture for GaussianBlur");
                 return;
             }
         };
@@ -270,7 +270,7 @@ impl FilterEngine {
         let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing output texture for GaussianBlur");
+                tracing::error!("[FilterEngine] Missing output texture for GaussianBlur");
                 return;
             }
         };
@@ -279,7 +279,7 @@ impl FilterEngine {
         let blur_pipeline = match ctx.renderer.blur_pipeline.as_ref() {
             Some(p) => p,
             None => {
-                log::warn!("[FilterEngine] Blur pipeline not available, skipping GaussianBlur");
+                tracing::warn!("[FilterEngine] Blur pipeline not available, skipping GaussianBlur");
                 return;
             }
         };
@@ -344,7 +344,7 @@ impl FilterEngine {
             pass.draw(0..3, 0..1);
         }
 
-        log::trace!(
+        tracing::trace!(
             "[FilterEngine] feGaussianBlur std_deviation={} completed ({}x{})",
             std_deviation,
             self.width,
@@ -369,7 +369,7 @@ impl FilterEngine {
         // For now, execute a simplified version: blur + offset
         self.execute_gaussian_blur(std_deviation, ctx);
 
-        log::trace!(
+        tracing::trace!(
             "[FilterEngine] feDropShadow dx={} dy={} std={} color={:?}",
             dx,
             dy,
@@ -383,7 +383,7 @@ impl FilterEngine {
         let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing input texture for Offset");
+                tracing::error!("[FilterEngine] Missing input texture for Offset");
                 return;
             }
         };
@@ -391,7 +391,7 @@ impl FilterEngine {
         let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing output texture for Offset");
+                tracing::error!("[FilterEngine] Missing output texture for Offset");
                 return;
             }
         };
@@ -437,7 +437,7 @@ impl FilterEngine {
             pass.draw(0..3, 0..1);
         }
 
-        log::trace!("[FilterEngine] feOffset dx={} dy={}", dx, dy);
+        tracing::trace!("[FilterEngine] feOffset dx={} dy={}", dx, dy);
     }
 
     /// Execute feBlend: blend two images together using the specified blend mode.
@@ -447,7 +447,7 @@ impl FilterEngine {
         let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing input texture for Blend");
+                tracing::error!("[FilterEngine] Missing input texture for Blend");
                 return;
             }
         };
@@ -455,7 +455,7 @@ impl FilterEngine {
         let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing output texture for Blend");
+                tracing::error!("[FilterEngine] Missing output texture for Blend");
                 return;
             }
         };
@@ -510,7 +510,7 @@ impl FilterEngine {
             pass.draw(0..3, 0..1);
         }
 
-        log::trace!(
+        tracing::trace!(
             "[FilterEngine] feBlend mode={:?} src={:?} dst={:?}",
             mode,
             src_factor,
@@ -524,7 +524,7 @@ impl FilterEngine {
         let input_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing input texture for Composite");
+                tracing::error!("[FilterEngine] Missing input texture for Composite");
                 return;
             }
         };
@@ -532,7 +532,7 @@ impl FilterEngine {
         let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing output texture for Composite");
+                tracing::error!("[FilterEngine] Missing output texture for Composite");
                 return;
             }
         };
@@ -583,7 +583,7 @@ impl FilterEngine {
             pass.draw(0..3, 0..1);
         }
 
-        log::trace!("[FilterEngine] feComposite operator={:?}", operator);
+        tracing::trace!("[FilterEngine] feComposite operator={:?}", operator);
     }
 
     /// Execute feFlood: fill the filter region with a solid color.
@@ -591,7 +591,7 @@ impl FilterEngine {
         let output_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[FilterEngine] Missing output texture for Flood");
+                tracing::error!("[FilterEngine] Missing output texture for Flood");
                 return;
             }
         };
@@ -620,7 +620,7 @@ impl FilterEngine {
             });
 
             // No pipeline needed — just clear to the flood color
-            log::trace!("[FilterEngine] feFlood color={:?}", color);
+            tracing::trace!("[FilterEngine] feFlood color={:?}", color);
         }
     }
 
@@ -628,7 +628,7 @@ impl FilterEngine {
     fn execute_merge(&mut self, ctx: &mut ExecutionContext) {
         // Merge composites all input layers in order
         // For now, just log — full implementation would iterate inputs
-        log::trace!("[FilterEngine] feMerge");
+        tracing::trace!("[FilterEngine] feMerge");
     }
 }
 
@@ -685,7 +685,7 @@ pub fn build_filter_graph(
                 result: prim.result.clone().unwrap_or_else(|| "merge".into()),
             },
             _ => {
-                log::warn!(
+                tracing::warn!(
                     "[FilterEngine] Unsupported filter primitive: {:?}",
                     prim.primitive_type
                 );

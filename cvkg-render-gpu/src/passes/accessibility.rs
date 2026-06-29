@@ -64,7 +64,7 @@ impl KvasirNode for AccessibilityNode {
         {
             Some(v) => v,
             None => {
-                log::error!("[Accessibility] Missing scene texture view");
+                tracing::error!("[Accessibility] Missing scene texture view");
                 return;
             }
         };

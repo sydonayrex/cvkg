@@ -84,7 +84,7 @@ impl KvasirNode for SvgFilterNode {
         if let Some(ref graph) = self.filter_graph {
             let mut engine = crate::filter::FilterEngine::new();
             engine.execute(graph, ctx);
-            log::trace!(
+            tracing::trace!(
                 "[Kvasir] Executed SVG filter: {} -> {:?} ({} primitives)",
                 self.label,
                 self.output,

@@ -222,7 +222,7 @@ pub fn compute_taffy_flex(
             } else {
                 let new_node = engine.tree.new_leaf(style)
                     .unwrap_or_else(|e| {
-                        log::warn!("[Layout] new_leaf failed: {e}, using fallback node");
+                        tracing::warn!("[Layout] new_leaf failed: {e}, using fallback node");
                         taffy::NodeId::new(0)
                     });
                 engine.node_map.insert(hash, new_node);
@@ -231,7 +231,7 @@ pub fn compute_taffy_flex(
         } else {
             engine.tree.new_leaf(style)
                 .unwrap_or_else(|e| {
-                    log::warn!("[Layout] new_leaf failed: {e}, using fallback node");
+                    tracing::warn!("[Layout] new_leaf failed: {e}, using fallback node");
                     taffy::NodeId::new(0)
                 })
         };
@@ -287,7 +287,7 @@ pub fn compute_taffy_flex(
         .tree
         .compute_layout(root_node, taffy::Size::MAX_CONTENT)
         .unwrap_or_else(|e| {
-            log::warn!("[Layout] compute_layout failed: {e}, using zero rects");
+            tracing::warn!("[Layout] compute_layout failed: {e}, using zero rects");
         });
 
     let mut rects = Vec::with_capacity(subviews.len());
@@ -301,14 +301,14 @@ pub fn compute_taffy_flex(
                     height: layout.size.height,
                 };
                 if !rect.x.is_finite() || !rect.y.is_finite() || !rect.width.is_finite() || !rect.height.is_finite() {
-                    log::warn!("[Layout] NaN/Inf rect at node {:?}, using zero", node);
+                    tracing::warn!("[Layout] NaN/Inf rect at node {:?}, using zero", node);
                     rects.push(Rect::zero());
                 } else {
                     rects.push(rect);
                 }
             }
             Err(e) => {
-                log::warn!("[Layout] layout failed for node {:?}: {e}, using zero", node);
+                tracing::warn!("[Layout] layout failed for node {:?}: {e}, using zero", node);
                 rects.push(Rect::zero());
             }
         }

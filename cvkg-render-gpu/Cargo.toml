@@ -60,6 +60,9 @@ roxmltree = "0.21"
 [dependencies.accesskit]
 version = "0.24"
 
+[dependencies.tracing]
+workspace = true
+
 [dependencies.accesskit_winit]
 version = "0.33"
 

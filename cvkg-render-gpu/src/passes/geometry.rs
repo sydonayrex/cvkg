@@ -47,7 +47,7 @@ impl KvasirNode for GeometryNode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                tracing::error!("Missing texture view for {}", stringify!(RES_SCENE));
                 return;
             }
         };
@@ -57,7 +57,7 @@ impl KvasirNode for GeometryNode {
         {
             Some(v) => v,
             None => {
-                log::error!(
+                tracing::error!(
                     "Missing texture view for {}",
                     stringify!(crate::kvasir::nodes::RES_SCENE_MSAA)
                 );
@@ -112,12 +112,12 @@ impl KvasirNode for GeometryNode {
         }
 
         if !ctx.renderer.draw_calls.is_empty() {
-            log::trace!(
+            tracing::trace!(
                 "[Kvasir] GeometryNode: draw_calls={}",
                 ctx.renderer.draw_calls.len()
             );
             for (i, call) in ctx.renderer.draw_calls.iter().enumerate() {
-                log::trace!(
+                tracing::trace!(
                     "[Kvasir]   call[{}]: material={:?}, target_id={:?}, index_start={}, index_count={}",
                     i,
                     call.material,
@@ -198,7 +198,7 @@ impl KvasirNode for GeometryNode {
                     call.instance_start..call.instance_start + call.instance_count,
                 );
             }
-            log::trace!(
+            tracing::trace!(
                 "[Kvasir] GeometryNode: opaque_calls drawn={}",
                 opaque_calls_count
             );

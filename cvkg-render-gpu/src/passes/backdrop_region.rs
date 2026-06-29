@@ -47,14 +47,14 @@ impl KvasirNode for BackdropRegionNode {
         let scene_tex = match ctx.registry.get_texture(crate::kvasir::nodes::RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("[BackdropRegion] Missing scene texture");
+                tracing::error!("[BackdropRegion] Missing scene texture");
                 return;
             }
         };
         let blur_tex = match ctx.registry.get_texture(self.output_id) {
             Some(v) => v,
             None => {
-                log::error!("[BackdropRegion] Missing blur target texture");
+                tracing::error!("[BackdropRegion] Missing blur target texture");
                 return;
             }
         };

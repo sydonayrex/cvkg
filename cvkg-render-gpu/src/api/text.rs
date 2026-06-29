@@ -109,7 +109,7 @@ impl GpuRenderer {
                         continue;
                     }
                     if rgba_data.is_empty() {
-                        log::warn!(
+                        tracing::warn!(
                             "Glyph rasterizer returned unsupported pixel format for glyph {} ({} bytes, {}x{}), skipping",
                             glyph_id,
                             data_len,
@@ -127,7 +127,7 @@ impl GpuRenderer {
                         match self.heim_packer.pack(gw, gh) {
                             Some(pos) => pos,
                             None => {
-                                log::error!(
+                                tracing::error!(
                                     "Glyph heim critically full after reclaim: cannot pack {}x{} glyph, skipping",
                                     gw,
                                     gh
@@ -266,7 +266,7 @@ fn glyph_image_to_rgba(image: cvkg_runic_text::GlyphImage) -> (Vec<u8>, u32, u32
 
     let (bytes_per_pixel, remainder) = (image.data.len() / pixels, image.data.len() % pixels);
     if remainder != 0 {
-        log::warn!(
+        tracing::warn!(
             "Glyph rasterizer returned {} bytes for {}x{} glyph; expected whole pixels ({} bytes per pixel)",
             image.data.len(),
             width,
@@ -308,7 +308,7 @@ fn glyph_image_to_rgba(image: cvkg_runic_text::GlyphImage) -> (Vec<u8>, u32, u32
             data
         }
         _ => {
-            log::warn!(
+            tracing::warn!(
                 "Glyph rasterizer returned unsupported {} bytes per pixel for {}x{} glyph ({} bytes total)",
                 bytes_per_pixel,
                 width,

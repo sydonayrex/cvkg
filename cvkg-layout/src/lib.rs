@@ -94,7 +94,7 @@ where
     }
     let already_active = ACTIVE_LAYOUT_NODES.with(|nodes| !nodes.borrow_mut().insert(hash));
     if already_active {
-        log::warn!(
+        tracing::warn!(
             "[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle with fallback size.",
             hash
         );
@@ -115,7 +115,7 @@ where
     }
     let already_active = ACTIVE_LAYOUT_NODES.with(|nodes| !nodes.borrow_mut().insert(hash));
     if already_active {
-        log::warn!(
+        tracing::warn!(
             "[Layout] Cycle detected for view hash 0x{:X}! Breaking cycle placement.",
             hash
         );

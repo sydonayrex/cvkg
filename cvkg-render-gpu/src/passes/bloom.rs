@@ -43,7 +43,7 @@ impl KvasirNode for BloomExtractNode {
         let bloom_texture = match ctx.registry.get_texture(RES_BLOOM_A) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture for {}", stringify!(RES_BLOOM_A));
+                tracing::error!("Missing texture for {}", stringify!(RES_BLOOM_A));
                 return;
             }
         };
@@ -59,7 +59,7 @@ impl KvasirNode for BloomExtractNode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                tracing::error!("Missing texture view for {}", stringify!(RES_SCENE));
                 return;
             }
         };
@@ -146,7 +146,7 @@ impl KvasirNode for BloomBlurNode {
         let bloom_tex = match ctx.registry.get_texture(RES_BLOOM_A) {
             Some(v) => v,
             None => {
-                log::error!("Missing texture for {}", stringify!(RES_BLOOM_A));
+                tracing::error!("Missing texture for {}", stringify!(RES_BLOOM_A));
                 return;
             }
         };
@@ -319,7 +319,7 @@ impl KvasirNode for BloomBlurNode {
             p.draw(0..3, 0..1);
         }
 
-        log::trace!(
+        tracing::trace!(
             "[Kvasir] bloom_blur: Kawase pyramid ({}x{})",
             bloom_width,
             bloom_height
