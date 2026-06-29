@@ -1286,6 +1286,87 @@ impl GpuRenderer {
         .await
     }
 
+    /// Read back the headless output texture as RGBA8 pixels.
+    /// Must be called after `end_frame` on a headless renderer.
+    pub fn readback_headless_rgba8(&self) -> Vec<u8> {
+        let ctx = self
+            .headless_context
+            .as_ref()
+            .expect("readback_headless_rgba8 requires a headless renderer");
+
+        let width = ctx.width;
+        let height = ctx.height;
+        let row_bytes = width * 4;
+        let padded_row_bytes = ((row_bytes + 255) / 256) * 256;
+        let buffer_size = (padded_row_bytes * height) as u64;
+
+        let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("headless-readback-buffer"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("headless-readback-encoder"),
+            });
+
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &ctx.output_texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &output_buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_row_bytes),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        let buffer_slice = output_buffer.slice(..);
+        buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
+        let _ = self.device.poll(wgpu::PollType::Wait {
+            submission_index: None,
+            timeout: None,
+        });
+
+        let data = buffer_slice.get_mapped_range();
+        let mut result = Vec::with_capacity((width * height * 4) as usize);
+        for row in 0..height {
+            let start = (row * padded_row_bytes) as usize;
+            let end = start + row_bytes as usize;
+            result.extend_from_slice(&data[start..end]);
+        }
+        drop(data);
+        output_buffer.unmap();
+        output_buffer.destroy();
+        result
+    }
+
+    /// Render a headless frame with a draw callback and read back pixels.
+    pub fn render_headless_frame<F>(&mut self, draw: F) -> Vec<u8>
+    where
+        F: FnOnce(&mut Self),
+    {
+        let encoder = self.begin_frame_headless();
+        draw(self);
+        self.end_frame(encoder);
+        self.readback_headless_rgba8()
+    }
+
     /// Create a headless GpuRenderer from an existing device and surface.
     ///
     /// This constructor does not require an event loop and is suitable for
