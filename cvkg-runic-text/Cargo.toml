@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-runic-text"
-version = "0.2.16"
+version = "0.2.17"
 build = false
 autolib = false
 autobins = false

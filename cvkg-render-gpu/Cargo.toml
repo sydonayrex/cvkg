@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-render-gpu"
-version = "0.2.16"
+version = "0.2.17"
 build = "build.rs"
 autolib = false
 autobins = false
@@ -71,16 +71,16 @@ version = "1.25"
 features = ["derive"]
 
 [dependencies.cvkg-core]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.cvkg-compositor]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.cvkg-svg-filters]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.cvkg-svg-serialize]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.futures]
 version = "0.3"
@@ -116,7 +116,7 @@ features = [
 version = "1.12"
 
 [dependencies.cvkg-runic-text]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.swash]
 version = "0.2"

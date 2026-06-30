@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-components"
-version = "0.2.16"
+version = "0.2.17"
 build = false
 autolib = false
 autobins = false
@@ -114,29 +114,29 @@ name = "theming_test"
 path = "tests/theming_test.rs"
 
 [dependencies]
-cvkg-runic-text= { version = "0.2.16", path = "../cvkg-runic-text" }
+cvkg-runic-text= { version = "0.2.17", path = "../cvkg-runic-text" }
 rfd.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies.arboard]
 workspace = true
 
 [dependencies.cvkg-anim]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.tracing]
 workspace = true
 
 [dependencies.cvkg-core]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.cvkg-layout]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.cvkg-themes]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.cvkg-vdom]
-version = "0.2.16"
+version = "0.2.17"
 
 [dependencies.log]
 version = "0.4"
