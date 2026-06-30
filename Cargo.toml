@@ -40,50 +40,49 @@ members = [
 ]
 
 [workspace.package]
-version = "0.2.16"
+version = "0.2.17"
 edition = "2024"
 rust-version = "1.85"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 [workspace.dependencies]
-cvkg-core = { path = "cvkg-core", version = "0.2.16" }
-cvkg-vdom = { path = "cvkg-vdom", version = "0.2.16" }
-cvkg-scene = { path = "cvkg-scene", version = "0.2.16" }
-cvkg-layout = { path = "cvkg-layout", version = "0.2.16" }
-cvkg-anim = { path = "cvkg-anim", version = "0.2.16" }
-cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.16" }
-cvkg-render-software = { path = "cvkg-render-software", version = "0.2.16" }
-runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.16" }
-cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.16" }
-cvkg-physics = { path = "cvkg-physics", version = "0.2.16" }
-cvkg-themes = { path = "cvkg-themes", version = "0.2.16" }
-cvkg-macros = { path = "cvkg-macros", version = "0.2.16" }
-cvkg-components = { path = "cvkg-components", version = "0.2.16" }
-cvkg-inputs = { path = "cvkg-inputs", version = "0.2.16" }
-cvkg-stl = { path = "cvkg-stl", version = "0.2.16" }
-cvkg-test = { path = "cvkg-test", version = "0.2.16" }
-cvkg-flow = { path = "cvkg-flow", version = "0.2.16" }
-cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.16" }
-cvkg-compositor = { path = "cvkg-compositor", version = "0.2.16" }
-cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.16" }
-cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.16" }
-cvkg-telemetry = { path = "cvkg-telemetry", version = "0.2.16" }
-proptest = "1"
-cvkg-cli = { path = "cvkg-cli", version = "0.2.16" }
-cvkg = { path = "cvkg", version = "0.2.16" }
+cvkg-core = { path = "cvkg-core", version = "0.2.17" }
+cvkg-vdom = { path = "cvkg-vdom", version = "0.2.17" }
+cvkg-scene = { path = "cvkg-scene", version = "0.2.17" }
+cvkg-layout = { path = "cvkg-layout", version = "0.2.17" }
+cvkg-anim = { path = "cvkg-anim", version = "0.2.17" }
+cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.17" }
+cvkg-render-software = { path = "cvkg-render-software", version = "0.2.17" }
+runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.17" }
+cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.17" }
+cvkg-physics = { path = "cvkg-physics", version = "0.2.17" }
+cvkg-themes = { path = "cvkg-themes", version = "0.2.17" }
+cvkg-macros = { path = "cvkg-macros", version = "0.2.17" }
+cvkg-components = { path = "cvkg-components", version = "0.2.17" }
+cvkg-inputs = { path = "cvkg-inputs", version = "0.2.17" }
+cvkg-stl = { path = "cvkg-stl", version = "0.2.17" }
+cvkg-test = { path = "cvkg-test", version = "0.2.17" }
+cvkg-flow = { path = "cvkg-flow", version = "0.2.17" }
+cvkg-webkit-server = { path = "cvkg-webkit-server", version = "0.2.17" }
+cvkg-compositor = { path = "cvkg-compositor", version = "0.2.17" }
+cvkg-svg-serialize = { path = "cvkg-svg-serialize", version = "0.2.17" }
+cvkg-svg-filters = { path = "cvkg-svg-filters", version = "0.2.17" }
+cvkg-telemetry = { path = "cvkg-telemetry", version = "0.2.17" }
+cvkg-cli = { path = "cvkg-cli", version = "0.2.17" }
+cvkg = { path = "cvkg", version = "0.2.17" }
 # Platform infrastructure crates
-cvkg-scheduler = { path = "cvkg-scheduler", version = "0.2.16" }
-cvkg-spatial = { path = "cvkg-spatial", version = "0.2.16" }
-cvkg-reflect = { path = "cvkg-reflect", version = "0.2.16" }
-cvkg-materials = { path = "cvkg-materials", version = "0.2.16" }
-cvkg-accessibility = { path = "cvkg-accessibility", version = "0.2.16" }
-cvkg-certification = { path = "cvkg-certification", version = "0.2.16" }
-cvkg-gallery = { path = "cvkg-gallery", version = "0.2.16" }
-cvkg-game-hud = { path = "cvkg-game-hud", version = "0.2.16" }
-cvkg-export-raster = { path = "cvkg-export-raster", version = "0.2.16" }
-cvkg_components = { path = "cvkg-components", version = "0.2.16" }
-cvkg_themes = { path = "cvkg-themes", version = "0.2.16" }
+cvkg-scheduler = { path = "cvkg-scheduler", version = "0.2.17" }
+cvkg-spatial = { path = "cvkg-spatial", version = "0.2.17" }
+cvkg-reflect = { path = "cvkg-reflect", version = "0.2.17" }
+cvkg-materials = { path = "cvkg-materials", version = "0.2.17" }
+cvkg-accessibility = { path = "cvkg-accessibility", version = "0.2.17" }
+cvkg-certification = { path = "cvkg-certification", version = "0.2.17" }
+cvkg-gallery = { path = "cvkg-gallery", version = "0.2.17" }
+cvkg-game-hud = { path = "cvkg-game-hud", version = "0.2.17" }
+cvkg-export-raster = { path = "cvkg-export-raster", version = "0.2.17" }
+cvkg_components = { path = "cvkg-components", version = "0.2.17" }
+cvkg_themes = { path = "cvkg-themes", version = "0.2.17" }
 bitflags = "2.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
