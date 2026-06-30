@@ -56,7 +56,7 @@ impl View for Textarea {
         // Draw text
         let line_height = 20.0;
         if self.text.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.placeholder,
                 rect.x + 8.0,
                 rect.y + 8.0,
@@ -68,7 +68,7 @@ impl View for Textarea {
             for (i, line) in lines.iter().enumerate() {
                 let y = rect.y + 8.0 + (i as f32 * line_height);
                 if y - rect.y < rect.height - 8.0 {
-                    renderer.draw_text(line, rect.x + 8.0, y, FONT_BASE, theme::text());
+                    renderer.draw_text_raw(line, rect.x + 8.0, y, FONT_BASE, theme::text());
                 }
             }
         }
@@ -92,7 +92,7 @@ impl View for Textarea {
         // Character count
         let count_text = format!("{} chars", self.text.len());
         let (cw, _) = renderer.measure_text(&count_text, 12.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &count_text,
             rect.x + rect.width - cw - 8.0,
             rect.y + rect.height - 16.0,

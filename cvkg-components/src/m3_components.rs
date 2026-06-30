@@ -90,7 +90,7 @@ impl View for FAB {
         renderer.pop_shadow();
         // Icon
         let (tw, th) = renderer.measure_text(&self.icon, 20.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.icon,
             cx - tw / 2.0,
             cy - th / 2.0,
@@ -189,7 +189,7 @@ impl View for ExtendedFAB {
         renderer.fill_rounded_rect(btn_rect, self.height / 2.0, self.bg_color);
         renderer.pop_shadow();
         // Icon
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.icon,
             btn_rect.x + 16.0,
             btn_rect.y + 36.0,
@@ -197,7 +197,7 @@ impl View for ExtendedFAB {
             self.text_color,
         );
         // Label
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             btn_rect.x + 48.0,
             btn_rect.y + 36.0,
@@ -322,7 +322,7 @@ impl View for TimePicker {
                 );
             }
             let (tw, th) = renderer.measure_text(&label, 12.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &label,
                 nx - tw / 2.0,
                 ny - th / 2.0,
@@ -337,7 +337,7 @@ impl View for TimePicker {
         // Center time display
         let time_str = format!("{:02}:{:02}", self.hour, self.minute);
         let (tw, _th) = renderer.measure_text(&time_str, 16.0);
-        renderer.draw_text(&time_str, cx - tw / 2.0, cy + r + 12.0, 16.0, theme::text());
+        renderer.draw_text_raw(&time_str, cx - tw / 2.0, cy + r + 12.0, 16.0, theme::text());
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -434,7 +434,7 @@ impl View for DateRangePicker {
             self.year
         );
         let (tw, _th) = renderer.measure_text(&header, 16.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &header,
             rect.x + (self.width - tw) / 2.0,
             rect.y + 24.0,
@@ -453,7 +453,7 @@ impl View for DateRangePicker {
         ];
         let cell_w = self.width / 7.0;
         for (i, day) in days.iter().enumerate() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 day,
                 rect.x + i as f32 * cell_w + cell_w / 2.0 - 8.0,
                 rect.y + 48.0,
@@ -508,7 +508,7 @@ impl View for DateRangePicker {
             }
             let day_str = format!("{}", day);
             let (dw, dh) = renderer.measure_text(&day_str, 13.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &day_str,
                 cx + (cell_w - dw) / 2.0,
                 cy + (28.0 - dh) / 2.0,
@@ -706,7 +706,7 @@ impl View for BgMediaHero {
         renderer.fill_rect(rect, theme::with_alpha(theme::bg(), self.overlay));
         // Title
         let (tw, th) = renderer.measure_text(&self.title, 32.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + (self.width - tw) / 2.0,
             rect.y + self.height * 0.4,
@@ -716,7 +716,7 @@ impl View for BgMediaHero {
         // Subtitle
         if !self.subtitle.is_empty() {
             let (sw, _sh) = renderer.measure_text(&self.subtitle, 16.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.subtitle,
                 rect.x + (self.width - sw) / 2.0,
                 rect.y + self.height * 0.4 + th + 12.0,
@@ -810,7 +810,7 @@ impl View for LogoCarousel {
             renderer.fill_rounded_rect(logo_rect, RADIUS_LG, theme::surface_elevated());
             renderer.stroke_rounded_rect(logo_rect, RADIUS_LG, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(logo, 14.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 logo,
                 logo_rect.x + (self.logo_width - tw) / 2.0,
                 logo_rect.y + (self.height - 20.0 - th) / 2.0,
@@ -830,7 +830,7 @@ impl View for LogoCarousel {
             renderer.fill_rounded_rect(logo_rect, RADIUS_LG, theme::surface_elevated());
             renderer.stroke_rounded_rect(logo_rect, RADIUS_LG, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(logo, 14.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 logo,
                 logo_rect.x + (self.logo_width - tw) / 2.0,
                 logo_rect.y + (self.height - 20.0 - th) / 2.0,
@@ -927,7 +927,7 @@ impl View for DynamicIsland {
         };
         let font_size = 12.0 + self.progress * 2.0;
         let (tw, th) = renderer.measure_text(display, font_size);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             display,
             island_rect.x + (w - tw) / 2.0,
             island_rect.y + (h - th) / 2.0,
@@ -1024,7 +1024,7 @@ impl View for SidePanel {
         renderer.fill_rounded_rect(panel_rect, RADIUS_2XL, theme::surface_overlay());
         renderer.stroke_rounded_rect(panel_rect, RADIUS_2XL, theme::border(), 1.0);
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             panel_rect.x + 16.0,
             panel_rect.y + 28.0,
@@ -1043,7 +1043,7 @@ impl View for SidePanel {
         // Content
         let mut y = panel_rect.y + 56.0;
         for line in &self.content {
-            renderer.draw_text(line, panel_rect.x + 16.0, y + 16.0, 14.0, theme::text());
+            renderer.draw_text_raw(line, panel_rect.x + 16.0, y + 16.0, 14.0, theme::text());
             y += 28.0;
         }
         renderer.pop_vnode();
@@ -1136,7 +1136,7 @@ impl View for Codeblock {
             1.0,
         );
         // Language label
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.language,
             rect.x + 12.0,
             rect.y + 20.0,
@@ -1144,7 +1144,7 @@ impl View for Codeblock {
             theme::text_dim(),
         );
         // Copy button
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Copy",
             rect.x + rect.width - 50.0,
             rect.y + 20.0,
@@ -1154,7 +1154,7 @@ impl View for Codeblock {
         // Code content
         let mut y = rect.y + 44.0;
         for line in self.code.lines() {
-            renderer.draw_text(line, rect.x + 12.0, y + 14.0, 13.0, theme::text());
+            renderer.draw_text_raw(line, rect.x + 12.0, y + 14.0, 13.0, theme::text());
             y += 20.0;
         }
         renderer.pop_vnode();
@@ -1295,7 +1295,7 @@ impl View for Kanban {
             // Column background
             renderer.fill_rounded_rect(col_rect, RADIUS_XL, theme::surface());
             // Column header
-            renderer.draw_text(&col.title, cx + 12.0, rect.y + 24.0, 14.0, theme::text());
+            renderer.draw_text_raw(&col.title, cx + 12.0, rect.y + 24.0, 14.0, theme::text());
             // Card count badge
             let count_str = format!("{}", col.cards.len());
             let (cw, _) = renderer.measure_text(&count_str, 11.0);
@@ -1309,7 +1309,7 @@ impl View for Kanban {
                 10.0,
                 theme::surface_elevated(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &count_str,
                 cx + self.column_width - cw - 14.0,
                 rect.y + 26.0,
@@ -1327,7 +1327,7 @@ impl View for Kanban {
                 };
                 renderer.fill_rounded_rect(card_rect, RADIUS_LG, theme::surface_elevated());
                 renderer.stroke_rounded_rect(card_rect, RADIUS_LG, theme::border(), 1.0);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &card.title,
                     card_rect.x + 12.0,
                     card_rect.y + 20.0,
@@ -1335,7 +1335,7 @@ impl View for Kanban {
                     theme::text(),
                 );
                 if !card.description.is_empty() {
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &card.description,
                         card_rect.x + 12.0,
                         card_rect.y + 38.0,

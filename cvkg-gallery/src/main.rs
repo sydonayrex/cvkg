@@ -584,7 +584,7 @@ impl View for GalleryApp {
 
             let cat_font_size = 9.0 * scale;
             let (cat_w, _) = renderer.measure_text(entries[i].category, cat_font_size);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 entries[i].category,
                 card_rect.x + (card_rect.width - cat_w) / 2.0,
                 card_rect.y + 16.0 * scale,
@@ -594,7 +594,7 @@ impl View for GalleryApp {
 
             let name_font_size = 15.0 * scale * cos_a.max(0.6);
             let (name_w, _) = renderer.measure_text(entries[i].name, name_font_size);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 entries[i].name,
                 card_rect.x + (card_rect.width - name_w) / 2.0,
                 card_rect.y + 35.0 * scale,
@@ -653,7 +653,7 @@ impl View for GalleryApp {
 
         // 4. Draw Selected Component Title & View
         let title_y = div_y + 15.0;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             format!("GALLERY / {}", entries[selected].name.to_uppercase()).as_str(),
             rect.x + 40.0,
             title_y,

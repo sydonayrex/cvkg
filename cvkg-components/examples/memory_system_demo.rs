@@ -115,7 +115,7 @@ impl ApplicationHandler for MemoryApp {
                 mem_view.render(renderer, mem_rect);
 
                 // ── AI Context Simulation ──
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     "AI_CONTEXT_INJECTION",
                     450.0,
                     65.0,
@@ -127,7 +127,7 @@ impl ApplicationHandler for MemoryApp {
                 let mut ctx_y = 90.0;
                 for id in &state.last_query_results {
                     if let Some(frag) = state.fragments.get(id) {
-                        renderer.draw_text(
+                        renderer.draw_text_raw(
                             &format!("[RECALL:{}]", frag.id),
                             460.0,
                             ctx_y,
@@ -138,7 +138,7 @@ impl ApplicationHandler for MemoryApp {
                     }
                 }
 
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     "Press any key to rotate search queries",
                     250.0,
                     520.0,

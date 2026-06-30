@@ -2,6 +2,9 @@
 name = "cvkg-game-hud"
 version.workspace = true
 edition.workspace = true
+description.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 cvkg-anim = { workspace = true }

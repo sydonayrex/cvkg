@@ -201,7 +201,7 @@ impl View for SyncEditor {
         let buffer = match self.buffer.lock() {
             Ok(b) => b.clone(),
             Err(_) => {
-                renderer.draw_text("[sync error]", rect.x, rect.y, 14.0, [1.0, 0.0, 0.0, 1.0]);
+                renderer.draw_text_raw("[sync error]", rect.x, rect.y, 14.0, [1.0, 0.0, 0.0, 1.0]);
                 return;
             }
         };
@@ -220,7 +220,7 @@ impl View for SyncEditor {
         let mut y = rect.y + 4.0;
         let line_height = 20.0;
         for line in text.lines() {
-            renderer.draw_text(line, rect.x + 4.0, y, 14.0, theme::text());
+            renderer.draw_text_raw(line, rect.x + 4.0, y, 14.0, theme::text());
             y += line_height;
         }
 
@@ -257,7 +257,7 @@ impl View for SyncEditor {
             // Name label above cursor
             let label_rect = Rect::new(cx, cy - 14.0, cursor.name.len() as f32 * 7.0 + 4.0, 14.0);
             renderer.fill_rounded_rect(label_rect, 2.0, cursor.color);
-            renderer.draw_text(&cursor.name, cx + 2.0, cy - 2.0, 10.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text_raw(&cursor.name, cx + 2.0, cy - 2.0, 10.0, [1.0, 1.0, 1.0, 1.0]);
         }
     }
 }

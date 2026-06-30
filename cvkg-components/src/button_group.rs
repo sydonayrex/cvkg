@@ -108,7 +108,7 @@ impl View for ButtonGroup {
             let (text_w, text_h) = renderer.measure_text(&label, FONT_BASE);
             let text_x = x + (item_width - text_w) / 2.0;
             let text_y = y + (item_height - text_h) / 2.0;
-            renderer.draw_text(&label, text_x, text_y, FONT_BASE, label_color);
+            renderer.draw_text_raw(&label, text_x, text_y, FONT_BASE, label_color);
         }
     }
 }

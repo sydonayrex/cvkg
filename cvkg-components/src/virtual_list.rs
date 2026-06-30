@@ -249,8 +249,8 @@ impl View for ListItem {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let x = rect.x + 12.0;
         if let Some(icon) = &self.icon {
-            renderer.draw_text(icon, x, rect.y + 2.0, 14.0, theme::info());
-            renderer.draw_text(
+            renderer.draw_text_raw(icon, x, rect.y + 2.0, 14.0, theme::info());
+            renderer.draw_text_raw(
                 &self.label,
                 x + 20.0,
                 rect.y + 2.0,
@@ -258,11 +258,11 @@ impl View for ListItem {
                 [1.0, 1.0, 1.0, 0.95],
             );
         } else {
-            renderer.draw_text(&self.label, x, rect.y + 2.0, 14.0, [1.0, 1.0, 1.0, 0.95]);
+            renderer.draw_text_raw(&self.label, x, rect.y + 2.0, 14.0, [1.0, 1.0, 1.0, 0.95]);
         }
         if let Some(subtitle) = &self.subtitle {
             let sub_x = if self.icon.is_some() { x + 20.0 } else { x };
-            renderer.draw_text(subtitle, sub_x, rect.y + 18.0, 11.0, theme::text_muted());
+            renderer.draw_text_raw(subtitle, sub_x, rect.y + 18.0, 11.0, theme::text_muted());
         }
     }
 }

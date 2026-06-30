@@ -41,7 +41,7 @@ impl<V: View> View for ComponentErrorBoundary<V> {
             renderer.stroke_rect(rect, theme::error_color(), 1.5);
 
             // Error Details
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("× FATAL: {}", msg),
                 rect.x + 8.0,
                 rect.y + 20.0,
@@ -49,7 +49,7 @@ impl<V: View> View for ComponentErrorBoundary<V> {
                 [1.0, 0.3, 0.2, 1.0],
             );
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("@ {}", loc),
                 rect.x + 8.0,
                 rect.y + 40.0,

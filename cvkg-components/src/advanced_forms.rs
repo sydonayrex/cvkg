@@ -56,7 +56,7 @@ impl View for TimePicker {
         };
 
         let (tw, _) = renderer.measure_text(&text, 13.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &text,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -64,7 +64,7 @@ impl View for TimePicker {
             theme::text(),
         );
 
-        renderer.draw_text("🕐", rect.x + 8.0, rect.y + 10.0, 14.0, theme::info());
+        renderer.draw_text_raw("🕐", rect.x + 8.0, rect.y + 10.0, 14.0, theme::info());
     }
 }
 
@@ -141,7 +141,7 @@ impl View for Calendar {
             height: header_h,
         };
         renderer.fill_rounded_rect(header_rect, 6.0, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("{} {}", self.current_month, self.current_year),
             header_rect.x + 12.0,
             header_rect.y + 10.0,
@@ -161,7 +161,7 @@ impl View for Calendar {
                 width: grid_w,
                 height: 24.0,
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 day,
                 day_rect.x + 4.0,
                 day_rect.y + 6.0,
@@ -180,7 +180,7 @@ impl View for Calendar {
                 height: 32.0,
             };
             renderer.fill_rounded_rect(day_rect, 4.0, theme::input_bg());
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &i.to_string(),
                 day_rect.x + 4.0,
                 day_rect.y + 10.0,
@@ -278,7 +278,7 @@ impl View for Autocomplete {
         renderer.fill_rounded_rect(rect, 6.0, bg);
 
         let (_tw, _) = renderer.measure_text(&self.text, 13.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -304,7 +304,7 @@ impl View for Autocomplete {
                     height: 28.0,
                 };
                 renderer.fill_rounded_rect(sug_rect, 4.0, theme::surface_elevated());
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     sug,
                     sug_rect.x + 8.0,
                     sug_rect.y + 10.0,
@@ -398,7 +398,7 @@ impl View for MultiSelect {
             selected_display.join(", ")
         };
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &text,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -492,7 +492,7 @@ impl View for TagInput {
                 height: rect.height - 12.0,
             };
             renderer.fill_rounded_rect(tag_rect, 4.0, theme::primary());
-            renderer.draw_text(tag, current_x + 4.0, rect.y + 12.0, 11.0, theme::text());
+            renderer.draw_text_raw(tag, current_x + 4.0, rect.y + 12.0, 11.0, theme::text());
             current_x += tag_w + 6.0;
         }
     }

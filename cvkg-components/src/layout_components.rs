@@ -175,7 +175,7 @@ impl View for Loader {
         }
         // Label
         if !self.label.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.label,
                 cx - self.label.len() as f32 * 4.0,
                 rect.y + self.size + 8.0,
@@ -278,7 +278,7 @@ impl View for MultiStepLoader {
             );
             // Step number
             let num_str = format!("{}", i + 1);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &num_str,
                 dot_x - 3.0,
                 dot_y + 5.0,
@@ -290,7 +290,7 @@ impl View for MultiStepLoader {
                 },
             );
             // Label
-            renderer.draw_text(label, x + 8.0, rect.y + 40.0, 11.0, theme::text());
+            renderer.draw_text_raw(label, x + 8.0, rect.y + 40.0, 11.0, theme::text());
         }
         renderer.pop_vnode();
     }
@@ -406,7 +406,7 @@ impl View for FloatingNavbar {
                 );
             }
             let (tw, th) = renderer.measure_text(label, 14.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 ix + (item_w - tw) / 2.0,
                 rect.y + (self.height - th) / 2.0,
@@ -503,7 +503,7 @@ impl View for NavbarMenu {
             let ix = rect.x + i as f32 * item_w;
             let is_selected = i == self.selected;
             let (tw, th) = renderer.measure_text(label, 14.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 ix + (item_w - tw) / 2.0,
                 rect.y + (self.height - th) / 2.0,
@@ -607,7 +607,7 @@ impl View for Carousel {
         let page_idx = self.current as usize;
         if let Some(label) = self.labels.get(page_idx) {
             let (tw, th) = renderer.measure_text(label, 20.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 page_rect.x + (self.page_width - tw) / 2.0,
                 page_rect.y + (self.page_height - th) / 2.0,
@@ -731,14 +731,14 @@ impl View for Marquee {
         let loop_w = tw + 40.0;
         let offset = (self.time * self.speed) % loop_w;
         // Draw text twice for seamless loop
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x - offset,
             rect.y + (self.height - th) / 2.0,
             self.font_size,
             self.color,
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x - offset + loop_w,
             rect.y + (self.height - th) / 2.0,
@@ -833,7 +833,7 @@ impl View for BentoGrid {
                 renderer.stroke_rounded_rect(cell_rect, 12.0, theme::border(), 1.0);
                 if let Some(label) = self.cells.get(idx) {
                     let (tw, th) = renderer.measure_text(label, 14.0);
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         label,
                         cx + (cell_w - tw) / 2.0,
                         cy + (cell_h - th) / 2.0,

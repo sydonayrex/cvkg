@@ -547,7 +547,7 @@ impl View for TextEditor {
 
                 // Render line text
                 if !line_text.is_empty() {
-                    renderer.draw_text(line_text, content_rect.x, y + 3.0, 13.0, theme::text());
+                    renderer.draw_text_raw(line_text, content_rect.x, y + 3.0, 13.0, theme::text());
                 }
 
                 // Render cursor on this line
@@ -581,7 +581,7 @@ impl View for TextEditor {
 
         // Render placeholder if empty
         if self.text.is_empty() && !self.placeholder.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.placeholder,
                 content_rect.x,
                 content_rect.y + 3.0,

@@ -125,7 +125,7 @@ impl MultiAgentOrchestrator {
                     3.0,
                     theme::surface_elevated(),
                 );
-                renderer.draw_text(cond, mid_x - tw.0 / 2.0, mid_y + 3.0, 9.0, theme::text());
+                renderer.draw_text_raw(cond, mid_x - tw.0 / 2.0, mid_y + 3.0, 9.0, theme::text());
             }
         }
     }
@@ -255,7 +255,7 @@ impl MultiAgentOrchestrator {
         );
 
         // Icon
-        renderer.draw_text(
+        renderer.draw_text_raw(
             node.node_type.icon(),
             nx + 8.0,
             ny + 7.0,
@@ -264,7 +264,7 @@ impl MultiAgentOrchestrator {
         );
 
         // Name
-        renderer.draw_text(&node.name, nx + 28.0, ny + 7.0, 12.0, theme::surface());
+        renderer.draw_text_raw(&node.name, nx + 28.0, ny + 7.0, 12.0, theme::surface());
 
         // Status indicator (if running)
         if let Some(ref run) = self.state.current_run
@@ -273,7 +273,7 @@ impl MultiAgentOrchestrator {
             let status_color = node_state.status.color();
             let status_label = node_state.status.label();
             let tw = renderer.measure_text(status_label, 9.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 status_label,
                 nx + nw - tw.0 - 8.0,
                 ny + 9.0,
@@ -338,7 +338,7 @@ impl MultiAgentOrchestrator {
                 theme::with_alpha(theme::accent(), 0.6),
                 1.0,
             );
-            renderer.draw_text(port_name, px + 10.0, py - 4.0, 9.0, theme::text_muted());
+            renderer.draw_text_raw(port_name, px + 10.0, py - 4.0, 9.0, theme::text_muted());
         }
 
         // Output ports (right side)
@@ -366,7 +366,7 @@ impl MultiAgentOrchestrator {
                 1.0,
             );
             let tw = renderer.measure_text(port_name, 9.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 port_name,
                 px - 10.0 - tw.0,
                 py - 4.0,
@@ -434,7 +434,7 @@ impl MultiAgentOrchestrator {
         );
 
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Orchestrator",
             rect.x + 12.0,
             rect.y + 10.0,
@@ -459,7 +459,7 @@ impl MultiAgentOrchestrator {
                 4.0,
                 theme::error_color(),
             );
-            renderer.draw_text("■ Stop", btn_x + 12.0, btn_y + 6.0, 11.0, theme::text());
+            renderer.draw_text_raw("■ Stop", btn_x + 12.0, btn_y + 6.0, 11.0, theme::text());
         } else {
             renderer.fill_rounded_rect(
                 Rect {
@@ -471,7 +471,7 @@ impl MultiAgentOrchestrator {
                 4.0,
                 theme::success(),
             );
-            renderer.draw_text("▶ Run", btn_x + 16.0, btn_y + 6.0, 11.0, theme::text());
+            renderer.draw_text_raw("▶ Run", btn_x + 16.0, btn_y + 6.0, 11.0, theme::text());
         }
 
         // Execution progress
@@ -506,7 +506,7 @@ impl MultiAgentOrchestrator {
             );
             let pct_text = format!("{}/{}", current, total);
             let tw = renderer.measure_text(&pct_text, 9.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &pct_text,
                 bar_x + bar_w / 2.0 - tw.0 / 2.0,
                 bar_y - 1.0,
@@ -542,7 +542,7 @@ impl MultiAgentOrchestrator {
             },
             theme::surface_elevated(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Execution Log",
             rect.x + 10.0,
             rect.y + 9.0,
@@ -566,7 +566,7 @@ impl MultiAgentOrchestrator {
             };
 
         if logs.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No logs yet. Click ▶ Run to start.",
                 rect.x + 10.0,
                 rect.y + header_h + 20.0,
@@ -589,10 +589,10 @@ impl MultiAgentOrchestrator {
             let level_label = log.level.label();
 
             // Level badge
-            renderer.draw_text(level_label, rect.x + 8.0, y, 9.0, level_color);
+            renderer.draw_text_raw(level_label, rect.x + 8.0, y, 9.0, level_color);
 
             // Message
-            renderer.draw_text(&log.message, rect.x + 36.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&log.message, rect.x + 36.0, y, 10.0, theme::text_muted());
 
             y += line_h;
         }
@@ -624,7 +624,7 @@ impl MultiAgentOrchestrator {
             },
             theme::surface_elevated(),
         );
-        renderer.draw_text("Metrics", rect.x + 10.0, rect.y + 9.0, 13.0, theme::text());
+        renderer.draw_text_raw("Metrics", rect.x + 10.0, rect.y + 9.0, 13.0, theme::text());
         renderer.draw_line(
             rect.x,
             rect.y + header_h,
@@ -640,9 +640,9 @@ impl MultiAgentOrchestrator {
         if let Some(ref run) = self.state.current_run {
             // Run status
             let status_color = run.status.color();
-            renderer.draw_text("Status:", rect.x + 10.0, y, 11.0, theme::text_muted());
+            renderer.draw_text_raw("Status:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
-            renderer.draw_text(run.status.label(), rect.x + 16.0, y, 11.0, status_color);
+            renderer.draw_text_raw(run.status.label(), rect.x + 16.0, y, 11.0, status_color);
             y += line_h + 6.0;
 
             // Node count
@@ -663,17 +663,17 @@ impl MultiAgentOrchestrator {
                 .filter(|s| s.status.is_active())
                 .count();
 
-            renderer.draw_text("Nodes:", rect.x + 10.0, y, 11.0, theme::text_muted());
+            renderer.draw_text_raw("Nodes:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             let node_summary = format!(
                 "{} total, {} done, {} running, {} failed",
                 total_nodes, completed, running, failed
             );
-            renderer.draw_text(&node_summary, rect.x + 16.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&node_summary, rect.x + 16.0, y, 10.0, theme::text_muted());
             y += line_h + 6.0;
 
             // Token usage
-            renderer.draw_text("Tokens:", rect.x + 10.0, y, 11.0, theme::text_muted());
+            renderer.draw_text_raw("Tokens:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             let token_text = format!(
                 "In: {}  Out: {}  Total: {}",
@@ -681,18 +681,18 @@ impl MultiAgentOrchestrator {
                 run.total_usage.output_tokens,
                 run.total_usage.total_tokens
             );
-            renderer.draw_text(&token_text, rect.x + 16.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&token_text, rect.x + 16.0, y, 10.0, theme::text_muted());
             y += line_h;
 
             // Cost
-            renderer.draw_text("Cost:", rect.x + 10.0, y, 11.0, theme::text_muted());
+            renderer.draw_text_raw("Cost:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
             let cost_text = format!("${:.4}", run.total_usage.estimated_cost);
-            renderer.draw_text(&cost_text, rect.x + 16.0, y, 10.0, theme::success());
+            renderer.draw_text_raw(&cost_text, rect.x + 16.0, y, 10.0, theme::success());
             y += line_h + 6.0;
 
             // Per-node breakdown
-            renderer.draw_text("Per-Node:", rect.x + 10.0, y, 11.0, theme::text_muted());
+            renderer.draw_text_raw("Per-Node:", rect.x + 10.0, y, 11.0, theme::text_muted());
             y += line_h;
 
             for node in &self.state.nodes {
@@ -707,12 +707,12 @@ impl MultiAgentOrchestrator {
                         node_state.status.label(),
                         node_state.token_usage.total_tokens
                     );
-                    renderer.draw_text(&line, rect.x + 16.0, y, 9.0, status_color);
+                    renderer.draw_text_raw(&line, rect.x + 16.0, y, 9.0, status_color);
                     y += line_h;
                 }
             }
         } else {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No run data yet.",
                 rect.x + 10.0,
                 y,
@@ -743,7 +743,7 @@ impl MultiAgentOrchestrator {
         renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, theme::border(), 1.0);
 
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Template Library",
             panel_x + 16.0,
             panel_y + 14.0,
@@ -762,14 +762,14 @@ impl MultiAgentOrchestrator {
         // Template list
         let templates = &self.state.templates;
         if templates.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No templates saved yet.",
                 panel_x + 16.0,
                 panel_y + 50.0,
                 11.0,
                 theme::text_dim(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Save your current workflow as a template.",
                 panel_x + 16.0,
                 panel_y + 66.0,
@@ -787,7 +787,7 @@ impl MultiAgentOrchestrator {
                     height: 52.0,
                 };
                 renderer.fill_rounded_rect(card_rect, RADIUS_SM, theme::surface_elevated());
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &template.name,
                     card_rect.x + 8.0,
                     card_rect.y + 10.0,
@@ -799,7 +799,7 @@ impl MultiAgentOrchestrator {
                 } else {
                     &template.description
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     desc,
                     card_rect.x + 8.0,
                     card_rect.y + 26.0,
@@ -807,7 +807,7 @@ impl MultiAgentOrchestrator {
                     theme::text_dim(),
                 );
                 let meta = format!("v{} · {} nodes", template.version, template.nodes.len());
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &meta,
                     card_rect.x + 8.0,
                     card_rect.y + 38.0,
@@ -819,7 +819,7 @@ impl MultiAgentOrchestrator {
         }
 
         // Close hint
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Click outside to close",
             panel_x + 16.0,
             panel_y + panel_h - 16.0,
@@ -849,7 +849,7 @@ impl MultiAgentOrchestrator {
         renderer.stroke_rounded_rect(panel_rect, RADIUS_LG, theme::border(), 1.0);
 
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Run Comparison",
             panel_x + 16.0,
             panel_y + 14.0,
@@ -867,14 +867,14 @@ impl MultiAgentOrchestrator {
 
         let history = &self.state.run_history;
         if history.len() < 2 {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Need at least 2 runs to compare.",
                 panel_x + 16.0,
                 panel_y + 50.0,
                 11.0,
                 theme::text_dim(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Run the workflow multiple times.",
                 panel_x + 16.0,
                 panel_y + 66.0,
@@ -887,42 +887,42 @@ impl MultiAgentOrchestrator {
             let run_a = &history[history.len() - 2];
             let run_b = &history[history.len() - 1];
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Run A (previous)",
                 panel_x + 16.0,
                 y,
                 11.0,
                 theme::success(),
             );
-            renderer.draw_text("Run B (latest)", panel_x + 260.0, y, 11.0, theme::accent());
+            renderer.draw_text_raw("Run B (latest)", panel_x + 260.0, y, 11.0, theme::accent());
             y += 20.0;
 
             // Duration comparison
-            renderer.draw_text("Duration:", panel_x + 16.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw("Duration:", panel_x + 16.0, y, 10.0, theme::text_muted());
             let dur_a = format!("{:?}", run_a.duration);
             let dur_b = format!("{:?}", run_b.duration);
-            renderer.draw_text(&dur_a, panel_x + 100.0, y, 10.0, theme::text_muted());
-            renderer.draw_text(&dur_b, panel_x + 260.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&dur_a, panel_x + 100.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&dur_b, panel_x + 260.0, y, 10.0, theme::text_muted());
             y += 16.0;
 
             // Token comparison
-            renderer.draw_text("Tokens:", panel_x + 16.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw("Tokens:", panel_x + 16.0, y, 10.0, theme::text_muted());
             let tok_a = format!("{}", run_a.total_usage.total_tokens);
             let tok_b = format!("{}", run_b.total_usage.total_tokens);
-            renderer.draw_text(&tok_a, panel_x + 100.0, y, 10.0, theme::text_muted());
-            renderer.draw_text(&tok_b, panel_x + 260.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&tok_a, panel_x + 100.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&tok_b, panel_x + 260.0, y, 10.0, theme::text_muted());
             y += 16.0;
 
             // Cost comparison
-            renderer.draw_text("Cost:", panel_x + 16.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw("Cost:", panel_x + 16.0, y, 10.0, theme::text_muted());
             let cost_a = format!("${:.4}", run_a.total_cost);
             let cost_b = format!("${:.4}", run_b.total_cost);
-            renderer.draw_text(&cost_a, panel_x + 100.0, y, 10.0, theme::text_muted());
-            renderer.draw_text(&cost_b, panel_x + 260.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&cost_a, panel_x + 100.0, y, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&cost_b, panel_x + 260.0, y, 10.0, theme::text_muted());
             y += 24.0;
 
             // Per-node comparison
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Per-node token usage:",
                 panel_x + 16.0,
                 y,
@@ -946,14 +946,14 @@ impl MultiAgentOrchestrator {
                     } else {
                         theme::success()
                     };
-                    renderer.draw_text(&line, panel_x + 16.0, y, 9.0, color);
+                    renderer.draw_text_raw(&line, panel_x + 16.0, y, 9.0, color);
                     y += 14.0;
                 }
             }
         }
 
         // Close hint
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Click outside to close",
             panel_x + 16.0,
             panel_y + panel_h - 16.0,
@@ -973,7 +973,7 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
+        renderer.draw_text_raw("Node Output", x + 12.0, y + 8.0, 14.0, theme::text());
         if let Some(sel) = &state.selected_node {
             if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
                 let output_text = if node.outputs.is_empty() {
@@ -981,10 +981,10 @@ impl MultiAgentOrchestrator {
                 } else {
                     &node.outputs[0]
                 };
-                renderer.draw_text(output_text, x + 12.0, y + 30.0, 12.0, theme::text_muted());
+                renderer.draw_text_raw(output_text, x + 12.0, y + 30.0, 12.0, theme::text_muted());
             }
         } else {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Select a node to inspect output.",
                 x + 12.0,
                 y + 30.0,
@@ -1005,7 +1005,7 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text("Agent Messages", x + 12.0, y + 8.0, 14.0, theme::text());
+        renderer.draw_text_raw("Agent Messages", x + 12.0, y + 8.0, 14.0, theme::text());
         let mut cy = y + 30.0;
         for msg in state.message_log.iter().rev().take(20) {
             let color = match msg.message_type {
@@ -1018,9 +1018,9 @@ impl MultiAgentOrchestrator {
                 "[{}] {} -> {}",
                 msg.message_type, msg.from_node, msg.to_node
             );
-            renderer.draw_text(&label, x + 12.0, cy, 11.0, color);
+            renderer.draw_text_raw(&label, x + 12.0, cy, 11.0, color);
             cy += 16.0;
-            renderer.draw_text(&msg.content, x + 20.0, cy, 10.0, theme::text_muted());
+            renderer.draw_text_raw(&msg.content, x + 20.0, cy, 10.0, theme::text_muted());
             cy += 20.0;
             if cy > y + h - 20.0 {
                 break;
@@ -1039,9 +1039,9 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
+        renderer.draw_text_raw("Validation", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.validation_errors.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No issues found.",
                 x + 12.0,
                 y + 30.0,
@@ -1056,7 +1056,7 @@ impl MultiAgentOrchestrator {
                 } else {
                     theme::warning()
                 };
-                renderer.draw_text(&err.message, x + 12.0, cy, 11.0, color);
+                renderer.draw_text_raw(&err.message, x + 12.0, cy, 11.0, color);
                 cy += 18.0;
             }
         }
@@ -1073,14 +1073,14 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Skills Configuration",
             x + 12.0,
             y + 8.0,
             14.0,
             theme::text(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Available skills:",
             x + 12.0,
             y + 30.0,
@@ -1089,7 +1089,7 @@ impl MultiAgentOrchestrator {
         );
         let mut cy = y + 50.0;
         for skill in state.skill_registry.list_skills() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("• {}", skill.name),
                 x + 20.0,
                 cy,
@@ -1114,7 +1114,7 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Webhook Configuration",
             x + 12.0,
             y + 8.0,
@@ -1123,14 +1123,14 @@ impl MultiAgentOrchestrator {
         );
         if let Some(sel) = &state.selected_node {
             if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("URL: {}", node.webhook_config.url),
                     x + 12.0,
                     y + 30.0,
                     11.0,
                     theme::text_muted(),
                 );
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("Method: {}", node.webhook_config.method),
                     x + 12.0,
                     y + 48.0,
@@ -1139,7 +1139,7 @@ impl MultiAgentOrchestrator {
                 );
             }
         } else {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Select a webhook node.",
                 x + 12.0,
                 y + 30.0,
@@ -1160,7 +1160,7 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Schedule Configuration",
             x + 12.0,
             y + 8.0,
@@ -1169,14 +1169,14 @@ impl MultiAgentOrchestrator {
         );
         if let Some(sel) = &state.selected_node {
             if let Some(node) = state.nodes.iter().find(|n| &n.id == sel) {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("Cron: {}", node.schedule_config.cron_expression),
                     x + 12.0,
                     y + 30.0,
                     11.0,
                     theme::text_muted(),
                 );
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("Interval: {}s", node.schedule_config.interval_seconds),
                     x + 12.0,
                     y + 48.0,
@@ -1185,7 +1185,7 @@ impl MultiAgentOrchestrator {
                 );
             }
         } else {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Select a schedule node.",
                 x + 12.0,
                 y + 30.0,
@@ -1206,9 +1206,9 @@ impl MultiAgentOrchestrator {
         let state = &self.state;
         renderer.fill_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::surface_elevated());
         renderer.stroke_rounded_rect(r(x, y, w, h), RADIUS_MD, theme::border_strong(), 1.0);
-        renderer.draw_text("Recurring Runs", x + 12.0, y + 8.0, 14.0, theme::text());
+        renderer.draw_text_raw("Recurring Runs", x + 12.0, y + 8.0, 14.0, theme::text());
         if state.recurring_runs.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No recurring runs configured.",
                 x + 12.0,
                 y + 30.0,
@@ -1218,7 +1218,7 @@ impl MultiAgentOrchestrator {
         } else {
             let mut cy = y + 30.0;
             for run in &state.recurring_runs {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("Every {}s ({} runs)", run.interval_seconds, run.run_count),
                     x + 12.0,
                     cy,

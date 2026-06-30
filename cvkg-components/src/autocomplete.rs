@@ -141,7 +141,7 @@ impl View for AutoComplete {
             &self.text
         };
         let text_color = [1.0, 1.0, 1.0, 1.0];
-        renderer.draw_text(
+        renderer.draw_text_raw(
             display_text,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -220,7 +220,7 @@ impl View for AutoComplete {
                 } else {
                     theme::text()
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     opt_text,
                     item_rect.x + 8.0,
                     item_rect.y + (item_height - 13.0) / 2.0,

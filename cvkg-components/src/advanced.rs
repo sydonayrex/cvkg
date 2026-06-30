@@ -672,7 +672,7 @@ impl<V: View> View for GraniBreadcrumb<V> {
             x_offset += size.width + spacing;
 
             if i < self.crumbs.len() - 1 {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     "/",
                     rect.x + x_offset,
                     rect.y + size.height * 0.7,
@@ -1172,7 +1172,7 @@ impl View for FafnirOTP {
             }
 
             if let Some(&c) = chars.get(i) {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &c.to_string(),
                     box_rect.x + box_size / 2.0 - 6.0,
                     box_rect.y + box_size / 2.0 + 6.0,

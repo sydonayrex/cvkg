@@ -83,7 +83,7 @@ impl View for Kbd {
         renderer.stroke_rounded_rect(key_rect, RADIUS_SM, theme::border_strong(), 1.0);
 
         // Key text (centered)
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.keys,
             key_rect.x + SPACE_SM,
             key_rect.y + SPACE_XS,

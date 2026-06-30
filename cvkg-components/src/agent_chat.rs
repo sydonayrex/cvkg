@@ -131,7 +131,7 @@ impl View for UserMessage {
             height: avatar_size,
         };
         renderer.fill_ellipse(avatar_rect, theme::accent());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.avatar,
             avatar_rect.x + 8.0,
             avatar_rect.y + 20.0,
@@ -139,7 +139,7 @@ impl View for UserMessage {
             theme::chat_text_user(),
         );
         // Message text
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x + 52.0,
             rect.y + 20.0,
@@ -216,7 +216,7 @@ impl View for AssistantMessage {
             height: avatar_size,
         };
         renderer.fill_ellipse(avatar_rect, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.avatar,
             avatar_rect.x + 6.0,
             avatar_rect.y + 20.0,
@@ -224,7 +224,7 @@ impl View for AssistantMessage {
             theme::text(),
         );
         // Message text
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x + 52.0,
             rect.y + 20.0,
@@ -234,14 +234,14 @@ impl View for AssistantMessage {
         // Action buttons row
         if self.show_actions {
             let actions_y = rect.y + rect.height - 28.0;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Copy",
                 rect.x + 16.0,
                 actions_y + 14.0,
                 12.0,
                 theme::text_muted(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Retry",
                 rect.x + 60.0,
                 actions_y + 14.0,
@@ -420,12 +420,12 @@ impl View for InputBar {
         } else {
             theme::text()
         };
-        renderer.draw_text(display_text, rect.x + 16.0, rect.y + 20.0, 15.0, text_color);
+        renderer.draw_text_raw(display_text, rect.x + 16.0, rect.y + 20.0, 15.0, text_color);
         // Character count
         if self.max_chars > 0 {
             let count_str = format!("{}/{}", self.text.len(), self.max_chars);
             let (cw, _) = renderer.measure_text(&count_str, 11.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &count_str,
                 rect.x + rect.width - cw - 56.0,
                 rect.y + 22.0,
@@ -534,7 +534,7 @@ impl View for SuggestionChips {
             };
             renderer.fill_rounded_rect(chip_rect, 14.0, bg);
             renderer.stroke_rounded_rect(chip_rect, 14.0, border, 1.0);
-            renderer.draw_text(label, x + 12.0, rect.y + 19.0, 13.0, text_col);
+            renderer.draw_text_raw(label, x + 12.0, rect.y + 19.0, 13.0, text_col);
             x += chip_w + chip_gap;
         }
         renderer.pop_vnode();
@@ -620,7 +620,7 @@ impl View for ModelPicker {
             .get(self.selected)
             .map(|s| s.as_str())
             .unwrap_or("Select Model");
-        renderer.draw_text(label, rect.x + 12.0, rect.y + 18.0, 14.0, theme::text());
+        renderer.draw_text_raw(label, rect.x + 12.0, rect.y + 18.0, 14.0, theme::text());
         // Chevron
         let ch_x = rect.x + rect.width - 20.0;
         let ch_y = rect.y + 14.0;
@@ -648,7 +648,7 @@ impl View for ModelPicker {
                     theme::surface_elevated()
                 };
                 renderer.fill_rect(item_rect, bg);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     model,
                     item_rect.x + 12.0,
                     item_rect.y + 20.0,
@@ -734,7 +734,7 @@ impl View for CopyToolbar {
         let mut x = rect.x + 8.0;
         for action in &self.actions {
             let (tw, _) = renderer.measure_text(action, 13.0);
-            renderer.draw_text(action, x, rect.y + 14.0, 13.0, theme::text());
+            renderer.draw_text_raw(action, x, rect.y + 14.0, 13.0, theme::text());
             x += tw + 20.0;
         }
         renderer.pop_vnode();
@@ -833,7 +833,7 @@ impl View for ToolCard {
             dot_color,
         );
         // Tool name
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.name,
             rect.x + 28.0,
             rect.y + 20.0,
@@ -842,7 +842,7 @@ impl View for ToolCard {
         );
         // Args summary
         if !self.args_summary.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.args_summary,
                 rect.x + 16.0,
                 rect.y + 40.0,
@@ -852,7 +852,7 @@ impl View for ToolCard {
         }
         // Result (when expanded)
         if self.expanded && !self.result.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.result,
                 rect.x + 16.0,
                 rect.y + 58.0,
@@ -906,15 +906,15 @@ impl View for Markdown {
         let mut y = rect.y + 4.0;
         for line in self.source.lines() {
             if let Some(rest) = line.strip_prefix("# ") {
-                renderer.draw_text(rest, rect.x + 8.0, y + 24.0, 24.0, theme::text());
+                renderer.draw_text_raw(rest, rect.x + 8.0, y + 24.0, 24.0, theme::text());
                 y += 32.0;
             } else if let Some(rest) = line.strip_prefix("## ") {
-                renderer.draw_text(rest, rect.x + 8.0, y + 20.0, 20.0, theme::text());
+                renderer.draw_text_raw(rest, rect.x + 8.0, y + 20.0, 20.0, theme::text());
                 y += 28.0;
             } else if line.starts_with("```") {
                 continue;
             } else if let Some(rest) = line.strip_prefix("- ") {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("  {}", rest),
                     rect.x + 8.0,
                     y + 16.0,
@@ -926,14 +926,14 @@ impl View for Markdown {
                 // Link
                 if let Some(bracket_end) = line.find(']') {
                     let link_text = &line[1..bracket_end];
-                    renderer.draw_text(link_text, rect.x + 8.0, y + 16.0, 14.0, theme::accent());
+                    renderer.draw_text_raw(link_text, rect.x + 8.0, y + 16.0, 14.0, theme::accent());
                     y += 22.0;
                 } else {
-                    renderer.draw_text(line, rect.x + 8.0, y + 16.0, 14.0, theme::text());
+                    renderer.draw_text_raw(line, rect.x + 8.0, y + 16.0, 14.0, theme::text());
                     y += 22.0;
                 }
             } else if !line.trim().is_empty() {
-                renderer.draw_text(line, rect.x + 8.0, y + 16.0, 14.0, theme::text());
+                renderer.draw_text_raw(line, rect.x + 8.0, y + 16.0, 14.0, theme::text());
                 y += 22.0;
             } else {
                 y += 8.0;

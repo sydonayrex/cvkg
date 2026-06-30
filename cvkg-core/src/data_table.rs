@@ -115,7 +115,7 @@ impl<T: Clone + Send + Sync + 'static> View for DataTable<T> {
         let mut x_offset = rect.x + 12.0;
         for (col_idx, col) in self.columns.iter().enumerate() {
             let col_width = rect.width * col.width / num_cols as f32;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &col.title,
                 x_offset,
                 rect.y + header_height / 2.0,
@@ -130,7 +130,7 @@ impl<T: Clone + Send + Sync + 'static> View for DataTable<T> {
                     SortDirection::Descending => " ▼",
                     SortDirection::None => "",
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     indicator,
                     x_offset + col_width * 0.8,
                     rect.y + header_height / 2.0,
@@ -164,7 +164,7 @@ impl<T: Clone + Send + Sync + 'static> View for DataTable<T> {
             for col in self.columns.iter() {
                 let col_width = rect.width * col.width / num_cols as f32;
                 let value = (col.accessor)(item);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &value,
                     cell_x,
                     row_y + row_height / 2.0,

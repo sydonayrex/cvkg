@@ -121,7 +121,7 @@ impl View for NativeSelect {
         } else {
             theme::text()
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &label,
             rect.x + SPACE_SM,
             rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -132,7 +132,7 @@ impl View for NativeSelect {
         // Dropdown arrow (right side)
         let arrow = if self.is_open { "▲" } else { "▼" };
         let (aw, _) = renderer.measure_text(arrow, FONT_BASE);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             arrow,
             rect.x + rect.width - aw - SPACE_SM,
             rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -180,7 +180,7 @@ impl View for NativeSelect {
                 } else {
                     theme::text()
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     opt_label,
                     item_rect.x + SPACE_SM,
                     item_rect.y + (item_h - FONT_BASE) / 2.0,

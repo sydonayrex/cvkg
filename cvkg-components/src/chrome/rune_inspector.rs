@@ -57,7 +57,7 @@ impl View for RuneInspector {
             12.0,
             [0.08, 0.08, 0.1, 0.5],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 12.0,
             rect.y + 10.0,

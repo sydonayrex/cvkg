@@ -69,7 +69,7 @@ impl View for CollaborationEngine {
             },
             theme::surface_elevated(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.session_name,
             rect.x + 8.0,
             rect.y + 12.0,
@@ -102,7 +102,7 @@ impl View for CollaborationEngine {
             };
             renderer.fill_ellipse(status_rect, status_color);
             renderer.stroke_ellipse(status_rect, theme::shadow(), 1.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &p.name,
                 part_rect.x + 28.0,
                 part_rect.y + 14.0,
@@ -112,7 +112,7 @@ impl View for CollaborationEngine {
 
             // Draw cursor position if present
             if let Some((cx, cy)) = p.cursor {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("📍 ({}, {})", cx as i32, cy as i32),
                     part_rect.x + 28.0,
                     part_rect.y + 28.0,

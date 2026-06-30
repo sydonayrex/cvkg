@@ -78,8 +78,8 @@ impl<V: View> View for Collapsible<V> {
         } else {
             theme::text_muted()
         };
-        renderer.draw_text(arrow, rect.x + 10.0, rect.y + 12.0, 12.0, accent);
-        renderer.draw_text(
+        renderer.draw_text_raw(arrow, rect.x + 10.0, rect.y + 12.0, 12.0, accent);
+        renderer.draw_text_raw(
             &self.header,
             rect.x + 30.0,
             rect.y + 10.0,
@@ -453,14 +453,14 @@ impl<V: View> View for SagaAccordion<V> {
                 theme::text_muted()
             };
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 arrow,
                 header_rect.x + 12.0,
                 header_rect.y + 14.0,
                 12.0,
                 accent_color,
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.title,
                 header_rect.x + 36.0,
                 header_rect.y + 14.0,

@@ -125,7 +125,7 @@ impl View for Item {
 
         // Leading element
         if let Some(ref lead) = self.leading {
-            renderer.draw_text(lead, content_x, text_y, FONT_BASE, theme::text());
+            renderer.draw_text_raw(lead, content_x, text_y, FONT_BASE, theme::text());
             let (lw, _) = renderer.measure_text(lead, FONT_BASE);
             content_x += lw + SPACE_SM;
         }
@@ -136,11 +136,11 @@ impl View for Item {
         } else {
             theme::text()
         };
-        renderer.draw_text(&self.title, content_x, text_y, FONT_BASE, title_color);
+        renderer.draw_text_raw(&self.title, content_x, text_y, FONT_BASE, title_color);
 
         // Subtitle
         if let Some(ref sub) = self.subtitle {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 sub,
                 content_x,
                 text_y + FONT_BASE + 4.0,
@@ -152,7 +152,7 @@ impl View for Item {
         // Trailing element (right-aligned)
         if let Some(ref trail) = self.trailing {
             let (tw, _) = renderer.measure_text(trail, FONT_BASE);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 trail,
                 rect.x + rect.width - tw - SPACE_SM,
                 text_y,

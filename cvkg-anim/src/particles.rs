@@ -95,7 +95,7 @@ impl RunicEmitter {
             color[3] *= p.life; // Apply fade
 
             // Draw glowing rune
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &p.rune.to_string(),
                 p.position[0],
                 p.position[1],

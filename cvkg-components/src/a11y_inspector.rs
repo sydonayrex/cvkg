@@ -193,7 +193,7 @@ impl View for A11yInspector {
         let mut y = panel_rect.y + pad;
 
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Accessibility Inspector",
             panel_rect.x + pad,
             y,
@@ -203,7 +203,7 @@ impl View for A11yInspector {
         y += 24.0;
 
         // Stats -- use actual counts from the real tree
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("{} nodes | {} roles", self.node_count(), self.role_count()),
             panel_rect.x + pad,
             y,
@@ -286,7 +286,7 @@ impl View for A11yInspector {
             };
 
             // Role label
-            renderer.draw_text(&node.role, item_x, item_y + 3.0, 10.0, role_color);
+            renderer.draw_text_raw(&node.role, item_x, item_y + 3.0, 10.0, role_color);
 
             // Node label
             let label_x = item_x + 108.0;
@@ -296,7 +296,7 @@ impl View for A11yInspector {
             } else {
                 theme::text_dim()
             };
-            renderer.draw_text(&node.label, label_x, item_y + 3.0, 11.0, label_color);
+            renderer.draw_text_raw(&node.label, label_x, item_y + 3.0, 11.0, label_color);
 
             // Value badge
             if let Some(ref val) = node.value {
@@ -312,7 +312,7 @@ impl View for A11yInspector {
                     4.0,
                     theme::surface_elevated(),
                 );
-                renderer.draw_text(val, val_x + 4.0, item_y + 3.0, 9.0, theme::text_dim());
+                renderer.draw_text_raw(val, val_x + 4.0, item_y + 3.0, 9.0, theme::text_dim());
             }
         }
 
@@ -328,7 +328,7 @@ impl View for A11yInspector {
             theme::border(),
             1.0,
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Cmd+Shift+I toggle  |  Up/Down navigate  |  Enter inspect",
             panel_rect.x + pad,
             footer_y + 6.0,

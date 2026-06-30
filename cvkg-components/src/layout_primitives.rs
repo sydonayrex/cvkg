@@ -231,7 +231,7 @@ impl View for LazyVGrid {
             renderer.fill_rounded_rect(cell_rect, 8.0, theme::surface_elevated());
             renderer.stroke_rounded_rect(cell_rect, 8.0, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(label, 13.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 cx + (cell_w - tw) / 2.0,
                 cy + (cell_h - th) / 2.0,
@@ -328,7 +328,7 @@ impl View for LazyHGrid {
             renderer.fill_rounded_rect(cell_rect, 8.0, theme::surface_elevated());
             renderer.stroke_rounded_rect(cell_rect, 8.0, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(label, 13.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 cx + (cell_w - tw) / 2.0,
                 cy + (cell_h - th) / 2.0,
@@ -427,7 +427,7 @@ impl View for LazyHStack {
             renderer.fill_rounded_rect(item_rect, 8.0, theme::surface_elevated());
             renderer.stroke_rounded_rect(item_rect, 8.0, theme::border(), 1.0);
             let (tw, th) = renderer.measure_text(item, 13.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 item,
                 x + (self.item_width - tw) / 2.0,
                 rect.y + (self.height - th) / 2.0,
@@ -623,7 +623,7 @@ impl View for Group {
         renderer.push_vnode(rect, "Group");
         renderer.fill_rounded_rect(rect, self.radius, self.bg_color);
         renderer.stroke_rounded_rect(rect, self.radius, theme::border(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + self.padding,
             rect.y + self.padding + 14.0,
@@ -696,7 +696,7 @@ impl View for GroupBox {
             4.0,
             theme::bg(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 20.0,
             rect.y + 4.0,

@@ -111,7 +111,7 @@ impl View for IdunnPersistence {
             },
             [0.06, 0.08, 0.06, 1.0],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Idunn Persistence",
             rect.x + 10.0,
             rect.y + 9.0,
@@ -125,7 +125,7 @@ impl View for IdunnPersistence {
         } else {
             "Auto-Restore: OFF"
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             auto_text,
             rect.x + 120.0,
             rect.y + 9.0,
@@ -135,14 +135,14 @@ impl View for IdunnPersistence {
 
         // Active session
         if let Some(session) = &self.active_session {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("Session: {}", session.session_id),
                 rect.x + 10.0,
                 rect.y + 45.0,
                 11.0,
                 theme::success(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("Workspace: {}", session.workspace_id),
                 rect.x + 10.0,
                 rect.y + 62.0,
@@ -153,7 +153,7 @@ impl View for IdunnPersistence {
 
         // Snapshots list
         let mut y = rect.y + 85.0;
-        renderer.draw_text("Snapshots:", rect.x + 10.0, y, 11.0, theme::text());
+        renderer.draw_text_raw("Snapshots:", rect.x + 10.0, y, 11.0, theme::text());
         y += 20.0;
 
         for snap in &self.snapshots {
@@ -179,8 +179,8 @@ impl View for IdunnPersistence {
                 },
                 [0.05, 0.07, 0.05, 1.0],
             );
-            renderer.draw_text(&snap.name, rect.x + 20.0, y + 6.0, 10.0, theme::success());
-            renderer.draw_text(
+            renderer.draw_text_raw(&snap.name, rect.x + 20.0, y + 6.0, 10.0, theme::success());
+            renderer.draw_text_raw(
                 &age_str,
                 rect.x + rect.width - 60.0,
                 y + 6.0,

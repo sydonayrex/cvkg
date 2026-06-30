@@ -62,7 +62,7 @@ impl View for FunnelChart {
                 theme::accent(),
             );
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{}: {:.0}", label, val),
                 rect.x + 12.0,
                 y + stage_h / 2.0 - 4.0,

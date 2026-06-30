@@ -201,7 +201,7 @@ impl<V: View> View for GraniSheet<V> {
             height: btn_size,
         };
         renderer.fill_rounded_rect(close_rect, RADIUS_XL, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "×",
             close_rect.x + 15.0,
             close_rect.y + 13.0,
@@ -403,7 +403,7 @@ impl<V: View> View for GeriDialog<V> {
         let mut current_y = modal_rect.y + padding;
 
         if let Some(title) = &self.title {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 title,
                 modal_rect.x + padding,
                 current_y,
@@ -446,7 +446,7 @@ impl<V: View> View for GeriDialog<V> {
             if is_focused && opacity > 0.5 {
                 draw_focus_ring(renderer, action_rect);
             }
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &action.label,
                 action_rect.x + 8.0,
                 action_rect.y + 8.0,

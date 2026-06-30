@@ -87,7 +87,7 @@ impl View for TimelineEditor {
             let t = (i as f32 / marker_count as f32) * self.duration;
             let x = rect.x + (t / self.duration) * rect.width;
             renderer.draw_line(x, ruler_y, x, ruler_y + 24.0, theme::border(), 1.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{:.0}s", t),
                 x - 10.0,
                 ruler_y + 4.0,
@@ -119,7 +119,7 @@ impl View for TimelineEditor {
             renderer.fill_rounded_rect(track_rect, 4.0, theme::input_bg());
             renderer.stroke_rounded_rect(track_rect, 4.0, theme::border(), 1.0);
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &track.name,
                 track_rect.x + 8.0,
                 track_rect.y + 14.0,

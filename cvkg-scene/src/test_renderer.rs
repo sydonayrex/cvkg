@@ -218,11 +218,11 @@ impl Renderer for TestRenderer {
     }
 
     /// Records a text drawing operation as a DrawText command.
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: cvkg_core::TextHAlign, v_align: cvkg_core::TextVAlign) {
         self.commands.push(Command::DrawText {
             text: text.to_string(),
-            x,
-            y,
+            x: rect.x,
+            y: rect.y,
             size,
             color,
         });

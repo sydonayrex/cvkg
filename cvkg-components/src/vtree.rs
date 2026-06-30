@@ -117,7 +117,7 @@ impl View for VTree {
                 "  "
             };
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{}{}", indicator, label),
                 item_rect.x + indent + 4.0,
                 item_rect.y + 16.0,

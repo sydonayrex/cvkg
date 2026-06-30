@@ -125,7 +125,7 @@ impl View for BifrostTabs {
             };
 
             let (tw, _th) = renderer.measure_text(option, font_size);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 option,
                 x + label_offset + (tab_width - tw) / 2.0,
                 rect.y + rect.height / 2.0 + 5.0,
@@ -143,7 +143,7 @@ impl View for BifrostTabs {
                 let close_x = x + tab_width - close_size - 4.0;
                 let close_y = rect.y + (rect.height - close_size) / 2.0;
 
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     "×",
                     close_x + 6.0,
                     close_y + 4.0,

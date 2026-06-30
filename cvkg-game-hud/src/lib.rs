@@ -349,7 +349,7 @@ impl View for DamageNumber {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let offset = self.animator.current();
         let text = format!("{}", self.value);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &text,
             rect.x,
             rect.y + offset,

@@ -111,7 +111,7 @@ impl View for DawView {
                     },
                     text_dim,
                 );
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("{}", i + 1),
                     tick_x + 5.0,
                     arranger_rect.y + 18.0,
@@ -267,7 +267,7 @@ impl View for DawView {
             border_color,
             1.0,
         );
-        renderer.draw_text("Tracks", 15.0, arranger_rect.y + 18.0, 12.0, text_dim);
+        renderer.draw_text_raw("Tracks", 15.0, arranger_rect.y + 18.0, 12.0, text_dim);
 
         // Drop lock before iterative drawing, we will just copy state to avoid deadlocks on event handlers
         // Wait, we need to draw M S R and volume slider which require interactive VNodes.
@@ -308,7 +308,7 @@ impl View for DawView {
             );
 
             // Track Name
-            renderer.draw_text(&track.name, 15.0, header_y + 15.0, 13.0, text_light);
+            renderer.draw_text_raw(track.name, 15.0, header_y + 15.0, 13.0, text_light);
 
             // High Fidelity M S R Buttons - INTERACTIVE
             let draw_btn = |renderer: &mut dyn Renderer,
@@ -397,7 +397,7 @@ impl View for DawView {
             let slider_y = header_y + 40.0;
             let slider_w = 90.0;
 
-            renderer.draw_text("Vol", slider_x, slider_y - 8.0, 9.0, text_dim);
+            renderer.draw_text_raw("Vol", slider_x, slider_y - 8.0, 9.0, text_dim);
 
             // Slider interactive area
             let slider_rect = Rect {
@@ -1027,7 +1027,7 @@ impl View for DawView {
             1.0,
         );
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("{:02}:{:02}.{:03}", minutes, seconds, millis),
             time_box_x + 15.0,
             16.0,

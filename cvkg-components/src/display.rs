@@ -198,7 +198,7 @@ impl View for Typography {
             _ => theme::text(),
         };
         let color = self.color.unwrap_or(default_color);
-        renderer.draw_text(&self.text, rect.x, rect.y + size, size, color);
+        renderer.draw_text_raw(&self.text, rect.x, rect.y + size, size, color);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -264,7 +264,7 @@ impl View for Icon {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Icon");
         let (tw, th) = renderer.measure_text(&self.glyph, self.size);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.glyph,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - th) / 2.0,

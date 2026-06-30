@@ -180,7 +180,7 @@ impl<S: View, D: View> View for NavigationSplitView<S, D> {
         };
         renderer.fill_rounded_rect(toggle_rect, RADIUS_XL, theme::surface_elevated());
         let chevron = if is_collapsed { "▶" } else { "◀" };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             chevron,
             toggle_rect.x + 12.0,
             toggle_rect.y + 13.0,

@@ -52,7 +52,7 @@ impl View for EmptyState {
 
         if !self.icon.is_empty() {
             let (tw, th) = renderer.measure_text(&self.icon, 32.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.icon,
                 cx - tw / 2.0,
                 cy - th / 2.0,
@@ -63,11 +63,11 @@ impl View for EmptyState {
         }
 
         let (tw, th) = renderer.measure_text(&self.title, 16.0);
-        renderer.draw_text(&self.title, cx - tw / 2.0, cy, 16.0, theme::text());
+        renderer.draw_text_raw(&self.title, cx - tw / 2.0, cy, 16.0, theme::text());
         cy += th + 8.0;
 
         let (dw, dh) = renderer.measure_text(&self.description, 12.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.description,
             cx - dw / 2.0,
             cy,
@@ -85,7 +85,7 @@ impl View for EmptyState {
                 height: ah + 12.0,
             };
             renderer.fill_rounded_rect(btn_rect, 6.0, theme::accent());
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 action,
                 btn_rect.x + 12.0,
                 btn_rect.y + 6.0,

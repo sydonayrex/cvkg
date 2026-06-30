@@ -91,7 +91,7 @@ impl View for LayerSystem {
 
             // Eye icon for visibility
             let icon = if layer.visible { "👁" } else { "🚫" };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 icon,
                 layer_rect.x + 8.0,
                 layer_rect.y + 10.0,
@@ -100,7 +100,7 @@ impl View for LayerSystem {
             );
 
             // Layer name
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &layer.name,
                 layer_rect.x + 32.0,
                 layer_rect.y + 10.0,
@@ -110,7 +110,7 @@ impl View for LayerSystem {
 
             // Lock icon
             let lock_icon = if layer.locked { "🔒" } else { "🔓" };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 lock_icon,
                 layer_rect.x + layer_rect.width - 60.0,
                 layer_rect.y + 10.0,

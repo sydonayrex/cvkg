@@ -237,7 +237,7 @@ impl View for ThemeSwitch {
                 height: icon_height,
             };
             let icon_color = text_col;
-            renderer.draw_text(icon, icon_rect.x, icon_rect.y, 16.0, icon_color);
+            renderer.draw_text_raw(icon, icon_rect.x, icon_rect.y, 16.0, icon_color);
 
             // Label
             if self.show_labels {
@@ -247,7 +247,7 @@ impl View for ThemeSwitch {
                     width: button_width,
                     height: label_height,
                 };
-                renderer.draw_text(label, label_rect.x, label_rect.y, 9.0, theme::text_muted());
+                renderer.draw_text_raw(label, label_rect.x, label_rect.y, 9.0, theme::text_muted());
             }
 
             // Click handler

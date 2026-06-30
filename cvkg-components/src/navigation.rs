@@ -100,7 +100,7 @@ impl View for Drawer {
             height: rect.height,
         };
         renderer.fill_rounded_rect(panel_rect, 0.0, theme::surface_overlay());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             panel_rect.x + 20.0,
             panel_rect.y + 28.0,
@@ -117,7 +117,7 @@ impl View for Drawer {
         );
         let mut y = panel_rect.y + 56.0;
         for line in &self.content {
-            renderer.draw_text(line, panel_rect.x + 20.0, y + 16.0, 14.0, theme::text());
+            renderer.draw_text_raw(line, panel_rect.x + 20.0, y + 16.0, 14.0, theme::text());
             y += 32.0;
         }
         renderer.pop_vnode();
@@ -227,7 +227,7 @@ impl View for Menubar {
                 );
             }
             let (tw, th) = renderer.measure_text(label, 13.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 ix + (item_w - tw) / 2.0,
                 rect.y + (self.height - th) / 2.0,
@@ -347,7 +347,7 @@ impl View for NavigationMenu {
             let ix = rect.x + i as f32 * item_w;
             let is_selected = i == self.selected;
             let (tw, th) = renderer.measure_text(label, 14.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 ix + (item_w - tw) / 2.0,
                 rect.y + (self.height - th) / 2.0,
@@ -369,7 +369,7 @@ impl View for NavigationMenu {
                 renderer.fill_rounded_rect(sub_rect, 8.0, theme::surface_elevated());
                 renderer.stroke_rounded_rect(sub_rect, 8.0, theme::border(), 1.0);
                 for (j, child) in children.iter().enumerate() {
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         child,
                         ix + 12.0,
                         rect.y + self.height + j as f32 * 32.0 + 20.0,
@@ -491,7 +491,7 @@ impl View for List {
                     theme::hover(),
                 );
             }
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 item,
                 rect.x + 12.0,
                 iy + self.row_height * 0.6,
@@ -579,7 +579,7 @@ impl View for Section {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Section");
         renderer.fill_rounded_rect(rect, 8.0, theme::surface());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.header,
             rect.x + 12.0,
             rect.y + 20.0,
@@ -588,7 +588,7 @@ impl View for Section {
         );
         let mut y = rect.y + 32.0;
         for item in &self.items {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 item,
                 rect.x + 16.0,
                 y + self.row_height * 0.6,
@@ -699,7 +699,7 @@ impl View for DisclosureGroup {
             renderer.draw_line(ch_x, ch_y, ch_x + 5.0, ch_y + 4.0, chev_col, 2.0);
             renderer.draw_line(ch_x + 5.0, ch_y + 4.0, ch_x + 10.0, ch_y, chev_col, 2.0);
         }
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 32.0,
             rect.y + 24.0,
@@ -707,7 +707,7 @@ impl View for DisclosureGroup {
             theme::text(),
         );
         if self.progress > 0.0 && !self.content.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.content,
                 rect.x + 16.0,
                 rect.y + 48.0,

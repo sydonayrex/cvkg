@@ -549,7 +549,7 @@ impl View for Button {
             let (tw, _th) = renderer.measure_text(&self.label, font_size);
             let text_x = final_rect.x + (final_rect.width - tw) / 2.0;
             let text_y = final_rect.y + (final_rect.height - font_size) / 2.0;
-            renderer.draw_text(&self.label, text_x, text_y, font_size, text_color);
+            renderer.draw_text_raw(&self.label, text_x, text_y, font_size, text_color);
         }
 
         // Register interaction handlers
@@ -810,7 +810,7 @@ impl View for Toggle {
             theme::text(),
         );
         // Label
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + track_w + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -1152,7 +1152,7 @@ impl View for Stepper {
         renderer.stroke_rect(rect, theme::text_dim(), 1.0);
 
         let label_w = rect.width * 0.4;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -1176,7 +1176,7 @@ impl View for Stepper {
         };
 
         renderer.fill_rounded_rect(minus_rect, 2.0, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "-",
             minus_rect.x + 10.0,
             minus_rect.y + (minus_rect.height - 14.0) / 2.0,
@@ -1185,7 +1185,7 @@ impl View for Stepper {
         );
 
         renderer.fill_rounded_rect(plus_rect, 2.0, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "+",
             plus_rect.x + 10.0,
             plus_rect.y + (plus_rect.height - 14.0) / 2.0,
@@ -1195,7 +1195,7 @@ impl View for Stepper {
 
         let val_text = self.value.to_string();
         let val_x = minus_rect.x + btn_w + 10.0;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &val_text,
             val_x,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -1280,7 +1280,7 @@ impl View for SecureField {
         } else {
             theme::text()
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &display,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,

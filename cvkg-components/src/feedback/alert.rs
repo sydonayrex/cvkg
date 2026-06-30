@@ -117,13 +117,13 @@ impl View for Alert {
         let text_x = icon_rect.x + icon_size + padding;
         let mut text_y = rect.y + padding;
         let (tw, th) = renderer.measure_text(&self.title, 14.0);
-        renderer.draw_text(&self.title, text_x, text_y, 14.0, theme::text());
+        renderer.draw_text_raw(&self.title, text_x, text_y, 14.0, theme::text());
 
         // Description text
         if !self.description.is_empty() {
             text_y += th + 4.0;
             let (dw, _dh) = renderer.measure_text(&self.description, 12.0);
-            renderer.draw_text(&self.description, text_x, text_y, 12.0, theme::text_dim());
+            renderer.draw_text_raw(&self.description, text_x, text_y, 12.0, theme::text_dim());
         }
 
         // Action button (if present)
@@ -141,7 +141,7 @@ impl View for Alert {
                 icon_color,
             );
             let (aw, ah) = renderer.measure_text(action_text, 12.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 action_text,
                 action_x + (80.0 - aw) / 2.0,
                 action_y + (24.0 - ah) / 2.0,

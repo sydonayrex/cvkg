@@ -149,11 +149,11 @@ version = "0.4.0"
 
 [dev-dependencies.cvkg-vdom]
 path = "../cvkg-vdom"
-version = ">=0.2.14"
+version = ">0.2.15"
 
 [dev-dependencies.cvkg-anim]
 path = "../cvkg-anim"
-version = ">=0.2.14"
+version = ">0.2.15"
 
 [build-dependencies.naga]
 version = "29"

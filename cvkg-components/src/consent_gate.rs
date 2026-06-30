@@ -91,7 +91,7 @@ impl View for ConsentGate {
 
         // Title
         let title = lingua_tong::t("consentgate.title");
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &title,
             dialog.x + 16.0,
             dialog.y + 24.0,
@@ -104,7 +104,7 @@ impl View for ConsentGate {
             "consentgate.data_label",
             &[("data", &self.data_description)],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &data_label,
             dialog.x + 16.0,
             dialog.y + 56.0,
@@ -115,7 +115,7 @@ impl View for ConsentGate {
         // Purpose
         let purpose_label =
             lingua_tong::t_with("consentgate.purpose_label", &[("purpose", &self.purpose)]);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &purpose_label,
             dialog.x + 16.0,
             dialog.y + 80.0,
@@ -133,7 +133,7 @@ impl View for ConsentGate {
         renderer.stroke_rounded_rect(reject_rect, RADIUS_MD, theme::border(), 1.0);
         let reject_text = lingua_tong::t("consentgate.reject");
         let (rw, _) = renderer.measure_text(&reject_text, 14.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &reject_text,
             reject_rect.x + (button_w - rw) / 2.0,
             reject_rect.y + 22.0,
@@ -146,7 +146,7 @@ impl View for ConsentGate {
         renderer.fill_rounded_rect(accept_rect, RADIUS_MD, theme::accent());
         let accept_text = lingua_tong::t("consentgate.accept");
         let (aw, _) = renderer.measure_text(&accept_text, 14.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &accept_text,
             accept_rect.x + (button_w - aw) / 2.0,
             accept_rect.y + 22.0,
@@ -191,7 +191,7 @@ impl View for DataTrail {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let mut y = rect.y;
         let data_used_text = lingua_tong::t("consentgate.data_used");
-        renderer.draw_text(&data_used_text, rect.x, y, 11.0, theme::text_muted());
+        renderer.draw_text_raw(&data_used_text, rect.x, y, 11.0, theme::text_muted());
         y += 14.0;
 
         for source in &self.sources {
@@ -207,7 +207,7 @@ impl View for DataTrail {
                 &[("count", &source.item_count.to_string())],
             );
             let text = format!("{} {} {}", icon, source.name, items_label);
-            renderer.draw_text(&text, rect.x + 8.0, y, 11.0, theme::text());
+            renderer.draw_text_raw(&text, rect.x + 8.0, y, 11.0, theme::text());
             y += 14.0;
         }
     }

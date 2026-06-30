@@ -135,7 +135,7 @@ impl View for RichTreeView {
             // Expansion arrow placeholder
             if !node.children.is_empty() {
                 let arrow = if node.is_expanded { "▼" } else { "▶" };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     arrow,
                     rect.x + indent + 8.0,
                     *y + row_h / 2.0 - 4.0,
@@ -148,7 +148,7 @@ impl View for RichTreeView {
 
             // Optional Icon
             let icon_w = if let Some(ref icon) = node.icon {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     icon,
                     rect.x + indent + offset_x + 4.0,
                     *y + row_h / 2.0 - 4.0,
@@ -161,7 +161,7 @@ impl View for RichTreeView {
             };
 
             // Label text
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &node.label,
                 rect.x + indent + offset_x + icon_w + 8.0,
                 *y + row_h / 2.0 - 4.0,

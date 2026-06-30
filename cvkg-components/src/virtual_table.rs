@@ -181,7 +181,7 @@ where
             };
             renderer.fill_rect(col_rect, theme::surface());
             renderer.stroke_rect(col_rect, theme::text_dim(), 1.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &col.header,
                 col_rect.x + 8.0,
                 col_rect.y + 8.0,

@@ -122,7 +122,7 @@ impl View for TokenStream {
         let text = match self.text.lock() {
             Ok(g) => g.clone(),
             Err(_) => {
-                renderer.draw_text("[stream error]", rect.x, rect.y, 14.0, [1.0, 0.0, 0.0, 1.0]);
+                renderer.draw_text_raw("[stream error]", rect.x, rect.y, 14.0, [1.0, 0.0, 0.0, 1.0]);
                 return;
             }
         };
@@ -181,7 +181,7 @@ impl View for TokenStream {
                 continue;
             }
 
-            renderer.draw_text(ch_str, current_x, current_y, 14.0, color);
+            renderer.draw_text_raw(ch_str, current_x, current_y, 14.0, color);
             current_x += w;
         }
 

@@ -87,7 +87,7 @@ impl View for NjordTheme {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, theme::surface());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Njord Theme Engine",
             rect.x + 10.0,
             rect.y + 20.0,
@@ -97,7 +97,7 @@ impl View for NjordTheme {
 
         let mut y = rect.y + 45.0;
         for token in &self.tokens {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{} = {}", token.name, token.value),
                 rect.x + 15.0,
                 y,

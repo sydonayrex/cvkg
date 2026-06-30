@@ -405,7 +405,7 @@ impl View for MimirSpotlight {
         };
         renderer.stroke_rounded_rect(outline_rect, 6.0, theme::accent(), 2.0);
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("> {}", search_text),
             search_rect.x + 8.0,
             search_rect.y + 12.0,
@@ -433,7 +433,7 @@ impl View for MimirSpotlight {
             } else {
                 [0.7, 0.7, 0.7, 1.0]
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &cmd.label,
                 cmd_rect.x + 8.0,
                 cmd_rect.y + 12.0,
@@ -443,7 +443,7 @@ impl View for MimirSpotlight {
 
             if let Some(ref shortcut) = cmd.shortcut {
                 let shortcut_x = cmd_rect.x + cmd_rect.width - 80.0;
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     shortcut,
                     shortcut_x,
                     cmd_rect.y + 12.0,
@@ -532,7 +532,7 @@ impl View for Launcher {
             .collect();
 
         if filtered.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No results",
                 rect.x + 12.0,
                 rect.y + 12.0,
@@ -553,14 +553,14 @@ impl View for Launcher {
             };
 
             renderer.fill_rounded_rect(item_rect, 4.0, theme::input_bg());
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.icon,
                 item_rect.x + 8.0,
                 item_rect.y + 12.0,
                 16.0,
                 theme::info(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.label,
                 item_rect.x + 32.0,
                 item_rect.y + 14.0,

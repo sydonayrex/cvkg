@@ -75,7 +75,7 @@ impl View for RadarChart {
             let label_x = center_x + (radius + 20.0) * (angle).cos();
             let label_y = center_y + (radius + 20.0) * (angle).sin();
             if let Some(label) = self.labels.get(i) {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     label,
                     label_x - 10.0,
                     label_y - 6.0,

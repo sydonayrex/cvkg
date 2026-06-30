@@ -63,7 +63,7 @@ impl View for OracleOrb {
         // 3. Central Runic Eye
         let runes = ['ᚦ', 'ᚢ', 'ᚱ', 'ᚲ'];
         let rune_idx = ((t * 2.0).floor() as usize) % runes.len();
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &runes[rune_idx].to_string(),
             center_x - 10.0,
             center_y + 10.0,

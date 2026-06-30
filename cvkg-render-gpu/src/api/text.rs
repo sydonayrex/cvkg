@@ -211,10 +211,11 @@ impl GpuRenderer {
     pub(crate) fn draw_text_impl(
         &mut self,
         text: &str,
-        x: f32,
-        y: f32,
+        rect: &cvkg_core::Rect,
         size: f32,
         color: [f32; 4],
+        h_align: cvkg_core::TextHAlign,
+        v_align: cvkg_core::TextVAlign,
     ) {
         let cache_key = (text.to_string(), (size * 100.0) as u32);
         let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
@@ -229,29 +230,65 @@ impl GpuRenderer {
                 .map(|s| s.style.color == [r, g, b, a])
                 .unwrap_or(false);
             if color_matches {
-                self.draw_shaped_text_impl(&shaped, x, y);
+                self.draw_shaped_text_aligned(&shaped, rect, size, h_align, v_align);
                 return;
             }
             let mut shaped = (*shaped).clone();
             for span in &mut shaped.spans {
                 span.style.color = [r, g, b, a];
             }
-            self.draw_shaped_text_impl(&shaped, x, y);
+            self.draw_shaped_text_aligned(&shaped, rect, size, h_align, v_align);
             return;
         }
         let mut style = cvkg_runic_text::TextStyle::new("Inter", size);
         style.color = [r, g, b, a];
         let spans = [cvkg_runic_text::TextSpan::new(text, style)];
+        let h_text_align = match h_align {
+            cvkg_core::TextHAlign::Left => cvkg_runic_text::TextAlign::Start,
+            cvkg_core::TextHAlign::Center => cvkg_runic_text::TextAlign::Center,
+            cvkg_core::TextHAlign::Right => cvkg_runic_text::TextAlign::End,
+        };
         if let Some(shaped) = self.shape_rich_text_impl(
             &spans,
             None,
-            cvkg_runic_text::TextAlign::Start,
+            h_text_align,
             cvkg_runic_text::TextOverflow::Visible,
         ) {
             let shaped = std::sync::Arc::new(shaped);
-            self.draw_shaped_text_impl(&shaped, x, y);
+            self.draw_shaped_text_aligned(&shaped, rect, size, h_align, v_align);
             self.text.shaped_cache.put(cache_key, shaped);
         }
+    }
+
+    /// Compute baseline x,y from rect + alignment, then draw.
+    fn draw_shaped_text_aligned(
+        &mut self,
+        shaped: &cvkg_runic_text::ShapedText,
+        rect: &cvkg_core::Rect,
+        size: f32,
+        h_align: cvkg_core::TextHAlign,
+        v_align: cvkg_core::TextVAlign,
+    ) {
+        // Calculate text width from glyph advances
+        let text_w: f32 = shaped.glyphs.iter().map(|g| g.advance_width).sum();
+
+        // X position based on horizontal alignment
+        let x = match h_align {
+            cvkg_core::TextHAlign::Left => rect.x,
+            cvkg_core::TextHAlign::Center => rect.x + (rect.width - text_w) / 2.0,
+            cvkg_core::TextHAlign::Right => rect.x + rect.width - text_w,
+        };
+
+        // Y position: baseline offset based on vertical alignment
+        // ascent ≈ size * 0.8 for most fonts
+        let ascent = size * 0.8;
+        let y = match v_align {
+            cvkg_core::TextVAlign::Top => rect.y + ascent,
+            cvkg_core::TextVAlign::Middle => rect.y + (rect.height + ascent * 0.75) / 2.0,
+            cvkg_core::TextVAlign::Bottom => rect.y + rect.height - (size - ascent),
+        };
+
+        self.draw_shaped_text_impl(shaped, x, y);
     }
 }
 

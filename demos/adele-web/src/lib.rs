@@ -131,14 +131,14 @@ impl AdeleApp {
         );
 
         let title = "ADELE";
-        renderer.draw_text(
+        renderer.draw_text_raw(
             title,
             rect.x + 30.0,
             rect.y + 25.0,
             28.0,
             [0.0, 1.0, 1.0, 1.0],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "DESIGN SYSTEMS EXPLORER",
             rect.x + 120.0,
             rect.y + 32.0,
@@ -154,7 +154,7 @@ impl AdeleApp {
         ];
         for (label, mode) in navs {
             let is_active = self.view_mode == mode;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 x,
                 rect.y + 30.0,
@@ -186,7 +186,7 @@ impl AdeleApp {
                 .count()
         );
         let (sw, _) = renderer.measure_text(&stats, 12.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &stats,
             rect.x + rect.width - sw - 30.0,
             rect.y + 30.0,
@@ -206,7 +206,7 @@ impl AdeleApp {
             1.0,
         );
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "FILTERS",
             rect.x + 25.0,
             rect.y + 30.0,
@@ -223,7 +223,7 @@ impl AdeleApp {
         };
         renderer.fill_rounded_rect(search_rect, 4.0, [0.1, 0.1, 0.15, 1.0]);
         renderer.stroke_rounded_rect(search_rect, 4.0, [0.2, 0.2, 0.3, 1.0], 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             if self.criteria.search_query.is_empty() {
                 "Search systems..."
             } else {
@@ -247,10 +247,10 @@ impl AdeleApp {
         ];
 
         for (cat, options) in categories {
-            renderer.draw_text(cat, rect.x + 25.0, y, 10.0, [0.4, 0.4, 0.5, 1.0]);
+            renderer.draw_text_raw(cat, rect.x + 25.0, y, 10.0, [0.4, 0.4, 0.5, 1.0]);
             y += 25.0;
             for opt in options {
-                renderer.draw_text(opt, rect.x + 35.0, y, 13.0, [0.8, 0.8, 0.9, 1.0]);
+                renderer.draw_text_raw(opt, rect.x + 35.0, y, 13.0, [0.8, 0.8, 0.9, 1.0]);
                 y += 24.0;
             }
             y += 20.0;
@@ -292,14 +292,14 @@ impl AdeleApp {
         renderer.stroke_rounded_rect(rect, 8.0, [0.2, 0.3, 0.4, 0.4], 1.0);
 
         // Header
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &system.system.data.to_uppercase(),
             rect.x + 20.0,
             rect.y + 20.0,
             18.0,
             [1.0, 1.0, 1.0, 1.0],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &system.company.data,
             rect.x + 20.0,
             rect.y + 45.0,
@@ -371,14 +371,14 @@ impl AdeleApp {
         renderer.fill_rounded_rect(rect, 12.0, [0.05, 0.05, 0.1, 0.95]);
         renderer.stroke_rounded_rect(rect, 12.0, [0.0, 0.8, 1.0, 0.6], 2.0);
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &system.system.data.to_uppercase(),
             rect.x + 40.0,
             rect.y + 40.0,
             32.0,
             [1.0, 1.0, 1.0, 1.0],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &system.company.data,
             rect.x + 40.0,
             rect.y + 80.0,
@@ -399,8 +399,8 @@ impl AdeleApp {
         ];
 
         for (label, value) in attributes {
-            renderer.draw_text(label, rect.x + 40.0, y, 14.0, [0.5, 0.5, 0.6, 1.0]);
-            renderer.draw_text(value, rect.x + 200.0, y, 14.0, [1.0, 1.0, 1.0, 1.0]);
+            renderer.draw_text_raw(label, rect.x + 40.0, y, 14.0, [0.5, 0.5, 0.6, 1.0]);
+            renderer.draw_text_raw(value, rect.x + 200.0, y, 14.0, [1.0, 1.0, 1.0, 1.0]);
             y += 30.0;
         }
 
@@ -443,14 +443,14 @@ impl AdeleApp {
             .collect();
 
         if systems_to_compare.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No systems selected for comparison.",
                 rect.x + 40.0,
                 rect.y + 40.0,
                 16.0,
                 [0.5, 0.5, 0.6, 1.0],
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Go back to catalog and add systems to compare them side-by-side.",
                 rect.x + 40.0,
                 rect.y + 70.0,
@@ -464,7 +464,7 @@ impl AdeleApp {
         let col_w = (rect.width - 200.0) / systems_to_compare.len() as f32;
         let mut x = rect.x + 200.0;
         for system in &systems_to_compare {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &system.system.data.to_uppercase(),
                 x + 10.0,
                 rect.y + 40.0,
@@ -487,10 +487,10 @@ impl AdeleApp {
 
         let mut y = rect.y + 80.0;
         for (label, getter) in &rows {
-            renderer.draw_text(label, rect.x + 40.0, y, 14.0, [0.5, 0.5, 0.6, 1.0]);
+            renderer.draw_text_raw(label, rect.x + 40.0, y, 14.0, [0.5, 0.5, 0.6, 1.0]);
             let mut row_x = rect.x + 200.0;
             for system in &systems_to_compare {
-                renderer.draw_text(getter(system), row_x + 10.0, y, 14.0, [1.0, 1.0, 1.0, 1.0]);
+                renderer.draw_text_raw(getter(system), row_x + 10.0, y, 14.0, [1.0, 1.0, 1.0, 1.0]);
                 row_x += col_w;
             }
             y += 40.0;

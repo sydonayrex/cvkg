@@ -78,7 +78,7 @@ impl View for FreyrInspector {
             },
             theme::inspector_bg(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 10.0,
             rect.y + 9.0,
@@ -97,7 +97,7 @@ impl View for FreyrInspector {
                 height: row_h,
             };
             renderer.fill_rect(prop_rect, theme::inspector_border());
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &prop.name,
                 prop_rect.x + 8.0,
                 prop_rect.y + 8.0,
@@ -124,7 +124,7 @@ impl View for FreyrInspector {
                 ),
                 PropertyValue::Enum(v, _) => v.clone(),
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &value_str,
                 prop_rect.x + 100.0,
                 prop_rect.y + 8.0,

@@ -120,7 +120,7 @@ impl<V: View> ErrorBoundary<V> {
         renderer.fill_rounded_rect(rect, 4.0, self.fallback_color);
 
         if let Some(ref label) = self.fallback_label {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 rect.x + 8.0,
                 rect.y + rect.height * 0.5,

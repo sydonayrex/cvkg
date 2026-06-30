@@ -86,7 +86,7 @@ impl View for Command {
             theme::text()
         };
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             search_display,
             search_rect.x + 16.0,
             search_rect.y + 14.0,
@@ -117,7 +117,7 @@ impl View for Command {
             // Hover state simulation (just a subtle highlight for now)
             renderer.fill_rounded_rect(item_rect, 4.0, theme::hover());
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.label,
                 item_rect.x + 12.0,
                 item_rect.y + 10.0,
@@ -126,7 +126,7 @@ impl View for Command {
             );
             if let Some(shortcut) = &item.shortcut {
                 let (sw, _) = renderer.measure_text(shortcut, 12.0);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     shortcut,
                     item_rect.x + item_rect.width - sw - 12.0,
                     item_rect.y + 11.0,

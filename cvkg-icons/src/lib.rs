@@ -257,7 +257,7 @@ impl<'a> View for Icon<'a> {
                 if let Some(ch) = char::from_u32(*idx) {
                     let mut text_buf = [0u8; 4];
                     let text = ch.encode_utf8(&mut text_buf);
-                    renderer.draw_text(text, rect.x, rect.y, rect.height, self.color);
+                    renderer.draw_text_raw(text, rect.x, rect.y, rect.height, self.color);
                 }
             }
         }

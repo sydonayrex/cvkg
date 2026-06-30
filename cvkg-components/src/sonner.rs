@@ -365,7 +365,7 @@ impl Sonner {
 
         // Icon
         let icon_x = rect.x + SIDE_BAR_WIDTH + SPACE_SM;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             toast.toast_type.icon(),
             icon_x,
             rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -378,16 +378,16 @@ impl Sonner {
         let mut text_y = rect.y + SPACE_SM;
 
         if let Some(ref title) = toast.title {
-            renderer.draw_text(title, text_x, text_y, FONT_SM, theme::text());
+            renderer.draw_text_raw(title, text_x, text_y, FONT_SM, theme::text());
             text_y += FONT_SM + 4.0;
         }
 
-        renderer.draw_text(&toast.message, text_x, text_y, FONT_SM, theme::text_muted());
+        renderer.draw_text_raw(&toast.message, text_x, text_y, FONT_SM, theme::text_muted());
 
         // Close button
         let close_x = rect.x + rect.width - 24.0;
         let close_y = rect.y + (rect.height - FONT_BASE) / 2.0;
-        renderer.draw_text("✕", close_x, close_y, FONT_SM, theme::text_muted());
+        renderer.draw_text_raw("✕", close_x, close_y, FONT_SM, theme::text_muted());
 
         // Countdown progress bar (bottom edge)
         if toast.duration_ms > 0 {

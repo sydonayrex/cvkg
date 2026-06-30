@@ -71,7 +71,7 @@ impl View for PieChart {
             let label_dist = radius + 15.0;
             let tx = center_x + label_dist * middle_angle.cos();
             let ty = center_y + label_dist * middle_angle.sin();
-            renderer.draw_text(label, tx - 10.0, ty - 6.0, 10.0, theme::text_muted());
+            renderer.draw_text_raw(label, tx - 10.0, ty - 6.0, 10.0, theme::text_muted());
 
             start_angle += sweep;
         }

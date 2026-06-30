@@ -100,6 +100,6 @@ impl View for FloatingText {
         let color = [self.color[0], self.color[1], self.color[2], self.color[3] * alpha];
 
         let (tw, th) = renderer.measure_text(&self.text, self.font_size);
-        renderer.draw_text(&self.text, x - tw / 2.0, y - th / 2.0, self.font_size, color);
+        renderer.draw_text_raw(&self.text, x - tw / 2.0, y - th / 2.0, self.font_size, color);
     }
 }

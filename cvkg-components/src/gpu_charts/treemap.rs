@@ -78,7 +78,7 @@ impl View for TreemapChart {
                 };
                 renderer.fill_rounded_rect(cell_rect, RADIUS_XS, color);
                 renderer.stroke_rounded_rect(cell_rect, RADIUS_XS, theme::border(), 0.5);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &node.label,
                     cell_rect.x + 4.0,
                     cell_rect.y + 14.0,
@@ -98,7 +98,7 @@ impl View for TreemapChart {
                 };
                 renderer.fill_rounded_rect(cell_rect, RADIUS_XS, color);
                 renderer.stroke_rounded_rect(cell_rect, RADIUS_XS, theme::border(), 0.5);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &node.label,
                     cell_rect.x + 4.0,
                     cell_rect.y + 14.0,

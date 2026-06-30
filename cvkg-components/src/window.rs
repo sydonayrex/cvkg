@@ -64,7 +64,7 @@ impl<V: View> View for YggdrasilWindow<V> {
                 0.2,
             ],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 12.0,
             rect.y + 18.0,
@@ -156,7 +156,7 @@ impl<V1: View, V2: View> View for GinnungagapWindow<V1, V2> {
                 0.2,
             ],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 12.0,
             rect.y + 18.0,

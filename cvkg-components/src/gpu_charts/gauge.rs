@@ -87,7 +87,7 @@ impl View for GaugeChart {
             theme::accent(),
         );
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("{:.1}%", pct * 100.0),
             center_x - 20.0,
             center_y + 15.0,
@@ -95,7 +95,7 @@ impl View for GaugeChart {
             theme::text(),
         );
         if !self.label.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.label,
                 center_x - 30.0,
                 center_y + 30.0,

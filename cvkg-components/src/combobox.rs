@@ -294,7 +294,7 @@ impl View for Combobox {
         } else {
             theme::text()
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             display_text,
             search_rect.x + 8.0,
             search_rect.y + 10.0,
@@ -328,7 +328,7 @@ impl View for Combobox {
             } else {
                 theme::text_muted()
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.options[original_idx],
                 item_rect.x + 8.0,
                 item_rect.y + 9.0,
@@ -486,12 +486,12 @@ impl Combobox {
         renderer.stroke_rounded_rect(rect, 6.0, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         // Text
-        renderer.draw_text(display_text, rect.x + 12.0, rect.y + 12.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text_raw(display_text, rect.x + 12.0, rect.y + 12.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
 
         // Chevron indicator
         let chevron = "▾";
         let (tw, _) = renderer.measure_text(chevron, 14.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             chevron,
             rect.x + rect.width - tw - 12.0,
             rect.y + 12.0,

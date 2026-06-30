@@ -132,7 +132,7 @@ impl View for Checkbox {
         }
 
         if let Some(label) = &self.label {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 box_rect.x + box_size + 8.0,
                 rect.y + (rect.height - 14.0) / 2.0,
@@ -295,7 +295,7 @@ impl<V: View> View for Tabs<V> {
             if is_selected {
                 renderer.stroke_rect(tab_rect, theme::accent(), 2.0);
             }
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 tab_rect.x + 12.0,
                 tab_rect.y + (tab_rect.height - 14.0) / 2.0,

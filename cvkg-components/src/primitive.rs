@@ -99,7 +99,7 @@ impl View for Text {
         ) {
             renderer.draw_shaped_text(&shaped, rect.x, rect.y);
         } else {
-            renderer.draw_text(&self.content, rect.x, rect.y, self.font_size, self.color);
+            renderer.draw_text_raw(&self.content, rect.x, rect.y, self.font_size, self.color);
         }
     }
 
@@ -559,7 +559,7 @@ impl View for Badge {
                     rect.y + (diameter - th) / 2.0,
                 );
             } else {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &self.text,
                     rect.x + (diameter - tw) / 2.0,
                     rect.y + (diameter - th) / 2.0,
@@ -609,7 +609,7 @@ impl View for Badge {
             if let Some(shaped) = shaped_opt {
                 renderer.draw_shaped_text(&shaped, text_x, text_y);
             } else {
-                renderer.draw_text(&self.text, text_x, text_y, font_size, text_color);
+                renderer.draw_text_raw(&self.text, text_x, text_y, font_size, text_color);
             }
         } else {
             // Use font_size (not th) for Y-centering — same pattern as Button.
@@ -622,7 +622,7 @@ impl View for Badge {
                     text_y,
                 );
             } else {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &self.text,
                     rect.x + (rect.width - tw) / 2.0,
                     text_y,

@@ -70,7 +70,7 @@ impl View for Label {
         } else {
             self.text.clone()
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &display,
             rect.x,
             rect.y + self.font_size,
@@ -171,7 +171,7 @@ impl View for DateTimePicker {
             "{:04}-{:02}-{:02} {:02}:{:02}",
             self.year, self.month, self.day, self.hour, self.minute
         );
-        renderer.draw_text(&dt_str, rect.x + 12.0, rect.y + 20.0, 14.0, theme::text());
+        renderer.draw_text_raw(&dt_str, rect.x + 12.0, rect.y + 20.0, 14.0, theme::text());
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -231,7 +231,7 @@ impl View for Link {
         } else {
             theme::accent()
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x,
             rect.y + self.font_size,
@@ -360,7 +360,7 @@ impl View for SearchField {
         } else {
             theme::text()
         };
-        renderer.draw_text(display, rect.x + 32.0, rect.y + 18.0, 14.0, color);
+        renderer.draw_text_raw(display, rect.x + 32.0, rect.y + 18.0, 14.0, color);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -463,7 +463,7 @@ impl View for SearchSuggestions {
                     theme::hover(),
                 );
             }
-            renderer.draw_text(item, rect.x + 12.0, iy + item_h * 0.6, 13.0, theme::text());
+            renderer.draw_text_raw(item, rect.x + 12.0, iy + item_h * 0.6, 13.0, theme::text());
         }
         renderer.pop_vnode();
     }
@@ -545,7 +545,7 @@ impl View for Tag {
             [self.color[0], self.color[1], self.color[2], 0.15],
         );
         renderer.stroke_rounded_rect(tag_rect, tag_h / 2.0, self.color, 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x + pad_x,
             rect.y + pad_y + th * 0.2,

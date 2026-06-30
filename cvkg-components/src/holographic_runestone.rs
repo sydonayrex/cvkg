@@ -42,7 +42,7 @@ impl View for HolographicRunestone {
             let mut c = color;
             c[3] *= alpha;
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.rune.to_string(),
                 center_x - (self.size / 2.0) + offset,
                 center_y + (self.size / 2.0) + float_y + offset,

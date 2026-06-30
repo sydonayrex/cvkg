@@ -137,7 +137,7 @@ impl NiflheimSidebar {
 
         // Icon
         if let Some(ref icon) = item.icon {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 icon,
                 rect.x + indent,
                 rect.y + 6.0,
@@ -148,7 +148,7 @@ impl NiflheimSidebar {
 
         // Label
         let text_color = theme::text();
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &item.label,
             rect.x + indent + 20.0,
             rect.y + 5.0,
@@ -171,7 +171,7 @@ impl NiflheimSidebar {
                 count.to_string()
             };
             let tw = renderer.measure_text(&text, 9.0).0;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &text,
                 badge_rect.x + (18.0 - tw) / 2.0,
                 badge_rect.y + 4.0,

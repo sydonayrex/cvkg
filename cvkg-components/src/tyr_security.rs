@@ -127,7 +127,7 @@ impl View for TyrSecurity {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Tyr Security",
             rect.x + 10.0,
             rect.y + 20.0,
@@ -137,7 +137,7 @@ impl View for TyrSecurity {
 
         // Session info
         if let Some(session) = &self.current_session {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("Session: {}", session.id),
                 rect.x + 110.0,
                 rect.y + 20.0,
@@ -151,7 +151,7 @@ impl View for TyrSecurity {
                     .unwrap_or_else(|e| e.duration())
                     .as_secs_f64();
             let hours = (remaining / 3600.0).max(0.0) as u32;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("Expires: {}h", hours),
                 rect.x + 110.0,
                 rect.y + 35.0,
@@ -162,7 +162,7 @@ impl View for TyrSecurity {
 
         // Roles
         let mut y = rect.y + 60.0;
-        renderer.draw_text("Roles:", rect.x + 10.0, y, 11.0, theme::text());
+        renderer.draw_text_raw("Roles:", rect.x + 10.0, y, 11.0, theme::text());
         y += 20.0;
 
         for role in &self.roles {
@@ -182,14 +182,14 @@ impl View for TyrSecurity {
                 },
                 theme::surface_elevated(),
             );
-            renderer.draw_text(level_str, rect.x + 20.0, y + 4.0, 9.0, theme::text());
-            renderer.draw_text(&role.name, rect.x + 80.0, y + 4.0, 10.0, theme::text());
+            renderer.draw_text_raw(level_str, rect.x + 20.0, y + 4.0, 9.0, theme::text());
+            renderer.draw_text_raw(&role.name, rect.x + 80.0, y + 4.0, 10.0, theme::text());
             y += 22.0;
         }
 
         // Recent audit log
         let audit_y = rect.y + rect.height - 80.0;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Recent Activity:",
             rect.x + 10.0,
             audit_y,
@@ -205,7 +205,7 @@ impl View for TyrSecurity {
                 theme::error_color()
             };
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{} {} {}", status, entry.user, entry.action),
                 rect.x + 15.0,
                 audit_y + 15.0 + i as f32 * 15.0,

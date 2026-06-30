@@ -27,7 +27,7 @@ impl View for MemoryView {
 
         // Aesthetic: Sleipnir-inspired scrolling list placeholder
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "YGGDRASIL_RECOLLECTION",
             rect.x,
             rect.y + 15.0,
@@ -38,7 +38,7 @@ impl View for MemoryView {
         let mut y_offset = rect.y + 40.0;
 
         if state.last_query_results.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "NO_ACTIVE_RECALL",
                 rect.x + 10.0,
                 y_offset,
@@ -60,7 +60,7 @@ impl View for MemoryView {
                     renderer.stroke_rect(item_rect, theme::with_alpha(theme::accent(), 0.4), 1.0);
 
                     // Summary
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &frag.summary,
                         rect.x + 8.0,
                         y_offset + 18.0,
@@ -70,7 +70,7 @@ impl View for MemoryView {
 
                     // Metadata
                     let meta = format!("REF: {} | ACCESS: {}", frag.source, frag.accessed_count);
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &meta,
                         rect.x + 8.0,
                         y_offset + 35.0,

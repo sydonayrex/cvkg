@@ -77,7 +77,7 @@ impl View for GullveigInspector {
             },
             theme::inspector_bg(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("Inspecting: {}", self.component_name),
             rect.x + 8.0,
             rect.y + 8.0,
@@ -87,7 +87,7 @@ impl View for GullveigInspector {
 
         // Stats section
         let stats_y = rect.y + 32.0;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!(
                 "Render: {:.1}ms | Mem: {}KB | Updates: {}",
                 self.render_stats.render_time_ms,
@@ -118,14 +118,14 @@ impl View for GullveigInspector {
                 bg,
             );
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &attr.name,
                 rect.x + 8.0,
                 current_y + 6.0,
                 10.0,
                 theme::text(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &attr.value,
                 rect.x + 100.0,
                 current_y + 6.0,
@@ -134,7 +134,7 @@ impl View for GullveigInspector {
             );
 
             if attr.editable {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     "✏",
                     rect.x + rect.width - 20.0,
                     current_y + 5.0,

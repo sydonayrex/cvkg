@@ -129,7 +129,7 @@ impl View for AlertDialog {
             },
             icon_color,
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             dlg_rect.x + 60.0,
             dlg_rect.y + 36.0,
@@ -137,7 +137,7 @@ impl View for AlertDialog {
             theme::text(),
         );
         if !self.description.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.description,
                 dlg_rect.x + 24.0,
                 dlg_rect.y + 64.0,
@@ -158,7 +158,7 @@ impl View for AlertDialog {
         renderer.fill_rounded_rect(cancel_rect, RADIUS_LG, theme::surface());
         renderer.stroke_rounded_rect(cancel_rect, RADIUS_LG, theme::border(), 1.0);
         let (ctw, cth) = renderer.measure_text(&self.cancel_label, 13.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.cancel_label,
             cancel_rect.x + (88.0 - ctw) / 2.0,
             cancel_rect.y + (44.0 - cth) / 2.0,
@@ -181,7 +181,7 @@ impl View for AlertDialog {
         renderer.set_aria_label(&self.confirm_label);
         renderer.fill_rounded_rect(confirm_rect, RADIUS_LG, confirm_bg);
         let (ftw, fth) = renderer.measure_text(&self.confirm_label, 13.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.confirm_label,
             confirm_rect.x + (88.0 - ftw) / 2.0,
             confirm_rect.y + (44.0 - fth) / 2.0,
@@ -306,7 +306,7 @@ impl View for ConfirmationDialog {
         };
         renderer.fill_rounded_rect(dlg_rect, RADIUS_XL, theme::surface_elevated());
         renderer.stroke_rounded_rect(dlg_rect, RADIUS_XL, theme::border(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             dlg_rect.x + 20.0,
             dlg_rect.y + 28.0,
@@ -314,7 +314,7 @@ impl View for ConfirmationDialog {
             theme::text(),
         );
         if !self.message.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.message,
                 dlg_rect.x + 20.0,
                 dlg_rect.y + 52.0,
@@ -336,7 +336,7 @@ impl View for ConfirmationDialog {
         renderer.stroke_rounded_rect(cancel_rect, RADIUS_MD, theme::border(), 1.0);
         let cancel_text = lingua_tong::t("dialog.cancel");
         let (ctw, cth) = renderer.measure_text(&cancel_text, 12.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &cancel_text,
             cancel_rect.x + (72.0 - ctw) / 2.0,
             cancel_rect.y + (44.0 - cth) / 2.0,
@@ -355,7 +355,7 @@ impl View for ConfirmationDialog {
         renderer.set_aria_label(&self.confirm_label);
         renderer.fill_rounded_rect(confirm_rect, RADIUS_MD, theme::error_color());
         let (ftw, fth) = renderer.measure_text(&self.confirm_label, 12.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.confirm_label,
             confirm_rect.x + (80.0 - ftw) / 2.0,
             confirm_rect.y + (44.0 - fth) / 2.0,
@@ -457,7 +457,7 @@ impl View for FullScreenCover {
         };
         renderer.fill_rect(cover_rect, self.bg_color);
         let (tw, _th) = renderer.measure_text(&self.title, 24.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             cover_rect.x + (cover_rect.width - tw) / 2.0,
             cover_rect.y + 60.0,

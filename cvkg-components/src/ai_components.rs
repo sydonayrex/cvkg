@@ -70,7 +70,7 @@ impl<V: View> View for GeriPrompt<V> {
         // Render Text Input Placeholder
         let text_rect = Rect::new(rect.x + padding_x, current_y, rect.width - 60.0, 24.0);
         if self.text.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Send a message...",
                 text_rect.x,
                 text_rect.y + 16.0,
@@ -78,7 +78,7 @@ impl<V: View> View for GeriPrompt<V> {
                 theme::text_muted(),
             );
         } else {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.text,
                 text_rect.x,
                 text_rect.y + 16.0,
@@ -178,7 +178,7 @@ impl View for HuginGhost {
     }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HuginGhost");
-        renderer.draw_text(&self.text, rect.x, rect.y + 16.0, 16.0, theme::text_dim());
+        renderer.draw_text_raw(&self.text, rect.x, rect.y + 16.0, 16.0, theme::text_dim());
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -237,14 +237,14 @@ impl View for HuginChat {
         } else {
             theme::success()
         };
-        renderer.draw_text(header_str, rect.x + 16.0, rect.y + 24.0, 12.0, header_color);
+        renderer.draw_text_raw(header_str, rect.x + 16.0, rect.y + 24.0, 12.0, header_color);
 
         let msg_color = if is_user {
             theme::chat_text_user()
         } else {
             theme::chat_text_assistant()
         };
-        renderer.draw_text(&self.message, rect.x + 16.0, rect.y + 48.0, 15.0, msg_color);
+        renderer.draw_text_raw(&self.message, rect.x + 16.0, rect.y + 48.0, 15.0, msg_color);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
@@ -302,7 +302,7 @@ impl View for DvalinMedia {
             renderer.stroke_rounded_rect(icon_rect, 4.0, theme::error_color(), 1.0);
         }
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.filename,
             rect.x + 48.0,
             rect.y + 28.0,
@@ -377,7 +377,7 @@ impl View for GullinSnip {
         renderer.stroke_rounded_rect(rect, 6.0, theme::border(), 1.0);
 
         let header_str = format!("Pasted Code ({} - {} lines)", self.language, self.lines);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &header_str,
             rect.x + 12.0,
             rect.y + 24.0,
@@ -427,7 +427,7 @@ impl View for HatiStream {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HatiStream");
         // Simulated markdown/text wrapping rendering
-        renderer.draw_text(&self.text, rect.x, rect.y + 16.0, 16.0, theme::text());
+        renderer.draw_text_raw(&self.text, rect.x, rect.y + 16.0, 16.0, theme::text());
 
         if self.is_streaming {
             // Draw blinking block cursor at the end
@@ -517,7 +517,7 @@ impl View for FenrirCode {
         } else {
             &self.language
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             lang_str,
             rect.x + 16.0,
             rect.y + 22.0,
@@ -527,7 +527,7 @@ impl View for FenrirCode {
 
         // Copy Button
         let copy_x = rect.x + rect.width - 60.0;
-        renderer.draw_text("Copy", copy_x, rect.y + 22.0, 13.0, theme::text_muted());
+        renderer.draw_text_raw("Copy", copy_x, rect.y + 22.0, 13.0, theme::text_muted());
 
         if let Some(handler) = &self.on_copy {
             let h = handler.clone();
@@ -548,7 +548,7 @@ impl View for FenrirCode {
         }
 
         // Code content
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.code,
             rect.x + 16.0,
             rect.y + 56.0,
@@ -605,7 +605,7 @@ impl View for GraniRate {
         } else {
             theme::text_muted()
         };
-        renderer.draw_text("Up", rect.x + 8.0, rect.y + 16.0, 14.0, up_color);
+        renderer.draw_text_raw("Up", rect.x + 8.0, rect.y + 16.0, 14.0, up_color);
 
         // Thumbs Down
         let down_color = if self.liked == Some(false) {
@@ -613,10 +613,10 @@ impl View for GraniRate {
         } else {
             theme::text_muted()
         };
-        renderer.draw_text("Down", rect.x + 40.0, rect.y + 16.0, 14.0, down_color);
+        renderer.draw_text_raw("Down", rect.x + 40.0, rect.y + 16.0, 14.0, down_color);
 
         // Copy
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Copy",
             rect.x + 90.0,
             rect.y + 16.0,
@@ -625,7 +625,7 @@ impl View for GraniRate {
         );
 
         // Regenerate
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Regen",
             rect.x + 140.0,
             rect.y + 16.0,
@@ -680,7 +680,7 @@ impl View for MuninPill {
             [self.color[0], self.color[1], self.color[2], 0.2],
         );
         renderer.stroke_rounded_rect(rect, 12.0, self.color, 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + 12.0,
             rect.y + 16.0,
@@ -726,7 +726,7 @@ impl View for RatatoChip {
         renderer.push_vnode(rect, "RatatoChip");
         renderer.fill_rounded_rect(rect, 16.0, theme::surface_elevated());
         renderer.stroke_rounded_rect(rect, 16.0, theme::border(), 1.5);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + 16.0,
             rect.y + 20.0,
@@ -854,7 +854,7 @@ impl View for DainnSkill {
         );
 
         // Name
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.name,
             rect.x + 56.0,
             rect.y + 26.0,
@@ -935,7 +935,7 @@ impl View for HeidruMask {
         } else {
             &self.persona
         };
-        renderer.draw_text(label, rect.x + 48.0, rect.y + 26.0, 16.0, theme::text());
+        renderer.draw_text_raw(label, rect.x + 48.0, rect.y + 26.0, 16.0, theme::text());
 
         // Dropdown Chevron
         let ch_x = rect.x + rect.width - 24.0;
@@ -1093,7 +1093,7 @@ impl View for FenrirNode {
             renderer.fill_ellipse(icon_rect, border_color);
         }
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.name,
             rect.x + 48.0,
             rect.y + 28.0,
@@ -1243,7 +1243,7 @@ impl<V: View> View for FrekiDrawer<V> {
             Rect::new(rect.x, rect.y, rect.width, 48.0),
             theme::surface_elevated(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 16.0,
             rect.y + 30.0,

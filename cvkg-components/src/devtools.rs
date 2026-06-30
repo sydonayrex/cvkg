@@ -48,7 +48,7 @@ impl View for VdomInspector {
             width: panel_width - 20.0,
             height: 30.0,
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "VDOM INSPECTOR",
             title_rect.x,
             title_rect.y,
@@ -83,7 +83,7 @@ impl VdomInspector {
             let indent = depth as f32 * 15.0;
             let node_label = format!("{} (ID: {})", node.component_type, id.0);
 
-            renderer.draw_text(&node_label, x + indent, current_y, 12.0, theme::text());
+            renderer.draw_text_raw(&node_label, x + indent, current_y, 12.0, theme::text());
             current_y += 20.0;
 
             for child_id in &node.children {
@@ -130,11 +130,11 @@ impl View for TelemetryOverlay {
         let line_h = 18.0;
 
         // Title
-        renderer.draw_text("SYSTEM_TELEMETRY", x, y, 14.0, theme::accent());
+        renderer.draw_text_raw("SYSTEM_TELEMETRY", x, y, 14.0, theme::accent());
         y += 25.0;
 
         // Frame timing
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("FRAME: {:.2} ms", telemetry.frame_time_ms),
             x,
             y,
@@ -144,7 +144,7 @@ impl View for TelemetryOverlay {
         y += line_h;
 
         // Pass timing breakdown
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  INPUT:  {:.2} ms", telemetry.input_time_ms),
             x,
             y,
@@ -152,7 +152,7 @@ impl View for TelemetryOverlay {
             theme::text_muted(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  LAYOUT: {:.2} ms", telemetry.layout_time_ms),
             x,
             y,
@@ -160,7 +160,7 @@ impl View for TelemetryOverlay {
             theme::text_muted(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  STATE:  {:.2} ms", telemetry.state_flush_time_ms),
             x,
             y,
@@ -168,7 +168,7 @@ impl View for TelemetryOverlay {
             theme::text_muted(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  DRAW:   {:.2} ms", telemetry.draw_time_ms),
             x,
             y,
@@ -176,7 +176,7 @@ impl View for TelemetryOverlay {
             theme::text_muted(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  SUBMIT: {:.2} ms", telemetry.gpu_submit_time_ms),
             x,
             y,
@@ -186,9 +186,9 @@ impl View for TelemetryOverlay {
         y += 25.0;
 
         // GPU Stats
-        renderer.draw_text("GPU_RESOURCES", x, y, 12.0, theme::warning());
+        renderer.draw_text_raw("GPU_RESOURCES", x, y, 12.0, theme::warning());
         y += 20.0;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("VRAM_TOTAL: {:.2} MB", telemetry.vram_usage_mb),
             x,
             y,
@@ -196,7 +196,7 @@ impl View for TelemetryOverlay {
             theme::text(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  TEX: {:.2} MB", telemetry.vram_textures_mb),
             x,
             y,
@@ -204,7 +204,7 @@ impl View for TelemetryOverlay {
             theme::text_muted(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("  BUF: {:.2} MB", telemetry.vram_buffers_mb),
             x,
             y,
@@ -214,7 +214,7 @@ impl View for TelemetryOverlay {
         y += 25.0;
 
         // Draw calls & Vertices
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("DRAW_CALLS: {}", telemetry.draw_calls),
             x,
             y,
@@ -222,7 +222,7 @@ impl View for TelemetryOverlay {
             theme::text(),
         );
         y += line_h;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("VERTICES:   {}", telemetry.vertices),
             x,
             y,

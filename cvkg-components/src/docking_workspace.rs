@@ -101,7 +101,7 @@ impl View for DockingWorkspace {
         };
         renderer.fill_rect(header_rect, theme::surface_elevated());
         renderer.stroke_rect(header_rect, theme::border(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Docking Workspace",
             header_rect.x + 12.0,
             header_rect.y + 14.0,
@@ -131,7 +131,7 @@ impl View for DockingWorkspace {
                 } else {
                     theme::text_muted()
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &panel.title,
                     sidebar_rect.x + 12.0,
                     current_y,
@@ -386,7 +386,7 @@ impl View for WorkspaceTabs {
             } else {
                 theme::text_muted()
             };
-            renderer.draw_text(&tab.label, tab_rect.x + 8.0, tab_rect.y + 10.0, 13.0, color);
+            renderer.draw_text_raw(&tab.label, tab_rect.x + 8.0, tab_rect.y + 10.0, 13.0, color);
 
             if is_active {
                 renderer.stroke_rect(tab_rect, theme::accent(), 1.0);

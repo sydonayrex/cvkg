@@ -178,7 +178,7 @@ impl View for RadioGroup {
             }
 
             // Label text
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &option.label,
                 rect.x + 26.0,
                 rect.y + y_offset + 7.0,
@@ -188,7 +188,7 @@ impl View for RadioGroup {
 
             // Optional description
             if let Some(ref desc) = option.description {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     desc,
                     rect.x + 26.0,
                     rect.y + y_offset + 22.0,

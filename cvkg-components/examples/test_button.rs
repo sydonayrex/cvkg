@@ -32,7 +32,7 @@ impl cvkg_core::View for TestButton {
         // Label text
         let text_x = rect.x + 8.0;
         let text_y = rect.y + (rect.height - 14.0) / 2.0;
-        renderer.draw_text(&self.label, text_x, text_y, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text_raw(self.label, text_x, text_y, 14.0, [1.0, 1.0, 1.0, 1.0]);
 
         renderer.pop_vnode();
     }

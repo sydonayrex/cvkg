@@ -91,8 +91,8 @@ impl View for SankeyChart {
                 flow_h.max(1.0),
             );
 
-            renderer.draw_text(from, left_x - 10.0, left_y - 8.0, 9.0, theme::text_muted());
-            renderer.draw_text(to, right_x, right_y - 8.0, 9.0, theme::text_muted());
+            renderer.draw_text_raw(from, left_x - 10.0, left_y - 8.0, 9.0, theme::text_muted());
+            renderer.draw_text_raw(to, right_x, right_y - 8.0, 9.0, theme::text_muted());
 
             left_y += flow_h + 10.0;
             right_y += flow_h + 10.0;

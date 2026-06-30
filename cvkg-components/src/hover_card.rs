@@ -86,7 +86,7 @@ impl View for HoverCard {
 
         // Render trigger text
         renderer.push_vnode(trigger_rect, "HoverCardTrigger");
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.trigger,
             rect.x,
             rect.y + (rect.height - FONT_SM) / 2.0,
@@ -161,7 +161,7 @@ impl View for HoverCard {
             renderer.stroke_rounded_rect(card_rect, RADIUS_LG, theme::border(), 1.0);
 
             // Content text
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.content,
                 card_rect.x + SPACE_MD,
                 card_rect.y + (card_rect.height - FONT_SM) / 2.0,

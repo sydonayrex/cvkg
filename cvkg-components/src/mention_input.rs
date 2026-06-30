@@ -115,7 +115,7 @@ impl View for MentionInput {
                 };
 
                 renderer.push_vnode(item_rect, "MentionOption");
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     item,
                     item_rect.x + SPACE_SM,
                     item_rect.y + (item_h - FONT_BASE) / 2.0,

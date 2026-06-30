@@ -78,7 +78,7 @@ impl<V: View> View for Popconfirm<V> {
             renderer.stroke_rounded_rect(overlay_rect, RADIUS_MD, theme::border(), 1.0);
 
             // Draw message
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.message,
                 overlay_rect.x + SPACE_SM,
                 overlay_rect.y + 8.0,

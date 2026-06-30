@@ -178,7 +178,7 @@ impl<V: View> TrustMark<V> {
                 );
             }
             IndicatorStyle::QuestionMark => {
-                renderer.draw_text("?", cx - 3.0, cy + 4.0, 10.0, color);
+                renderer.draw_text_raw("?", cx - 3.0, cy + 4.0, 10.0, color);
             }
         }
     }

@@ -78,7 +78,7 @@ impl View for Editable {
         } else {
             // Render label text with edit-hover cue
             renderer.fill_rounded_rect(rect, 4.0, [0.0, 0.0, 0.0, 0.0]); // Transparent default
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.text,
                 rect.x + 4.0,
                 rect.y + (rect.height - 14.0) / 2.0,

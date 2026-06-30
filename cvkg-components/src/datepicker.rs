@@ -262,12 +262,12 @@ impl DatePicker {
         let text_color = [1.0, 1.0, 1.0, 1.0];
         let text_x = rect.x + 10.0;
         let text_y = rect.y + (rect.height - 14.0) / 2.0;
-        renderer.draw_text(&text, text_x, text_y, 14.0, text_color);
+        renderer.draw_text_raw(&text, text_x, text_y, 14.0, text_color);
 
         // Calendar icon on the right
         let icon_x = rect.x + rect.width - 28.0;
         let icon_y = rect.y + (rect.height - 14.0) / 2.0;
-        renderer.draw_text("\u{1F4C5}", icon_x, icon_y, 14.0, [1.0, 1.0, 1.0, 0.8]);
+        renderer.draw_text_raw("\u{1F4C5}", icon_x, icon_y, 14.0, [1.0, 1.0, 1.0, 0.8]);
 
         renderer.pop_vnode();
     }
@@ -319,7 +319,7 @@ impl DatePicker {
             width: 24.0,
             height: 24.0,
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "<",
             prev_btn_rect.x + 6.0,
             prev_btn_rect.y + 4.0,
@@ -332,7 +332,7 @@ impl DatePicker {
         let (tw, _th) = renderer.measure_text(&label, 14.0);
         let label_x = header_rect.x + (header_rect.width - tw) / 2.0;
         let label_y = header_rect.y + (header_h - 14.0) / 2.0;
-        renderer.draw_text(&label, label_x, label_y, 14.0, theme::text());
+        renderer.draw_text_raw(&label, label_x, label_y, 14.0, theme::text());
 
         // Next month button
         let next_btn_rect = Rect {
@@ -341,7 +341,7 @@ impl DatePicker {
             width: 24.0,
             height: 24.0,
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             ">",
             next_btn_rect.x + 6.0,
             next_btn_rect.y + 4.0,
@@ -358,7 +358,7 @@ impl DatePicker {
         for (i, day_name) in day_hdrs.iter().enumerate() {
             let cx = pop_rect.x + i as f32 * cell_w + cell_w / 2.0;
             let (tw, _th) = renderer.measure_text(day_name, 11.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 day_name,
                 cx - tw / 2.0,
                 grid_y_start + (cell_h - 11.0) / 2.0,
@@ -435,7 +435,7 @@ impl DatePicker {
                     // Dimmed days from adjacent months
                     let day_str = format!("{}", day_num);
                     let (tw, _th) = renderer.measure_text(&day_str, 12.0);
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &day_str,
                         cell_x + (cell_w - tw) / 2.0,
                         cell_y + (cell_h - 12.0) / 2.0,
@@ -532,7 +532,7 @@ impl DatePicker {
                     } else {
                         theme::text()
                     };
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &day_str,
                         cell_x + (cell_w - tw) / 2.0,
                         cell_y + (cell_h - 12.0) / 2.0,

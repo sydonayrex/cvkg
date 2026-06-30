@@ -89,7 +89,7 @@ impl View for LokiGlitch {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if cvkg_core::load_system_state().realm == cvkg_core::UiFidelityLevel::Midgard {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.content,
                 rect.x,
                 rect.y,
@@ -100,7 +100,7 @@ impl View for LokiGlitch {
         }
 
         let t = renderer.elapsed_time();
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.content,
             rect.x,
             rect.y,
@@ -109,7 +109,7 @@ impl View for LokiGlitch {
         );
 
         if (t * 10.0).sin().abs() > 0.8 {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.content,
                 rect.x + (t * 15.0).sin() * self.glitch_intensity,
                 rect.y,
@@ -118,7 +118,7 @@ impl View for LokiGlitch {
             );
         }
         if (t * 7.0).cos().abs() > 0.85 {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.content,
                 rect.x - (t * 12.0).cos() * self.glitch_intensity,
                 rect.y,
@@ -371,7 +371,7 @@ impl View for FutharkFlow {
             5.0,
             0.8,
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &runes[rune_idx].to_string(),
             rx - 5.0,
             ry + 5.0,

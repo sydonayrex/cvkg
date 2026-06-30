@@ -233,7 +233,7 @@ where
             } else {
                 ""
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{}{}", col.header, sort_indicator),
                 col_rect.x + 8.0,
                 col_rect.y + 10.0,
@@ -342,7 +342,7 @@ where
 
                         // Draw expand/collapse arrow
                         let arrow = if is_expanded { "▼ " } else { "▶ " };
-                        renderer.draw_text(
+                        renderer.draw_text_raw(
                             arrow,
                             cx + indent - 12.0,
                             row_y + 8.0,
@@ -413,7 +413,7 @@ where
                 theme::with_alpha(theme::surface_elevated(), 0.95),
             );
             renderer.stroke_rounded_rect(bar_rect, 6.0, theme::accent(), 1.5);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{} items selected", self.bulk_selected.len()),
                 bar_rect.x + 16.0,
                 bar_rect.y + 12.0,

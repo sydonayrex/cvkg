@@ -118,7 +118,7 @@ impl View for NotificationCenterPanel {
         );
 
         // 4. Header title: "Notification Center"
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Notification Center",
             panel_rect.x + MARGIN,
             panel_rect.y + MARGIN + 4.0,
@@ -141,7 +141,7 @@ impl View for NotificationCenterPanel {
             let clear_text = "Clear All";
             let clear_x = panel_rect.x + panel_rect.width - MARGIN - 60.0;
             let clear_y = panel_rect.y + MARGIN + 4.0;
-            renderer.draw_text(clear_text, clear_x, clear_y, 12.0, theme::text_muted());
+            renderer.draw_text_raw(clear_text, clear_x, clear_y, 12.0, theme::text_muted());
 
             renderer.register_handler(
                 "pointerclick",
@@ -176,7 +176,7 @@ impl View for NotificationCenterPanel {
             // Draw grouped items
             for (app, notifs) in groups {
                 // Group Header
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &app.to_uppercase(),
                     panel_rect.x + MARGIN,
                     curr_y,
@@ -199,7 +199,7 @@ impl View for NotificationCenterPanel {
                     renderer.stroke_rounded_rect(card_rect, CARD_RADIUS, theme::border(), 0.5);
 
                     // Title
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &notif.title,
                         card_rect.x + 8.0,
                         card_rect.y + 8.0,
@@ -213,7 +213,7 @@ impl View for NotificationCenterPanel {
                     } else {
                         notif.body.clone()
                     };
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &display_body,
                         card_rect.x + 8.0,
                         card_rect.y + 24.0,
@@ -287,7 +287,7 @@ impl View for NotificationCenterPanel {
                             } else {
                                 theme::text()
                             };
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 &action.title,
                                 btn_x + 6.0,
                                 btn_y + 4.0,
@@ -327,7 +327,7 @@ impl View for NotificationCenterPanel {
             }
         } else {
             // Draw empty state
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "No Notifications",
                 panel_rect.x + MARGIN,
                 curr_y + 16.0,

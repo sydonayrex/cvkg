@@ -67,7 +67,7 @@ impl View for SemanticMemoryExplorer {
             },
             theme::surface_elevated(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Semantic Memory",
             rect.x + 8.0,
             rect.y + 8.0,
@@ -123,7 +123,7 @@ impl View for SemanticMemoryExplorer {
             };
             renderer.fill_ellipse(cluster_rect, color);
             renderer.stroke_ellipse(cluster_rect, theme::with_alpha(theme::accent(), 0.8), 2.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &cluster.topic,
                 cx - 20.0,
                 cy + radius + 4.0,

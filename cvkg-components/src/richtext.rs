@@ -395,7 +395,7 @@ impl View for RichText {
                     );
                     let (cw, _ch) = renderer.measure_text(c, self.text_size - 2.0);
                     let x = self.aligned_x(rect.x + 5.0, rect.width - 10.0, cw, self.align);
-                    renderer.draw_text(c, x, y + 4.0, self.text_size - 2.0, theme::success());
+                    renderer.draw_text_raw(c, x, y + 4.0, self.text_size - 2.0, theme::success());
                     y += code_h + 5.0;
                 }
                 RichTextSegment::Image {

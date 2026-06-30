@@ -75,7 +75,7 @@ impl View for ShatterApp {
             renderer.mjolnir_fluid_shatter(center_rect, 1024, self.force, [0.0, 0.8, 1.0, 1.0]);
 
             let (tw, th) = renderer.measure_text("BERSERKER UNLEASHED", 24.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "BERSERKER UNLEASHED",
                 rect.width / 2.0 - tw / 2.0,
                 rect.height - 50.0 - th / 2.0,
@@ -87,7 +87,7 @@ impl View for ShatterApp {
             renderer.fill_rounded_rect(center_rect, 20.0, [0.0, 0.8, 1.0, 1.0]);
 
             let (tw, th) = renderer.measure_text("CLICK TO SHATTER", 20.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "CLICK TO SHATTER",
                 rect.width / 2.0 - tw / 2.0,
                 rect.height / 2.0 - th / 2.0, // Top-Left anchored centering

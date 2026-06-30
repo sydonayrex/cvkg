@@ -88,7 +88,7 @@ impl ApplicationHandler for ErrorApp {
 
                 boundary.render(renderer, error_rect);
 
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     "Press any key to toggle Error State",
                     280.0,
                     500.0,

@@ -42,7 +42,7 @@ impl View for ValkyrieIndicator {
             let mut c = self.color;
             c[3] *= alpha;
 
-            renderer.draw_text(&rune.to_string(), rx - 5.0, ry + 5.0, 12.0, c);
+            renderer.draw_text_raw(&rune.to_string(), rx - 5.0, ry + 5.0, 12.0, c);
         }
 
         // 2. Central Pulse

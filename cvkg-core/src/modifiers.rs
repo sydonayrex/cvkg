@@ -499,7 +499,7 @@ impl ViewModifier for ObservabilityOverlayModifier {
                 width: 200.0,
                 height: rect.height - 80.0,
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "HUGIN: THOUGHT",
                 hugin_rect.x,
                 hugin_rect.y,
@@ -507,7 +507,7 @@ impl ViewModifier for ObservabilityOverlayModifier {
                 [0.0, 1.0, 1.0, 0.6],
             );
             for (i, thought) in state.thoughts.iter().rev().take(10).enumerate() {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     thought,
                     hugin_rect.x,
                     hugin_rect.y + 20.0 + i as f32 * 14.0,
@@ -523,7 +523,7 @@ impl ViewModifier for ObservabilityOverlayModifier {
                 width: 200.0,
                 height: rect.height - 80.0,
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "MUNIN: MEMORY",
                 munin_rect.x,
                 munin_rect.y,
@@ -532,7 +532,7 @@ impl ViewModifier for ObservabilityOverlayModifier {
             );
             for (i, node) in state.nodes.iter().take(10).enumerate() {
                 let opacity = (node.weight.min(1.0)) * 0.5;
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &node.id,
                     munin_rect.x,
                     munin_rect.y + 20.0 + i as f32 * 14.0,
@@ -544,7 +544,7 @@ impl ViewModifier for ObservabilityOverlayModifier {
             // 5. Omniscient Focus Beams (Gungnir Beams)
             if let Some(focus_id) = &state.odin_focus {
                 // Visualize causal links to the focus node
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("EYE FOCUS: {}", focus_id),
                     rect.x + rect.width / 2.0 - 50.0,
                     rect.y + 20.0,

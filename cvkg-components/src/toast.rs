@@ -520,7 +520,7 @@ impl ToastManager {
 
         // 6. Title text
         let title_color = [accent[0], accent[1], accent[2], 1.0];
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &toast.title,
             rect.x + PADDING_X,
             rect.y + PADDING_Y,
@@ -534,7 +534,7 @@ impl ToastManager {
         } else {
             toast.message.clone()
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &display_msg,
             rect.x + PADDING_X,
             rect.y + PADDING_Y + TITLE_SIZE + 4.0,

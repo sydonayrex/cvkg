@@ -163,7 +163,7 @@ impl View for ToggleGroup {
 
             // Label (centered)
             let (tw, _) = renderer.measure_text(label, FONT_SM);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 item_rect.x + (item_w - tw) / 2.0,
                 item_rect.y + (item_h - FONT_SM) / 2.0,

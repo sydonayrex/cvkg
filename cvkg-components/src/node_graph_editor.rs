@@ -780,7 +780,7 @@ impl View for NodeGraphEditor {
             );
 
             // Title text
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &node.label,
                 node.x + 8.0,
                 node.y + 8.0,
@@ -824,7 +824,7 @@ impl View for NodeGraphEditor {
                 );
 
                 // Port label
-                renderer.draw_text(&port.label, px + 10.0, py - 4.0, 9.0, theme::text_muted());
+                renderer.draw_text_raw(&port.label, px + 10.0, py - 4.0, 9.0, theme::text_muted());
             }
 
             // Output ports (right side)
@@ -863,7 +863,7 @@ impl View for NodeGraphEditor {
 
                 // Port label (right-aligned)
                 let (tw, _) = renderer.measure_text(&port.label, 9.0);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &port.label,
                     px - 10.0 - tw,
                     py - 4.0,

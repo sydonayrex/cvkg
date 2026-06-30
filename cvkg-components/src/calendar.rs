@@ -105,7 +105,7 @@ impl View for TyrCalendar {
             self.selected_date.year
         );
         let (tw, th) = renderer.measure_text(&title, 16.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &title,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (header_h - th) / 2.0,
@@ -125,7 +125,7 @@ impl View for TyrCalendar {
             lingua_tong::t("datepicker.day.sa"),
         ];
         for (i, day) in days.iter().enumerate() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 day,
                 rect.x + i as f32 * day_w + (day_w - 10.0) / 2.0,
                 rect.y + header_h + 5.0,
@@ -192,7 +192,7 @@ impl View for TyrCalendar {
                 } else {
                     theme::text()
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &day_str,
                     cell_rect.x + (day_w - dtw) / 2.0,
                     cell_rect.y + (30.0 - dth) / 2.0,
@@ -323,14 +323,14 @@ impl View for LegacyDatePicker {
             theme::text()
         };
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &display,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
             text_color,
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "📅",
             rect.x + rect.width - 24.0,
             rect.y + (rect.height - 14.0) / 2.0,

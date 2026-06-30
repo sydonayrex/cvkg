@@ -78,7 +78,7 @@ impl View for NornirBar {
                         renderer.fill_rounded_rect(item_rect, 4.0, theme::hover());
                     }
 
-                    renderer.draw_text(label, x + 8.0, rect.y + 8.0, 13.0, theme::text());
+                    renderer.draw_text_raw(label, x + 8.0, rect.y + 8.0, 13.0, theme::text());
 
                     // If open, render submenu as floating glass panel
                     if self.open_menu == Some(i) {
@@ -89,7 +89,7 @@ impl View for NornirBar {
                 }
                 MenuItem::Action { label, .. } => {
                     let label_w = renderer.measure_text(label, 13.0).0;
-                    renderer.draw_text(label, x + 8.0, rect.y + 8.0, 13.0, theme::text());
+                    renderer.draw_text_raw(label, x + 8.0, rect.y + 8.0, 13.0, theme::text());
                     x += label_w + 16.0;
                 }
                 MenuItem::Separator => {
@@ -128,7 +128,7 @@ fn render_submenu(renderer: &mut dyn Renderer, items: &[MenuItem], anchor: Rect)
                 } else {
                     theme::text_dim()
                 };
-                renderer.draw_text(label, menu_rect.x + 8.0, iy + 5.0, 12.0, color);
+                renderer.draw_text_raw(label, menu_rect.x + 8.0, iy + 5.0, 12.0, color);
             }
             MenuItem::Separator => {
                 renderer.draw_line(

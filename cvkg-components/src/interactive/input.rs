@@ -208,7 +208,7 @@ impl View for Input {
         }
 
         // Render text
-        renderer.draw_text(
+        renderer.draw_text_raw(
             display_text,
             text_rect.x,
             rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -240,7 +240,7 @@ impl View for Input {
 
         // Error message
         if let Some(ref msg) = self.error_message {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 msg,
                 rect.x + 8.0,
                 rect.y + rect.height + 4.0,

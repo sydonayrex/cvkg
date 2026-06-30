@@ -99,7 +99,7 @@ impl View for InputGroup {
         if let Some(ref lead) = self.leading {
             let (lw, _) = renderer.measure_text(lead, FONT_BASE);
             let lead_w = lw + SPACE_SM * 2.0;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 lead,
                 rect.x + SPACE_SM,
                 rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -113,7 +113,7 @@ impl View for InputGroup {
         if let Some(ref trail) = self.trailing {
             let (tw, _) = renderer.measure_text(trail, FONT_BASE);
             let trail_w = tw + SPACE_SM * 2.0;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 trail,
                 rect.x + rect.width - trail_w + SPACE_SM,
                 rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -134,7 +134,7 @@ impl View for InputGroup {
             theme::text()
         };
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             display_text,
             input_x + SPACE_SM,
             rect.y + (rect.height - FONT_BASE) / 2.0,

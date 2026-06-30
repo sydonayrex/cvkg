@@ -45,7 +45,7 @@ impl View for StreamingText {
 
         // Draw the streaming text
         // (Assuming renderer.draw_text handles bounds wrapping natively for now)
-        renderer.draw_text(current_text, rect.x, rect.y, self.font_size, self.color);
+        renderer.draw_text_raw(current_text, rect.x, rect.y, self.font_size, self.color);
 
         // Calculate cursor position by measuring the current text
         let (width, _height) = renderer.measure_text(current_text, self.font_size);

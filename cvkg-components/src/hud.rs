@@ -75,7 +75,7 @@ impl View for Vegvísir {
                 theme::accent(),
             );
 
-            renderer.draw_text(&item.label, x - 20.0, y + 5.0, 10.0, theme::text());
+            renderer.draw_text_raw(&item.label, x - 20.0, y + 5.0, 10.0, theme::text());
         }
 
         let on_select = self.on_select.clone();
@@ -157,7 +157,7 @@ impl View for TacticalGauge {
 
         renderer.set_aria_role("meter");
         // 1. Label
-        renderer.draw_text(&self.label, rect.x, rect.y - 5.0, 10.0, theme::text());
+        renderer.draw_text_raw(&self.label, rect.x, rect.y - 5.0, 10.0, theme::text());
 
         // 2. Background Track
         renderer.fill_rect(
@@ -308,14 +308,14 @@ impl View for GjallarAlert {
         );
 
         // 4. Text Content (Inscribed wisdom)
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 12.0,
             rect.y + 10.0,
             14.0,
             accent_color,
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.message,
             rect.x + 12.0,
             rect.y + 28.0,

@@ -69,7 +69,7 @@ impl View for BarChart {
                 self.color,
             );
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 x,
                 rect.y + rect.height - padding + 8.0,

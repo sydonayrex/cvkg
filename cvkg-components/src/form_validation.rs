@@ -132,12 +132,12 @@ impl<V: View> View for FormField<V> {
 
         // --- Label ---
         let label_color = theme::text();
-        renderer.draw_text(&self.label, rect.x, rect.y + 2.0, 13.0, label_color);
+        renderer.draw_text_raw(&self.label, rect.x, rect.y + 2.0, 13.0, label_color);
 
         // Red asterisk for required fields
         if self.is_required {
             let (label_w, _) = renderer.measure_text(&self.label, 13.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "*",
                 rect.x + label_w + 4.0,
                 rect.y + 2.0,
@@ -164,7 +164,7 @@ impl<V: View> View for FormField<V> {
         // --- Error message ---
         if let Some(ref msg) = self.error_message {
             if self.is_dirty {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     msg,
                     rect.x,
                     content_top + content_height + 2.0,

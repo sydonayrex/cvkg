@@ -105,8 +105,8 @@ impl View for AssetBrowser {
                         2.0,
                     );
                 }
-                renderer.draw_text(&item.icon, x + 20.0, y + 10.0, 32.0, theme::info());
-                renderer.draw_text(
+                renderer.draw_text_raw(&item.icon, x + 20.0, y + 10.0, 32.0, theme::info());
+                renderer.draw_text_raw(
                     &item.name,
                     x + 4.0,
                     y + item_size - 20.0,
@@ -125,7 +125,7 @@ impl View for AssetBrowser {
                     height: row_h,
                 };
                 renderer.fill_rect(item_rect, theme::button_ghost_bg());
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("{} {}", item.icon, item.name),
                     item_rect.x + 4.0,
                     item_rect.y + 10.0,

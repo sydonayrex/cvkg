@@ -117,7 +117,7 @@ impl View for Scheduler {
             );
 
             // Time label
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{:02}:00", hour as i32),
                 x - 15.0,
                 rect.y + 16.0,
@@ -157,7 +157,7 @@ impl View for Scheduler {
             renderer.stroke_rounded_rect(ev_rect, 4.0, border_color, 1.0);
 
             // Draw event title
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &ev.title,
                 ev_x + 8.0,
                 ev_y + event_h / 2.0 - 4.0,
@@ -276,7 +276,7 @@ impl View for Gantt {
                 ],
                 1.0,
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("Day {:.0}", d),
                 x + 4.0,
                 rect.y + 16.0,
@@ -294,7 +294,7 @@ impl View for Gantt {
             let y = rect.y + 40.0 + i as f32 * row_h;
 
             // Draw task name label
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &task.name,
                 rect.x + 10.0,
                 y + row_h / 2.0 - 4.0,

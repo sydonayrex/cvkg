@@ -57,7 +57,7 @@ impl View for TelemetryView {
         renderer.fill_rounded_rect(fill_rect, 4.0, self.color);
         let text = format!("{}: {:.1}{}", self.label, self.value, self.unit);
         let (tw, th) = renderer.measure_text(&text, 10.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &text,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - th) / 2.0,

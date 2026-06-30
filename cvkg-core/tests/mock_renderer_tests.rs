@@ -15,7 +15,7 @@ mod mock_renderer_tests {
     #[test]
     fn test_mock_renderer_records_text() {
         let mut renderer = MockRenderer::new();
-        renderer.draw_text("Hello", 100.0, 200.0, 14.0, [0.0, 0.0, 0.0, 1.0]);
+        renderer.draw_text_raw("Hello", 100.0, 200.0, 14.0, [0.0, 0.0, 0.0, 1.0]);
         renderer.assert_draw_call_count(1);
         renderer.assert_text_rendered("Hello");
     }

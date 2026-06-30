@@ -79,7 +79,7 @@ impl View for HrungnirSegmented {
             } else {
                 [0.7, 0.7, 0.75, 1.0]
             };
-            renderer.draw_text(label, x - w / 2.0, rect.y + 8.0, 12.0, color);
+            renderer.draw_text_raw(label, x - w / 2.0, rect.y + 8.0, 12.0, color);
         }
     }
 }

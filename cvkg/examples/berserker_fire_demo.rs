@@ -559,7 +559,7 @@ impl ApplicationHandler for App {
                             };
                             renderer.bifrost(rect1, 16.0, 1.0, 0.4);
                             let (tw, th) = renderer.measure_text("CVKG !!!!", 28.0);
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 "CVKG !!!!",
                                 rect1.x + (card_width - tw) * 0.5,
                                 rect1.y + (card_height - th) * 0.5,
@@ -579,7 +579,7 @@ impl ApplicationHandler for App {
                                 height: card_rect.height,
                             };
                             renderer.bifrost(rect2, 16.0, 1.0, 0.4);
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 "CVKG !!!!",
                                 rect2.x + (card_width - tw) * 0.5,
                                 rect2.y + (card_height - th) * 0.5,
@@ -591,7 +591,7 @@ impl ApplicationHandler for App {
                             // Draw normal card
                             renderer.bifrost(card_rect, 16.0, 1.0, 0.4);
                             let (tw, th) = renderer.measure_text("CVKG !!!!", 28.0);
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 "CVKG !!!!",
                                 card_x + (card_width - tw) * 0.5,
                                 card_y + (card_height - th) * 0.5,
@@ -627,7 +627,7 @@ impl ApplicationHandler for App {
                     },
                     [0.0, 0.0, 0.0, 0.7],
                 );
-                renderer.draw_text(&info, 18.0, 42.0, 32.0, [0.0, 1.0, 0.8, 1.0]);
+                renderer.draw_text_raw(info, 18.0, 42.0, 32.0, [0.0, 1.0, 0.8, 1.0]);
 
                 // Upload vertex data to GPU before render passes
                 renderer.render_frame();

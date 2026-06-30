@@ -37,7 +37,7 @@ async fn test_pipeline_ingestion_latency() {
         [0.02, 0.02, 0.05, 1.0],
     );
 
-    renderer.draw_text("Latency Test", 100.0, 100.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
+    renderer.draw_text_raw("Latency Test", 100.0, 100.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
 
     renderer.render_frame();
     renderer.end_frame(encoder);
@@ -59,7 +59,7 @@ async fn test_pipeline_ingestion_latency() {
         },
         [0.02, 0.02, 0.05, 1.0],
     );
-    renderer.draw_text("Latency Test", 100.0, 100.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
+    renderer.draw_text_raw("Latency Test", 100.0, 100.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
     renderer.render_frame();
     renderer.end_frame(encoder2);
 

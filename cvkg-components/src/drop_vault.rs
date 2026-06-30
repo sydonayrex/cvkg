@@ -178,7 +178,7 @@ impl View for DropVault {
             crate::lingua_tong::t("dropvault.browse")
         };
         let (tw, _th) = renderer.measure_text(&prompt, 14.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &prompt,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + 20.0,
@@ -271,7 +271,7 @@ fn render_upload_entry(renderer: &mut dyn Renderer, entry: &VaultEntry, rect: Re
     // File name + size
     let size_str = format_file_size(entry.file_info.size);
     let label = format!("{} ({})", entry.file_info.name, size_str);
-    renderer.draw_text(&label, rect.x + 4.0, rect.y + 4.0, 12.0, theme::text());
+    renderer.draw_text_raw(&label, rect.x + 4.0, rect.y + 4.0, 12.0, theme::text());
 
     // Progress bar
     let bar_y = rect.y + 22.0;
@@ -307,7 +307,7 @@ fn render_upload_entry(renderer: &mut dyn Renderer, entry: &VaultEntry, rect: Re
             format!("Error: {}", msg)
         }
     };
-    renderer.draw_text(
+    renderer.draw_text_raw(
         &status_text,
         rect.x + 4.0,
         rect.y + 38.0,

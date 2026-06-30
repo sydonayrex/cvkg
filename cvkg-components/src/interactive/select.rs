@@ -88,7 +88,7 @@ impl<V: Clone + View> View for Select<V> {
             .and_then(|i| self.options.get(i))
             .map(|(l, _)| l.as_str())
             .unwrap_or(&self.placeholder);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             display_text,
             rect.x + 12.0,
             rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -101,7 +101,7 @@ impl<V: Clone + View> View for Select<V> {
         );
 
         // Chevron
-        renderer.draw_text(
+        renderer.draw_text_raw(
             if is_open { "▲" } else { "▼" },
             rect.x + rect.width - 20.0,
             rect.y + (rect.height - FONT_BASE) / 2.0,
@@ -150,7 +150,7 @@ impl<V: Clone + View> View for Select<V> {
                     renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::list_item_hover());
                 }
 
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     label,
                     item_rect.x + 12.0,
                     item_rect.y + (item_height - FONT_BASE) / 2.0,
@@ -353,14 +353,14 @@ impl View for Dropdown {
             .get(self.selection)
             .cloned()
             .unwrap_or_default();
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &selected,
             rect.x + 8.0,
             rect.y + (rect.height - 14.0) / 2.0,
             14.0,
             theme::text(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             if is_expanded { "▲" } else { "▼" },
             rect.x + rect.width - 20.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -397,7 +397,7 @@ impl View for Dropdown {
                     renderer.fill_rect(item_rect, theme::list_item_selected());
                 }
 
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     opt,
                     item_rect.x + 8.0,
                     item_rect.y + (item_rect.height - 14.0) / 2.0,
@@ -539,7 +539,7 @@ impl View for Picker {
             .get(self.selection)
             .cloned()
             .unwrap_or_default();
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &selected_text,
             rect.x + 10.0,
             rect.y + (rect.height - 14.0) / 2.0,
@@ -548,7 +548,7 @@ impl View for Picker {
         );
 
         // Chevron
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "▼",
             rect.x + rect.width - 20.0,
             rect.y + (rect.height - 14.0) / 2.0,

@@ -151,7 +151,7 @@ impl View for PromptForge {
         for segment in &self.segments {
             match segment {
                 ForgeSegment::Text(text) => {
-                    renderer.draw_text(text, x, y, 14.0, theme::text());
+                    renderer.draw_text_raw(text, x, y, 14.0, theme::text());
                     let (w, _) = renderer.measure_text(text, 14.0);
                     x += w;
                 }
@@ -167,7 +167,7 @@ impl View for PromptForge {
                     } else {
                         theme::accent()
                     };
-                    renderer.draw_text(&var_text, x, y, 14.0, color);
+                    renderer.draw_text_raw(&var_text, x, y, 14.0, color);
                     let (w, _) = renderer.measure_text(&var_text, 14.0);
                     x += w;
                 }

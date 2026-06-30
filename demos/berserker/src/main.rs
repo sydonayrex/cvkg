@@ -768,8 +768,8 @@ fn draw_nornir_bar(
         let (lw, lh) = r.measure_text(label, 13.0);
         let tx = x + (*width - lw) / 2.0;
         let ty = (28.0 - lh) * 0.5;
-        r.draw_text(label, tx + 1.0, ty + 1.0, 13.0, [0.0, 0.0, 0.0, 0.35]);
-        r.draw_text(label, tx, ty, 13.0, [0.95, 0.95, 0.98, 1.0]);
+        r.draw_text_raw(label, tx + 1.0, ty + 1.0, 13.0, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text_raw(label, tx, ty, 13.0, [0.95, 0.95, 0.98, 1.0]);
         let active_menu_clone = active_menu.clone();
         let h_closure = Arc::new(move |_| {
             let current = active_menu_clone.get();
@@ -790,28 +790,28 @@ fn draw_nornir_bar(
     let (tw, tlh) = r.measure_text(&title_str, 14.0);
     let title_x = (w - tw) / 2.0;
     let title_y = (28.0 - tlh) * 0.5;
-    r.draw_text(
+    r.draw_text_raw(
         &title_str,
         title_x + 1.0,
         title_y + 1.0,
         14.0,
         [0.0, 0.0, 0.0, 0.35],
     );
-    r.draw_text(&title_str, title_x, title_y, 14.0, [1.0, 0.35, 0.15, 1.0]);
+    r.draw_text_raw(&title_str, title_x, title_y, 14.0, [1.0, 0.35, 0.15, 1.0]);
 
     // Right-aligned, vertically centered rage meter
     let rage_str = format!("Rage: {:.0}%", _rage.get());
     let (rw, rlh) = r.measure_text(&rage_str, 12.0);
     let rage_x = w - rw - 16.0;
     let rage_y = (28.0 - rlh) * 0.5;
-    r.draw_text(
+    r.draw_text_raw(
         &rage_str,
         rage_x + 1.0,
         rage_y + 1.0,
         12.0,
         [0.0, 0.0, 0.0, 0.35],
     );
-    r.draw_text(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.55, 1.0]);
+    r.draw_text_raw(&rage_str, rage_x, rage_y, 12.0, [0.0, 1.0, 0.55, 1.0]);
 
     // Render the active dropdown menu if open
     if let Some(open_idx) = active_menu.get() {
@@ -1030,8 +1030,8 @@ fn draw_dock(
         let (tw, th) = r.measure_text(icon, text_size);
         let tx = ix + (icon_size - tw) / 2.0;
         let ty = dock_rect.y + (dock_rect.height - th) / 2.0;
-        r.draw_text(icon, tx + 1.0, ty + 1.0, text_size, [0.0, 0.0, 0.0, 0.35]);
-        r.draw_text(icon, tx, ty, text_size, [0.98, 0.98, 1.0, 1.0]);
+        r.draw_text_raw(icon, tx + 1.0, ty + 1.0, text_size, [0.0, 0.0, 0.0, 0.35]);
+        r.draw_text_raw(icon, tx, ty, text_size, [0.98, 0.98, 1.0, 1.0]);
 
         if i < 3 {
             // Center the dot horizontally below the icon cell
@@ -1142,14 +1142,14 @@ fn draw_glass_cards(
             };
             r.fill_glass_rect_with_intensity(rect, 12.0, 12.0, 0.38);
             let (rw, rh) = r.measure_text(runes[i % runes.len()], 32.0);
-            r.draw_text(
+            r.draw_text_raw(
                 runes[i % runes.len()],
                 card.x - rw / 2.0 + 1.0,
                 card.y - rh / 2.0 + 1.0,
                 32.0,
                 [0.0, 0.0, 0.0, 0.35],
             );
-            r.draw_text(
+            r.draw_text_raw(
                 runes[i % runes.len()],
                 card.x - rw / 2.0,
                 card.y - rh / 2.0,
@@ -1531,28 +1531,28 @@ fn draw_corner_buttons(
         let (cw, ch) = r.measure_text(corner.2, 32.0);
         let text_x = corner.0 + (btn_size - cw) / 2.0;
         let text_y = corner.1 + (btn_size - ch) / 2.0;
-        r.draw_text(
+        r.draw_text_raw(
             corner.2,
             text_x + 1.0,
             text_y + 1.0,
             32.0,
             [0.0, 0.0, 0.0, 0.35],
         );
-        r.draw_text(corner.2, text_x, text_y, 32.0, [1.0, 1.0, 1.0, 1.0]);
+        r.draw_text_raw(corner.2, text_x, text_y, 32.0, [1.0, 1.0, 1.0, 1.0]);
 
         let val = counters[i].get();
         let val_str = format!("{}", val);
         let (_vw, vh) = r.measure_text(&val_str, 24.0);
         let value_x = corner.0 + btn_size + 10.0;
         let value_y = corner.1 + (btn_size - vh) / 2.0;
-        r.draw_text(
+        r.draw_text_raw(
             &val_str,
             value_x + 1.0,
             value_y + 1.0,
             24.0,
             [0.0, 0.0, 0.0, 0.35],
         );
-        r.draw_text(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.55, 1.0]);
+        r.draw_text_raw(&val_str, value_x, value_y, 24.0, [0.0, 1.0, 0.55, 1.0]);
 
         let c_signal = counters[i].clone();
         let r_signal = rage.clone();

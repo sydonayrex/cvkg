@@ -60,7 +60,7 @@ impl View for MjolnirSlider {
 
         // 3. Runic Etching
         let label_text = format!("{}: {:.0}%", self.label, normalized * 100.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &label_text,
             rect.x + 8.0,
             rect.y + rect.height / 2.0 + 5.0,

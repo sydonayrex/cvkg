@@ -232,7 +232,7 @@ impl View for HlinAccessibility {
         };
         renderer.fill_rect(rect, bg);
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Hlin Accessibility",
             rect.x + 10.0,
             rect.y + 20.0,
@@ -253,12 +253,12 @@ impl View for HlinAccessibility {
             "Reduced Motion: OFF"
         };
 
-        renderer.draw_text(hc_text, rect.x + 10.0, status_y, 10.0, theme::success());
-        renderer.draw_text(rm_text, rect.x + 130.0, status_y, 10.0, theme::success());
+        renderer.draw_text_raw(hc_text, rect.x + 10.0, status_y, 10.0, theme::success());
+        renderer.draw_text_raw(rm_text, rect.x + 130.0, status_y, 10.0, theme::success());
 
         // Focus indicator
         if let Some(focused) = &self.focus_state.focused_id {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("Focused: {}", focused),
                 rect.x + 10.0,
                 status_y + 20.0,
@@ -285,7 +285,7 @@ impl View for HlinAccessibility {
                 AriaRole::Contentinfo => "[Ci]",
                 _ => "[ ]",
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{} {} - {}", role_icon, node.id, node.label),
                 rect.x + 15.0,
                 y,

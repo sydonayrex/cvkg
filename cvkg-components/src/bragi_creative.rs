@@ -124,7 +124,7 @@ impl View for BragiCreative {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, theme::surface_elevated());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Bragi Creative Suite",
             rect.x + 10.0,
             rect.y + 20.0,
@@ -155,7 +155,7 @@ impl View for BragiCreative {
                 CreativeType::Svg => "⚡",
                 CreativeType::Texture => "🎨",
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{} {}", icon, comp.name),
                 rect.x + 15.0,
                 y + 8.0,

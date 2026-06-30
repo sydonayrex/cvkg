@@ -213,12 +213,12 @@ impl<T: View> View for DropdownMenu<T> {
 
             // Icon
             if let Some(ref icon) = item.icon {
-                renderer.draw_text(icon, text_x, item_rect.y + 8.0, 12.0, theme::text_muted());
+                renderer.draw_text_raw(icon, text_x, item_rect.y + 8.0, 12.0, theme::text_muted());
                 text_x += 20.0;
             }
 
             // Label
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.label,
                 text_x,
                 item_rect.y + 8.0,
@@ -228,7 +228,7 @@ impl<T: View> View for DropdownMenu<T> {
 
             // Shortcut text (right-aligned)
             if let Some(ref shortcut) = item.shortcut {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     shortcut,
                     item_rect.x + item_rect.width - 50.0,
                     item_rect.y + 8.0,

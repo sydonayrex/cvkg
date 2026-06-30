@@ -84,7 +84,7 @@ impl View for TextAnimate {
             TextAnimEffect::Fade => p,
             TextAnimEffect::Slide => {
                 let offset_y = (1.0 - p) * 20.0;
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &self.text,
                     rect.x,
                     rect.y + offset_y,
@@ -97,7 +97,7 @@ impl View for TextAnimate {
             TextAnimEffect::Scale => p,
             TextAnimEffect::Blur => p,
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x,
             rect.y,
@@ -187,7 +187,7 @@ impl View for TypewriterEffect {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "TypewriterEffect");
         let visible = &self.text[..self.revealed.min(self.text.len())];
-        renderer.draw_text(
+        renderer.draw_text_raw(
             visible,
             rect.x,
             rect.y + self.font_size,
@@ -313,7 +313,7 @@ impl View for NumberTicker {
                 prec = self.decimals
             )
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &formatted,
             rect.x,
             rect.y + self.font_size,
@@ -530,7 +530,7 @@ impl View for CardHoverEffect {
         }
         // Label
         if !self.label.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.label,
                 card_rect.x + 16.0,
                 card_rect.y + 28.0,
@@ -638,7 +638,7 @@ impl View for ExpandableCard {
         renderer.fill_rounded_rect(card_rect, RADIUS_XL, theme::surface_elevated());
         renderer.stroke_rounded_rect(card_rect, RADIUS_XL, theme::border(), 1.0);
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 16.0,
             rect.y + 24.0,
@@ -659,7 +659,7 @@ impl View for ExpandableCard {
         }
         // Summary
         if !self.summary.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.summary,
                 rect.x + 16.0,
                 rect.y + 44.0,
@@ -669,7 +669,7 @@ impl View for ExpandableCard {
         }
         // Detail (expanded)
         if self.progress > 0.0 && !self.detail.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.detail,
                 rect.x + 16.0,
                 rect.y + 60.0,
@@ -796,7 +796,7 @@ impl View for DraggableCard {
             );
         }
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             card_rect.x + 16.0,
             card_rect.y + 40.0,
@@ -805,7 +805,7 @@ impl View for DraggableCard {
         );
         // Description
         if !self.description.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.description,
                 card_rect.x + 16.0,
                 card_rect.y + 58.0,
@@ -931,7 +931,7 @@ impl View for ShimmerButton {
         }
         // Label
         let (tw, th) = renderer.measure_text(&self.label, 15.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + (self.width - tw) / 2.0,
             rect.y + (self.height - th) / 2.0,
@@ -1067,7 +1067,7 @@ impl View for RippleButton {
         }
         // Label
         let (tw, th) = renderer.measure_text(&self.label, 15.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.label,
             rect.x + (self.width - tw) / 2.0,
             rect.y + (self.height - th) / 2.0,
@@ -1200,7 +1200,7 @@ impl View for StatefulButton {
             }
             ButtonState::Idle => {
                 let (tw, th) = renderer.measure_text(&self.label, 15.0);
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &self.label,
                     rect.x + (self.width - tw) / 2.0,
                     rect.y + (self.height - th) / 2.0,

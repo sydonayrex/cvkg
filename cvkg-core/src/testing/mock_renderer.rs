@@ -60,13 +60,15 @@ pub enum DrawCall {
         text: String,
         x: f32,
         y: f32,
+        rect: Rect,
         size: f32,
         color: [f32; 4],
+        h_align: TextHAlign,
+        v_align: TextVAlign,
     },
     DrawTextCentered {
         text: String,
-        x: f32,
-        y: f32,
+        rect: Rect,
         size: f32,
         color: [f32; 4],
     },
@@ -246,20 +248,34 @@ impl Renderer for MockRenderer {
             stroke_width,
         });
     }
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: TextHAlign, v_align: TextVAlign) {
+        self.calls.push(DrawCall::DrawText {
+            text: text.to_string(),
+            x: rect.x,
+            y: rect.y,
+            rect: *rect,
+            size,
+            color,
+            h_align,
+            v_align,
+        });
+    }
+    fn draw_text_raw(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         self.calls.push(DrawCall::DrawText {
             text: text.to_string(),
             x,
             y,
             size,
             color,
+            h_align: TextHAlign::Left,
+            v_align: TextVAlign::Middle,
+            rect: Rect { x, y, width: 0.0, height: 0.0 },
         });
     }
-    fn draw_text_centered(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    fn draw_text_centered(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4]) {
         self.calls.push(DrawCall::DrawTextCentered {
             text: text.to_string(),
-            x,
-            y,
+            rect: *rect,
             size,
             color,
         });

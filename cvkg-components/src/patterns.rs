@@ -120,7 +120,7 @@ impl View for Wizard {
 
             // Step number text
             let number_text = &format!("{}", i + 1);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 number_text,
                 cx - 3.0,
                 line_y - 5.0,
@@ -135,7 +135,7 @@ impl View for Wizard {
                 } else {
                     theme::text_muted()
                 };
-                renderer.draw_text(label, cx - 20.0, line_y + 20.0, 10.0, text_color);
+                renderer.draw_text_raw(label, cx - 20.0, line_y + 20.0, 10.0, text_color);
             }
         }
     }
@@ -301,7 +301,7 @@ impl View for Login {
         renderer.stroke_rounded_rect(rect, 8.0, theme::border(), 1.0);
 
         // Header Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "SYSTEM LOGIN // AUTHORIZE",
             rect.x + 20.0,
             rect.y + 30.0,
@@ -318,7 +318,7 @@ impl View for Login {
         );
 
         // Username Label & Box
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.username_label,
             rect.x + 20.0,
             rect.y + 60.0,
@@ -335,7 +335,7 @@ impl View for Login {
         renderer.stroke_rounded_rect(user_box, 4.0, theme::border(), 1.0);
 
         // Password Label & Box
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.password_label,
             rect.x + 20.0,
             rect.y + 120.0,
@@ -350,7 +350,7 @@ impl View for Login {
         };
         renderer.fill_rounded_rect(pass_box, 4.0, theme::input_bg());
         renderer.stroke_rounded_rect(pass_box, 4.0, theme::border(), 1.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "••••••••",
             rect.x + 28.0,
             rect.y + 152.0,
@@ -378,7 +378,7 @@ impl View for Login {
         } else {
             "TRANSMIT ACCESS CODES"
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             button_text,
             rect.x + 35.0,
             rect.y + 205.0,
@@ -493,19 +493,19 @@ impl View for Settings {
             } else {
                 theme::text_muted()
             };
-            renderer.draw_text(cat, rect.x + 12.0, cat_y + 12.0, 11.0, text_color);
+            renderer.draw_text_raw(cat, rect.x + 12.0, cat_y + 12.0, 11.0, text_color);
         }
 
         // Active panel context label placeholder
         if let Some(cat_name) = self.categories.get(self.active_category) {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("SETTINGS // {}", cat_name.to_uppercase()),
                 divider_x + 20.0,
                 rect.y + 30.0,
                 12.0,
                 theme::accent(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 "Adjust parameters using control widgets in dashboard layout.",
                 divider_x + 20.0,
                 rect.y + 50.0,

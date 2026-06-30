@@ -42,7 +42,7 @@ pub fn render_mjolnir_frame(
             for rune in runes {
                 let x = rect.x + rect.width * rune.position;
                 let y = rect.y - 8.0;
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &rune.character.to_string(),
                     x,
                     y,

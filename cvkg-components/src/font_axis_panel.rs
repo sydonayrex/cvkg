@@ -170,7 +170,7 @@ impl View for FontAxisPanel {
 
         // Title
         let title = format!("{} — Variable Axes", self.family);
-        renderer.draw_text(&title, rect.x + padding, y + 14.0, 14.0, color_text_title());
+        renderer.draw_text_raw(&title, rect.x + padding, y + 14.0, 14.0, color_text_title());
         y += label_height + row_gap + 4.0;
 
         // One slider per axis
@@ -184,7 +184,7 @@ impl View for FontAxisPanel {
                 info.tag_string,
                 *value
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &label_text,
                 rect.x + padding,
                 y + 14.0,
@@ -229,7 +229,7 @@ impl View for FontAxisPanel {
         // COLRv1 toggle row
         y += 4.0;
         let toggle_row_h = 28.0;
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "COLRv1 Color Rendering",
             rect.x + padding,
             y + 14.0,

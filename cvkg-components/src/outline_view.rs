@@ -293,7 +293,7 @@ impl View for OutlineView {
             if i < flat.len() {
                 // We need to get the actual label -- for now use a placeholder
                 // In a real implementation, we'd store labels in the flat list
-                renderer.draw_text(&format!("Item {}", i), label_x, y + 4.0, 12.0, label_color);
+                renderer.draw_text_raw(&format!("Item {}", i), label_x, y + 4.0, 12.0, label_color);
             }
         }
 

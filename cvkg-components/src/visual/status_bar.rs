@@ -52,7 +52,7 @@ impl View for StatusBar {
             };
             renderer.fill_rect(seg_rect, seg.color);
             let (tw, th) = renderer.measure_text(&seg.label, 10.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &seg.label,
                 seg_rect.x + (seg_width - tw) / 2.0,
                 seg_rect.y + (rect.height - th) / 2.0,

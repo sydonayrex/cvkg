@@ -61,7 +61,7 @@ impl View for RunestoneDecoder {
         }
 
         let color = theme::accent(); // Cyan deciphering glow
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &display_text,
             rect.x,
             rect.y + rect.height * 0.8,

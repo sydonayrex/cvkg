@@ -29,7 +29,7 @@ impl View for HitTestView {
         renderer.fill_rect(rect, [0.02, 0.02, 0.05, 1.0]);
 
         // Title
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "CVKG INTERACTION TEST SUITE",
             rect.x + 40.0,
             rect.y + 60.0,
@@ -49,7 +49,7 @@ impl View for HitTestView {
         };
         renderer.fill_rounded_rect(button_rect, 8.0, [0.1, 0.1, 0.2, 1.0]);
         renderer.stroke_rect(button_rect, [0.0, 0.8, 1.0, 1.0], 2.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Click Me",
             button_rect.x + 50.0,
             button_rect.y + 32.0,
@@ -65,7 +65,7 @@ impl View for HitTestView {
             }),
         );
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &format!("Clicks: {}", state.click_count),
             content_x + 220.0,
             rect.y + 152.0,
@@ -103,7 +103,7 @@ impl View for HitTestView {
         })
         .render(renderer, toggle_rect);
 
-        renderer.draw_text(
+        renderer.draw_text_raw(
             if state.toggle {
                 "SYSTEM ONLINE"
             } else {

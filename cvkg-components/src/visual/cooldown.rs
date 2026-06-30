@@ -144,7 +144,7 @@ impl View for CooldownOverlay {
         if !self.label.is_empty() {
             let text_size = (self.size * 0.3).max(10.0).min(16.0);
             let (tw, th) = renderer.measure_text(&self.label, text_size);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.label,
                 cx - tw / 2.0,
                 cy - th / 2.0,

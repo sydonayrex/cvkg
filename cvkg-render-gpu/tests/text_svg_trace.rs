@@ -35,7 +35,7 @@ fn test_text_svg_rendering_trace() {
     );
 
     // Render Text (should write to atlas)
-    renderer.draw_text("Trace Text", 32.0, 32.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
+    renderer.draw_text_raw("Trace Text", 32.0, 32.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
 
     // Draw the whole atlas to the screen
     renderer.draw_image(
@@ -62,7 +62,7 @@ fn test_text_svg_rendering_trace() {
         },
         [0.0, 0.0, 0.0, 1.0],
     );
-    renderer.draw_text("Trace Text", 32.0, 32.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
+    renderer.draw_text_raw("Trace Text", 32.0, 32.0, 24.0, [1.0, 1.0, 1.0, 1.0]);
     renderer.draw_image(
         "__mega_heim",
         Rect {

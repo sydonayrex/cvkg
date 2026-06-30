@@ -1,6 +1,22 @@
 use crate::*;
 use crate::error_types::CvkgError;
 
+/// Vertical alignment of text within its bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextVAlign {
+    Top,
+    Middle,
+    Bottom,
+}
+
+/// Horizontal alignment of text within its bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TextHAlign {
+    Left,
+    Center,
+    Right,
+}
+
 pub trait ElapsedTime {
     /// Returns the cumulative time since the renderer started in seconds.
     fn elapsed_time(&self) -> f32;
@@ -174,7 +190,29 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     fn stroke_polygon(&mut self, _vertices: &[[f32; 2]], _color: [f32; 4], _stroke_width: f32) {}
 
     // ── Text ─────────────────────────────────────────────────────────────
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    /// Draw text aligned within a bounding box.
+    /// This is the primary method — callers should use this for proper
+    /// vertical and horizontal alignment within their layout rects.
+    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: TextHAlign, v_align: TextVAlign) {
+        // Default implementation delegates to draw_text_raw for backward compat
+        let text_w = self.measure_text(text, size).0;
+        let x = match h_align {
+            TextHAlign::Left => rect.x,
+            TextHAlign::Center => rect.x + (rect.width - text_w) / 2.0,
+            TextHAlign::Right => rect.x + rect.width - text_w,
+        };
+        let ascent = size * 0.8;
+        let y = match v_align {
+            TextVAlign::Top => rect.y + ascent,
+            TextVAlign::Middle => rect.y + (rect.height + ascent * 0.75) / 2.0,
+            TextVAlign::Bottom => rect.y + rect.height - (size - ascent),
+        };
+        self.draw_text_raw(text, x, y, size, color);
+    }
+
+    /// Draw text at a raw baseline position (x = left, y = baseline).
+    /// Use this when you need precise control over baseline positioning.
+    fn draw_text_raw(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
         let r = (color[0] * 255.0).clamp(0.0, 255.0) as u8;
         let g = (color[1] * 255.0).clamp(0.0, 255.0) as u8;
         let b = (color[2] * 255.0).clamp(0.0, 255.0) as u8;
@@ -194,9 +232,9 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
         }
     }
 
-    /// Draw centered text at the given position.
-    fn draw_text_centered(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        self.draw_text(text, x, y, size, color)
+    /// Draw text centered within a bounding box (convenience).
+    fn draw_text_centered(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4]) {
+        self.draw_text(text, rect, size, color, TextHAlign::Center, TextVAlign::Middle)
     }
 
     /// Measure the width and height of the specified text.

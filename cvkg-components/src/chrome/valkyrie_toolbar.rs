@@ -281,7 +281,7 @@ fn render_toolbar_item(
             } else {
                 x + 10.0
             };
-            renderer.draw_text(label, text_x, y + 7.0, 12.0, theme::text());
+            renderer.draw_text_raw(label, text_x, y + 7.0, 12.0, theme::text());
         }
         ToolbarItem::Segmented(seg) => {
             // Glass platter for segmented control
@@ -309,7 +309,7 @@ fn render_toolbar_item(
                 } else {
                     theme::text_muted()
                 };
-                renderer.draw_text(label, label_x, y + 7.0, 12.0, color);
+                renderer.draw_text_raw(label, label_x, y + 7.0, 12.0, color);
             }
         }
         ToolbarItem::SearchField(sf) => {
@@ -318,7 +318,7 @@ fn render_toolbar_item(
             renderer.fill_rounded_rect(item_rect, radius, theme::surface());
 
             // Search icon
-            renderer.draw_text("*", x + 8.0, y + 7.0, 12.0, theme::text_muted());
+            renderer.draw_text_raw("*", x + 8.0, y + 7.0, 12.0, theme::text_muted());
 
             // Query text or placeholder
             let text = if sf.query.is_empty() {
@@ -331,7 +331,7 @@ fn render_toolbar_item(
             } else {
                 theme::text()
             };
-            renderer.draw_text(text, x + 24.0, y + 7.0, 12.0, color);
+            renderer.draw_text_raw(text, x + 24.0, y + 7.0, 12.0, color);
         }
         ToolbarItem::Separator => {
             // Vertical separator line

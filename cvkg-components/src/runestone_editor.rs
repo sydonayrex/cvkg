@@ -40,7 +40,7 @@ impl View for RunestoneEditor {
 
         let lines: Vec<&str> = self.text.lines().collect();
         for (i, _) in lines.iter().enumerate() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &(i + 1).to_string(),
                 rect.x + 10.0,
                 rect.y + 20.0 + (i as f32 * 20.0),
@@ -62,7 +62,7 @@ impl View for RunestoneEditor {
                     _ => theme::text(),                               // White text
                 };
 
-                renderer.draw_text(word, current_x, y, 14.0, color);
+                renderer.draw_text_raw(word, current_x, y, 14.0, color);
                 let (w, _) = renderer.measure_text(word, 14.0);
                 current_x += w + 8.0;
             }

@@ -49,7 +49,7 @@ impl View for HringrPagination {
             height: rect.height,
         };
         renderer.fill_rounded_rect(prev_rect, 4.0, theme::surface());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "<",
             prev_rect.x + 10.0,
             prev_rect.y + 10.0,
@@ -78,7 +78,7 @@ impl View for HringrPagination {
                 renderer.stroke_rect(page_rect, theme::accent(), 1.0);
             }
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &i.to_string(),
                 page_rect.x + 10.0,
                 page_rect.y + 10.0,
@@ -96,7 +96,7 @@ impl View for HringrPagination {
             height: rect.height,
         };
         renderer.fill_rounded_rect(next_rect, 4.0, theme::surface());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             ">",
             next_rect.x + 10.0,
             next_rect.y + 10.0,

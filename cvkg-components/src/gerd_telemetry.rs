@@ -115,7 +115,7 @@ impl View for GerdTelemetry {
             },
             [0.08, 0.04, 0.08, 1.0],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Gerd Telemetry Dashboard",
             rect.x + 10.0,
             rect.y + 9.0,
@@ -140,7 +140,7 @@ impl View for GerdTelemetry {
                 },
                 theme::surface(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("⚠ {}", alert.message),
                 rect.x + 15.0,
                 alert_y + 5.0,
@@ -183,9 +183,9 @@ impl View for GerdTelemetry {
                 }
             }
 
-            renderer.draw_text(&series.name, rect.x + 10.0, series_y, 10.0, series.color);
+            renderer.draw_text_raw(&series.name, rect.x + 10.0, series_y, 10.0, series.color);
             if let Some(last) = series.points.last() {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!("{:.1}{}", last.value, last.unit),
                     rect.x + rect.width - 60.0,
                     series_y,

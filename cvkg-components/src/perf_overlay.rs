@@ -169,14 +169,14 @@ impl View for PerfOverlay {
 
         // Title
         let title_baseline = renderer.measure_text_baseline("Performance", 14.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Performance",
             text_x + 1.0,
             y + 1.0 - title_baseline,
             14.0,
             [0.0, 0.0, 0.0, 0.75],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "Performance",
             text_x,
             y - title_baseline,
@@ -201,22 +201,22 @@ impl View for PerfOverlay {
         let frame_text = format!("{:.1}ms", self.current_frame_ms);
         let fps_baseline = renderer.measure_text_baseline(&fps_text, 16.0);
         let frame_baseline = renderer.measure_text_baseline(&frame_text, 13.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &fps_text,
             text_x + 1.0,
             y + 1.0 - fps_baseline,
             16.0,
             [0.0, 0.0, 0.0, 0.75],
         );
-        renderer.draw_text(&fps_text, text_x, y - fps_baseline, 16.0, fps_color);
-        renderer.draw_text(
+        renderer.draw_text_raw(&fps_text, text_x, y - fps_baseline, 16.0, fps_color);
+        renderer.draw_text_raw(
             &frame_text,
             text_x + 111.0,
             y + 1.0 - frame_baseline,
             13.0,
             [0.0, 0.0, 0.0, 0.75],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &frame_text,
             text_x + 110.0,
             y - frame_baseline,
@@ -228,14 +228,14 @@ impl View for PerfOverlay {
         // Stats
         let draw_calls_text = format!("Draw Calls: {}", self.draw_calls);
         let draw_calls_baseline = renderer.measure_text_baseline(&draw_calls_text, 11.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &draw_calls_text,
             text_x + 1.0,
             y + 1.0 - draw_calls_baseline,
             11.0,
             [0.0, 0.0, 0.0, 0.7],
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &draw_calls_text,
             text_x,
             y - draw_calls_baseline,
@@ -245,14 +245,14 @@ impl View for PerfOverlay {
         y += 18.0;
         let geom_text = format!("Tris: {}  Verts: {}", self.triangles, self.vertices);
         let geom_baseline = renderer.measure_text_baseline(&geom_text, 11.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &geom_text,
             text_x + 1.0,
             y + 1.0 - geom_baseline,
             11.0,
             [0.0, 0.0, 0.0, 0.7],
         );
-        renderer.draw_text(&geom_text, text_x, y - geom_baseline, 11.0, theme::text());
+        renderer.draw_text_raw(&geom_text, text_x, y - geom_baseline, 11.0, theme::text());
         y += 18.0;
         let stats_text = format!(
             "Avg: {:.1}ms  P99: {:.1}ms",
@@ -260,14 +260,14 @@ impl View for PerfOverlay {
             self.p99_frame_ms()
         );
         let stats_baseline = renderer.measure_text_baseline(&stats_text, 11.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &stats_text,
             text_x + 1.0,
             y + 1.0 - stats_baseline,
             11.0,
             [0.0, 0.0, 0.0, 0.7],
         );
-        renderer.draw_text(&stats_text, text_x, y - stats_baseline, 11.0, theme::text());
+        renderer.draw_text_raw(&stats_text, text_x, y - stats_baseline, 11.0, theme::text());
         // Rolling frame time graph
         let graph_x = text_x;
         let graph_w = overlay_w - pad * 2.0;

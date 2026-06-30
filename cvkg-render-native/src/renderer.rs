@@ -470,8 +470,8 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.gpu_ref_shared().is_over_budget()
     }
 
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
-        self.gpu_ref().draw_text(text, x, y, size, color);
+    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: cvkg_core::TextHAlign, v_align: cvkg_core::TextVAlign) {
+        self.gpu_ref().draw_text(text, rect, size, color, h_align, v_align);
     }
 
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {

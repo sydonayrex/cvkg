@@ -216,7 +216,7 @@ impl View for ContextMenu {
 
             // Label
             let label_y = item_rect.y + (item_h - FONT_SM) / 2.0 - FONT_SM * 0.5;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.label,
                 item_rect.x + SPACE_SM,
                 label_y,
@@ -228,7 +228,7 @@ impl View for ContextMenu {
             if let Some(ref sc) = item.shortcut {
                 let (sw, _) = renderer.measure_text(sc, FONT_SM);
                 let sc_y = item_rect.y + (item_h - FONT_SM) / 2.0 - FONT_SM * 0.5;
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     sc,
                     item_rect.x + item_rect.width - sw - SPACE_SM,
                     sc_y,
@@ -241,7 +241,7 @@ impl View for ContextMenu {
             if item.has_submenu() {
                 let arrow_x = item_rect.x + item_rect.width - 12.0;
                 let arrow_y = item_rect.y + (item_h - FONT_BASE) / 2.0 - FONT_BASE * 0.5;
-                renderer.draw_text("›", arrow_x, arrow_y, FONT_BASE, text_color);
+                renderer.draw_text_raw("›", arrow_x, arrow_y, FONT_BASE, text_color);
             }
 
             // Click handler

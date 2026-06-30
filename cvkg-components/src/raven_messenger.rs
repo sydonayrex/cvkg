@@ -171,10 +171,10 @@ impl View for RavenMessenger {
             if !is_system {
                 let header_color = theme::accent();
                 let header_text = format!("{} {}", icon, role_label);
-                renderer.draw_text(&header_text, bubble_x, current_y, 11.0, header_color);
+                renderer.draw_text_raw(&header_text, bubble_x, current_y, 11.0, header_color);
 
                 if !msg.timestamp.is_empty() {
-                    renderer.draw_text(
+                    renderer.draw_text_raw(
                         &msg.timestamp,
                         bubble_x + max_bubble_w - 60.0,
                         current_y,
@@ -212,7 +212,7 @@ impl View for RavenMessenger {
                                 1.0,
                             );
                         }
-                        renderer.draw_text(
+                        renderer.draw_text_raw(
                             text,
                             text_rect.x + 8.0,
                             text_rect.y + 4.0,
@@ -241,7 +241,7 @@ impl View for RavenMessenger {
 
                         // Language label
                         if let Some(l) = lang {
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 l,
                                 code_rect.x + 8.0,
                                 code_rect.y + 2.0,
@@ -256,7 +256,7 @@ impl View for RavenMessenger {
                                 code_rect.y + code_block_padding + 4.0 + line_idx as f32 * 15.0;
                             // Line number (dim)
                             let line_num = format!("{:>3} ", line_idx + 1);
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 &line_num,
                                 code_rect.x + 4.0,
                                 line_y,
@@ -264,7 +264,7 @@ impl View for RavenMessenger {
                                 [0.25, 0.25, 0.35, 0.6],
                             );
                             // Code text
-                            renderer.draw_text(
+                            renderer.draw_text_raw(
                                 line,
                                 code_rect.x + 34.0,
                                 line_y,

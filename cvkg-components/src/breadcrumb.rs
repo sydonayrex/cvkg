@@ -173,7 +173,7 @@ impl View for Breadcrumb {
             };
 
             let item_x = x;
-            renderer.draw_text(&item.label, x, y, self.font_size, color);
+            renderer.draw_text_raw(&item.label, x, y, self.font_size, color);
 
             // Measure text width for positioning
             let (w, _) = renderer.measure_text(&item.label, self.font_size);
@@ -182,7 +182,7 @@ impl View for Breadcrumb {
 
             // Draw separator between items
             if !is_last {
-                renderer.draw_text(&self.separator, x, y, self.font_size, self.color);
+                renderer.draw_text_raw(&self.separator, x, y, self.font_size, self.color);
                 let (sep_w, _) = renderer.measure_text(&self.separator, self.font_size);
                 x += sep_w + SPACE_XS;
             }

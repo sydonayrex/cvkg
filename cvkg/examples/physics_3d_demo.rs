@@ -210,7 +210,7 @@ impl View for Physics3DDemo {
         drop(scene);
 
         // UI overlay
-        r.draw_text(
+        r.draw_text_raw(
             &format!(
                 "3D Physics Demo | {} cubes | dt={:.3}s",
                 self.cube_node_ids.borrow().len(),
@@ -221,7 +221,7 @@ impl View for Physics3DDemo {
             18.0,
             [1.0, 1.0, 1.0, 0.8],
         );
-        r.draw_text(
+        r.draw_text_raw(
             "Physics → SceneGraph → render_scene_node_3d → draw_mesh_3d → GPU",
             -480.0,
             -320.0,

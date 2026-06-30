@@ -58,7 +58,7 @@ impl View for Audio {
         renderer.stroke_rounded_rect(rect, 4.0, theme::border(), 1.0);
 
         let icon = if self.is_playing { "⏸" } else { "▶" };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             icon,
             rect.x + 12.0,
             rect.y + rect.height / 2.0 - 6.0,
@@ -261,7 +261,7 @@ impl View for Video {
         }
 
         // Overlay status text
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 10.0,
             rect.y + 20.0,
@@ -273,7 +273,7 @@ impl View for Video {
         } else {
             "PAUSED // STANDBY"
         };
-        renderer.draw_text(
+        renderer.draw_text_raw(
             status,
             rect.x + 10.0,
             rect.y + rect.height - 24.0,
@@ -464,7 +464,7 @@ impl View for Map {
                 theme::success(),
             );
 
-            renderer.draw_text(label, px + 8.0, py - 5.0, 8.0, theme::text_muted());
+            renderer.draw_text_raw(label, px + 8.0, py - 5.0, 8.0, theme::text_muted());
         }
     }
 }

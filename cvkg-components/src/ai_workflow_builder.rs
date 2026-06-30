@@ -82,7 +82,7 @@ impl View for MultiAgentPanel {
             },
             theme::surface_elevated(),
         );
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 12.0,
             rect.y + 11.0,
@@ -112,7 +112,7 @@ impl View for MultiAgentPanel {
             renderer.fill_rect(agent_rect, bg);
 
             // Agent name
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &agent.name,
                 agent_rect.x + 12.0,
                 agent_rect.y + 8.0,
@@ -150,7 +150,7 @@ impl View for MultiAgentPanel {
                 AgentStatus::Failed => ("✗", theme::status_failed()),
                 AgentStatus::Waiting => ("…", theme::status_waiting()),
             };
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 status_text,
                 agent_rect.x + agent_rect.width - 20.0,
                 agent_rect.y + 24.0,
@@ -281,10 +281,10 @@ impl View for PromptChainVisualizer {
                 color,
             );
 
-            renderer.draw_text(&step.name, rect.x + 8.0, y + 9.0, 11.0, theme::text());
+            renderer.draw_text_raw(&step.name, rect.x + 8.0, y + 9.0, 11.0, theme::text());
 
             if step.status == PromptStatus::Completed {
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &format!(
                         "out: {} tok, {}ms",
                         step.output_tokens, step.latency_ms as i32
@@ -425,7 +425,7 @@ impl View for MemoryGraphViewer {
             };
             renderer.fill_ellipse(node_rect, color);
             renderer.stroke_ellipse(node_rect, theme::border_strong(), 2.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &node.label,
                 cx - 20.0,
                 cy + radius + 4.0,
@@ -522,12 +522,12 @@ impl View for TokenStreamViewer {
                 TokenType::Space => theme::text_dim(),
                 TokenType::NewLine => theme::text_dim(),
             };
-            renderer.draw_text(&token.text, current_x, y, 12.0, color);
+            renderer.draw_text_raw(&token.text, current_x, y, 12.0, color);
             current_x += token.text.len() as f32 * 7.0;
         }
 
         if self.is_streaming {
-            renderer.draw_text("▋", current_x, y, 12.0, theme::accent());
+            renderer.draw_text_raw("▋", current_x, y, 12.0, theme::accent());
         }
     }
 }
@@ -608,7 +608,7 @@ impl View for ReasoningTraceInspector {
                 },
                 theme::surface_elevated(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &step.description,
                 rect.x + 8.0,
                 y + 6.0,
@@ -629,7 +629,7 @@ impl View for ReasoningTraceInspector {
             );
 
             // Conclusion
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &step.conclusion,
                 rect.x + 8.0,
                 y + 42.0,
@@ -728,21 +728,21 @@ impl View for ToolInvocationInspector {
                 theme::surface(),
             );
 
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("🔧 {}", inv.tool_name),
                 rect.x + 10.0,
                 y + 8.0,
                 11.0,
                 theme::text(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("{}ms", inv.duration_ms as i32),
                 rect.x + rect.width - 50.0,
                 y + 8.0,
                 10.0,
                 theme::text_muted(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &inv.result_preview,
                 rect.x + 10.0,
                 y + 22.0,
@@ -893,7 +893,7 @@ impl View for AIWorkflowBuilder {
                 theme::border_strong(),
                 1.0,
             );
-            renderer.draw_text(&node.title, cx - 35.0, cy - 2.0, 10.0, theme::text());
+            renderer.draw_text_raw(&node.title, cx - 35.0, cy - 2.0, 10.0, theme::text());
         }
     }
 }
@@ -953,7 +953,7 @@ impl View for AIExecutionDebugger {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rect(rect, theme::surface());
-        renderer.draw_text(
+        renderer.draw_text_raw(
             "AI Execution Debugger",
             rect.x + 10.0,
             rect.y + 20.0,
@@ -972,7 +972,7 @@ impl View for AIExecutionDebugger {
                 },
                 theme::surface(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &format!("● {}", bp),
                 rect.x + 15.0,
                 y + 15.0,

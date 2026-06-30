@@ -62,7 +62,7 @@ impl View for RuneScript {
         }
 
         if !display_text.is_empty() {
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &display_text,
                 rect.x,
                 rect.y + self.font_size,
@@ -178,7 +178,7 @@ impl<V: View> View for VölvaScan<V> {
                     noise.push('\n');
                 }
             }
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &noise,
                 rect.x,
                 rect.y + 10.0,
@@ -262,7 +262,7 @@ impl<V: View> View for RunicTooltip<V> {
             renderer.stroke_rounded_rect(tip_rect, RADIUS_SM, [0.70, 0.50, 0.90, 0.70], 1.0);
 
             // Vertically center text using font_size, not th (th is unreliable)
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.text,
                 tip_rect.x + 8.0,
                 tip_rect.y + (tip_h - font_size) / 2.0,

@@ -270,7 +270,7 @@ impl View for YggdrasilTree {
                     height: 22.0,
                 };
 
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     opt,
                     opt_rect.x + 12.0,
                     opt_rect.y + 15.0,
@@ -514,7 +514,7 @@ impl YggdrasilTree {
                 theme::with_alpha(theme::surface_elevated(), 0.85),
             );
             renderer.stroke_rounded_rect(input_rect, RADIUS_SM, theme::accent(), 1.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &state.rename_text,
                 input_rect.x + 6.0,
                 y + 17.0,
@@ -559,7 +559,7 @@ impl YggdrasilTree {
             } else {
                 theme::with_alpha(theme::text(), 0.8)
             };
-            renderer.draw_text(&item.name, text_x, y + 19.0, 13.0, label_color);
+            renderer.draw_text_raw(&item.name, text_x, y + 19.0, 13.0, label_color);
         }
 
         // 5. Interaction (Selection, Context Menu, Drag & Drop)

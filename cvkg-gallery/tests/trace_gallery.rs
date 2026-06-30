@@ -173,10 +173,10 @@ impl Renderer for TraceRenderer {
         ));
     }
 
-    fn draw_text(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: cvkg_core::TextHAlign, v_align: cvkg_core::TextVAlign) {
         self.log(format!(
             "draw_text(\"{}\" at ({:.1},{:.1}) size={:.1} color={:?}",
-            text, x, y, size, color
+            text, rect.x, rect.y, size, color
         ));
     }
 
@@ -323,7 +323,7 @@ impl View for SingleTextView {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "SingleText");
-        renderer.draw_text(&self.content, rect.x, rect.y, self.font_size, self.color);
+        renderer.draw_text_raw(self.content, rect.x, rect.y, self.font_size, self.color);
         renderer.pop_vnode();
     }
 

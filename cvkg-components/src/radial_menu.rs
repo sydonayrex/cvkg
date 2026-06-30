@@ -316,7 +316,7 @@ impl View for RadialMenu {
             // Simple centering: estimate text width
             let char_w = 7.0;
             let text_w = item.label.len() as f32 * char_w;
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &item.label,
                 label_x - text_w * 0.5,
                 label_y + 5.0,

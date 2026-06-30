@@ -73,7 +73,7 @@ impl View for WyrdHUD {
         );
 
         // 3. Header
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.title,
             rect.x + 10.0,
             rect.y + 25.0,
@@ -94,11 +94,11 @@ impl View for WyrdHUD {
             let y = rect.y + 60.0 + (i as f32 * 25.0);
 
             // Key (Runic style label)
-            renderer.draw_text(k, rect.x + 10.0, y, 12.0, theme::text_muted());
+            renderer.draw_text_raw(k, rect.x + 10.0, y, 12.0, theme::text_muted());
 
             // Value (Glow)
             let val_color = [0.0, 1.0, 1.0, 0.9];
-            renderer.draw_text(v, rect.x + rect.width - 60.0, y, 14.0, val_color);
+            renderer.draw_text_raw(v, rect.x + rect.width - 60.0, y, 14.0, val_color);
         }
 
         // 5. Scanning Bar (with Glitch)

@@ -61,7 +61,7 @@ impl View for MuninAvatar {
             renderer.draw_image(src, rect);
         } else {
             let (tw, _) = renderer.measure_text(&self.fallback, 14.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &self.fallback,
                 rect.x + (rect.width - tw) / 2.0,
                 rect.y + (rect.height - 14.0) / 2.0,
@@ -135,7 +135,7 @@ impl View for MerkiBadge {
         renderer.stroke_rounded_rect(rect, RADIUS_SM, self.color, 1.0);
 
         let (tw, _) = renderer.measure_text(&self.text, 10.0);
-        renderer.draw_text(
+        renderer.draw_text_raw(
             &self.text,
             rect.x + (rect.width - tw) / 2.0,
             rect.y + (rect.height - 10.0) / 2.0,
@@ -225,14 +225,14 @@ impl View for UrdrTimeline {
             );
 
             // 2. Content
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &event.timestamp,
                 line_x + 20.0,
                 current_y - 2.0,
                 10.0,
                 theme::text_muted(),
             );
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 &event.title,
                 line_x + 20.0,
                 current_y + 12.0,

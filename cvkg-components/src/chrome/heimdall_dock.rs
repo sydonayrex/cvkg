@@ -196,7 +196,7 @@ impl View for HeimdallDock {
                 } else {
                     count.to_string()
                 };
-                renderer.draw_text(
+                renderer.draw_text_raw(
                     &text,
                     badge_rect.x + 2.0,
                     badge_rect.y + 3.0,

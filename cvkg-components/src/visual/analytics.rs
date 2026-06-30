@@ -53,7 +53,7 @@ impl View for ValkyrieAnalytics {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.fill_rounded_rect(rect, 8.0, theme::surface());
         let (_tw, _th) = renderer.measure_text(&self.title, 12.0);
-        renderer.draw_text(&self.title, rect.x + 8.0, rect.y + 8.0, 12.0, theme::text());
+        renderer.draw_text_raw(&self.title, rect.x + 8.0, rect.y + 8.0, 12.0, theme::text());
         // Simplified chart rendering
         for (i, (label, value)) in self.data.iter().enumerate() {
             let bar_h = value * (rect.height - 40.0);
@@ -65,7 +65,7 @@ impl View for ValkyrieAnalytics {
             };
             renderer.fill_rounded_rect(bar_rect, 2.0, theme::accent());
             let (lw, lh) = renderer.measure_text(label, 8.0);
-            renderer.draw_text(
+            renderer.draw_text_raw(
                 label,
                 bar_rect.x + (24.0 - lw) / 2.0,
                 bar_rect.y - lh - 2.0,
