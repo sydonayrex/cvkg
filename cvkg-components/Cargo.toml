@@ -151,12 +151,12 @@ version = "0.3"
 workspace = true
 
 [dev-dependencies.cvkg-render-native]
-version = ">0.2.15"
+version = ">=0.2.16"
 
 
 
 [dev-dependencies.cvkg-macros]
-version = ">0.2.15"
+version = ">=0.2.16"
 
 [dev-dependencies.cvkg-render-gpu]
-version = ">0.2.15"
+version = ">=0.2.16"

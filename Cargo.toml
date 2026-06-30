@@ -46,6 +46,7 @@ rust-version = "1.85"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
+
 [workspace.dependencies]
 cvkg-core = { path = "cvkg-core", version = "0.2.17" }
 cvkg-vdom = { path = "cvkg-vdom", version = "0.2.17" }
