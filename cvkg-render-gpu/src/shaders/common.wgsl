@@ -39,8 +39,12 @@ struct SceneUniforms {
     scale_factor:    f32,
     scene_type:      u32,
     fireball_pos:    vec2<f32>,
-    _pad0:           f32,
-    _pad1:           f32,
+    camera_pos:      vec3<f32>,
+    _pad2:           f32,
+    light_direction: vec3<f32>,
+    _pad3:           f32,
+    light_color:     vec3<f32>,
+    _pad4:           f32,
 };
 
 // --- Group 2: Berserker Uniforms ---

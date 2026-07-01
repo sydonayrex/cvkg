@@ -183,7 +183,12 @@ pub struct SceneUniforms {
     pub scene_type: u32,
     pub _pad_vec2_align: [u32; 1], // 4-byte pad: WGSL vec2<f32> requires 8-byte alignment
     pub fireball_pos: [f32; 2],
-    pub _pad: [f32; 4], // Align to 224 bytes (struct align 16 from Mat4)
+    pub camera_pos: [f32; 3],
+    pub _pad_cam: f32,
+    pub light_direction: [f32; 3],
+    pub _pad_light_dir: f32,
+    pub light_color: [f32; 3],
+    pub _pad_light_color: f32,
 }
 
 pub const SCENE_AURORA: u32 = 0;
@@ -228,7 +233,12 @@ impl SceneUniforms {
             scene_type: SCENE_AURORA,
             _pad_vec2_align: [0],
             fireball_pos: [0.0, 0.0],
-            _pad: [0.0; 4],
+            camera_pos: [0.0, 0.0, -5.0],
+            _pad_cam: 0.0,
+            light_direction: [0.5, 0.8, 0.6],
+            _pad_light_dir: 0.0,
+            light_color: [1.0, 0.95, 0.9],
+            _pad_light_color: 0.0,
         }
     }
 }

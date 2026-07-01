@@ -139,11 +139,11 @@
 133|        let roughness = in.slice.y;
 134|        let opacity  = in.slice.z;
 135|        let n = normalize(in.normal);
-136|        let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.6));
-137|        let light_color = vec3<f32>(1.0, 0.95, 0.9);
+136|        let light_dir = normalize(scene.light_direction);
+137|        let light_color = scene.light_color;
 138|        let n_dot_l = max(dot(n, light_dir), 0.0);
 139|        let diffuse = n_dot_l * light_color;
-140|        let view_dir = vec3<f32>(0.0, 0.0, 1.0);
+140|        let view_dir = normalize(scene.camera_pos - vec3<f32>(in.uv.x, in.uv.y, 0.0));
 141|        let half_dir = normalize(light_dir + view_dir);
 142|        let n_dot_h = max(dot(n, half_dir), 0.0);
 143|        let shininess = mix(8.0, 256.0, 1.0 - roughness);
