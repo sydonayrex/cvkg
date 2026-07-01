@@ -1,0 +1,11 @@
+[package]
+name = "cvkg-render-3d-hierarchy"
+version = "0.2.17"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "3D scene-graph hierarchy: parent-child transform propagation"
+
+[dependencies]
+cvkg-core = { workspace = true }
+glam = { workspace = true }

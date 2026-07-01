@@ -10,6 +10,7 @@ members = [
     "cvkg-render-native",
     "cvkg-render-gpu",
     "cvkg-render-software",
+    "cvkg-render-3d-hierarchy",
     "cvkg-telemetry",
     "cvkg-compositor",
     "cvkg-cli",
@@ -55,6 +56,7 @@ cvkg-layout = { path = "cvkg-layout", version = "0.2.17" }
 cvkg-anim = { path = "cvkg-anim", version = "0.2.17" }
 cvkg-render-gpu = { path = "cvkg-render-gpu", version = "0.2.17" }
 cvkg-render-software = { path = "cvkg-render-software", version = "0.2.17" }
+cvkg-render-3d-hierarchy = { path = "cvkg-render-3d-hierarchy", version = "0.2.17" }
 runic-text = { package = "cvkg-runic-text", path = "cvkg-runic-text", version = "0.2.17" }
 cvkg-runic-text = { path = "cvkg-runic-text", version = "0.2.17" }
 cvkg-physics = { path = "cvkg-physics", version = "0.2.17" }

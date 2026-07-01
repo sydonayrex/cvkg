@@ -74,9 +74,14 @@ impl Default for Transform3D {
 }
 
 impl Transform3D {
-    /// Convert this transform to a 4x4 model matrix.
+    /// Convert this transform to a 4x4 model matrix (TRS order: Translation * Rotation * Scale).
     pub fn to_matrix(&self) -> glam::Mat4 {
         glam::Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.position)
+    }
+
+    /// Alias for [`to_matrix`](Self::to_matrix) – convenience for hierarchy crates.
+    pub fn to_mat4(&self) -> glam::Mat4 {
+        self.to_matrix()
     }
 
     /// Create a 2D-compatible transform (z=0, no rotation on z axis).
