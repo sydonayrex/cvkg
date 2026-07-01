@@ -1307,22 +1307,33 @@ impl cvkg_core::Renderer for GpuRenderer {
                     3, 2, 6, 3, 6, 7, // top
                     4, 5, 1, 4, 1, 0, // bottom
                 ],
+                tex_coords: vec![[0.0, 0.0]; 8],
             };
             let material = cvkg_core::Material3D {
                 base_color: color,
+                base_color_texture: None,
+                normal_map_texture: None,
+                metallic_roughness_texture: None,
                 metallic: 0.0,
                 roughness: 0.5,
                 emissive: [0.0, 0.0, 0.0],
                 opacity: color[3],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
             };
             self.draw_mesh_3d(&cube, &material, &transform);
         } else {
             let material = cvkg_core::Material3D {
                 base_color: color,
+                base_color_texture: None,
+                normal_map_texture: None,
+                metallic_roughness_texture: None,
                 metallic: 0.0,
                 roughness: 0.5,
                 emissive: [0.0, 0.0, 0.0],
                 opacity: color[3],
+                uv_scale: [1.0, 1.0],
+                uv_offset: [0.0, 0.0],
             };
             self.draw_mesh_3d(&meshes[0], &material, &transform);
         }

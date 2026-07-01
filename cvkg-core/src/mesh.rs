@@ -130,10 +130,16 @@ pub struct Camera3D {
 }
 
 /// Material properties for 3D rendering.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Material3D {
     /// Base color (RGBA).
     pub base_color: [f32; 4],
+    /// Optional base color texture name (looked up in Mega-Heim atlas).
+    pub base_color_texture: Option<String>,
+    /// Optional normal map texture name.
+    pub normal_map_texture: Option<String>,
+    /// Optional metallic-roughness (ORM) texture name.
+    pub metallic_roughness_texture: Option<String>,
     /// Metallic factor (0 = dielectric, 1 = metallic).
     pub metallic: f32,
     /// Roughness factor (0 = mirror, 1 = fully diffuse).
@@ -142,16 +148,25 @@ pub struct Material3D {
     pub emissive: [f32; 3],
     /// Opacity (0 = transparent, 1 = opaque).
     pub opacity: f32,
+    /// UV tiling scale.
+    pub uv_scale: [f32; 2],
+    /// UV offset.
+    pub uv_offset: [f32; 2],
 }
 
 impl Default for Material3D {
     fn default() -> Self {
         Self {
             base_color: [1.0, 1.0, 1.0, 1.0],
+            base_color_texture: None,
+            normal_map_texture: None,
+            metallic_roughness_texture: None,
             metallic: 0.0,
             roughness: 0.5,
             emissive: [0.0, 0.0, 0.0],
             opacity: 1.0,
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
         }
     }
 }
@@ -161,10 +176,15 @@ impl Material3D {
     pub fn unlit(color: [f32; 4]) -> Self {
         Self {
             base_color: color,
+            base_color_texture: None,
+            normal_map_texture: None,
+            metallic_roughness_texture: None,
             metallic: 0.0,
             roughness: 1.0,
             emissive: [0.0, 0.0, 0.0],
             opacity: color[3],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
         }
     }
 
@@ -172,10 +192,15 @@ impl Material3D {
     pub fn metallic(color: [f32; 4], roughness: f32) -> Self {
         Self {
             base_color: color,
+            base_color_texture: None,
+            normal_map_texture: None,
+            metallic_roughness_texture: None,
             metallic: 1.0,
             roughness: roughness.clamp(0.0, 1.0),
             emissive: [0.0, 0.0, 0.0],
             opacity: color[3],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
         }
     }
 }
