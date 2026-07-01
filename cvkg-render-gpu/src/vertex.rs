@@ -34,6 +34,45 @@ pub struct InstanceData {
     pub glass_intensity: f32,
 }
 
+/// Per-instance data for 3D instanced rendering.
+/// Stores a 3×4 model matrix (4th row implied [0,0,0,1]) and material overrides.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct InstanceData3D {
+    pub model_row0: [f32; 4],
+    pub model_row1: [f32; 4],
+    pub model_row2: [f32; 4],
+    pub material_overrides: [f32; 4],
+}
+
+impl Default for InstanceData3D {
+    fn default() -> Self {
+        Self {
+            model_row0: [1.0, 0.0, 0.0, 0.0],
+            model_row1: [0.0, 1.0, 0.0, 0.0],
+            model_row2: [0.0, 0.0, 1.0, 0.0],
+            material_overrides: [0.0, 0.0, 1.0, 0.0],
+        }
+    }
+}
+
+impl InstanceData3D {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+        16 => Float32x4,
+        17 => Float32x4,
+        18 => Float32x4,
+        19 => Float32x4,
+    ];
+
+    pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<InstanceData3D>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &Self::ATTRIBUTES,
+        }
+    }
+}
+
 impl Default for InstanceData {
     fn default() -> Self {
         Self {

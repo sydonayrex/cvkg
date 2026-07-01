@@ -172,4 +172,4 @@ pub use renderer::GpuRenderer;
 
 // P1-35: SVG filter graph integration (moved to filter/ module)
 pub use types::{SvgAnimation, SvgModel};
-pub use vertex::{InstanceData, Vertex};
+pub use vertex::{InstanceData, InstanceData3D, Vertex};
