@@ -621,8 +621,12 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
             },
         };
 
+        let read_only_lit = read_only;
         set_arms.push(quote! {
             #field_name_str => {
+                if #read_only_lit {
+                    return Err(cvkg_reflect::ReflectError::ReadOnly(#field_name_str.into()));
+                }
                 #set_conversion
                 Ok(())
             }
@@ -675,7 +679,7 @@ fn type_to_kind(ty: &syn::Type) -> String {
         "[f32 ; 2]" | "[f32;2]" => "Vec2".to_string(),
         "[f32 ; 3]" | "[f32;3]" => "Vec3".to_string(),
         "[f32 ; 4]" | "[f32;4]" => "Color".to_string(),
-        _ => format!("Custom(\"{}\")", type_str.replace(' ', "")),
+        _ => type_str.replace(' ', ""),
     }
 }
 

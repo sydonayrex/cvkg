@@ -67,8 +67,15 @@ fn test_set_field_string() {
         opacity: 0.0,
         name: "old".into(),
     };
-    s.set_field("name", serde_json::json!("new")).unwrap();
-    assert_eq!(s.name, "new");
+    // "name" is read_only, so this should fail
+    let err = s
+        .set_field("name", serde_json::json!("new"))
+        .unwrap_err();
+    match err {
+        cvkg_reflect::ReflectError::ReadOnly(n) => assert_eq!(n, "name"),
+        other => panic!("expected ReadOnly, got {:?}", other),
+    }
+    assert_eq!(s.name, "old");
 }
 
 #[test]
@@ -128,4 +135,37 @@ fn test_field_names_via_meta() {
     let meta = TestStruct::type_meta();
     let names: Vec<&str> = meta.field_names().collect();
     assert_eq!(names, vec!["enabled", "opacity", "name"]);
+}
+
+#[derive(Reflect)]
+struct CustomKindStruct {
+    tags: [f32; 3],
+}
+
+#[test]
+fn test_custom_field_kind_not_double_wrapped() {
+    let meta = CustomKindStruct::type_meta();
+    match &meta.fields[0].kind {
+        cvkg_reflect::FieldKind::Custom(s) => assert_eq!(*s, "[f32;3]"),
+        other => panic!("expected Custom, got {:?}", other),
+    }
+}
+
+#[test]
+fn test_read_only_blocks_writes() {
+    let mut s = TestStruct {
+        enabled: true,
+        opacity: 1.0,
+        name: "immutable".into(),
+    };
+    // read_only field rejects writes
+    let err = s
+        .set_field("name", serde_json::json!("changed"))
+        .unwrap_err();
+    assert!(matches!(err, cvkg_reflect::ReflectError::ReadOnly(_)));
+    assert_eq!(s.name, "immutable");
+
+    // non-read_only field still works
+    s.set_field("enabled", serde_json::json!(false)).unwrap();
+    assert!(!s.enabled);
 }
