@@ -184,6 +184,8 @@ pub mod gpu;
 pub mod material;
 pub mod runtime;
 pub mod scene_graph;
+pub mod frame_phase;
+pub use frame_phase::FramePhase;
 pub mod sdf_shadow;
 pub mod shadow;
 

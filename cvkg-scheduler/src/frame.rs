@@ -19,85 +19,18 @@
 use crate::task::{Priority, TaskHandle, TaskScheduler};
 use cvkg_core::KvasirId;
 
-// =============================================================================
-// FramePhase
-// =============================================================================
+use cvkg_core::FramePhase;
 
-/// The ordered phases of a single CVKG render frame.
+/// Map a frame phase to the `Priority` that best represents its frame urgency.
 ///
-/// # Why enumerate phases?
-/// Explicit phases give each subsystem a named slot in the frame timeline.
-/// Code that submits work for `Layout` cannot accidentally run before `State`
-/// is resolved, and code that submits for `Render` cannot run before `Layout`
-/// and `Animation` are complete.
-///
-/// # Ordering contract
-/// Phases advance monotonically within a frame via [`FrameScheduler::advance_phase`].
-/// Returning to an earlier phase within the same frame is not permitted.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
-)]
-pub enum FramePhase {
-    /// Raw input events are collected and dispatched (pointer, keyboard, touch).
-    Input,
-    /// Application state is resolved and dirty flags are cleared.
-    State,
-    /// Layout trees are measured and positioned.
-    Layout,
-    /// Animations are stepped and interpolated values are written.
-    Animation,
-    /// The scene graph is submitted to the GPU or software renderer.
-    Render,
-    /// The compositor combines render layers into the final framebuffer.
-    Composite,
-    /// Post-frame housekeeping: telemetry flush, deferred drops, frame stats.
-    PostFrame,
-}
-
-impl FramePhase {
-    /// Advance to the next phase in the pipeline.
-    ///
-    /// Returns `None` if called on `PostFrame` (end of frame — no next phase).
-    ///
-    /// # Contract
-    /// Phases form a total order; this function always returns the immediately
-    /// following phase or `None` at the terminal phase.
-    pub fn next(self) -> Option<FramePhase> {
-        match self {
-            FramePhase::Input => Some(FramePhase::State),
-            FramePhase::State => Some(FramePhase::Layout),
-            FramePhase::Layout => Some(FramePhase::Animation),
-            FramePhase::Animation => Some(FramePhase::Render),
-            FramePhase::Render => Some(FramePhase::Composite),
-            FramePhase::Composite => Some(FramePhase::PostFrame),
-            FramePhase::PostFrame => None,
-        }
-    }
-
-    /// Map a phase to the `Priority` that best represents its frame urgency.
-    ///
-    /// Used when forwarding phase tasks to a temporary `TaskScheduler` so they
-    /// execute in the correct order when multiple tasks are flushed together.
-    fn priority(self) -> Priority {
-        match self {
-            FramePhase::Input | FramePhase::State => Priority::Critical,
-            FramePhase::Layout | FramePhase::Animation => Priority::High,
-            FramePhase::Render | FramePhase::Composite => Priority::Normal,
-            FramePhase::PostFrame => Priority::Idle,
-        }
-    }
-
-    /// Return a stable `'static` label for this phase, used as the task name.
-    fn label(self) -> &'static str {
-        match self {
-            FramePhase::Input => "phase:Input",
-            FramePhase::State => "phase:State",
-            FramePhase::Layout => "phase:Layout",
-            FramePhase::Animation => "phase:Animation",
-            FramePhase::Render => "phase:Render",
-            FramePhase::Composite => "phase:Composite",
-            FramePhase::PostFrame => "phase:PostFrame",
-        }
+/// Used when forwarding phase tasks to a temporary `TaskScheduler` so they
+/// execute in the correct order when multiple tasks are flushed together.
+fn phase_priority(phase: FramePhase) -> Priority {
+    match phase {
+        FramePhase::Input | FramePhase::State => Priority::Critical,
+        FramePhase::Layout | FramePhase::Animation => Priority::High,
+        FramePhase::Render | FramePhase::Composite => Priority::Normal,
+        FramePhase::PostFrame => Priority::Idle,
     }
 }
 
@@ -291,7 +224,7 @@ impl FrameScheduler {
     /// tasks were submitted there.
     pub fn flush_current_phase(&mut self) {
         let current = self.current_phase;
-        let priority = current.priority();
+        let priority = phase_priority(current);
         let name = current.label();
 
         // Extract matching entries; leave non-matching in place.
