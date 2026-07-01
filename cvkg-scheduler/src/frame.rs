@@ -16,10 +16,10 @@
 //! `TaskScheduler` is exposed as a convenience for callers that want to submit
 //! ad-hoc priority-ordered work within a phase flush.
 
-use crate::task::{Priority, TaskHandle, TaskScheduler};
-use cvkg_core::KvasirId;
+use std::sync::atomic::Ordering;
 
-use cvkg_core::FramePhase;
+use crate::task::{Priority, TaskHandle, TaskScheduler};
+use cvkg_core::{DirtyFlags, FramePhase, KvasirId};
 
 /// Map a frame phase to the `Priority` that best represents its frame urgency.
 ///
@@ -67,6 +67,7 @@ struct PhaseEntry {
 /// 2. Accepts closures targeted at specific phases via `submit_for_phase`.
 /// 3. Runs the correct subset of closures when `flush_current_phase` is called.
 /// 4. Exposes the inner `TaskScheduler` for ad-hoc priority-ordered work.
+/// 5. Tracks frame-level dirty flags to skip unnecessary phases.
 ///
 /// # Typical usage
 /// ```ignore
@@ -77,7 +78,9 @@ struct PhaseEntry {
 /// fs.submit_for_phase(FramePhase::Animation, || step_animations());
 ///
 /// loop {
-///     fs.flush_current_phase();
+///     if !fs.should_skip_phase(fs.current_phase()) {
+///         fs.flush_current_phase();
+///     }
 ///     if fs.current_phase() == FramePhase::PostFrame { break; }
 ///     fs.advance_phase();
 /// }
@@ -92,6 +95,9 @@ pub struct FrameScheduler {
     /// Phase-targeted work entries. Stored separately so flush can drain by phase
     /// without consuming/losing non-matching entries.
     phase_queue: Vec<PhaseEntry>,
+    /// Accumulated dirty flags for the current frame (from FRAME_DIRTY_FLAGS).
+    /// Determines which phases can be skipped.
+    frame_dirty_flags: DirtyFlags,
 }
 
 impl Default for FrameScheduler {
@@ -112,6 +118,7 @@ impl FrameScheduler {
             frame_number: 0,
             task_scheduler: TaskScheduler::new(),
             phase_queue: Vec::new(),
+            frame_dirty_flags: DirtyFlags::CLEAN,
         }
     }
 
@@ -128,10 +135,18 @@ impl FrameScheduler {
         self.current_phase = FramePhase::Input;
         // Drop any unflushed tasks from the previous frame.
         self.phase_queue.clear();
+
+        // Snapshot and reset the frame-level dirty flags accumulator.
+        // This must be called on the SAME thread that runs the signals.
+        let flags_byte =
+            cvkg_vdom::signals::FRAME_DIRTY_FLAGS.with(|f| f.swap(0, Ordering::Relaxed));
+        self.frame_dirty_flags = DirtyFlags(flags_byte);
+
         tracing::trace!(
-            "FrameScheduler: begin_frame #{} (phase = {:?})",
+            "FrameScheduler: begin_frame #{} (phase = {:?}, dirty={:?})",
             self.frame_number,
-            self.current_phase
+            self.current_phase,
+            self.frame_dirty_flags
         );
     }
 
@@ -169,6 +184,41 @@ impl FrameScheduler {
     /// Starts at 0. Increments by 1 on each `begin_frame` call. Never decrements.
     pub fn frame_number(&self) -> u64 {
         self.frame_number
+    }
+
+    /// Set the frame's accumulated dirty flags (for testing / external control).
+    pub fn set_frame_dirty_flags(&mut self, flags: DirtyFlags) {
+        self.frame_dirty_flags = flags;
+    }
+
+    /// Returns true if the given phase can be entirely skipped this frame.
+    ///
+    /// Decision matrix (derived from dirty_flags.rs downstream invariant):
+    ///
+    /// | Frame dirty flags | Skip Layout? | Skip Animation? | Skip Render? |
+    /// |-------------------|-------------|-----------------|--------------|
+    /// | STATE             | No          | No              | No           |
+    /// | LAYOUT            | No          | No              | No           |
+    /// | PAINT             | **Yes**     | **Yes**         | No           |
+    /// | COMPOSITE         | Yes         | Yes             | **Yes***     |
+    ///
+    /// *Render is never fully skipped (the GPU still presents), but when only
+    ///  COMPOSITE is dirty, the scene draw list is reused from cache.
+    pub fn should_skip_phase(&self, phase: FramePhase) -> bool {
+        match phase {
+            // Layout runs only when a state or layout bit is set.
+            FramePhase::Layout => {
+                !self.frame_dirty_flags.needs_layout()
+                    && !self.frame_dirty_flags.needs_state()
+            }
+            // Animation reads layout output. If layout did not run (only
+            // PAINT/COMPOSITE changed), there is no new layout to animate toward.
+            FramePhase::Animation => {
+                !self.frame_dirty_flags.needs_layout()
+                    && !self.frame_dirty_flags.needs_state()
+            }
+            _ => false,
+        }
     }
 
     /// Schedule a closure to run when the frame reaches `phase`.
@@ -437,5 +487,115 @@ mod tests {
             !*ran.lock().unwrap(),
             "task from previous frame should have been dropped"
         );
+    }
+
+    #[test]
+    fn test_skip_layout_when_only_paint_dirty() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        // Simulate only PAINT dirty (e.g., color change).
+        fs.set_frame_dirty_flags(DirtyFlags::PAINT);
+        assert!(fs.should_skip_phase(FramePhase::Layout),
+            "Layout must be skipped when only PAINT is dirty");
+    }
+
+    #[test]
+    fn test_skip_animation_when_only_paint_dirty() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::PAINT);
+        assert!(fs.should_skip_phase(FramePhase::Animation),
+            "Animation must be skipped when only PAINT is dirty");
+    }
+
+    #[test]
+    fn test_never_skip_input() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::COMPOSITE);
+        assert!(!fs.should_skip_phase(FramePhase::Input),
+            "Input phase is never skipped");
+    }
+
+    #[test]
+    fn test_never_skip_state() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::COMPOSITE);
+        assert!(!fs.should_skip_phase(FramePhase::State),
+            "State phase is never skipped");
+    }
+
+    #[test]
+    fn test_layout_runs_when_state_dirty() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::STATE);
+        assert!(!fs.should_skip_phase(FramePhase::Layout),
+            "Layout must run when STATE is dirty");
+    }
+
+    #[test]
+    fn test_animation_runs_when_layout_dirty() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::LAYOUT);
+        assert!(!fs.should_skip_phase(FramePhase::Animation),
+            "Animation must run when LAYOUT is dirty");
+    }
+
+    #[test]
+    fn test_render_never_fully_skipped() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::COMPOSITE);
+        // Render is never fully skipped — GPU always presents.
+        assert!(!fs.should_skip_phase(FramePhase::Render));
+    }
+
+    #[test]
+    fn test_full_frame_loop_skips_layout_for_paint_only() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::PAINT);
+
+        let mut phases_run = Vec::new();
+        loop {
+            if !fs.should_skip_phase(fs.current_phase()) {
+                phases_run.push(fs.current_phase());
+            }
+            if fs.current_phase() == FramePhase::PostFrame { break; }
+            fs.advance_phase();
+        }
+
+        // Layout and Animation must NOT be in the run list.
+        assert!(!phases_run.contains(&FramePhase::Layout),
+            "Layout must be skipped for PAINT-only dirty");
+        assert!(!phases_run.contains(&FramePhase::Animation),
+            "Animation must be skipped for PAINT-only dirty");
+        // Render and Composite must run.
+        assert!(phases_run.contains(&FramePhase::Render));
+        assert!(phases_run.contains(&FramePhase::Composite));
+    }
+
+    #[test]
+    fn test_full_frame_loop_runs_all_for_state_dirty() {
+        let mut fs = FrameScheduler::new();
+        fs.begin_frame();
+        fs.set_frame_dirty_flags(DirtyFlags::STATE);
+
+        let mut phases_run = Vec::new();
+        loop {
+            if !fs.should_skip_phase(fs.current_phase()) {
+                phases_run.push(fs.current_phase());
+            }
+            if fs.current_phase() == FramePhase::PostFrame { break; }
+            fs.advance_phase();
+        }
+
+        // All phases must run when STATE is dirty.
+        assert!(phases_run.contains(&FramePhase::Layout));
+        assert!(phases_run.contains(&FramePhase::Animation));
+        assert!(phases_run.contains(&FramePhase::Render));
     }
 }

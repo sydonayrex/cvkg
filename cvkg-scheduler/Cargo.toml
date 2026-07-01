@@ -13,5 +13,6 @@ path = "src/lib.rs"
 [dependencies]
 tracing = { workspace = true }
 cvkg-core = { workspace = true }
+cvkg-vdom = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }
