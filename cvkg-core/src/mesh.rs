@@ -4,6 +4,7 @@ pub struct Mesh {
     pub vertices: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
+    pub tex_coords: Vec<[f32; 2]>,  // ← NEW: UV channel 0
 }
 impl Mesh {
     pub fn from_obj(data: &[u8]) -> anyhow::Result<Vec<Self>> {
@@ -24,18 +25,29 @@ impl Mesh {
             } else {
                 mesh.normals.chunks(3).map(|c| [c[0], c[1], c[2]]).collect()
             };
+            let tex_coords = if mesh.texcoords.is_empty() {
+                vec![[0.0, 0.0]; vertices.len()]
+            } else {
+                mesh.texcoords.chunks(2).map(|c| [c[0], c[1]]).collect()
+            };
             meshes.push(Mesh {
                 vertices,
                 normals,
                 indices: mesh.indices,
+                tex_coords,
             });
         }
-        // Debug invariant: every mesh must have matching vertex/normal counts
+        // Debug invariant: every mesh must have matching vertex/normal/texcoord counts
         for m in &meshes {
             debug_assert_eq!(
                 m.vertices.len(),
                 m.normals.len(),
                 "Mesh vertex/normal count mismatch after normal generation"
+            );
+            debug_assert_eq!(
+                m.vertices.len(),
+                m.tex_coords.len(),
+                "Mesh vertex/tex_coord count mismatch"
             );
         }
         Ok(meshes)
@@ -43,10 +55,12 @@ impl Mesh {
     pub fn from_stl(data: &[u8]) -> anyhow::Result<Self> {
         let stl = cvkg_stl::parse_bytes(data)
             .map_err(|e| anyhow::anyhow!("STL parse failed: {e}"))?;
+        let vertex_count = stl.vertices.len();
         Ok(Self {
             vertices: stl.vertices,
             normals: stl.normals,
             indices: stl.indices,
+            tex_coords: vec![[0.0, 0.0]; vertex_count], // STL has no UVs
         })
     }
 }
