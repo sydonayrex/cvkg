@@ -98,6 +98,14 @@ version = "0.2"
 [target.'cfg(target_arch = "wasm32")'.dependencies.wasm-bindgen-futures]
 version = "0.4"
 
+[[test]]
+name = "dirty_flags_tests"
+path = "tests/dirty_flags_tests.rs"
+
+[[test]]
+name = "mesh_uv_tests"
+path = "tests/mesh_uv_tests.rs"
+
 [dev-dependencies]
 proptest = { workspace = true }
 

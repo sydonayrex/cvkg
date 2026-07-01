@@ -103,6 +103,18 @@ impl std::ops::BitAnd for DirtyFlags {
     }
 }
 
+impl DirtyFlags {
+    /// Returns `true` if `self` implies (contains all bits of) `other`.
+    /// This enforces the downstream propagation invariant:
+    /// STATE implies LAYOUT, PAINT, COMPOSITE
+    /// LAYOUT implies PAINT, COMPOSITE
+    /// PAINT implies COMPOSITE
+    #[inline]
+    pub fn implies(self, other: DirtyFlags) -> bool {
+        (self.0 & other.0) == other.0
+    }
+}
+
 /// A single invalidation record associating a `KvasirId` with its dirty layers.
 ///
 /// # Contract

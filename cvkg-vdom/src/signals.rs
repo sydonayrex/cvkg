@@ -4,13 +4,18 @@
 //! designed to replace expensive VDOM tree-diffing with targeted, instantaneous
 //! side-effects when reactive state changes.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, RwLock};
+
+use cvkg_core::DirtyFlags;
 
 thread_local! {
     /// Tracks the currently executing effect to auto-subscribe it to signals.
     /// Thread-local because dependency tracking only matters for the thread executing the effect.
     static CURRENT_EFFECT: RwLock<Option<Arc<dyn EffectRunner>>> = RwLock::new(None);
+    /// OR-ed across every set_with_flags call in this frame.
+    /// Read and reset by FrameScheduler::begin_frame().
+    pub static FRAME_DIRTY_FLAGS: AtomicU8 = const { AtomicU8::new(0) };
 }
 
 pub trait EffectRunner: Send + Sync {
@@ -19,11 +24,21 @@ pub trait EffectRunner: Send + Sync {
 
 static NEXT_SIGNAL_ID: AtomicU64 = AtomicU64::new(1);
 
+/// Subscriber entry with accumulated dirty flags.
+/// Replaces bare `Arc<dyn EffectRunner>` so we can track per-subscriber flags.
+#[derive(Clone)]
+struct SubscriberEntry {
+    runner: Arc<dyn EffectRunner>,
+    /// Bitmask of DirtyFlags accumulated across set_with_flags calls
+    /// since the last run. Reset when the runner is dispatched.
+    accumulated: Arc<AtomicU8>,
+}
+
 /// A reactive primitive that holds a value and notifies subscribers when it changes.
 pub struct Signal<T> {
     pub id: u64,
     value: Arc<RwLock<T>>,
-    subscribers: Arc<RwLock<Vec<Arc<dyn EffectRunner>>>>,
+    subscribers: Arc<RwLock<Vec<SubscriberEntry>>>,
     /// Monotonically increasing version counter. Incremented on every `set()`.
     /// Used by the VDOM layer to detect when a signal's value has changed since
     /// the last frame, enabling incremental VDOM rebuilds.
@@ -48,7 +63,10 @@ impl<T: Clone> Signal<T> {
                 let mut subs = self.subscribers.write().unwrap();
                 // In a production-grade implementation, we would deduplicate subscriptions
                 // and handle dynamic branching cleanup here.
-                subs.push(effect.clone());
+                subs.push(SubscriberEntry {
+                    runner: effect.clone(),
+                    accumulated: Arc::new(AtomicU8::new(0)),
+                });
             }
         });
         self.value.read().unwrap().clone()
@@ -60,14 +78,38 @@ impl<T: Clone> Signal<T> {
         self.version.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Updates the value of the signal and synchronously triggers all subscribed effects.
+    /// Default: conservative. Assumes worst case — full pipeline rebuild.
     pub fn set(&self, new_value: T) {
+        self.set_with_flags(new_value, DirtyFlags::ALL);
+    }
+
+    /// Set value AND annotate which pipeline layers are affected.
+    ///
+    /// # Invariant enforcement
+    /// debug_assert ensures the callers passes one of the four canonical
+    /// constants (STATE / LAYOUT / PAINT / COMPOSITE). Manual bit-twiddling
+    /// that violates the downstream-propagation invariant is caught here.
+    pub fn set_with_flags(&self, new_value: T, flags: DirtyFlags) {
+        debug_assert!(
+            matches!(
+                flags,
+                DirtyFlags::STATE | DirtyFlags::LAYOUT | DirtyFlags::PAINT | DirtyFlags::COMPOSITE
+            ),
+            "set_with_flags: flags must be one of STATE/LAYOUT/PAINT/COMPOSITE \
+             (downstream-invariant violation would cause stale pipeline layers)"
+        );
+
         *self.value.write().unwrap() = new_value;
-        self.version
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.version.fetch_add(1, Ordering::Relaxed);
+
+        // OR into the frame-level accumulator.
+        FRAME_DIRTY_FLAGS.with(|f| f.fetch_or(flags.0, Ordering::Relaxed));
+
+        // OR onto each subscriber's accumulated mask, then dispatch.
         let subs = self.subscribers.read().unwrap().clone();
-        for sub in subs {
-            sub.run();
+        for sub in &subs {
+            sub.accumulated.fetch_or(flags.0, Ordering::Relaxed);
+            sub.runner.clone().run();
         }
     }
 }
