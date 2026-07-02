@@ -308,6 +308,12 @@ pub mod dirty_region;
 pub use dirty_region::*;
 
 // =========================================================================
+// P1-43: Typed Event Triggers (Bevy-inspired)
+// =========================================================================
+pub mod triggers;
+pub use triggers::{EventCtx, TriggerEvent, TriggerRegistry};
+
+// =========================================================================
 // P1-43: FrameBudget -- global frame budget contract
 // =========================================================================
 //
