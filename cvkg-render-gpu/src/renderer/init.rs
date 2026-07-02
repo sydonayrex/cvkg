@@ -907,6 +907,7 @@ impl GpuRenderer {
             vram_textures_bytes: 0,
             _debug_layout: false,
             transform_stack: Vec::new(),
+            transform_stack_3d: Vec::new(),
             redraw_requested: false,
             skuld_queries,
             skuld_buffer,

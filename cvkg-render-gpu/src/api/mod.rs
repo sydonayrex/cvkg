@@ -1240,24 +1240,17 @@ impl cvkg_core::Renderer for GpuRenderer {
     }
 
     fn push_transform_3d(&mut self, transform: &cvkg_core::Transform3D) {
-        // Push a 2D-compatible transform for the existing pipeline
-        // Use proper matrix decomposition to extract scale correctly (handles rotated matrices)
-        let (translation, rotation_quat, scale_glam) =
-            transform.to_matrix().to_scale_rotation_translation();
-        let translation = [translation.x, translation.y];
-        let scale = [scale_glam.x, scale_glam.y];
-        let rotation = if rotation_quat.length_squared() > 0.0 {
-            let (axis, angle) = rotation_quat.to_axis_angle();
-            angle * axis.z.signum() // Radians (preserving Z-axis direction)
-        } else {
-            0.0
-        };
-        self.push_transform(translation, scale, rotation);
+        let model_matrix = transform.to_matrix();
+        let parent = self
+            .transform_stack_3d
+            .last()
+            .copied()
+            .unwrap_or(glam::Mat4::IDENTITY);
+        self.transform_stack_3d.push(parent * model_matrix);
     }
 
     fn pop_transform_3d(&mut self) {
-        // Only pop the single transform that was pushed - no double pop
-        self.pop_transform();
+        self.transform_stack_3d.pop();
     }
 
     /// Render a 3D scene graph node using the GPU backend.
@@ -1533,7 +1526,75 @@ impl GpuRenderer {
         (t, [sx, sy], rotation, skew_x, 0.0)
     }
 
+    /// Returns the current 3D model matrix from the 3D transform stack.
+    pub(crate) fn current_transform_3d(&self) -> glam::Mat4 {
+        self.transform_stack_3d
+            .last()
+            .copied()
+            .unwrap_or(glam::Mat4::IDENTITY)
+    }
+
     pub fn stroke_path(&mut self, path: &lyon::path::Path, color: [f32; 4], stroke_width: f32) {
         self.stroke_path_impl(path, color, stroke_width);
+    }
+}
+
+#[cfg(test)]
+mod transform_3d_tests {
+    use glam::{Mat4, Vec3, Quat};
+    use cvkg_core::Transform3D;
+
+    #[test]
+    fn test_transform3d_to_matrix_translation() {
+        let transform = Transform3D {
+            position: Vec3::new(10.0, 20.0, 30.0),
+            ..Default::default()
+        };
+        let m = transform.to_matrix();
+        assert!((m.w_axis.x - 10.0).abs() < 0.001);
+        assert!((m.w_axis.y - 20.0).abs() < 0.001);
+        assert!((m.w_axis.z - 30.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_transform3d_to_matrix_scale() {
+        let transform = Transform3D {
+            scale: Vec3::new(2.0, 3.0, 4.0),
+            ..Default::default()
+        };
+        let m = transform.to_matrix();
+        assert!((m.x_axis.x - 2.0).abs() < 0.001);
+        assert!((m.y_axis.y - 3.0).abs() < 0.001);
+        assert!((m.z_axis.z - 4.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_transform3d_hierarchical_multiplication() {
+        let parent = Transform3D {
+            position: Vec3::new(10.0, 0.0, 0.0),
+            ..Default::default()
+        };
+        let child = Transform3D {
+            position: Vec3::new(5.0, 0.0, 0.0),
+            ..Default::default()
+        };
+        let parent_m = parent.to_matrix();
+        let child_m = child.to_matrix();
+        let combined = parent_m * child_m;
+        assert!((combined.w_axis.x - 15.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_transform3d_rotation() {
+        let transform = Transform3D {
+            rotation: Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            ..Default::default()
+        };
+        let m = transform.to_matrix();
+        // cos(PI/2) = 0, sin(PI/2) = 1
+        assert!((m.x_axis.x).abs() < 0.001);
+        assert!((m.x_axis.y - 1.0).abs() < 0.001);
+        assert!((m.y_axis.x + 1.0).abs() < 0.001);
+        assert!((m.y_axis.y).abs() < 0.001);
     }
 }

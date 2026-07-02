@@ -23,6 +23,7 @@ impl GpuRenderer {
         self.clip_stack.clear();
         self.slice_stack.clear();
         self.transform_stack.clear();
+        self.transform_stack_3d.clear();
         self.portal_regions.clear();
         self.hologram_instances.clear();
         self.current_z = 0.0;

@@ -264,6 +264,8 @@ pub struct GpuRenderer {
 
     // Transform Stack -- stores full affine matrices for correct SVG transform composition.
     pub(crate) transform_stack: Vec<glam::Mat3>,
+    /// 3D Transform Stack -- stores model matrices for 3D object hierarchy.
+    pub(crate) transform_stack_3d: Vec<glam::Mat4>,
     /// Whether a redraw has been requested for the next frame.
     pub redraw_requested: bool,
     /// Cursor for compositor draw call submission tracking.
