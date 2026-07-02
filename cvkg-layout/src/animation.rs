@@ -163,3 +163,137 @@ pub fn apply_layout_animations(
         }
     }
 }
+
+// =========================================================================
+// SpringConstraint -- typed layout properties driven by spring physics
+// =========================================================================
+//
+// Inspired by Bevy's animation system: any layout property (width, height,
+// margins, gap, flex-grow) can be wrapped in a SpringConstraint. Setting the
+// target triggers a spring simulation; the current value is written back to
+// Taffy's Style before the layout pass each frame.
+
+use cvkg_anim::SpringParams;
+
+/// Layout properties that can be spring-animated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LayoutProperty {
+    Width,
+    Height,
+    MarginLeft,
+    MarginRight,
+    MarginTop,
+    MarginBottom,
+    Gap,
+    FlexGrow,
+}
+
+/// A spring-driven layout constraint.
+///
+/// Wraps a target value with a `SpringParams` (stiffness, damping, mass).
+/// Each frame, the `current()` step produces the interpolated value used by
+/// the layout pass.
+pub struct SpringConstraint {
+    /// Layout property this constraint animates.
+    pub property: LayoutProperty,
+    /// Spring physics parameters.
+    pub spring: SpringParams,
+    /// Target value (set declaratively; spring drives from current → target).
+    pub target: f32,
+    /// Current position from the most recent step.
+    pub current: f32,
+    /// Velocity from the most recent step.
+    pub velocity: f32,
+}
+
+impl SpringConstraint {
+    /// Create a new spring constraint with `current == target == initial`.
+    pub fn new(property: LayoutProperty, spring: SpringParams, initial: f32) -> Self {
+        Self {
+            property,
+            spring,
+            target: initial,
+            current: initial,
+            velocity: 0.0,
+        }
+    }
+
+    /// Set the target value. The spring will drive `current` toward `target`.
+    pub fn set_target(&mut self, target: f32) {
+        self.target = target;
+    }
+
+    /// Advance the spring simulation by `dt` seconds.
+    ///
+    /// Uses a semi-implicit Euler step. When velocity falls below the
+    /// settlement threshold and the target is reached, the spring snaps to
+    /// the target.
+    pub fn step(&mut self, dt: f32) {
+        let k = self.spring.stiffness;
+        let c = self.spring.damping;
+        let m = self.spring.mass.max(1e-6);
+
+        let force = -k * (self.current - self.target) - c * self.velocity;
+        let acceleration = force / m;
+        self.velocity += acceleration * dt;
+        self.current += self.velocity * dt;
+
+        // Snap to target if velocity is near-zero and close to target.
+        let settle_velocity_threshold = 0.001;
+        let settle_position_threshold = 0.001;
+        if self.velocity.abs() < settle_velocity_threshold
+            && (self.current - self.target).abs() < settle_position_threshold
+        {
+            self.current = self.target;
+            self.velocity = 0.0;
+        }
+    }
+}
+
+#[cfg(test)]
+mod spring_constraint_tests {
+    use super::*;
+
+    #[test]
+    fn test_spring_step_converges_to_target() {
+        let mut sc = SpringConstraint::new(
+            LayoutProperty::Width,
+            SpringParams::snappy(),
+            0.0,
+        );
+        sc.set_target(100.0);
+        for _ in 0..200 {
+            sc.step(1.0 / 60.0);
+        }
+        assert!((sc.current - 100.0).abs() < 0.5, "current={}", sc.current);
+    }
+
+    #[test]
+    fn test_spring_starts_at_initial() {
+        let sc = SpringConstraint::new(LayoutProperty::Height, SpringParams::snappy(), 50.0);
+        assert_eq!(sc.target, 50.0);
+        assert_eq!(sc.current, 50.0);
+        assert_eq!(sc.velocity, 0.0);
+    }
+
+    #[test]
+    fn test_spring_settles_to_target() {
+        let mut sc = SpringConstraint::new(
+            LayoutProperty::MarginLeft,
+            SpringParams::snappy(),
+            0.0,
+        );
+        sc.set_target(16.0);
+        for _ in 0..500 {
+            sc.step(1.0 / 60.0);
+        }
+        assert_eq!(sc.current, 16.0);
+        assert_eq!(sc.velocity, 0.0);
+    }
+
+    #[test]
+    fn test_layout_property_variants_distinct() {
+        assert_ne!(LayoutProperty::Width, LayoutProperty::Height);
+        assert_ne!(LayoutProperty::MarginLeft, LayoutProperty::MarginRight);
+    }
+}
