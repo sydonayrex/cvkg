@@ -134,6 +134,10 @@ pub struct GpuRenderer {
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) indices: Vec<u32>,
     pub(crate) instance_data: Vec<InstanceData>,
+    /// Per-instance 3D model matrices (used by vs_main_3d once instanced 3D
+    /// rendering is wired up). draw_mesh_3d records into both this and
+    /// instance_data so the data is ready when the GPU path lands.
+    pub(crate) instance_data_3d: Vec<InstanceData3D>,
     pub(crate) staging_belt: wgpu::util::StagingBelt,
     pub(crate) staging_command_buffers: Vec<wgpu::CommandBuffer>,
     pub(crate) draw_calls: Vec<DrawCall>,

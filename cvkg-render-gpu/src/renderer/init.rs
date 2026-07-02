@@ -877,6 +877,7 @@ impl GpuRenderer {
             vertices: Vec::with_capacity(MAX_VERTICES),
             indices: Vec::with_capacity(MAX_INDICES),
             instance_data: Vec::with_capacity(MAX_VERTICES / 4),
+            instance_data_3d: Vec::with_capacity(MAX_VERTICES / 4),
             draw_calls: Vec::new(),
             current_texture_id: None,
             opacity_stack: vec![1.0],

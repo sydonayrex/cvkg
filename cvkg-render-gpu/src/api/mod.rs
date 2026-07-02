@@ -1172,11 +1172,17 @@ impl cvkg_core::Renderer for GpuRenderer {
         for i in 0..mesh.vertices.len() {
             let pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
             let norm = model_matrix.transform_vector3(glam::Vec3::from(mesh.normals[i]));
+            // Sample UV: apply scale/offset, defaulting to 0 if tex_coords is empty.
+            let raw_uv = mesh.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
+            let uv = [
+                raw_uv[0] * material.uv_scale[0] + material.uv_offset[0],
+                raw_uv[1] * material.uv_scale[1] + material.uv_offset[1],
+            ];
 
             self.vertices.push(Vertex {
                 position: [pos.x, pos.y, pos.z],
                 normal: [norm.x, norm.y, norm.z],
-                uv: [0.0, 0.0],
+                uv,
                 color: material.base_color,
                 material_id: 13, // Material 13: 3D Surface
                 radius: 0.0,
@@ -1199,6 +1205,20 @@ impl cvkg_core::Renderer for GpuRenderer {
             blur_radius: 0.0,
             ior_override: 0.0,
             glass_intensity: 1.0,
+        });
+
+        // Also record the raw 3x4 model matrix in the per-instance 3D buffer.
+        // This will be consumed by the future vs_main_3d entry point once
+        // instanced rendering is wired up. The CPU-baked fallback above keeps
+        // 3D meshes rendering correctly in the meantime.
+        let row0 = model_matrix.row(0);
+        let row1 = model_matrix.row(1);
+        let row2 = model_matrix.row(2);
+        self.instance_data_3d.push(InstanceData3D {
+            model_row0: [row0.x, row0.y, row0.z, row0.w],
+            model_row1: [row1.x, row1.y, row1.z, row1.w],
+            model_row2: [row2.x, row2.y, row2.z, row2.w],
+            material_overrides: [material.metallic, material.roughness, 0.0, material.opacity],
         });
 
         self.draw_calls.push(DrawCall {
