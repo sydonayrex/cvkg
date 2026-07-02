@@ -98,6 +98,18 @@ struct VertexOutput {
     @location(13) @interpolate(flat) glass_intensity: f32,
 };
 
+struct VertexInput3D {
+    @location(0) position: vec3<f32>,
+    @location(1) normal:   vec3<f32>,
+    @location(2) uv:       vec2<f32>,
+    @location(3) color:    vec4<f32>,
+    // Instance attributes (per-mesh model matrix)
+    @location(16) model_row0: vec4<f32>,
+    @location(17) model_row1: vec4<f32>,
+    @location(18) model_row2: vec4<f32>,
+    @location(19) material_overrides: vec4<f32>,
+};
+
 @vertex
 fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var out: VertexOutput;
@@ -115,6 +127,46 @@ fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     out.size   = vec2<f32>(scene.resolution.x, scene.resolution.y);
     out.normal = vec3<f32>(0.0, 0.0, 1.0);
     out.world_pos = vec2<f32>(0.0, 0.0);
+    out.blur_radius = 0.0;
+    out.ior_override = 0.0;
+    out.glass_intensity = 0.0;
+    return out;
+}
+
+/// Full MVP vertex shader for 3D meshes.
+/// Reads the per-instance 3x4 model matrix from locations 16-18 and
+/// constructs a full mat4x4 (4th row implied [0, 0, 0, 1]).
+@vertex
+fn vs_main_3d(in: VertexInput3D) -> VertexOutput {
+    var out: VertexOutput;
+
+    let model = mat4x4<f32>(
+        in.model_row0,
+        in.model_row1,
+        in.model_row2,
+        vec4<f32>(0.0, 0.0, 0.0, 1.0)
+    );
+
+    let world_pos = model * vec4<f32>(in.position, 1.0);
+    out.clip_position = scene.proj * scene.view * world_pos;
+    out.world_pos = world_pos.xy;
+    // Transform normal to world space (no non-uniform scale handling yet).
+    // Stored in `out.normal` since VertexOutput has no world_normal field.
+    out.normal = normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
+    // Pass material overrides through to the fragment shader via slice.
+    // slice.x = metallic, slice.y = roughness, slice.z = emissive_intensity, slice.w = opacity
+    let mo = in.material_overrides;
+    out.slice = vec4<f32>(mo.x, mo.y, mo.z, mo.w);
+
+    out.uv = in.uv;
+    out.color = in.color;
+    out.material_id = 13u; // OPAQUE_3D
+    out.radius = 0.0;
+    out.logical = in.position.xy;
+    out.size = vec2<f32>(1.0, 1.0);
+    out.normal = in.normal;
+    out.clip = vec4<f32>(-10000.0, -10000.0, 20000.0, 20000.0);
+    out.tex_index = 0u;
     out.blur_radius = 0.0;
     out.ior_override = 0.0;
     out.glass_intensity = 0.0;
