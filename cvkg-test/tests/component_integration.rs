@@ -24,6 +24,10 @@ impl cvkg_core::ElapsedTime for MockRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for MockRenderer {
+    fn on_render_error(&mut self, _error: &cvkg_core::CvkgError) {}
+}
+
 impl Renderer for MockRenderer {
     fn fill_rect(&mut self, _rect: Rect, _color: [f32; 4]) {}
     fn fill_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4]) {}

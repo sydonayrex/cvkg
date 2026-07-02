@@ -210,6 +210,7 @@ impl VDom {
                     children,
                     handlers,
                     sdf_shape,
+                    world_space,
                 } => {
                     if let Some(node) = self.nodes.get_mut(&id) {
                         if let Some(p) = props {
@@ -239,6 +240,9 @@ impl VDom {
                         }
                         if let Some(s) = sdf_shape {
                             node.sdf_shape = Some(s);
+                        }
+                        if let Some(ws) = world_space {
+                            node.world_space = Some(ws);
                         }
                     }
                 }

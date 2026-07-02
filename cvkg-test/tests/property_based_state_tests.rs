@@ -2,7 +2,7 @@
 // Tests state transitions, VDOM patches, and component behavior using proptest
 
 use cvkg_core::KvasirId;
-use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VNode};
+use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VNode, WorldSpacePanel};
 use proptest::prelude::*;
 use std::collections::HashMap;
 
@@ -30,6 +30,7 @@ prop_compose! {
             aria_role: "generic".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            world_space: None,
         }
     }
 }
@@ -49,6 +50,7 @@ proptest! {
             aria_role: "text".to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            world_space: None,
         };
         assert_eq!(node.id.0, id);
     }
@@ -82,6 +84,7 @@ prop_compose! {
             aria_role,
             aria_props: AriaProps::default(),
             portal_target: None,
+            world_space: None,
         }
     }
 }

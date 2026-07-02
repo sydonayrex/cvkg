@@ -5,7 +5,7 @@ use cvkg_flow::port::FlowPort;
 use cvkg_flow::types::{PortDirection, PortId, PortPosition};
 use cvkg_flow::{FlowEdge, FlowGraph, FlowNode};
 use cvkg_layout::HStack;
-use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode};
+use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode, WorldSpacePanel};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -119,6 +119,7 @@ fn test_journey_vdom_patch_lifecycle() {
         aria_role: "group".to_string(),
         aria_props: AriaProps::default(),
         portal_target: None,
+        world_space: None,
     };
 
     // 1. Initial State
@@ -140,6 +141,7 @@ fn test_journey_vdom_patch_lifecycle() {
         aria_role: None,
         children: None,
         handlers: None,
+        world_space: None,
     }]);
 
     // 3. Removal

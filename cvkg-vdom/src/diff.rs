@@ -1,5 +1,5 @@
 use crate::VDom;
-use crate::vnode::{AriaProps, EventHandlerMap, LayoutRect, NodeId, VNode};
+use crate::vnode::{AriaProps, EventHandlerMap, LayoutRect, NodeId, VNode, WorldSpacePanel};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -26,6 +26,8 @@ pub enum VDomPatch {
         handlers: Option<EventHandlerMap>,
         /// Updated SDF shape
         sdf_shape: Option<cvkg_core::layout::SdfShape>,
+        /// Updated world-space panel
+        world_space: Option<WorldSpacePanel>,
     },
     /// Remove an existing node
     Remove(NodeId),
@@ -70,6 +72,7 @@ impl std::fmt::Debug for VDomPatch {
                 children,
                 handlers,
                 sdf_shape,
+                world_space,
             } => f
                 .debug_struct("Update")
                 .field("id", id)
@@ -80,6 +83,7 @@ impl std::fmt::Debug for VDomPatch {
                 .field("children", children)
                 .field("handlers_count", &handlers.as_ref().map(|h| h.len()))
                 .field("sdf_shape", sdf_shape)
+                .field("world_space", world_space)
                 .finish(),
             Self::Remove(id) => f.debug_tuple("Remove").field(id).finish(),
             Self::Replace { id, node } => f
@@ -117,8 +121,9 @@ impl serde::Serialize for VDomPatch {
                 children,
                 handlers,
                 sdf_shape,
+                world_space,
             } => {
-                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 8)?;
+                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 9)?;
                 state.serialize_field("id", id)?;
                 state.serialize_field("props", props)?;
                 state.serialize_field("layout", layout)?;
@@ -132,6 +137,7 @@ impl serde::Serialize for VDomPatch {
                         .map(|h| h.keys().cloned().collect::<Vec<String>>()),
                 )?;
                 state.serialize_field("sdf_shape", sdf_shape)?;
+                state.serialize_field("world_space", world_space)?;
                 state.end()
             }
             Self::Remove(id) => serializer.serialize_newtype_variant("VDomPatch", 2, "Remove", id),
@@ -175,6 +181,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 children: Option<Vec<NodeId>>,
                 handlers: Option<Vec<String>>,
                 sdf_shape: Option<cvkg_core::layout::SdfShape>,
+                world_space: Option<WorldSpacePanel>,
             },
             Remove(NodeId),
             Replace {
@@ -191,7 +198,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
         let internal = VDomPatchInternal::deserialize(deserializer)?;
         Ok(match internal {
             VDomPatchInternal::Create(n) => VDomPatch::Create(n),
-            VDomPatchInternal::Update {
+VDomPatchInternal::Update {
                 id,
                 props,
                 layout,
@@ -200,6 +207,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 children,
                 handlers,
                 sdf_shape,
+                world_space,
             } => VDomPatch::Update {
                 id,
                 props,
@@ -221,6 +229,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                     map
                 }),
                 sdf_shape,
+                world_space,
             },
             VDomPatchInternal::Remove(id) => VDomPatch::Remove(id),
             VDomPatchInternal::Replace { id, node } => VDomPatch::Replace { id, node },
@@ -319,6 +328,7 @@ impl VDom {
             }
         };
         let handlers_removed = old_handlers.is_some() && new_handlers.is_none();
+        let world_space_changed = old_node.world_space != new_node.world_space;
 
         if props_changed
             || layout_changed
@@ -327,6 +337,7 @@ impl VDom {
             || children_changed
             || sdf_shape_changed
             || handlers_changed
+            || world_space_changed
         {
             patches.push(VDomPatch::Update {
                 id: old_id,
@@ -358,6 +369,11 @@ impl VDom {
                 handlers: other.event_handlers.get(&new_id).cloned(),
                 sdf_shape: if sdf_shape_changed {
                     new_node.sdf_shape
+                } else {
+                    None
+                },
+                world_space: if world_space_changed {
+                    new_node.world_space.clone()
                 } else {
                     None
                 },
