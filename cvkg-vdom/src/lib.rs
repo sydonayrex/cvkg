@@ -901,6 +901,7 @@ impl VNodeRenderer {
                 aria_props: AriaProps::default(),
                 portal_target: None,
                 world_space: None,
+                theme_override: None,
                 sdf_shape: None,
             };
             if let Some(parent_id) = self.stack.last()
@@ -1008,6 +1009,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             },
             portal_target: None,
             world_space: None,
+            theme_override: None,
             sdf_shape: None,
         });
     }
@@ -1037,6 +1039,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_props: AriaProps::default(),
             portal_target: None,
             world_space: None,
+            theme_override: None,
             sdf_shape: None,
         });
         self.stack.push(id);
