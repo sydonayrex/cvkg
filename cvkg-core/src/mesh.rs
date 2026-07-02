@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// A 3D mesh containing vertex and index data.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Mesh {
     pub vertices: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
@@ -63,6 +65,27 @@ impl Mesh {
             tex_coords: vec![[0.0, 0.0]; vertex_count], // STL has no UVs
         })
     }
+
+    /// Compute the axis-aligned bounding box (AABB) of this mesh.
+    /// Returns (center, half_extents) in local mesh space.
+    pub fn aabb(&self) -> (glam::Vec3, glam::Vec3) {
+        if self.vertices.is_empty() {
+            return (glam::Vec3::ZERO, glam::Vec3::ZERO);
+        }
+
+        let mut min = glam::Vec3::new(f32::MAX, f32::MAX, f32::MAX);
+        let mut max = glam::Vec3::new(f32::MIN, f32::MIN, f32::MIN);
+
+        for v in &self.vertices {
+            let p = glam::Vec3::new(v[0], v[1], v[2]);
+            min = min.min(p);
+            max = max.max(p);
+        }
+
+        let center = (min + max) * 0.5;
+        let half_extents = (max - min) * 0.5;
+        (center, half_extents)
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -70,7 +93,7 @@ impl Mesh {
 // ══════════════════════════════════════════════════════════════════════════
 
 /// A 3D transform: position, rotation (quaternion), and scale.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Transform3D {
     pub position: glam::Vec3,
     pub rotation: glam::Quat,

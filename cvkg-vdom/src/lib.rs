@@ -39,7 +39,7 @@ use std::collections::HashMap;
 pub use accesskit_bridge::A11yNodeEntry;
 pub use diff::VDomPatch;
 pub use vnode::{
-    AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId, VNode,
+    AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId, VNode, WorldSpacePanel,
 };
 
 /// The root container for the Virtual DOM state.
@@ -896,6 +896,7 @@ impl VNodeRenderer {
                 aria_role: "presentation".to_string(),
                 aria_props: AriaProps::default(),
                 portal_target: None,
+                world_space: None,
                 sdf_shape: None,
             };
             if let Some(parent_id) = self.stack.last()
@@ -1002,6 +1003,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
                 ..Default::default()
             },
             portal_target: None,
+            world_space: None,
             sdf_shape: None,
         });
     }
@@ -1030,6 +1032,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
             aria_role: role.to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            world_space: None,
             sdf_shape: None,
         });
         self.stack.push(id);

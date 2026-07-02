@@ -37,7 +37,12 @@ path = "tests/vdom_integration_tests.rs"
 name = "signal_dirty_tests"
 path = "tests/signal_dirty_tests.rs"
 
+[[test]]
+name = "world_space_panel_tests"
+path = "tests/world_space_panel_tests.rs"
+
 [dependencies]
+cvkg-materials.workspace = true
 cvkg-runic-text.workspace = true
 
 [dependencies.accesskit]
@@ -63,3 +68,6 @@ features = [
 
 [dependencies.serde_json]
 version = "1.0"
+
+[dev-dependencies]
+glam.workspace = true

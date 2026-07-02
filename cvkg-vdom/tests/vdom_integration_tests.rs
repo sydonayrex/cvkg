@@ -20,6 +20,7 @@ fn create_node(id: u64, key: Option<&str>, c_type: &str, children: Vec<NodeId>) 
         aria_role: "presentation".to_string(),
         aria_props: AriaProps::default(),
         portal_target: None,
+        world_space: None,
         sdf_shape: None,
     }
 }
@@ -182,6 +183,7 @@ fn interactive_node(
         aria_role: aria_role.to_string(),
         aria_props: AriaProps::default(),
         portal_target: None,
+        world_space: None,
         sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(cvkg_core::Rect {
             x,
             y,

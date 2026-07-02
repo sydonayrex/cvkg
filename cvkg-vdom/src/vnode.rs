@@ -1,4 +1,5 @@
-use cvkg_core::KvasirId;
+use cvkg_core::{KvasirId, Transform3D};
+use cvkg_materials::GlassMaterial;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -28,6 +29,45 @@ pub struct LayoutRect {
     pub width: f32,
     /// Height of the bounds
     pub height: f32,
+}
+
+/// A VDOM subtree rendered to an offscreen texture and composited as a
+/// 3D-positioned quad in the scene.
+///
+/// This encodes both the "portal target" concept and the 3D positioning
+/// in one structure, replacing the unused `VNode.portal_target` field.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct WorldSpacePanel {
+    /// Position, rotation, and scale in 3D world space.
+    pub transform: Transform3D,
+    /// Logical size of the panel in world units (meters).
+    /// The offscreen texture resolution = size * pixels_per_unit.
+    pub world_size: (f32, f32),
+    /// Pixels per world unit. 1.0 = 1 pixel per meter (low), 200.0 = sharp UI.
+    pub pixels_per_unit: f32,
+    /// Optional glass material for scene refraction through this panel.
+    pub glass: Option<GlassMaterial>,
+}
+
+impl Default for WorldSpacePanel {
+    fn default() -> Self {
+        Self {
+            transform: Transform3D::default(),
+            world_size: (1.0, 1.0),
+            pixels_per_unit: 200.0,
+            glass: None,
+        }
+    }
+}
+
+impl WorldSpacePanel {
+    /// Offscreen texture resolution in pixels.
+    pub fn texture_resolution(&self) -> (u32, u32) {
+        (
+            (self.world_size.0 * self.pixels_per_unit).round() as u32,
+            (self.world_size.1 * self.pixels_per_unit).round() as u32,
+        )
+    }
 }
 
 /// Accessibility ARIA properties for the DOM shadow tree.
@@ -74,6 +114,10 @@ pub struct VNode {
     pub aria_props: AriaProps,
     /// Optional portal target. If set, this node's children render into the target ID.
     pub portal_target: Option<NodeId>,
+    /// Optional world-space panel. If set, this node's VDOM subtree renders
+    /// to an offscreen texture and is composited as a quad at the panel's
+    /// 3D transform in the scene. Replaces the concept of portal_target.
+    pub world_space: Option<WorldSpacePanel>,
     /// Vili SDF Shape for precise hit testing
     pub sdf_shape: Option<cvkg_core::layout::SdfShape>,
 }
@@ -89,6 +133,8 @@ impl PartialEq for VNode {
             && self.children == other.children
             && self.aria_role == other.aria_role
             && self.aria_props == other.aria_props
+            && self.portal_target == other.portal_target
+            && self.world_space == other.world_space
             && self.sdf_shape == other.sdf_shape
     }
 }
@@ -128,6 +174,12 @@ impl VNode {
                 | "switch"
                 | "scrollbar"
         )
+    }
+
+    /// Attach a WorldSpacePanel to this VNode, enabling 3D compositing.
+    pub fn with_world_space(mut self, panel: WorldSpacePanel) -> Self {
+        self.world_space = Some(panel);
+        self
     }
 }
 
