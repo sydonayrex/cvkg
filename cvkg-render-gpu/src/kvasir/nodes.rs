@@ -1,16 +1,17 @@
-use crate::kvasir::node::{ExecutionContext, KvasirNode};
-use crate::kvasir::resource::ResourceId;
+use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use crate::passes::accessibility::AccessibilityNode;
 use crate::passes::backdrop_region::BackdropRegionNode;
 use crate::passes::bloom::{BloomBlurNode, BloomExtractNode};
 use crate::passes::composite::CompositeNode;
 use crate::passes::geometry::GeometryNode;
 use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
+use crate::passes::pre_world_panel::PreWorldPanelNode;
 use crate::passes::ui::UINode;
 use crate::passes::volumetric::VolumetricNode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PassId {
+    PreWorldPanel,
     Geometry,
     BackdropCopy,
     BackdropBlur,
@@ -29,6 +30,10 @@ pub enum PassId {
     },
     /// Per-element isolated backdrop region blur.
     BackdropRegion,
+    /// 3D shadow pass rendering depth maps.
+    Shadow,
+    /// 3D opaque pass rendering meshes with PBR.
+    Opaque3d,
 }
 
 pub struct PresentNode {
@@ -40,15 +45,19 @@ impl KvasirNode for PresentNode {
     fn label(&self) -> &'static str {
         "Present"
     }
+
     fn inputs(&self) -> &[ResourceId] {
         &self.inputs
     }
+
     fn outputs(&self) -> &[ResourceId] {
         &self.outputs
     }
+
     fn pass_id(&self) -> PassId {
         PassId::Present
     }
+
     fn execute(&self, _ctx: &mut ExecutionContext) {
         // Presentation is handled implicitly when submitting the command buffer
     }
@@ -70,6 +79,8 @@ pub struct RenderGraphConfig<'a> {
     pub has_volumetric: bool,
     pub active_offscreens: &'a [crate::types::OffscreenEffectConfig],
     pub portal_regions: &'a [cvkg_core::Rect],
+    /// World-space UI panels that render to offscreen textures for 3D compositing.
+    pub world_space_panels: &'a [cvkg_vdom::WorldSpacePanel],
     pub width: u32,
     pub height: u32,
     pub scale: f32,
@@ -78,6 +89,21 @@ pub struct RenderGraphConfig<'a> {
 /// Build the dynamic RenderGraph (KvasirGraph)
 pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::KvasirGraph {
     let mut builder = super::graph::GraphBuilder::new();
+
+    // PreWorldPanel pass: render WorldSpacePanel subtrees to offscreen textures.
+    // These textures will be sampled by Geometry pass for 3D quad compositing.
+    let mut panel_outputs = Vec::new();
+    for (i, panel) in config.world_space_panels.iter().enumerate() {
+        let size = panel.texture_resolution();
+        let tex_id = ResourceId(2000 + i as u32);
+        panel_outputs.push(tex_id);
+    }
+
+    if !panel_outputs.is_empty() {
+        let pre_panel = builder.add_node(Box::new(PreWorldPanelNode::new(panel_outputs)));
+        // No output connection needed - panels write to their allocated offscreen textures.
+        // Geometry pass will sample them via their ResourceIds.
+    }
 
     let geometry = builder.add_node(Box::new(GeometryNode::new()));
     let mut last_scene_node = geometry;
@@ -139,6 +165,22 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
         builder.connect(last_scene_node, RES_SCENE, volumetric);
         last_scene_node = volumetric;
     }
+
+    // 3D Shadow pass (runs before opaque 3D, outputs shadow map) - TODO: implement ShadowNode
+    // let shadow_rid = ResourceId(10000); // dedicated shadow map resource
+    // let shadow_node = builder.add_node(Box::new(ShadowNode {
+    //     light: config.directional_light,
+    //     shadow_map: shadow_rid,
+    //     mesh_instances: Vec::new(), // populated by scene traversal
+    // }));
+    // builder.connect(shadow_node, shadow_rid, last_scene_node); // shadow runs before scene
+
+    // 3D Opaque pass (runs after shadow, reads shadow map) - TODO: implement Opaque3dNode
+    // let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
+    //     shadow_map: shadow_rid,
+    //     mesh_instances: Vec::new(), // populated by scene traversal
+    // }));
+    // builder.connect(opaque_3d_node, RES_SCENE, last_scene_node); // opaque 3d writes to scene
 
     // Bloom extraction and blur (conditional)
     let mut last_bloom_node = None;

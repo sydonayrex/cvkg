@@ -55,7 +55,9 @@ path = "benches/large_tree.rs"
 harness = false
 
 [dependencies]
+cvkg-vdom = { version = ">=0.2.16", path = "../cvkg-vdom" }
 roxmltree = "0.21"
+thiserror.workspace = true
 
 [dependencies.accesskit]
 version = "0.24"

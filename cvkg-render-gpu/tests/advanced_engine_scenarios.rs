@@ -70,6 +70,7 @@ fn test_advanced_vdom_with_glassmorphism() {
         aria_role: "presentation".to_string(),
         aria_props: Default::default(),
         portal_target: None,
+        world_space: None,
         sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(Rect {
             x: 50.0,
             y: 50.0,

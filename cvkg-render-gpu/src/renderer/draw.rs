@@ -990,6 +990,7 @@ impl GpuRenderer {
                     has_volumetric,
                     active_offscreens: &self.active_offscreens,
                     portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
+                    world_space_panels: &[],
                     width,
                     height,
                     scale,

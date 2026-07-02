@@ -3,6 +3,23 @@
 use super::resource::ResourceId;
 use crate::renderer::GpuRenderer;
 
+/// Error type for Kvasir render graph operations.
+#[derive(Debug, thiserror::Error)]
+pub enum KvasirError {
+    #[error("Cycle detected in render graph: {0:?}")]
+    CycleDetected(Vec<String>),
+    #[error("Missing resource: {0}")]
+    MissingResource(String),
+    #[error("Invalid node configuration: {0}")]
+    InvalidNodeConfig(String),
+    #[error("Graph compilation failed: {0}")]
+    CompilationFailed(String),
+}
+
+/// Unique identifier for a node in the render graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GraphId(pub u64);
+
 /// Hint to the planner about preferred execution backend.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExecutionHint {
