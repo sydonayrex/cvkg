@@ -206,6 +206,7 @@ impl GpuRenderer {
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
             || last_call.unwrap().scissor_rect != scissor
+            || last_call.unwrap().panel_id != self.current_panel_id
             || last_call.unwrap().material != Self::resolve_material_with_context(material_id, &self.current_draw_material)
             || {
                 let last_material = last_call.unwrap().material;
@@ -221,7 +222,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
-                panel_id: None,
+                panel_id: self.current_panel_id,
                 texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
@@ -365,6 +366,7 @@ impl GpuRenderer {
         let last_call = self.draw_calls.last();
         let needs_new_call = self.draw_calls.is_empty()
             || last_call.unwrap().scissor_rect != scissor
+            || last_call.unwrap().panel_id != self.current_panel_id
             || last_call.unwrap().material != material
             || last_call.unwrap().texture_id != self.current_texture_id
             || {
@@ -381,7 +383,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
-                panel_id: None,
+                panel_id: self.current_panel_id,
                 texture_id: self.current_texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,

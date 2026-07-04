@@ -1116,11 +1116,11 @@ impl View for DawView {
 
         // Draw PLAY/PAUSE label centered
         renderer.draw_text_centered(
-                        "PAN",
-                        &pan_label_rect,
-                        9.0,
-                        text_light,
-                    );
+            if is_playing { "PAUSE" } else { "PLAY" },
+            &btn_rect,
+            9.0,
+            text_light,
+        );
         renderer.pop_vnode();
     }
 }

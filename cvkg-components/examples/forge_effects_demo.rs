@@ -3,7 +3,7 @@
 use cvkg_core::{Rect, Renderer};
 use cvkg_render_gpu::{
     ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role,
-    ShieldWallAdapter, SurtrRenderer, Tree, TreeId, TreeUpdate,
+    ShieldWallAdapter, GpuRenderer, Tree, TreeId, TreeUpdate,
 };
 use std::sync::Arc;
 use winit::{
@@ -15,7 +15,7 @@ use winit::{
 
 struct ForgeEffectsApp {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     shieldwall: Option<ShieldWallAdapter>,
 }
 
@@ -70,7 +70,7 @@ impl ApplicationHandler for ForgeEffectsApp {
 
         window.set_visible(true);
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone())).expect("Failed to initialize GPU");
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
         self.shieldwall = Some(shieldwall);
@@ -86,7 +86,7 @@ impl ApplicationHandler for ForgeEffectsApp {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id()).expect("Failed to begin frame");
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
 
                 // ── Background Void ──
                 renderer.fill_rect(

@@ -46,7 +46,7 @@ fn color_from_theme(key: &str) -> [f32; 4] {
         }
         "accent_hover" => {
             let a = colors.accent;
-            Color::new(a.r * 1.2, a.g * 1.2, a.b * 1.2, a.a)
+            Color::new((a.r * 1.2).min(1.0), (a.g * 1.2).min(1.0), (a.b * 1.2).min(1.0), a.a)
         }
         "hover" => {
             let a = colors.accent;

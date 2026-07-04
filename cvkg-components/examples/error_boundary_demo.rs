@@ -1,8 +1,8 @@
 // Error Boundary Demo
 
-use cvkg_components::{Color, ErrorBoundary};
-use cvkg_core::{ComponentErrorState, Rect, Renderer, State, View};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_components::Color;
+use cvkg_core::{ComponentErrorState, ErrorBoundary, Rect, Renderer, State, View};
+use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,7 +13,7 @@ use winit::{
 
 struct ErrorApp {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     error_state: State<ComponentErrorState>,
 }
 
@@ -29,7 +29,7 @@ impl ApplicationHandler for ErrorApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone())).expect("Failed to initialize GPU");
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()));
         self.window = Some(window);
         self.renderer = Some(renderer);
     }
@@ -59,7 +59,7 @@ impl ApplicationHandler for ErrorApp {
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id()).expect("Failed to begin frame");
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
 
                 // ── Background ──
                 renderer.fill_rect(
@@ -83,8 +83,27 @@ impl ApplicationHandler for ErrorApp {
                 // Normal content
                 let content = Color::new(0.0, 0.8, 1.0, 0.5); // Cyan semi-transparent
 
+                struct PanickingView<V> {
+                    state: State<ComponentErrorState>,
+                    child: V,
+                }
+
+                impl<V: View> View for PanickingView<V> {
+                    type Body = cvkg_core::Never;
+                    fn body(self) -> Self::Body { unreachable!() }
+                    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+                        if self.state.get().has_error {
+                            panic!("Simulated System Fault in Bifrost Link");
+                        }
+                        self.child.render(renderer, rect);
+                    }
+                }
+
                 // Wrap in boundary
-                let boundary = ErrorBoundary::new(self.error_state.clone(), content);
+                let boundary = ErrorBoundary::new(PanickingView {
+                    state: self.error_state.clone(),
+                    child: content,
+                });
 
                 boundary.render(renderer, error_rect);
 

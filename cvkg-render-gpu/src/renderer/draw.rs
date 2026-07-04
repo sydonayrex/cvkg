@@ -52,6 +52,9 @@ impl GpuRenderer {
         self.svg.clear_filter_batches();
         self.shared_elements.clear();
         self.current_texture_id = None;
+        self.current_panel_id = None;
+        self.panel_stack.clear();
+        self.world_space_panels.clear();
         self.opacity_stack.clear();
         self.opacity_stack.push(1.0);
         self.clip_stack.clear();
@@ -428,6 +431,7 @@ impl GpuRenderer {
         let needs_new_call = self.draw_calls.is_empty()
             || self.current_texture_id != texture_id
             || last_call.unwrap().scissor_rect != scissor
+            || last_call.unwrap().panel_id != self.current_panel_id
             || last_call.unwrap().material != material
             || {
                 let last_material = last_call.unwrap().material;
@@ -442,7 +446,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
-                panel_id: None,
+                panel_id: self.current_panel_id,
                 texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
@@ -643,6 +647,7 @@ impl GpuRenderer {
             || last_call.unwrap().scissor_rect != scissor
             || last_call.unwrap().material != material
             || last_call.unwrap().texture_id != self.current_texture_id
+            || last_call.unwrap().panel_id != self.current_panel_id
             || {
                 // Check if glass/blur state changed (these require pipeline changes)
                 let last_material = last_call.unwrap().material;
@@ -657,7 +662,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
-                panel_id: None,
+                panel_id: self.current_panel_id,
                 texture_id: self.current_texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
@@ -983,6 +988,12 @@ impl GpuRenderer {
             false
         };
 
+        for (id, panel) in &self.world_space_panels {
+            let width = (panel.world_size.0 * panel.pixels_per_unit).max(1.0) as u32;
+            let height = (panel.world_size.1 * panel.pixels_per_unit).max(1.0) as u32;
+            self.registry.allocate_offscreen(&self.device, *id, [width, height]);
+        }
+
         if !use_cache {
             let render_graph = crate::kvasir::nodes::build_render_graph(
                 &crate::kvasir::nodes::RenderGraphConfig {
@@ -992,7 +1003,7 @@ impl GpuRenderer {
                     has_volumetric,
                     active_offscreens: &self.active_offscreens,
                     portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
-                    world_space_panels: &[],
+                    world_space_panels: &self.world_space_panels,
                     width,
                     height,
                     scale,
@@ -1418,7 +1429,7 @@ impl GpuRenderer {
             instance_count: 1,
             material,
             target_id,
-            panel_id: None,
+            panel_id: self.current_panel_id,
             instance_start: cmd.instance_id,
             draw_order: 0,
         });
@@ -1569,6 +1580,7 @@ impl GpuRenderer {
         let needs_new_call = renderer.draw_calls.is_empty()
             || renderer.current_texture_id != texture_id
             || last_call.unwrap().scissor_rect != renderer.clip_stack.last().copied()
+            || last_call.unwrap().panel_id != renderer.current_panel_id
             || last_call.unwrap().material != material
             || {
                 let last_material = last_call.unwrap().material;
@@ -1583,7 +1595,7 @@ impl GpuRenderer {
             renderer.instance_data.push(current_instance_data);
             renderer.draw_calls.push(DrawCall {
                 target_id: None,
-                panel_id: None,
+                panel_id: renderer.current_panel_id,
                 texture_id,
                 scissor_rect: renderer.clip_stack.last().copied(),
                 index_start: (renderer.indices.len() - index_count as usize) as u32,

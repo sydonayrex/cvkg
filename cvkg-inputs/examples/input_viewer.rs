@@ -3,10 +3,10 @@
 //! Prints live gamepad, keyboard, and mouse state to the terminal.
 //! Run with: cargo run -p cvkg-inputs --example input_viewer --features gilrs
 
-use cvkg_inputs::backend::{NoopBackend, InputBackend};
+use cvkg_inputs::backend::NoopBackend;
 #[cfg(feature = "gilrs")]
 use cvkg_inputs::backend::GilrsBackend;
-use cvkg_inputs::{InputSystem, InputState};
+use cvkg_inputs::InputSystem;
 
 fn main() {
     let mut system = InputSystem::new();

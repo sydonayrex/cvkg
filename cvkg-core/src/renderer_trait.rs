@@ -653,7 +653,30 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
         Err("SVG filter not supported by this renderer".into())
     }
 
-    // ── GPU Transformations ──────────────────────────────────────────────
+    // ── 3D World Space Panels ────────────────────────────────────────────────
+    
+    /// Called when the traversal enters a VNode with a WorldSpacePanel configured.
+    /// Redirects subsequent draw calls into an offscreen texture for the panel,
+    /// similar to push_target.
+    fn begin_world_space_panel(
+        &mut self,
+        node_id: u64,
+        transform: &Transform3D,
+        glass: Option<cvkg_materials::GlassMaterial>,
+        pixels_per_unit: f32,
+        world_size: (f32, f32),
+    ) {
+        let _ = (node_id, transform, glass, pixels_per_unit, world_size);
+    }
+
+    /// Called when the traversal exits a VNode with a WorldSpacePanel configured.
+    /// Ends offscreen redirection and records the panel into the renderer state
+    /// for 3D compositing later in the frame graph.
+    fn end_world_space_panel(&mut self, node_id: u64) {
+        let _ = node_id;
+    }
+
+    // ── Coordinate Transforms ──────────────────────────────────────────────
     /// Push a 2D transform (translation, scale, rotation) onto the stack.
     /// This transform should be applied to all subsequent draw calls until popped.
     /// Transform-only animations use this to avoid re-triggering the layout engine.

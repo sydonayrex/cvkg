@@ -201,6 +201,7 @@ fn escape_attr(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cvkg_core::Renderer;
 
     #[test]
     fn test_headless_create() {

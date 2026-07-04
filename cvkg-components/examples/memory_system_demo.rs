@@ -2,7 +2,7 @@
 
 use cvkg_components::MemoryView;
 use cvkg_core::{KnowledgeFragment, KnowledgeState, Rect, Renderer, State, View};
-use cvkg_render_gpu::SurtrRenderer;
+use cvkg_render_gpu::GpuRenderer;
 use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
@@ -13,7 +13,7 @@ use winit::{
 
 struct MemoryApp {
     window: Option<Arc<Window>>,
-    renderer: Option<SurtrRenderer>,
+    renderer: Option<GpuRenderer>,
     memory_state: State<KnowledgeState>,
 }
 
@@ -29,7 +29,7 @@ impl ApplicationHandler for MemoryApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(SurtrRenderer::forge(window.clone())).expect("Failed to initialize GPU");
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone())).expect("Failed to initialize GPU");
         self.window = Some(window);
         self.renderer = Some(renderer);
 
@@ -91,7 +91,7 @@ impl ApplicationHandler for MemoryApp {
                 self.window.as_ref().unwrap().request_redraw();
             }
             WindowEvent::RedrawRequested => {
-                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id()).expect("Failed to begin frame");
+                let encoder = renderer.begin_frame(self.window.as_ref().unwrap().id());
 
                 // ── Background ──
                 renderer.fill_rect(

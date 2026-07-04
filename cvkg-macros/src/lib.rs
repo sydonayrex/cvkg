@@ -165,7 +165,26 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn body(self) -> Self::Body {
                     // Map fields back to local variables for the body
                     #(let #field_names = self.#field_names;)*
-                    cvkg_core::AnyView::new(#body)
+                    
+                    // The user's specification requested self.node_id(), but since View doesn't have it natively
+                    // without a trait update, we generate a stable ID from the type name as a fallback if needed,
+                    // or assume the user has added a node_id() method. We will use a hash of the type for now.
+                    let __tracking_id = {
+                        use std::hash::{Hash, Hasher};
+                        let mut __hasher = std::collections::hash_map::DefaultHasher::new();
+                        stringify!(#struct_name).hash(&mut __hasher);
+                        __hasher.finish()
+                    };
+                    
+                    cvkg_vdom::signals::begin_tracking(__tracking_id);
+                    let __result = cvkg_core::AnyView::new(#body);
+                    let __reads = cvkg_vdom::signals::end_tracking();
+                    
+                    for __signal_id in __reads {
+                        cvkg_vdom::signals::dependency_graph().write().unwrap().register(__tracking_id, __signal_id);
+                    }
+                    
+                    __result
                 }
 
                 #companion_states_impl

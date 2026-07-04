@@ -82,7 +82,7 @@ pub struct RenderGraphConfig<'a> {
     pub active_offscreens: &'a [crate::types::OffscreenEffectConfig],
     pub portal_regions: &'a [cvkg_core::Rect],
     /// World-space UI panels that render to offscreen textures for 3D compositing.
-    pub world_space_panels: &'a [cvkg_vdom::WorldSpacePanel],
+    pub world_space_panels: &'a [(u64, cvkg_vdom::WorldSpacePanel)],
     pub width: u32,
     pub height: u32,
     pub scale: f32,
@@ -102,7 +102,7 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     // These textures will be sampled by Geometry pass for 3D quad compositing.
     let mut panel_outputs = Vec::new();
     for (i, panel) in config.world_space_panels.iter().enumerate() {
-        let size = panel.texture_resolution();
+        let size = panel.1.texture_resolution();
         let tex_id = ResourceId(2000 + i as u32);
         panel_outputs.push(tex_id);
     }

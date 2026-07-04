@@ -7,7 +7,6 @@ use cvkg_inputs::DeviceId;
 /// Mock gilrs context for testing.
 struct MockGilrsContext {
     events: Vec<MockGilrsEvent>,
-    polled: bool,
 }
 
 enum MockGilrsEvent {
@@ -21,7 +20,6 @@ impl MockGilrsContext {
     fn new() -> Self {
         Self {
             events: Vec::new(),
-            polled: false,
         }
     }
 

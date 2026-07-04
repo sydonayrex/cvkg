@@ -770,7 +770,7 @@ fn berserker_click_box_regression() {
     // the overlay is only rendered when a menu is open, and the menu items
     // are positioned to be reachable.
     for i in 0..5 {
-        let mid = menu_ids[i];
+        let _mid = menu_ids[i];
         let cx = menu_x[i] + menu_w[i] / 2.0;
         let cy = 14.0;
         let hit = vdom.hit_test(cx, cy, 0.0).map(|(id, _)| id);

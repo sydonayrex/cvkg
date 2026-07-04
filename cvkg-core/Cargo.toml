@@ -66,6 +66,9 @@ workspace = true
 version = "0.3.0"
 
 
+[dependencies.cvkg-materials]
+workspace = true
+
 [dependencies.thiserror]
 version = "2.0"
 

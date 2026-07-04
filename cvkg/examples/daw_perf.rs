@@ -308,7 +308,7 @@ impl View for DawView {
             );
 
             // Track Name
-            renderer.draw_text_raw(track.name, 15.0, header_y + 15.0, 13.0, text_light);
+            renderer.draw_text_raw(&track.name, 15.0, header_y + 15.0, 13.0, text_light);
 
             // High Fidelity M S R Buttons - INTERACTIVE
             let draw_btn = |renderer: &mut dyn Renderer,

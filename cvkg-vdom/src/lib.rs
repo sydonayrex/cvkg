@@ -87,19 +87,67 @@ impl VDom {
         renderer.into_vdom()
     }
 
-    /// Phase 4.4: Prepare this VDom to receive a new frame's nodes by clearing
-    /// data while retaining allocated capacity in all HashMaps.
+    /// Extract WorldSpacePanel subtrees from this VDOM.
     ///
-    /// Call this at the start of a frame rebuild (before rebuilding) to reuse the
-    /// previous frame's heap allocations. This avoids repeated allocator churn
-    /// when the VDom is rebuilt every frame.
-    pub fn clear_and_retain_capacity(&mut self) {
-        self.root = None;
-        self.nodes.clear();
-        self.parents.clear();
-        self.event_handlers.clear();
-        // Note: focused_node, captured_node, hovered_node are Mutex<Option<NodeId>>
-        // and are not cleared here -- they carry state across frames.
+    /// Returns a vector of (panel_id, panel_config, panel_vdom) tuples for each
+    /// node that has a `world_space` configuration. The panel_vdom contains
+    /// the complete subtree rooted at that node, ready for offscreen rendering.
+    pub fn extract_panels(&self) -> Vec<(NodeId, WorldSpacePanel, VDom)> {
+        let mut panels = Vec::new();
+
+        // Find all nodes with world_space configuration
+        for (node_id, node) in &self.nodes {
+            if let Some(panel) = &node.world_space {
+                // Build a subtree VDom for this panel
+                let panel_vdom = self.build_subtree_vdom(*node_id);
+                panels.push((*node_id, panel.clone(), panel_vdom));
+            }
+        }
+
+        panels
+    }
+
+    /// Build a VDom containing only the subtree rooted at `root_id`.
+    fn build_subtree_vdom(&self, root_id: NodeId) -> VDom {
+        let mut new_vdom = VDom::new();
+
+        // Collect all nodes in the subtree
+        let mut subtree_nodes = Vec::new();
+        self.collect_subtree_nodes(root_id, &mut subtree_nodes);
+
+        // Copy nodes and parent relationships
+        for &node_id in &subtree_nodes {
+            if let Some(node) = self.nodes.get(&node_id) {
+                new_vdom.nodes.insert(node_id, node.clone());
+                if let Some(parent_id) = self.parents.get(&node_id) {
+                    // Only insert parent if it's also in the subtree (or is the root)
+                    if subtree_nodes.contains(parent_id) || *parent_id == root_id {
+                        new_vdom.parents.insert(node_id, *parent_id);
+                    }
+                }
+            }
+        }
+
+        new_vdom.root = Some(root_id);
+
+        // Copy event handlers for nodes in subtree
+        for &node_id in &subtree_nodes {
+            if let Some(handlers) = self.event_handlers.get(&node_id) {
+                new_vdom.event_handlers.insert(node_id, handlers.clone());
+            }
+        }
+
+        new_vdom
+    }
+
+    /// Recursively collect all node IDs in the subtree rooted at `node_id`.
+    fn collect_subtree_nodes(&self, node_id: NodeId, collected: &mut Vec<NodeId>) {
+        collected.push(node_id);
+        if let Some(node) = self.nodes.get(&node_id) {
+            for child_id in &node.children {
+                self.collect_subtree_nodes(*child_id, collected);
+            }
+        }
     }
 
     /// Apply a set of patches to the host's DOM environment.
@@ -1224,8 +1272,29 @@ impl cvkg_core::Renderer for VNodeRenderer {
     fn push_opacity(&mut self, _opacity: f32) {}
     fn pop_opacity(&mut self) {}
     fn bifrost(&mut self, _rect: cvkg_core::Rect, _blur: f32, _sat: f32, _op: f32) {}
-    fn push_mjolnir_slice(&mut self, _angle: f32, _offset: f32) {}
     fn pop_mjolnir_slice(&mut self) {}
+
+    fn begin_world_space_panel(
+        &mut self,
+        _node_id: u64,
+        transform: &cvkg_core::Transform3D,
+        glass: Option<cvkg_materials::GlassMaterial>,
+        pixels_per_unit: f32,
+        world_size: (f32, f32),
+    ) {
+        if let Some(id) = self.stack.last() {
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.world_space = Some(WorldSpacePanel {
+                    transform: transform.clone(),
+                    glass,
+                    pixels_per_unit,
+                    world_size,
+                });
+            }
+        }
+    }
+
+    fn end_world_space_panel(&mut self, _node_id: u64) {}
 
     fn mjolnir_shatter(&mut self, rect: cvkg_core::Rect, pieces: u32, force: f32, color: [f32; 4]) {
         self.begin_decorative(rect);

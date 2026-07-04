@@ -67,6 +67,8 @@ impl cvkg_core::ElapsedTime for TraceRenderer {
     }
 }
 
+impl cvkg_core::RendererErrorHandler for TraceRenderer {}
+
 impl Renderer for TraceRenderer {
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.log(format!(
@@ -177,6 +179,13 @@ impl Renderer for TraceRenderer {
         self.log(format!(
             "draw_text(\"{}\" at ({:.1},{:.1}) size={:.1} color={:?}",
             text, rect.x, rect.y, size, color
+        ));
+    }
+
+    fn draw_text_raw(&mut self, text: &str, x: f32, y: f32, size: f32, color: [f32; 4]) {
+        self.log(format!(
+            "draw_text(\"{}\" at ({:.1},{:.1}) size={:.1} color={:?}",
+            text, x, y, size, color
         ));
     }
 
@@ -323,7 +332,7 @@ impl View for SingleTextView {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "SingleText");
-        renderer.draw_text_raw(self.content, rect.x, rect.y, self.font_size, self.color);
+        renderer.draw_text_raw(&self.content, rect.x, rect.y, self.font_size, self.color);
         renderer.pop_vnode();
     }
 

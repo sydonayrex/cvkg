@@ -59,9 +59,11 @@ pub use error_boundary::{ComponentErrorState, ErrorBoundary};
 pub use knowledge::{
     AnnouncementPriority, AppState, KnowledgeFragment, KnowledgeId, LAYOUT_DIRTY, MemoryLayer,
     SYSTEM_STATE, TemporalEdge, TemporalNode, UiFidelityLevel, begin_render_phase,
-    end_render_phase, fallback_runtime, get_system_state, is_rendering, load_system_state,
+    end_render_phase, get_system_state, is_rendering, load_system_state,
     set_rendering, snapshot_system_state, update_system_state,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use knowledge::fallback_runtime;
 pub use undo::{UndoGroup, UndoManager};
 pub use window::{Window, WindowCloseAction, WindowConfig, WindowHandle, WindowId, WindowLevel};
 

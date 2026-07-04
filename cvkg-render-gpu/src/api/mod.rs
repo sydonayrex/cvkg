@@ -1168,7 +1168,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             });
             self.draw_calls.push(DrawCall {
                 target_id: None,
-                panel_id: None,
+                panel_id: self.current_panel_id,
                 texture_id: None,
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),
@@ -1248,7 +1248,7 @@ impl cvkg_core::Renderer for GpuRenderer {
 
         self.draw_calls.push(DrawCall {
             target_id: None,
-                panel_id: None,
+            panel_id: self.current_panel_id,
             texture_id: None,
             scissor_rect: self.clip_stack.last().copied(),
             index_start: (self.indices.len() as u32) - (mesh.indices.len() as u32),

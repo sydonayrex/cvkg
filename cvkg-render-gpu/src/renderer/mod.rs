@@ -5,7 +5,7 @@ use crate::vertex::*;
 use cvkg_core::Rect;
 use cvkg_core::{ColorTheme, SceneUniforms};
 use lru::LruCache;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
@@ -81,6 +81,10 @@ pub struct GpuRenderer {
     pub(crate) registry: crate::kvasir::registry::ResourceRegistry,
 
     pub(crate) active_offscreens: Vec<crate::types::OffscreenEffectConfig>,
+    pub(crate) world_space_panels: Vec<(u64, cvkg_vdom::WorldSpacePanel)>,
+    /// VDOM subtrees for WorldSpacePanel offscreen rendering.
+    /// Key is the panel ID (matches world_space_panels).
+    pub(crate) panel_vdoms: HashMap<u64, cvkg_vdom::VDom>,
     pub(crate) effect_pipelines: std::collections::HashMap<String, wgpu::RenderPipeline>,
     pub(crate) effect_params_buffer: wgpu::Buffer,
     pub(crate) effect_params_bind_group: wgpu::BindGroup,
@@ -155,6 +159,10 @@ pub struct GpuRenderer {
     pub(crate) staging_command_buffers: Vec<wgpu::CommandBuffer>,
     pub(crate) draw_calls: Vec<DrawCall>,
     pub(crate) current_texture_id: Option<u32>,
+    /// Current WorldSpacePanel ID being rendered. Some(id) = inside panel VDOM subtree.
+    /// None = rendering to main surface (2D UI).
+    pub(crate) current_panel_id: Option<u64>,
+    pub(crate) panel_stack: Vec<u64>,
 
     // Opacity & Clip Stacks
     pub(crate) opacity_stack: Vec<f32>,
@@ -1429,5 +1437,38 @@ impl GpuRenderer {
             Some((width, height, wgpu::TextureFormat::Rgba8UnormSrgb)),
         )
         .await
+    }
+
+    pub fn set_world_space_panels(&mut self, panels: Vec<(u64, cvkg_vdom::WorldSpacePanel)>) {
+        self.world_space_panels = panels;
+    }
+
+    pub fn begin_world_space_panel(
+        &mut self,
+        node_id: u64,
+        transform: &cvkg_core::Transform3D,
+        glass: Option<cvkg_materials::GlassMaterial>,
+        pixels_per_unit: f32,
+        world_size: (f32, f32),
+    ) {
+        if let Some(prev) = self.current_panel_id {
+            self.panel_stack.push(prev);
+        }
+        self.current_panel_id = Some(node_id);
+
+        let panel = cvkg_vdom::WorldSpacePanel {
+            transform: transform.clone(),
+            glass,
+            pixels_per_unit,
+            world_size,
+        };
+        // Record it so the rendering graph knows about it
+        if !self.world_space_panels.iter().any(|(id, _)| *id == node_id) {
+            self.world_space_panels.push((node_id, panel));
+        }
+    }
+
+    pub fn end_world_space_panel(&mut self, _node_id: u64) {
+        self.current_panel_id = self.panel_stack.pop();
     }
 }

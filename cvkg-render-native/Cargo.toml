@@ -49,6 +49,9 @@ version = "3.6"
 [dependencies.cvkg-core]
 version = "0.3.0"
 
+[dependencies.cvkg-materials]
+workspace = true
+
 [dependencies.cvkg-render-gpu]
 version = "0.3.0"
 

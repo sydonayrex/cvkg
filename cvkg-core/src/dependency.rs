@@ -60,6 +60,11 @@ impl DependencyGraph {
         }
     }
 
+    /// Alias for unregister to clear stale tracking before a component re-renders.
+    pub fn clear_component(&mut self, component_id: u64) {
+        self.unregister(component_id);
+    }
+
     /// Return the set of component IDs that depend on `state_key`.
     ///
     /// Returns an empty slice when no component depends on this key.

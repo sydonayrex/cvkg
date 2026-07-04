@@ -1,9 +1,9 @@
 //! Additional edge-case and error-handling tests.
 
-use cvkg_inputs::backend::{InputBackend, InputEvent, NoopBackend};
+use cvkg_inputs::backend::{InputEvent, NoopBackend};
 use cvkg_inputs::error::InputError;
 use cvkg_inputs::{
-    ActionMap, Binding, DeviceId, GamepadAxis, GamepadButton, GamepadState, InputState,
+    ActionMap, DeviceId, GamepadAxis, GamepadButton, GamepadState, InputState,
     KeyboardState, MouseButton, MouseState, TouchPoint, TouchState,
 };
 

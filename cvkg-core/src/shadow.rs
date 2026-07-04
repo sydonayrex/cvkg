@@ -230,7 +230,7 @@ impl<V: View> ViewShadowExt for V {}
 mod tests {
     use super::*;
     use crate::testing::MockRenderer;
-    use crate::{Color, Never, Rect, Renderer, View};
+    use crate::{Never, Rect, Renderer, View};
 
     struct TestView;
 
@@ -248,7 +248,7 @@ mod tests {
     fn shadow_renders_without_panic() {
         let mut renderer = MockRenderer::new();
         let rect = Rect::new(10.0, 10.0, 100.0, 50.0);
-        let shadow = Shadow::drop(0.0, 4.0, 8.0);
+        let _shadow = Shadow::drop(0.0, 4.0, 8.0);
         let view = TestView.shadow(0.0, 4.0, 8.0, [0.0, 0.0, 0.0, 0.3]);
         view.render(&mut renderer, rect);
         // Shadow uses push/pop which are recorded as no-ops in MockRenderer

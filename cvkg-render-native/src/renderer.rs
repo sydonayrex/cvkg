@@ -228,6 +228,21 @@ impl cvkg_core::ElapsedTime for NativeRenderer {
 impl cvkg_core::RendererErrorHandler for NativeRenderer {}
 
 impl cvkg_core::Renderer for NativeRenderer {
+    fn begin_world_space_panel(
+        &mut self,
+        node_id: u64,
+        transform: &cvkg_core::Transform3D,
+        glass: Option<cvkg_materials::GlassMaterial>,
+        pixels_per_unit: f32,
+        world_size: (f32, f32),
+    ) {
+        self.gpu_ref().begin_world_space_panel(node_id, transform, glass, pixels_per_unit, world_size);
+    }
+
+    fn end_world_space_panel(&mut self, node_id: u64) {
+        self.gpu_ref().end_world_space_panel(node_id);
+    }
+
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {
         self.gpu_ref().fill_rect(rect, color);
     }

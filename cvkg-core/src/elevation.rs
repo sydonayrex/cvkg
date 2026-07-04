@@ -129,7 +129,7 @@ pub mod z_index {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Color, ModifiedView, Never, Rect, Renderer, View, testing::MockRenderer};
+    use crate::{Never, Rect, Renderer, View, testing::MockRenderer};
 
     struct SolidView {
         color: [f32; 4],

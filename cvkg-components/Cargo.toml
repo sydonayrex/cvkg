@@ -166,3 +166,9 @@ version = ">=0.2.17"
 
 [dev-dependencies.cvkg-render-gpu]
 version = ">=0.2.17"
+
+[dev-dependencies.winit]
+version = "0.30"
+
+[dev-dependencies.cvkg-materials]
+path = "../cvkg-materials"
