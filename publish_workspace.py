@@ -21,16 +21,16 @@ def extract_deps(content):
             continue
         if part.startswith('['):
             current_section = part.strip()
-            # Match dependency table headers e.g., [dependencies.cvkg-core]
-            sec_match = re.match(r'^\[(?:dependencies|build-dependencies)\.(cvkg-[a-z0-9-]+)(?:\..+)?\]', current_section)
+            # Match dependency table headers e.g., [dependencies.cvkg] or [dependencies.cvkg-core]
+            sec_match = re.match(r'^\[(?:dependencies|build-dependencies)\.(cvkg(?:-[a-z0-9-]+)?)(?:\..+)?\]', current_section)
             if sec_match:
                 deps.add(sec_match.group(1))
         else:
             if 'dev-dependencies' in current_section:
                 continue
             
-            # Match standard dependencies e.g., cvkg-core = { ... } or cvkg-core.workspace = true
-            potential = re.findall(r'^\s*(cvkg-[a-z0-9-]+)(?:\.[a-z0-9-]+)?\s*=', part, re.MULTILINE)
+            # Match standard dependencies e.g., cvkg = { ... } or cvkg-core.workspace = true
+            potential = re.findall(r'^\s*(cvkg(?:-[a-z0-9-]+)?)(?:\.[a-z0-9-]+)?\s*=', part, re.MULTILINE)
             for d in potential:
                 deps.add(d)
                 
@@ -136,7 +136,7 @@ def strip_private_deps(cargo_path, private_crates):
                 for line in lines:
                     is_private = False
                     for p in private_crates:
-                        if re.search(rf'^\s*{p}\s*=', line):
+                        if re.search(rf'^\s*{p}(?:\.[a-z0-9-]+)?\s*=', line):
                             is_private = True
                             break
                     if not is_private:
@@ -147,8 +147,6 @@ def strip_private_deps(cargo_path, private_crates):
                 
     # Reassemble the file
     with open(cargo_path, 'w', encoding='utf-8') as f:
-        # Rejoin section headers and bodies properly
-        # Since parts has headers at odd/even positions, we can reconstruct
         reconstructed = ""
         for item in new_parts:
             if item.startswith('['):
