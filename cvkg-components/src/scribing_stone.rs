@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 /// Also available as `ScribingNote` or `Markdown` via `cvkg::prelude::*`
 /// or directly via `use ScribingStone as ScribingNote`.
 pub use ScribingStone as ScribingNote;
+pub use ScribingStone as Markdown;
 
 #[doc(alias = "ScribingNote")]
 pub struct ScribingStone {
