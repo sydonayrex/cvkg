@@ -233,6 +233,10 @@ pub struct GpuRenderer {
     pub(crate) ui_pipeline: wgpu::RenderPipeline,
     /// Specialized glass material pipeline (mode 7 only, ~150 lines of complex math).
     pub(crate) glass_pipeline: wgpu::RenderPipeline,
+    /// PBR rendering pipeline for 3D surfaces (modes 13+ with shadow mapping).
+    pub(crate) pbr_pipeline: wgpu::RenderPipeline,
+    /// Shadow map rendering pipeline (depth-only for cascaded shadows).
+    pub(crate) shadow_pipeline: wgpu::RenderPipeline,
     pub(crate) background_pipeline: wgpu::RenderPipeline,
     pub(crate) bloom_extract_pipeline: wgpu::RenderPipeline,
     /// Identity copy pipeline for Pass 2 backdrop blur (all pixels, no luminance gate).

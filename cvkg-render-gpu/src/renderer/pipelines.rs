@@ -1,5 +1,5 @@
 use crate::types::{GpuParticle, MAX_PARTICLES, ParticleUniforms};
-use crate::vertex::{InstanceData, Vertex};
+use crate::vertex::{InstanceData, InstanceData3D, Vertex};
 use crate::{WGSL_PARTICLES, WGSL_TONEMAP};
 
 pub(crate) struct CompiledPipelines {
@@ -31,6 +31,9 @@ pub(crate) struct CompiledPipelines {
     pub(crate) particle_render_pipeline: wgpu::RenderPipeline,
     pub(crate) particle_render_bgl: wgpu::BindGroupLayout,
     pub(crate) tonemap_pipeline: wgpu::RenderPipeline,
+    // New 3D pipelines
+    pub(crate) pbr_pipeline: wgpu::RenderPipeline,
+    pub(crate) shadow_pipeline: wgpu::RenderPipeline,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -45,6 +48,8 @@ pub(crate) fn compile_render_pipelines(
     shader: &wgpu::ShaderModule,
     wgsl_opaque: &str,
     wgsl_glass: &str,
+    wgsl_pbr: &str,
+    wgsl_shadow: &str,
     queue: &wgpu::Queue,
 ) -> CompiledPipelines {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -253,6 +258,73 @@ pub(crate) fn compile_render_pipelines(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
+        multiview_mask: None,
+        cache: pipeline_cache,
+    });
+
+    // PBR pipeline for 3D surfaces (mode 13+ with shadow mapping)
+    let pbr_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Surtr PBR Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_pbr)),
+    });
+
+    let pbr_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Surtr PBR"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &pbr_shader,
+            entry_point: Some("vs_main_3d"),
+            buffers: &[Vertex::desc(), InstanceData3D::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &pbr_shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rgba16Float,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::GreaterEqual),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: pipeline_cache,
+    });
+
+    // Shadow pipeline for cascaded shadow map rendering (depth-only)
+    let shadow_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Surtr Shadow Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_shadow)),
+    });
+
+    let shadow_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Surtr Shadow Map"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shadow_shader,
+            entry_point: Some("vs_shadow"),
+            buffers: &[Vertex::desc(), InstanceData3D::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: None, // Depth-only pass
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
         multiview_mask: None,
         cache: pipeline_cache,
     });
@@ -930,5 +1002,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         particle_render_pipeline,
         particle_render_bgl,
         tonemap_pipeline,
+        pbr_pipeline,
+        shadow_pipeline,
     }
 }

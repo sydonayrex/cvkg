@@ -141,6 +141,8 @@ pub(crate) const WGSL_MATERIAL_OPAQUE: &str = include_str!("shaders/material_opa
 pub(crate) const WGSL_MATERIAL_OPAQUE: &str = include_str!("shaders/material_opaque.wgsl");
 
 pub(crate) const WGSL_MATERIAL_GLASS: &str = include_str!("shaders/material_glass.wgsl");
+pub(crate) const WGSL_MATERIAL_PBR: &str = include_str!("shaders/material_pbr.wgsl");
+pub(crate) const WGSL_MATERIAL_SHADOW: &str = include_str!("shaders/material_shadow.wgsl");
 pub(crate) const WGSL_BIFROST: &str = include_str!("shaders/bifrost.wgsl");
 
 #[cfg(target_arch = "wasm32")]

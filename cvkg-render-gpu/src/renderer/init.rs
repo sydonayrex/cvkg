@@ -11,7 +11,7 @@ use crate::types::{
 };
 use crate::{
     WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND, WGSL_COMMON, WGSL_MATERIAL_GLASS,
-    WGSL_MATERIAL_OPAQUE, WGSL_SHAPES,
+    WGSL_MATERIAL_OPAQUE, WGSL_MATERIAL_PBR, WGSL_MATERIAL_SHADOW, WGSL_SHAPES,
 };
 use cvkg_core::{ColorTheme, Rect, SceneUniforms};
 use lru::LruCache;
@@ -376,6 +376,21 @@ impl GpuRenderer {
             WGSL_COLOR_BLIND,
             materials_generated
         );
+        let wgsl_pbr = format!(
+            "{}{}{}{}{}{}",
+            WGSL_COMMON,
+            WGSL_MATERIAL_PBR,
+            WGSL_BIFROST,
+            WGSL_BLOOM,
+            WGSL_COLOR_BLIND,
+            materials_generated
+        );
+        let wgsl_shadow = format!(
+            "{}{}{}",
+            WGSL_COMMON,
+            WGSL_MATERIAL_SHADOW,
+            materials_generated
+        );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Surtr Main Shader"),
@@ -494,6 +509,8 @@ impl GpuRenderer {
             &shader,
             wgsl_opaque.as_str(),
             wgsl_glass.as_str(),
+            wgsl_pbr.as_str(),
+            wgsl_shadow.as_str(),
             &queue,
         );
 
@@ -829,6 +846,8 @@ impl GpuRenderer {
             opaque_pipeline: pipes.opaque_pipeline,
             ui_pipeline: pipes.ui_pipeline,
             glass_pipeline: pipes.glass_pipeline,
+            pbr_pipeline: pipes.pbr_pipeline,
+            shadow_pipeline: pipes.shadow_pipeline,
             bloom_extract_pipeline: pipes.bloom_extract_pipeline,
             copy_pipeline: pipes.copy_pipeline,
             composite_pipeline: pipes.composite_pipeline,

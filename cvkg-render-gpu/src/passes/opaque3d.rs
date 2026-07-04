@@ -39,18 +39,6 @@ impl KvasirNode for Opaque3dNode {
             self.shadow_map,
         );
 
-        // Get the shadow map texture view from the resource registry.
-        let _shadow_texture_view = match ctx.registry.get_texture_view(self.shadow_map) {
-            Some(v) => v,
-            None => {
-                tracing::warn!(
-                    "Opaque3dNode: shadow map texture view not found — \
-                     proceeding without shadows",
-                );
-                return;
-            }
-        };
-
         // Use the main scene render target (RES_SCENE) for color output.
         let scene_view = match ctx
             .registry
@@ -87,7 +75,7 @@ impl KvasirNode for Opaque3dNode {
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: depth_view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    load: wgpu::LoadOp::Clear(0.0),
                     store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
@@ -96,6 +84,10 @@ impl KvasirNode for Opaque3dNode {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+
+        // Bind the PBR pipeline and required bind groups.
+        pass.set_pipeline(&ctx.renderer.pbr_pipeline);
+        pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
 
         // For each mesh instance, set vertex/index buffers and draw.
         for mesh in self.mesh_instances.iter() {

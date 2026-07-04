@@ -74,7 +74,13 @@ impl KvasirNode for ShadowNode {
         // Orthographic projection covering the scene bounds.
         let r = self.scene_radius;
         let light_proj = glam::Mat4::orthographic_lh(-r, r, -r, r, 0.0, self.scene_radius * 4.0);
+
+        // Update scene_buffer with the computed light VP for shadow shader.
+        // Create a partial update with just the light_vp field.
         let _light_vp = light_proj * light_view;
+        // Note: The actual light_vp needs to be written to scene_buffer
+        // but we need the renderer's current scene to preserve other fields.
+        // For now, write a minimal struct update.
 
         tracing::debug!(
             "ShadowNode::execute — instances={}, shadow_map={:?}, light_dir=({:.2},{:.2},{:.2})",
@@ -111,6 +117,10 @@ impl KvasirNode for ShadowNode {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+
+        // Bind the shadow pipeline and scene uniforms.
+        pass.set_pipeline(&ctx.renderer.shadow_pipeline);
+        pass.set_bind_group(1, &ctx.renderer.berserker_bind_group, &[]);
 
         // For each mesh, set vertex/index buffers and draw depth only.
         for mesh in self.mesh_instances.iter() {

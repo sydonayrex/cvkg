@@ -29,3 +29,26 @@ where
     }
     guard.len()
 }
+
+/// Invoke only subscribers with the given component IDs.
+/// The subscriber list is indexed by component ID (position in vec).
+pub(crate) fn invoke_subscribers_by_id<T>(subs: &SubscriberList<T>, val: &T, ids: &[u64]) -> usize
+where
+    T: 'static,
+{
+    let guard = match subs.lock() {
+        Ok(g) => g,
+        Err(poisoned) => {
+            tracing::warn!("[invoke_subscribers_by_id] subscriber lock poisoned, recovering");
+            poisoned.into_inner()
+        }
+    };
+    let mut count = 0;
+    for id in ids {
+        if let Some(cb) = guard.get(*id as usize) {
+            cb(val);
+            count += 1;
+        }
+    }
+    count
+}

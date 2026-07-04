@@ -1,8 +1,10 @@
 use crate::agents;
+use crate::dependency::DependencyGraph;
 use crate::*;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::sync::RwLock;
 
 /// Thread-safe reactive state with multiple storage mechanism.
 ///
@@ -32,6 +34,10 @@ pub struct State<T: Clone + Send + Sync + 'static> {
     subscribers: SubscriberList<T>,
     version: Arc<AtomicU64>,
     resolution: agents::ConflictResolution,
+    /// Stable hash of the type path, computed once at construction.
+    state_key: u64,
+    /// Optional dependency graph for narrow fan-out.
+    dep_graph: Option<Arc<RwLock<DependencyGraph>>>,
 }
 
 impl<T: Clone + Send + Sync + 'static> State<T> {
@@ -39,6 +45,15 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
     pub fn new(value: T) -> Self {
         // Initialize metadata (None for fresh state, no mutation history)
         let metadata: Option<agents::MutationMetadata> = None;
+        // Compute stable state_key from type name
+        let type_name = std::any::type_name::<T>();
+        let state_key = {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            type_name.hash(&mut hasher);
+            hasher.finish()
+        };
         Self {
             #[cfg(not(target_arch = "wasm32"))]
             tvar: Arc::new(stm::TVar::new(value.clone())),
@@ -49,6 +64,8 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
             subscribers: Arc::new(std::sync::Mutex::new(Vec::new())),
             version: Arc::new(AtomicU64::new(0)),
             resolution: agents::ConflictResolution::LastWriterWins,
+            state_key,
+            dep_graph: None,
         }
     }
 
@@ -110,7 +127,39 @@ impl<T: Clone + Send + Sync + 'static> State<T> {
 
     /// Notify all subscribers of a new value.
     fn notify(&self, value: &T) {
+        if let Some(graph) = &self.dep_graph {
+            let graph = graph.read().unwrap();
+            if graph.has_dependents(self.state_key) {
+                // narrow fan-out: only affected components
+                let ids: Vec<u64> = graph.affected_components(self.state_key).collect();
+                invoke_subscribers_by_id(&self.subscribers, value, &ids);
+                return;
+            }
+        }
+        // fallback: full fan-out when no graph is attached
         invoke_subscribers_safely(&self.subscribers, value);
+    }
+
+    /// Attach a dependency graph for narrow fan-out.
+    pub fn attach_dep_graph(&mut self, graph: Arc<RwLock<DependencyGraph>>, key: u64) {
+        self.dep_graph = Some(graph);
+        self.state_key = key;
+    }
+
+    /// Register a dependency on this state for a component.
+    pub fn register_dependency(&self, component_id: u64) {
+        if let Some(graph) = &self.dep_graph {
+            let mut graph = graph.write().unwrap();
+            graph.register(component_id, self.state_key);
+        }
+    }
+
+    /// Unregister a component's dependency on this state.
+    pub fn unregister_dependency(&self, component_id: u64) {
+        if let Some(graph) = &self.dep_graph {
+            let mut graph = graph.write().unwrap();
+            graph.unregister(component_id);
+        }
     }
 
     /// Get the current version counter.
