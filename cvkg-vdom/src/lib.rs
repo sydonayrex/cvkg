@@ -1408,11 +1408,10 @@ impl cvkg_core::Renderer for VNodeRenderer {
         }
 
         // 4. Update the stack entry (the node is still being built).
-        if let Some(top) = self.stack.last_mut() {
-            if *top == old_id {
+        if let Some(top) = self.stack.last_mut()
+            && *top == old_id {
                 *top = stable_id;
             }
-        }
 
         // 5. Update the parent's children list so the tree stays consistent.
         // During building, the parent is the second-to-last item on the stack.

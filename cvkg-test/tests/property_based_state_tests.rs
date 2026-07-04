@@ -2,7 +2,7 @@
 // Tests state transitions, VDOM patches, and component behavior using proptest
 
 use cvkg_core::KvasirId;
-use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VNode, WorldSpacePanel};
+use cvkg_vdom::{AriaProps, LayoutRect, NodeId, VNode};
 use proptest::prelude::*;
 use std::collections::HashMap;
 
@@ -33,7 +33,6 @@ prop_compose! {
             world_space: None,
             theme_override: None,
             color_palette: u16::MAX,
-            sdf_shape: None,
             companions: HashMap::new(),
         }
     }
@@ -57,7 +56,6 @@ proptest! {
             world_space: None,
             theme_override: None,
             color_palette: u16::MAX,
-            sdf_shape: None,
             companions: HashMap::new(),
         };
         assert_eq!(node.id.0, id);
@@ -95,7 +93,6 @@ prop_compose! {
             world_space: None,
             theme_override: None,
             color_palette: u16::MAX,
-            sdf_shape: None,
             companions: HashMap::new(),
         }
     }

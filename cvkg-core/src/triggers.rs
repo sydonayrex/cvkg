@@ -9,6 +9,9 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// Type alias for typed event handlers to improve readability.
+pub type EventHandler<E> = Arc<dyn Fn(&E, &mut EventCtx) + Send + Sync>;
+
 /// Marker trait for events that can be dispatched through the VDOM trigger registry.
 ///
 /// # Contract
@@ -69,7 +72,7 @@ impl TriggerRegistry {
         node_id: KvasirId,
         handler: impl Fn(&E, &mut EventCtx) + Send + Sync + 'static,
     ) {
-        let arc: Arc<dyn Fn(&E, &mut EventCtx) + Send + Sync> = Arc::new(handler);
+        let arc: EventHandler<E> = Arc::new(handler);
         let key = (node_id, TypeId::of::<E>());
         self.handlers
             .entry(key)
@@ -89,7 +92,7 @@ impl TriggerRegistry {
         let mut rerender = false;
         if let Some(handlers) = self.handlers.get(&key) {
             for h in handlers {
-                if let Some(f) = h.downcast_ref::<Arc<dyn Fn(&E, &mut EventCtx) + Send + Sync>>() {
+                if let Some(f) = h.downcast_ref::<EventHandler<E>>() {
                     f(event, ctx);
                     if ctx.request_rerender {
                         rerender = true;

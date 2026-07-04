@@ -578,3 +578,9 @@ impl EikonaForm {
         errors
     }
 }
+
+impl Default for EikonaForm {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -207,8 +207,8 @@ impl View for Checkbox {
         renderer.register_handler(
             "pointerclick",
             std::sync::Arc::new(move |evt| {
-                if let cvkg_core::Event::PointerClick { x, y, .. } = evt {
-                    if x >= rect_clone.x
+                if let cvkg_core::Event::PointerClick { x, y, .. } = evt
+                    && x >= rect_clone.x
                         && x <= rect_clone.x + rect_clone.width
                         && y >= rect_clone.y
                         && y <= rect_clone.y + rect_clone.height
@@ -216,7 +216,6 @@ impl View for Checkbox {
                         tracing::debug!("Checkbox clicked: {:?}", lbl);
                         (on_change)(!is_checked);
                     }
-                }
             }),
         );
 

@@ -56,6 +56,12 @@ impl HatiSpinner {
     }
 }
 
+impl Default for HatiSpinner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for HatiSpinner {
     type Body = Never;
 

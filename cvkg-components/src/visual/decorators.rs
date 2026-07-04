@@ -179,6 +179,12 @@ impl UrdrTimeline {
     }
 }
 
+impl Default for UrdrTimeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for UrdrTimeline {
     type Body = Never;
     fn body(self) -> Self::Body {
@@ -274,6 +280,12 @@ impl DraumaSkeleton {
     pub fn shimmer(mut self, enabled: bool) -> Self {
         self.shimmer = enabled;
         self
+    }
+}
+
+impl Default for DraumaSkeleton {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

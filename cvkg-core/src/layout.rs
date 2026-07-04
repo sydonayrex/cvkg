@@ -150,12 +150,12 @@ impl LayoutCache {
 
     pub fn get_size(&self, view_hash: u64, proposal: SizeProposal) -> Option<Size> {
         debug_assert!(
-            proposal.width.map_or(true, |v| v.is_finite()),
+            proposal.width.is_none_or(|v| v.is_finite()),
             "layout proposal width is not finite: {:?}",
             proposal.width
         );
         debug_assert!(
-            proposal.height.map_or(true, |v| v.is_finite()),
+            proposal.height.is_none_or(|v| v.is_finite()),
             "layout proposal height is not finite: {:?}",
             proposal.height
         );
@@ -166,12 +166,12 @@ impl LayoutCache {
 
     pub fn set_size(&mut self, view_hash: u64, proposal: SizeProposal, size: Size) {
         debug_assert!(
-            proposal.width.map_or(true, |v| v.is_finite()),
+            proposal.width.is_none_or(|v| v.is_finite()),
             "layout proposal width is not finite: {:?}",
             proposal.width
         );
         debug_assert!(
-            proposal.height.map_or(true, |v| v.is_finite()),
+            proposal.height.is_none_or(|v| v.is_finite()),
             "layout proposal height is not finite: {:?}",
             proposal.height
         );

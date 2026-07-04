@@ -1115,10 +1115,10 @@ impl ThemeBuilder {
             let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
             let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
             if c.a >= 0.999 {
-                let _ = std::write!(css, "  --cvkg-{name}: #{r:02x}{g:02x}{b:02x};\n");
+                let _ = writeln!(css, "  --cvkg-{name}: #{r:02x}{g:02x}{b:02x};");
             } else {
                 let a = c.a.clamp(0.0, 1.0);
-                let _ = std::write!(css, "  --cvkg-{name}: rgba({r},{g},{b},{a:.3});\n");
+                let _ = writeln!(css, "  --cvkg-{name}: rgba({r},{g},{b},{a:.3});");
             }
         };
 

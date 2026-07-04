@@ -140,16 +140,17 @@ impl View for InputOTP {
 
             // Character content
             if i < char_count as u32 {
-                let ch = self.value.chars().nth(i as usize).unwrap();
-                let display = if self.masked { "•" } else { &ch.to_string() };
-                let (tw, _) = renderer.measure_text(display, FONT_LG);
-                renderer.draw_text_raw(
-                    display,
-                    box_rect.x + (box_w - tw) / 2.0,
-                    box_rect.y + (box_h - FONT_LG) / 2.0,
-                    FONT_LG,
-                    theme::text(),
-                );
+                if let Some(ch) = self.value.chars().nth(i as usize) {
+                    let display = if self.masked { "•" } else { &ch.to_string() };
+                    let (tw, _) = renderer.measure_text(display, FONT_LG);
+                    renderer.draw_text_raw(
+                        display,
+                        box_rect.x + (box_w - tw) / 2.0,
+                        box_rect.y + (box_h - FONT_LG) / 2.0,
+                        FONT_LG,
+                        theme::text(),
+                    );
+                }
             }
 
             // Click handler for focus

@@ -5,7 +5,7 @@ use cvkg_flow::port::FlowPort;
 use cvkg_flow::types::{PortDirection, PortId, PortPosition};
 use cvkg_flow::{FlowEdge, FlowGraph, FlowNode};
 use cvkg_layout::HStack;
-use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode, WorldSpacePanel};
+use cvkg_vdom::{AriaProps, LayoutRect, VDom, VDomPatch, VNode};
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -108,23 +108,22 @@ fn test_journey_vdom_patch_lifecycle() {
     let mut vdom = VDom::new();
 
     let node = VNode {
-        id: KvasirId(1),
-        key: None,
-        component_type: "div".to_string(),
-        sdf_shape: None,
-        props: HashMap::new(),
-        state: None,
-        layout: LayoutRect::default(),
-        children: Vec::new(),
-        aria_role: "group".to_string(),
-        aria_props: AriaProps::default(),
-        portal_target: None,
-        world_space: None,
-        theme_override: None,
-        color_palette: u16::MAX,
-        sdf_shape: None,
-        companions: HashMap::new(),
-    };
+            id: KvasirId(1),
+            key: None,
+            component_type: "div".to_string(),
+            sdf_shape: None,
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect::default(),
+            children: Vec::new(),
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            companions: HashMap::new(),
+        };
 
     // 1. Initial State
     vdom.apply_patches(vec![VDomPatch::Create(node)]);

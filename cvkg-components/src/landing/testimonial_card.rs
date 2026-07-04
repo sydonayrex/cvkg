@@ -77,7 +77,7 @@ impl View for TestimonialCard {
 
             // Quote mark
             renderer.draw_text_raw(
-                &"\"".to_string(),
+                "\"",
                 rect.x + 20.0,
                 item_y,
                 24.0,

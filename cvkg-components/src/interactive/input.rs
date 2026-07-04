@@ -168,13 +168,12 @@ impl Input {
                 return Err(msg);
             }
         }
-        if let Some(ref validator) = self.custom_validator {
-            if let Err(msg) = validator(&self.text) {
+        if let Some(ref validator) = self.custom_validator
+            && let Err(msg) = validator(&self.text) {
                 self.input_state = InputState::Error;
                 self.error_message = Some(msg.clone());
                 return Err(msg);
             }
-        }
         self.input_state = InputState::Default;
         self.error_message = None;
         Ok(())

@@ -145,7 +145,7 @@ impl Clone for VNode {
             aria_props: self.aria_props.clone(),
             portal_target: self.portal_target,
             world_space: self.world_space.clone(),
-            theme_override: self.theme_override.clone(),
+            theme_override: self.theme_override,
             color_palette: self.color_palette,
             sdf_shape: self.sdf_shape,
             companions: HashMap::new(), // companions are not cloned - they're runtime-only

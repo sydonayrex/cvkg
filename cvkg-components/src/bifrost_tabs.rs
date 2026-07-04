@@ -173,14 +173,13 @@ impl View for BifrostTabs {
                     renderer.register_handler(
                         &format!("pointerdown_close_{}", i),
                         Arc::new(move |ev| {
-                            if let Event::PointerDown { x, y, .. } = ev {
-                                if x >= close_x
+                            if let Event::PointerDown { x, y, .. } = ev
+                                && x >= close_x
                                 && x <= close_x + close_sz
                                 && y >= close_y
                                 && y <= close_y + close_sz
                             {
                                 on_close(idx);
-                            }
                             }
                         }),
                     );
@@ -203,14 +202,13 @@ impl View for BifrostTabs {
         renderer.register_handler(
             "pointerdown",
             Arc::new(move |ev| {
-                if let cvkg_core::Event::PointerDown { x, y, .. } = ev {
-                    if y >= rect_y && y <= rect_y + rect_h && x >= start_x && x <= start_x + (num_tabs as f32 * tab_w) {
+                if let cvkg_core::Event::PointerDown { x, y, .. } = ev
+                    && y >= rect_y && y <= rect_y + rect_h && x >= start_x && x <= start_x + (num_tabs as f32 * tab_w) {
                         let idx = ((x - start_x) / tab_w) as usize;
                         if idx < num_tabs {
                             on_select(idx);
                         }
                     }
-                }
             }),
         );
 

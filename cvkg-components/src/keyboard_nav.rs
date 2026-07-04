@@ -358,8 +358,8 @@ fn focus_id_hash(id: &str) -> u64 {
 }
 
 /// Constants for system state hashes.
-const FOCUS_ORDER_HASH: u64 = 0xC0DE_01;
-const CURRENT_FOCUS_HASH: u64 = 0xC0DE_02;
+const FOCUS_ORDER_HASH: u64 = 0x00C0_DE01;
+const CURRENT_FOCUS_HASH: u64 = 0x00C0_DE02;
 
 /// Arrow key direction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

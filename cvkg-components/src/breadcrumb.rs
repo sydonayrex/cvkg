@@ -211,8 +211,8 @@ impl View for Breadcrumb {
             Arc::new(move |event| {
                 if let Event::KeyDown { key, .. } = event {
                     match key.as_str() {
-                        "ArrowLeft" => {
-                            if item_count > 0 {
+                        "ArrowLeft"
+                            if item_count > 0 => {
                                 let next = if current_focused == 0 {
                                     item_count - 1
                                 } else {
@@ -220,23 +220,19 @@ impl View for Breadcrumb {
                                 };
                                 set_idx(next);
                             }
-                        }
-                        "ArrowRight" => {
-                            if item_count > 0 {
+                        "ArrowRight"
+                            if item_count > 0 => {
                                 let next = (current_focused + 1) % item_count;
                                 set_idx(next);
                             }
-                        }
-                        "Home" => {
-                            if item_count > 0 {
+                        "Home"
+                            if item_count > 0 => {
                                 set_idx(0);
                             }
-                        }
-                        "End" => {
-                            if item_count > 0 {
+                        "End"
+                            if item_count > 0 => {
                                 set_idx(item_count - 1);
                             }
-                        }
                         "Enter" | " " => {
                             if let Some(ref cb) = on_select_kb {
                                 (cb)(current_focused);

@@ -34,6 +34,12 @@ impl HatiCarousel {
     }
 }
 
+impl Default for HatiCarousel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for HatiCarousel {
     type Body = Never;
 

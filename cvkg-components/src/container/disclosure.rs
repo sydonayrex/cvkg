@@ -388,6 +388,12 @@ impl<V: View> SagaAccordion<V> {
     }
 }
 
+impl<V: View + Default> Default for SagaAccordion<V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<V: View> View for SagaAccordion<V> {
     type Body = Never;
     fn body(self) -> Self::Body {

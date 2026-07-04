@@ -70,7 +70,7 @@ impl View for QRCode {
 
                     // Finder pattern: 7x7 outer border, 3x3 inner fill
                     let is_border = local_r == 0 || local_r == 6 || local_c == 0 || local_c == 6;
-                    let is_center = local_r >= 2 && local_r <= 4 && local_c >= 2 && local_c <= 4;
+                    let is_center = (2..=4).contains(&local_r) && (2..=4).contains(&local_c);
 
                     if is_border || is_center {
                         renderer.fill_rect(cell_rect, theme::qr_dark());

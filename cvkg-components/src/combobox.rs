@@ -141,8 +141,8 @@ impl View for Combobox {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |evt| {
-                if let Event::PointerClick { x, y, .. } = evt {
-                    if x >= rect_clone.x
+                if let Event::PointerClick { x, y, .. } = evt
+                    && x >= rect_clone.x
                         && x <= rect_clone.x + rect_clone.width
                         && y >= rect_clone.y
                         && y <= rect_clone.y + rect_clone.height
@@ -179,7 +179,6 @@ impl View for Combobox {
                             });
                         }
                     }
-                }
             }),
         );
 

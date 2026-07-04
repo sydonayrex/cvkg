@@ -33,6 +33,12 @@ impl StatusBar {
     }
 }
 
+impl Default for StatusBar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for StatusBar {
     type Body = Never;
 

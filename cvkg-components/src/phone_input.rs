@@ -54,6 +54,12 @@ impl PhoneInput {
     }
 }
 
+impl Default for PhoneInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for PhoneInput {
     type Body = Never;
 

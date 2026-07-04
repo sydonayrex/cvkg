@@ -378,8 +378,8 @@ impl View for AutoComplete {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let Event::PointerClick { x, y, .. } = event {
-                    if x >= rect_clone.x && x <= rect_clone.x + rect_clone.width {
+                if let Event::PointerClick { x, y, .. } = event
+                    && x >= rect_clone.x && x <= rect_clone.x + rect_clone.width {
                         let id = AutoComplete::id_hash(&placeholder_click);
 
                         // Check if click is inside the input field
@@ -439,7 +439,6 @@ impl View for AutoComplete {
                             }
                         }
                     }
-                }
             }),
         );
 

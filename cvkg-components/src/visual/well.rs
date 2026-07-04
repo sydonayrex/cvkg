@@ -58,6 +58,12 @@ impl MimirsWell {
     }
 }
 
+impl Default for MimirsWell {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for MimirsWell {
     type Body = Never;
 

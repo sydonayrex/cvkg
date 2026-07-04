@@ -61,6 +61,12 @@ impl MentionInput {
     }
 }
 
+impl Default for MentionInput {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for MentionInput {
     type Body = Never;
 

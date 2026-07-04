@@ -120,13 +120,13 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut field_names = Vec::new();
 
     for arg in inputs {
-        if let FnArg::Typed(pat_type) = arg {
-            if let Pat::Ident(pat_ident) = &*pat_type.pat {
-                let arg_name = &pat_ident.ident;
-                let arg_type = &pat_type.ty;
-                fields.push(quote! { pub #arg_name: #arg_type });
-                field_names.push(arg_name);
-            }
+        if let FnArg::Typed(pat_type) = arg
+            && let Pat::Ident(pat_ident) = &*pat_type.pat
+        {
+            let arg_name = &pat_ident.ident;
+            let arg_type = &pat_type.ty;
+            fields.push(quote! { pub #arg_name: #arg_type });
+            field_names.push(arg_name);
         }
     }
 

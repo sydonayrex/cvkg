@@ -129,8 +129,8 @@ impl<V: View> View for Popconfirm<V> {
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let cvkg_core::Event::PointerClick { x, y, .. } = event {
-                    if rect.contains(x, y) {
+                if let cvkg_core::Event::PointerClick { x, y, .. } = event
+                    && rect.contains(x, y) {
                         cvkg_core::update_system_state(move |s| {
                             let mut s = s.clone();
                             let current = s
@@ -141,7 +141,6 @@ impl<V: View> View for Popconfirm<V> {
                             s
                         });
                     }
-                }
             }),
         );
 

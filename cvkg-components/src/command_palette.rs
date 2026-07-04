@@ -140,6 +140,12 @@ impl MimirSpotlight {
     }
 }
 
+impl Default for MimirSpotlight {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl View for MimirSpotlight {
     type Body = Never;
 
@@ -514,6 +520,12 @@ impl Launcher {
     pub fn search(mut self, text: &str) -> Self {
         self.search = text.to_lowercase();
         self
+    }
+}
+
+impl Default for Launcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
