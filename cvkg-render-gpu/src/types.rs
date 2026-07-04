@@ -138,6 +138,10 @@ pub(crate) struct DrawCall {
     /// in the multi-pass Backdrop Capture pipeline.
     pub material: cvkg_core::DrawMaterial,
     pub target_id: Option<u64>,
+    /// Optional panel ID for WorldSpacePanel isolation.
+    /// None = render to main surface (2D UI).
+    /// Some(id) = render to panel's offscreen texture.
+    pub panel_id: Option<u64>,
     pub instance_start: u32,
     /// Draw order for sorting within the same pass. Higher = later (on top).
     /// Convention: 0 = background, 100 = UI chrome, 200 = SVG content, 300 = overlays.

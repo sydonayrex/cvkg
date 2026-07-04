@@ -221,6 +221,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
+                panel_id: None,
                 texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
@@ -380,6 +381,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
+                panel_id: None,
                 texture_id: self.current_texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,

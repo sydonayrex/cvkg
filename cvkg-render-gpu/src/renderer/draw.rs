@@ -442,6 +442,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
+                panel_id: None,
                 texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
@@ -656,6 +657,7 @@ impl GpuRenderer {
             self.instance_data.push(current_instance_data);
             self.draw_calls.push(DrawCall {
                 target_id: None,
+                panel_id: None,
                 texture_id: self.current_texture_id,
                 scissor_rect: scissor,
                 index_start: self.indices.len() as u32,
@@ -1416,6 +1418,7 @@ impl GpuRenderer {
             instance_count: 1,
             material,
             target_id,
+            panel_id: None,
             instance_start: cmd.instance_id,
             draw_order: 0,
         });
@@ -1580,6 +1583,7 @@ impl GpuRenderer {
             renderer.instance_data.push(current_instance_data);
             renderer.draw_calls.push(DrawCall {
                 target_id: None,
+                panel_id: None,
                 texture_id,
                 scissor_rect: renderer.clip_stack.last().copied(),
                 index_start: (renderer.indices.len() - index_count as usize) as u32,

@@ -86,6 +86,7 @@ impl GpuRenderer {
             });
             self.draw_calls.push(DrawCall {
                 target_id: None,
+                panel_id: None,
                 texture_id: tid,
                 scissor_rect: self.clip_stack.last().copied(),
                 index_start: base_index_idx,
