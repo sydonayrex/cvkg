@@ -17,6 +17,14 @@ use std::sync::Arc;
 // Drawer -- slide-in drawer panel
 // ----------------------------------------------------------------------------
 
+/// A slide-in drawer panel with title and content.
+///
+/// ## Accessibility
+/// - Role: `dialog` / `complementary`
+/// - Keyboard: Esc to close, Tab to move through drawer content
+/// - Focus: Focus is moved inside the drawer when it opens; returned to trigger on close
+/// - ARIA: `aria-modal="true"`, `aria-label` from `title` prop
+/// - Reduced motion: respects `is_reduced_motion()` for slide-in animation
 #[derive(Clone)]
 pub struct Drawer {
     /// Drawer title.

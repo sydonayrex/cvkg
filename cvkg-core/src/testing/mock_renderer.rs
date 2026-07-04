@@ -92,6 +92,10 @@ impl MockRenderer {
         Self { calls: Vec::new() }
     }
 
+    pub fn vnode_count(&self) -> usize {
+        0 // MockRenderer doesn't track vnodes
+    }
+
     pub fn assert_draw_call_count(&self, expected: usize) {
         assert_eq!(
             self.calls.len(),
@@ -371,6 +375,14 @@ impl Renderer for MockRenderer {
         TelemetryData::default()
     }
     fn push_vnode(&mut self, _r: Rect, _n: &'static str) {}
+    fn push_vnode_with_companions(
+        &mut self,
+        rect: Rect,
+        name: &'static str,
+        _companions: Vec<Box<dyn Companion>>,
+    ) {
+        renderer_trait::Renderer::push_vnode(self, rect, name);
+    }
     fn pop_vnode(&mut self) {}
     fn register_handler(&mut self, _et: &str, _h: std::sync::Arc<dyn Fn(Event) + Send + Sync>) {}
     fn set_z_index(&mut self, _z: f32) {}
@@ -390,5 +402,13 @@ impl Renderer for MockRenderer {
     fn set_material(&mut self, _m: crate::material::DrawMaterial) {}
     fn current_material(&self) -> crate::material::DrawMaterial {
         crate::material::DrawMaterial::Opaque
+    }
+
+    // ── Theme stack (Phase 15) ─────────────────────────────────────────────
+
+    fn push_theme(&mut self, _theme: ColorTheme) {}
+    fn pop_theme(&mut self) {}
+    fn current_theme(&self) -> ColorTheme {
+        ColorTheme::default()
     }
 }

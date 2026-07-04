@@ -10,6 +10,13 @@ use std::cell::Cell;
 
 /// HoverCard - A floating card that appears on hover with a delay.
 ///
+/// ## Accessibility
+/// - Role: `tooltip` (non-interactive content) or `dialog` (interactive content)
+/// - Keyboard: No direct keyboard activation — appears on hover; content is reachable via Tab if interactive
+/// - Focus: Follows trigger focus; dismisses when trigger loses focus
+/// - ARIA: `aria-describedby` linking trigger to card content
+/// - Reduced motion: respects `is_reduced_motion()` for fade-in animation
+///
 /// The trigger content is rendered inline. When the pointer hovers over
 /// the trigger area, the card content is displayed in a floating panel
 /// after the specified delay.

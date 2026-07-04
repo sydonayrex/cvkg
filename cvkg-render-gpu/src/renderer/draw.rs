@@ -994,6 +994,9 @@ impl GpuRenderer {
                     width,
                     height,
                     scale,
+                    directional_light: None,
+                    mesh_instances_3d: Vec::new(),
+                    scene_radius: 100.0,
                 },
             );
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);

@@ -240,7 +240,7 @@ pub trait RendererVolumetric {
 // Accessibility -- ARIA / shared elements / keys
 // ══════════════════════════════════════════════════════════════════════════════
 
-/// Accessibility helpers.
+/// Accessibility helpers for ARIA role and label registration.
 pub trait RendererAccessibility {
     fn set_aria_role(&mut self, _role: &str) {}
     fn set_aria_label(&mut self, _label: &str) {}
@@ -249,6 +249,14 @@ pub trait RendererAccessibility {
     fn set_aria_valuenow(&mut self, _now: f32) {}
     fn register_shared_element(&mut self, _id: &str, _rect: Rect) {}
     fn set_key(&mut self, _key: &str) {}
+
+    /// Convenience method: register aria role and label in one call.
+    /// This combines `set_aria_role` and `set_aria_label` for components
+    /// that have both a role and label property.
+    fn register_a11y(&mut self, role: &str, label: &str) {
+        self.set_aria_role(role);
+        self.set_aria_label(label);
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

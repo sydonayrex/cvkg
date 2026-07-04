@@ -2,6 +2,7 @@
 
 use super::resource::ResourceId;
 use crate::renderer::GpuRenderer;
+use cvkg_core::PassNode;
 
 /// Error type for Kvasir render graph operations.
 #[derive(Debug, thiserror::Error)]
@@ -115,6 +116,44 @@ pub trait KvasirNode {
     fn pass_id(&self) -> super::nodes::PassId;
     fn execute(&self, ctx: &mut ExecutionContext);
 }
+
+// =========================================================================
+// PassNode implementations for all Kvasir node types
+// =========================================================================
+
+use crate::passes::accessibility::AccessibilityNode;
+use crate::passes::backdrop_region::BackdropRegionNode;
+use crate::passes::bloom::{BloomBlurNode, BloomExtractNode};
+use crate::passes::composite::CompositeNode;
+use crate::passes::effects::{EffectCompositeNode, OffscreenGeometryNode};
+use crate::passes::geometry::GeometryNode;
+use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
+use crate::passes::opaque3d::Opaque3dNode;
+use crate::passes::pre_world_panel::PreWorldPanelNode;
+use crate::passes::shadow::ShadowNode;
+use crate::passes::svg_filter::SvgFilterNode;
+use crate::passes::tonemap::ToneMapNode;
+use crate::passes::ui::UINode;
+use crate::passes::volumetric::VolumetricNode;
+
+impl PassNode for GeometryNode {}
+impl PassNode for UINode {}
+impl PassNode for ShadowNode {}
+impl PassNode for Opaque3dNode {}
+impl PassNode for CompositeNode {}
+impl PassNode for GlassNode {}
+impl PassNode for BackdropCopyNode {}
+impl PassNode for BackdropBlurNode {}
+impl PassNode for BloomExtractNode {}
+impl PassNode for BloomBlurNode {}
+impl PassNode for VolumetricNode {}
+impl PassNode for ToneMapNode {}
+impl PassNode for AccessibilityNode {}
+impl PassNode for BackdropRegionNode {}
+impl PassNode for PreWorldPanelNode {}
+impl PassNode for OffscreenGeometryNode {}
+impl PassNode for EffectCompositeNode {}
+impl PassNode for SvgFilterNode {}
 
 // =========================================================================
 // P1-2: ExecutionContext aliasing contract tests

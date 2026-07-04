@@ -1,0 +1,19 @@
+[package]
+name = "cvkg-gltf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "glTF 2.0 asset loader for CVKG — converts glTF scenes to CVKG Mesh, Material3D, Transform3D"
+
+[dependencies]
+cvkg-core.workspace = true
+gltf = "1.4"
+glam.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+cvkg-test.workspace = true
+serde_json.workspace = true
+
+[lints.rust]
+unsafe_code = "forbid"

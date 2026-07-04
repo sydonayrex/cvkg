@@ -218,7 +218,7 @@ impl std::error::Error for ReflectError {}
 /// - `snapshot` has a blanket default implementation that is correct for all
 ///   conforming implementations; do not override it unless you have a specific
 ///   performance need.
-pub trait Reflected {
+pub trait Reflected: Send {
     /// Returns the static type metadata (field names, kinds, docs).
     /// This is the "schema" — it does not change at runtime.
     fn type_meta() -> &'static TypeMeta

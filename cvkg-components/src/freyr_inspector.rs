@@ -156,3 +156,6 @@ impl LayoutView for FreyrInspector {
     ) {
     }
 }
+
+/// Standard English alias for FreyrInspector.
+pub use FreyrInspector as Inspector;

@@ -1,5 +1,6 @@
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD};
+use crate::form_validation::ValidationRule;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, Never, Rect, Renderer, Size, View};
 use std::sync::Arc;
@@ -15,6 +16,13 @@ pub enum InputState {
 }
 
 /// Single-line text input with cursor, selection, clipboard, and undo.
+///
+/// ## Accessibility
+/// - Role: `textbox`
+/// - Keyboard: Tab to focus, arrow keys to navigate text, Ctrl+A to select all
+/// - Focus: auto-focused on mount when `auto_focus` is true
+/// - ARIA: `aria-label` from `placeholder` if no label set, `aria-invalid` for error state
+/// - Reduced motion: respects `is_reduced_motion()` for focus transitions
 #[derive(Clone)]
 pub struct Input {
     pub(crate) placeholder: String,
@@ -26,6 +34,10 @@ pub struct Input {
     pub(crate) error_message: Option<String>,
     /// Unique hash for this input instance (for system state)
     pub(crate) state_id: u64,
+    /// Validation rules applied when `.validate()` is called
+    pub(crate) rules: Vec<ValidationRule>,
+    /// Optional custom validator: `Fn(value) -> Result<(), String>`
+    pub(crate) custom_validator: Option<Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>>,
 }
 
 impl Input {
@@ -51,6 +63,8 @@ impl Input {
             input_state: InputState::Default,
             error_message: None,
             state_id: s.finish(),
+            rules: Vec::new(),
+            custom_validator: None,
         }
     }
 
@@ -86,6 +100,84 @@ impl Input {
     pub fn success(mut self) -> Self {
         self.input_state = InputState::Success;
         self
+    }
+
+    // ── Validation integration ──
+
+    /// Attach validation rules to this input. Rules are checked when
+    /// `.validate()` is called, typically from within a `FormField` or
+    /// an `on_commit` handler.
+    pub fn rules(mut self, rules: Vec<ValidationRule>) -> Self {
+        self.rules = rules;
+        self
+    }
+
+    /// Attach a custom validator function.
+    ///
+    /// The function receives the current text value and returns
+    /// `Ok(())` if valid or `Err(message)` with the error text.
+    pub fn validator(
+        mut self,
+        f: impl Fn(&str) -> Result<(), String> + Send + Sync + 'static,
+    ) -> Self {
+        self.custom_validator = Some(Arc::new(f));
+        self
+    }
+
+    /// Run all attached validation rules and the custom validator (if set)
+    /// against the current text value.
+    ///
+    /// Returns `Ok(())` if all pass, or `Err(message)` with the first failure.
+    /// As a side effect, updates `input_state` to `Error` or `Default` and
+    /// sets `error_message` accordingly.
+    pub fn validate(&mut self) -> Result<(), String> {
+        for rule in &self.rules {
+            let result = match rule {
+                ValidationRule::Required => {
+                    if self.text.trim().is_empty() {
+                        Err("This field is required".to_string())
+                    } else {
+                        Ok(())
+                    }
+                }
+                ValidationRule::MinLength(min) => {
+                    if self.text.len() < *min {
+                        Err(format!("Must be at least {} characters", min))
+                    } else {
+                        Ok(())
+                    }
+                }
+                ValidationRule::MaxLength(max) => {
+                    if self.text.len() > *max {
+                        Err(format!("Must be at most {} characters", max))
+                    } else {
+                        Ok(())
+                    }
+                }
+                ValidationRule::Pattern(pattern) => {
+                    if !self.text.contains(pattern.as_str()) {
+                        Err(format!("Invalid format (must contain \"{}\")", pattern))
+                    } else {
+                        Ok(())
+                    }
+                }
+            };
+            if let Err(msg) = result {
+                self.input_state = InputState::Error;
+                self.error_message = Some(msg.clone());
+                return Err(msg);
+            }
+        }
+        if let Some(ref validator) = self.custom_validator {
+            if let Err(msg) = validator(&self.text) {
+                self.input_state = InputState::Error;
+                self.error_message = Some(msg.clone());
+                return Err(msg);
+            }
+        }
+        self.input_state = InputState::Default;
+        self.error_message = None;
+        Ok(())
     }
 
     fn bg_color(&self) -> [f32; 4] {
@@ -157,8 +249,7 @@ impl View for Input {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Input");
-        renderer.set_aria_role("textbox");
-        renderer.set_aria_label(&self.placeholder);
+        renderer.register_a11y("textbox", &self.placeholder);
 
         let bg = self.bg_color();
         let border = self.border_color();

@@ -65,6 +65,9 @@ pub use knowledge::{
 pub use undo::{UndoGroup, UndoManager};
 pub use window::{Window, WindowCloseAction, WindowConfig, WindowHandle, WindowId, WindowLevel};
 
+pub mod companion;
+pub use companion::*;
+
 pub mod view;
 pub use view::*;
 pub mod aria;
@@ -188,6 +191,7 @@ pub mod frame_phase;
 pub use frame_phase::FramePhase;
 pub mod frame_manifest;
 pub use frame_manifest::{FrameManifest, PassNode, PassNodeDescriptor, TimeBudgetRequest};
+pub use frame_manifest::validate_manifests;
 pub mod sdf_shadow;
 pub mod shadow;
 
@@ -229,7 +233,8 @@ pub trait Seer: Send + Sync {
 
 pub mod theme;
 pub use theme::{
-    ThemeContext, glassmorphism_enabled, set_current_theme, use_theme, use_theme_context,
+    ThemeContext, clear_current_theme, glassmorphism_enabled, set_current_theme, set_theme_context,
+    use_theme, use_theme_context,
 };
 
 pub mod hooks;

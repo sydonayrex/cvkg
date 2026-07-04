@@ -1,6 +1,9 @@
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
+/// Also available as `SecurityGate` via `cvkg::prelude::*` or directly via `use ShieldWall as SecurityGate`.
+pub use ShieldWall as SecurityGate;
+
 /// A futuristic Scifi-Viking frame.
 /// Features animated glowing borders and 'shield' corner brackets.
 pub struct ShieldWall<V: View> {

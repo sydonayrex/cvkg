@@ -31,7 +31,7 @@
     unused_parens
 )]
 
-mod kvasir;
+pub mod kvasir;
 mod material;
 pub mod error;
 
@@ -173,3 +173,110 @@ pub use renderer::GpuRenderer;
 // P1-35: SVG filter graph integration (moved to filter/ module)
 pub use types::{SvgAnimation, SvgModel};
 pub use vertex::{InstanceData, InstanceData3D, Vertex};
+
+/// Re-export PassNode for convenience.
+pub use cvkg_core::PassNode;
+
+/// Frame manifest for cvkg-render-gpu.
+/// Contributes: Render + Composite phases.
+pub const MANIFEST: cvkg_core::FrameManifest = cvkg_core::FrameManifest {
+    phase_contributions: &[
+        cvkg_core::FramePhase::Render,
+        cvkg_core::FramePhase::Composite,
+    ],
+    pass_nodes: &[
+        cvkg_core::PassNodeDescriptor {
+            id: "geometry",
+            label: "Geometry Pass (Opaque)",
+            inputs: &[],
+            outputs: &["scene_color", "scene_depth"],
+            after: &[],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::geometry::GeometryNode::new())
+            },
+        },
+        cvkg_core::PassNodeDescriptor {
+            id: "shadow",
+            label: "Shadow Pass (Depth-Only)",
+            inputs: &[],
+            outputs: &["shadow_map"],
+            after: &[],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::shadow::ShadowNode {
+                    light: crate::passes::shadow::DirectionalLight::default(),
+                    shadow_map: crate::kvasir::ResourceId(0),
+                    mesh_instances: Vec::new(),
+                    scene_radius: 100.0,
+                })
+            },
+        },
+        cvkg_core::PassNodeDescriptor {
+            id: "opaque3d",
+            label: "Opaque 3D Pass (PBR + Shadows)",
+            inputs: &["shadow_map"],
+            outputs: &["scene_color"],
+            after: &["shadow"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::opaque3d::Opaque3dNode {
+                    mesh_instances: Vec::new(),
+                    light: crate::passes::shadow::DirectionalLight::default(),
+                    shadow_map: crate::kvasir::ResourceId(0),
+                })
+            },
+        },
+        cvkg_core::PassNodeDescriptor {
+            id: "ui",
+            label: "UI Compositing",
+            inputs: &["scene_color", "scene_depth"],
+            outputs: &["ui_output"],
+            after: &["geometry"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::ui::UINode::new())
+            },
+        },
+        cvkg_core::PassNodeDescriptor {
+            id: "bloom_extract",
+            label: "Bloom Extract",
+            inputs: &["ui_output"],
+            outputs: &["bloom_src"],
+            after: &["ui"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::bloom::BloomExtractNode::new())
+            },
+        },
+        cvkg_core::PassNodeDescriptor {
+            id: "volumetric",
+            label: "Volumetric Raymarching",
+            inputs: &["scene_color"],
+            outputs: &["scene_color"],
+            after: &["geometry"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::volumetric::VolumetricNode::new())
+            },
+        },
+        cvkg_core::PassNodeDescriptor {
+            id: "accessibility",
+            label: "Accessibility Transform",
+            inputs: &["scene_color"],
+            outputs: &["scene_color"],
+            after: &["bloom_extract"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(crate::passes::accessibility::AccessibilityNode::new())
+            },
+        },
+    ],
+    time_budget_requests: &[
+        cvkg_core::TimeBudgetRequest {
+            phase: cvkg_core::FramePhase::Render,
+            time_slice_us: 8000,
+            skippable: false,
+            name: "render_gpu",
+        },
+        cvkg_core::TimeBudgetRequest {
+            phase: cvkg_core::FramePhase::Composite,
+            time_slice_us: 4000,
+            skippable: false,
+            name: "composite_gpu",
+        },
+    ],
+};

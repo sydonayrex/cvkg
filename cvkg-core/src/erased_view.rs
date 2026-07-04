@@ -8,6 +8,7 @@ pub trait ErasedView: Send {
     fn grid_placement_erased(&self) -> Option<GridPlacement>;
     fn intrinsic_size_erased(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size;
     fn clone_box(&self) -> Box<dyn ErasedView>;
+    fn companion_states_erased(&self) -> Vec<Box<dyn Companion>>;
 }
 
 impl<V: View + Clone + 'static> ErasedView for V {
@@ -37,6 +38,10 @@ impl<V: View + Clone + 'static> ErasedView for V {
 
     fn clone_box(&self) -> Box<dyn ErasedView> {
         Box::new(self.clone())
+    }
+
+    fn companion_states_erased(&self) -> Vec<Box<dyn Companion>> {
+        self.companion_states()
     }
 }
 

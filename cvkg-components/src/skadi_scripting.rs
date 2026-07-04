@@ -210,3 +210,6 @@ impl LayoutView for SkadiScripting {
     ) {
     }
 }
+
+/// Standard English alias for SkadiScripting.
+pub use SkadiScripting as Scripting;

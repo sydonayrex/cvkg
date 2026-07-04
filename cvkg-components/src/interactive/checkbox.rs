@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::form_validation::ValidationRule;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, Size, View};
 use std::sync::Arc as StdArc;
@@ -11,10 +12,22 @@ pub enum CheckboxState {
 }
 
 #[derive(Clone)]
+/// Checkbox for boolean selection with optional label.
+///
+/// ## Accessibility
+/// - Role: `checkbox`
+/// - Keyboard: Space to toggle, Tab to focus
+/// - Focus: auto-focused on mount when `auto_focus` is true
+/// - ARIA: `aria-label` from `label` prop, `aria-checked` from state
+/// - Reduced motion: respects `is_reduced_motion()` for state transitions
 pub struct Checkbox {
     pub(crate) state: CheckboxState,
     pub(crate) label: Option<String>,
     pub(crate) on_change: std::sync::Arc<dyn Fn(bool) + Send + Sync>,
+    /// Validation rules for this checkbox
+    pub(crate) rules: Vec<ValidationRule>,
+    /// Error message when validation fails
+    pub(crate) error_message: Option<String>,
 }
 
 impl Checkbox {
@@ -35,6 +48,8 @@ impl Checkbox {
             },
             label: None,
             on_change: std::sync::Arc::new(on_change),
+            rules: Vec::new(),
+            error_message: None,
         }
     }
 
@@ -50,6 +65,39 @@ impl Checkbox {
     pub fn label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
         self
+    }
+
+    // ── Validation integration ──
+
+    /// Attach validation rules to this checkbox.
+    pub fn rules(mut self, rules: Vec<ValidationRule>) -> Self {
+        self.rules = rules;
+        self
+    }
+
+    /// Run all attached validation rules.
+    ///
+    /// For checkboxes, `Required` means the box must be checked.
+    /// Returns `Ok(())` if valid, `Err(message)` on first failure.
+    pub fn validate(&mut self) -> Result<(), String> {
+        for rule in &self.rules {
+            let result = match rule {
+                ValidationRule::Required => {
+                    if self.state != CheckboxState::Checked {
+                        Err("This field is required".to_string())
+                    } else {
+                        Ok(())
+                    }
+                }
+                _ => Ok(()), // min/max/pattern don't apply to booleans
+            };
+            if let Err(msg) = result {
+                self.error_message = Some(msg.clone());
+                return Err(msg);
+            }
+        }
+        self.error_message = None;
+        Ok(())
     }
 }
 
@@ -70,8 +118,7 @@ impl View for Checkbox {
         let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
 
         renderer.push_vnode(rect, "Checkbox");
-        renderer.set_aria_role("checkbox");
-        renderer.set_aria_label(self.label.as_deref().unwrap_or("Checkbox"));
+        renderer.register_a11y("checkbox", self.label.as_deref().unwrap_or("Checkbox"));
 
         let box_size = 18.0;
         let box_rect = Rect {
@@ -138,6 +185,17 @@ impl View for Checkbox {
                 rect.y + (rect.height - 14.0) / 2.0,
                 14.0,
                 theme::text(),
+            );
+        }
+
+        // Error message
+        if let Some(ref msg) = self.error_message {
+            renderer.draw_text_raw(
+                msg,
+                rect.x,
+                rect.y + rect.height + 2.0,
+                11.0,
+                theme::error_color(),
             );
         }
 

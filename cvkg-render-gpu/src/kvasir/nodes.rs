@@ -5,7 +5,9 @@ use crate::passes::bloom::{BloomBlurNode, BloomExtractNode};
 use crate::passes::composite::CompositeNode;
 use crate::passes::geometry::GeometryNode;
 use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
+use crate::passes::opaque3d::Opaque3dNode;
 use crate::passes::pre_world_panel::PreWorldPanelNode;
+use crate::passes::shadow::{DirectionalLight, GpuMesh3d, ShadowNode};
 use crate::passes::ui::UINode;
 use crate::passes::volumetric::VolumetricNode;
 
@@ -84,6 +86,12 @@ pub struct RenderGraphConfig<'a> {
     pub width: u32,
     pub height: u32,
     pub scale: f32,
+    /// Active directional light for shadow pass (if set, shadow map is allocated).
+    pub directional_light: Option<DirectionalLight>,
+    /// GPU-ready 3D mesh instances for shadow map and opaque pass rendering.
+    pub mesh_instances_3d: Vec<GpuMesh3d>,
+    /// Scene radius for shadow frustum computation.
+    pub scene_radius: f32,
 }
 
 /// Build the dynamic RenderGraph (KvasirGraph)
@@ -166,21 +174,30 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
         last_scene_node = volumetric;
     }
 
-    // 3D Shadow pass (runs before opaque 3D, outputs shadow map) - TODO: implement ShadowNode
-    // let shadow_rid = ResourceId(10000); // dedicated shadow map resource
-    // let shadow_node = builder.add_node(Box::new(ShadowNode {
-    //     light: config.directional_light,
-    //     shadow_map: shadow_rid,
-    //     mesh_instances: Vec::new(), // populated by scene traversal
-    // }));
-    // builder.connect(shadow_node, shadow_rid, last_scene_node); // shadow runs before scene
+    // 3D Shadow pass (runs before opaque 3D, outputs shadow map)
+    if let Some(light) = &config.directional_light {
+        if !config.mesh_instances_3d.is_empty() {
+            let shadow_rid = ResourceId(10000); // dedicated shadow map resource
+            let shadow_node = builder.add_node(Box::new(ShadowNode {
+                light: *light,
+                shadow_map: shadow_rid,
+                mesh_instances: config.mesh_instances_3d.clone(),
+                scene_radius: config.scene_radius,
+            }));
+            // Shadow runs before scene — scene reads the shadow map.
 
-    // 3D Opaque pass (runs after shadow, reads shadow map) - TODO: implement Opaque3dNode
-    // let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
-    //     shadow_map: shadow_rid,
-    //     mesh_instances: Vec::new(), // populated by scene traversal
-    // }));
-    // builder.connect(opaque_3d_node, RES_SCENE, last_scene_node); // opaque 3d writes to scene
+            // 3D Opaque pass (runs after shadow, reads shadow map)
+            let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
+                mesh_instances: config.mesh_instances_3d.clone(),
+                light: *light,
+                shadow_map: shadow_rid,
+            }));
+            builder.connect(shadow_node, shadow_rid, opaque_3d_node);
+            builder.connect(opaque_3d_node, RES_SCENE, last_scene_node);
+            // Opaque 3d writes to scene — update last_scene_node to chain off it.
+            last_scene_node = opaque_3d_node;
+        }
+    }
 
     // Bloom extraction and blur (conditional)
     let mut last_bloom_node = None;

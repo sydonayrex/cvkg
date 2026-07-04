@@ -5,6 +5,15 @@ use std::sync::Arc;
 
 /// Liquid glass tabs with chromatic aberration.
 /// Section 4.7: "Tactile realm-switching navigation with fluid feedback."
+///
+/// ## Accessibility
+/// - Role: `tablist`
+/// - Keyboard: Arrow Left/Right to switch tabs, Tab to focus, W to close (if closable)
+/// - Focus: auto-focused on mount when `auto_focus` is true
+/// - ARIA: `aria-label` from `options`, `aria-selected` for selected tab, `aria-controls` for tab panels
+/// - Reduced motion: respects `is_reduced_motion()` for jelly physics animation
+///
+/// Also available as `Tabs` via `cvkg::prelude::*` or directly via `use BifrostTabs as Tabs`.
 #[derive(Clone)]
 #[doc(alias = "Tabs")]
 pub struct BifrostTabs {
@@ -16,6 +25,11 @@ pub struct BifrostTabs {
     /// Whether tabs show a close button (default: false).
     pub closable: bool,
 }
+
+/// Standard English alias for BifrostTabs.
+pub use BifrostTabs as Tabs;
+
+// ... rest of the file unchanged
 
 impl BifrostTabs {
     /// Create a new BifrostTabs component with the given tab labels and selection callback.

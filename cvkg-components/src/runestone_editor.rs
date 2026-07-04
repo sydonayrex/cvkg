@@ -3,10 +3,15 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A code editor with runic syntax highlighting.
 /// Section 4.3: "Scriptorium components for runic logic definition."
+///
+/// Also available as `CodeEditor` via `cvkg::prelude::*` or directly via `use RunestoneEditor as CodeEditor`.
 pub struct RunestoneEditor {
     pub text: String,
     pub language: String,
 }
+
+/// Standard English alias for RunestoneEditor.
+pub use RunestoneEditor as CodeEditor;
 
 impl RunestoneEditor {
     pub fn new(text: impl Into<String>) -> Self {

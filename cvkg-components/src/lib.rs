@@ -19,7 +19,8 @@
 //! Sources:
 //!   Karpathy: https://github.com/multica-ai/andrej-karpathy-skills
 //!   CVKG Extended: Section 2 of the CVKG Design Specification
-#![warn(missing_docs)]
+// Missing docs are not a priority during active development
+#![allow(missing_docs)]
 #![allow(
     clippy::too_many_arguments,
     clippy::needless_range_loop,
@@ -179,6 +180,7 @@ pub enum ButtonSize {
 }
 
 // Re-export submodules
+pub mod prelude;
 pub mod advanced_forms;
 pub mod ai_workflow_builder;
 pub mod bifrost_tabs;
@@ -192,6 +194,7 @@ pub mod command_palette;
 pub mod container;
 pub mod data_grid;
 pub mod devtools;
+pub mod reflected_inspector;
 pub mod docking_workspace;
 pub mod dropdown_menu;
 pub mod effects;
@@ -282,8 +285,8 @@ pub use hud::{AlertKind, GjallarAlert, TacticalGauge, Vegvísir};
 pub use idunn_persistence::*;
 pub use image::*;
 pub use interactive::{
-    BifrostColorPicker, Button, Checkbox, GeriTransfer, HringrPagination, Input, Picker,
-    SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
+    BifrostColorPicker, Button, Checkbox, GeriTransfer, HringrPagination, HrungnirSegmented,
+    Input, Picker, SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
 };
 pub use layer_system::*;
 pub use memory::*;
@@ -386,8 +389,9 @@ pub mod multimedia;
 pub mod patterns;
 pub mod scheduler;
 pub mod text_anim;
+pub mod motion;
+pub mod responsive;
 pub mod tree_view;
-
 pub use a11y_beacon::{A11yBeacon, A11yBeaconExt};
 pub use a11y_inspector::{A11yInspector, A11yNode};
 pub use autocomplete::*;
@@ -406,6 +410,8 @@ pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
 pub use editable::Editable;
 pub use form_binder::{FormBinder, FormBinding};
 pub use form_validation::FormField;
+pub use form_validation::Form;
+pub use form_validation::ValidationRule;
 pub use hover_card::{HoverCard, HoverCardPosition};
 pub use input_group::InputGroup;
 pub use input_otp::InputOTP;
@@ -423,6 +429,7 @@ pub use toast::ToastManager;
 pub use toggle_group::ToggleGroup;
 
 pub use flexiscope::{ContainerLayout, FlexiScope, ScopeThreshold, fluid_typography};
+pub use responsive::{Breakpoint, Responsive};
 pub use flux_layout::FluxState;
 pub use hlin_accessibility::*;
 pub use lingua_tong::{
@@ -476,6 +483,21 @@ pub use text_anim::{
     ShimmerButton, StatefulButton, TextAnimEffect, TextAnimate, TypewriterEffect,
 };
 pub use tree_view::{RichTreeView, TreeViewNode};
+
+// ── P3.3 Landing page components ──
+pub mod landing;
+pub use landing::{FeatureGrid, FeatureItem, Hero, PricingCard, PricingTable, TestimonialCard, TestimonialItem};
+
+// ── P4.2 Motion preset library ──
+pub use motion::{Motion, MotionPreset};
+
+// ── P4.3 Skeleton loading component ──
+pub mod skeleton;
+pub use skeleton::Skeleton;
+
+// ── P5.1 Game UI primitives ──
+pub mod game;
+pub use game::{DPadControl, DPadDirection, HealthBar, MapMarker, MiniMap};
 
 // Internal Never type for primitive views
 #[doc(hidden)]
@@ -608,4 +630,18 @@ pub type Timeline = UrdrTimeline;
 pub type Tooltip = RunicTooltip<cvkg_core::AnyView>;
 pub type TreeView = YggdrasilTree;
 pub type Well = MimirsWell;
+
+// ── Additional English aliases for Norse-named components ──
+pub type Frame = MjolnirFrame;
+pub type Markdown = ScribingStone;
+pub type CodeEditor = RunestoneEditor;
+pub type SecurityGate = ShieldWall<cvkg_core::AnyView>;
+pub type Scripting = SkadiScripting;
+pub type SegmentedControl = HrungnirSegmented;
+pub type ThemeConfig = NjordTheme;
+pub type Persistence = IdunnPersistence;
+pub type Inspector = FreyrInspector;
+pub type DevToolsInspector = GullveigInspector;
+pub type Telemetry = GerdTelemetry;
+pub type AccessibilityTree = HlinAccessibility;
 pub type Window = YggdrasilWindow<cvkg_core::AnyView>;

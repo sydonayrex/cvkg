@@ -4,6 +4,9 @@ use std::time::Duration;
 
 /// RunestoneDecoder - A text component that "deciphers" ancient runes into digital text.
 /// Section 4.12: "Reading the Runes -- Temporal data reconstruction."
+/// Also available as `Decoder` via `cvkg::prelude::*` or directly via `use RunestoneDecoder as Decoder`.
+pub use RunestoneDecoder as Decoder;
+
 #[doc(alias = "Decoder")]
 pub struct RunestoneDecoder {
     pub text: String,

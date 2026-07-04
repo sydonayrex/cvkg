@@ -970,6 +970,16 @@ impl GpuRenderer {
             // Error tracking
             render_error_count: 0,
             has_fatal_error: false,
+
+            // Shadow map resources
+            shadow_map_texture: None,
+            shadow_map_view: None,
+            shadow_sampler: None,
+            shadow_light_vp: glam::Mat4::IDENTITY,
+            shadow_map_size: 1024,
+            shadow_bias: 0.005,
+            theme_stack: Vec::new(),
+            portal_theme_stack: Vec::new(),
         }
     }
 }

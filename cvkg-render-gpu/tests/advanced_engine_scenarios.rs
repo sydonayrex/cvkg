@@ -2,6 +2,7 @@ use cvkg_core::{Event, FrameRenderer, KvasirId, Rect, Renderer};
 use cvkg_core::{SpringParams, SpringSolver};
 use cvkg_render_gpu::GpuRenderer;
 use cvkg_vdom::{LayoutRect, VDom, VNode};
+use std::collections::HashMap;
 
 /// Benchmark and capture frame. Runs the provided layout function for 60 frames,
 /// measures average frame time to ensure >= 60 FPS, and returns the final captured pixels.
@@ -71,12 +72,15 @@ fn test_advanced_vdom_with_glassmorphism() {
         aria_props: Default::default(),
         portal_target: None,
         world_space: None,
+        theme_override: None,
+        color_palette: u16::MAX,
         sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(Rect {
             x: 50.0,
             y: 50.0,
             width: 200.0,
             height: 200.0,
         })),
+        companions: HashMap::new(),
     };
 
     vdom.nodes.insert(root_id, root_node);
@@ -126,20 +130,20 @@ fn test_advanced_vdom_with_glassmorphism() {
         );
 
         // Traverse VDOM to render (Mock compositor integration)
-        if let Some(root_id) = vdom.root
-            && let Some(node) = vdom.nodes.get(&root_id)
-        {
-            renderer.set_z_index(-0.1);
-            renderer.fill_glass_rect(
-                Rect {
-                    x: node.layout.x,
-                    y: node.layout.y,
-                    width: node.layout.width,
-                    height: node.layout.height,
-                },
-                8.0,
-                15.0,
-            );
+        if let Some(root_id) = vdom.root {
+            if let Some(node) = vdom.nodes.get(&root_id) {
+                renderer.set_z_index(-0.1);
+                renderer.fill_glass_rect(
+                    Rect {
+                        x: node.layout.x,
+                        y: node.layout.y,
+                        width: node.layout.width,
+                        height: node.layout.height,
+                    },
+                    8.0,
+                    15.0,
+                );
+            }
         }
 
         // Inner neon element

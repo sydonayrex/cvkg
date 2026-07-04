@@ -28,6 +28,13 @@ impl SheetPosition {
 
 /// Modal bottom sheet or side drawer container
 ///
+/// ## Accessibility
+/// - Role: `dialog`
+/// - Keyboard: Esc to dismiss, Tab to cycle through focusable children
+/// - Focus: auto-focuses first child on open, traps focus within dialog
+/// - ARIA: `aria-label` from content description, `aria-modal` for modal dialogs
+/// - Reduced motion: respects `is_reduced_motion()` for slide animation
+///
 /// # Contract
 /// Manages slide-in dialogs positioned along viewport edges with spring physics.
 #[doc(alias = "Sheet")]

@@ -46,8 +46,7 @@ impl View for Textarea {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Textarea");
-        renderer.set_aria_role("textbox");
-        renderer.set_aria_label(&self.placeholder);
+        renderer.register_a11y("textbox", &self.placeholder);
 
         // Editor background
         renderer.fill_rounded_rect(rect, RADIUS_SM, theme::surface());

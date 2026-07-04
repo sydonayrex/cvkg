@@ -217,3 +217,6 @@ impl LayoutView for GerdTelemetry {
     ) {
     }
 }
+
+/// Standard English alias for GerdTelemetry.
+pub use GerdTelemetry as Telemetry;

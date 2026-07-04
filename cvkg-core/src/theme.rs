@@ -44,6 +44,32 @@ impl ThemeContext {
             glassmorphism_enabled: false,
         }
     }
+
+    /// Build a `ThemeContext` from a GPU `ColorTheme`, mapping its WGSL-uniform
+    /// fields to the closest semantic equivalents for CPU-side `theme::*()` helpers.
+    pub fn from_color_theme(ct: &crate::ColorTheme) -> Self {
+        fn to_color(a: [f32; 4]) -> crate::Color {
+            crate::Color::new(a[0], a[1], a[2], a[3])
+        }
+        Self {
+            glassmorphism_enabled: ct.glass_blur_strength > 0.0,
+            colors: SemanticColors {
+                primary: to_color(ct.primary_neon),
+                secondary: to_color(ct.ember_core),
+                accent: to_color(ct.shatter_neon),
+                background: to_color(ct.background_deep),
+                surface: to_color(ct.glass_base),
+                error: crate::Color::new(1.0, 0.2, 0.2, 1.0),
+                warning: crate::Color::new(1.0, 0.8, 0.0, 1.0),
+                success: crate::Color::new(0.0, 1.0, 0.5, 1.0),
+                text: to_color(ct.rune_glow),
+                text_dim: {
+                    let c = to_color(ct.rune_glow);
+                    crate::Color::new(c.r * 0.6, c.g * 0.6, c.b * 0.6, c.a)
+                },
+            },
+        }
+    }
 }
 
 /// Set the current theme context for this thread.

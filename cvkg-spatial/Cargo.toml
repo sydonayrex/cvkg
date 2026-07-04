@@ -1,6 +1,6 @@
 [package]
 name = "cvkg-spatial"
-version = "0.2.17"
+version = "0.3.0"
 edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
@@ -10,7 +10,12 @@ description = "CVKG spatial indexing — QuadTree, BVH, and SpatialHash for plat
 name = "cvkg_spatial"
 path = "src/lib.rs"
 
+[[test]]
+name = "frustum_tests"
+path = "tests/frustum_tests.rs"
+
 [dependencies]
 cvkg-core = { workspace = true }
+glam = { workspace = true }
 serde = { workspace = true }
 log = { workspace = true }

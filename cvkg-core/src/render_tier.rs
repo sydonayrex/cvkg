@@ -15,7 +15,7 @@ pub enum RenderTier {
 use bytemuck::{Pod, Zeroable};
 /// Fully themeable color palette for the Berserker pipeline.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
 pub struct ColorTheme {
     pub primary_neon: [f32; 4], // (R, G, B, intensity)
     pub shatter_neon: [f32; 4],
@@ -189,6 +189,10 @@ pub struct SceneUniforms {
     pub _pad_light_dir: f32,
     pub light_color: [f32; 3],
     pub _pad_light_color: f32,
+    pub shadow_map_size: f32,
+    pub shadow_bias: f32,
+    pub _pad_shadow: [u32; 2],  // 8 bytes padding for 16-byte alignment of light_vp
+    pub light_vp: glam::Mat4,
 }
 
 pub const SCENE_AURORA: u32 = 0;
@@ -239,6 +243,10 @@ impl SceneUniforms {
             _pad_light_dir: 0.0,
             light_color: [1.0, 0.95, 0.9],
             _pad_light_color: 0.0,
+            shadow_map_size: 1024.0,
+            shadow_bias: 0.005,
+            _pad_shadow: [0, 0],
+            light_vp: glam::Mat4::IDENTITY,
         }
     }
 }

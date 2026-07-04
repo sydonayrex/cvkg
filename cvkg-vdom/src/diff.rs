@@ -1,5 +1,6 @@
 use crate::VDom;
 use crate::vnode::{AriaProps, EventHandlerMap, LayoutRect, NodeId, VNode, WorldSpacePanel};
+use cvkg_core::ColorTheme;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -28,6 +29,10 @@ pub enum VDomPatch {
         sdf_shape: Option<cvkg_core::layout::SdfShape>,
         /// Updated world-space panel
         world_space: Option<WorldSpacePanel>,
+        /// Updated theme override
+        theme_override: Option<Option<ColorTheme>>,
+        /// Updated color palette index
+        color_palette: Option<u16>,
     },
     /// Remove an existing node
     Remove(NodeId),
@@ -73,6 +78,8 @@ impl std::fmt::Debug for VDomPatch {
                 handlers,
                 sdf_shape,
                 world_space,
+                theme_override,
+                color_palette,
             } => f
                 .debug_struct("Update")
                 .field("id", id)
@@ -84,6 +91,8 @@ impl std::fmt::Debug for VDomPatch {
                 .field("handlers_count", &handlers.as_ref().map(|h| h.len()))
                 .field("sdf_shape", sdf_shape)
                 .field("world_space", world_space)
+                .field("theme_override", theme_override)
+                .field("color_palette", color_palette)
                 .finish(),
             Self::Remove(id) => f.debug_tuple("Remove").field(id).finish(),
             Self::Replace { id, node } => f
@@ -122,8 +131,10 @@ impl serde::Serialize for VDomPatch {
                 handlers,
                 sdf_shape,
                 world_space,
+                theme_override,
+                color_palette,
             } => {
-                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 9)?;
+                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 11)?;
                 state.serialize_field("id", id)?;
                 state.serialize_field("props", props)?;
                 state.serialize_field("layout", layout)?;
@@ -138,6 +149,8 @@ impl serde::Serialize for VDomPatch {
                 )?;
                 state.serialize_field("sdf_shape", sdf_shape)?;
                 state.serialize_field("world_space", world_space)?;
+                state.serialize_field("theme_override", theme_override)?;
+                state.serialize_field("color_palette", color_palette)?;
                 state.end()
             }
             Self::Remove(id) => serializer.serialize_newtype_variant("VDomPatch", 2, "Remove", id),
@@ -182,6 +195,8 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                 handlers: Option<Vec<String>>,
                 sdf_shape: Option<cvkg_core::layout::SdfShape>,
                 world_space: Option<WorldSpacePanel>,
+                theme_override: Option<Option<ColorTheme>>,
+                color_palette: Option<u16>,
             },
             Remove(NodeId),
             Replace {
@@ -198,7 +213,7 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
         let internal = VDomPatchInternal::deserialize(deserializer)?;
         Ok(match internal {
             VDomPatchInternal::Create(n) => VDomPatch::Create(n),
-VDomPatchInternal::Update {
+            VDomPatchInternal::Update {
                 id,
                 props,
                 layout,
@@ -208,6 +223,8 @@ VDomPatchInternal::Update {
                 handlers,
                 sdf_shape,
                 world_space,
+                theme_override,
+                color_palette,
             } => VDomPatch::Update {
                 id,
                 props,
@@ -230,6 +247,8 @@ VDomPatchInternal::Update {
                 }),
                 sdf_shape,
                 world_space,
+                theme_override,
+                color_palette,
             },
             VDomPatchInternal::Remove(id) => VDomPatch::Remove(id),
             VDomPatchInternal::Replace { id, node } => VDomPatch::Replace { id, node },
@@ -329,6 +348,8 @@ impl VDom {
         };
         let handlers_removed = old_handlers.is_some() && new_handlers.is_none();
         let world_space_changed = old_node.world_space != new_node.world_space;
+        let theme_override_changed = old_node.theme_override != new_node.theme_override;
+        let color_palette_changed = old_node.color_palette != new_node.color_palette;
 
         if props_changed
             || layout_changed
@@ -338,6 +359,8 @@ impl VDom {
             || sdf_shape_changed
             || handlers_changed
             || world_space_changed
+            || theme_override_changed
+            || color_palette_changed
         {
             patches.push(VDomPatch::Update {
                 id: old_id,
@@ -374,6 +397,16 @@ impl VDom {
                 },
                 world_space: if world_space_changed {
                     new_node.world_space.clone()
+                } else {
+                    None
+                },
+                theme_override: if theme_override_changed {
+                    Some(new_node.theme_override)
+                } else {
+                    None
+                },
+                color_palette: if color_palette_changed {
+                    Some(new_node.color_palette)
                 } else {
                     None
                 },

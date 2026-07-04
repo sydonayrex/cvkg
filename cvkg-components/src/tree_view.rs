@@ -6,6 +6,13 @@ use cvkg_core::{
 use std::sync::Arc;
 
 /// Node structure for RichTreeView hierarchical item.
+///
+/// ## Accessibility
+/// - Role: `treeitem`
+/// - Keyboard: Arrow up/down to navigate, Arrow left/right to collapse/expand, Enter to select
+/// - Focus: Focusable node via keyboard navigation; `is_selected` tracks focused item
+/// - ARIA: `aria-expanded` on parent nodes, `aria-selected` on leaf nodes, `aria-level` for depth
+/// - Reduced motion: respects `is_reduced_motion()` for expand/collapse animation
 #[derive(Debug, Clone)]
 pub struct TreeViewNode {
     /// Label text.

@@ -3,6 +3,8 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// MjolnirFrame - A geometric, non-rectangular UI frame with chromatic aberration.
 /// Section 4.5: "Mjolnir's Edge -- Geometric slicing and destructive visual feedback."
+///
+/// Also available as `Frame` via `cvkg::prelude::*` or directly via `use MjolnirFrame as Frame`.
 pub struct MjolnirFrame {
     /// Color of the main geometric border.
     pub border_color: [f32; 4],
@@ -13,6 +15,9 @@ pub struct MjolnirFrame {
     /// Amplitude of chromatic aberration color shift.
     pub glitch_intensity: f32,
 }
+
+/// Standard English alias for MjolnirFrame.
+pub use MjolnirFrame as Frame;
 
 impl Default for MjolnirFrame {
     /// Creates a default MjolnirFrame instance.

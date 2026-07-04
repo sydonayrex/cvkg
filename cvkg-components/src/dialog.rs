@@ -102,8 +102,7 @@ impl View for AlertDialog {
             return;
         }
         renderer.push_vnode(rect, "AlertDialog");
-        renderer.set_aria_role("alertdialog");
-        renderer.set_aria_label(&self.title);
+        renderer.register_a11y("alertdialog", &self.title);
         renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.5));
         let dlg_w = 400.0;
         let dlg_h = 180.0;
@@ -293,8 +292,7 @@ impl View for ConfirmationDialog {
             return;
         }
         renderer.push_vnode(rect, "ConfirmationDialog");
-        renderer.set_aria_role("alertdialog");
-        renderer.set_aria_label(&self.title);
+        renderer.register_a11y("alertdialog", &self.title);
         renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.5));
         let dlg_w = 360.0;
         let dlg_h = 160.0;
@@ -330,8 +328,7 @@ impl View for ConfirmationDialog {
             height: 44.0,
         };
         renderer.push_vnode(cancel_rect, "ConfirmationDialog:Cancel");
-        renderer.set_aria_role("button");
-        renderer.set_aria_label(&lingua_tong::t("dialog.cancel"));
+        renderer.register_a11y("button", &lingua_tong::t("dialog.cancel"));
         renderer.fill_rounded_rect(cancel_rect, RADIUS_MD, theme::surface());
         renderer.stroke_rounded_rect(cancel_rect, RADIUS_MD, theme::border(), 1.0);
         let cancel_text = lingua_tong::t("dialog.cancel");
@@ -351,8 +348,7 @@ impl View for ConfirmationDialog {
             height: 44.0,
         };
         renderer.push_vnode(confirm_rect, "ConfirmationDialog:Confirm");
-        renderer.set_aria_role("button");
-        renderer.set_aria_label(&self.confirm_label);
+        renderer.register_a11y("button", &self.confirm_label);
         renderer.fill_rounded_rect(confirm_rect, RADIUS_MD, theme::error_color());
         let (ftw, fth) = renderer.measure_text(&self.confirm_label, 12.0);
         renderer.draw_text_raw(

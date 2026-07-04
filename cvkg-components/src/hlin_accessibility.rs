@@ -28,12 +28,17 @@ pub struct FocusState {
 }
 
 /// Hlin Accessibility Infrastructure for inclusive design
+///
+/// Also available as `AccessibilityTree` via `cvkg::prelude::*` or directly via `use HlinAccessibility as AccessibilityTree`.
 pub struct HlinAccessibility {
     pub tree: Vec<HlinNode>,
     pub focus_state: FocusState,
     pub high_contrast: bool,
     pub reduced_motion: bool,
 }
+
+/// Standard English alias for HlinAccessibility.
+pub use HlinAccessibility as AccessibilityTree;
 
 impl Default for HlinAccessibility {
     fn default() -> Self {

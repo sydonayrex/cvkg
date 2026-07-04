@@ -15,6 +15,13 @@ pub struct DataGridColumn<D> {
 }
 
 /// A virtualized data grid with advanced features including sorting, filtering, and column management.
+///
+/// ## Accessibility
+/// - Role: `grid` / `table`
+/// - Keyboard: Arrow keys to navigate cells, Enter to edit, Tab to move between columns
+/// - Focus: Focusable row/cell via keyboard navigation; `selected_index` tracks focused row
+/// - ARIA: `aria-label` from header labels, `aria-sort` on sortable columns, `aria-selected` on rows
+/// - Reduced motion: respects `is_reduced_motion()` for sort/row transition animations
 pub struct RunesTable<D>
 where
     D: Send + Sync + 'static,

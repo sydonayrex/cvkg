@@ -42,6 +42,14 @@ pub enum PopoverPosition {
 /// .position(PopoverPosition::Bottom)
 /// .open(true);
 /// ```
+/// A floating popover triggered by a view, with auto-positioning and dismissal.
+///
+/// ## Accessibility
+/// - Role: `dialog` (when open)
+/// - Keyboard: Esc to close, Tab to move focus inside popover, Enter/Space on trigger to toggle
+/// - Focus: Focus is trapped inside the popover when open; returns to trigger on close
+/// - ARIA: `aria-expanded` on trigger when open, `aria-modal="true"` on content panel
+/// - Reduced motion: respects `is_reduced_motion()` for slide/scale entrance animation
 pub struct Popover<V: View, C: View> {
     /// The trigger element that toggles the popover.
     trigger: V,

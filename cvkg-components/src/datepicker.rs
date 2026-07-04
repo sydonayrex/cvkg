@@ -118,6 +118,14 @@ fn today_date() -> (u32, u32, u32) {
 /// })
 /// .selected(15, 6, 2025);
 /// ```
+/// DatePicker component with calendar popover.
+///
+/// ## Accessibility
+/// - Role: `combobox`
+/// - Keyboard: Tab to focus, Enter/Space to open calendar, Arrow keys to navigate dates
+/// - Focus: auto-focused on mount when `auto_focus` is true
+/// - ARIA: `aria-label` for label, `aria-expanded` for open state, `aria-haspopup` for calendar
+/// - Reduced motion: respects `is_reduced_motion()` for calendar popup animation
 #[derive(Clone)]
 pub struct DatePicker {
     /// The currently selected date as (day, month, year).
@@ -249,8 +257,7 @@ impl DatePicker {
     fn render_text_field(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "DatePickerField");
         renderer.set_key(&format!("dp_field_{}", self.id_hash));
-        renderer.set_aria_role("textbox");
-        renderer.set_aria_label(&lingua_tong::t("datepicker.label"));
+        renderer.register_a11y("textbox", &lingua_tong::t("datepicker.label"));
 
         // Background
         renderer.fill_rounded_rect(rect, RADIUS_MD, [0.06, 0.06, 0.08, 1.0]);

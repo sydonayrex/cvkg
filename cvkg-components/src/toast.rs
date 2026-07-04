@@ -95,6 +95,13 @@ impl Toast {
 
 /// ToastManager - Owns and renders a stack of toast notifications.
 ///
+/// ## Accessibility
+/// - Role: `status` (live region) or `alert` for error/warning toasts
+/// - Keyboard: No direct interaction — toasts are auto-dismissed; focus stays on underlying content
+/// - Focus: Non-blocking — toasts do not trap focus; user can interact with page while toast is visible
+/// - ARIA: `aria-live="polite"` for info/success, `aria-live="assertive"` for error/warning
+/// - Reduced motion: respects `is_reduced_motion()` for slide-in/dismiss animation
+///
 /// Toasts are displayed stacked in the top-right corner of the screen.
 /// The manager handles creation, dismissal, auto-expiry, and rendering
 /// of all active toasts.

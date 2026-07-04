@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-render-gpu"
-version = "0.2.17"
+version = "0.3.0"
 build = "build.rs"
 autolib = false
 autobins = false
@@ -55,7 +55,7 @@ path = "benches/large_tree.rs"
 harness = false
 
 [dependencies]
-cvkg-vdom = { version = ">=0.2.16", path = "../cvkg-vdom" }
+cvkg-vdom = { version = ">=0.2.17", path = "../cvkg-vdom" }
 roxmltree = "0.21"
 thiserror.workspace = true
 
@@ -73,16 +73,16 @@ version = "1.25"
 features = ["derive"]
 
 [dependencies.cvkg-core]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-compositor]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-svg-filters]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-svg-serialize]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.futures]
 version = "0.3"
@@ -118,7 +118,7 @@ features = [
 version = "1.12"
 
 [dependencies.cvkg-runic-text]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.swash]
 version = "0.2"
@@ -151,11 +151,11 @@ version = "0.4.0"
 
 [dev-dependencies.cvkg-vdom]
 path = "../cvkg-vdom"
-version = ">=0.2.16"
+version = ">=0.2.17"
 
 [dev-dependencies.cvkg-anim]
 path = "../cvkg-anim"
-version = ">=0.2.16"
+version = ">=0.2.17"
 
 [build-dependencies.naga]
 version = "29"

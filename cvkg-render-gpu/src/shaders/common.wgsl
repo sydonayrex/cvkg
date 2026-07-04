@@ -45,6 +45,10 @@ struct SceneUniforms {
     _pad3:           f32,
     light_color:     vec3<f32>,
     _pad4:           f32,
+    // Shadow map parameters
+    shadow_map_size: f32,
+    shadow_bias:     f32,
+    light_vp:        mat4x4<f32>,
 };
 
 // --- Group 2: Berserker Uniforms ---
@@ -96,6 +100,8 @@ struct VertexOutput {
     @location(11) @interpolate(flat) blur_radius: f32,
     @location(12) @interpolate(flat) ior_override: f32,
     @location(13) @interpolate(flat) glass_intensity: f32,
+    @location(14) world_pos_3d: vec3<f32>,
+    @location(15) world_normal: vec3<f32>,
 };
 
 struct VertexInput3D {
@@ -108,6 +114,9 @@ struct VertexInput3D {
     @location(17) model_row1: vec4<f32>,
     @location(18) model_row2: vec4<f32>,
     @location(19) material_overrides: vec4<f32>,
+    // Instance attributes (per-mesh UV transform)
+    @location(20) uv_scale:  vec2<f32>,
+    @location(21) uv_offset: vec2<f32>,
 };
 
 @vertex
@@ -148,13 +157,14 @@ fn vs_main_3d(in: VertexInput3D) -> VertexOutput {
     );
 
     let world_pos = model * vec4<f32>(in.position, 1.0);
-    out.clip_position = scene.proj * scene.view * world_pos;
+    let view_proj = scene.proj * scene.view;
+
+    out.clip_position = view_proj * world_pos;
     out.world_pos = world_pos.xy;
-    // Transform normal to world space (no non-uniform scale handling yet).
-    // Stored in `out.normal` since VertexOutput has no world_normal field.
-    out.normal = normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
+    out.world_pos_3d = world_pos.xyz;
+    out.world_normal = normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
+
     // Pass material overrides through to the fragment shader via slice.
-    // slice.x = metallic, slice.y = roughness, slice.z = emissive_intensity, slice.w = opacity
     let mo = in.material_overrides;
     out.slice = vec4<f32>(mo.x, mo.y, mo.z, mo.w);
 
@@ -162,14 +172,9 @@ fn vs_main_3d(in: VertexInput3D) -> VertexOutput {
     out.color = in.color;
     out.material_id = 13u; // OPAQUE_3D
     out.radius = 0.0;
-    out.logical = in.position.xy;
-    out.size = vec2<f32>(1.0, 1.0);
     out.normal = in.normal;
-    out.clip = vec4<f32>(-10000.0, -10000.0, 20000.0, 20000.0);
-    out.tex_index = 0u;
-    out.blur_radius = 0.0;
-    out.ior_override = 0.0;
-    out.glass_intensity = 0.0;
+    out.slice = vec4<f32>(mo.x, mo.y, mo.z, mo.w);
+
     return out;
 }
 

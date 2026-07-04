@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg"
-version = "0.2.17"
+version = "0.3.0"
 build = false
 autolib = false
 autobins = false
@@ -30,6 +30,11 @@ default = []
 gpu = ["dep:cvkg-render-gpu"]
 native = ["dep:cvkg-render-native"]
 web = ["dep:cvkg-render-gpu"]
+headless = []
+render-3d = ["dep:cvkg-render-gpu", "dep:cvkg-render-3d"]
+physics = ["dep:cvkg-physics"]
+flow = ["dep:cvkg-flow"]
+framemanifest = ["dep:cvkg-physics", "dep:cvkg-flow", "dep:cvkg-render-gpu"]
 
 [lib]
 name = "cvkg"
@@ -57,35 +62,59 @@ name = "declarative_dashboard"
 path = "examples/declarative_dashboard.rs"
 
 [dependencies.cvkg-anim]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-components]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-core]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-layout]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-macros]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-render-gpu]
-version = "0.2.17"
+version = "0.3.0"
 optional = true
 
 [dependencies.cvkg-render-native]
-version = "0.2.17"
+version = "0.3.0"
 optional = true
+
+[dependencies.cvkg-scheduler]
+version = "0.3.0"
+
+[dependencies.cvkg-svg-serialize]
+version = "0.3.0"
+
+[dependencies.cvkg-vdom]
+version = "0.3.0"
 
 
 
 [dependencies.cvkg-scene]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-themes]
-version = "0.2.17"
+version = "0.3.0"
+
+[dependencies.cvkg-render-3d]
+version = "0.3.0"
+optional = true
+path = "../cvkg-render-3d"
+
+[dependencies.cvkg-physics]
+version = "0.3.0"
+optional = true
+path = "../cvkg-physics"
+
+[dependencies.cvkg-flow]
+version = "0.3.0"
+optional = true
+path = "../cvkg-flow"
 
 [dependencies.rand]
 version = "0.8"
@@ -115,3 +144,7 @@ required-features = ["native"]
 name = "daw_perf"
 path = "examples/daw_perf.rs"
 required-features = ["native"]
+
+[[test]]
+name = "feature_gate_tests"
+path = "tests/feature_gate_tests.rs"

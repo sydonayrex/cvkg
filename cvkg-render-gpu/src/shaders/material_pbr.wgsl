@@ -3,13 +3,33 @@
 //! Separated from opaque to reduce register pressure from raymarching loops.
 
 
+@group(3) @binding(4) var t_shadow: texture_depth_2d;
+@group(3) @binding(5) var s_shadow: sampler_comparison;
+
+fn sample_shadow(light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
+    let light_pos = light_vp * vec4<f32>(world_pos, 1.0);
+    let light_uv = light_pos.xy / light_pos.w * 0.5 + 0.5;
+    let light_depth = light_pos.z / light_pos.w;
+
+    // PCF 3x3
+    let texel_size = 1.0 / scene.shadow_map_size;
+    var shadow = 0.0;
+    for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+            let offset = vec2<f32>(f32(dx), f32(dy)) * texel_size;
+            shadow += textureSampleCompare(t_shadow, s_shadow,
+                light_uv + offset, light_depth - scene.shadow_bias);
+        }
+    }
+    return shadow / 9.0;
+}
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var color = in.color;
 
     if in.material_id == 13u {
-        // ── Mode 13: 3D Surface — Basic PBR Lighting Model
+        // ── Mode 13: 3D Surface — Basic PBR Lighting Model with Shadows
         let metallic = in.slice.x;
         let roughness = in.slice.y;
         let opacity  = in.slice.z;
@@ -18,14 +38,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_dir = normalize(scene.light_direction);
         let light_color = scene.light_color;
 
-        let n_dot_l = max(dot(n, light_dir), 0.0);
-        let diffuse = n_dot_l * light_color;
+        // Shadow mapping
+        let shadow = sample_shadow(scene.light_vp, in.world_pos);
 
-        let view_dir = normalize(scene.camera_pos - vec3<f32>(in.uv.x, in.uv.y, 0.0));
+        let n_dot_l = max(dot(n, light_dir), 0.0);
+        let diffuse = n_dot_l * light_color * shadow;
+
+        let view_dir = normalize(scene.camera_pos - in.world_pos);
         let half_dir = normalize(light_dir + view_dir);
         let n_dot_h = max(dot(n, half_dir), 0.0);
         let shininess = mix(8.0, 256.0, 1.0 - roughness);
-        let spec = pow(n_dot_h, shininess) * light_color;
+        let spec = pow(n_dot_h, shininess) * light_color * shadow;
 
         let f0 = mix(vec3<f32>(0.04), in.color.rgb, metallic);
         let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - max(dot(n, -view_dir), 0.0), 5.0);

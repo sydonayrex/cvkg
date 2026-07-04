@@ -52,6 +52,32 @@ pub use cvkg_render_native as native;
 #[cfg(feature = "web")]
 pub use cvkg_render_gpu as web;
 
+#[cfg(feature = "framemanifest")]
+cvkg_core::merge_manifests! {
+    cvkg_physics::MANIFEST,
+    cvkg_flow::MANIFEST,
+    cvkg_render_gpu::MANIFEST,
+}
+
+/// Configure a frame scheduler using the merged FrameManifest budget requests.
+///
+/// Sets per-phase time budgets from all crate manifests. Currently a no-op
+/// until `FrameScheduler` exposes a set_phase_budget() API.
+#[cfg(feature = "framemanifest")]
+pub fn configure_scheduler(_scheduler: &mut cvkg_scheduler::FrameScheduler) {
+    #[allow(unused_imports)]
+    use cvkg_core::{FramePhase, TimeBudgetRequest};
+
+    // Placeholder for future budget API integration.
+    // Once FrameScheduler::set_phase_budget() is available:
+    // for budget in MERGED_BUDGET_REQUESTS {
+    //     scheduler.set_phase_budget(budget.phase, budget.time_slice_us);
+    // }
+}
+
+pub mod headless;
+pub use headless::{CvkgHeadless, HeadlessFrame, HeadlessOptions};
+
 pub mod prelude {
     // === Macros (always needed) ===
     pub use cvkg_macros::{View, view_component};
@@ -65,22 +91,8 @@ pub mod prelude {
     // === Color type ===
     pub use cvkg_components::Color;
 
-    // === Layout primitives (most common imports) ===
-    pub use cvkg_components::{FlexBox, Grid, HStack, ScrollView, VStack};
-
-    // === Common interactive components ===
-    pub use cvkg_components::{Button, Checkbox, Input, Select, Slider, Text};
-
-    // === English API aliases for all Norse-named components ===
-    // These type aliases point to the canonical (Norse) implementation.
-    // Both names are valid; the English name is preferred for new code.
-    pub use cvkg_components::{
-        Accordion, Alert, Analytics, Avatar, ColorPicker, CommandPalette, CreativeTools, Decoder,
-        Dialog, DraumaSkeleton, FormBinder, FormField, HUD, HolographicDisplay, Indicator,
-        Messenger, Orb, Pagination, Popover, Progress, PromptBuilder, RadioGroup, Rating,
-        RunesTable, Sheet, Sonner, SonnerPosition, SonnerToast, SonnerType, Spinner, Splitter,
-        StepIndicator, Tabs, Timeline, ToastManager, Tooltip, TreeView, Well, Window,
-    };
+    // === Re-export cvkg-components prelude (standard English names) ===
+    pub use cvkg_components::prelude::*;
 
     // === Animation triggers ===
     pub use cvkg_components::animation_triggers::{AnimationTriggers, TriggerSpring};

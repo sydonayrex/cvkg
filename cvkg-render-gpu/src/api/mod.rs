@@ -921,6 +921,28 @@ impl cvkg_core::Renderer for GpuRenderer {
             .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
     }
 
+    fn push_theme(&mut self, theme: ColorTheme) {
+        let prev = self.current_theme;
+        self.current_theme = theme;
+        self.theme_stack.push(prev);
+        self.queue
+            .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&theme));
+        cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(&theme));
+    }
+
+    fn pop_theme(&mut self) {
+        if let Some(parent_theme) = self.theme_stack.pop() {
+            self.current_theme = parent_theme;
+            self.queue
+                .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&parent_theme));
+            cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(&parent_theme));
+        }
+    }
+
+    fn current_theme(&self) -> ColorTheme {
+        self.current_theme
+    }
+
     fn set_rage(&mut self, rage: f32) {
         self.current_scene.berzerker_rage = rage;
         // scene_buffer is updated every frame in begin_frame, so no need to write here
@@ -1219,6 +1241,8 @@ impl cvkg_core::Renderer for GpuRenderer {
             model_row1: [row1.x, row1.y, row1.z, row1.w],
             model_row2: [row2.x, row2.y, row2.z, row2.w],
             material_overrides: [material.metallic, material.roughness, 0.0, material.opacity],
+            uv_scale: material.uv_scale,
+            uv_offset: material.uv_offset,
         });
 
         self.draw_calls.push(DrawCall {
@@ -1237,6 +1261,7 @@ impl cvkg_core::Renderer for GpuRenderer {
     fn set_camera_3d(&mut self, camera: &cvkg_core::Camera3D) {
         self.current_scene.proj = camera.projection_matrix();
         self.current_scene.view = camera.view_matrix();
+        self.current_scene.camera_pos = camera.position.into();
     }
 
     fn push_transform_3d(&mut self, transform: &cvkg_core::Transform3D) {
@@ -1388,9 +1413,10 @@ impl cvkg_core::Renderer for GpuRenderer {
     ///
     /// `z_index` controls the layer ordering for portal content.
     fn enter_portal(&mut self, z_index: i32) {
-        // Portal rendering enables per-element backdrop blur for Tahoe glass
-        // When z_index is 0, we're rendering normal glass cards
-        // When z_index > 0, we're in a portal layer that will get special treatment
+        // Save the current theme so the portal composites with the caller's theme.
+        // Portal content may have been rendered with a pushed theme (via push_theme),
+        // but the compositing pass uses the saved theme from before enter_portal.
+        self.portal_theme_stack.push(self.current_theme);
         self.current_z = z_index as f32;
     }
 
@@ -1399,6 +1425,13 @@ impl cvkg_core::Renderer for GpuRenderer {
     /// no more draw calls will be appended to it.
     fn exit_portal(&mut self) {
         self.current_z = 0.0;
+        // Restore the theme that was active before enter_portal.
+        if let Some(restored_theme) = self.portal_theme_stack.pop() {
+            self.current_theme = restored_theme;
+            self.queue
+                .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&restored_theme));
+            cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(&restored_theme));
+        }
     }
 
     fn push_vnode(&mut self, rect: Rect, name: &'static str) {

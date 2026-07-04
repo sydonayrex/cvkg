@@ -3,6 +3,13 @@ use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 /// A vertical stack of views
 ///
+/// ## Accessibility
+/// - Role: `group`
+/// - Keyboard: No direct keyboard interaction — children handle their own focus
+/// - Focus: Passes focus to its first focusable child; no focus trap
+/// - ARIA: No additional ARIA needed — stacking is purely visual/layout
+/// - Reduced motion: N/A — layout primitive has no animation
+///
 /// # Contract
 /// Positions subviews vertically aligned according to layout constraints and computes intrinsic sizing.
 #[derive(Clone)]

@@ -4,6 +4,8 @@ use cvkg_core::{Never, Rect, Renderer, View};
 // Named after Hrungnir, whose heart was stone with three sharp corners.
 
 /// A horizontal group of mutually exclusive options with glass styling.
+/// Also available as `SegmentedControl` via `cvkg::prelude::*` or directly via `use HrungnirSegmented as SegmentedControl`.
+#[doc(alias = "SegmentedControl")]
 pub struct HrungnirSegmented {
     pub segments: Vec<String>,
     pub selected: usize,
@@ -13,6 +15,9 @@ pub struct HrungnirSegmented {
     #[allow(dead_code)]
     anim: cvkg_anim::SpringSolver,
 }
+
+/// Standard English alias for HrungnirSegmented.
+pub use HrungnirSegmented as SegmentedControl;
 
 pub enum SegmentedStyle {
     Glass,
@@ -50,8 +55,8 @@ impl View for HrungnirSegmented {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.set_aria_role("radiogroup");
-        renderer.set_aria_label("Segmented control");
+        renderer.push_vnode(rect, "HrungnirSegmented");
+        renderer.register_a11y("radiogroup", "Segmented control");
 
         // Glass platter background
         let radius = match self.style {

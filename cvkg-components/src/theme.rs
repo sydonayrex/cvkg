@@ -1,24 +1,81 @@
 //! Theme helpers for CVKG components.
 //!
-//! Provides convenient access to themed colors via `StyleResolver::color_array()`.
+//! Provides convenient access to themed colors via thread-local `THEME_CONTEXT`.
 //! Every color used by a component should be resolved through this module,
 //! never hardcoded as raw `[f32; 4]` arrays.
 //!
-//! Token keys match the semantic color tokens defined in cvkg-core's `default_tokens()`:
-//!   - "background", "surface", "surface_elevated", "surface_overlay"
-//!   - "primary", "secondary", "accent", "accent_hover"
-//!   - "text", "text_muted", "text_dim"
-//!   - "border", "border_strong"
-//!   - "hover", "active", "disabled", "disabled_text"
-//!   - "success", "warning", "error", "info"
-//!   - "focus_ring", "shadow", "code_bg"
+//! Token keys map to `SemanticColors` fields:
+//!   - "background" → colors.background
+//!   - "surface" → colors.surface
+//!   - "surface_elevated", "surface_overlay" → colors.surface
+//!   - "primary", "secondary", "accent" → respective fields
+//!   - "text", "text_dim" → respective fields
+//!   - "error", "warning", "success" → respective fields
+//!   - "accent_hover", "hover", "active", "disabled", etc. → derived from base
 
-use cvkg_core::StyleResolver;
+use cvkg_core::{use_theme, Color};
+
+#[inline]
+fn color_from_theme(key: &str) -> [f32; 4] {
+    let colors = use_theme();
+    let c = match key {
+        "background" => colors.background,
+        "surface" => colors.surface,
+        "surface_elevated" => colors.surface,
+        "surface_overlay" => colors.surface,
+        "primary" => colors.primary,
+        "secondary" => colors.secondary,
+        "accent" => colors.accent,
+        "text" => colors.text,
+        "text_muted" => {
+            let t = colors.text;
+            Color::new(t.r * 0.6, t.g * 0.6, t.b * 0.6, t.a)
+        }
+        "text_dim" => colors.text_dim,
+        "error" => colors.error,
+        "warning" => colors.warning,
+        "success" => colors.success,
+        "info" => colors.accent,
+        "border" => {
+            let s = colors.surface;
+            Color::new(s.r * 0.6, s.g * 0.6, s.b * 0.6, s.a)
+        }
+        "border_strong" => {
+            let s = colors.surface;
+            Color::new(s.r * 0.8, s.g * 0.8, s.b * 0.8, s.a)
+        }
+        "accent_hover" => {
+            let a = colors.accent;
+            Color::new(a.r * 1.2, a.g * 1.2, a.b * 1.2, a.a)
+        }
+        "hover" => {
+            let a = colors.accent;
+            Color::new(a.r * 0.5, a.g * 0.5, a.b * 0.5, a.a)
+        }
+        "active" => colors.accent,
+        "disabled" => {
+            let s = colors.surface;
+            Color::new(s.r * 0.3, s.g * 0.3, s.b * 0.3, s.a)
+        }
+        "disabled_text" => {
+            let t = colors.text;
+            Color::new(t.r * 0.4, t.g * 0.4, t.b * 0.4, t.a)
+        }
+        "focus_ring" => colors.accent,
+        "shadow" => {
+            let b = colors.background;
+            Color::new(b.r * 0.0, b.g * 0.0, b.b * 0.0, 0.3)
+        }
+        "code_bg" => colors.surface,
+        _ => colors.surface,
+    };
+    [c.r, c.g, c.b, c.a]
+}
 
 /// Resolve a themed color by token key. Returns `[f32; 4]` RGBA.
 #[inline]
 pub fn color(key: &str) -> [f32; 4] {
-    StyleResolver::color_array(key)
+    color_from_theme(key)
 }
 
 // === Convenience wrappers for hot-path code ===
@@ -614,4 +671,48 @@ pub fn qr_light() -> [f32; 4] {
 #[inline]
 pub fn glassmorphism_enabled() -> bool {
     cvkg_core::glassmorphism_enabled()
+}
+
+// =============================================================================
+// THEMED<V> WRAPPER COMPONENT
+// =============================================================================
+
+/// A wrapper component that applies a theme override to its child content.
+///
+/// When rendered, this pushes the theme onto the renderer's theme stack,
+/// renders the child content, then pops the theme. This allows for
+/// per-subtree theming within a larger application.
+///
+/// # Example
+/// ```ignore
+/// Themed::new(
+///     ColorTheme::berserker(),
+///     VStack::new()
+///         .child(Text::new("Blood-red neon theme"))
+/// )
+/// ```
+pub struct Themed<V: cvkg_core::View> {
+    theme: cvkg_core::ColorTheme,
+    content: V,
+}
+
+impl<V: cvkg_core::View> Themed<V> {
+    /// Create a new themed wrapper with the given theme and content.
+    pub fn new(theme: cvkg_core::ColorTheme, content: V) -> Self {
+        Self { theme, content }
+    }
+}
+
+impl<V: cvkg_core::View> cvkg_core::View for Themed<V> {
+    type Body = V::Body;
+
+    fn body(self) -> Self::Body {
+        self.content.body()
+    }
+
+    fn render(&self, renderer: &mut dyn cvkg_core::Renderer, rect: cvkg_core::Rect) {
+        renderer.push_theme(self.theme);
+        self.content.render(renderer, rect);
+        renderer.pop_theme();
+    }
 }

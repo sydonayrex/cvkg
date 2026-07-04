@@ -6,6 +6,7 @@ pub mod effects;
 pub mod geometry;
 pub mod glass;
 pub mod pyramid;
+pub mod opaque3d;
 pub mod pre_world_panel;
 pub mod shadow;
 pub mod svg_filter;

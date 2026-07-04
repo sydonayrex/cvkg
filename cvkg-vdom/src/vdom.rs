@@ -170,6 +170,8 @@ impl VDom {
                     children,
                     handlers,
                     sdf_shape,
+                    theme_override,
+                    color_palette,
                 } => {
                     if let Some(node) = self.nodes.get_mut(&id) {
                         if let Some(p) = props { node.props = p; }
@@ -183,6 +185,8 @@ impl VDom {
                         }
                         if let Some(h) = handlers { self.event_handlers.insert(id, h); }
                         if let Some(s) = sdf_shape { node.sdf_shape = Some(s); }
+                        if let Some(to) = theme_override { node.theme_override = to; }
+                        if let Some(cp) = color_palette { node.color_palette = cp; }
                     }
                 }
                 VDomPatch::Remove(id) => {

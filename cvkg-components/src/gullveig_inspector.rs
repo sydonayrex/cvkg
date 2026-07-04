@@ -167,3 +167,6 @@ impl LayoutView for GullveigInspector {
     ) {
     }
 }
+
+/// Standard English alias for GullveigInspector.
+pub use GullveigInspector as DevToolsInspector;

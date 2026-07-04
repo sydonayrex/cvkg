@@ -6,6 +6,13 @@ use cvkg_core::{ElapsedTime, Never, Rect, Renderer, Size, View};
 /// RunesCard - A container component with header, content, and footer sections.
 /// Named after the Runes, the ancient inscribed containers of meaning.
 ///
+/// ## Accessibility
+/// - Role: `region`
+/// - Keyboard: Tab to focus children
+/// - Focus: children receive focus as normal
+/// - ARIA: `aria-label` for accessible name, `aria-describedby` for content
+/// - Reduced motion: respects `is_reduced_motion()` for any state transitions
+///
 /// # Examples
 /// ```
 /// use cvkg_components::{RunesCard, Text};

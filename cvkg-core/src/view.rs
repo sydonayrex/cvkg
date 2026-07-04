@@ -368,4 +368,10 @@ pub trait View: Sized + Send {
     fn view_id(&self) -> Option<u64> {
         None
     }
+
+    /// Returns companion states that must be initialized when this view's
+    /// VNode is created. Default: none.
+    fn companion_states(&self) -> Vec<Box<dyn Companion>> {
+        vec![]
+    }
 }

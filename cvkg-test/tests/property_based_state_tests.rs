@@ -31,6 +31,10 @@ prop_compose! {
             aria_props: AriaProps::default(),
             portal_target: None,
             world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
         }
     }
 }
@@ -51,6 +55,10 @@ proptest! {
             aria_props: AriaProps::default(),
             portal_target: None,
             world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
         };
         assert_eq!(node.id.0, id);
     }
@@ -85,6 +93,10 @@ prop_compose! {
             aria_props: AriaProps::default(),
             portal_target: None,
             world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
         }
     }
 }

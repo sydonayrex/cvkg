@@ -3,6 +3,7 @@ use cvkg_core::{Never, Rect, Renderer, View};
 
 /// A high-fidelity tactical data display.
 /// Section 4.9: "The Threads of Fate (Wyrd) -- Precision telemetry readouts."
+/// Also available as `HUD` via `cvkg::prelude::*` or directly via `use WyrdHUD as HUD`.
 #[doc(alias = "HUD")]
 pub struct WyrdHUD {
     pub title: String,
@@ -161,3 +162,6 @@ impl View for WyrdHUD {
         );
     }
 }
+
+/// Standard English alias for WyrdHUD.
+pub use WyrdHUD as HUD;

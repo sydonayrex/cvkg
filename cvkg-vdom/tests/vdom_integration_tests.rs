@@ -21,7 +21,10 @@ fn create_node(id: u64, key: Option<&str>, c_type: &str, children: Vec<NodeId>) 
         aria_props: AriaProps::default(),
         portal_target: None,
         world_space: None,
+        theme_override: None,
+        color_palette: u16::MAX,
         sdf_shape: None,
+        companions: HashMap::new(),
     }
 }
 
@@ -184,12 +187,15 @@ fn interactive_node(
         aria_props: AriaProps::default(),
         portal_target: None,
         world_space: None,
+        theme_override: None,
+        color_palette: u16::MAX,
         sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(cvkg_core::Rect {
             x,
             y,
             width,
             height,
         })),
+        companions: HashMap::new(),
     }
 }
 

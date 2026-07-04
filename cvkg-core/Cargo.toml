@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-core"
-version = "0.2.17"
+version = "0.3.0"
 build = false
 autolib = false
 autobins = false
@@ -63,7 +63,7 @@ version = "1.0"
 workspace = true
 
 [dependencies.cvkg-runic-text]
-version = "0.2.17"
+version = "0.3.0"
 
 
 [dependencies.thiserror]
@@ -105,6 +105,34 @@ path = "tests/dirty_flags_tests.rs"
 [[test]]
 name = "mesh_uv_tests"
 path = "tests/mesh_uv_tests.rs"
+
+[[test]]
+name = "material3d_texture_tests"
+path = "tests/material3d_texture_tests.rs"
+
+[[test]]
+name = "mesh_aabb_tests"
+path = "tests/mesh_aabb_tests.rs"
+
+[[test]]
+name = "scene_uniforms_3d_tests"
+path = "tests/scene_uniforms_3d_tests.rs"
+
+[[test]]
+name = "companion_tests"
+path = "tests/companion_tests.rs"
+
+[[test]]
+name = "view_companion_tests"
+path = "tests/view_companion_tests.rs"
+
+[[test]]
+name = "erased_view_companion_tests"
+path = "tests/erased_view_companion_tests.rs"
+
+[[test]]
+name = "renderer_companion_tests"
+path = "tests/renderer_companion_tests.rs"
 
 [dev-dependencies]
 proptest = { workspace = true }

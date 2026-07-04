@@ -17,7 +17,7 @@
 //! 7. MONITOR LOOPS   -- Check every tool call / command for progress every 30 seconds.
 //!                      After 3 consecutive identical failures, stop, write BLOCKED.md,
 //!                      and move to unblocked work. Never silently accept a broken state.
-
+//!
 //! # Tyr -- Rigid Body Physics Engine for CVKG
 //!
 //! 2D-oriented rigid body simulation with impulse-based constraint solving,
@@ -87,7 +87,55 @@ pub use ragdoll_bridge::{BoneBodyMap, RagdollBridge, RagdollBridgeConfig};
 pub use shape::{Shape, ShapeKind};
 pub use solver::ImpulseSolver;
 pub use world::{CollisionEvent, CollisionEventType, PhysicsWorld, StepResult, WorldConfig};
-///
+
+use cvkg_core::{FrameManifest, FramePhase, PassNodeDescriptor, TimeBudgetRequest};
+
+/// Frame manifest for the physics crate.
+/// Contributes: State phase (simulation step) + Render phase (debug draw).
+/// Budget: 2ms State, 1ms Render.
+pub const MANIFEST: FrameManifest = FrameManifest {
+    phase_contributions: &[FramePhase::State, FramePhase::Render],
+    pass_nodes: &[
+        PassNodeDescriptor {
+            id: "physics_debug",
+            label: "Physics Debug Draw",
+            inputs: &[],
+            outputs: &["physics_debug_buffer"],
+            after: &["geometry"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(PhysicsDebugDrawPass)
+            },
+        },
+        PassNodeDescriptor {
+            id: "fluid_simulation",
+            label: "SPH Fluid Sim (Compute)",
+            inputs: &["scene_depth"],
+            outputs: &["fluid_density"],
+            after: &["geometry"],
+            constructor: || -> Box<dyn cvkg_core::PassNode> {
+                Box::new(FluidSimulationPass)
+            },
+        },
+    ],
+    time_budget_requests: &[
+        TimeBudgetRequest {
+            phase: FramePhase::State,
+            time_slice_us: 2000,
+            skippable: true,
+            name: "physics",
+        },
+    ],
+};
+
+/// Placeholder pass for physics debug draw (to be implemented)
+struct PhysicsDebugDrawPass;
+impl cvkg_core::PassNode for PhysicsDebugDrawPass {}
+
+/// Placeholder pass for fluid simulation (to be implemented)
+struct FluidSimulationPass;
+impl cvkg_core::PassNode for FluidSimulationPass {}
+
+/// Callback when a physics body goes to sleep.
 /// This is the handoff point to cvkg-anim: application code can use this
 /// to trigger a Sleipnir spring animation to snap to grid/guide positions.
 pub type OnSleepCallback = Box<dyn Fn(BodyId) + Send + Sync>;

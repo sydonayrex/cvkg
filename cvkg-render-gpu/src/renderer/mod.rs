@@ -120,6 +120,19 @@ pub struct GpuRenderer {
     ///
     /// CONTRACT: Always sample_count = 4, format = Depth32Float.
     pub(crate) dummy_depth_view_msaa: wgpu::TextureView,
+    /// Shadow map resources for 3D shadow mapping.
+    /// Depth-only texture for rendering shadow map from light's perspective.
+    pub(crate) shadow_map_texture: Option<wgpu::Texture>,
+    /// View of the shadow map texture for depth comparison sampling.
+    pub(crate) shadow_map_view: Option<wgpu::TextureView>,
+    /// Comparison sampler for PCF shadow filtering.
+    pub(crate) shadow_sampler: Option<wgpu::Sampler>,
+    /// Light view-projection matrix for shadow map rendering (from light's perspective).
+    pub(crate) shadow_light_vp: glam::Mat4,
+    /// Shadow map resolution (width = height).
+    pub(crate) shadow_map_size: u32,
+    /// Shadow bias to prevent shadow acne.
+    pub(crate) shadow_bias: f32,
     pub(crate) svg: crate::types::SvgSubsystem,
 
     // Niflheim Resources (Shared)
@@ -175,6 +188,10 @@ pub struct GpuRenderer {
     // The Forge's Heart (Shared Berserker State)
     pub(crate) theme_buffer: wgpu::Buffer,
     pub(crate) scene_buffer: wgpu::Buffer,
+    /// Theme stack used when entering portals — push on `enter_portal`, pop (and apply) in `exit_portal`.
+    pub(crate) theme_stack: Vec<ColorTheme>,
+    /// Portal theme save stack for enter_portal/exit_portal theme inheritance.
+    pub(crate) portal_theme_stack: Vec<ColorTheme>,
     pub(crate) berserker_bind_group: wgpu::BindGroup,
     pub(crate) berserker_bind_group_layout: wgpu::BindGroupLayout,
     pub(crate) start_time: std::time::Instant,

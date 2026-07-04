@@ -3,7 +3,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
 use syn::{
-    DeriveInput, Expr, FnArg, ItemFn, ItemStruct, Pat, Token, braced, parse_macro_input,
+    parse_macro_input, DeriveInput, FnArg, ItemFn, ItemStruct, Pat, Token,
 };
 
 /// State attribute macro -- derives common traits for state structs
@@ -67,8 +67,8 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
         return syn::Error::new(
             name.span(),
             format!(
-                "`#[derive(View)]` cannot be applied to `{}` because it has fields.\n\
-                 Types with fields must implement `fn body(self) -> Self::Body` manually.\n\
+                "`#[derive(View)]` cannot be applied to `{}` because it has fields.\n \
+                 Types with fields must implement `fn body(self) -> Self::Body` manually.\n \
                  Use `#[derive(View)]` only for leaf/primitive views with no fields.",
                 name
             ),
@@ -94,6 +94,7 @@ pub fn derive_view(input: TokenStream) -> TokenStream {
 /// View component attribute macro -- transforms a function into a View struct
 ///
 /// Section 4.1: "automate the boilerplate... generating the View trait implementation"
+/// Supports `#[require(Type1, Type2)]` attribute on the function to auto-generate companion state initialization.
 #[proc_macro_attribute]
 pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -103,18 +104,29 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let inputs = &input.sig.inputs;
     let body = &input.block;
 
+    // Parse the #[require(...)] attribute from the function's attributes
+    let mut required_types = Vec::new();
+    for attr in attrs {
+        if attr.path().is_ident("require") {
+            let parsed = attr.parse_args::<RequireAttr>();
+            if let Ok(req) = parsed {
+                required_types = req.types;
+            }
+        }
+    }
+
     // Extract argument names and types for the struct fields
     let mut fields = Vec::new();
     let mut field_names = Vec::new();
 
     for arg in inputs {
-        if let FnArg::Typed(pat_type) = arg
-            && let Pat::Ident(pat_ident) = &*pat_type.pat
-        {
-            let arg_name = &pat_ident.ident;
-            let arg_type = &pat_type.ty;
-            fields.push(quote! { pub #arg_name: #arg_type });
-            field_names.push(arg_name);
+        if let FnArg::Typed(pat_type) = arg {
+            if let Pat::Ident(pat_ident) = &*pat_type.pat {
+                let arg_name = &pat_ident.ident;
+                let arg_type = &pat_type.ty;
+                fields.push(quote! { pub #arg_name: #arg_type });
+                field_names.push(arg_name);
+            }
         }
     }
 
@@ -123,6 +135,24 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         first.make_ascii_uppercase();
     }
     let struct_name = quote::format_ident!("{}View", name_str);
+
+    // Generate companion_states() method if there are required types
+    let companion_states_impl = if required_types.is_empty() {
+        quote! {
+            fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+                vec![]
+            }
+        }
+    } else {
+        let required_types_ref = &required_types;
+        quote! {
+            fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+                vec![
+                    #(Box::new(#required_types_ref::default())),*
+                ]
+            }
+        }
+    };
 
     let expanded = quote! {
             #vis struct #struct_name {
@@ -137,6 +167,8 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     #(let #field_names = self.#field_names;)*
                     cvkg_core::AnyView::new(#body)
                 }
+
+                #companion_states_impl
             }
 
             #(#attrs)*
@@ -148,6 +180,26 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         };
 
     TokenStream::from(expanded)
+}
+
+/// Helper struct for parsing `#[require(Type1, Type2)]` attribute.
+struct RequireAttr {
+    types: Vec<syn::Type>,
+}
+
+impl Parse for RequireAttr {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut types = Vec::new();
+        while !input.is_empty() {
+            let ty: syn::Type = input.parse()?;
+            types.push(ty);
+            if input.is_empty() {
+                break;
+            }
+            let _: Option<Token![,]> = input.parse()?;
+        }
+        Ok(Self { types })
+    }
 }
 
 /// Binding attribute macro -- marks a struct as a reactive binding
@@ -164,6 +216,13 @@ pub fn binding(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+/// Require attribute -- marks companion types for a view component.
+/// This attribute is parsed by `#[view_component]` and has no effect on its own.
+#[proc_macro_attribute]
+pub fn require(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item // Pass through unchanged
 }
 
 /// Component attribute macro -- generates a component with builder pattern
@@ -246,219 +305,46 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
-
     };
 
     TokenStream::from(expanded)
 }
 
-enum HamrNode {
-    Expr(Expr),
-    Block { expr: Expr, children: Vec<HamrNode> },
-}
-
-impl Parse for HamrNode {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let expr: Expr = input.parse()?;
-        if input.peek(syn::token::Brace) {
-            let content;
-            braced!(content in input);
-            let mut children = Vec::new();
-            while !content.is_empty() {
-                children.push(content.parse()?);
-            }
-            Ok(HamrNode::Block { expr, children })
-        } else {
-            Ok(HamrNode::Expr(expr))
-        }
-    }
-}
-
-/// Internal helper: parse the body of an if/else branch for hamr_if! macro.
-struct HamrIfBranch {
-    nodes: Vec<HamrNode>,
-}
-
-impl Parse for HamrIfBranch {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut nodes = Vec::new();
-        while !input.is_empty() {
-            nodes.push(input.parse()?);
-        }
-        Ok(HamrIfBranch { nodes })
-    }
-}
-
-/// hamr_if! macro -- conditional rendering inside hamr! blocks.
-///
-/// Syntax:
-/// ```ignore
-/// hamr_if!(condition { then_block })
-/// hamr_if!(condition { then_block } else { else_block })
-/// ```
-///
-/// This macro generates conditional rendering code that can be used
-/// inside hamr! blocks. It supports both `if` and `if/else` forms.
-///
-/// Example:
-/// ```ignore
-/// use cvkg_macros::{hamr, hamr_if};
-/// hamr! {
-///     VStack {
-///         hamr_if!(is_playing {
-///             Text::new("PAUSE")
-///         })
-///     }
-/// }
-/// ```
+/// Frame manifest merge macro — evaluates const expressions at compile time.
+/// Validates: duplicate pass IDs, unresolved `after` refs, cycles, budget overruns.
 #[proc_macro]
-pub fn hamr_if(input: TokenStream) -> TokenStream {
-    let parsed: HamrIfMacro = parse_macro_input!(input);
-    let cond = parsed.cond;
-    let then_branch = parsed.then_branch;
-    let else_branch = parsed.else_branch;
-
-    let then_tokens: Vec<proc_macro2::TokenStream> = then_branch
-        .nodes
-        .iter()
-        .map(quote::ToTokens::to_token_stream)
-        .collect();
-
-    if let Some(else_nodes) = else_branch {
-        let else_tokens: Vec<proc_macro2::TokenStream> = else_nodes
-            .nodes
-            .iter()
-            .map(quote::ToTokens::to_token_stream)
-            .collect();
-        TokenStream::from(quote::quote! {
-            if #cond {
-                #(#then_tokens)*
-            } else {
-                #(#else_tokens)*
-            }
-        })
-    } else {
-        TokenStream::from(quote::quote! {
-            if #cond {
-                #(#then_tokens)*
-            }
-        })
+pub fn merge_manifests(input: TokenStream) -> TokenStream {
+    let manifests: syn::punctuated::Punctuated<syn::Expr, syn::token::Comma> = parse_macro_input!(input with syn::punctuated::Punctuated::<syn::Expr, syn::token::Comma>::parse_terminated);
+    let manifests: Vec<syn::Expr> = manifests.into_iter().collect();
+    
+    // Build the expanded macro that validates at compile time
+    let mut expanded = proc_macro2::TokenStream::new();
+    
+    // Add all the manifest expressions as statements
+    for manifest in &manifests {
+        expanded.extend(quote::quote! {
+            #manifest;
+        });
     }
-}
-
-struct HamrIfMacro {
-    cond: Expr,
-    then_branch: HamrIfBranch,
-    else_branch: Option<HamrIfBranch>,
-}
-
-impl Parse for HamrIfMacro {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        // Parse condition wrapped in parens to avoid syn treating
-        // `if cond { ... }` as an Expr::If expression.
-        let cond = input.parse::<syn::ExprParen>()?.expr;
-        let then_content;
-        braced!(then_content in input);
-        let then_branch: HamrIfBranch = then_content.parse()?;
-        let else_branch = if input.peek(Token![else]) {
-            let _else_token: Token![else] = input.parse()?;
-            let else_content;
-            braced!(else_content in input);
-            let else_branch: HamrIfBranch = else_content.parse()?;
-            Some(else_branch)
-        } else {
-            None
+    
+    // Add compile-time validation
+    expanded.extend(quote::quote! {
+        const _: () = {
+            cvkg_core::frame_manifest::validate_manifests(&[
+                #(&#manifests),*
+            ]);
         };
-        Ok(HamrIfMacro {
-            cond: *cond,
-            then_branch,
-            else_branch,
-        })
-    }
-}
-
-struct HamrRoot {
-    nodes: Vec<HamrNode>,
-}
-
-impl Parse for HamrRoot {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let mut nodes = Vec::new();
-        while !input.is_empty() {
-            nodes.push(input.parse()?);
-        }
-        Ok(HamrRoot { nodes })
-    }
-}
-
-impl quote::ToTokens for HamrNode {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        match self {
-            HamrNode::Expr(expr) => {
-                expr.to_tokens(tokens);
-            }
-            HamrNode::Block { expr, children } => {
-                let mut output = quote::quote! { #expr };
-                for child in children {
-                    output = quote::quote! { #output.child(#child) };
-                }
-                tokens.extend(output);
-            }
-        }
-    }
-}
-
-/// hamr! macro -- DSL for declarative UI definition
-///
-/// Example:
-/// hamr! {
-///     VStack::new(16.0) {
-///         Text::new("Hello")
-///         Button::new("Click", || {})
-///     }
-/// }
-///
-/// Conditional rendering is available via hamr_if!:
-/// hamr! {
-///     VStack {
-///         hamr_if!(is_logged_in {
-///             Text::new("Welcome!")
-///         } else {
-///             Text::new("Please log in")
-///         })
-///     }
-/// }
-#[proc_macro]
-pub fn hamr(input: TokenStream) -> TokenStream {
-    let root = parse_macro_input!(input as HamrRoot);
-    let nodes = root.nodes;
-    let expanded = quote! {
-        #(#nodes)*
-    };
+        
+        // Build the merged manifest reference
+        pub static _MERGED_MANIFEST: cvkg_core::frame_manifest::FrameManifest = cvkg_core::frame_manifest::build_merged_manifest(&[
+            #(&#manifests),*
+        ]);
+    });
+    
     TokenStream::from(expanded)
 }
 
-/// cvkg_model! macro -- generates data models with VDOM metadata
-#[proc_macro]
-pub fn cvkg_model(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ItemStruct);
-    let name = &input.ident;
-
-    let expanded = quote! {
-        #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
-        #input
-
-        impl #name {
-            pub fn vdom_id(&self) -> String {
-                format!("{}_{}", stringify!(#name), std::collections::hash_map::DefaultHasher::new().finish())
-            }
-        }
-    };
-
-    TokenStream::from(expanded)
-}
-
-/// Derive macro that generates a `cvkg_reflect::Reflected` implementation.
+/// Reflect derive macro — generates a `cvkg_reflect::Reflected` implementation.
 ///
 /// # Supported attributes
 /// - `#[reflect(kind = "Vec3")]` — override inferred FieldKind
@@ -672,8 +558,9 @@ fn type_to_kind(ty: &syn::Type) -> String {
     let type_str = quote!(#ty).to_string();
     match type_str.as_str() {
         "bool" => "Bool".to_string(),
-        "i8" | "i16" | "i32" | "i64" | "isize" |
-        "u8" | "u16" | "u32" | "u64" | "usize" => "Integer".to_string(),
+        "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64" | "usize" => {
+            "Integer".to_string()
+        }
         "f32" | "f64" => "Float".to_string(),
         "String" => "String".to_string(),
         "[f32 ; 2]" | "[f32;2]" => "Vec2".to_string(),

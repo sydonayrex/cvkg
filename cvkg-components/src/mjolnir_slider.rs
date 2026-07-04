@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 /// A heavy, metallic, high-density slider.
 /// Section 4.1: "Tactile HUD interaction with energy-based feedback."
+///
+/// Also available as `Slider` via `cvkg::prelude::*` or directly via `use MjolnirSlider as Slider`.
 #[doc(alias = "Slider")]
 pub struct MjolnirSlider {
     pub label: String,
@@ -11,6 +13,9 @@ pub struct MjolnirSlider {
     pub range: std::ops::RangeInclusive<f32>,
     pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
 }
+
+/// Standard English alias for MjolnirSlider.
+pub use MjolnirSlider as Slider;
 
 impl MjolnirSlider {
     pub fn new(

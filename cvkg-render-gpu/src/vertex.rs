@@ -35,7 +35,8 @@ pub struct InstanceData {
 }
 
 /// Per-instance data for 3D instanced rendering.
-/// Stores a 3×4 model matrix (4th row implied [0,0,0,1]) and material overrides.
+/// Stores a 3×4 model matrix (4th row implied [0,0,0,1]), material overrides,
+/// and UV transform (scale + offset).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceData3D {
@@ -43,6 +44,8 @@ pub struct InstanceData3D {
     pub model_row1: [f32; 4],
     pub model_row2: [f32; 4],
     pub material_overrides: [f32; 4],
+    pub uv_scale: [f32; 2],
+    pub uv_offset: [f32; 2],
 }
 
 impl Default for InstanceData3D {
@@ -52,16 +55,20 @@ impl Default for InstanceData3D {
             model_row1: [0.0, 1.0, 0.0, 0.0],
             model_row2: [0.0, 0.0, 1.0, 0.0],
             material_overrides: [0.0, 0.0, 1.0, 0.0],
+            uv_scale: [1.0, 1.0],
+            uv_offset: [0.0, 0.0],
         }
     }
 }
 
 impl InstanceData3D {
-    const ATTRIBUTES: [wgpu::VertexAttribute; 4] = wgpu::vertex_attr_array![
+    const ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
         16 => Float32x4,
         17 => Float32x4,
         18 => Float32x4,
         19 => Float32x4,
+        20 => Float32x2,
+        21 => Float32x2,
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {

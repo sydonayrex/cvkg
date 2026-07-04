@@ -1,0 +1,31 @@
+[package]
+name = "cvkg-render-3d"
+version = "0.3.0"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/sydonayrex/cvkg"
+description = "3D rendering pipeline for CVKG"
+
+[lib]
+name = "cvkg_render_3d"
+path = "src/lib.rs"
+
+[build-dependencies]
+naga = { workspace = true }
+
+[dependencies]
+wgpu = { workspace = true }
+glam = { workspace = true }
+bytemuck = { workspace = true }
+cvkg-core = { workspace = true }
+cvkg-render-gpu = { workspace = true }
+cvkg-spatial = { workspace = true }
+tracing = { workspace = true }
+log = { workspace = true }
+
+[dev-dependencies]
+naga = { workspace = true }
+
+[[test]]
+name = "light_type_tests"
+path = "tests/light_type_tests.rs"

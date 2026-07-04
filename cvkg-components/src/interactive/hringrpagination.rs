@@ -1,6 +1,8 @@
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
 
+/// Pagination component for navigating between pages.
+/// Also available as `Pagination` via `cvkg::prelude::*` or directly via `use HringrPagination as Pagination`.
 #[doc(alias = "Pagination")]
 #[derive(Clone)]
 pub struct HringrPagination {
@@ -8,6 +10,9 @@ pub struct HringrPagination {
     pub total_pages: usize,
     pub on_change: std::sync::Arc<dyn Fn(usize) + Send + Sync>,
 }
+
+/// Standard English alias for HringrPagination.
+pub use HringrPagination as Pagination;
 
 impl HringrPagination {
     /// Creates a new HringrPagination.
@@ -34,8 +39,7 @@ impl View for HringrPagination {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "HringrPagination");
-        renderer.set_aria_role("navigation");
-        renderer.set_aria_label("Pagination");
+        renderer.register_a11y("navigation", "Pagination");
 
         let btn_w = 32.0;
         let spacing = 4.0;

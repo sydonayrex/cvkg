@@ -1,4 +1,4 @@
-use cvkg_core::{KvasirId, Transform3D};
+use cvkg_core::{ColorTheme, KvasirId, Transform3D};
 use cvkg_materials::GlassMaterial;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -92,7 +92,7 @@ pub struct AriaProps {
 }
 
 /// A node in the Virtual DOM tree representing a component instance.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct VNode {
     /// Unique identifier for this node instance
     pub id: NodeId,
@@ -118,8 +118,43 @@ pub struct VNode {
     /// to an offscreen texture and is composited as a quad at the panel's
     /// 3D transform in the scene. Replaces the concept of portal_target.
     pub world_space: Option<WorldSpacePanel>,
+    /// Semantic colors that override the inherited theme for this node's subtree.
+    #[serde(skip)]
+    pub theme_override: Option<ColorTheme>,
+    /// Resolved color palette ID — used by Phase 3 portal inheritance.
+    #[serde(default = "default_u16")]
+    pub color_palette: u16,
     /// Vili SDF Shape for precise hit testing
     pub sdf_shape: Option<cvkg_core::layout::SdfShape>,
+    /// Companion states auto-initialized for this node (Phase 12).
+    #[serde(skip)]
+    pub companions: HashMap<String, Box<dyn cvkg_core::Companion>>,
+}
+
+impl Clone for VNode {
+    fn clone(&self) -> Self {
+        Self {
+            id: self.id,
+            key: self.key.clone(),
+            component_type: self.component_type.clone(),
+            props: self.props.clone(),
+            state: self.state.clone(),
+            layout: self.layout,
+            children: self.children.clone(),
+            aria_role: self.aria_role.clone(),
+            aria_props: self.aria_props.clone(),
+            portal_target: self.portal_target,
+            world_space: self.world_space.clone(),
+            theme_override: self.theme_override.clone(),
+            color_palette: self.color_palette,
+            sdf_shape: self.sdf_shape,
+            companions: HashMap::new(), // companions are not cloned - they're runtime-only
+        }
+    }
+}
+
+fn default_u16() -> u16 {
+    u16::MAX
 }
 
 impl PartialEq for VNode {
@@ -135,7 +170,11 @@ impl PartialEq for VNode {
             && self.aria_props == other.aria_props
             && self.portal_target == other.portal_target
             && self.world_space == other.world_space
+            && std::mem::discriminant(&self.theme_override)
+                == std::mem::discriminant(&other.theme_override)
+            && self.color_palette == other.color_palette
             && self.sdf_shape == other.sdf_shape
+            && self.companions.len() == other.companions.len()
     }
 }
 

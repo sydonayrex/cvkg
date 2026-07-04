@@ -292,6 +292,12 @@ pub struct Form {
     fields: Vec<cvkg_core::AnyView>,
     /// Cached validation results: (is_valid, error_message) per field.
     field_states: Vec<(bool, Option<String>)>,
+    /// Optional submit callback. Called with `true` on successful submit.
+    on_submit: Option<std::sync::Arc<dyn Fn() + Send + Sync>>,
+    /// Label for the submit button.
+    submit_label: String,
+    /// Whether the form has been submitted at least once.
+    submitted: bool,
 }
 
 impl Form {
@@ -300,7 +306,39 @@ impl Form {
         Self {
             fields: Vec::new(),
             field_states: Vec::new(),
+            on_submit: None,
+            submit_label: "Submit".to_string(),
+            submitted: false,
         }
+    }
+
+    /// Set the submit button label.
+    pub fn submit_label(mut self, label: impl Into<String>) -> Self {
+        self.submit_label = label.into();
+        self
+    }
+
+    /// Set the submit callback. Fires when the form's submit button is clicked
+    /// and all fields pass validation.
+    pub fn on_submit<F>(mut self, callback: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_submit = Some(std::sync::Arc::new(callback));
+        self
+    }
+
+    /// Attempt to submit the form: validates all fields and fires
+    /// the on_submit callback if every field passes.
+    pub fn submit(&mut self) -> bool {
+        let all_valid = self.validate_all();
+        if all_valid {
+            if let Some(ref cb) = self.on_submit {
+                cb();
+            }
+            self.submitted = true;
+        }
+        all_valid
     }
 
     /// Add a FormField to the form. Returns self for chaining.

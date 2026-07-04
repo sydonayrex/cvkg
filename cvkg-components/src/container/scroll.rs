@@ -49,6 +49,13 @@ impl Default for ScrollState {
 
 /// Scrollable container for content that exceeds available space.
 ///
+/// ## Accessibility
+/// - Role: `scrollbar` (track) / `region` (viewport)
+/// - Keyboard: Arrow keys to scroll, Page Up/Down for larger steps, Home/End for bounds
+/// - Focus: Focusable but passes through to content; scrollbar responds to keyboard when focused
+/// - ARIA: `aria-orientation` based on scroll direction, `aria-valuenow` for scroll position
+/// - Reduced motion: respects `is_reduced_motion()` for momentum-scroll deceleration animation
+///
 /// # Contract
 /// Manages viewport coordinates, touch-based dragging, pinch zoom gestures, mouse wheel scroll events, and scrollbar drawing.
 #[derive(Clone)]

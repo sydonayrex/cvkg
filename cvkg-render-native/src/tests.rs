@@ -33,12 +33,16 @@ mod tests {
             aria_role: aria_role.to_string(),
             aria_props: AriaProps::default(),
             portal_target: None,
+            world_space: None,
             sdf_shape: Some(cvkg_core::layout::SdfShape::Rect(cvkg_core::Rect {
                 x,
                 y,
                 width,
                 height,
             })),
+            theme_override: None,
+            color_palette: u16::MAX,
+            companions: HashMap::new(),
         }
     }
 

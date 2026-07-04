@@ -693,18 +693,96 @@ impl View for BerserkerFireView {
         let t_chrome_start = std::time::Instant::now();
         draw_corner_buttons(r, &self.counters, &self.rage, w, h);
         draw_dock(r, &self.counters, &self.rage, w, h);
+
+        // ── Game UI primitives ──
+        let t_game_start = std::time::Instant::now();
+
+        // HealthBar: top-left, shows current rage as health
+        let hp_bar = HealthBar::new(current_rage.max(0.0), 100.0)
+            .label("Rage")
+            .show_text(true)
+            .height(20.0);
+        hp_bar.render(r, cvkg_core::Rect {
+            x: 20.0,
+            y: 170.0,
+            width: 260.0,
+            height: 24.0,
+        });
+
+        // MiniMap: top-right, shows card positions and fire center as markers
+        let minimap_x = w - 140.0;
+        let minimap_y = 170.0;
+        let markers: Vec<MapMarker> = s.cards.iter().enumerate().map(|(i, card)| {
+            let color = match i {
+                0 => [1.0, 0.3, 0.3, 1.0],   // red
+                1 => [0.3, 1.0, 0.3, 1.0],   // green
+                _ => [0.3, 0.3, 1.0, 1.0],   // blue
+            };
+            MapMarker::new(card.x, card.y)
+                .color(color)
+                .size(5.0)
+        }).collect();
+
+        // Add flame center as a yellow marker
+        let flame_markers = {
+            let mut m = markers;
+            m.push(MapMarker::new(s.flame_x, s.flame_y)
+                .color([1.0, 0.8, 0.0, 1.0])
+                .size(6.0));
+            m
+        };
+
+        let mini_map = MiniMap::new((0.0, 0.0, w, h))
+            .player_position(w / 2.0, h / 2.0 - 100.0)
+            .zoom(0.35);
+        // Add each marker individually — MiniMap has no add_markers bulk method
+        let mini_map = flame_markers.into_iter().fold(mini_map, |m, marker| m.marker(marker));
+        mini_map.render(r, cvkg_core::Rect {
+            x: minimap_x,
+            y: minimap_y,
+            width: 120.0,
+            height: 120.0,
+        });
+
+        // DPadControl: left side below HealthBar, direction callbacks increment counters
+        let d0 = self.counters[0].clone();
+        let d1 = self.counters[1].clone();
+        let d2 = self.counters[2].clone();
+        let d3 = self.counters[3].clone();
+        let dpad = DPadControl::new()
+            .button_size(34.0)
+            .on_direction(move |dir| {
+                let (sig, label) = match dir {
+                    DPadDirection::Up    => (&d0, "Up"),
+                    DPadDirection::Down  => (&d1, "Down"),
+                    DPadDirection::Left  => (&d2, "Left"),
+                    DPadDirection::Right => (&d3, "Right"),
+                };
+                sig.set(sig.get().wrapping_add(1));
+                log::info!("[DPad] {label}");
+            });
+        dpad.render(r, cvkg_core::Rect {
+            x: 20.0,
+            y: 320.0,
+            width: 130.0,
+            height: 130.0,
+        });
+
+        let t_game = t_game_start.elapsed().as_secs_f32() * 1000.0;
+
         // Note: draw_nornir_bar is drawn LAST to ensure menu items appear above
         // corner button counter text and other chrome elements
         let t_chrome = t_chrome_start.elapsed().as_secs_f32() * 1000.0;
 
         if (s.last_time as u32).is_multiple_of(5) {
             log::info!(
-                "[Berserker] Draw timings: sim={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms chrome={:.2}ms",
+                "[Berserker] Draw timings: sim={:.2}ms cards={:.2}ms valknut={:.2}ms fire={:.2}ms chrome={:.2}ms game={:.2}ms",
                 t_sim,
                 t_cards,
                 t_valknut,
                 t_fire,
-                t_chrome
+                t_chrome,
+                t_game,
             );
         }
 
@@ -1597,10 +1675,10 @@ fn find_cvkg_asset_path(name: &str) -> Option<PathBuf> {
 }
 
 fn main() {
-    env_logger::Builder::from_env(
+    let _ = env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or("info,cvkg=debug,berserker=debug"),
     )
-    .init();
+    .try_init();
     log::info!("═══════════════════════════════════════════════════");
     log::info!(
         "  BERSERKER FIRE v{} — Cyberpunk Viking UI Demo",

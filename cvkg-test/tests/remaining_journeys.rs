@@ -120,6 +120,10 @@ fn test_journey_vdom_patch_lifecycle() {
         aria_props: AriaProps::default(),
         portal_target: None,
         world_space: None,
+        theme_override: None,
+        color_palette: u16::MAX,
+        sdf_shape: None,
+        companions: HashMap::new(),
     };
 
     // 1. Initial State
@@ -142,6 +146,8 @@ fn test_journey_vdom_patch_lifecycle() {
         children: None,
         handlers: None,
         world_space: None,
+        theme_override: None,
+        color_palette: None,
     }]);
 
     // 3. Removal

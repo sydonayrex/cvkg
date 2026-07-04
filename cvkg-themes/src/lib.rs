@@ -1,4 +1,5 @@
 use cvkg_core::Color;
+use std::fmt::Write;
 
 // =============================================================================
 // OKLCH COLOR MODEL
@@ -656,16 +657,16 @@ impl Theme {
         Self {
             is_dark: false,
             colors: SemanticColors {
-                primary: Color::new(0.35, 0.30, 0.70, 1.0),
+                primary: Color::new(0.35, 0.25, 0.65, 1.0),
                 secondary: Color::new(0.30, 0.50, 0.30, 1.0),
-                accent: Color::new(0.30, 0.35, 0.75, 1.0),
+                accent: Color::new(0.25, 0.30, 0.80, 1.0),
                 background: Color::new(0.97, 0.97, 0.98, 1.0),
-                surface: Color::new(0.93, 0.93, 0.95, 1.0),
+                surface: Color::new(0.90, 0.90, 0.93, 1.0),
                 error: Color::new(0.75, 0.15, 0.15, 1.0),
                 warning: Color::new(0.80, 0.60, 0.0, 1.0),
                 success: Color::new(0.15, 0.65, 0.30, 1.0),
                 text: Color::new(0.08, 0.08, 0.10, 1.0),
-                text_dim: Color::new(0.40, 0.40, 0.45, 1.0),
+                text_dim: Color::new(0.35, 0.35, 0.40, 1.0),
             },
             typography: TypographyScale {
                 large_title: 34.0,
@@ -1085,6 +1086,90 @@ impl ThemeBuilder {
         }
     }
 
+    // --- CSS Variables Export ---
+
+    /// Export theme semantic colors as CSS custom properties.
+    ///
+    /// Produces a `:root { ... }` block with `--cvkg-{name}` variables for
+    /// every color in the semantic palette. Colors with alpha=1.0 are emitted
+    /// as hex (`#rrggbb`); translucent colors use `rgba(r,g,b,a)`.
+    ///
+    /// # Example output
+    ///
+    /// ```css
+    /// :root {
+    ///   --cvkg-primary: #ffd700;
+    ///   --cvkg-background: #05050d;
+    ///   --cvkg-text: #f2f2ff;
+    ///   --cvkg-glass-base: rgba(10,10,30,0.82);
+    /// }
+    /// ```
+    pub fn to_css_variables(&self) -> String {
+        let mut css = String::new();
+        css.push_str(":root {\n");
+        let colors = &self.base.colors;
+
+        // Helper: emit a single Color value
+        let emit = |name: &str, c: &Color, css: &mut String| {
+            let r = (c.r.clamp(0.0, 1.0) * 255.0).round() as u8;
+            let g = (c.g.clamp(0.0, 1.0) * 255.0).round() as u8;
+            let b = (c.b.clamp(0.0, 1.0) * 255.0).round() as u8;
+            if c.a >= 0.999 {
+                let _ = std::write!(css, "  --cvkg-{name}: #{r:02x}{g:02x}{b:02x};\n");
+            } else {
+                let a = c.a.clamp(0.0, 1.0);
+                let _ = std::write!(css, "  --cvkg-{name}: rgba({r},{g},{b},{a:.3});\n");
+            }
+        };
+
+        emit("primary", &colors.primary, &mut css);
+        emit("secondary", &colors.secondary, &mut css);
+        emit("accent", &colors.accent, &mut css);
+        emit("background", &colors.background, &mut css);
+        emit("surface", &colors.surface, &mut css);
+        emit("error", &colors.error, &mut css);
+        emit("warning", &colors.warning, &mut css);
+        emit("success", &colors.success, &mut css);
+        emit("text", &colors.text, &mut css);
+        emit("text-dim", &colors.text_dim, &mut css);
+
+        // Emit typography scale as numeric pixel values
+        let ty = &self.base.typography;
+        css.push_str(&format!("  --cvkg-font-large-title: {}px;\n", ty.large_title));
+        css.push_str(&format!("  --cvkg-font-title1: {}px;\n", ty.title1));
+        css.push_str(&format!("  --cvkg-font-title2: {}px;\n", ty.title2));
+        css.push_str(&format!("  --cvkg-font-title3: {}px;\n", ty.title3));
+        css.push_str(&format!("  --cvkg-font-headline: {}px;\n", ty.headline));
+        css.push_str(&format!("  --cvkg-font-body: {}px;\n", ty.body));
+
+        // Spacing scale
+        let sp = &self.base.spacing;
+        css.push_str(&format!("  --cvkg-space-xs: {}px;\n", sp.xs));
+        css.push_str(&format!("  --cvkg-space-sm: {}px;\n", sp.s));
+        css.push_str(&format!("  --cvkg-space-md: {}px;\n", sp.m));
+        css.push_str(&format!("  --cvkg-space-lg: {}px;\n", sp.l));
+        css.push_str(&format!("  --cvkg-space-xl: {}px;\n", sp.xl));
+        css.push_str(&format!("  --cvkg-space-xxl: {}px;\n", sp.xxl));
+
+        // Radius scale
+        let rd = &self.base.radius;
+        css.push_str(&format!("  --cvkg-radius-xs: {}px;\n", rd.xs));
+        css.push_str(&format!("  --cvkg-radius-sm: {}px;\n", rd.s));
+        css.push_str(&format!("  --cvkg-radius-md: {}px;\n", rd.m));
+        css.push_str(&format!("  --cvkg-radius-lg: {}px;\n", rd.l));
+        css.push_str(&format!("  --cvkg-radius-xl: {}px;\n", rd.xl));
+        css.push_str(&format!("  --cvkg-radius-full: {}px;\n", rd.full));
+
+        // Glass material base color
+        if let Some(mat) = self.base.materials.first() {
+            let tint_rgba = mat.tint_color.to_rgba();
+            emit("glass-tint", &tint_rgba, &mut css);
+        }
+
+        css.push_str("}\n");
+        css
+    }
+
     // --- Build ---
 
     /// Build the final Theme, validating APCA contrast.
@@ -1490,5 +1575,69 @@ mod smoke_tests {
         assert_eq!(Density::Compact.multiplier(), 0.75);
         assert_eq!(Density::Default.multiplier(), 1.0);
         assert_eq!(Density::Spacious.multiplier(), 1.25);
+    }
+
+    #[test]
+    fn light_theme_contrast_text_on_background_passes_apca() {
+        let theme = Theme::light();
+        let bg_lum = theme.colors.background.relative_luminance();
+        let text_lum = theme.colors.text.relative_luminance();
+        let lc = StateColors::apca_contrast(text_lum, bg_lum);
+        assert!(
+            lc >= 60.0,
+            "light theme text/bg APCA Lc = {:.1} < 60 (FAIL)",
+            lc
+        );
+    }
+
+    #[test]
+    fn light_theme_contrast_dimtext_on_background_passes_apca() {
+        let theme = Theme::light();
+        let bg_lum = theme.colors.background.relative_luminance();
+        let dim_lum = theme.colors.text_dim.relative_luminance();
+        let lc = StateColors::apca_contrast(dim_lum, bg_lum);
+        assert!(
+            lc >= 60.0,
+            "light theme dim-text/bg APCA Lc = {:.1} < 60 (FAIL)",
+            lc
+        );
+    }
+
+    #[test]
+    fn dark_theme_contrast_text_on_background_passes_apca() {
+        let theme = Theme::dark();
+        let bg_lum = theme.colors.background.relative_luminance();
+        let text_lum = theme.colors.text.relative_luminance();
+        let lc = StateColors::apca_contrast(text_lum, bg_lum);
+        assert!(
+            lc >= 60.0,
+            "dark theme text/bg APCA Lc = {:.1} < 60 (FAIL)",
+            lc
+        );
+    }
+
+    #[test]
+    fn light_theme_surface_contrast_visible_from_background() {
+        let theme = Theme::light();
+        let bg_lum = theme.colors.background.relative_luminance();
+        let surf_lum = theme.colors.surface.relative_luminance();
+        // Surface should be visually distinct from background — APCA >= 5 for
+        // border differentiation, >= 15 for clear surface separation.
+        let lc = StateColors::apca_contrast(bg_lum, surf_lum);
+        assert!(
+            lc >= 6.0,
+            "light surface/bg APCA Lc = {:.1} < 6 — surface too close to background",
+            lc
+        );
+    }
+
+    #[test]
+    fn to_css_variables_produces_valid_css() {
+        let builder = ThemeBuilder::dark();
+        let css = builder.to_css_variables();
+        assert!(css.starts_with(":root {"));
+        assert!(css.contains("--cvkg-primary:"));
+        assert!(css.contains("--cvkg-text:"));
+        assert!(css.ends_with("}\n"));
     }
 }

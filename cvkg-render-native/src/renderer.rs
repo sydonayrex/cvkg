@@ -127,7 +127,8 @@ impl NativeRenderer {
     ) {
         env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
             .format_timestamp_millis()
-            .init();
+            .try_init()
+            .ok();
 
         let event_loop = EventLoop::<AppEvent>::with_user_event()
             .with_any_thread(true)

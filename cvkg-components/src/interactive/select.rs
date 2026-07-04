@@ -1,9 +1,18 @@
 use crate::theme;
-use crate::{Color, FONT_BASE, RADIUS_MD, RADIUS_SM};
+use crate::Color;
+use crate::form_validation::ValidationRule;
+use crate::{FONT_BASE, RADIUS_MD, RADIUS_SM};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
 use std::sync::Arc;
 
 /// Select/Dropdown component with keyboard navigation, dropdown popover, and focus ring.
+///
+/// ## Accessibility
+/// - Role: `combobox`
+/// - Keyboard: Tab to focus, Enter/Space to open, Arrow keys to navigate, Esc to close
+/// - Focus: auto-focused on mount when `auto_focus` is true
+/// - ARIA: `aria-label` from `placeholder`, `aria-expanded` for open state, `aria-controls` for dropdown
+/// - Reduced motion: respects `is_reduced_motion()` for dropdown animation
 #[derive(Clone)]
 pub struct Select<V> {
     placeholder: String,
@@ -12,6 +21,10 @@ pub struct Select<V> {
     is_open: bool,
     hover_index: Option<usize>,
     id_hash: u64,
+    /// Validation rules for this select
+    pub(crate) rules: Vec<ValidationRule>,
+    /// Error message when validation fails
+    pub(crate) error_message: Option<String>,
 }
 
 impl<V: Clone> Select<V> {
@@ -38,6 +51,8 @@ impl<V: Clone> Select<V> {
             is_open: false,
             hover_index: None,
             id_hash,
+            rules: Vec::new(),
+            error_message: None,
         }
     }
 
@@ -50,6 +65,38 @@ impl<V: Clone> Select<V> {
         self.selected_index = Some(index);
         self
     }
+
+    // ── Validation integration ──
+
+    /// Attach validation rules to this select.
+    pub fn rules(mut self, rules: Vec<ValidationRule>) -> Self {
+        self.rules = rules;
+        self
+    }
+
+    /// Run all attached validation rules.
+    ///
+    /// For selects, `Required` means an option must be selected.
+    pub fn validate(&mut self) -> Result<(), String> {
+        for rule in &self.rules {
+            let result = match rule {
+                ValidationRule::Required => {
+                    if self.selected_index.is_none() {
+                        Err("Please make a selection".to_string())
+                    } else {
+                        Ok(())
+                    }
+                }
+                _ => Ok(()),
+            };
+            if let Err(msg) = result {
+                self.error_message = Some(msg.clone());
+                return Err(msg);
+            }
+        }
+        self.error_message = None;
+        Ok(())
+    }
 }
 
 impl<V: Clone + View> View for Select<V> {
@@ -60,8 +107,7 @@ impl<V: Clone + View> View for Select<V> {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.push_vnode(rect, "Select");
-        renderer.set_aria_role("combobox");
-        renderer.set_aria_label(&self.placeholder);
+        renderer.register_a11y("combobox", &self.placeholder);
 
         // Read open state from system state
         let is_open = cvkg_core::load_system_state()
@@ -163,6 +209,17 @@ impl<V: Clone + View> View for Select<V> {
                 );
             }
             renderer.set_z_index(0.0);
+        }
+
+        // Error message
+        if let Some(ref msg) = self.error_message {
+            renderer.draw_text_raw(
+                msg,
+                rect.x + 4.0,
+                rect.y + rect.height + 4.0,
+                11.0,
+                theme::error_color(),
+            );
         }
 
         // Toggle on click

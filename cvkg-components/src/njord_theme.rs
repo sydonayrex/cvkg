@@ -129,3 +129,6 @@ impl LayoutView for NjordTheme {
     ) {
     }
 }
+
+/// Standard English alias for NjordTheme.
+pub use NjordTheme as ThemeConfig;

@@ -308,7 +308,15 @@ impl View for DawView {
             );
 
             // Track Name
-            renderer.draw_text_raw(track.name, 15.0, header_y + 15.0, 13.0, text_light);
+            renderer.draw_text_raw(&track.name, 15.0, header_y + 15.0, 13.0, text_light);
+
+            // Channel number label rect (for CH {i+1} text)
+            let label_rect = Rect {
+                x: 15.0,
+                y: header_y + 5.0,
+                width: left_panel_width - 20.0,
+                height: 20.0,
+            };
 
             // High Fidelity M S R Buttons - INTERACTIVE
             let draw_btn = |renderer: &mut dyn Renderer,
@@ -363,7 +371,12 @@ impl View for DawView {
                     },
                     [1.0, 1.0, 1.0, 0.1],
                 );
-                renderer.draw_text_centered(text, btn_rect.x, btn_rect.y, 11.0, fg);
+                renderer.draw_text_centered(
+                &format!("CH {}", i + 1),
+                &label_rect,
+                11.0,
+                text_light,
+            );
                 renderer.pop_vnode();
             };
 
@@ -600,8 +613,7 @@ impl View for DawView {
             );
             renderer.draw_text_centered(
                 &format!("CH {}", i + 1),
-                label_rect.x,
-                label_rect.y,
+                &label_rect,
                 11.0,
                 text_light,
             );
@@ -614,7 +626,12 @@ impl View for DawView {
                 width: 40.0,
                 height: 20.0,
             };
-            renderer.draw_text_centered("PAN", pan_label_rect.x, pan_label_rect.y, 9.0, text_dim);
+            renderer.draw_text_centered(
+                "PAN",
+                &pan_label_rect,
+                9.0,
+                text_dim,
+            );
 
             let knob_rect = Rect {
                 x: strip_x + 25.0,
@@ -848,7 +865,12 @@ impl View for DawView {
                 height: 20.0,
             };
             renderer.fill_rect(label_rect, [0.8, 0.2, 0.2, 1.0]);
-            renderer.draw_text_centered("MASTER", label_rect.x, label_rect.y, 11.0, text_light);
+            renderer.draw_text_centered(
+                "MASTER",
+                &label_rect,
+                11.0,
+                text_light,
+            );
 
             let meter_h = bottom_mixer_height - 80.0;
             let meter_y = mixer_y + 30.0;
@@ -1094,12 +1116,11 @@ impl View for DawView {
 
         // Draw PLAY/PAUSE label centered
         renderer.draw_text_centered(
-            if is_playing { "PAUSE" } else { "PLAY" },
-            btn_rect.x,
-            btn_rect.y,
-            12.0,
-            if is_playing { text_dark } else { text_light },
-        );
+                        "PAN",
+                        &pan_label_rect,
+                        9.0,
+                        text_light,
+                    );
         renderer.pop_vnode();
     }
 }

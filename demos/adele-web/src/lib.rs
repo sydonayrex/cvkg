@@ -5,7 +5,7 @@
     clippy::type_complexity
 )]
 
-use cvkg_components::{Badge, BadgeVariant, Button};
+use cvkg_components::{Badge, BadgeVariant, Button, Hero, PricingTable, FeatureGrid, TestimonialCard, FeatureItem, PricingCard, TestimonialItem};
 use cvkg_core::{Never, Rect, Renderer, View};
 use wasm_bindgen::prelude::*;
 
@@ -118,6 +118,68 @@ impl View for AdeleApp {
 }
 
 impl AdeleApp {
+    /// Render landing page components demo for illustration.
+    fn render_landing_demo(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        // Demo Hero
+        let hero_rect = Rect {
+            x: rect.x + 40.0,
+            y: rect.y + 40.0,
+            width: 600.0,
+            height: 200.0,
+        };
+        Hero::new("Build Beautiful UIs", "Compose at the speed of thought with CVKG")
+            .render(renderer, hero_rect);
+
+        // Demo Pricing Table
+        let pricing_rect = Rect {
+            x: rect.x + 40.0,
+            y: rect.y + 280.0,
+            width: rect.width - 80.0,
+            height: 200.0,
+        };
+        PricingTable::new()
+            .card(PricingCard::new("Starter", "Free"))
+            .card(PricingCard::new("Pro", "$9")
+                .feature("3 projects")
+                .feature("Basic support"))
+            .card(PricingCard::new("Enterprise", "$29")
+                .feature("Unlimited projects")
+                .feature("Priority support")
+                .feature("Custom domains"))
+            .render(renderer, pricing_rect);
+
+        // Demo Feature Grid
+        let features_rect = Rect {
+            x: rect.x + 40.0,
+            y: rect.y + 520.0,
+            width: rect.width - 80.0,
+            height: 200.0,
+        };
+        FeatureGrid::new()
+            .item(FeatureItem::new("⚡", "Fast", "Lightning quick rendering"))
+            .item(FeatureItem::new("🎨", "Beautiful", "Glassmorphic design"))
+            .item(FeatureItem::new("♿", "Accessible", "WCAG compliant"))
+            .render(renderer, features_rect);
+
+        // Demo Testimonial Card
+        let testimonial_rect = Rect {
+            x: rect.x + rect.width - 400.0,
+            y: rect.y + 760.0,
+            width: 360.0,
+            height: 140.0,
+        };
+        TestimonialCard::new()
+            .item(TestimonialItem::new(
+                "CVKG transformed our workflow!",
+                "Alex Morgan"
+            ))
+            .item(TestimonialItem::new(
+                "The glass morphism is stunning.",
+                "Sam Rivera"
+            ))
+            .render(renderer, testimonial_rect);
+    }
+
     fn render_header(&self, renderer: &mut dyn Renderer, rect: Rect) {
         renderer.bifrost(rect, 20.0, 1.2, 0.8);
         renderer.fill_rect(rect, [0.05, 0.05, 0.12, 0.6]);

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-vdom"
-version = "0.2.17"
+version = "0.3.0"
 build = false
 autolib = false
 autobins = false
@@ -41,6 +41,10 @@ path = "tests/signal_dirty_tests.rs"
 name = "world_space_panel_tests"
 path = "tests/world_space_panel_tests.rs"
 
+[[test]]
+name = "companion_storage_tests"
+path = "tests/companion_storage_tests.rs"
+
 [dependencies]
 cvkg-materials.workspace = true
 cvkg-runic-text.workspace = true
@@ -52,10 +56,10 @@ workspace = true
 
 
 [dependencies.cvkg-core]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.cvkg-scene]
-version = "0.2.17"
+version = "0.3.0"
 
 [dependencies.log]
 version = "0.4"

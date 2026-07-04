@@ -67,9 +67,9 @@ impl KvasirNode for GeometryNode {
         let depth_view = ctx.depth_view;
 
         let bg = ctx.renderer.default_background_color;
-        let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Surtr P1 Opaque Background"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Surtr P1 Opaque Background"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &msaa_view,
                 resolve_target: Some(&scene_view),
                 ops: wgpu::Operations {

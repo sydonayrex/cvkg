@@ -3,6 +3,7 @@ use cvkg_core::KvasirId;
 use cvkg_materials::GlassMaterial;
 use cvkg_vdom::{VNode, WorldSpacePanel};
 use glam::{Quat, Vec3};
+use std::collections::HashMap;
 
 #[test]
 fn test_default_panel() {
@@ -40,7 +41,10 @@ fn test_vnode_carries_world_space() {
         aria_props: Default::default(),
         portal_target: None,
         world_space: Some(panel.clone()),
+        theme_override: None,
+        color_palette: u16::MAX,
         sdf_shape: None,
+        companions: HashMap::new(),
     };
     assert!(v.world_space.is_some());
     assert_eq!(v.world_space.as_ref().unwrap(), &panel);

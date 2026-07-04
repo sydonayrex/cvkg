@@ -212,3 +212,6 @@ impl LayoutView for IdunnPersistence {
     ) {
     }
 }
+
+/// Standard English alias for IdunnPersistence.
+pub use IdunnPersistence as Persistence;

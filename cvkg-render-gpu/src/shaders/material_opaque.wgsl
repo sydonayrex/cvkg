@@ -205,7 +205,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_color = scene.light_color;
         let n_dot_l = max(dot(n, light_dir), 0.0);
         let diffuse = n_dot_l * light_color;
-        let view_dir = normalize(scene.camera_pos - vec3<f32>(in.uv.x, in.uv.y, 0.0));
+        let view_dir = normalize(scene.camera_pos - in.world_pos_3d);
         let half_dir = normalize(light_dir + view_dir);
         let n_dot_h = max(dot(n, half_dir), 0.0);
         let shininess = mix(8.0, 256.0, 1.0 - roughness);

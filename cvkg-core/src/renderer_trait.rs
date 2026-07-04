@@ -544,6 +544,13 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     fn set_aria_valuemax(&mut self, _max: f32) {}
     fn set_aria_valuenow(&mut self, _now: f32) {}
 
+    /// Convenience method: register aria role and label in one call.
+    /// Components with both `role` and `label` props should call this.
+    fn register_a11y(&mut self, role: &str, label: &str) {
+        self.set_aria_role(role);
+        self.set_aria_label(label);
+    }
+
     /// Push a focus trap onto the stack. While active, keyboard focus is
     /// trapped within the specified element and its children.
     /// Returns a trap ID that must be passed to `pop_focus_trap`.
@@ -573,29 +580,47 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     fn pop_shadow(&mut self) {}
 
     // ── VDOM & Scene Graph ───────────────────────────────────────────────
-    /// Push a Virtual DOM node onto the stack for hierarchy tracking.
-    fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
-    /// Pop the current Virtual DOM node from the stack.
-    fn pop_vnode(&mut self) {}
-    /// Register an event handler for the current VDOM node.
-    fn register_handler(
-        &mut self,
-        _event_type: &str,
-        _handler: std::sync::Arc<dyn Fn(Event) + Send + Sync>,
-    ) {
-    }
+        /// Push a Virtual DOM node onto the stack for hierarchy tracking.
+        fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
 
-    // ── Z-Index & Depth ──────────────────────────────────────────────────
-    /// Set the current Z-index for depth sorting.
-    /// Higher values appear closer to the viewer.
-    fn set_z_index(&mut self, _z: f32) {}
-    /// Get the current Z-index.
-    fn get_z_index(&self) -> f32 {
-        0.0
-    }
+        /// Push a Virtual DOM node with companion state auto-initialization.
+        /// Default implementation ignores companions and delegates to `push_vnode`.
+        fn push_vnode_with_companions(
+            &mut self,
+            rect: Rect,
+            name: &'static str,
+            _companions: Vec<Box<dyn Companion>>,
+        ) {
+            self.push_vnode(rect, name);
+        }
 
-    // ── Vector Graphics ──────────────────────────────────────────────────
-    /// Load an SVG model from raw bytes.
+        /// Pop the current Virtual DOM node from the stack.
+        fn pop_vnode(&mut self) {}
+
+        /// Register an event handler for the current VDOM node.
+        fn register_handler(
+            &mut self,
+            _event_type: &str,
+            _handler: std::sync::Arc<dyn Fn(Event) + Send + Sync>,
+        ) {
+        }
+
+        /// Retrieve a companion state for the VNode currently at the top of the stack.
+        /// Returns None if the companion type is not registered on this node.
+        fn current_companion(&self) -> Option<&dyn Companion> {
+            None
+        }
+
+        /// Set the current Z-index for depth sorting.
+        /// Higher values appear closer to the viewer.
+        fn set_z_index(&mut self, _z: f32) {}
+
+        /// Get the current Z-index.
+        fn get_z_index(&self) -> f32 {
+            0.0
+        }
+
+                // ── Vector Graphics ──────────────────────────────────────────────────
     fn load_svg(&mut self, _name: &str, _svg_data: &[u8]) {}
     /// Draw a pre-loaded SVG model.
     fn draw_svg(&mut self, _name: &str, _rect: Rect) {}
@@ -701,6 +726,28 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     fn set_sdf_shape(&mut self, _shape: crate::layout::SdfShape) {}
 
     // -- Portal / PhaseGate rendering -----------------------------------------
+
+    // ── Theme stack ──────────────────────────────────────────────────────
+
+    /// Push a theme override for the current subtree.
+    /// All child nodes rendered until `pop_theme()` are drawn with this theme.
+    fn push_theme(&mut self, _theme: ColorTheme) {}
+
+    /// Pop the theme override and restore the previous theme.
+    fn pop_theme(&mut self) {}
+
+    /// Return the current theme at the current stack depth.
+    /// Falls back to the default theme if no theme has been pushed.
+    fn current_theme(&self) -> ColorTheme {
+        ColorTheme::default()
+    }
+
+    /// Save theme state for portal inheritance before entering a new buffer.
+    /// Legacy — prefer using the theme stack (`push_theme`/`pop_theme`) instead.
+    fn save_theme(&mut self) {}
+    /// Restore the saved theme when exiting a portal buffer.
+    /// Legacy — prefer using the theme stack (`push_theme`/`pop_theme`) instead.
+    fn restore_theme(&mut self) {}
 
     /// Begin rendering into the portal root layer instead of the inline tree.
     /// All draw calls between `enter_portal` and `exit_portal` are collected

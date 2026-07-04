@@ -5,6 +5,13 @@ use cvkg_core::{Never, Rect, Renderer, Size, View};
 
 /// A flexible container that defaults to a glassmorphic construct over a void black background.
 ///
+/// ## Accessibility
+/// - Role: `group`
+/// - Keyboard: No direct keyboard interaction — children handle their own focus
+/// - Focus: Passes focus to its first focusable child; no focus trap
+/// - ARIA: No additional ARIA needed — flexbox is purely visual/layout
+/// - Reduced motion: N/A — layout primitive has no animation
+///
 /// # Contract
 /// Distributes subviews horizontally or vertically with custom spacing, adjusting dimensions to fit.
 pub struct FlexBox {

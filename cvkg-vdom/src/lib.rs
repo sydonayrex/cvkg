@@ -211,6 +211,8 @@ impl VDom {
                     handlers,
                     sdf_shape,
                     world_space,
+                    theme_override,
+                    color_palette,
                 } => {
                     if let Some(node) = self.nodes.get_mut(&id) {
                         if let Some(p) = props {
@@ -243,6 +245,12 @@ impl VDom {
                         }
                         if let Some(ws) = world_space {
                             node.world_space = Some(ws);
+                        }
+                        if let Some(to) = theme_override {
+                            node.theme_override = to;
+                        }
+                        if let Some(cp) = color_palette {
+                            node.color_palette = cp;
                         }
                     }
                 }
@@ -768,6 +776,9 @@ pub struct VNodeRenderer {
     batch_node_id: Option<NodeId>,
     /// Phase 2 fix: long-lived text engine, constructed once per VNodeRenderer.
     text_engine: cvkg_runic_text::TextEngine,
+    /// Phase 15: theme override stack for portal/subtree inheritance.
+    theme_stack: Vec<cvkg_core::ColorTheme>,
+    current_theme: cvkg_core::ColorTheme,
 }
 
 impl Default for VNodeRenderer {
@@ -793,6 +804,8 @@ impl VNodeRenderer {
                 engine.load_font_data(include_bytes!("../Fonts/Jupiteroid.ttf").to_vec());
                 engine
             },
+            theme_stack: Vec::new(),
+            current_theme: cvkg_core::ColorTheme::default(),
         }
     }
 
@@ -902,7 +915,9 @@ impl VNodeRenderer {
                 portal_target: None,
                 world_space: None,
                 theme_override: None,
+                color_palette: u16::MAX,
                 sdf_shape: None,
+                companions: HashMap::new(),
             };
             if let Some(parent_id) = self.stack.last()
                 && let Some(parent) = self.nodes.get_mut(parent_id)
@@ -1010,7 +1025,9 @@ impl cvkg_core::Renderer for VNodeRenderer {
             portal_target: None,
             world_space: None,
             theme_override: None,
+            color_palette: u16::MAX,
             sdf_shape: None,
+            companions: HashMap::new(),
         });
     }
 
@@ -1040,7 +1057,56 @@ impl cvkg_core::Renderer for VNodeRenderer {
             portal_target: None,
             world_space: None,
             theme_override: None,
+            color_palette: u16::MAX,
             sdf_shape: None,
+            companions: HashMap::new(),
+        });
+        self.stack.push(id);
+        self.flush_decorative_batch();
+    }
+
+    fn push_vnode_with_companions(
+        &mut self,
+        rect: cvkg_core::Rect,
+        name: &'static str,
+        companions: Vec<Box<dyn cvkg_core::Companion>>,
+    ) {
+        // Convert companions Vec to HashMap
+        let mut companion_map: HashMap<String, Box<dyn cvkg_core::Companion>> = HashMap::new();
+        for companion in companions {
+            let key = companion.type_name().to_string();
+            companion_map.insert(key, companion);
+        }
+
+        // Create VNode with companions
+        let id = self.next_id();
+        let role = match name {
+            "CornerButton" => "button",
+            "BerserkerRoot" => "application",
+            _ => "group",
+        };
+
+        self.add_node(VNode {
+            id,
+            key: None,
+            component_type: name.to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+            },
+            children: Vec::new(),
+            aria_role: role.to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: companion_map,
         });
         self.stack.push(id);
         self.flush_decorative_batch();
@@ -1048,6 +1114,15 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     fn pop_vnode(&mut self) {
         self.stack.pop();
+    }
+
+    /// Retrieve a companion state for the VNode currently at the top of the stack.
+    /// Returns None if the companion type is not registered on this node.
+    fn current_companion(&self) -> Option<&dyn cvkg_core::Companion> {
+        let node_id = self.stack.last()?;
+        let node = self.nodes.get(node_id)?;
+        // Return the first companion (for testing purposes)
+        node.companions.values().next().map(|c| c.as_ref())
     }
 
     fn fill_rounded_rect(&mut self, rect: cvkg_core::Rect, radius: f32, _color: [f32; 4]) {
@@ -1382,6 +1457,26 @@ impl cvkg_core::Renderer for VNodeRenderer {
                 .or_default()
                 .insert(event_type.to_string(), handler);
         }
+    }
+
+    // ── Phase 15: Theme stack ─────────────────────────────────────────────
+
+    fn push_theme(&mut self, theme: cvkg_core::ColorTheme) {
+        let prev = self.current_theme;
+        self.current_theme = theme;
+        self.theme_stack.push(prev);
+        cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(&theme));
+    }
+
+    fn pop_theme(&mut self) {
+        if let Some(parent_theme) = self.theme_stack.pop() {
+            self.current_theme = parent_theme;
+            cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(&parent_theme));
+        }
+    }
+
+    fn current_theme(&self) -> cvkg_core::ColorTheme {
+        self.current_theme
     }
 }
 

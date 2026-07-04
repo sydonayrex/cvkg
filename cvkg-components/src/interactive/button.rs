@@ -5,6 +5,13 @@ use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Rend
 use std::sync::Arc;
 
 /// Button with action callback, variant styling, size options, and disabled state.
+///
+/// ## Accessibility
+/// - Role: `button`
+/// - Keyboard: Enter/Space to activate, Tab to focus
+/// - Focus: auto-focused on mount when `auto_focus` is true
+/// - ARIA: `aria-label` from `label` prop, `aria-disabled` from `disabled` prop
+/// - Reduced motion: respects `is_reduced_motion()` for press animation
 #[derive(Clone)]
 pub struct Button {
     pub(crate) label: String,
@@ -419,8 +426,7 @@ impl View for Button {
 
         renderer.push_vnode(final_rect, "Button");
         renderer.set_key(&self.label);
-        renderer.set_aria_role("button");
-        renderer.set_aria_label(&self.label);
+        renderer.register_a11y("button", &self.label);
 
         // Apply mani_glow() soft lunar-like highlight
         if !self.disabled && !self.loading {
