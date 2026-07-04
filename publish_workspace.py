@@ -129,8 +129,14 @@ def main():
         path = crate_info['path']
         print(f"\nPublishing {name} in {path}...")
         
-        res = subprocess.run(cmd_base, cwd=path)
+        res = subprocess.run(cmd_base, cwd=path, capture_output=True, text=True)
+        print(res.stdout)
+        print(res.stderr, file=sys.stderr)
+        
         if res.returncode != 0:
+            if "already uploaded" in res.stderr or "already published" in res.stderr or "is already uploaded" in res.stderr:
+                print(f"Info: {name} is already published. Skipping.")
+                continue
             print(f"Error: Failed to publish {name}", file=sys.stderr)
             sys.exit(res.returncode)
             
