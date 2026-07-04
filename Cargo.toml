@@ -27,7 +27,7 @@ members = [
     "cvkg-macros",
     "cvkg-runic-text", "cvkg-test",
     "cvkg-physics",
-    "demos/adele-web", "demos/niflheim-wasi", "demos/berserker-fire-web",
+    "demos/adele-web", "demos/niflheim-wasi",
     "demos/berserker",
     "cvkg-flow",
     # Platform infrastructure crates (crosscrate.md audit findings)
