@@ -6,14 +6,16 @@ use crate::kvasir::resource::ResourceId;
 /// quads by the Geometry pass.
 pub struct PreWorldPanelNode {
     pub panel_textures: Vec<ResourceId>,
+    pub panel_ids: Vec<u64>,
     pub inputs: Vec<ResourceId>,
     pub outputs: Vec<ResourceId>,
 }
 
 impl PreWorldPanelNode {
-    pub fn new(panel_textures: Vec<ResourceId>) -> Self {
+    pub fn new(panel_textures: Vec<ResourceId>, panel_ids: Vec<u64>) -> Self {
         Self {
             panel_textures: panel_textures.clone(),
+            panel_ids,
             inputs: vec![],
             outputs: panel_textures,
         }
@@ -42,6 +44,7 @@ impl KvasirNode for PreWorldPanelNode {
         // VDOM subtree.
 
         for (i, &panel_tex) in self.panel_textures.iter().enumerate() {
+            let panel_id = self.panel_ids[i];
             let view = match ctx.registry.get_texture_view(panel_tex) {
                 Some(v) => v,
                 None => {
@@ -77,8 +80,7 @@ impl KvasirNode for PreWorldPanelNode {
             pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
             pass.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
 
-            // TODO: Filter draw_calls to only those belonging to this panel's VDOM subtree.
-            // For now, render all draw calls (will be refined when panel filtering is wired).
+            // Filter draw_calls to only those belonging to this panel's VDOM subtree.
             if !ctx.renderer.draw_calls.is_empty() {
                 pass.set_vertex_buffer(0, ctx.renderer.geometry_buffers.vertex_buffer.slice(..));
                 pass.set_vertex_buffer(1, ctx.renderer.geometry_buffers.instance_buffer.slice(..));
@@ -88,16 +90,13 @@ impl KvasirNode for PreWorldPanelNode {
                 );
 
                 for call in &ctx.renderer.draw_calls {
-                    // Skip 2D-only draw calls (those that don't target a panel)
-                    // In the future, we'd filter by panel_id or similar.
-                    if call.instance_count == 1 && call.instance_start == 0 {
-                        continue; // Skip 2D-only instances
+                    if call.panel_id == Some(panel_id) {
+                        pass.draw_indexed(
+                            call.index_start..call.index_start + call.index_count,
+                            0,
+                            call.instance_start..call.instance_start + call.instance_count,
+                        );
                     }
-                    pass.draw_indexed(
-                        call.index_start..call.index_start + call.index_count,
-                        0,
-                        call.instance_start..call.instance_start + call.instance_count,
-                    );
                 }
             }
         }
@@ -110,13 +109,13 @@ mod pre_world_panel_tests {
 
     #[test]
     fn test_pre_world_panel_node_label() {
-        let node = PreWorldPanelNode::new(vec![]);
+        let node = PreWorldPanelNode::new(vec![], vec![]);
         assert_eq!(node.label(), "PreWorldPanel");
     }
 
     #[test]
     fn test_pre_world_panel_node_empty() {
-        let node = PreWorldPanelNode::new(vec![]);
+        let node = PreWorldPanelNode::new(vec![], vec![]);
         assert!(node.inputs().is_empty());
         assert!(node.outputs().is_empty());
         assert!(node.panel_textures.is_empty());
@@ -125,7 +124,7 @@ mod pre_world_panel_tests {
     #[test]
     fn test_pre_world_panel_node_single_panel() {
         let tex = ResourceId(2000);
-        let node = PreWorldPanelNode::new(vec![tex]);
+        let node = PreWorldPanelNode::new(vec![tex], vec![123]);
         assert_eq!(node.inputs().len(), 0);
         assert_eq!(node.outputs().len(), 1);
         assert_eq!(node.outputs()[0], tex);
@@ -135,7 +134,7 @@ mod pre_world_panel_tests {
     #[test]
     fn test_pre_world_panel_node_multiple_panels() {
         let texes = vec![ResourceId(2000), ResourceId(2001), ResourceId(2002)];
-        let node = PreWorldPanelNode::new(texes.clone());
+        let node = PreWorldPanelNode::new(texes.clone(), vec![1, 2, 3]);
         assert_eq!(node.outputs().len(), 3);
         assert_eq!(node.panel_textures.len(), 3);
         for (i, tex) in texes.iter().enumerate() {
@@ -145,7 +144,7 @@ mod pre_world_panel_tests {
 
     #[test]
     fn test_pre_world_panel_node_pass_id() {
-        let node = PreWorldPanelNode::new(vec![]);
+        let node = PreWorldPanelNode::new(vec![], vec![]);
         assert!(matches!(
             node.pass_id(),
             crate::kvasir::nodes::PassId::PreWorldPanel

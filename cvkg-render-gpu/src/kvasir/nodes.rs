@@ -101,14 +101,16 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     // PreWorldPanel pass: render WorldSpacePanel subtrees to offscreen textures.
     // These textures will be sampled by Geometry pass for 3D quad compositing.
     let mut panel_outputs = Vec::new();
+    let mut panel_ids = Vec::new();
     for (i, panel) in config.world_space_panels.iter().enumerate() {
         let size = panel.1.texture_resolution();
         let tex_id = ResourceId(2000 + i as u32);
         panel_outputs.push(tex_id);
+        panel_ids.push(panel.0);
     }
 
     if !panel_outputs.is_empty() {
-        let pre_panel = builder.add_node(Box::new(PreWorldPanelNode::new(panel_outputs)));
+        let pre_panel = builder.add_node(Box::new(PreWorldPanelNode::new(panel_outputs, panel_ids)));
         // No output connection needed - panels write to their allocated offscreen textures.
         // Geometry pass will sample them via their ResourceIds.
     }
