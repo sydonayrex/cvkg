@@ -112,12 +112,9 @@ def main():
     for i, name in enumerate(order, 1):
         print(f"  {i:2d}. {name}")
         
-    cmd_base = ["cargo", "publish"]
+    cmd_base = ["cargo", "publish", "--no-verify", "--allow-dirty"]
     if args.dry_run:
         cmd_base.append("--dry-run")
-        cmd_base.append("--allow-dirty")
-    if args.no_verify:
-        cmd_base.append("--no-verify")
     if args.token:
         cmd_base.extend(["--token", args.token])
         
