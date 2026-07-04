@@ -2,6 +2,7 @@
 """
 CVKG Workspace Publisher Script
 Determines the dependency order of workspace crates and publishes them sequentially.
+Handles removing private dev-dependencies during the upload phase.
 """
 
 import os
@@ -37,6 +38,7 @@ def extract_deps(content):
 
 def get_workspace_crates(root_dir):
     crates = {}
+    all_workspace_packages = set()
     for root, dirs, files in os.walk(root_dir):
         # Skip directories we don't want to traverse
         dirs[:] = [d for d in dirs if d not in ['.git', 'target', 'node_modules', 'demos', '.gemini', '.agents']]
@@ -46,23 +48,27 @@ def get_workspace_crates(root_dir):
                 with open(cargo_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 
-                # Check if package is publishable
-                publish_match = re.search(r'^\s*publish\s*=\s*false', content, re.MULTILINE)
-                if publish_match:
-                    continue  # Skip private/non-publishable packages
-                
                 name_match = re.search(r'^\s*name\s*=\s*"([^"]+)"', content, re.MULTILINE)
                 if name_match:
                     crate_name = name_match.group(1)
-                    deps = extract_deps(content)
+                    all_workspace_packages.add(crate_name)
                     
+                    # Check if package is publishable
+                    publish_match = re.search(r'^\s*publish\s*=\s*false', content, re.MULTILINE)
+                    if publish_match:
+                        continue  # Skip private/non-publishable packages
+                    
+                    deps = extract_deps(content)
                     crates[crate_name] = {
                         'path': root,
                         'deps': deps
                     }
             except Exception as e:
                 print(f"Warning: Could not parse {cargo_path}: {e}", file=sys.stderr)
-    return crates
+                
+    # Private crates are those in the workspace but not publishable
+    private_crates = all_workspace_packages - set(crates.keys())
+    return crates, private_crates
 
 def topological_sort(crates):
     in_degree = {name: 0 for name in crates}
@@ -92,6 +98,72 @@ def topological_sort(crates):
         
     return order
 
+def strip_private_deps(cargo_path, private_crates):
+    with open(cargo_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+        
+    backup_path = cargo_path + ".bak"
+    with open(backup_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+        
+    # Split content by section headers
+    parts = re.split(r'^(\[.*\])\s*$', content, flags=re.MULTILINE)
+    new_parts = []
+    current_section = "[dependencies]"
+    
+    for part in parts:
+        if not part:
+            continue
+        if part.startswith('['):
+            current_section = part.strip()
+            # If the section header itself is a private dev-dependency, skip it
+            is_private_header = False
+            for p in private_crates:
+                if f"dev-dependencies.{p}" in current_section:
+                    is_private_header = True
+                    break
+            if is_private_header:
+                current_section = "[skipped-private-dev-dep]"
+                continue
+            new_parts.append(part)
+        else:
+            if current_section == "[skipped-private-dev-dep]":
+                continue
+            if 'dev-dependencies' in current_section:
+                # Remove lines defining private dev-dependencies
+                lines = part.splitlines()
+                filtered_lines = []
+                for line in lines:
+                    is_private = False
+                    for p in private_crates:
+                        if re.search(rf'^\s*{p}\s*=', line):
+                            is_private = True
+                            break
+                    if not is_private:
+                        filtered_lines.append(line)
+                new_parts.append('\n'.join(filtered_lines))
+            else:
+                new_parts.append(part)
+                
+    # Reassemble the file
+    with open(cargo_path, 'w', encoding='utf-8') as f:
+        # Rejoin section headers and bodies properly
+        # Since parts has headers at odd/even positions, we can reconstruct
+        reconstructed = ""
+        for item in new_parts:
+            if item.startswith('['):
+                reconstructed += "\n" + item + "\n"
+            else:
+                reconstructed += item
+        f.write(reconstructed)
+
+def restore_cargo_toml(cargo_path):
+    backup_path = cargo_path + ".bak"
+    if os.path.exists(backup_path):
+        if os.path.exists(cargo_path):
+            os.remove(cargo_path)
+        os.rename(backup_path, cargo_path)
+
 def main():
     parser = argparse.ArgumentParser(description="Publish CVKG workspace crates in dependency order.")
     parser.add_argument("--dry-run", action="store_true", help="Perform a dry-run publish.")
@@ -102,7 +174,7 @@ def main():
     workspace_root = os.path.abspath(os.path.dirname(__file__))
     
     try:
-        crates = get_workspace_crates(workspace_root)
+        crates, private_crates = get_workspace_crates(workspace_root)
         order = topological_sort(crates)
     except Exception as e:
         print(f"Error sorting workspace: {e}", file=sys.stderr)
@@ -111,6 +183,8 @@ def main():
     print("Resolved Publishing Order:")
     for i, name in enumerate(order, 1):
         print(f"  {i:2d}. {name}")
+        
+    print(f"\nPrivate / Non-publishable Crates to strip from dev-dependencies: {list(private_crates)}")
         
     cmd_base = ["cargo", "publish", "--no-verify", "--allow-dirty"]
     if args.dry_run:
@@ -127,18 +201,27 @@ def main():
     for name in order:
         crate_info = crates[name]
         path = crate_info['path']
+        cargo_path = os.path.join(path, "Cargo.toml")
+        
         print(f"\nPublishing {name} in {path}...")
         
-        res = subprocess.run(cmd_base, cwd=path, capture_output=True, text=True)
-        print(res.stdout)
-        print(res.stderr, file=sys.stderr)
+        # Strip private dev-dependencies
+        strip_private_deps(cargo_path, private_crates)
         
-        if res.returncode != 0:
-            if "already uploaded" in res.stderr or "already published" in res.stderr or "is already uploaded" in res.stderr or "already exists" in res.stderr:
-                print(f"Info: {name} is already published. Skipping.")
-                continue
-            print(f"Error: Failed to publish {name}", file=sys.stderr)
-            sys.exit(res.returncode)
+        try:
+            res = subprocess.run(cmd_base, cwd=path, capture_output=True, text=True)
+            print(res.stdout)
+            print(res.stderr, file=sys.stderr)
+            
+            if res.returncode != 0:
+                if "already uploaded" in res.stderr or "already published" in res.stderr or "is already uploaded" in res.stderr or "already exists" in res.stderr:
+                    print(f"Info: {name} is already published. Skipping.")
+                    continue
+                print(f"Error: Failed to publish {name}", file=sys.stderr)
+                sys.exit(res.returncode)
+        finally:
+            # Always restore Cargo.toml
+            restore_cargo_toml(cargo_path)
             
     print("\nAll crates processed successfully!")
 
