@@ -8,8 +8,10 @@ Handles removing private dev-dependencies during the upload phase.
 import os
 import re
 import sys
+import time
 import argparse
 import subprocess
+from datetime import datetime, timezone
 
 def extract_deps(content):
     parts = re.split(r'^(\[.*\])\s*$', content, flags=re.MULTILINE)
@@ -207,14 +209,38 @@ def main():
         strip_private_deps(cargo_path, private_crates)
         
         try:
-            res = subprocess.run(cmd_base, cwd=path, capture_output=True, text=True)
-            print(res.stdout)
-            print(res.stderr, file=sys.stderr)
-            
-            if res.returncode != 0:
-                if "already uploaded" in res.stderr or "already published" in res.stderr or "is already uploaded" in res.stderr or "already exists" in res.stderr:
+            max_retries = 5
+            for attempt in range(max_retries):
+                res = subprocess.run(cmd_base, cwd=path, capture_output=True, text=True)
+                print(res.stdout)
+                print(res.stderr, file=sys.stderr)
+                
+                if res.returncode == 0:
+                    break
+                
+                combined = res.stdout + res.stderr
+                if "already uploaded" in combined or "already published" in combined or "already exists" in combined:
                     print(f"Info: {name} is already published. Skipping.")
+                    break
+                
+                # Handle 429 rate-limit: parse the retry-after datetime from error text
+                rate_limit_match = re.search(
+                    r'try again after ([A-Za-z]+,\s+\d+\s+[A-Za-z]+\s+\d+\s+[\d:]+\s+GMT)',
+                    combined
+                )
+                if rate_limit_match and attempt < max_retries - 1:
+                    retry_str = rate_limit_match.group(1)
+                    try:
+                        retry_dt = datetime.strptime(retry_str, "%a, %d %b %Y %H:%M:%S GMT").replace(tzinfo=timezone.utc)
+                        now = datetime.now(timezone.utc)
+                        wait = max(0, (retry_dt - now).total_seconds()) + 5
+                    except ValueError:
+                        wait = 30
+                    print(f"Rate-limited. Sleeping {wait:.0f}s before retry {attempt + 2}/{max_retries}...")
+                    time.sleep(wait)
                     continue
+                
+                # Unrecoverable error
                 print(f"Error: Failed to publish {name}", file=sys.stderr)
                 sys.exit(res.returncode)
         finally:
