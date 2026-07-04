@@ -21,6 +21,7 @@ graph TD
 
     subgraph Rendering ["GPU Rendering"]
         cvkg-render-gpu["cvkg-render-gpu<br/>(wgpu render graph)"]
+        cvkg-render-3d["cvkg-render-3d<br/>(3D pipeline, Kvasir graph)"]
         cvkg-compositor["cvkg-compositor<br/>(Layer tree, damage tracking)"]
         cvkg-svg-filters["cvkg-svg-filters<br/>(SVG filter effects)"]
         cvkg-svg-serialize["cvkg-svg-serialize<br/>(SVG serialization)"]
@@ -39,6 +40,15 @@ graph TD
     subgraph Platform ["Platform"]
         cvkg-render-native["cvkg-render-native<br/>(winit + AccessKit)"]
         cvkg-render-software["cvkg-render-software<br/>(CPU fallback)"]
+    end
+
+    subgraph Input ["Input"]
+        cvkg-inputs["cvkg-inputs<br/>(HID backends)"]
+    end
+
+    subgraph Assets ["Assets"]
+        cvkg-gltf["cvkg-gltf<br/>(glTF loader)"]
+        cvkg-stl["cvkg-stl<br/>(STL parser)"]
     end
 
     subgraph Services ["Services & Tooling"]
@@ -91,6 +101,14 @@ graph TD
     cvkg-render-gpu --> cvkg-runic-text
     cvkg-render-gpu --> cvkg-vdom
     cvkg-render-gpu --> cvkg-anim
+    cvkg-render-3d --> cvkg-core
+    cvkg-render-3d --> cvkg-render-gpu
+    cvkg-render-3d --> cvkg-spatial
+    cvkg-render-3d-hierarchy --> cvkg-core
+    cvkg-gltf --> cvkg-core
+    cvkg-gltf --> cvkg-render-3d
+    cvkg-stl --> cvkg-core
+    cvkg-inputs --> cvkg-core
     cvkg-compositor --> cvkg-core
 
     %% ========================
@@ -226,7 +244,7 @@ graph TD
     classDef meta fill:#3f3f46,stroke:#a1a1aa,color:#d4d4d8,stroke-width:1px
     classDef demo fill:#4a1d96,stroke:#a855f7,color:#c084fc,stroke-width:1.5px
 
-    class cvkg-core,cvkg-vdom,cvkg-scene,cvkg-spatial core
+    class cvkg-core,cvkg-vdom,cvkg-scene,cvkg-spatial,cvkg-render-3d,cvkg-render-3d-hierarchy,cvkg-gltf,cvkg-stl,cvkg-inputs core
     class cvkg-layout,cvkg-anim layout
     class cvkg-render-gpu,cvkg-compositor,cvkg-svg-filters,cvkg-svg-serialize gpu
     class cvkg-runic-text text
@@ -234,7 +252,7 @@ graph TD
     class cvkg-render-native,cvkg-render-software platform
     class cvkg-cli,cvkg-webkit-server,cvkg-physics,cvkg-scheduler,cvkg-test,cvkg-macros services
     class cvkg-reflect,cvkg-materials,cvkg-accessibility,cvkg-certification,cvkg-telemetry,cvkg-icons meta
-    class cvkg,berserker,adele-web,niflheim_wasi,berserker-fire-web,cvkg-gallery,cvkg-game-hud,cvkg-export-raster demo
+    class cvkg,berserker,adele-web,niflheim_wasi,berserker-fire-web,cvkg-gallery,cvkg-game-hud,cvkg-export-raster,cvkg-render-3d,cvkg-gltf,cvkg-inputs,cvkg-stl demo
 ```
 
 ## Problem and Audience
@@ -269,9 +287,14 @@ cargo run -p demos/berserker
 | cvkg-layout | Taffy-based flexbox and grid layout engine |
 | cvkg-anim | Spring-physics solver (RK4), particle systems, morph/growth |
 | cvkg-render-gpu | WGPU render graph, multi-pass pipeline, texture management |
+| cvkg-render-3d | 3D rendering pipeline, Kvasir render graph, PBR materials |
+| cvkg-render-3d-hierarchy | 3D transform hierarchy |
+| cvkg-gltf | glTF 2.0 asset loader |
+| cvkg-stl | STL file parser |
 | cvkg-compositor | Layer tree orchestration, damage tracking, material routing |
 | cvkg-render-native | Desktop windowing via winit, event loop, AccessKit bridge |
 | cvkg-render-software | CPU-based rendering fallback |
+| cvkg-inputs | HID input backends (gamepad, keyboard, mouse, touch) |
 | cvkg-runic-text | HarfBuzz text shaper, BiDi, word-wrap, font discovery |
 | cvkg-svg-filters | GPU SVG filter primitives (blur, color matrix, etc.) |
 | cvkg-svg-serialize | SVG serialization via usvg and quick-xml |
@@ -290,6 +313,8 @@ cargo run -p demos/berserker
 | cvkg-certification | Cross-crate integration test suites |
 | cvkg-telemetry | Metrics collection |
 | cvkg-icons | Icon component library |
+| cvkg-gltf | glTF 2.0 asset loader |
+| cvkg-stl | STL file parser |
 | demos/berserker | Native tactical HUD demo application |
 | demos/adele-web | Web design system explorer |
 | demos/niflheim-wasi | Headless WASI validation target |
@@ -303,6 +328,8 @@ cargo run -p demos/berserker
 - [Onboarding](docs/onboarding.md) -- Clone, build, run, make a change.
 - [Architecture](docs/architecture.md) -- Crate topology, data flow, design decisions.
 - [Troubleshooting](docs/troubleshooting.md) -- Build errors, runtime crashes, visual artifacts.
+- [Component Index](COMPONENTS.md) -- Complete index of all 180+ UI components.
+- [WASM Performance](WASM.md) -- Bundle size and cold-start performance metrics.
 
 ### How-To Guides
 
