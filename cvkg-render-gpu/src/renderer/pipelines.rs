@@ -45,6 +45,7 @@ pub(crate) fn compile_render_pipelines(
     env_bind_group_layout: &wgpu::BindGroupLayout,
     berserker_bind_group_layout: &wgpu::BindGroupLayout,
     gradient_bind_group_layout: &wgpu::BindGroupLayout,
+    pbr_material_bind_group_layout: &wgpu::BindGroupLayout,
     shader: &wgpu::ShaderModule,
     wgsl_opaque: &str,
     wgsl_glass: &str,
@@ -262,7 +263,17 @@ pub(crate) fn compile_render_pipelines(
         cache: pipeline_cache,
     });
 
-    // PBR pipeline for 3D surfaces (mode 13+ with shadow mapping)
+    let pbr_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Surtr PBR Pipeline Layout"),
+        bind_group_layouts: &[
+            Some(texture_bind_group_layout),
+            Some(env_bind_group_layout),
+            Some(berserker_bind_group_layout),
+            Some(pbr_material_bind_group_layout),
+        ],
+        immediate_size: 0,
+    });
+
     let pbr_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("Surtr PBR Shader"),
         source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_pbr)),
@@ -270,7 +281,7 @@ pub(crate) fn compile_render_pipelines(
 
     let pbr_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Surtr PBR"),
-        layout: Some(&pipeline_layout),
+        layout: Some(&pbr_layout),
         vertex: wgpu::VertexState {
             module: &pbr_shader,
             entry_point: Some("vs_main_3d"),

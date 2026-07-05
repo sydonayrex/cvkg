@@ -471,6 +471,16 @@ impl GpuRenderer {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
                 label: Some("Surtr Berserker Bind Group Layout"),
             });
@@ -498,6 +508,49 @@ impl GpuRenderer {
                 label: Some("Surtr Gradient Bind Group Layout"),
             });
 
+        let pbr_material_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    // Binding 0: Shadow Map Texture Array (depth array)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                            sample_type: wgpu::TextureSampleType::Depth,
+                        },
+                        count: None,
+                    },
+                    // Binding 1: Shadow Sampler (comparison)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                        count: None,
+                    },
+                    // Binding 8: IBL Texture (standard 2D)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 8,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    // Binding 9: IBL Sampler (filtering)
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("Surtr PBR Material Bind Group Layout"),
+            });
+
         let pipes = compile_render_pipelines(
             &device,
             format,
@@ -506,6 +559,7 @@ impl GpuRenderer {
             &env_bind_group_layout,
             &berserker_bind_group_layout,
             &gradient_bind_group_layout,
+            &pbr_material_bind_group_layout,
             &shader,
             wgsl_opaque.as_str(),
             wgsl_glass.as_str(),
@@ -716,6 +770,39 @@ impl GpuRenderer {
         let dummy_depth_view_msaa =
             dummy_depth_tex_msaa.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let shadow_map_size = 1024;
+        let shadow_map_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Surtr CSM Shadow Map Texture"),
+            size: wgpu::Extent3d {
+                width: shadow_map_size,
+                height: shadow_map_size,
+                depth_or_array_layers: 4, // 4 cascades
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let shadow_map_view = shadow_map_texture.create_view(&wgpu::TextureViewDescriptor {
+            label: Some("Surtr CSM Shadow Map View"),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..wgpu::TextureViewDescriptor::default()
+        });
+
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("Surtr CSM Shadow Sampler"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..wgpu::SamplerDescriptor::default()
+        });
+
         let mut texture_registry = LruCache::new(NonZeroUsize::new(31).unwrap());
         let mut texture_bind_groups = Vec::new();
 
@@ -754,6 +841,12 @@ impl GpuRenderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
+        let csm_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Surtr CSM Buffer"),
+            contents: bytemuck::bytes_of(&cvkg_core::render_tier::CsmUniforms::default()),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let berserker_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &berserker_bind_group_layout,
             entries: &[
@@ -764,6 +857,10 @@ impl GpuRenderer {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: scene_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: csm_buffer.as_entire_binding(),
                 },
             ],
             label: Some("Surtr Berserker Bind Group"),
@@ -873,6 +970,7 @@ impl GpuRenderer {
             texture_registry,
             texture_views: texture_views_list,
             dummy_sampler,
+            dummy_view: dummy_view.clone(),
             dummy_depth_view,
             dummy_depth_view_msaa,
             svg: crate::types::SvgSubsystem::forge(
@@ -897,6 +995,7 @@ impl GpuRenderer {
             indices: Vec::with_capacity(MAX_INDICES),
             instance_data: Vec::with_capacity(MAX_VERTICES / 4),
             instance_data_3d: Vec::with_capacity(MAX_VERTICES / 4),
+            instance_buffer_3d: None,
             draw_calls: Vec::new(),
             current_texture_id: None,
             current_panel_id: None,
@@ -968,6 +1067,8 @@ impl GpuRenderer {
             volumetric_pipeline: pipes.volumetric_pipeline,
             volumetric_bind_group_layout: pipes.volumetric_bind_group_layout,
             volumetric_uniform_buffer: pipes.volumetric_uniform_buffer,
+            csm_buffer,
+            pbr_material_bind_group_layout,
             volumetric_depth_sampler: pipes.volumetric_depth_sampler,
             hologram_instances: Vec::new(),
             color_blind_bind_group_layout: pipes.color_blind_bind_group_layout,
@@ -995,12 +1096,18 @@ impl GpuRenderer {
             has_fatal_error: false,
 
             // Shadow map resources
-            shadow_map_texture: None,
-            shadow_map_view: None,
-            shadow_sampler: None,
+            shadow_map_texture: Some(shadow_map_texture),
+            shadow_map_view: Some(shadow_map_view),
+            shadow_sampler: Some(shadow_sampler),
             shadow_light_vp: glam::Mat4::IDENTITY,
             shadow_map_size: 1024,
             shadow_bias: 0.005,
+
+            // 3D mesh staging
+            pending_directional_light: None,
+            pending_mesh_instances_3d: Vec::new(),
+            pending_scene_radius: 100.0,
+
             theme_stack: Vec::new(),
             portal_theme_stack: Vec::new(),
         }

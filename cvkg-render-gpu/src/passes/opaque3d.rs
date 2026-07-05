@@ -39,6 +39,10 @@ impl KvasirNode for Opaque3dNode {
             self.shadow_map,
         );
 
+        if self.mesh_instances.is_empty() {
+            return;
+        }
+
         // Use the main scene render target (RES_SCENE) for color output.
         let scene_view = match ctx
             .registry
@@ -51,6 +55,70 @@ impl KvasirNode for Opaque3dNode {
             }
         };
         let depth_view = ctx.depth_view;
+
+        // Get shadow resources and update scene uniforms.
+        let shadow_bind_group = match ctx.registry.get_texture_view(self.shadow_map) {
+            Some(shadow_view) => {
+                let shadow_sampler = match ctx.renderer.shadow_sampler.as_ref() {
+                    Some(s) => s,
+                    None => {
+                        tracing::warn!("Opaque3dNode: missing shadow sampler");
+                        return;
+                    }
+                };
+
+                // Compute light VP for the scene uniform update
+                let light_dir = self.light.direction;
+                let scene_radius = 100.0;
+                let light_pos = glam::Vec3::ZERO + light_dir * scene_radius * 2.0;
+                let light_view = glam::Mat4::look_at_lh(light_pos, glam::Vec3::ZERO, glam::Vec3::Y);
+                let light_proj = glam::Mat4::orthographic_lh(-scene_radius, scene_radius, -scene_radius, scene_radius, 0.0, scene_radius * 4.0);
+                let light_vp = light_proj * light_view;
+
+                let mut scene = ctx.renderer.current_scene;
+                scene.light_direction = light_dir.to_array();
+                scene.light_color = self.light.color.to_array();
+                scene.light_vp = light_vp;
+                ctx.queue.write_buffer(
+                    &ctx.renderer.scene_buffer,
+                    0,
+                    bytemuck::bytes_of(&scene),
+                );
+
+                let ibl_view_owned = ctx.registry.get_texture_view(crate::kvasir::nodes::RES_BLUR_A);
+                let ibl_view = match &ibl_view_owned {
+                    Some(view) => view,
+                    None => &ctx.renderer.dummy_view,
+                };
+
+                Some(ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("Opaque3d PBR Material Bind Group"),
+                    layout: &ctx.renderer.pbr_material_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&shadow_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(shadow_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 8,
+                            resource: wgpu::BindingResource::TextureView(ibl_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 9,
+                            resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                        },
+                    ],
+                }))
+            }
+            None => {
+                tracing::warn!("Opaque3dNode: missing shadow map view, skipping shadow sampling");
+                return;
+            }
+        };
 
         // Default dark background color for 3D scenes.
         let bg = [0.02f32, 0.02, 0.05, 1.0];
@@ -88,6 +156,9 @@ impl KvasirNode for Opaque3dNode {
         // Bind the PBR pipeline and required bind groups.
         pass.set_pipeline(&ctx.renderer.pbr_pipeline);
         pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+        if let Some(ref bg) = shadow_bind_group {
+            pass.set_bind_group(3, bg, &[]);
+        }
 
         // For each mesh instance, set vertex/index buffers and draw.
         for mesh in self.mesh_instances.iter() {

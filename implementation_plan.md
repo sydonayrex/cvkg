@@ -318,7 +318,7 @@ they use separate pipeline vertex buffer descriptors.
 
 ---
 
-## Item 5 — Cascaded Shadow Maps (4-cascade)
+## Item 5 — Cascaded Shadow Maps (4-cascade) [COMPLETE]
 
 ### Current state
 
@@ -385,7 +385,7 @@ buffer alignment. Plan this as a separate `CsmUniforms` uniform buffer bound at 
 
 ---
 
-## Item 6 — Screen-Space IBL from Glass blur pyramid *(CVKG-unique)*
+## Item 6 — Screen-Space IBL from Glass blur pyramid *(CVKG-unique)* [COMPLETE]
 
 ### Current state
 

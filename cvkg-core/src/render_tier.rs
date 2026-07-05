@@ -188,7 +188,7 @@ pub struct SceneUniforms {
     pub light_direction: [f32; 3],
     pub _pad_light_dir: f32,
     pub light_color: [f32; 3],
-    pub _pad_light_color: f32,
+    pub ibl_enabled: u32,
     pub shadow_map_size: f32,
     pub shadow_bias: f32,
     pub _pad_shadow: [u32; 2],  // 8 bytes padding for 16-byte alignment of light_vp
@@ -242,11 +242,31 @@ impl SceneUniforms {
             light_direction: [0.5, 0.8, 0.6],
             _pad_light_dir: 0.0,
             light_color: [1.0, 0.95, 0.9],
-            _pad_light_color: 0.0,
+            ibl_enabled: 0,
             shadow_map_size: 1024.0,
             shadow_bias: 0.005,
             _pad_shadow: [0, 0],
             light_vp: glam::Mat4::IDENTITY,
+        }
+    }
+}
+
+/// Cascaded Shadow Map uniform buffer structure.
+/// Maintains 16-byte alignment requirements for uniform buffers.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+pub struct CsmUniforms {
+    pub cascade_vps: [glam::Mat4; 4],    // 256 bytes
+    pub cascade_splits: [f32; 4],         // 16 bytes
+    pub _pad: [f32; 4],                   // 16 bytes (padding for 16-byte alignment)
+}
+
+impl Default for CsmUniforms {
+    fn default() -> Self {
+        Self {
+            cascade_vps: [glam::Mat4::IDENTITY; 4],
+            cascade_splits: [0.0; 4],
+            _pad: [0.0; 4],
         }
     }
 }

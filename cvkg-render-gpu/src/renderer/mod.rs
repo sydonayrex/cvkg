@@ -110,6 +110,8 @@ pub struct GpuRenderer {
     pub(crate) texture_registry: LruCache<String, u32>,
     pub(crate) texture_views: Vec<wgpu::TextureView>,
     pub(crate) dummy_sampler: wgpu::Sampler,
+    /// Dummy 1x1 white texture view.
+    pub(crate) dummy_view: wgpu::TextureView,
     /// Dummy single-sampled depth texture view.
     ///
     /// WHY: Used in the volumetric shader to bind a valid single-sampled depth view
@@ -155,6 +157,9 @@ pub struct GpuRenderer {
     /// rendering is wired up). draw_mesh_3d records into both this and
     /// instance_data so the data is ready when the GPU path lands.
     pub(crate) instance_data_3d: Vec<InstanceData3D>,
+    /// GPU buffer for 3D instance data (model matrices, material overrides, UV params).
+    /// Created during forge() and used by instanced 3D rendering.
+    pub(crate) instance_buffer_3d: Option<wgpu::Buffer>,
     pub(crate) staging_belt: wgpu::util::StagingBelt,
     pub(crate) staging_command_buffers: Vec<wgpu::CommandBuffer>,
     pub(crate) draw_calls: Vec<DrawCall>,
@@ -250,11 +255,24 @@ pub struct GpuRenderer {
     pub(crate) volumetric_bind_group_layout: wgpu::BindGroupLayout,
     /// Persistent uniform buffer for volumetric data (updated each frame).
     pub(crate) volumetric_uniform_buffer: wgpu::Buffer,
+    /// Persistent uniform buffer for CSM (Cascaded Shadow Map) data.
+    pub(crate) csm_buffer: wgpu::Buffer,
+    /// Bind group layout for 3D material-specific resources (shadows, IBL, normal maps).
+    pub(crate) pbr_material_bind_group_layout: wgpu::BindGroupLayout,
     /// Comparison sampler for volumetric depth comparison.
     pub(crate) volumetric_depth_sampler: wgpu::Sampler,
     /// CPU-side list of hologram instances submitted this frame.
     /// Cleared each frame in reset_frame_state; consumed by VolumetricNode::execute.
     pub(crate) hologram_instances: Vec<HologramInstance>,
+    /// Pending directional light for 3D shadow pass.
+    /// Populated by submit_mesh_3d when meshes are submitted.
+    pub(crate) pending_directional_light: Option<crate::passes::shadow::DirectionalLight>,
+    /// Pending 3D mesh instances for shadow + opaque passes.
+    /// Populated by submit_mesh_3d; consumed and cleared in frame graph construction.
+    pub(crate) pending_mesh_instances_3d: Vec<crate::passes::shadow::GpuMesh3d>,
+    /// Pending scene radius for light VP frustum computation.
+    /// Derived from mesh bounds or default 100.0.
+    pub(crate) pending_scene_radius: f32,
     /// Kawase blur pyramid downsample pipeline (separate shader module).
     pub(crate) kawase_down_pipeline: wgpu::RenderPipeline,
     /// Kawase blur pyramid upsample pipeline (separate shader module).
@@ -1465,6 +1483,8 @@ impl GpuRenderer {
             glass,
             pixels_per_unit,
             world_size,
+            spring: None,
+            physics: None,
         };
         // Record it so the rendering graph knows about it
         if !self.world_space_panels.iter().any(|(id, _)| *id == node_id) {

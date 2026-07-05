@@ -3,10 +3,12 @@
 //! Separated from opaque to reduce register pressure from raymarching loops.
 
 
-@group(3) @binding(4) var t_shadow: texture_depth_2d;
-@group(3) @binding(5) var s_shadow: sampler_comparison;
+@group(3) @binding(0) var t_shadow: texture_depth_2d_array;
+@group(3) @binding(1) var s_shadow: sampler_comparison;
+@group(3) @binding(8) var t_ibl: texture_2d<f32>;
+@group(3) @binding(9) var s_ibl: sampler;
 
-fn sample_shadow(light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
+fn sample_shadow(cascade_idx: u32, light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
     let light_pos = light_vp * vec4<f32>(world_pos, 1.0);
     let light_uv = light_pos.xy / light_pos.w * 0.5 + 0.5;
     let light_depth = light_pos.z / light_pos.w;
@@ -18,7 +20,7 @@ fn sample_shadow(light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
         for (var dy = -1; dy <= 1; dy++) {
             let offset = vec2<f32>(f32(dx), f32(dy)) * texel_size;
             shadow += textureSampleCompare(t_shadow, s_shadow,
-                light_uv + offset, light_depth - scene.shadow_bias);
+                light_uv + offset, cascade_idx, light_depth - scene.shadow_bias);
         }
     }
     return shadow / 9.0;
@@ -38,8 +40,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_dir = normalize(scene.light_direction);
         let light_color = scene.light_color;
 
-        // Shadow mapping
-        let shadow = sample_shadow(scene.light_vp, in.world_pos);
+        // Shadow mapping (CSM)
+        let depth_val = length(in.world_pos - scene.camera_pos);
+        var cascade_idx = 3u;
+        if (depth_val < csm.cascade_splits.x) {
+            cascade_idx = 0u;
+        } else if (depth_val < csm.cascade_splits.y) {
+            cascade_idx = 1u;
+        } else if (depth_val < csm.cascade_splits.z) {
+            cascade_idx = 2u;
+        }
+        let light_vp = csm.cascade_vps[cascade_idx];
+        let shadow = sample_shadow(cascade_idx, light_vp, in.world_pos);
 
         let n_dot_l = max(dot(n, light_dir), 0.0);
         let diffuse = n_dot_l * light_color * shadow;
@@ -56,6 +68,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let ambient = vec3<f32>(0.06, 0.07, 0.1);
         var lit_color = in.color.rgb * (ambient + diffuse);
         lit_color += spec * mix(vec3<f32>(1.0), in.color.rgb, metallic) * fresnel;
+
+        if scene.ibl_enabled != 0u {
+            let reflect_ws  = reflect(-view_dir, n);
+            let reflect_cs  = scene.proj * scene.view * vec4<f32>(in.world_pos + reflect_ws, 1.0);
+            let screen_uv   = reflect_cs.xy / reflect_cs.w * 0.5 + 0.5;
+            let ibl_mip     = roughness * 4.0;
+            let ibl_sample  = textureSampleLevel(t_ibl, s_ibl, screen_uv, ibl_mip);
+            lit_color      += ibl_sample.rgb * fresnel * (1.0 - roughness);
+        }
 
         let depth = in.clip_position.z;
         let fog_factor = clamp(1.0 - depth * 0.0005, 0.7, 1.0);

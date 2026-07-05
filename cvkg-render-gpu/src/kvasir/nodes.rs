@@ -8,6 +8,7 @@ use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
 use crate::passes::opaque3d::Opaque3dNode;
 use crate::passes::pre_world_panel::PreWorldPanelNode;
 use crate::passes::shadow::{DirectionalLight, GpuMesh3d, ShadowNode};
+use crate::passes::transparent::TransparentNode;
 use crate::passes::ui::UINode;
 use crate::passes::volumetric::VolumetricNode;
 
@@ -36,6 +37,8 @@ pub enum PassId {
     Shadow,
     /// 3D opaque pass rendering meshes with PBR.
     Opaque3d,
+    /// Transparent 3D pass with back-to-front sorting.
+    Transparent3d,
 }
 
 pub struct PresentNode {
@@ -77,6 +80,7 @@ pub struct RenderGraphConfig<'a> {
     pub has_glass: bool,
     pub has_bloom: bool,
     pub has_accessibility: bool,
+    pub has_ibl: bool,
     /// Whether volumetric raymarching pass is active for fog/light shaft effects.
     pub has_volumetric: bool,
     pub active_offscreens: &'a [crate::types::OffscreenEffectConfig],
@@ -90,8 +94,14 @@ pub struct RenderGraphConfig<'a> {
     pub directional_light: Option<DirectionalLight>,
     /// GPU-ready 3D mesh instances for shadow map and opaque pass rendering.
     pub mesh_instances_3d: Vec<GpuMesh3d>,
-    /// Scene radius for shadow frustum computation.
-    pub scene_radius: f32,
+    /// Transparent 3D mesh instances (sorted by view_depth for back-to-front rendering).
+    pub transparent_meshes_3d: Vec<GpuMesh3d>,
+    /// Cascade splits for shadow frustum division.
+    pub cascade_splits: [f32; 4],
+    /// Camera view projection matrix.
+    pub camera_view_proj: glam::Mat4,
+    /// Camera position for view_depth calculation.
+    pub camera_pos: glam::Vec3,
 }
 
 /// Build the dynamic RenderGraph (KvasirGraph)
@@ -178,13 +188,14 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
 
     // 3D Shadow pass (runs before opaque 3D, outputs shadow map)
     if let Some(light) = &config.directional_light {
-        if !config.mesh_instances_3d.is_empty() {
+        if !config.mesh_instances_3d.is_empty() || !config.transparent_meshes_3d.is_empty() {
             let shadow_rid = ResourceId(10000); // dedicated shadow map resource
             let shadow_node = builder.add_node(Box::new(ShadowNode {
                 light: *light,
                 shadow_map: shadow_rid,
                 mesh_instances: config.mesh_instances_3d.clone(),
-                scene_radius: config.scene_radius,
+                cascade_splits: config.cascade_splits,
+                camera_view_proj: config.camera_view_proj,
             }));
             // Shadow runs before scene — scene reads the shadow map.
 
@@ -198,6 +209,22 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
             builder.connect(opaque_3d_node, RES_SCENE, last_scene_node);
             // Opaque 3d writes to scene — update last_scene_node to chain off it.
             last_scene_node = opaque_3d_node;
+
+            // 3D Transparent pass (runs after opaque, reads shadow map)
+            // Transparent meshes must be sorted by view_depth (back-to-front)
+            if !config.transparent_meshes_3d.is_empty() {
+                let mut transparent_meshes = config.transparent_meshes_3d.clone();
+                // Sort by view_depth descending (farthest first for back-to-front)
+                transparent_meshes.sort_by(|a, b| b.view_depth.partial_cmp(&a.view_depth).unwrap_or(std::cmp::Ordering::Equal));
+                
+                let transparent_node = builder.add_node(Box::new(TransparentNode {
+                    mesh_instances: transparent_meshes,
+                    shadow_map: shadow_rid,
+                    camera_pos: config.camera_pos,
+                }));
+                builder.connect(last_scene_node, RES_SCENE, transparent_node);
+                last_scene_node = transparent_node;
+            }
         }
     }
 

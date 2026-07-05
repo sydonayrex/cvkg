@@ -208,7 +208,8 @@ pub const MANIFEST: cvkg_core::FrameManifest = cvkg_core::FrameManifest {
                     light: crate::passes::shadow::DirectionalLight::default(),
                     shadow_map: crate::kvasir::ResourceId(0),
                     mesh_instances: Vec::new(),
-                    scene_radius: 100.0,
+                    cascade_splits: [8.0, 25.0, 70.0, 200.0],
+                    camera_view_proj: glam::Mat4::IDENTITY,
                 })
             },
         },

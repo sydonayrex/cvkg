@@ -1,7 +1,7 @@
 use super::GpuRenderer;
 use super::context_helpers::create_surface_context;
 use crate::types::{DrawCall, MAX_PARTICLES};
-use crate::vertex::{InstanceData, Vertex};
+use crate::vertex::{InstanceData, InstanceData3D, Vertex};
 use cvkg_core::{Rect, Renderer};
 use std::sync::Arc;
 
@@ -62,6 +62,9 @@ impl GpuRenderer {
         self.transform_stack.clear();
         self.portal_regions.clear();
         self.hologram_instances.clear();
+        self.pending_directional_light = None;
+        self.pending_mesh_instances_3d.clear();
+        self.pending_scene_radius = 100.0;
         self.current_z = 0.0;
         self.vnode_stack.clear();
         self.event_handlers.clear();
@@ -994,24 +997,35 @@ impl GpuRenderer {
             self.registry.allocate_offscreen(&self.device, *id, [width, height]);
         }
 
+        self.current_scene.ibl_enabled = if has_glass { 1 } else { 0 };
+        self.queue.write_buffer(
+            &self.scene_buffer,
+            0,
+            bytemuck::bytes_of(&self.current_scene),
+        );
+
         if !use_cache {
-            let render_graph = crate::kvasir::nodes::build_render_graph(
-                &crate::kvasir::nodes::RenderGraphConfig {
-                    has_glass,
-                    has_bloom,
-                    has_accessibility,
-                    has_volumetric,
-                    active_offscreens: &self.active_offscreens,
-                    portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
-                    world_space_panels: &self.world_space_panels,
-                    width,
-                    height,
-                    scale,
-                    directional_light: None,
-                    mesh_instances_3d: Vec::new(),
-                    scene_radius: 100.0,
-                },
-            );
+             let render_graph = crate::kvasir::nodes::build_render_graph(
+                 &crate::kvasir::nodes::RenderGraphConfig {
+                     has_glass,
+                     has_bloom,
+                     has_accessibility,
+                     has_ibl: has_glass,
+                     has_volumetric,
+                     active_offscreens: &self.active_offscreens,
+                     portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
+                     world_space_panels: &self.world_space_panels,
+                     width,
+                     height,
+                     scale,
+                     directional_light: self.pending_directional_light,
+                     mesh_instances_3d: std::mem::take(&mut self.pending_mesh_instances_3d),
+                     transparent_meshes_3d: Vec::new(),
+                     cascade_splits: [8.0, 25.0, 70.0, 200.0],
+                     camera_view_proj: self.current_scene.proj * self.current_scene.view,
+                     camera_pos: glam::Vec3::from(self.current_scene.camera_pos),
+                 },
+             );
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);
             let compiled_plan = match planner.compile() {
                 Ok(plan) => plan,
@@ -1869,5 +1883,96 @@ impl GpuRenderer {
             slice,
             [0.0, 0.0],
         );
+    }
+
+    /// Submit a 3D mesh instance to the GPU-ready staging buffer.
+    ///
+    /// Creates GPU vertex and index buffers for the mesh and stores the
+    /// instance in `pending_mesh_instances_3d`. The instance will be consumed
+    /// by the frame graph during `end_frame` to construct the Shadow and Opaque3d
+    /// pass nodes.
+    ///
+    /// WHY: This enables the Kvasir render graph to render true 3D meshes with
+    /// instanced rendering, separate from the CPU-baked 2D vertex buffer path.
+    pub fn submit_mesh_3d(
+        &mut self,
+        mesh: &cvkg_core::Mesh,
+        material: &cvkg_core::Material3D,
+        transform: &cvkg_core::Transform3D,
+    ) {
+        let model_matrix = transform.to_matrix();
+
+        let mut mesh_vertices: Vec<Vertex> = Vec::with_capacity(mesh.vertices.len());
+        for (i, pos) in mesh.vertices.iter().enumerate() {
+            let world_pos = model_matrix.transform_point3(glam::Vec3::from(*pos));
+            let world_norm = model_matrix.transform_vector3(glam::Vec3::from(*mesh.normals.get(i).unwrap_or(&[0.0, 0.0, 1.0])));
+            let raw_uv = mesh.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
+            let uv = [
+                raw_uv[0] * material.uv_scale[0] + material.uv_offset[0],
+                raw_uv[1] * material.uv_scale[1] + material.uv_offset[1],
+            ];
+            mesh_vertices.push(Vertex {
+                position: [world_pos.x, world_pos.y, world_pos.z],
+                normal: [world_norm.x, world_norm.y, world_norm.z],
+                uv,
+                color: material.base_color,
+                material_id: 13,
+                radius: 0.0,
+                slice: [material.metallic, material.roughness, material.opacity, 1.0],
+                logical: [0.0, 0.0],
+                size: [0.0, 0.0],
+                clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
+                tex_index: 0,
+            });
+        }
+
+        let vertex_bytes: Vec<u8> = bytemuck::cast_slice(&mesh_vertices).to_vec();
+        let vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Mesh3D Vertex Buffer"),
+            size: (mesh_vertices.len() * std::mem::size_of::<Vertex>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let index_bytes: Vec<u8> = bytemuck::cast_slice(&mesh.indices).to_vec();
+        let index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Mesh3D Index Buffer"),
+            size: (mesh.indices.len() * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        self.queue.write_buffer(&vertex_buffer, 0, &vertex_bytes);
+        self.queue.write_buffer(&index_buffer, 0, &index_bytes);
+
+        let (center, half_extents) = mesh.aabb();
+        let mesh_radius = half_extents.length().max(1.0);
+        if mesh_radius > self.pending_scene_radius {
+            self.pending_scene_radius = mesh_radius;
+        }
+
+        // Compute average view_depth from transformed vertices
+        let view_depth = (0..mesh.vertices.len())
+            .map(|i| {
+                let world_pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
+                (glam::Vec3::from(self.current_scene.camera_pos) - world_pos).length()
+            })
+            .sum::<f32>() / mesh.vertices.len().max(1) as f32;
+
+        self.pending_mesh_instances_3d.push(crate::passes::shadow::GpuMesh3d {
+            vertex_buffer,
+            index_buffer,
+            index_count: mesh.indices.len() as u32,
+            transform: model_matrix,
+            view_depth,
+        });
+
+        if self.pending_directional_light.is_none() {
+            self.pending_directional_light = Some(crate::passes::shadow::DirectionalLight {
+                direction: glam::Vec3::new(0.0, -1.0, 0.0),
+                color: glam::Vec3::ONE,
+                intensity: 1.0,
+            });
+        }
     }
 }

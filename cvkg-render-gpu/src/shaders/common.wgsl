@@ -44,7 +44,7 @@ struct SceneUniforms {
     light_direction: vec3<f32>,
     _pad3:           f32,
     light_color:     vec3<f32>,
-    _pad4:           f32,
+    ibl_enabled:     u32,
     // Shadow map parameters
     shadow_map_size: f32,
     shadow_bias:     f32,
@@ -54,6 +54,12 @@ struct SceneUniforms {
 // --- Group 2: Berserker Uniforms ---
 @group(2) @binding(0) var<uniform> theme: ColorTheme;
 @group(2) @binding(1) var<uniform> scene: SceneUniforms;
+
+struct CsmUniforms {
+    cascade_vps: array<mat4x4<f32>, 4>,
+    cascade_splits: vec4<f32>,
+};
+@group(2) @binding(2) var<uniform> csm: CsmUniforms;
 
 // --- Group 0: Main Texture Array ---
 @group(0) @binding(0) var t_diffuse: binding_array<texture_2d<f32>, 32>;

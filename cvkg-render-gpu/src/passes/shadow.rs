@@ -35,6 +35,21 @@ pub struct GpuMesh3d {
     pub index_count: u32,
     /// Per-instance model matrix.
     pub transform: Mat4,
+    /// View depth for transparent sorting (world-space distance from camera).
+    /// Used by TransparentNode for back-to-front rendering.
+    pub view_depth: f32,
+}
+
+impl Default for GpuMesh3d {
+    fn default() -> Self {
+        Self {
+            vertex_buffer: unsafe { std::mem::zeroed() },
+            index_buffer: unsafe { std::mem::zeroed() },
+            index_count: 0,
+            transform: Mat4::IDENTITY,
+            view_depth: 0.0,
+        }
+    }
 }
 
 /// Shadow pass node — renders depth-only shadow map from light's perspective.
@@ -43,8 +58,10 @@ pub struct ShadowNode {
     pub shadow_map: ResourceId,
     /// GPU-ready mesh instances to render into the shadow map.
     pub mesh_instances: Vec<GpuMesh3d>,
-    /// Bounds of the scene — used for light VP frustum computation.
-    pub scene_radius: f32,
+    /// Cascade splits for CSM.
+    pub cascade_splits: [f32; 4],
+    /// Camera's view projection matrix.
+    pub camera_view_proj: Mat4,
 }
 
 impl KvasirNode for ShadowNode {
@@ -65,71 +82,116 @@ impl KvasirNode for ShadowNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        // Compute light VP: orthographic frustum from light direction toward scene origin.
-        let light_dir = self.light.direction;
-        let scene_center = glam::Vec3::ZERO;
-        let light_pos = scene_center + light_dir * self.scene_radius * 2.0;
-        let light_view = glam::Mat4::look_at_lh(light_pos, scene_center, glam::Vec3::Y);
+        let light_dir = self.light.direction.normalize();
+        
+        // 1. Compute 4 cascades VP matrices
+        let inv_cam_vp = self.camera_view_proj.inverse();
+        let ndc_ranges = [
+            (0.0f32, 0.08f32),
+            (0.08f32, 0.22f32),
+            (0.22f32, 0.55f32),
+            (0.55f32, 1.0f32),
+        ];
+        
+        let mut cascade_vps = [glam::Mat4::IDENTITY; 4];
+        for i in 0..4 {
+            let (near_ndc, far_ndc) = ndc_ranges[i];
+            let ndc_corners = [
+                glam::Vec3::new(-1.0, -1.0, near_ndc),
+                glam::Vec3::new( 1.0, -1.0, near_ndc),
+                glam::Vec3::new(-1.0,  1.0, near_ndc),
+                glam::Vec3::new( 1.0,  1.0, near_ndc),
+                glam::Vec3::new(-1.0, -1.0, far_ndc),
+                glam::Vec3::new( 1.0, -1.0, far_ndc),
+                glam::Vec3::new(-1.0,  1.0, far_ndc),
+                glam::Vec3::new( 1.0,  1.0, far_ndc),
+            ];
+            
+            let mut world_corners = [glam::Vec3::ZERO; 8];
+            let mut center = glam::Vec3::ZERO;
+            for j in 0..8 {
+                let p = inv_cam_vp.project_point3(ndc_corners[j]);
+                world_corners[j] = p;
+                center += p;
+            }
+            center /= 8.0;
+            
+            let mut radius = 0.0f32;
+            for j in 0..8 {
+                radius = radius.max(world_corners[j].distance(center));
+            }
+            
+            // Snap radius to prevent shimmering
+            radius = (radius * 16.0).round() / 16.0;
+            
+            let light_pos = center - light_dir * radius * 2.0;
+            let light_view = glam::Mat4::look_at_lh(light_pos, center, glam::Vec3::Y);
+            let light_proj = glam::Mat4::orthographic_lh(-radius, radius, -radius, radius, 0.0, radius * 4.0);
+            
+            cascade_vps[i] = light_proj * light_view;
+        }
 
-        // Orthographic projection covering the scene bounds.
-        let r = self.scene_radius;
-        let light_proj = glam::Mat4::orthographic_lh(-r, r, -r, r, 0.0, self.scene_radius * 4.0);
+        // 2. Update CSM buffer with the new cascade splits/VPs
+        let csm = cvkg_core::render_tier::CsmUniforms {
+            cascade_vps,
+            cascade_splits: [
+                self.cascade_splits[0],
+                self.cascade_splits[1],
+                self.cascade_splits[2],
+                self.cascade_splits[3],
+            ],
+            _pad: [0.0; 4],
+        };
+        ctx.queue.write_buffer(&ctx.renderer.csm_buffer, 0, bytemuck::bytes_of(&csm));
 
-        // Update scene_buffer with the computed light VP for shadow shader.
-        // Create a partial update with just the light_vp field.
-        let _light_vp = light_proj * light_view;
-        // Note: The actual light_vp needs to be written to scene_buffer
-        // but we need the renderer's current scene to preserve other fields.
-        // For now, write a minimal struct update.
-
-        tracing::debug!(
-            "ShadowNode::execute — instances={}, shadow_map={:?}, light_dir=({:.2},{:.2},{:.2})",
-            self.mesh_instances.len(),
-            self.shadow_map,
-            light_dir.x, light_dir.y, light_dir.z,
-        );
-
-        // Get the shadow map texture view from the resource registry.
-        let shadow_view = match ctx.registry.get_texture_view(self.shadow_map) {
-            Some(v) => v,
+        let shadow_texture = match &ctx.renderer.shadow_map_texture {
+            Some(t) => t,
             None => {
-                tracing::error!(
-                    "ShadowNode: missing shadow map texture view for {:?}",
-                    self.shadow_map,
-                );
+                tracing::error!("ShadowNode: renderer missing shadow_map_texture");
                 return;
             }
         };
 
-        // Create a depth-only render pass.
-        let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Shadow Pass (Depth-Only)"),
-            color_attachments: &[], // No color output.
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &shadow_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
+        // 3. Render each cascade into its array layer
+        for i in 0..4 {
+            // Write cascade_vps[i] into scene_buffer's light_vp field (offset 320)
+            ctx.queue.write_buffer(&ctx.renderer.scene_buffer, 320, bytemuck::bytes_of(&cascade_vps[i]));
+
+            let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some(&format!("Surtr CSM Shadow Pass Layer {}", i)),
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                base_array_layer: i as u32,
+                array_layer_count: Some(1),
+                ..wgpu::TextureViewDescriptor::default()
+            });
+
+            // Create a depth-only render pass.
+            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some(&format!("Shadow Pass Cascade {}", i)),
+                color_attachments: &[], // No color output.
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &layer_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
                 }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
 
-        // Bind the shadow pipeline and scene uniforms.
-        pass.set_pipeline(&ctx.renderer.shadow_pipeline);
-        pass.set_bind_group(1, &ctx.renderer.berserker_bind_group, &[]);
+            // Bind the shadow pipeline and scene uniforms.
+            pass.set_pipeline(&ctx.renderer.shadow_pipeline);
+            pass.set_bind_group(1, &ctx.renderer.berserker_bind_group, &[]);
 
-        // For each mesh, set vertex/index buffers and draw depth only.
-        for mesh in self.mesh_instances.iter() {
-            // Set vertex buffer (assumes interleaved position at location 0).
-            pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-
-            // Bind per-instance transform and draw.
-            pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+            // For each mesh, set vertex/index buffers and draw depth only.
+            for mesh in self.mesh_instances.iter() {
+                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+            }
         }
     }
 }
