@@ -84,7 +84,26 @@ pub struct AppState {
 impl AppState {
     /// Create a new AppState instance.
     pub fn new(config: Config, hmr_tx: tokio::sync::broadcast::Sender<String>) -> Self {
-        let auth_token = std::env::var("CVKG_AUTH_TOKEN").unwrap_or_else(|_| "dev-token-default-12345".to_string());
+        let auth_token = match std::env::var("CVKG_AUTH_TOKEN") {
+            Ok(token) => {
+                if token.is_empty() {
+                    panic!("CVKG_AUTH_TOKEN environment variable must not be empty");
+                }
+                token
+            }
+            Err(_) => {
+                // Generate a secure random token for development
+                use rand::{rngs::OsRng, RngCore};
+                let mut bytes = [0u8; 32];
+                OsRng.fill_bytes(&mut bytes);
+                let token: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+                tracing::warn!(
+                    "CVKG_AUTH_TOKEN not set. Generated temporary token: {} (save this for authentication!)",
+                    &token[..8]
+                );
+                token
+            }
+        };
         
         let js_entrypoint = if let Ok(entries) = std::fs::read_dir(&config.pkg_dir) {
             let mut found = None;
@@ -324,7 +343,7 @@ pub async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl In
 <body>
     <div id="cvkg-root">{}</div>
     <script>
-        window.CVKG_AUTH_TOKEN = "{}";
+        // Auth token is NOT exposed in HTML - use Authorization header instead
 
         // HMR Client Protocol Integration
         (function() {{

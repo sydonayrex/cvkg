@@ -143,6 +143,10 @@ features = ["derive"]
 [dependencies.regex]
 version = "1"
 
+[dependencies.rand]
+version = "0.9"
+features = ["std"]
+
 [dependencies.wasmtime]
 version = "46"
 features = [
