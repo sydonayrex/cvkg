@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-vdom"
-version = "0.3.3"
+version = "0.3.4"
 build = false
 autolib = false
 autobins = false
@@ -60,14 +60,14 @@ workspace = true
 
 
 [dependencies.cvkg-core]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.cvkg-physics]
-version = "0.3.3"
+version = "0.3.4"
 path = "../cvkg-physics"
 
 [dependencies.cvkg-scene]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.log]
 version = "0.4"

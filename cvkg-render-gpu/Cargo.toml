@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-render-gpu"
-version = "0.3.3"
+version = "0.3.4"
 build = "build.rs"
 autolib = false
 autobins = false
@@ -21,7 +21,7 @@ autotests = true
 autobenches = false
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"
 readme = "README.md"
-license = "MPL-2.0"
+license = "EPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 resolver = "2"
 
@@ -74,16 +74,16 @@ version = "1.25"
 features = ["derive"]
 
 [dependencies.cvkg-core]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.cvkg-compositor]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.cvkg-svg-filters]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.cvkg-svg-serialize]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.futures]
 version = "0.3"
@@ -119,7 +119,7 @@ features = [
 version = "1.12"
 
 [dependencies.cvkg-runic-text]
-version = "0.3.3"
+version = "0.3.4"
 
 [dependencies.swash]
 version = "0.2"
@@ -168,9 +168,6 @@ features = [
 [target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "dragonfly", target_os = "openbsd", target_os = "netbsd"))'.dependencies.accesskit_unix]
 version = "0.22"
 optional = true
-
-[features]
-pillage = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.89"
