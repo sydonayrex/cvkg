@@ -1295,8 +1295,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
                 glass,
                 pixels_per_unit,
                 world_size,
-                spring: None,
-                physics: None,
+                ..Default::default()
             });
         }
     }

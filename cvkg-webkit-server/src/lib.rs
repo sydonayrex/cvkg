@@ -5,3 +5,4 @@
 //! Provides WASM execution, WASI preview1 mapping, and server-side utilities.
 
 pub mod wasm_server;
+pub mod router;

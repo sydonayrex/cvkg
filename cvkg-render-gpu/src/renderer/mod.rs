@@ -1487,8 +1487,7 @@ impl GpuRenderer {
             glass,
             pixels_per_unit,
             world_size,
-            spring: None,
-            physics: None,
+            ..Default::default()
         };
         // Record it so the rendering graph knows about it
         if !self.world_space_panels.iter().any(|(id, _)| *id == node_id) {
