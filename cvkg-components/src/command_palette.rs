@@ -157,7 +157,11 @@ impl View for MimirSpotlight {
         Some(self)
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::layout::SizeProposal,
+    ) -> cvkg_core::Size {
         let height = self.all_commands.len() as f32 * 36.0;
         cvkg_core::Size {
             width: proposal.width.unwrap_or(480.0),
@@ -317,7 +321,8 @@ impl View for MimirSpotlight {
         let palette_width = 480.0_f32;
         let item_height = 36.0_f32;
         let top_padding = 56.0_f32;
-        let palette_height = (filtered_count as f32 * item_height + top_padding + 8.0).min(rect.height);
+        let palette_height =
+            (filtered_count as f32 * item_height + top_padding + 8.0).min(rect.height);
         let palette_x = rect.x + (rect.width - palette_width) / 2.0;
         let palette_y = rect.y + (rect.height - palette_height) / 2.0;
 
@@ -340,7 +345,8 @@ impl View for MimirSpotlight {
             .collect();
 
         // Clone actions for the handler
-        let actions: Vec<Arc<dyn Fn() + Send + Sync>> = filtered.iter().map(|cmd| cmd.action.clone()).collect();
+        let actions: Vec<Arc<dyn Fn() + Send + Sync>> =
+            filtered.iter().map(|cmd| cmd.action.clone()).collect();
 
         // ── Single pointerdown handler on the root MimirSpotlight VNode ──
         // Borrowing the DropdownMenu pattern: pointerdown fires immediately on press,

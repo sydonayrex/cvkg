@@ -1,5 +1,5 @@
-use crate::*;
 use crate::error_types::CvkgError;
+use crate::*;
 
 /// Vertical alignment of text within its bounding box.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -193,7 +193,15 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     /// Draw text aligned within a bounding box.
     /// This is the primary method — callers should use this for proper
     /// vertical and horizontal alignment within their layout rects.
-    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: TextHAlign, v_align: TextVAlign) {
+    fn draw_text(
+        &mut self,
+        text: &str,
+        rect: &Rect,
+        size: f32,
+        color: [f32; 4],
+        h_align: TextHAlign,
+        v_align: TextVAlign,
+    ) {
         // Default implementation delegates to draw_text_raw for backward compat
         let text_w = self.measure_text(text, size).0;
         let x = match h_align {
@@ -234,7 +242,14 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
 
     /// Draw text centered within a bounding box (convenience).
     fn draw_text_centered(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4]) {
-        self.draw_text(text, rect, size, color, TextHAlign::Center, TextVAlign::Middle)
+        self.draw_text(
+            text,
+            rect,
+            size,
+            color,
+            TextHAlign::Center,
+            TextVAlign::Middle,
+        )
     }
 
     /// Measure the width and height of the specified text.
@@ -580,47 +595,47 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     fn pop_shadow(&mut self) {}
 
     // ── VDOM & Scene Graph ───────────────────────────────────────────────
-        /// Push a Virtual DOM node onto the stack for hierarchy tracking.
-        fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
+    /// Push a Virtual DOM node onto the stack for hierarchy tracking.
+    fn push_vnode(&mut self, _rect: Rect, _name: &'static str) {}
 
-        /// Push a Virtual DOM node with companion state auto-initialization.
-        /// Default implementation ignores companions and delegates to `push_vnode`.
-        fn push_vnode_with_companions(
-            &mut self,
-            rect: Rect,
-            name: &'static str,
-            _companions: Vec<Box<dyn Companion>>,
-        ) {
-            self.push_vnode(rect, name);
-        }
+    /// Push a Virtual DOM node with companion state auto-initialization.
+    /// Default implementation ignores companions and delegates to `push_vnode`.
+    fn push_vnode_with_companions(
+        &mut self,
+        rect: Rect,
+        name: &'static str,
+        _companions: Vec<Box<dyn Companion>>,
+    ) {
+        self.push_vnode(rect, name);
+    }
 
-        /// Pop the current Virtual DOM node from the stack.
-        fn pop_vnode(&mut self) {}
+    /// Pop the current Virtual DOM node from the stack.
+    fn pop_vnode(&mut self) {}
 
-        /// Register an event handler for the current VDOM node.
-        fn register_handler(
-            &mut self,
-            _event_type: &str,
-            _handler: std::sync::Arc<dyn Fn(Event) + Send + Sync>,
-        ) {
-        }
+    /// Register an event handler for the current VDOM node.
+    fn register_handler(
+        &mut self,
+        _event_type: &str,
+        _handler: std::sync::Arc<dyn Fn(Event) + Send + Sync>,
+    ) {
+    }
 
-        /// Retrieve a companion state for the VNode currently at the top of the stack.
-        /// Returns None if the companion type is not registered on this node.
-        fn current_companion(&self) -> Option<&dyn Companion> {
-            None
-        }
+    /// Retrieve a companion state for the VNode currently at the top of the stack.
+    /// Returns None if the companion type is not registered on this node.
+    fn current_companion(&self) -> Option<&dyn Companion> {
+        None
+    }
 
-        /// Set the current Z-index for depth sorting.
-        /// Higher values appear closer to the viewer.
-        fn set_z_index(&mut self, _z: f32) {}
+    /// Set the current Z-index for depth sorting.
+    /// Higher values appear closer to the viewer.
+    fn set_z_index(&mut self, _z: f32) {}
 
-        /// Get the current Z-index.
-        fn get_z_index(&self) -> f32 {
-            0.0
-        }
+    /// Get the current Z-index.
+    fn get_z_index(&self) -> f32 {
+        0.0
+    }
 
-                // ── Vector Graphics ──────────────────────────────────────────────────
+    // ── Vector Graphics ──────────────────────────────────────────────────
     fn load_svg(&mut self, _name: &str, _svg_data: &[u8]) {}
     /// Draw a pre-loaded SVG model.
     fn draw_svg(&mut self, _name: &str, _rect: Rect) {}
@@ -654,7 +669,7 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
     }
 
     // ── 3D World Space Panels ────────────────────────────────────────────────
-    
+
     /// Called when the traversal enters a VNode with a WorldSpacePanel configured.
     /// Redirects subsequent draw calls into an offscreen texture for the panel,
     /// similar to push_target.

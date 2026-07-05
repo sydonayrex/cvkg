@@ -10,10 +10,14 @@ unsafe impl Send for SyncTaffyTree {}
 unsafe impl Sync for SyncTaffyTree {}
 impl std::ops::Deref for SyncTaffyTree {
     type Target = taffy::TaffyTree;
-    fn deref(&self) -> &Self::Target { &self.0 }
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 impl std::ops::DerefMut for SyncTaffyTree {
-    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 /// The central Taffy engine that computes flexbox and grid layouts.
@@ -158,8 +162,6 @@ pub fn compute_taffy_flex(
     subviews: &[&dyn LayoutView],
     cache: &mut LayoutCache,
 ) -> Vec<Rect> {
-
-
     if cache.is_over_budget() {
         let all_cached = subviews.iter().all(|child| {
             let hash = child.view_hash();
@@ -220,20 +222,18 @@ pub fn compute_taffy_flex(
                 let _ = engine.tree.set_style(existing, style);
                 existing
             } else {
-                let new_node = engine.tree.new_leaf(style)
-                    .unwrap_or_else(|e| {
-                        tracing::warn!("[Layout] new_leaf failed: {e}, using fallback node");
-                        taffy::NodeId::new(0)
-                    });
+                let new_node = engine.tree.new_leaf(style).unwrap_or_else(|e| {
+                    tracing::warn!("[Layout] new_leaf failed: {e}, using fallback node");
+                    taffy::NodeId::new(0)
+                });
                 engine.node_map.insert(hash, new_node);
                 new_node
             }
         } else {
-            engine.tree.new_leaf(style)
-                .unwrap_or_else(|e| {
-                    tracing::warn!("[Layout] new_leaf failed: {e}, using fallback node");
-                    taffy::NodeId::new(0)
-                })
+            engine.tree.new_leaf(style).unwrap_or_else(|e| {
+                tracing::warn!("[Layout] new_leaf failed: {e}, using fallback node");
+                taffy::NodeId::new(0)
+            })
         };
         child_nodes.push(node);
     }
@@ -300,7 +300,11 @@ pub fn compute_taffy_flex(
                     width: layout.size.width,
                     height: layout.size.height,
                 };
-                if !rect.x.is_finite() || !rect.y.is_finite() || !rect.width.is_finite() || !rect.height.is_finite() {
+                if !rect.x.is_finite()
+                    || !rect.y.is_finite()
+                    || !rect.width.is_finite()
+                    || !rect.height.is_finite()
+                {
                     tracing::warn!("[Layout] NaN/Inf rect at node {:?}, using zero", node);
                     rects.push(Rect::zero());
                 } else {
@@ -308,7 +312,10 @@ pub fn compute_taffy_flex(
                 }
             }
             Err(e) => {
-                tracing::warn!("[Layout] layout failed for node {:?}: {e}, using zero", node);
+                tracing::warn!(
+                    "[Layout] layout failed for node {:?}: {e}, using zero",
+                    node
+                );
                 rects.push(Rect::zero());
             }
         }
@@ -850,8 +857,18 @@ impl Grid {
 
         let container_style = taffy::Style {
             display: taffy::Display::Grid,
-            grid_template_columns: self.columns.iter().copied().map(|t| taffy::GridTemplateComponent::Single(taffy_track(t))).collect(),
-            grid_template_rows: self.rows.iter().copied().map(|t| taffy::GridTemplateComponent::Single(taffy_track(t))).collect(),
+            grid_template_columns: self
+                .columns
+                .iter()
+                .copied()
+                .map(|t| taffy::GridTemplateComponent::Single(taffy_track(t)))
+                .collect(),
+            grid_template_rows: self
+                .rows
+                .iter()
+                .copied()
+                .map(|t| taffy::GridTemplateComponent::Single(taffy_track(t)))
+                .collect(),
             gap: taffy::Size {
                 width: taffy::LengthPercentage::length(self.column_gap),
                 height: taffy::LengthPercentage::length(self.row_gap),

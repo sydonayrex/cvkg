@@ -66,7 +66,11 @@ impl CvkgHeadless {
     }
 
     /// Build a headless instance with options.
-    pub fn with_options(view: impl View + 'static, viewport: Rect, options: HeadlessOptions) -> Self {
+    pub fn with_options(
+        view: impl View + 'static,
+        viewport: Rect,
+        options: HeadlessOptions,
+    ) -> Self {
         let vdom = {
             let mut r = VNodeRenderer::new();
             view.render(&mut r, viewport);
@@ -171,11 +175,7 @@ impl CvkgHeadless {
                 let _ = writeln!(
                     s,
                     "  <rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"none\" stroke=\"gray\" data-comp=\"{}\"/>",
-                    node.layout.x,
-                    node.layout.y,
-                    node.layout.width,
-                    node.layout.height,
-                    attr
+                    node.layout.x, node.layout.y, node.layout.width, node.layout.height, attr
                 );
             }
         }
@@ -206,12 +206,15 @@ mod tests {
     #[test]
     fn test_headless_create() {
         let view = EmptyView;
-        let mut h = CvkgHeadless::new(view, Rect {
-            x: 0.0,
-            y: 0.0,
-            width: 800.0,
-            height: 600.0,
-        });
+        let mut h = CvkgHeadless::new(
+            view,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 800.0,
+                height: 600.0,
+            },
+        );
         let frame = h.render_frame();
         assert!(!frame.telemetry.is_empty());
         assert!(frame.telemetry.contains_key("phases_flushed"));

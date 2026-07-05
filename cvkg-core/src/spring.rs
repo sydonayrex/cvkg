@@ -156,11 +156,7 @@ impl SpringSolver3D {
 
     /// Advance the simulation by dt seconds and return the new position.
     pub fn tick(&mut self, dt: f32) -> glam::Vec3 {
-        glam::Vec3::new(
-            self.x.tick(dt),
-            self.y.tick(dt),
-            self.z.tick(dt),
-        )
+        glam::Vec3::new(self.x.tick(dt), self.y.tick(dt), self.z.tick(dt))
     }
 
     /// Check if all three spring solvers have settled.

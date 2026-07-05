@@ -1,4 +1,4 @@
-use cvkg_core::{Companion, FocusableCompanion, A11yCompanion, FocusState};
+use cvkg_core::{A11yCompanion, Companion, FocusState, FocusableCompanion};
 
 #[test]
 fn test_companion_trait_is_default_constructible() {

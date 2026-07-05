@@ -1,7 +1,7 @@
 //! Tests for the noop backend.
 
-use cvkg_inputs::backend::{InputBackend, NoopBackend};
 use cvkg_inputs::DeviceId;
+use cvkg_inputs::backend::{InputBackend, NoopBackend};
 
 #[test]
 fn test_noop_backend_name() {

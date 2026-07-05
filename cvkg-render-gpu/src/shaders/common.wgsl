@@ -38,6 +38,7 @@ struct SceneUniforms {
     scroll_offset:   f32,
     scale_factor:    f32,
     scene_type:      u32,
+    _pad_vec2_align: u32,
     fireball_pos:    vec2<f32>,
     camera_pos:      vec3<f32>,
     _pad2:           f32,
@@ -48,6 +49,8 @@ struct SceneUniforms {
     // Shadow map parameters
     shadow_map_size: f32,
     shadow_bias:     f32,
+    _pad_shadow:     u32,
+    _pad_shadow2:    u32,
     light_vp:        mat4x4<f32>,
     ambient_color:   vec4<f32>,
 };
@@ -168,22 +171,19 @@ fn vs_main_3d(in: VertexInput3D) -> VertexOutput {
     let view_proj = scene.proj * scene.view;
 
     out.clip_position = view_proj * world_pos;
-    out.world_pos = world_pos.xy;
-    out.world_pos_3d = world_pos.xyz;
+    out.world_pos = world_pos.xy; // 2D for UI compositing compatibility
+    out.world_pos_3d = world_pos.xyz; // Full 3D for PBR lighting
     out.world_normal = normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
-    let world_tangent = normalize((model * vec4<f32>(in.tangent.xyz, 0.0)).xyz);
-    out.clip = vec4<f32>(world_tangent, in.tangent.w);
 
     // Pass material overrides through to the fragment shader via slice.
     let mo = in.material_overrides;
-    out.slice = vec4<f32>(mo.x, mo.y, mo.z, mo.w);
 
     out.uv = in.uv;
     out.color = in.color;
     out.material_id = 13u; // OPAQUE_3D
     out.radius = 0.0;
-    out.normal = in.normal;
     out.slice = vec4<f32>(mo.x, mo.y, mo.z, mo.w);
+    out.normal = in.normal;
 
     return out;
 }

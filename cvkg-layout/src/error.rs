@@ -2,13 +2,17 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum LayoutError {
-    #[error("Layout constraint conflict in node {node_id}: {reason}. Check flex properties for circular or over-constrained layouts.")]
+    #[error(
+        "Layout constraint conflict in node {node_id}: {reason}. Check flex properties for circular or over-constrained layouts."
+    )]
     ConstraintConflict { node_id: u64, reason: String },
 
     #[error("Layout engine capacity exceeded: {0}. Reduce UI complexity or increase limits.")]
     CapacityExceeded(String),
 
-    #[error("NaN or Inf value propagated through layout calculations at node {node_id}. Check intrinsic_size return values for invalid floats.")]
+    #[error(
+        "NaN or Inf value propagated through layout calculations at node {node_id}. Check intrinsic_size return values for invalid floats."
+    )]
     InvalidFloat { node_id: u64 },
 
     #[error("Layout computation failed: {0}")]
@@ -27,7 +31,10 @@ mod tests {
         };
         let msg = err.to_string();
         assert!(msg.contains("42"), "should contain node ID");
-        assert!(msg.contains("over-constrained flex"), "should contain reason");
+        assert!(
+            msg.contains("over-constrained flex"),
+            "should contain reason"
+        );
         assert!(msg.contains("flex properties"), "should contain suggestion");
     }
 
@@ -36,7 +43,10 @@ mod tests {
         let err = LayoutError::CapacityExceeded("node limit 1024 reached".into());
         let msg = err.to_string();
         assert!(msg.contains("1024"), "should contain detail");
-        assert!(msg.contains("Reduce UI complexity"), "should contain suggestion");
+        assert!(
+            msg.contains("Reduce UI complexity"),
+            "should contain suggestion"
+        );
     }
 
     #[test]
@@ -51,7 +61,10 @@ mod tests {
     fn internal_includes_message() {
         let err = LayoutError::Internal("taffy solver diverged".into());
         let msg = err.to_string();
-        assert!(msg.contains("taffy solver diverged"), "should contain internal message");
+        assert!(
+            msg.contains("taffy solver diverged"),
+            "should contain internal message"
+        );
     }
 
     #[test]

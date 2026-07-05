@@ -69,23 +69,17 @@ impl Skeleton {
 
     /// Create a rounded skeleton (capsule/pill shape).
     pub fn capsule(width: f32, height: f32) -> Self {
-        Self::new()
-            .size(width, height)
-            .radius(height / 2.0)
+        Self::new().size(width, height).radius(height / 2.0)
     }
 
     /// Create a text line skeleton.
     pub fn text(width: f32, height: f32) -> Self {
-        Self::new()
-            .size(width, height)
-            .radius(2.0)
+        Self::new().size(width, height).radius(2.0)
     }
 
     /// Create a circular skeleton (for avatars).
     pub fn circle(size: f32) -> Self {
-        Self::new()
-            .size(size, size)
-            .radius(size / 2.0)
+        Self::new().size(size, size).radius(size / 2.0)
     }
 }
 

@@ -282,7 +282,9 @@ async fn handle_socket(mut ws: WebSocket) {
         }
     });
     if let Err(e) = ws
-        .send(axum::extract::ws::Message::Text(handshake.to_string().into()))
+        .send(axum::extract::ws::Message::Text(
+            handshake.to_string().into(),
+        ))
         .await
     {
         error!("Failed to send handshake: {}", e);
@@ -332,7 +334,9 @@ async fn handle_hmr_socket(mut ws: WebSocket, state: Arc<AppState>) {
         }
     });
     if let Err(e) = ws
-        .send(axum::extract::ws::Message::Text(handshake.to_string().into()))
+        .send(axum::extract::ws::Message::Text(
+            handshake.to_string().into(),
+        ))
         .await
     {
         error!("Failed to send HMR handshake: {}", e);

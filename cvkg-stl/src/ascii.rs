@@ -133,14 +133,26 @@ fn parse_f33_triple(tokens: &[&str], line_num: usize) -> Result<[f32; 3], StlErr
             tokens.len()
         )));
     }
-    let x = tokens[0]
-        .parse::<f32>()
-        .map_err(|_| StlError::InvalidAscii(format!("line {}: invalid float '{}'", line_num + 1, tokens[0])))?;
-    let y = tokens[1]
-        .parse::<f32>()
-        .map_err(|_| StlError::InvalidAscii(format!("line {}: invalid float '{}'", line_num + 1, tokens[1])))?;
-    let z = tokens[2]
-        .parse::<f32>()
-        .map_err(|_| StlError::InvalidAscii(format!("line {}: invalid float '{}'", line_num + 1, tokens[2])))?;
+    let x = tokens[0].parse::<f32>().map_err(|_| {
+        StlError::InvalidAscii(format!(
+            "line {}: invalid float '{}'",
+            line_num + 1,
+            tokens[0]
+        ))
+    })?;
+    let y = tokens[1].parse::<f32>().map_err(|_| {
+        StlError::InvalidAscii(format!(
+            "line {}: invalid float '{}'",
+            line_num + 1,
+            tokens[1]
+        ))
+    })?;
+    let z = tokens[2].parse::<f32>().map_err(|_| {
+        StlError::InvalidAscii(format!(
+            "line {}: invalid float '{}'",
+            line_num + 1,
+            tokens[2]
+        ))
+    })?;
     Ok([x, y, z])
 }

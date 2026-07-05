@@ -1,11 +1,11 @@
+use cvkg::components::calendar::Date;
 use cvkg::components::{
-    AutoComplete, Breadcrumb, BreadcrumbItem, BifrostTabs, Combobox, DatePicker, MimirSpotlight,
+    AutoComplete, BifrostTabs, Breadcrumb, BreadcrumbItem, Combobox, DatePicker, MimirSpotlight,
     SpinnerVariant, Toggle,
 };
-use cvkg::components::calendar::Date;
+use cvkg::core::{Event, Renderer, View};
 use cvkg::prelude::AnyView;
 use cvkg::prelude::*;
-use cvkg::core::{Event, Renderer, View};
 use cvkg_core::update_system_state;
 
 // Shared system-state key for the command palette open flag (must match command_palette.rs).
@@ -41,14 +41,22 @@ fn catalog() -> Vec<GalleryEntry> {
                 let arc2 = state_arc.clone();
                 AnyView::new(
                     VStack::new(8.0)
-                        .child(Checkbox::new(state.checkbox_1, move |val| {
-                            let mut s = arc1.lock().unwrap();
-                            s.checkbox_1 = val;
-                        }).label("Enable Berserk Mode").frame(Some(220.0), Some(30.0)))
-                        .child(Checkbox::new(state.checkbox_2, move |val| {
-                            let mut s = arc2.lock().unwrap();
-                            s.checkbox_2 = val;
-                        }).label("Auto-charge Rage").frame(Some(220.0), Some(30.0))),
+                        .child(
+                            Checkbox::new(state.checkbox_1, move |val| {
+                                let mut s = arc1.lock().unwrap();
+                                s.checkbox_1 = val;
+                            })
+                            .label("Enable Berserk Mode")
+                            .frame(Some(220.0), Some(30.0)),
+                        )
+                        .child(
+                            Checkbox::new(state.checkbox_2, move |val| {
+                                let mut s = arc2.lock().unwrap();
+                                s.checkbox_2 = val;
+                            })
+                            .label("Auto-charge Rage")
+                            .frame(Some(220.0), Some(30.0)),
+                        ),
                 )
             },
         },
@@ -60,17 +68,16 @@ fn catalog() -> Vec<GalleryEntry> {
                 AnyView::new(
                     VStack::new(12.0)
                         .child(
-                            Input::new(state.input_text.as_str())
-                                .on_change(move |text| {
-                                    let mut s = arc.lock().unwrap();
-                                    s.input_text = text;
-                                })
+                            Input::new(state.input_text.as_str()).on_change(move |text| {
+                                let mut s = arc.lock().unwrap();
+                                s.input_text = text;
+                            }),
                         )
                         .child(
                             Text::new(format!("Typed: {}", state.input_text))
                                 .font_size(14.0)
                                 .color([0.7, 0.7, 0.7, 1.0]),
-                        )
+                        ),
                 )
             },
         },
@@ -118,15 +125,19 @@ fn catalog() -> Vec<GalleryEntry> {
             render: |state, state_arc| {
                 let arc = state_arc.clone();
                 AnyView::new(
-                    VStack::new(8.0)
-                        .child(Combobox::new(vec![
+                    VStack::new(8.0).child(
+                        Combobox::new(vec![
                             "Odin".to_string(),
                             "Tyr".to_string(),
                             "Bor".to_string(),
-                        ]).selected(state.combobox_index).on_change(move |idx| {
+                        ])
+                        .selected(state.combobox_index)
+                        .on_change(move |idx| {
                             let mut s = arc.lock().unwrap();
                             s.combobox_index = idx;
-                        }).frame(Some(220.0), Some(38.0))),
+                        })
+                        .frame(Some(220.0), Some(38.0)),
+                    ),
                 )
             },
         },
@@ -142,18 +153,20 @@ fn catalog() -> Vec<GalleryEntry> {
                     "Odin".to_string(),
                     "Thor".to_string(),
                 ];
-                AnyView::new(VStack::new(8.0).child(
-                    AutoComplete::new(
-                        "Search warriors...".to_string(),
-                        suggestions,
-                        move |query| {
-                            let mut s = arc.lock().unwrap();
-                            s.autocomplete_query = query;
-                        },
-                        move |_selected| {},
-                    )
-                    .frame(Some(220.0), Some(38.0))
-                ))
+                AnyView::new(
+                    VStack::new(8.0).child(
+                        AutoComplete::new(
+                            "Search warriors...".to_string(),
+                            suggestions,
+                            move |query| {
+                                let mut s = arc.lock().unwrap();
+                                s.autocomplete_query = query;
+                            },
+                            move |_selected| {},
+                        )
+                        .frame(Some(220.0), Some(38.0)),
+                    ),
+                )
             },
         },
         GalleryEntry {
@@ -171,10 +184,18 @@ fn catalog() -> Vec<GalleryEntry> {
                         .child(
                             DatePicker::new(move |d, m, y| {
                                 let mut s = arc.lock().unwrap();
-                                s.selected_date = Date { year: y as i32, month: m, day: d };
+                                s.selected_date = Date {
+                                    year: y as i32,
+                                    month: m,
+                                    day: d,
+                                };
                             })
-                            .selected(state.selected_date.day, state.selected_date.month, state.selected_date.year as u32)
-                            .frame(Some(220.0), Some(38.0))
+                            .selected(
+                                state.selected_date.day,
+                                state.selected_date.month,
+                                state.selected_date.year as u32,
+                            )
+                            .frame(Some(220.0), Some(38.0)),
                         )
                         .child(
                             Text::new("Date picker component")
@@ -190,30 +211,29 @@ fn catalog() -> Vec<GalleryEntry> {
             category: "Navigation",
             render: |state, state_arc| {
                 let arc_clone = state_arc.clone();
-                AnyView::new(
-                    BifrostTabs::new(
-                        vec!["Shield".to_string(), "Rage".to_string(), "Runes".to_string()],
-                        state.tab_index,
-                        move |idx| {
-                            let mut s = arc_clone.lock().unwrap();
-                            s.tab_index = idx;
-                        },
-                    ),
-                )
+                AnyView::new(BifrostTabs::new(
+                    vec![
+                        "Shield".to_string(),
+                        "Rage".to_string(),
+                        "Runes".to_string(),
+                    ],
+                    state.tab_index,
+                    move |idx| {
+                        let mut s = arc_clone.lock().unwrap();
+                        s.tab_index = idx;
+                    },
+                ))
             },
         },
         GalleryEntry {
             name: "Breadcrumb",
             category: "Navigation",
             render: |_state, _state_arc| {
-                AnyView::new(
-                    VStack::new(8.0)
-                        .child(Breadcrumb::new(vec![
-                            BreadcrumbItem::new("Home"),
-                            BreadcrumbItem::new("Loadout"),
-                            BreadcrumbItem::new("Berserker"),
-                        ]))
-                )
+                AnyView::new(VStack::new(8.0).child(Breadcrumb::new(vec![
+                    BreadcrumbItem::new("Home"),
+                    BreadcrumbItem::new("Loadout"),
+                    BreadcrumbItem::new("Berserker"),
+                ])))
             },
         },
         // -- Overlays --
@@ -223,9 +243,14 @@ fn catalog() -> Vec<GalleryEntry> {
             render: |_state, _state_arc| {
                 AnyView::new(
                     Tooltip::new(
-                        AnyView::new(Text::new("Hover target").font_size(14.0).color([0.9, 0.9, 0.9, 1.0])),
+                        AnyView::new(
+                            Text::new("Hover target")
+                                .font_size(14.0)
+                                .color([0.9, 0.9, 0.9, 1.0]),
+                        ),
                         "Hidden wisdom: Runes guide the worthy",
-                    ).visible(true),
+                    )
+                    .visible(true),
                 )
             },
         },
@@ -296,9 +321,7 @@ fn catalog() -> Vec<GalleryEntry> {
                                 .font_size(14.0)
                                 .color([0.9, 0.9, 0.9, 1.0]),
                         )
-                        .child(
-                            Button::new("Open Modal", || {}),
-                        )
+                        .child(Button::new("Open Modal", || {}))
                         .child(
                             Text::new("Click Open Modal to see overlay")
                                 .font_size(11.0)
@@ -447,16 +470,26 @@ impl View for GalleryApp {
         let mut draw_order: Vec<usize> = (0..num_entries).collect();
         draw_order.sort_by(|&a, &b| {
             let mut diff_a = (a as i32 - selected as i32) as f32;
-            while diff_a > half { diff_a -= num_entries as f32; }
-            while diff_a < -half { diff_a += num_entries as f32; }
+            while diff_a > half {
+                diff_a -= num_entries as f32;
+            }
+            while diff_a < -half {
+                diff_a += num_entries as f32;
+            }
 
             let mut diff_b = (b as i32 - selected as i32) as f32;
-            while diff_b > half { diff_b -= num_entries as f32; }
-            while diff_b < -half { diff_b += num_entries as f32; }
+            while diff_b > half {
+                diff_b -= num_entries as f32;
+            }
+            while diff_b < -half {
+                diff_b += num_entries as f32;
+            }
 
             let cos_a = (diff_a * 0.45).cos();
             let cos_b = (diff_b * 0.45).cos();
-            cos_a.partial_cmp(&cos_b).unwrap_or(std::cmp::Ordering::Equal)
+            cos_a
+                .partial_cmp(&cos_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
         });
 
         // Carousel area bounds
@@ -473,8 +506,12 @@ impl View for GalleryApp {
 
         for i in draw_order {
             let mut diff = (i as i32 - selected as i32) as f32;
-            while diff > half { diff -= num_entries as f32; }
-            while diff < -half { diff += num_entries as f32; }
+            while diff > half {
+                diff -= num_entries as f32;
+            }
+            while diff < -half {
+                diff += num_entries as f32;
+            }
 
             let calculate_card_rect = |d: f32| -> Rect {
                 let angle = d * 0.42;
@@ -542,7 +579,12 @@ impl View for GalleryApp {
             };
             renderer.fill_rounded_rect(shadow_bottom, 1.0, [0.0, 0.0, 0.0, 0.95]);
 
-            renderer.stroke_rounded_rect(card_rect, 6.0, border_color, if is_selected { 1.5 } else { 0.8 });
+            renderer.stroke_rounded_rect(
+                card_rect,
+                6.0,
+                border_color,
+                if is_selected { 1.5 } else { 0.8 },
+            );
 
             let abs_diff = diff.abs();
             let text_alpha = if is_selected {
@@ -624,8 +666,9 @@ impl View for GalleryApp {
 
         // Register scroll-wheel handler for carousel cycling (only once per frame via VDOM setup)
         let wheel_state = self.state.clone();
-        static WHEEL_HANDLER_READY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-        
+        static WHEEL_HANDLER_READY: std::sync::atomic::AtomicBool =
+            std::sync::atomic::AtomicBool::new(false);
+
         if !WHEEL_HANDLER_READY.load(std::sync::atomic::Ordering::Relaxed) {
             renderer.register_handler(
                 "pointerwheel",
@@ -652,9 +695,9 @@ impl View for GalleryApp {
             WHEEL_HANDLER_READY.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
-        // Note: The VDOM stores event handlers in a map and applies patches. 
+        // Note: The VDOM stores event handlers in a map and applies patches.
         // For the render()-only GalleryApp, we ensure the handler is registered exactly once by using an AtomicBool flag.
-        
+
         // 3. Draw Divider Line
         let div_y = carousel_rect.y + carousel_rect.height + 15.0;
         renderer.draw_line(
@@ -718,14 +761,19 @@ fn main() {
         };
         let bt = std::backtrace::Backtrace::force_capture();
         eprintln!("[CVKG PANIC] {msg}");
-        eprintln!("[CVKG PANIC] Backtrace:
-{bt}");
+        eprintln!(
+            "[CVKG PANIC] Backtrace:
+{bt}"
+        );
         if let Ok(mut file) = std::fs::File::create("cvkg-crash.log") {
             use std::io::Write;
             let _ = writeln!(file, "CVKG Panic Dump");
             let _ = writeln!(file, "Message: {msg}");
-            let _ = writeln!(file, "Backtrace:
-{bt}");
+            let _ = writeln!(
+                file,
+                "Backtrace:
+{bt}"
+            );
         }
     }));
 

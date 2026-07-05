@@ -6,4 +6,6 @@ pub mod types;
 
 pub use culler::FrustumCuller;
 pub use passes::{Opaque3dNode, ShadowNode};
-pub use types::{DirectionalLight, Light, PointLight, GpuMesh3d, ShadowInstance, ShadowMap, ShadowQuality};
+pub use types::{
+    DirectionalLight, GpuMesh3d, Light, PointLight, ShadowInstance, ShadowMap, ShadowQuality,
+};

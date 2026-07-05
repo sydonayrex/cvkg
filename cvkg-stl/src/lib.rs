@@ -14,7 +14,7 @@ mod binary;
 mod detect;
 mod normal;
 
-pub use error::{detect_format, StlError, StlFormat, StlMesh};
+pub use error::{StlError, StlFormat, StlMesh, detect_format};
 
 use std::io::{Read, Seek};
 

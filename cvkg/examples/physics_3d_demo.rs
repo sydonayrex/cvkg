@@ -191,12 +191,12 @@ impl View for Physics3DDemo {
         }
 
         // Render 3D cubes -- this is the critical path:
-        // VNode 3D fields → render_scene_node_3d → draw_mesh_3d → GPU mode 13
+        // VNode 3D fields → render_scene_node_3d → submit_mesh_3d → GPU mode 13
         let cubes = self.cubes.borrow();
         let scene = self.scene_graph.borrow();
         for (idx, node_id) in self.cube_node_ids.borrow().iter().enumerate() {
             if let Some(node) = scene.nodes.get(node_id) {
-                // This calls draw_mesh_3d which tessellates a cube and sends it to the GPU
+                // This calls submit_mesh_3d which tessellates a cube and sends it to the GPU
                 r.render_scene_node_3d(
                     node.position_3d,
                     node.rotation_3d,
@@ -222,7 +222,7 @@ impl View for Physics3DDemo {
             [1.0, 1.0, 1.0, 0.8],
         );
         r.draw_text_raw(
-            "Physics → SceneGraph → render_scene_node_3d → draw_mesh_3d → GPU",
+            "Physics → SceneGraph → render_scene_node_3d → submit_mesh_3d → GPU",
             -480.0,
             -320.0,
             14.0,

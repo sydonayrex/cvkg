@@ -120,7 +120,8 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     }
 
     if !panel_outputs.is_empty() {
-        let pre_panel = builder.add_node(Box::new(PreWorldPanelNode::new(panel_outputs, panel_ids)));
+        let pre_panel =
+            builder.add_node(Box::new(PreWorldPanelNode::new(panel_outputs, panel_ids)));
         // No output connection needed - panels write to their allocated offscreen textures.
         // Geometry pass will sample them via their ResourceIds.
     }
@@ -215,8 +216,12 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
             if !config.transparent_meshes_3d.is_empty() {
                 let mut transparent_meshes = config.transparent_meshes_3d.clone();
                 // Sort by view_depth descending (farthest first for back-to-front)
-                transparent_meshes.sort_by(|a, b| b.view_depth.partial_cmp(&a.view_depth).unwrap_or(std::cmp::Ordering::Equal));
-                
+                transparent_meshes.sort_by(|a, b| {
+                    b.view_depth
+                        .partial_cmp(&a.view_depth)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
                 let transparent_node = builder.add_node(Box::new(TransparentNode {
                     mesh_instances: transparent_meshes,
                     shadow_map: shadow_rid,

@@ -4,11 +4,11 @@
 //! designed to replace expensive VDOM tree-diffing with targeted, instantaneous
 //! side-effects when reactive state changes.
 
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-use std::sync::{Arc, RwLock, OnceLock};
+use std::sync::atomic::{AtomicU8, AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, RwLock};
 
-use cvkg_core::DirtyFlags;
 use cvkg_core::DependencyGraph;
+use cvkg_core::DirtyFlags;
 
 thread_local! {
     /// Tracks the currently executing effect to auto-subscribe it to signals.
@@ -73,7 +73,7 @@ impl<T: Clone> Signal<T> {
                 reads.push(self.id);
             }
         });
-        
+
         CURRENT_EFFECT.with(|current| {
             if let Some(effect) = current.read().unwrap().as_ref() {
                 let mut subs = self.subscribers.write().unwrap();
@@ -86,7 +86,10 @@ impl<T: Clone> Signal<T> {
                         accumulated: Arc::new(AtomicU8::new(0)),
                     });
                 }
-                dependency_graph().write().unwrap().register(effect_id, self.id);
+                dependency_graph()
+                    .write()
+                    .unwrap()
+                    .register(effect_id, self.id);
             }
         });
         self.value.read().unwrap().clone()
@@ -165,7 +168,7 @@ impl EffectRunner for ClosureEffect {
     fn id(&self) -> u64 {
         self.id
     }
-    
+
     fn run(self: Arc<Self>) {
         // Unregister previous dependencies before re-running
         dependency_graph().write().unwrap().unregister(self.id);

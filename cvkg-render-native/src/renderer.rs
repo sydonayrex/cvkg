@@ -3,8 +3,8 @@ use crate::audio::{RodioAudioEngine, VisualHapticEngine};
 use crate::main_loop::{App, AppEvent};
 use crate::window::{SafeAreaInsets, WindowManager};
 use cvkg_core::{
-    ColorTheme, DrawMaterial, FrameRenderer, Mesh, Rect, RenderIntensityMode, RenderStateSnapshot,
-    Renderer, TelemetryData, Material3D, Transform3D,
+    ColorTheme, DrawMaterial, FrameRenderer, Material3D, Mesh, Rect, RenderIntensityMode,
+    RenderStateSnapshot, Renderer, TelemetryData, Transform3D,
 };
 use std::sync::Arc;
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -236,7 +236,13 @@ impl cvkg_core::Renderer for NativeRenderer {
         pixels_per_unit: f32,
         world_size: (f32, f32),
     ) {
-        self.gpu_ref().begin_world_space_panel(node_id, transform, glass, pixels_per_unit, world_size);
+        self.gpu_ref().begin_world_space_panel(
+            node_id,
+            transform,
+            glass,
+            pixels_per_unit,
+            world_size,
+        );
     }
 
     fn end_world_space_panel(&mut self, node_id: u64) {
@@ -490,8 +496,17 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.gpu_ref_shared().is_over_budget()
     }
 
-    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: cvkg_core::TextHAlign, v_align: cvkg_core::TextVAlign) {
-        self.gpu_ref().draw_text(text, rect, size, color, h_align, v_align);
+    fn draw_text(
+        &mut self,
+        text: &str,
+        rect: &Rect,
+        size: f32,
+        color: [f32; 4],
+        h_align: cvkg_core::TextHAlign,
+        v_align: cvkg_core::TextVAlign,
+    ) {
+        self.gpu_ref()
+            .draw_text(text, rect, size, color, h_align, v_align);
     }
 
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {

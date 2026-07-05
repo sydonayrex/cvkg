@@ -494,7 +494,10 @@ impl View for Button {
 
         // Forged-iron bevel: 1px top-edge catch-light + 1px bottom-edge anvil shadow.
         // Only on solid variants (not Ghost/Link which are transparent).
-        if matches!(self.variant, ButtonVariant::Default | ButtonVariant::Secondary | ButtonVariant::Destructive) {
+        if matches!(
+            self.variant,
+            ButtonVariant::Default | ButtonVariant::Secondary | ButtonVariant::Destructive
+        ) {
             // Top bevel highlight
             renderer.draw_line(
                 final_rect.x + corner_radius,
@@ -929,9 +932,9 @@ impl LayoutView for Toggle {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-
 
 #[derive(Clone)]
 pub struct Slider {
@@ -1117,9 +1120,9 @@ impl LayoutView for Slider {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-
 
 /// Stepper for discrete increment/decrement
 #[derive(Clone)]

@@ -27,7 +27,11 @@ fn test_snapshot_solid_red() {
     let height = 32;
     let pixels = render_solid_rect(width, height, [1.0, 0.0, 0.0, 1.0]);
 
-    assert_eq!(pixels.len(), (width * height * 4) as usize, "pixel buffer size");
+    assert_eq!(
+        pixels.len(),
+        (width * height * 4) as usize,
+        "pixel buffer size"
+    );
 
     // Sample center pixel — should be red
     let center_y = height / 2;

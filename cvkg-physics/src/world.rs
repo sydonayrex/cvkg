@@ -520,7 +520,9 @@ impl PhysicsWorld {
                     }
                 }
                 crate::snapshot::ShapeSnapshot::Compound3D { .. } => crate::Shape::sphere(16.0),
-                crate::snapshot::ShapeSnapshot::ConvexHull3D { vertices } => crate::Shape::convex_hull_3d(vertices),
+                crate::snapshot::ShapeSnapshot::ConvexHull3D { vertices } => {
+                    crate::Shape::convex_hull_3d(vertices)
+                }
                 crate::snapshot::ShapeSnapshot::Heightmap {
                     heights,
                     width,
@@ -639,10 +641,13 @@ impl PhysicsWorld {
         for body in &mut self.bodies {
             if body.is_3d {
                 // Apply spring-settle force/torque if set
-                if let (Some(target), Some(params)) = (body.target_transform_3d, body.spring_params_3d) {
+                if let (Some(target), Some(params)) =
+                    (body.target_transform_3d, body.spring_params_3d)
+                {
                     // Position spring force: F = -k * (x - x_target) - d * v
                     let pos_diff = body.position_3d - target.position;
-                    let spring_force = -params.stiffness * pos_diff - params.damping * body.velocity_3d;
+                    let spring_force =
+                        -params.stiffness * pos_diff - params.damping * body.velocity_3d;
                     body.force_3d += spring_force;
 
                     // Rotation spring torque: T = -k * theta * axis - d * omega
@@ -652,7 +657,7 @@ impl PhysicsWorld {
                     } else {
                         q_error
                     };
-                    
+
                     let w = q_error.w.clamp(-1.0, 1.0);
                     let angle = 2.0 * w.acos();
                     let sin_half = (1.0 - w * w).sqrt();
@@ -662,7 +667,8 @@ impl PhysicsWorld {
                         glam::Vec3::X
                     };
                     let error_rot_vec = axis * angle;
-                    let spring_torque = -params.stiffness * error_rot_vec - params.damping * body.angular_velocity_3d;
+                    let spring_torque = -params.stiffness * error_rot_vec
+                        - params.damping * body.angular_velocity_3d;
                     body.torque_3d += spring_torque;
                 }
 

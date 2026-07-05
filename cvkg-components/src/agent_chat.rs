@@ -926,7 +926,13 @@ impl View for Markdown {
                 // Link
                 if let Some(bracket_end) = line.find(']') {
                     let link_text = &line[1..bracket_end];
-                    renderer.draw_text_raw(link_text, rect.x + 8.0, y + 16.0, 14.0, theme::accent());
+                    renderer.draw_text_raw(
+                        link_text,
+                        rect.x + 8.0,
+                        y + 16.0,
+                        14.0,
+                        theme::accent(),
+                    );
                     y += 22.0;
                 } else {
                     renderer.draw_text_raw(line, rect.x + 8.0, y + 16.0, 14.0, theme::text());

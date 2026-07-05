@@ -130,17 +130,18 @@ impl<V: View> View for Popconfirm<V> {
             "pointerclick",
             Arc::new(move |event| {
                 if let cvkg_core::Event::PointerClick { x, y, .. } = event
-                    && rect.contains(x, y) {
-                        cvkg_core::update_system_state(move |s| {
-                            let mut s = s.clone();
-                            let current = s
-                                .get_component_state::<bool>(state_id)
-                                .and_then(|v| v.read().ok().map(|g| *g))
-                                .unwrap_or(false);
-                            s.set_component_state(state_id, !current);
-                            s
-                        });
-                    }
+                    && rect.contains(x, y)
+                {
+                    cvkg_core::update_system_state(move |s| {
+                        let mut s = s.clone();
+                        let current = s
+                            .get_component_state::<bool>(state_id)
+                            .and_then(|v| v.read().ok().map(|g| *g))
+                            .unwrap_or(false);
+                        s.set_component_state(state_id, !current);
+                        s
+                    });
+                }
             }),
         );
 

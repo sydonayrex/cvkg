@@ -1193,7 +1193,8 @@ impl cvkg_core::Renderer for GpuRenderer {
         let model_matrix = transform.to_matrix();
 
         // Calculate view_depth for transparent sorting
-        let view_depth = (glam::Vec3::from(self.current_scene.camera_pos) - glam::Vec3::from(transform.position)).length();
+        let view_depth =
+            (glam::Vec3::from(self.current_scene.camera_pos) - transform.position).length();
 
         for i in 0..mesh.vertices.len() {
             let pos = glam::Vec3::from(mesh.vertices[i]);
@@ -1215,7 +1216,11 @@ impl cvkg_core::Renderer for GpuRenderer {
                 slice: [material.metallic, material.roughness, material.opacity, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                clip: mesh.tangents.get(i).copied().unwrap_or([0.0, 0.0, 1.0, 1.0]),
+                clip: mesh
+                    .tangents
+                    .get(i)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 1.0, 1.0]),
                 tex_index: 0,
             });
         }
@@ -1302,6 +1307,9 @@ impl cvkg_core::Renderer for GpuRenderer {
     /// # Contract
     /// PBR lighting and opacity are computed using base color, metallic (0.0), and roughness (0.5)
     /// to support standard matte opaque 3D meshes.
+    ///
+    /// Uses the proper 3D instanced rendering path via `submit_mesh_3d` which creates
+    /// dedicated per-mesh vertex buffers for GPU skinning, rather than CPU-baked transforms.
     fn render_scene_node_3d(
         &mut self,
         position: [f32; 3],
@@ -1381,7 +1389,7 @@ impl cvkg_core::Renderer for GpuRenderer {
                 uv_scale: [1.0, 1.0],
                 uv_offset: [0.0, 0.0],
             };
-            self.draw_mesh_3d(&cube, &material, &transform);
+            self.submit_mesh_3d(&cube, &material, &transform);
         } else {
             let material = cvkg_core::Material3D {
                 base_color: color,
@@ -1395,7 +1403,7 @@ impl cvkg_core::Renderer for GpuRenderer {
                 uv_scale: [1.0, 1.0],
                 uv_offset: [0.0, 0.0],
             };
-            self.draw_mesh_3d(&meshes[0], &material, &transform);
+            self.submit_mesh_3d(&meshes[0], &material, &transform);
         }
     }
 
@@ -1452,7 +1460,9 @@ impl cvkg_core::Renderer for GpuRenderer {
             self.current_theme = restored_theme;
             self.queue
                 .write_buffer(&self.theme_buffer, 0, bytemuck::bytes_of(&restored_theme));
-            cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(&restored_theme));
+            cvkg_core::set_theme_context(cvkg_core::ThemeContext::from_color_theme(
+                &restored_theme,
+            ));
         }
     }
 
@@ -1529,7 +1539,15 @@ impl cvkg_core::Renderer for GpuRenderer {
         self.measure_text_impl(text, size)
     }
 
-    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: cvkg_core::TextHAlign, v_align: cvkg_core::TextVAlign) {
+    fn draw_text(
+        &mut self,
+        text: &str,
+        rect: &Rect,
+        size: f32,
+        color: [f32; 4],
+        h_align: cvkg_core::TextHAlign,
+        v_align: cvkg_core::TextVAlign,
+    ) {
         self.draw_text_impl(text, rect, size, color, h_align, v_align);
     }
 }
@@ -1596,8 +1614,8 @@ impl GpuRenderer {
 
 #[cfg(test)]
 mod transform_3d_tests {
-    use glam::{Mat4, Vec3, Quat};
     use cvkg_core::Transform3D;
+    use glam::{Mat4, Quat, Vec3};
 
     #[test]
     fn test_transform3d_to_matrix_translation() {

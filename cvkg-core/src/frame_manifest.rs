@@ -132,7 +132,7 @@ macro_rules! merge_manifests {
         // Validate all manifests at compile time - panics in const context become compile errors
         const _VERIFY_MANIFESTS: () = {
             $crate::validate_manifests(&[ $( & $manifest ),+ ]);
-            
+
             // Ensure FrameManifest::merge is callable (validates const fn exists and works)
             let _check_merge = $crate::FrameManifest::merge(&[ $( & $manifest ),+ ]);
             let _ = _check_merge;
@@ -151,7 +151,7 @@ macro_rules! merge_manifests {
             // The actual iteration and wiring happen in cvkg/src/lib.rs build_render_graph().
             &[]
         };
-        
+
         /// Merged time budget requests for scheduler configuration.
         #[allow(dead_code)]
         pub static MERGED_BUDGET_REQUESTS: &'static [$crate::TimeBudgetRequest] = {
@@ -170,11 +170,11 @@ pub const fn validate_manifests(manifests: &[&FrameManifest]) {
         validate_budgets(manifests[i].time_budget_requests);
         i += 1;
     }
-    
+
     // Cross-manifest validation: check for duplicate pass IDs
     let mut all_pass_ids: [&'static str; 64] = [""; 64];
     let mut pass_count = 0;
-    
+
     let mut m = 0;
     while m < manifests.len() {
         let passes = manifests[m].pass_nodes;
@@ -186,7 +186,7 @@ pub const fn validate_manifests(manifests: &[&FrameManifest]) {
         }
         m += 1;
     }
-    
+
     // Check for duplicates across manifests
     let mut i = 0;
     while i < pass_count {
@@ -254,10 +254,11 @@ const fn validate_budgets(budgets: &[TimeBudgetRequest]) {
     let mut i = 0;
     while i < budgets.len() {
         let phase_idx = budgets[i].phase as u8 as usize;
-        total_by_phase[phase_idx] = total_by_phase[phase_idx].saturating_add(budgets[i].time_slice_us);
+        total_by_phase[phase_idx] =
+            total_by_phase[phase_idx].saturating_add(budgets[i].time_slice_us);
         i += 1;
     }
-    
+
     const MAX_BUDGET_US: u32 = 16667;
     let mut phase = 0;
     while phase < 8 {

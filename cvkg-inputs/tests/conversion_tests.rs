@@ -1,7 +1,7 @@
 //! Integration tests: cvkg-inputs ↔ cvkg_core::Event conversion.
 
-use cvkg_inputs::backend::{from_cvkg_event, into_cvkg_event, InputEvent};
 use cvkg_inputs::DeviceId;
+use cvkg_inputs::backend::{InputEvent, from_cvkg_event, into_cvkg_event};
 
 #[test]
 fn test_into_cvkg_event_gamepad_connected() {
@@ -43,7 +43,11 @@ fn test_from_cvkg_event_gamepad_button() {
     };
     let input_event = from_cvkg_event(&cvkg_event).unwrap();
     match input_event {
-        InputEvent::GamepadButton { device, button, pressure } => {
+        InputEvent::GamepadButton {
+            device,
+            button,
+            pressure,
+        } => {
             assert_eq!(device, DeviceId(7));
             assert_eq!(button, 3);
             assert!((pressure - 1.0).abs() < f32::EPSILON);

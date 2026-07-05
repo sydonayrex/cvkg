@@ -208,14 +208,12 @@ impl FrameScheduler {
         match phase {
             // Layout runs only when a state or layout bit is set.
             FramePhase::Layout => {
-                !self.frame_dirty_flags.needs_layout()
-                    && !self.frame_dirty_flags.needs_state()
+                !self.frame_dirty_flags.needs_layout() && !self.frame_dirty_flags.needs_state()
             }
             // Animation reads layout output. If layout did not run (only
             // PAINT/COMPOSITE changed), there is no new layout to animate toward.
             FramePhase::Animation => {
-                !self.frame_dirty_flags.needs_layout()
-                    && !self.frame_dirty_flags.needs_state()
+                !self.frame_dirty_flags.needs_layout() && !self.frame_dirty_flags.needs_state()
             }
             _ => false,
         }
@@ -495,8 +493,10 @@ mod tests {
         fs.begin_frame();
         // Simulate only PAINT dirty (e.g., color change).
         fs.set_frame_dirty_flags(DirtyFlags::PAINT);
-        assert!(fs.should_skip_phase(FramePhase::Layout),
-            "Layout must be skipped when only PAINT is dirty");
+        assert!(
+            fs.should_skip_phase(FramePhase::Layout),
+            "Layout must be skipped when only PAINT is dirty"
+        );
     }
 
     #[test]
@@ -504,8 +504,10 @@ mod tests {
         let mut fs = FrameScheduler::new();
         fs.begin_frame();
         fs.set_frame_dirty_flags(DirtyFlags::PAINT);
-        assert!(fs.should_skip_phase(FramePhase::Animation),
-            "Animation must be skipped when only PAINT is dirty");
+        assert!(
+            fs.should_skip_phase(FramePhase::Animation),
+            "Animation must be skipped when only PAINT is dirty"
+        );
     }
 
     #[test]
@@ -513,8 +515,10 @@ mod tests {
         let mut fs = FrameScheduler::new();
         fs.begin_frame();
         fs.set_frame_dirty_flags(DirtyFlags::COMPOSITE);
-        assert!(!fs.should_skip_phase(FramePhase::Input),
-            "Input phase is never skipped");
+        assert!(
+            !fs.should_skip_phase(FramePhase::Input),
+            "Input phase is never skipped"
+        );
     }
 
     #[test]
@@ -522,8 +526,10 @@ mod tests {
         let mut fs = FrameScheduler::new();
         fs.begin_frame();
         fs.set_frame_dirty_flags(DirtyFlags::COMPOSITE);
-        assert!(!fs.should_skip_phase(FramePhase::State),
-            "State phase is never skipped");
+        assert!(
+            !fs.should_skip_phase(FramePhase::State),
+            "State phase is never skipped"
+        );
     }
 
     #[test]
@@ -531,8 +537,10 @@ mod tests {
         let mut fs = FrameScheduler::new();
         fs.begin_frame();
         fs.set_frame_dirty_flags(DirtyFlags::STATE);
-        assert!(!fs.should_skip_phase(FramePhase::Layout),
-            "Layout must run when STATE is dirty");
+        assert!(
+            !fs.should_skip_phase(FramePhase::Layout),
+            "Layout must run when STATE is dirty"
+        );
     }
 
     #[test]
@@ -540,8 +548,10 @@ mod tests {
         let mut fs = FrameScheduler::new();
         fs.begin_frame();
         fs.set_frame_dirty_flags(DirtyFlags::LAYOUT);
-        assert!(!fs.should_skip_phase(FramePhase::Animation),
-            "Animation must run when LAYOUT is dirty");
+        assert!(
+            !fs.should_skip_phase(FramePhase::Animation),
+            "Animation must run when LAYOUT is dirty"
+        );
     }
 
     #[test]
@@ -564,15 +574,21 @@ mod tests {
             if !fs.should_skip_phase(fs.current_phase()) {
                 phases_run.push(fs.current_phase());
             }
-            if fs.current_phase() == FramePhase::PostFrame { break; }
+            if fs.current_phase() == FramePhase::PostFrame {
+                break;
+            }
             fs.advance_phase();
         }
 
         // Layout and Animation must NOT be in the run list.
-        assert!(!phases_run.contains(&FramePhase::Layout),
-            "Layout must be skipped for PAINT-only dirty");
-        assert!(!phases_run.contains(&FramePhase::Animation),
-            "Animation must be skipped for PAINT-only dirty");
+        assert!(
+            !phases_run.contains(&FramePhase::Layout),
+            "Layout must be skipped for PAINT-only dirty"
+        );
+        assert!(
+            !phases_run.contains(&FramePhase::Animation),
+            "Animation must be skipped for PAINT-only dirty"
+        );
         // Render and Composite must run.
         assert!(phases_run.contains(&FramePhase::Render));
         assert!(phases_run.contains(&FramePhase::Composite));
@@ -589,7 +605,9 @@ mod tests {
             if !fs.should_skip_phase(fs.current_phase()) {
                 phases_run.push(fs.current_phase());
             }
-            if fs.current_phase() == FramePhase::PostFrame { break; }
+            if fs.current_phase() == FramePhase::PostFrame {
+                break;
+            }
             fs.advance_phase();
         }
 

@@ -5,7 +5,10 @@
     clippy::type_complexity
 )]
 
-use cvkg_components::{Badge, BadgeVariant, Button, Hero, PricingTable, FeatureGrid, TestimonialCard, FeatureItem, PricingCard, TestimonialItem};
+use cvkg_components::{
+    Badge, BadgeVariant, Button, FeatureGrid, FeatureItem, Hero, PricingCard, PricingTable,
+    TestimonialCard, TestimonialItem,
+};
 use cvkg_core::{Never, Rect, Renderer, View};
 use wasm_bindgen::prelude::*;
 
@@ -127,8 +130,11 @@ impl AdeleApp {
             width: 600.0,
             height: 200.0,
         };
-        Hero::new("Build Beautiful UIs", "Compose at the speed of thought with CVKG")
-            .render(renderer, hero_rect);
+        Hero::new(
+            "Build Beautiful UIs",
+            "Compose at the speed of thought with CVKG",
+        )
+        .render(renderer, hero_rect);
 
         // Demo Pricing Table
         let pricing_rect = Rect {
@@ -139,13 +145,17 @@ impl AdeleApp {
         };
         PricingTable::new()
             .card(PricingCard::new("Starter", "Free"))
-            .card(PricingCard::new("Pro", "$9")
-                .feature("3 projects")
-                .feature("Basic support"))
-            .card(PricingCard::new("Enterprise", "$29")
-                .feature("Unlimited projects")
-                .feature("Priority support")
-                .feature("Custom domains"))
+            .card(
+                PricingCard::new("Pro", "$9")
+                    .feature("3 projects")
+                    .feature("Basic support"),
+            )
+            .card(
+                PricingCard::new("Enterprise", "$29")
+                    .feature("Unlimited projects")
+                    .feature("Priority support")
+                    .feature("Custom domains"),
+            )
             .render(renderer, pricing_rect);
 
         // Demo Feature Grid
@@ -171,11 +181,11 @@ impl AdeleApp {
         TestimonialCard::new()
             .item(TestimonialItem::new(
                 "CVKG transformed our workflow!",
-                "Alex Morgan"
+                "Alex Morgan",
             ))
             .item(TestimonialItem::new(
                 "The glass morphism is stunning.",
-                "Sam Rivera"
+                "Sam Rivera",
             ))
             .render(renderer, testimonial_rect);
     }

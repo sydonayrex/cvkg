@@ -22,16 +22,21 @@ struct SceneUniforms {
     scroll_offset:   f32,
     scale_factor:    f32,
     scene_type:      u32,
+    _pad_vec2_align: u32,
     fireball_pos:    vec2<f32>,
     camera_pos:      vec3<f32>,
     _pad2:           f32,
     light_direction: vec3<f32>,
     _pad3:           f32,
     light_color:     vec3<f32>,
-    _pad4:           f32,
+    ibl_enabled:     u32,
+    // Shadow map parameters
     shadow_map_size: f32,
     shadow_bias:     f32,
+    _pad_shadow:     u32,
+    _pad_shadow2:    u32,
     light_vp:        mat4x4<f32>,
+    ambient_color:   vec4<f32>,
 };
 
 // ─── Bindings ───────────────────────────────────────────────────────────────

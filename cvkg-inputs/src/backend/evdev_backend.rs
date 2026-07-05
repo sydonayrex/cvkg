@@ -2,10 +2,10 @@
 //!
 //! Feature-gated behind `evdev`. Linux-only.
 
+use crate::DeviceId;
 use crate::backend::{InputBackend, InputEvent};
 use crate::error::InputError;
 use crate::platform::HidDeviceInfo;
-use crate::DeviceId;
 
 #[cfg(all(feature = "evdev", target_os = "linux"))]
 pub struct EvdevBackend {
@@ -25,16 +25,18 @@ impl EvdevBackend {
             .map_err(|e| InputError::BackendInit(format!("glob failed: {e}")))?;
 
         for (idx, path) in paths.enumerate() {
-            let path = path.map_err(|e| {
-                InputError::BackendInit(format!("read dir failed: {e}"))
-            })?;
+            let path =
+                path.map_err(|e| InputError::BackendInit(format!("read dir failed: {e}")))?;
             if let Ok(device) = evdev::Device::open(&path) {
                 device_ids.push(DeviceId(idx as u64));
                 devices.push(device);
             }
         }
 
-        Ok(Self { devices, device_ids })
+        Ok(Self {
+            devices,
+            device_ids,
+        })
     }
 
     /// Returns info about all enumerated HID devices.

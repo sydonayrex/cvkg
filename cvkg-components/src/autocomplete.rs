@@ -116,7 +116,11 @@ impl View for AutoComplete {
         Some(self)
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::layout::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(220.0),
             height: 38.0,
@@ -184,17 +188,8 @@ impl View for AutoComplete {
             if crate::theme::glassmorphism_enabled() {
                 renderer.bifrost(dropdown_rect, 12.0, 1.2, 0.15);
             }
-            renderer.fill_rounded_rect(
-                dropdown_rect,
-                RADIUS_LG,
-                [0.05, 0.05, 0.07, 1.0],
-            );
-            renderer.stroke_rounded_rect(
-                dropdown_rect,
-                RADIUS_LG,
-                [0.25, 0.25, 0.28, 1.0],
-                1.5,
-            );
+            renderer.fill_rounded_rect(dropdown_rect, RADIUS_LG, [0.05, 0.05, 0.07, 1.0]);
+            renderer.stroke_rounded_rect(dropdown_rect, RADIUS_LG, [0.25, 0.25, 0.28, 1.0], 1.5);
 
             // Render each filtered option
             for (vis_idx, &opt_idx) in state.filtered_indices.iter().enumerate() {
@@ -379,66 +374,68 @@ impl View for AutoComplete {
             "pointerclick",
             Arc::new(move |event| {
                 if let Event::PointerClick { x, y, .. } = event
-                    && x >= rect_clone.x && x <= rect_clone.x + rect_clone.width {
-                        let id = AutoComplete::id_hash(&placeholder_click);
+                    && x >= rect_clone.x
+                    && x <= rect_clone.x + rect_clone.width
+                {
+                    let id = AutoComplete::id_hash(&placeholder_click);
 
-                        // Check if click is inside the input field
-                        if y >= rect_clone.y && y <= rect_clone.y + rect_clone.height {
-                            let sys = cvkg_core::load_system_state();
-                            if let Some(st) = sys
-                                .get_component_state::<AutoCompleteState>(id)
-                                .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
-                                && !st.is_open
-                            {
-                                let mut new_st = st.clone();
-                                new_st.is_open = true;
-                                if new_st.filtered_indices.is_empty() {
-                                    new_st.filtered_indices = (0..options_click.len()).collect();
-                                }
-                                new_st.selection = if new_st.filtered_indices.is_empty() {
-                                    None
-                                } else {
-                                    Some(0)
-                                };
-                                let saved = new_st.clone();
-                                cvkg_core::update_system_state(move |sys| {
-                                    let mut next = sys.clone();
-                                    next.set_component_state(id, saved.clone());
-                                    next
-                                });
+                    // Check if click is inside the input field
+                    if y >= rect_clone.y && y <= rect_clone.y + rect_clone.height {
+                        let sys = cvkg_core::load_system_state();
+                        if let Some(st) = sys
+                            .get_component_state::<AutoCompleteState>(id)
+                            .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
+                            && !st.is_open
+                        {
+                            let mut new_st = st.clone();
+                            new_st.is_open = true;
+                            if new_st.filtered_indices.is_empty() {
+                                new_st.filtered_indices = (0..options_click.len()).collect();
                             }
-                            return;
+                            new_st.selection = if new_st.filtered_indices.is_empty() {
+                                None
+                            } else {
+                                Some(0)
+                            };
+                            let saved = new_st.clone();
+                            cvkg_core::update_system_state(move |sys| {
+                                let mut next = sys.clone();
+                                next.set_component_state(id, saved.clone());
+                                next
+                            });
                         }
+                        return;
+                    }
 
-                        // Click on a dropdown item
-                        let rel_y = y - (rect_clone.y + rect_clone.height + 4.0);
-                        if rel_y >= 0.0 && rel_y < dropdown_height_for_click {
-                            let vis_idx = (rel_y / item_height) as usize;
+                    // Click on a dropdown item
+                    let rel_y = y - (rect_clone.y + rect_clone.height + 4.0);
+                    if rel_y >= 0.0 && rel_y < dropdown_height_for_click {
+                        let vis_idx = (rel_y / item_height) as usize;
 
-                            let sys = cvkg_core::load_system_state();
-                            if let Some(st) = sys
-                                .get_component_state::<AutoCompleteState>(id)
-                                .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
-                                && let Some(&opt_idx) = st.filtered_indices.get(vis_idx)
-                            {
-                                let selected = options_click[opt_idx].clone();
-                                if let Ok(mut guard) = text_click.lock() {
-                                    *guard = selected.clone();
-                                }
-                                (on_select_click)(selected);
-
-                                let mut new_st = st.clone();
-                                new_st.is_open = false;
-                                new_st.selection = None;
-                                let saved = new_st.clone();
-                                cvkg_core::update_system_state(move |sys| {
-                                    let mut next = sys.clone();
-                                    next.set_component_state(id, saved.clone());
-                                    next
-                                });
+                        let sys = cvkg_core::load_system_state();
+                        if let Some(st) = sys
+                            .get_component_state::<AutoCompleteState>(id)
+                            .and_then(|lock| lock.read().ok().map(|g| (*g).clone()))
+                            && let Some(&opt_idx) = st.filtered_indices.get(vis_idx)
+                        {
+                            let selected = options_click[opt_idx].clone();
+                            if let Ok(mut guard) = text_click.lock() {
+                                *guard = selected.clone();
                             }
+                            (on_select_click)(selected);
+
+                            let mut new_st = st.clone();
+                            new_st.is_open = false;
+                            new_st.selection = None;
+                            let saved = new_st.clone();
+                            cvkg_core::update_system_state(move |sys| {
+                                let mut next = sys.clone();
+                                next.set_component_state(id, saved.clone());
+                                next
+                            });
                         }
                     }
+                }
             }),
         );
 

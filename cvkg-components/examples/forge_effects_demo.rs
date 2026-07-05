@@ -2,8 +2,8 @@
 
 use cvkg_core::{Rect, Renderer};
 use cvkg_render_gpu::{
-    ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, Node, NodeId, Role,
-    ShieldWallAdapter, GpuRenderer, Tree, TreeId, TreeUpdate,
+    ActionHandler, ActionRequest, ActivationHandler, DeactivationHandler, GpuRenderer, Node,
+    NodeId, Role, ShieldWallAdapter, Tree, TreeId, TreeUpdate,
 };
 use std::sync::Arc;
 use winit::{

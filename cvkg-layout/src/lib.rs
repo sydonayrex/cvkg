@@ -31,8 +31,8 @@ pub mod spatial;
 pub mod taffy_engine;
 
 pub use cvkg_core::layout::EdgeInsets;
-pub use error::LayoutError;
 use cvkg_core::{LayoutCache, LayoutView};
+pub use error::LayoutError;
 use std::cell::RefCell;
 use std::collections::HashSet;
 

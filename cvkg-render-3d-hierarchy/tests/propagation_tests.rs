@@ -2,12 +2,7 @@ use cvkg_core::{KvasirId, Transform3D};
 use cvkg_render_3d_hierarchy::{TransformNode3D, propagate_transforms};
 use glam::{Mat4, Vec3};
 
-fn make_node(
-    id: u64,
-    parent: Option<u64>,
-    position: Vec3,
-    children: Vec<u64>,
-) -> TransformNode3D {
+fn make_node(id: u64, parent: Option<u64>, position: Vec3, children: Vec<u64>) -> TransformNode3D {
     TransformNode3D {
         id: KvasirId(id),
         parent: parent.map(KvasirId),

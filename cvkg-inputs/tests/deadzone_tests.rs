@@ -28,7 +28,10 @@ fn test_deadzone_scales_midrange() {
 #[test]
 fn test_deadzone_negative_midrange() {
     let result = deadzone::apply(-0.55, 0.1);
-    assert!((result - (-0.5)).abs() < 0.01, "expected ~-0.5, got {result}");
+    assert!(
+        (result - (-0.5)).abs() < 0.01,
+        "expected ~-0.5, got {result}"
+    );
 }
 
 #[test]
@@ -96,7 +99,10 @@ fn test_radial_deadzone_diagonal() {
 fn test_radial_deadzone_preserves_direction() {
     let (x, y) = deadzone::radial(0.8, 0.6, 0.1);
     let ratio = y / x;
-    assert!((ratio - 0.75).abs() < 0.05, "expected y/x ~ 0.75, got {ratio}");
+    assert!(
+        (ratio - 0.75).abs() < 0.05,
+        "expected y/x ~ 0.75, got {ratio}"
+    );
 }
 
 #[test]

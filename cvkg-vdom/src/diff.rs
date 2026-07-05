@@ -134,7 +134,8 @@ impl serde::Serialize for VDomPatch {
                 theme_override,
                 color_palette,
             } => {
-                let mut state = serializer.serialize_struct_variant("VDomPatch", 1, "Update", 11)?;
+                let mut state =
+                    serializer.serialize_struct_variant("VDomPatch", 1, "Update", 11)?;
                 state.serialize_field("id", id)?;
                 state.serialize_field("props", props)?;
                 state.serialize_field("layout", layout)?;
@@ -240,7 +241,9 @@ impl<'de> serde::Deserialize<'de> for VDomPatch {
                         // The actual handler closures cannot be serialized.
                         map.insert(
                             key,
-                            std::sync::Arc::new(|_| tracing::warn!("Cannot invoke serialized handler")),
+                            std::sync::Arc::new(|_| {
+                                tracing::warn!("Cannot invoke serialized handler")
+                            }),
                         );
                     }
                     map

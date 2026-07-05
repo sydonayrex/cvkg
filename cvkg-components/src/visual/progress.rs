@@ -82,7 +82,7 @@ impl View for SkollProgress {
             };
             renderer.fill_rounded_rect(fill_rect, self.border_radius, self.fill);
         }
-     }
+    }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
         Size {
@@ -114,9 +114,9 @@ impl LayoutView for SkollProgress {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-
 
 /// A horizontal status bar for system indicators.
 #[derive(Clone)]

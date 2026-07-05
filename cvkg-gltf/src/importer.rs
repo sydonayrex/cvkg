@@ -68,11 +68,7 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
         .or_else(|| document.scenes().next())
         .context("glTF file has no scenes")?;
 
-    let nodes = build_hierarchy(
-        scene,
-        mesh_prim_offset.as_slice(),
-        &cameras,
-    );
+    let nodes = build_hierarchy(scene, mesh_prim_offset.as_slice(), &cameras);
 
     Ok(Scene3D {
         nodes,
@@ -124,9 +120,7 @@ fn convert_image(index: usize, img: &gltf::image::Data) -> Result<LoadedTexture>
             }
             (rgba, TextureFormat::Rgba8Srgb)
         }
-        gltf::image::Format::R8G8B8A8 => {
-            (img.pixels.clone(), TextureFormat::Rgba8Srgb)
-        }
+        gltf::image::Format::R8G8B8A8 => (img.pixels.clone(), TextureFormat::Rgba8Srgb),
         other => {
             anyhow::bail!("Unsupported glTF image format: {other:?} (index {index})");
         }
@@ -205,9 +199,13 @@ fn convert_primitive(
 
 fn convert_camera(camera: gltf::Camera<'_>) -> Camera3D {
     let (fov_y, near, far, aspect, perspective) = match camera.projection() {
-        gltf::camera::Projection::Perspective(p) => {
-            (p.yfov(), p.znear(), p.zfar().unwrap_or(1000.0), p.aspect_ratio().unwrap_or(1.6), true)
-        }
+        gltf::camera::Projection::Perspective(p) => (
+            p.yfov(),
+            p.znear(),
+            p.zfar().unwrap_or(1000.0),
+            p.aspect_ratio().unwrap_or(1.6),
+            true,
+        ),
         gltf::camera::Projection::Orthographic(_) => {
             (std::f32::consts::FRAC_PI_4, 0.01, 1000.0, 1.6, false)
         }

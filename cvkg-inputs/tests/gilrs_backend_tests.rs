@@ -1,8 +1,8 @@
 //! Tests for the Gilrs backend.
 //! Uses mock gilrs context injection — no real hardware needed.
 
-use cvkg_inputs::backend::{InputBackend, InputEvent};
 use cvkg_inputs::DeviceId;
+use cvkg_inputs::backend::{InputBackend, InputEvent};
 
 /// Mock gilrs context for testing.
 struct MockGilrsContext {
@@ -18,9 +18,7 @@ enum MockGilrsEvent {
 
 impl MockGilrsContext {
     fn new() -> Self {
-        Self {
-            events: Vec::new(),
-        }
+        Self { events: Vec::new() }
     }
 
     fn push_event(&mut self, event: MockGilrsEvent) {
@@ -114,7 +112,11 @@ fn test_mock_gilrs_poll_axis_event() {
     let events = backend.poll();
     assert_eq!(events.len(), 1);
     match &events[0] {
-        InputEvent::GamepadAxis { device, axis, value } => {
+        InputEvent::GamepadAxis {
+            device,
+            axis,
+            value,
+        } => {
             assert_eq!(*device, DeviceId(1));
             assert_eq!(*axis, 0);
             assert!((*value - 0.75).abs() < f32::EPSILON);
@@ -132,7 +134,11 @@ fn test_mock_gilrs_poll_button_event() {
     let events = backend.poll();
     assert_eq!(events.len(), 1);
     match &events[0] {
-        InputEvent::GamepadButton { device, button, pressure } => {
+        InputEvent::GamepadButton {
+            device,
+            button,
+            pressure,
+        } => {
             assert_eq!(*device, DeviceId(1));
             assert_eq!(*button, 0);
             assert!((*pressure - 1.0).abs() < f32::EPSILON);

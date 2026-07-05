@@ -372,11 +372,11 @@ impl View for DawView {
                     [1.0, 1.0, 1.0, 0.1],
                 );
                 renderer.draw_text_centered(
-                &format!("CH {}", i + 1),
-                &label_rect,
-                11.0,
-                text_light,
-            );
+                    &format!("CH {}", i + 1),
+                    &label_rect,
+                    11.0,
+                    text_light,
+                );
                 renderer.pop_vnode();
             };
 
@@ -611,12 +611,7 @@ impl View for DawView {
                     1.0,
                 ],
             );
-            renderer.draw_text_centered(
-                &format!("CH {}", i + 1),
-                &label_rect,
-                11.0,
-                text_light,
-            );
+            renderer.draw_text_centered(&format!("CH {}", i + 1), &label_rect, 11.0, text_light);
 
             // Pan Knob - INTERACTIVE
             let pan_y = mixer_y + 20.0;
@@ -626,12 +621,7 @@ impl View for DawView {
                 width: 40.0,
                 height: 20.0,
             };
-            renderer.draw_text_centered(
-                "PAN",
-                &pan_label_rect,
-                9.0,
-                text_dim,
-            );
+            renderer.draw_text_centered("PAN", &pan_label_rect, 9.0, text_dim);
 
             let knob_rect = Rect {
                 x: strip_x + 25.0,
@@ -865,12 +855,7 @@ impl View for DawView {
                 height: 20.0,
             };
             renderer.fill_rect(label_rect, [0.8, 0.2, 0.2, 1.0]);
-            renderer.draw_text_centered(
-                "MASTER",
-                &label_rect,
-                11.0,
-                text_light,
-            );
+            renderer.draw_text_centered("MASTER", &label_rect, 11.0, text_light);
 
             let meter_h = bottom_mixer_height - 80.0;
             let meter_y = mixer_y + 30.0;

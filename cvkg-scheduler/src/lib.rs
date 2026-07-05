@@ -40,6 +40,6 @@
 pub mod frame;
 pub mod task;
 
-pub use frame::FrameScheduler;
 pub use cvkg_core::FramePhase;
+pub use frame::FrameScheduler;
 pub use task::{Priority, Task, TaskHandle, TaskScheduler};

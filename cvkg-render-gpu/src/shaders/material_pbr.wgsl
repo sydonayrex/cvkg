@@ -67,7 +67,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_color = scene.light_color;
 
         // Shadow mapping (CSM)
-        let depth_val = length(in.world_pos - scene.camera_pos);
+        let depth_val = length(in.world_pos_3d - scene.camera_pos);
         var cascade_idx = 3u;
         if (depth_val < csm.cascade_splits.x) {
             cascade_idx = 0u;
@@ -77,9 +77,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             cascade_idx = 2u;
         }
         let light_vp = csm.cascade_vps[cascade_idx];
-        let shadow = sample_shadow(cascade_idx, light_vp, in.world_pos);
+        let shadow = sample_shadow(cascade_idx, light_vp, in.world_pos_3d);
 
-        let view_dir = normalize(scene.camera_pos - in.world_pos);
+        let view_dir = normalize(scene.camera_pos - in.world_pos_3d);
         let half_dir = normalize(light_dir + view_dir);
 
         let n_dot_v = max(dot(n, view_dir), 0.0001);

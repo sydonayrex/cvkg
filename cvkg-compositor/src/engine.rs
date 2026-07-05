@@ -13,8 +13,8 @@
 
 use crate::layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 use cvkg_core::Rect;
-use tracing::warn;
 use std::collections::HashSet;
+use tracing::warn;
 
 /// Draw command tagged with its source layer material.
 /// This is the output of the compositor's routing phase.

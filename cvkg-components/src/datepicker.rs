@@ -296,17 +296,8 @@ impl DatePicker {
 
         // Semi-transparent backdrop behind the popover
         renderer.fill_rect(anchor_rect, theme::with_alpha(theme::bg(), 0.25));
-        renderer.fill_rounded_rect(
-            pop_rect,
-            RADIUS_XL,
-            [0.05, 0.05, 0.07, 1.0],
-        );
-        renderer.stroke_rounded_rect(
-            pop_rect,
-            RADIUS_XL,
-            [0.25, 0.25, 0.28, 1.0],
-            1.5,
-        );
+        renderer.fill_rounded_rect(pop_rect, RADIUS_XL, [0.05, 0.05, 0.07, 1.0]);
+        renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         let (display_month, display_year) = self.displayed_month_state();
 
@@ -566,7 +557,12 @@ impl DatePicker {
             "pointerclick",
             Arc::new(move |event: Event| {
                 if let Event::PointerClick { x, y, .. } = event {
-                    tracing::info!("[DatePicker] Prev Month click at ({}, {}), prev_r={:?}", x, y, prev_r);
+                    tracing::info!(
+                        "[DatePicker] Prev Month click at ({}, {}), prev_r={:?}",
+                        x,
+                        y,
+                        prev_r
+                    );
                     let (new_m, new_y) = if dm == 1 { (12, dy - 1) } else { (dm - 1, dy) };
                     update_system_state(move |s| {
                         let mut s = s.clone();
@@ -588,7 +584,12 @@ impl DatePicker {
             "pointerclick",
             Arc::new(move |event: Event| {
                 if let Event::PointerClick { x, y, .. } = event {
-                    tracing::info!("[DatePicker] Next Month click at ({}, {}), next_r={:?}", x, y, next_r);
+                    tracing::info!(
+                        "[DatePicker] Next Month click at ({}, {}), next_r={:?}",
+                        x,
+                        y,
+                        next_r
+                    );
                     let (new_m, new_y) = if dm2 == 12 {
                         (1, dy2 + 1)
                     } else {
@@ -632,7 +633,13 @@ impl DatePicker {
                             "pointerclick",
                             Arc::new(move |event: Event| {
                                 if let Event::PointerClick { x, y, .. } = event {
-                                    tracing::info!("[DatePicker] Day {} click at ({}, {}), cell_rect={:?}", d, x, y, cell_rect);
+                                    tracing::info!(
+                                        "[DatePicker] Day {} click at ({}, {}), cell_rect={:?}",
+                                        d,
+                                        x,
+                                        y,
+                                        cell_rect
+                                    );
                                     (oc)(d, display_month, display_year);
                                     if mode == DatePickerMode::Range {
                                         // In range mode, toggle between picking start and end
@@ -717,7 +724,11 @@ impl View for DatePicker {
         Some(self)
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::layout::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(220.0),
             height: 38.0,

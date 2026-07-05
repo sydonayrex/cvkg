@@ -15,10 +15,10 @@ mod mouse;
 mod platform;
 mod touch;
 
+pub use action::deadzone;
+pub use action::{ActionConfig, ActionMap, Binding};
 pub use backend::{InputBackend, InputEvent};
 pub use error::InputError;
-pub use action::{ActionConfig, ActionMap, Binding};
-pub use action::deadzone;
 pub use gamepad::{GamepadAxis, GamepadButton, GamepadState};
 pub use keyboard::{Key, KeyboardState};
 pub use mouse::{MouseButton, MouseState};
@@ -68,7 +68,11 @@ impl InputState {
                     state.connected = false;
                 }
             }
-            InputEvent::GamepadAxis { device, axis, value } => {
+            InputEvent::GamepadAxis {
+                device,
+                axis,
+                value,
+            } => {
                 if let Some(state) = self.gamepads.get_mut(device) {
                     // Map raw axis index to standard axis
                     let axis = match axis {
@@ -83,7 +87,11 @@ impl InputState {
                     state.axes.insert(axis, *value);
                 }
             }
-            InputEvent::GamepadButton { device, button, pressure } => {
+            InputEvent::GamepadButton {
+                device,
+                button,
+                pressure,
+            } => {
                 if let Some(state) = self.gamepads.get_mut(device) {
                     let button = match button {
                         0 => GamepadButton::South,
@@ -143,7 +151,15 @@ impl InputState {
             }
             InputEvent::Touch(touch_event) => match touch_event {
                 backend::TouchEvent::Down { id, x, y } => {
-                    self.touch.points.insert(*id, TouchPoint { id: *id, x: *x, y: *y, pressure: 1.0 });
+                    self.touch.points.insert(
+                        *id,
+                        TouchPoint {
+                            id: *id,
+                            x: *x,
+                            y: *y,
+                            pressure: 1.0,
+                        },
+                    );
                 }
                 backend::TouchEvent::Move { id, x, y } => {
                     if let Some(point) = self.touch.points.get_mut(id) {

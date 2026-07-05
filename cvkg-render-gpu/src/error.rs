@@ -18,7 +18,10 @@ impl fmt::Display for RenderError {
                 write!(f, "GPU device lost: {msg}. Try recreating the renderer.")
             }
             RenderError::Surface(msg) => {
-                write!(f, "Surface error: {msg}. Check window state and GPU availability.")
+                write!(
+                    f,
+                    "Surface error: {msg}. Check window state and GPU availability."
+                )
             }
             RenderError::MaterialCompile { name, reason } => {
                 write!(
@@ -27,7 +30,10 @@ impl fmt::Display for RenderError {
                 )
             }
             RenderError::ShaderValidation(msg) => {
-                write!(f, "Shader validation failed: {msg}. See inner WGSL error for line/column info.")
+                write!(
+                    f,
+                    "Shader validation failed: {msg}. See inner WGSL error for line/column info."
+                )
             }
             RenderError::UnsupportedFormat(fmt) => {
                 write!(
@@ -76,7 +82,10 @@ mod tests {
 
     #[test]
     fn vertex_overflow_includes_counts() {
-        let err = RenderError::VertexOverflow { needed: 100000, max: 65536 };
+        let err = RenderError::VertexOverflow {
+            needed: 100000,
+            max: 65536,
+        };
         let msg = err.to_string();
         assert!(msg.contains("100000"), "should contain needed count");
         assert!(msg.contains("65536"), "should contain max count");

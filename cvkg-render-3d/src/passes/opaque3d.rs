@@ -1,8 +1,8 @@
 //! Opaque 3D render pass Kvasir node — renders 3D meshes with PBR shading and shadow sampling.
 
-use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
-use cvkg_render_gpu::kvasir::nodes::PassId;
 use crate::types::{DirectionalLight, GpuMesh3d};
+use cvkg_render_gpu::kvasir::nodes::PassId;
+use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 
 /// Opaque 3D render pass node — renders 3D meshes with PBR shading and PCF shadow sampling.
 pub struct Opaque3dNode {

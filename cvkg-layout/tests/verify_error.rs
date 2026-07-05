@@ -11,7 +11,10 @@ mod verify_error {
         let msg = e.to_string();
         assert!(msg.contains("node 42"), "Should contain node id");
         assert!(msg.contains("circular flex basis"), "Should contain reason");
-        assert!(msg.contains("Check flex properties"), "Should have guidance text");
+        assert!(
+            msg.contains("Check flex properties"),
+            "Should have guidance text"
+        );
     }
 
     #[test]
@@ -49,6 +52,9 @@ mod verify_error {
     fn test_std_error_impl() {
         fn assert_error<E: std::error::Error>(_: &E) {}
         assert_error(&LayoutError::Internal("x".into()));
-        assert_error(&LayoutError::ConstraintConflict { node_id: 0, reason: "x".into() });
+        assert_error(&LayoutError::ConstraintConflict {
+            node_id: 0,
+            reason: "x".into(),
+        });
     }
 }

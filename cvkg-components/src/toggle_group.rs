@@ -211,26 +211,22 @@ impl View for ToggleGroup {
                 Arc::new(move |event| {
                     if let Event::KeyDown { key, .. } = event {
                         match key.as_str() {
-                            "ArrowLeft"
-                                if items_len > 0 => {
-                                    let cur = focused.load(Ordering::Relaxed);
-                                    let next = if cur > 0 { cur - 1 } else { items_len - 1 };
-                                    focused.store(next, Ordering::Relaxed);
-                                }
-                            "ArrowRight"
-                                if items_len > 0 => {
-                                    let cur = focused.load(Ordering::Relaxed);
-                                    let next = if cur + 1 < items_len { cur + 1 } else { 0 };
-                                    focused.store(next, Ordering::Relaxed);
-                                }
-                            "Home"
-                                if items_len > 0 => {
-                                    focused.store(0, Ordering::Relaxed);
-                                }
-                            "End"
-                                if items_len > 0 => {
-                                    focused.store(items_len - 1, Ordering::Relaxed);
-                                }
+                            "ArrowLeft" if items_len > 0 => {
+                                let cur = focused.load(Ordering::Relaxed);
+                                let next = if cur > 0 { cur - 1 } else { items_len - 1 };
+                                focused.store(next, Ordering::Relaxed);
+                            }
+                            "ArrowRight" if items_len > 0 => {
+                                let cur = focused.load(Ordering::Relaxed);
+                                let next = if cur + 1 < items_len { cur + 1 } else { 0 };
+                                focused.store(next, Ordering::Relaxed);
+                            }
+                            "Home" if items_len > 0 => {
+                                focused.store(0, Ordering::Relaxed);
+                            }
+                            "End" if items_len > 0 => {
+                                focused.store(items_len - 1, Ordering::Relaxed);
+                            }
                             " " | "Enter" => {
                                 let target_idx = focused.load(Ordering::Relaxed);
                                 if target_idx < items_len {

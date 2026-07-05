@@ -1,8 +1,8 @@
 //! Shadow pass types and KvasirNode — renders depth-only shadow map from
 //! light's perspective using 3D mesh data.
 
-use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use crate::kvasir::nodes::PassId;
+use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use glam::Mat4;
 use wgpu::Buffer;
 
@@ -73,7 +73,7 @@ impl KvasirNode for ShadowNode {
 
     fn execute(&self, ctx: &mut ExecutionContext) {
         let light_dir = self.light.direction.normalize();
-        
+
         // 1. Compute 4 cascades VP matrices
         let inv_cam_vp = self.camera_view_proj.inverse();
         let ndc_ranges = [
@@ -82,21 +82,21 @@ impl KvasirNode for ShadowNode {
             (0.22f32, 0.55f32),
             (0.55f32, 1.0f32),
         ];
-        
+
         let mut cascade_vps = [glam::Mat4::IDENTITY; 4];
         for i in 0..4 {
             let (near_ndc, far_ndc) = ndc_ranges[i];
             let ndc_corners = [
                 glam::Vec3::new(-1.0, -1.0, near_ndc),
-                glam::Vec3::new( 1.0, -1.0, near_ndc),
-                glam::Vec3::new(-1.0,  1.0, near_ndc),
-                glam::Vec3::new( 1.0,  1.0, near_ndc),
+                glam::Vec3::new(1.0, -1.0, near_ndc),
+                glam::Vec3::new(-1.0, 1.0, near_ndc),
+                glam::Vec3::new(1.0, 1.0, near_ndc),
                 glam::Vec3::new(-1.0, -1.0, far_ndc),
-                glam::Vec3::new( 1.0, -1.0, far_ndc),
-                glam::Vec3::new(-1.0,  1.0, far_ndc),
-                glam::Vec3::new( 1.0,  1.0, far_ndc),
+                glam::Vec3::new(1.0, -1.0, far_ndc),
+                glam::Vec3::new(-1.0, 1.0, far_ndc),
+                glam::Vec3::new(1.0, 1.0, far_ndc),
             ];
-            
+
             let mut world_corners = [glam::Vec3::ZERO; 8];
             let mut center = glam::Vec3::ZERO;
             for j in 0..8 {
@@ -105,19 +105,20 @@ impl KvasirNode for ShadowNode {
                 center += p;
             }
             center /= 8.0;
-            
+
             let mut radius = 0.0f32;
             for j in 0..8 {
                 radius = radius.max(world_corners[j].distance(center));
             }
-            
+
             // Snap radius to prevent shimmering
             radius = (radius * 16.0).round() / 16.0;
-            
+
             let light_pos = center - light_dir * radius * 2.0;
             let light_view = glam::Mat4::look_at_lh(light_pos, center, glam::Vec3::Y);
-            let light_proj = glam::Mat4::orthographic_lh(-radius, radius, -radius, radius, 0.0, radius * 4.0);
-            
+            let light_proj =
+                glam::Mat4::orthographic_lh(-radius, radius, -radius, radius, 0.0, radius * 4.0);
+
             cascade_vps[i] = light_proj * light_view;
         }
 
@@ -132,7 +133,8 @@ impl KvasirNode for ShadowNode {
             ],
             _pad: [0.0; 4],
         };
-        ctx.queue.write_buffer(&ctx.renderer.csm_buffer, 0, bytemuck::bytes_of(&csm));
+        ctx.queue
+            .write_buffer(&ctx.renderer.csm_buffer, 0, bytemuck::bytes_of(&csm));
 
         let shadow_texture = match &ctx.renderer.shadow_map_texture {
             Some(t) => t,
@@ -145,7 +147,11 @@ impl KvasirNode for ShadowNode {
         // 3. Render each cascade into its array layer
         for i in 0..4 {
             // Write cascade_vps[i] into scene_buffer's light_vp field (offset 320)
-            ctx.queue.write_buffer(&ctx.renderer.scene_buffer, 320, bytemuck::bytes_of(&cascade_vps[i]));
+            ctx.queue.write_buffer(
+                &ctx.renderer.scene_buffer,
+                320,
+                bytemuck::bytes_of(&cascade_vps[i]),
+            );
 
             let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Surtr CSM Shadow Pass Layer {}", i)),

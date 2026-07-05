@@ -20,7 +20,8 @@ mod tests {
     endloop
   endfacet
 endsolid simple_quad
-".to_vec()
+"
+        .to_vec()
     }
 
     #[test]
@@ -56,7 +57,8 @@ endsolid simple_quad
     endloop
   endfacet
 endsolid spacey
-".to_vec();
+"
+        .to_vec();
         let mesh = cvkg_stl::parse_bytes(&data).expect("extra whitespace should parse");
         assert_eq!(mesh.indices.len(), 3);
     }
@@ -71,7 +73,8 @@ endsolid spacey
       vertex 1 1 0
     endloop
   endfacet
-".to_vec();
+"
+        .to_vec();
         let result = cvkg_stl::parse_bytes(&data);
         assert!(result.is_err(), "missing endsolid should error");
     }
@@ -87,7 +90,8 @@ endsolid spacey
     ENDLOOP
   ENDFACET
 ENDSOLID Cased
-".to_vec();
+"
+        .to_vec();
         let mesh = cvkg_stl::parse_bytes(&data).expect("case insensitive parse should work");
         assert_eq!(mesh.indices.len(), 3);
     }

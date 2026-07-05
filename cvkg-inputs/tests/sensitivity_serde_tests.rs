@@ -1,8 +1,8 @@
 //! Tests for sensitivity, invert, and chord behavior.
 
-use cvkg_inputs::{ActionMap, ActionConfig, Binding};
-use cvkg_inputs::backend::InputEvent;
 use cvkg_inputs::DeviceId;
+use cvkg_inputs::backend::InputEvent;
+use cvkg_inputs::{ActionConfig, ActionMap, Binding};
 
 #[test]
 fn test_sensitivity_scales_axis() {

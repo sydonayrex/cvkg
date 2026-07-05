@@ -96,7 +96,7 @@ impl View for HatiSpinner {
                             height: dot_r * 2.0,
                         },
                         color,
-                     );
+                    );
                 }
             }
             SpinnerVariant::Ring => {
@@ -165,7 +165,8 @@ impl View for HatiSpinner {
                     let sy = cy + angle.sin() * body_r;
 
                     // Smooth taper: thick near head, thin at tail
-                    let thickness = min_thickness + (max_thickness - min_thickness) * (1.0 - f).powf(1.8);
+                    let thickness =
+                        min_thickness + (max_thickness - min_thickness) * (1.0 - f).powf(1.8);
 
                     // Main dorsal body
                     let color = [
@@ -332,8 +333,22 @@ impl View for HatiSpinner {
                     let fork_l_y = tongue_end_y + (tangent + 0.5).sin() * head_size * 0.15;
                     let fork_r_x = tongue_end_x + (tangent - 0.5).cos() * head_size * 0.15;
                     let fork_r_y = tongue_end_y + (tangent - 0.5).sin() * head_size * 0.15;
-                    renderer.draw_line(tongue_end_x, tongue_end_y, fork_l_x, fork_l_y, [0.9, 0.1, 0.12, 0.95], 1.2);
-                    renderer.draw_line(tongue_end_x, tongue_end_y, fork_r_x, fork_r_y, [0.9, 0.1, 0.12, 0.95], 1.2);
+                    renderer.draw_line(
+                        tongue_end_x,
+                        tongue_end_y,
+                        fork_l_x,
+                        fork_l_y,
+                        [0.9, 0.1, 0.12, 0.95],
+                        1.2,
+                    );
+                    renderer.draw_line(
+                        tongue_end_x,
+                        tongue_end_y,
+                        fork_r_x,
+                        fork_r_y,
+                        [0.9, 0.1, 0.12, 0.95],
+                        1.2,
+                    );
                 }
 
                 // 3. Draw glowing cyan eyes
@@ -453,6 +468,6 @@ impl LayoutView for HatiSpinner {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-

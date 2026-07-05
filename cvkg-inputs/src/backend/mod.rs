@@ -23,13 +23,23 @@ pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
             id: id.0,
             name: format!("gamepad-{}", id.0),
         }),
-        InputEvent::GamepadDisconnected(id) => Some(cvkg_core::Event::GamepadDisconnected { id: id.0 }),
-        InputEvent::GamepadAxis { device, axis, value } => Some(cvkg_core::Event::GamepadAxis {
+        InputEvent::GamepadDisconnected(id) => {
+            Some(cvkg_core::Event::GamepadDisconnected { id: id.0 })
+        }
+        InputEvent::GamepadAxis {
+            device,
+            axis,
+            value,
+        } => Some(cvkg_core::Event::GamepadAxis {
             id: device.0,
             axis: *axis,
             value: *value,
         }),
-        InputEvent::GamepadButton { device, button, pressure } => Some(cvkg_core::Event::GamepadButton {
+        InputEvent::GamepadButton {
+            device,
+            button,
+            pressure,
+        } => Some(cvkg_core::Event::GamepadButton {
             id: device.0,
             button: *button,
             pressure: *pressure,
@@ -99,12 +109,7 @@ pub trait InputBackend: Send {
     fn poll(&mut self) -> Vec<InputEvent>;
 
     /// Sets force-feedback rumble on a device (if supported).
-    fn set_rumble(
-        &mut self,
-        device: DeviceId,
-        weak: f32,
-        strong: f32,
-    ) -> Result<(), InputError>;
+    fn set_rumble(&mut self, device: DeviceId, weak: f32, strong: f32) -> Result<(), InputError>;
 }
 
 /// Unified input event type. Converted from backend-native events.

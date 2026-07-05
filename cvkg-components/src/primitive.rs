@@ -92,8 +92,8 @@ impl View for Text {
         if let Some(shaped) = renderer.shape_rich_text(
             &[span],
             None, // Do not hard-wrap: size_that_fits uses a constant approximation that is
-                  // narrower than real shaped metrics, so passing rect.width forces each
-                  // character onto its own line (vertical text). Natural width is correct here.
+            // narrower than real shaped metrics, so passing rect.width forces each
+            // character onto its own line (vertical text). Natural width is correct here.
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         ) {
@@ -119,9 +119,9 @@ impl View for Text {
         if let Some(shaped) = renderer.shape_rich_text(
             &[span],
             None, // Natural (unwrapped) width — same rationale as Text::render.
-                  // Passing proposal.width wraps text to the container width, so
-                  // intrinsic_size returns the full panel width and centering
-                  // produces zero offset (text lands at the left edge).
+            // Passing proposal.width wraps text to the container width, so
+            // intrinsic_size returns the full panel width and centering
+            // produces zero offset (text lands at the left edge).
             runic::TextAlign::Start,
             runic::TextOverflow::Clip,
         ) {
@@ -616,11 +616,7 @@ impl View for Badge {
             // th from measure_text is unreliable; font_size is the actual rendered em-height.
             let text_y = rect.y + (height - font_size) / 2.0;
             if let Some(shaped) = shaped_opt {
-                renderer.draw_shaped_text(
-                    &shaped,
-                    rect.x + (rect.width - tw) / 2.0,
-                    text_y,
-                );
+                renderer.draw_shaped_text(&shaped, rect.x + (rect.width - tw) / 2.0, text_y);
             } else {
                 renderer.draw_text_raw(
                     &self.text,
@@ -705,9 +701,9 @@ impl LayoutView for Badge {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-
 
 /// Skeleton component for displaying loading placeholders.
 #[derive(Clone)]

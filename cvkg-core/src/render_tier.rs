@@ -136,16 +136,16 @@ impl ColorTheme {
         Self {
             primary_neon: [1.0, 0.08, 0.12, 1.1], // Calibrated intensity down from 1.8 to 1.1 for legibility
             shatter_neon: [0.95, 0.92, 0.88, 1.0], // Muted from 1.6 to 1.0
-            glass_base: [0.02, 0.01, 0.01, 0.92],  // Darker flat blood-iron background
-            glass_edge: [0.7, 0.15, 0.05, 0.55],   // Clean blood-red neon edge
-            rune_glow: [0.95, 0.35, 0.1, 0.6],     // Warm fire-rune glow
+            glass_base: [0.02, 0.01, 0.01, 0.92], // Darker flat blood-iron background
+            glass_edge: [0.7, 0.15, 0.05, 0.55],  // Clean blood-red neon edge
+            rune_glow: [0.95, 0.35, 0.1, 0.6],    // Warm fire-rune glow
             ember_core: [0.98, 0.25, 0.05, 0.8],
             background_deep: [0.005, 0.002, 0.002, 1.0], // Deeper flat black canvas
-            mani_glow: [0.8, 0.15, 0.02, 0.03],    // Smaller cursor halo
-            glass_blur_strength: 0.5,              // Reduced blur for clean contrast
+            mani_glow: [0.8, 0.15, 0.02, 0.03],          // Smaller cursor halo
+            glass_blur_strength: 0.5,                    // Reduced blur for clean contrast
             shatter_edge_width: 2.0,
-            neon_bloom_radius: 0.018,              // Reduced bloom radius from 0.035 to 0.018 for legibility
-            rune_opacity: 0.45,                    // Softened background rune glow
+            neon_bloom_radius: 0.018, // Reduced bloom radius from 0.035 to 0.018 for legibility
+            rune_opacity: 0.45,       // Softened background rune glow
             glass_tint_adapt: 0.1,
             glass_ior: 1.5,
             color_space: 0,
@@ -191,7 +191,7 @@ pub struct SceneUniforms {
     pub ibl_enabled: u32,
     pub shadow_map_size: f32,
     pub shadow_bias: f32,
-    pub _pad_shadow: [u32; 2],  // 8 bytes padding for 16-byte alignment of light_vp
+    pub _pad_shadow: [u32; 2], // 8 bytes padding for 16-byte alignment of light_vp
     pub light_vp: glam::Mat4,
     pub ambient_color: [f32; 4],
 }
@@ -258,9 +258,9 @@ impl SceneUniforms {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
 pub struct CsmUniforms {
-    pub cascade_vps: [glam::Mat4; 4],    // 256 bytes
-    pub cascade_splits: [f32; 4],         // 16 bytes
-    pub _pad: [f32; 4],                   // 16 bytes (padding for 16-byte alignment)
+    pub cascade_vps: [glam::Mat4; 4], // 256 bytes
+    pub cascade_splits: [f32; 4],     // 16 bytes
+    pub _pad: [f32; 4],               // 16 bytes (padding for 16-byte alignment)
 }
 
 impl Default for CsmUniforms {

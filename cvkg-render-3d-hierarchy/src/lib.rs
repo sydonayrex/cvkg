@@ -35,11 +35,8 @@ pub struct TransformNode3D {
 /// Panics (in debug) or produces undefined results if a parent id is not
 /// found in the index map.
 pub fn propagate_transforms(nodes: &mut [TransformNode3D]) {
-    let index_map: HashMap<NodeId, usize> = nodes
-        .iter()
-        .enumerate()
-        .map(|(i, n)| (n.id, i))
-        .collect();
+    let index_map: HashMap<NodeId, usize> =
+        nodes.iter().enumerate().map(|(i, n)| (n.id, i)).collect();
 
     for i in 0..nodes.len() {
         let local_mat = nodes[i].local.to_mat4();

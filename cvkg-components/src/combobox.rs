@@ -123,7 +123,11 @@ impl View for Combobox {
         Some(self)
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::layout::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::layout::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(220.0),
             height: 38.0,
@@ -143,42 +147,42 @@ impl View for Combobox {
             Arc::new(move |evt| {
                 if let Event::PointerClick { x, y, .. } = evt
                     && x >= rect_clone.x
-                        && x <= rect_clone.x + rect_clone.width
-                        && y >= rect_clone.y
-                        && y <= rect_clone.y + rect_clone.height
-                    {
-                        let state = load_system_state();
-                        let currently_open = state
-                            .get_component_state::<bool>(COMBO_OPEN_HASH)
+                    && x <= rect_clone.x + rect_clone.width
+                    && y >= rect_clone.y
+                    && y <= rect_clone.y + rect_clone.height
+                {
+                    let state = load_system_state();
+                    let currently_open = state
+                        .get_component_state::<bool>(COMBO_OPEN_HASH)
+                        .and_then(|v| v.read().ok().map(|g| *g))
+                        .unwrap_or(false);
+                    if currently_open {
+                        // Close and confirm current selection
+                        let sel: usize = state
+                            .get_component_state::<usize>(COMBO_SELECTED_HASH)
                             .and_then(|v| v.read().ok().map(|g| *g))
-                            .unwrap_or(false);
-                        if currently_open {
-                            // Close and confirm current selection
-                            let sel: usize = state
-                                .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                                .and_then(|v| v.read().ok().map(|g| *g))
-                                .unwrap_or(usize::MAX);
-                            let sel_option = if sel < options_click.len() {
-                                Some(sel)
-                            } else {
-                                None
-                            };
-                            update_system_state(|s| {
-                                let mut s = s.clone();
-                                s.set_component_state(COMBO_OPEN_HASH, false);
-                                s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                                s
-                            });
-                            (on_change_click)(sel_option);
+                            .unwrap_or(usize::MAX);
+                        let sel_option = if sel < options_click.len() {
+                            Some(sel)
                         } else {
-                            update_system_state(|s| {
-                                let mut s = s.clone();
-                                s.set_component_state(COMBO_OPEN_HASH, true);
-                                s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                                s
-                            });
-                        }
+                            None
+                        };
+                        update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(COMBO_OPEN_HASH, false);
+                            s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                            s
+                        });
+                        (on_change_click)(sel_option);
+                    } else {
+                        update_system_state(|s| {
+                            let mut s = s.clone();
+                            s.set_component_state(COMBO_OPEN_HASH, true);
+                            s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                            s
+                        });
                     }
+                }
             }),
         );
 
@@ -261,12 +265,7 @@ impl View for Combobox {
 
         // Dropdown background
         renderer.fill_rounded_rect(dropdown_rect, 6.0, [0.05, 0.05, 0.07, 1.0]);
-        renderer.stroke_rounded_rect(
-            dropdown_rect,
-            6.0,
-            [0.3, 0.3, 0.35, 1.0],
-            1.5,
-        );
+        renderer.stroke_rounded_rect(dropdown_rect, 6.0, [0.3, 0.3, 0.35, 1.0], 1.5);
 
         // ── Render search input ──
         let search_rect = Rect {
@@ -485,7 +484,13 @@ impl Combobox {
         renderer.stroke_rounded_rect(rect, 6.0, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         // Text
-        renderer.draw_text_raw(display_text, rect.x + 12.0, rect.y + 12.0, 14.0, [1.0, 1.0, 1.0, 1.0]);
+        renderer.draw_text_raw(
+            display_text,
+            rect.x + 12.0,
+            rect.y + 12.0,
+            14.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
 
         // Chevron indicator
         let chevron = "▾";
@@ -518,5 +523,6 @@ impl cvkg_core::layout::LayoutView for Combobox {
         _bounds: Rect,
         _subviews: &mut [&mut dyn cvkg_core::layout::LayoutView],
         _cache: &mut cvkg_core::layout::LayoutCache,
-    ) {}
+    ) {
+    }
 }

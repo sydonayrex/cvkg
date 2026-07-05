@@ -1,7 +1,9 @@
 //! Frame phase types shared across all CVKG crates.
 
 /// The ordered phases of a single CVKG render frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub enum FramePhase {
     Input,
     State,

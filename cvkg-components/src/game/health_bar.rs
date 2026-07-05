@@ -70,7 +70,7 @@ impl View for HealthBar {
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let ratio = (self.current / self.max).clamp(0.0, 1.0);
-        
+
         renderer.push_vnode(rect, "HealthBar");
         renderer.register_a11y("progressbar", self.label.as_deref().unwrap_or("Health"));
 
@@ -92,7 +92,7 @@ impl View for HealthBar {
                 width: bg_rect.width * ratio,
                 height: bg_rect.height,
             };
-            
+
             // Color based on health ratio: green → yellow → red
             let fill_color = if ratio > 0.6 {
                 // Green
@@ -104,7 +104,7 @@ impl View for HealthBar {
                 // Red
                 [0.8, 0.0, 0.0, 1.0]
             };
-            
+
             renderer.fill_rounded_rect(fill_rect, 2.0, fill_color);
         }
 

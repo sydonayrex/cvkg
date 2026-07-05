@@ -84,7 +84,7 @@ pub use queries::{
     OverlapHit, QueryFilter, RaycastHit, RaycastHit3D, ShapeCastHit, ShapeCastHit3D,
 };
 pub use ragdoll_bridge::{BoneBodyMap, RagdollBridge, RagdollBridgeConfig};
-pub use shape::{Shape, ShapeKind, ConvexHull3D, quickhull};
+pub use shape::{ConvexHull3D, Shape, ShapeKind, quickhull};
 pub use solver::ImpulseSolver;
 pub use world::{CollisionEvent, CollisionEventType, PhysicsWorld, StepResult, WorldConfig};
 
@@ -102,9 +102,7 @@ pub const MANIFEST: FrameManifest = FrameManifest {
             inputs: &[],
             outputs: &["physics_debug_buffer"],
             after: &["geometry"],
-            constructor: || -> Box<dyn cvkg_core::PassNode> {
-                Box::new(PhysicsDebugDrawPass)
-            },
+            constructor: || -> Box<dyn cvkg_core::PassNode> { Box::new(PhysicsDebugDrawPass) },
         },
         PassNodeDescriptor {
             id: "fluid_simulation",
@@ -112,19 +110,15 @@ pub const MANIFEST: FrameManifest = FrameManifest {
             inputs: &["scene_depth"],
             outputs: &["fluid_density"],
             after: &["geometry"],
-            constructor: || -> Box<dyn cvkg_core::PassNode> {
-                Box::new(FluidSimulationPass)
-            },
+            constructor: || -> Box<dyn cvkg_core::PassNode> { Box::new(FluidSimulationPass) },
         },
     ],
-    time_budget_requests: &[
-        TimeBudgetRequest {
-            phase: FramePhase::State,
-            time_slice_us: 2000,
-            skippable: true,
-            name: "physics",
-        },
-    ],
+    time_budget_requests: &[TimeBudgetRequest {
+        phase: FramePhase::State,
+        time_slice_us: 2000,
+        skippable: true,
+        name: "physics",
+    }],
 };
 
 /// Placeholder pass for physics debug draw (to be implemented)

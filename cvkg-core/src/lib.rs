@@ -39,8 +39,8 @@ pub mod error_types;
 pub mod future_views;
 pub mod security;
 
-pub use future_views::{HologramView, ParticleEmitter, StreamingText};
 pub use error_types::CvkgError;
+pub use future_views::{HologramView, ParticleEmitter, StreamingText};
 
 // P1-13: extracted modules
 pub mod asset;
@@ -56,14 +56,14 @@ pub mod window;
 pub use asset::{AssetKey, AssetState, DesignTokens, TokenValue};
 pub use dependency::{DependencyGraph, FrameBudgetTracker, InputLatencyTracker, SubsystemBudget};
 pub use error_boundary::{ComponentErrorState, ErrorBoundary};
+#[cfg(not(target_arch = "wasm32"))]
+pub use knowledge::fallback_runtime;
 pub use knowledge::{
     AnnouncementPriority, AppState, KnowledgeFragment, KnowledgeId, LAYOUT_DIRTY, MemoryLayer,
     SYSTEM_STATE, TemporalEdge, TemporalNode, UiFidelityLevel, begin_render_phase,
-    end_render_phase, get_system_state, is_rendering, load_system_state,
-    set_rendering, snapshot_system_state, update_system_state,
+    end_render_phase, get_system_state, is_rendering, load_system_state, set_rendering,
+    snapshot_system_state, update_system_state,
 };
-#[cfg(not(target_arch = "wasm32"))]
-pub use knowledge::fallback_runtime;
 pub use undo::{UndoGroup, UndoManager};
 pub use window::{Window, WindowCloseAction, WindowConfig, WindowHandle, WindowId, WindowLevel};
 
@@ -185,15 +185,15 @@ pub use layout::*;
 
 pub mod agents;
 pub mod animation;
+pub mod frame_phase;
 pub mod gpu;
 pub mod material;
 pub mod runtime;
 pub mod scene_graph;
-pub mod frame_phase;
 pub use frame_phase::FramePhase;
 pub mod frame_manifest;
-pub use frame_manifest::{FrameManifest, PassNode, PassNodeDescriptor, TimeBudgetRequest};
 pub use frame_manifest::validate_manifests;
+pub use frame_manifest::{FrameManifest, PassNode, PassNodeDescriptor, TimeBudgetRequest};
 pub mod sdf_shadow;
 pub mod shadow;
 

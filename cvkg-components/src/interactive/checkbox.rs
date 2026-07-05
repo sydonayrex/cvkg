@@ -1,5 +1,5 @@
-use crate::theme;
 use crate::form_validation::ValidationRule;
+use crate::theme;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, Size, View};
 use std::sync::Arc as StdArc;
@@ -209,13 +209,13 @@ impl View for Checkbox {
             std::sync::Arc::new(move |evt| {
                 if let cvkg_core::Event::PointerClick { x, y, .. } = evt
                     && x >= rect_clone.x
-                        && x <= rect_clone.x + rect_clone.width
-                        && y >= rect_clone.y
-                        && y <= rect_clone.y + rect_clone.height
-                    {
-                        tracing::debug!("Checkbox clicked: {:?}", lbl);
-                        (on_change)(!is_checked);
-                    }
+                    && x <= rect_clone.x + rect_clone.width
+                    && y >= rect_clone.y
+                    && y <= rect_clone.y + rect_clone.height
+                {
+                    tracing::debug!("Checkbox clicked: {:?}", lbl);
+                    (on_change)(!is_checked);
+                }
             }),
         );
 
@@ -348,7 +348,15 @@ impl<V: View> View for Tabs<V> {
                 height: tab_height,
             };
             let is_selected = idx == self.selected_index;
-            renderer.fill_rounded_rect(tab_rect, 6.0, if is_selected { theme::surface_high_contrast() } else { theme::tab_inactive_bg() });
+            renderer.fill_rounded_rect(
+                tab_rect,
+                6.0,
+                if is_selected {
+                    theme::surface_high_contrast()
+                } else {
+                    theme::tab_inactive_bg()
+                },
+            );
             if is_selected {
                 renderer.stroke_rect(tab_rect, theme::accent(), 2.0);
             }
@@ -400,9 +408,17 @@ impl LayoutView for Checkbox {
         _cache: &mut LayoutCache,
     ) -> Size {
         // We use character count logic to avoid needing renderer inside layout
-        let label_width = self.label.as_ref().map_or(0.0, |l| l.len() as f32 * 14.0 * 0.55);
+        let label_width = self
+            .label
+            .as_ref()
+            .map_or(0.0, |l| l.len() as f32 * 14.0 * 0.55);
         Size {
-            width: 18.0 + if self.label.is_some() { 8.0 + label_width } else { 0.0 },
+            width: 18.0
+                + if self.label.is_some() {
+                    8.0 + label_width
+                } else {
+                    0.0
+                },
             height: 22.0,
         }
     }
@@ -412,6 +428,6 @@ impl LayoutView for Checkbox {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-

@@ -29,7 +29,8 @@ impl ApplicationHandler for MemoryApp {
                 .unwrap(),
         );
 
-        let renderer = pollster::block_on(GpuRenderer::forge(window.clone())).expect("Failed to initialize GPU");
+        let renderer = pollster::block_on(GpuRenderer::forge(window.clone()))
+            .expect("Failed to initialize GPU");
         self.window = Some(window);
         self.renderer = Some(renderer);
 

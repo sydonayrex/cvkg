@@ -115,9 +115,12 @@ impl ActionMap {
     /// Checks if a binding matches an event.
     fn matches(binding: &Binding, event: &InputEvent) -> bool {
         match (binding, event) {
-            (Binding::Button(btn), InputEvent::GamepadButton { button, pressure, .. }) => {
-                *btn == *button && *pressure > 0.0
-            }
+            (
+                Binding::Button(btn),
+                InputEvent::GamepadButton {
+                    button, pressure, ..
+                },
+            ) => *btn == *button && *pressure > 0.0,
             (Binding::Axis(axis), InputEvent::GamepadAxis { axis: a, .. }) => axis == a,
             (
                 Binding::AxisRange(axis, min, max),

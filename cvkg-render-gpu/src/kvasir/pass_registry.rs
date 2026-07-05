@@ -103,8 +103,7 @@ impl PassRegistry {
     /// `Err(_)` if a cycle is detected or an unknown dependency is referenced.
     pub fn topo_sort(&self) -> Result<Vec<&'static str>, String> {
         let ids: Vec<&'static str> = self.passes.iter().map(|p| p.id).collect();
-        let mut indegree: HashMap<&'static str, usize> =
-            ids.iter().map(|&id| (id, 0)).collect();
+        let mut indegree: HashMap<&'static str, usize> = ids.iter().map(|&id| (id, 0)).collect();
         let mut graph: HashMap<&'static str, Vec<&'static str>> = HashMap::new();
 
         for pass in &self.passes {
@@ -196,9 +195,7 @@ mod tests {
             inputs: &[],
             outputs: &[],
             after,
-            constructor: || {
-                Box::new(DummyNode("dummy")) as DynKvasirNode
-            },
+            constructor: || Box::new(DummyNode("dummy")) as DynKvasirNode,
         }
     }
 

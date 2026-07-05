@@ -1,8 +1,8 @@
 //! Gilrs-based cross-platform gamepad backend.
 
+use crate::DeviceId;
 use crate::backend::{InputBackend, InputEvent};
 use crate::error::InputError;
-use crate::DeviceId;
 
 /// Backend using the `gilrs` crate for cross-platform gamepad support.
 ///
@@ -32,10 +32,14 @@ impl InputBackend for GilrsBackend {
         while let Some(event) = self.gilrs.next_event() {
             match event.event {
                 gilrs::EventType::Connected => {
-                    events.push(InputEvent::GamepadConnected(DeviceId(id_into_u64(event.id))));
+                    events.push(InputEvent::GamepadConnected(DeviceId(id_into_u64(
+                        event.id,
+                    ))));
                 }
                 gilrs::EventType::Disconnected => {
-                    events.push(InputEvent::GamepadDisconnected(DeviceId(id_into_u64(event.id))));
+                    events.push(InputEvent::GamepadDisconnected(DeviceId(id_into_u64(
+                        event.id,
+                    ))));
                 }
                 gilrs::EventType::AxisChanged(axis, value, _code) => {
                     let axis_index = gilrs_axis_index(axis);
@@ -60,7 +64,7 @@ impl InputBackend for GilrsBackend {
     }
 
     fn set_rumble(&mut self, device: DeviceId, weak: f32, strong: f32) -> Result<(), InputError> {
-        use gilrs::ff::{BaseEffect, BaseEffectType, EffectBuilder, Replay, Repeat};
+        use gilrs::ff::{BaseEffect, BaseEffectType, EffectBuilder, Repeat, Replay};
         use std::time::Duration;
 
         // Convert deviceId to gilrs GamepadId
@@ -100,11 +104,13 @@ impl InputBackend for GilrsBackend {
                         .repeat(Repeat::Infinitely)
                         .add_gamepad(&gamepad)
                         .finish(&mut self.gilrs)
-                        .map_err(|e| InputError::Platform(format!("rumble creation failed: {e}")))?;
+                        .map_err(|e| {
+                            InputError::Platform(format!("rumble creation failed: {e}"))
+                        })?;
 
-                    effect.play().map_err(|e| {
-                        InputError::Platform(format!("rumble play failed: {e}"))
-                    })?;
+                    effect
+                        .play()
+                        .map_err(|e| InputError::Platform(format!("rumble play failed: {e}")))?;
                 }
                 found = true;
                 break;
@@ -172,8 +178,6 @@ pub struct GilrsBackend;
 impl GilrsBackend {
     /// Fails immediately because gilrs feature is disabled.
     pub fn new() -> Result<Self, InputError> {
-        Err(InputError::BackendInit(
-            "gilrs feature not enabled".into(),
-        ))
+        Err(InputError::BackendInit("gilrs feature not enabled".into()))
     }
 }

@@ -48,7 +48,11 @@ impl MotionPreset {
     /// Get the target value for the animation (1.0 = completed, 0.0 = initial).
     pub fn target_value(&self) -> f32 {
         match self {
-            Self::FadeOut | Self::SlideDown | Self::SlideRight | Self::ScaleOut | Self::RotateOut => 0.0,
+            Self::FadeOut
+            | Self::SlideDown
+            | Self::SlideRight
+            | Self::ScaleOut
+            | Self::RotateOut => 0.0,
             _ => 1.0,
         }
     }
@@ -73,7 +77,11 @@ impl<V: Clone + cvkg_core::View> Motion<V> {
         Self {
             view,
             preset,
-            progress: if preset.target_value() == 1.0 { 0.0 } else { 1.0 },
+            progress: if preset.target_value() == 1.0 {
+                0.0
+            } else {
+                1.0
+            },
             is_active: false,
         }
     }
@@ -141,7 +149,7 @@ impl<V: cvkg_core::View> cvkg_core::View for Motion<V> {
         // Apply transform
         let center_x = rect.x + rect.width / 2.0;
         let center_y = rect.y + rect.height / 2.0;
-        
+
         let transform_rect = Rect {
             x: center_x + offset_x - rect.width * scale / 2.0,
             y: center_y + offset_y - rect.height * scale / 2.0,
@@ -151,15 +159,15 @@ impl<V: cvkg_core::View> cvkg_core::View for Motion<V> {
 
         renderer.push_vnode(transform_rect, "Motion");
         renderer.set_key(&format!("{:?}", self.preset));
-        
+
         // Push opacity
         if alpha < 1.0 {
             renderer.push_opacity(alpha);
         }
-        
+
         // Render inner view
         self.view.render(renderer, transform_rect);
-        
+
         if alpha < 1.0 {
             renderer.pop_opacity();
         }

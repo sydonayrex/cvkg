@@ -1,8 +1,8 @@
 //! Property-based tests for deadzone math and action map.
 //! Uses proptest to generate 1000s of random inputs.
 
-use proptest::prelude::*;
 use cvkg_inputs::deadzone;
+use proptest::prelude::*;
 
 // Strategy: finite f32 in [-1.0, 1.0]
 fn finite_f32() -> impl Strategy<Value = f32> {

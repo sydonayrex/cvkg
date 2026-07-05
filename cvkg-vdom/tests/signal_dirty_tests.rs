@@ -1,5 +1,5 @@
-use cvkg_vdom::signals::Signal;
 use cvkg_core::dirty_flags::DirtyFlags;
+use cvkg_vdom::signals::Signal;
 
 /// Verify Signal::set_with_flags correctly accumulates dirty flags.
 

@@ -1,4 +1,4 @@
-use cvkg_core::{View, Never};
+use cvkg_core::{Never, View};
 
 #[derive(Clone)]
 struct NoCompanions;

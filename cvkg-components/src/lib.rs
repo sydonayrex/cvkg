@@ -27,7 +27,7 @@
     clippy::large_enum_variant,
     clippy::manual_clamp,
     clippy::type_complexity,
-    clippy::doc_lazy_continuation,
+    clippy::doc_lazy_continuation
 )]
 
 //! Built-in component library for CVKG
@@ -180,7 +180,6 @@ pub enum ButtonSize {
 }
 
 // Re-export submodules
-pub mod prelude;
 pub mod advanced_forms;
 pub mod ai_workflow_builder;
 pub mod bifrost_tabs;
@@ -194,7 +193,6 @@ pub mod command_palette;
 pub mod container;
 pub mod data_grid;
 pub mod devtools;
-pub mod reflected_inspector;
 pub mod docking_workspace;
 pub mod dropdown_menu;
 pub mod effects;
@@ -219,9 +217,11 @@ pub mod niflheim_demo;
 pub mod node_graph_editor;
 pub mod oracle_orb;
 pub mod ornamental;
+pub mod prelude;
 pub mod primitive;
 pub mod radial_menu;
 pub mod raven_messenger;
+pub mod reflected_inspector;
 pub mod richtext;
 pub mod runestone_decoder;
 pub mod runestone_editor;
@@ -285,8 +285,8 @@ pub use hud::{AlertKind, GjallarAlert, TacticalGauge, Vegvísir};
 pub use idunn_persistence::*;
 pub use image::*;
 pub use interactive::{
-    BifrostColorPicker, Button, Checkbox, GeriTransfer, HringrPagination, HrungnirSegmented,
-    Input, Picker, SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
+    BifrostColorPicker, Button, Checkbox, GeriTransfer, HringrPagination, HrungnirSegmented, Input,
+    Picker, SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
 };
 pub use layer_system::*;
 pub use memory::*;
@@ -311,8 +311,9 @@ pub use valkyrie_indicator::ValkyrieIndicator;
 pub use virtual_list::*;
 pub use visual::{
     AvatarStatus, ChartType, DraumaSkeleton, EmptyState, HatiCarousel, HatiSpinner, MerkiBadge,
-    MimirsWell, MuninAvatar, ProgressVariant, RuneScript, RunicTooltip, SkollProgress, SleipnirGait, SpinnerVariant,
-    StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics, VölvaScan,
+    MimirsWell, MuninAvatar, ProgressVariant, RuneScript, RunicTooltip, SkollProgress,
+    SleipnirGait, SpinnerVariant, StatusBar, TelemetryView, UrdrTimeline, ValkyrieAnalytics,
+    VölvaScan,
 };
 pub use window::{GinnungagapWindow, HiminnModal, YggdrasilWindow};
 pub use wyrd_hud::WyrdHUD;
@@ -385,12 +386,12 @@ pub mod layout_components;
 pub mod layout_primitives;
 pub mod m3_components;
 pub mod morph;
+pub mod motion;
 pub mod multimedia;
 pub mod patterns;
+pub mod responsive;
 pub mod scheduler;
 pub mod text_anim;
-pub mod motion;
-pub mod responsive;
 pub mod tree_view;
 pub use a11y_beacon::{A11yBeacon, A11yBeaconExt};
 pub use a11y_inspector::{A11yInspector, A11yNode};
@@ -409,8 +410,8 @@ pub use direction::DirectionProvider;
 pub use drop_vault::{DropVault, VaultEntry, VaultFile, VaultStatus};
 pub use editable::Editable;
 pub use form_binder::{FormBinder, FormBinding};
-pub use form_validation::FormField;
 pub use form_validation::Form;
+pub use form_validation::FormField;
 pub use form_validation::ValidationRule;
 pub use hover_card::{HoverCard, HoverCardPosition};
 pub use input_group::InputGroup;
@@ -429,7 +430,6 @@ pub use toast::ToastManager;
 pub use toggle_group::ToggleGroup;
 
 pub use flexiscope::{ContainerLayout, FlexiScope, ScopeThreshold, fluid_typography};
-pub use responsive::{Breakpoint, Responsive};
 pub use flux_layout::FluxState;
 pub use hlin_accessibility::*;
 pub use lingua_tong::{
@@ -443,6 +443,7 @@ pub use phasegate::{GateTier, PhaseGate};
 pub use popover::*;
 pub use prompt_forge::{ForgeSegment, PromptForge};
 pub use radio_group::*;
+pub use responsive::{Breakpoint, Responsive};
 pub use sync_weave::{PeerCursor, SyncEditor, SyncWeave, WeaveOp};
 pub use text_editor::TextEditor;
 pub use toast::*;
@@ -486,7 +487,9 @@ pub use tree_view::{RichTreeView, TreeViewNode};
 
 // ── P3.3 Landing page components ──
 pub mod landing;
-pub use landing::{FeatureGrid, FeatureItem, Hero, PricingCard, PricingTable, TestimonialCard, TestimonialItem};
+pub use landing::{
+    FeatureGrid, FeatureItem, Hero, PricingCard, PricingTable, TestimonialCard, TestimonialItem,
+};
 
 // ── P4.2 Motion preset library ──
 pub use motion::{Motion, MotionPreset};

@@ -92,10 +92,22 @@ impl<V: View + 'static> Responsive<V> {
         lg: impl Fn() -> V + Send + Sync + 'static,
     ) -> Self {
         let breakpoints = vec![
-            ScopeThreshold { min_width: 0.0, mode: Breakpoint::Xs },
-            ScopeThreshold { min_width: 600.0, mode: Breakpoint::Sm },
-            ScopeThreshold { min_width: 900.0, mode: Breakpoint::Md },
-            ScopeThreshold { min_width: 1200.0, mode: Breakpoint::Lg },
+            ScopeThreshold {
+                min_width: 0.0,
+                mode: Breakpoint::Xs,
+            },
+            ScopeThreshold {
+                min_width: 600.0,
+                mode: Breakpoint::Sm,
+            },
+            ScopeThreshold {
+                min_width: 900.0,
+                mode: Breakpoint::Md,
+            },
+            ScopeThreshold {
+                min_width: 1200.0,
+                mode: Breakpoint::Lg,
+            },
         ];
         Self {
             inner: FlexiScope::new(
@@ -122,11 +134,7 @@ impl<V: View + 'static> View for Responsive<V> {
         self.inner.render(renderer, rect);
     }
 
-    fn intrinsic_size(
-        &self,
-        renderer: &mut dyn Renderer,
-        proposal: SizeProposal,
-    ) -> Size {
+    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
         self.inner.intrinsic_size(renderer, proposal)
     }
 

@@ -23,18 +23,14 @@ use cvkg_core::{FrameManifest, FramePhase, PassNodeDescriptor, TimeBudgetRequest
 /// Budget: 1ms Layout, 2ms Render.
 pub const MANIFEST: FrameManifest = FrameManifest {
     phase_contributions: &[FramePhase::Layout, FramePhase::Render],
-    pass_nodes: &[
-        PassNodeDescriptor {
-            id: "particle_trail",
-            label: "Particle Trail Render",
-            inputs: &["scene_color"],
-            outputs: &["scene_color"],
-            after: &["ui"],
-            constructor: || -> Box<dyn cvkg_core::PassNode> {
-                Box::new(ParticleTrailPass)
-            },
-        },
-    ],
+    pass_nodes: &[PassNodeDescriptor {
+        id: "particle_trail",
+        label: "Particle Trail Render",
+        inputs: &["scene_color"],
+        outputs: &["scene_color"],
+        after: &["ui"],
+        constructor: || -> Box<dyn cvkg_core::PassNode> { Box::new(ParticleTrailPass) },
+    }],
     time_budget_requests: &[
         TimeBudgetRequest {
             phase: FramePhase::Layout,

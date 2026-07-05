@@ -223,12 +223,10 @@ fn format_value(value: &serde_json::Value) -> String {
         serde_json::Value::Object(obj) => {
             // Detect common CVKG shapes: Vec2, Vec3, Color, Rect
             if obj.len() == 2 && obj.contains_key("x") && obj.contains_key("y") {
-                format!(
-                    "({}, {})",
-                    fmt_val(obj.get("x")),
-                    fmt_val(obj.get("y")),
-                )
-            } else if obj.len() == 3 && obj.contains_key("x") && obj.contains_key("y")
+                format!("({}, {})", fmt_val(obj.get("x")), fmt_val(obj.get("y")),)
+            } else if obj.len() == 3
+                && obj.contains_key("x")
+                && obj.contains_key("y")
                 && obj.contains_key("z")
             {
                 format!(

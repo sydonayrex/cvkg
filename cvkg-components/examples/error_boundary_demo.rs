@@ -90,7 +90,9 @@ impl ApplicationHandler for ErrorApp {
 
                 impl<V: View> View for PanickingView<V> {
                     type Body = cvkg_core::Never;
-                    fn body(self) -> Self::Body { unreachable!() }
+                    fn body(self) -> Self::Body {
+                        unreachable!()
+                    }
                     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
                         if self.state.get().has_error {
                             panic!("Simulated System Fault in Bifrost Link");

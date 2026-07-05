@@ -990,7 +990,7 @@ pub fn quickhull(points: &[Vec3]) -> ConvexHull3D {
         let p = vertices[i];
         let mut visible = vec![false; faces.len()];
         let mut has_visible = false;
-        
+
         for (f_idx, face) in faces.iter().enumerate() {
             let a = vertices[face[0] as usize];
             let b = vertices[face[1] as usize];
@@ -1010,11 +1010,7 @@ pub fn quickhull(points: &[Vec3]) -> ConvexHull3D {
         for (f_idx, &is_visible) in visible.iter().enumerate() {
             if is_visible {
                 let face = faces[f_idx];
-                let edges = [
-                    (face[0], face[1]),
-                    (face[1], face[2]),
-                    (face[2], face[0]),
-                ];
+                let edges = [(face[0], face[1]), (face[1], face[2]), (face[2], face[0])];
                 for &(u, v) in &edges {
                     let mut visible_count = 0;
                     let mut invisible_count = 0;

@@ -1,4 +1,4 @@
-use cvkg_core::{Companion, FocusableCompanion, A11yCompanion, FocusState, Rect, Renderer};
+use cvkg_core::{A11yCompanion, Companion, FocusState, FocusableCompanion, Rect, Renderer};
 use cvkg_vdom::VNodeRenderer;
 
 #[test]
@@ -6,8 +6,16 @@ fn test_vnoderenderer_stores_multiple_companions() {
     let mut renderer = VNodeRenderer::new();
     let rect = Rect::new(0.0, 0.0, 200.0, 50.0);
     let companions: Vec<Box<dyn Companion>> = vec![
-        Box::new(FocusableCompanion { state: FocusState::Unfocused, tab_index: 0 }),
-        Box::new(A11yCompanion { role: "button".into(), label: "Submit".into(), description: "".into(), disabled: false }),
+        Box::new(FocusableCompanion {
+            state: FocusState::Unfocused,
+            tab_index: 0,
+        }),
+        Box::new(A11yCompanion {
+            role: "button".into(),
+            label: "Submit".into(),
+            description: "".into(),
+            disabled: false,
+        }),
     ];
 
     renderer.push_vnode_with_companions(rect, "MyButton", companions);

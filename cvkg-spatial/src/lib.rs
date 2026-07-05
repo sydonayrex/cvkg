@@ -35,6 +35,6 @@ pub mod quadtree;
 pub mod spatial_hash;
 
 pub use bvh::{Bvh, BvhNode};
-pub use frustum::{Frustum};
+pub use frustum::Frustum;
 pub use quadtree::Quadtree;
 pub use spatial_hash::SpatialHash;

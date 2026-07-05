@@ -19,6 +19,21 @@ pub struct Vertex {
     pub tex_index: u32,
 }
 
+/// Vertex format for 3D mesh rendering.
+/// Matches VertexInput3D in WGSL shaders (locations 0-4, 9, 16-21).
+/// This is separate from `Vertex` to avoid layout conflicts with 2D rendering.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Vertex3D {
+    pub position: [f32; 3],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
+    pub color: [f32; 4],
+    /// Tangent vector (xyz) + handedness (w) for normal mapping.
+    /// WGSL location 9 maps to this field directly.
+    pub tangent: [f32; 4],
+}
+
 /// Per-instance data for instanced rendering.
 /// Stores transform data previously duplicated across all vertices of a path/quad.
 #[repr(C)]
@@ -129,6 +144,26 @@ impl Vertex {
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &Self::ATTRIBUTES,
+        }
+    }
+}
+
+/// Vertex buffer layout for 3D meshes.
+/// Matches VertexInput3D WGSL layout (locations 0-4, 9).
+impl Vertex3D {
+    const ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
+        0 => Float32x3, // position
+        1 => Float32x3, // normal
+        2 => Float32x2, // uv
+        3 => Float32x4, // color
+        9 => Float32x4, // tangent
+    ];
+
+    pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex3D>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTRIBUTES,
         }

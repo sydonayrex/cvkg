@@ -1,8 +1,8 @@
 //! Transparent pass KvasirNode — renders transparent 3D meshes with proper
 //! back-to-front sorting using view_depth.
 
-use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use crate::kvasir::nodes::PassId;
+use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use crate::passes::shadow::GpuMesh3d;
 
 /// Transparent 3D render pass node — renders transparent meshes with alpha blending.
@@ -68,7 +68,9 @@ impl KvasirNode for TransparentNode {
                     }
                 };
 
-                let ibl_view_owned = ctx.registry.get_texture_view(crate::kvasir::nodes::RES_BLUR_A);
+                let ibl_view_owned = ctx
+                    .registry
+                    .get_texture_view(crate::kvasir::nodes::RES_BLUR_A);
                 let ibl_view = match &ibl_view_owned {
                     Some(view) => view,
                     None => &ctx.renderer.dummy_view,

@@ -1,4 +1,13 @@
-#![allow(dead_code, clippy::approx_constant, clippy::assign_op_pattern, clippy::too_many_arguments, clippy::identity_op, clippy::needless_return, clippy::let_and_return, clippy::unnested_or_patterns)]
+#![allow(
+    dead_code,
+    clippy::approx_constant,
+    clippy::assign_op_pattern,
+    clippy::too_many_arguments,
+    clippy::identity_op,
+    clippy::needless_return,
+    clippy::let_and_return,
+    clippy::unnested_or_patterns
+)]
 
 use cvkg::prelude::*;
 use cvkg_components::context_menu::{ContextMenu, ContextMenuItem};
@@ -702,33 +711,41 @@ impl View for BerserkerFireView {
             .label("Rage")
             .show_text(true)
             .height(20.0);
-        hp_bar.render(r, cvkg_core::Rect {
-            x: 20.0,
-            y: 170.0,
-            width: 260.0,
-            height: 24.0,
-        });
+        hp_bar.render(
+            r,
+            cvkg_core::Rect {
+                x: 20.0,
+                y: 170.0,
+                width: 260.0,
+                height: 24.0,
+            },
+        );
 
         // MiniMap: top-right, shows card positions and fire center as markers
         let minimap_x = w - 140.0;
         let minimap_y = 170.0;
-        let markers: Vec<MapMarker> = s.cards.iter().enumerate().map(|(i, card)| {
-            let color = match i {
-                0 => [1.0, 0.3, 0.3, 1.0],   // red
-                1 => [0.3, 1.0, 0.3, 1.0],   // green
-                _ => [0.3, 0.3, 1.0, 1.0],   // blue
-            };
-            MapMarker::new(card.x, card.y)
-                .color(color)
-                .size(5.0)
-        }).collect();
+        let markers: Vec<MapMarker> = s
+            .cards
+            .iter()
+            .enumerate()
+            .map(|(i, card)| {
+                let color = match i {
+                    0 => [1.0, 0.3, 0.3, 1.0], // red
+                    1 => [0.3, 1.0, 0.3, 1.0], // green
+                    _ => [0.3, 0.3, 1.0, 1.0], // blue
+                };
+                MapMarker::new(card.x, card.y).color(color).size(5.0)
+            })
+            .collect();
 
         // Add flame center as a yellow marker
         let flame_markers = {
             let mut m = markers;
-            m.push(MapMarker::new(s.flame_x, s.flame_y)
-                .color([1.0, 0.8, 0.0, 1.0])
-                .size(6.0));
+            m.push(
+                MapMarker::new(s.flame_x, s.flame_y)
+                    .color([1.0, 0.8, 0.0, 1.0])
+                    .size(6.0),
+            );
             m
         };
 
@@ -736,13 +753,18 @@ impl View for BerserkerFireView {
             .player_position(w / 2.0, h / 2.0 - 100.0)
             .zoom(0.35);
         // Add each marker individually — MiniMap has no add_markers bulk method
-        let mini_map = flame_markers.into_iter().fold(mini_map, |m, marker| m.marker(marker));
-        mini_map.render(r, cvkg_core::Rect {
-            x: minimap_x,
-            y: minimap_y,
-            width: 120.0,
-            height: 120.0,
-        });
+        let mini_map = flame_markers
+            .into_iter()
+            .fold(mini_map, |m, marker| m.marker(marker));
+        mini_map.render(
+            r,
+            cvkg_core::Rect {
+                x: minimap_x,
+                y: minimap_y,
+                width: 120.0,
+                height: 120.0,
+            },
+        );
 
         // DPadControl: left side below HealthBar, direction callbacks increment counters
         let d0 = self.counters[0].clone();
@@ -753,20 +775,23 @@ impl View for BerserkerFireView {
             .button_size(34.0)
             .on_direction(move |dir| {
                 let (sig, label) = match dir {
-                    DPadDirection::Up    => (&d0, "Up"),
-                    DPadDirection::Down  => (&d1, "Down"),
-                    DPadDirection::Left  => (&d2, "Left"),
+                    DPadDirection::Up => (&d0, "Up"),
+                    DPadDirection::Down => (&d1, "Down"),
+                    DPadDirection::Left => (&d2, "Left"),
                     DPadDirection::Right => (&d3, "Right"),
                 };
                 sig.set(sig.get().wrapping_add(1));
                 log::info!("[DPad] {label}");
             });
-        dpad.render(r, cvkg_core::Rect {
-            x: 20.0,
-            y: 320.0,
-            width: 130.0,
-            height: 130.0,
-        });
+        dpad.render(
+            r,
+            cvkg_core::Rect {
+                x: 20.0,
+                y: 320.0,
+                width: 130.0,
+                height: 130.0,
+            },
+        );
 
         let t_game = t_game_start.elapsed().as_secs_f32() * 1000.0;
 

@@ -1,8 +1,7 @@
+use cvkg_core::{A11yCompanion, Companion, EmptyView, FocusableCompanion, View};
 /// Compile-time test: the expanded macro must produce a companion_states() method.
 /// This test verifies the macro expansion, not runtime behavior.
-
-use cvkg_macros::{view_component, require};
-use cvkg_core::{View, Companion, FocusableCompanion, A11yCompanion, EmptyView};
+use cvkg_macros::{require, view_component};
 
 #[view_component]
 #[require(FocusableCompanion, A11yCompanion)]

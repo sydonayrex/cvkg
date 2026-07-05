@@ -1,6 +1,6 @@
+use crate::form_validation::ValidationRule;
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD};
-use crate::form_validation::ValidationRule;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, Never, Rect, Renderer, Size, View};
 use std::sync::Arc;
@@ -169,11 +169,12 @@ impl Input {
             }
         }
         if let Some(ref validator) = self.custom_validator
-            && let Err(msg) = validator(&self.text) {
-                self.input_state = InputState::Error;
-                self.error_message = Some(msg.clone());
-                return Err(msg);
-            }
+            && let Err(msg) = validator(&self.text)
+        {
+            self.input_state = InputState::Error;
+            self.error_message = Some(msg.clone());
+            return Err(msg);
+        }
         self.input_state = InputState::Default;
         self.error_message = None;
         Ok(())
@@ -631,7 +632,6 @@ impl LayoutView for Input {
         _bounds: Rect,
         _subviews: &mut [&mut dyn LayoutView],
         _cache: &mut LayoutCache,
-    ) {}
+    ) {
+    }
 }
-
-

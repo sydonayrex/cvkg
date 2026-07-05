@@ -252,7 +252,15 @@ impl Renderer for MockRenderer {
             stroke_width,
         });
     }
-    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: TextHAlign, v_align: TextVAlign) {
+    fn draw_text(
+        &mut self,
+        text: &str,
+        rect: &Rect,
+        size: f32,
+        color: [f32; 4],
+        h_align: TextHAlign,
+        v_align: TextVAlign,
+    ) {
         self.calls.push(DrawCall::DrawText {
             text: text.to_string(),
             x: rect.x,
@@ -273,7 +281,12 @@ impl Renderer for MockRenderer {
             color,
             h_align: TextHAlign::Left,
             v_align: TextVAlign::Middle,
-            rect: Rect { x, y, width: 0.0, height: 0.0 },
+            rect: Rect {
+                x,
+                y,
+                width: 0.0,
+                height: 0.0,
+            },
         });
     }
     fn draw_text_centered(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4]) {

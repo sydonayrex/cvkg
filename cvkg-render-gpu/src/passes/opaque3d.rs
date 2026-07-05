@@ -1,8 +1,8 @@
 //! Opaque 3D render pass Kvasir node — renders 3D meshes with PBR shading
 //! and reads the shadow map from the Shadow pass.
 
-use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use crate::kvasir::nodes::PassId;
+use crate::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use crate::passes::shadow::{DirectionalLight, GpuMesh3d};
 
 /// Opaque 3D render pass node — renders 3D meshes with PBR shading and PCF shadow sampling.
@@ -72,20 +72,26 @@ impl KvasirNode for Opaque3dNode {
                 let scene_radius = 100.0;
                 let light_pos = glam::Vec3::ZERO + light_dir * scene_radius * 2.0;
                 let light_view = glam::Mat4::look_at_lh(light_pos, glam::Vec3::ZERO, glam::Vec3::Y);
-                let light_proj = glam::Mat4::orthographic_lh(-scene_radius, scene_radius, -scene_radius, scene_radius, 0.0, scene_radius * 4.0);
+                let light_proj = glam::Mat4::orthographic_lh(
+                    -scene_radius,
+                    scene_radius,
+                    -scene_radius,
+                    scene_radius,
+                    0.0,
+                    scene_radius * 4.0,
+                );
                 let light_vp = light_proj * light_view;
 
                 let mut scene = ctx.renderer.current_scene;
                 scene.light_direction = light_dir.to_array();
                 scene.light_color = self.light.color.to_array();
                 scene.light_vp = light_vp;
-                ctx.queue.write_buffer(
-                    &ctx.renderer.scene_buffer,
-                    0,
-                    bytemuck::bytes_of(&scene),
-                );
+                ctx.queue
+                    .write_buffer(&ctx.renderer.scene_buffer, 0, bytemuck::bytes_of(&scene));
 
-                let ibl_view_owned = ctx.registry.get_texture_view(crate::kvasir::nodes::RES_BLUR_A);
+                let ibl_view_owned = ctx
+                    .registry
+                    .get_texture_view(crate::kvasir::nodes::RES_BLUR_A);
                 let ibl_view = match &ibl_view_owned {
                     Some(view) => view,
                     None => &ctx.renderer.dummy_view,

@@ -15,14 +15,18 @@ pub enum CvkgError {
         suggestion: String,
     },
     /// Missing required feature flag
-    #[error("Missing feature '{feature}' in crate {crate_name}. {suggestion}. Run: cargo build -p {crate_name} --features {feature}")]
+    #[error(
+        "Missing feature '{feature}' in crate {crate_name}. {suggestion}. Run: cargo build -p {crate_name} --features {feature}"
+    )]
     MissingFeature {
         feature: String,
         crate_name: String,
         suggestion: String,
     },
     /// Invalid view composition
-    #[error("Cannot use {view_type} inside {parent_type}. {suggestion}. Check the parent-child compatibility rules.")]
+    #[error(
+        "Cannot use {view_type} inside {parent_type}. {suggestion}. Check the parent-child compatibility rules."
+    )]
     InvalidViewComposition {
         view_type: String,
         parent_type: String,
@@ -153,7 +157,10 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("[gpu]"), "should tag backend");
         assert!(msg.contains("device lost"), "should contain message");
-        assert!(msg.contains("recreate renderer"), "should contain suggestion");
+        assert!(
+            msg.contains("recreate renderer"),
+            "should contain suggestion"
+        );
     }
 
     #[test]
@@ -166,7 +173,10 @@ mod tests {
         let msg = err.to_string();
         // {node_id:?} renders as Some(43981) in thiserror (Debug is decimal)
         assert!(msg.contains("43981"), "should include node ID value");
-        assert!(msg.contains("constraint conflict"), "should contain message");
+        assert!(
+            msg.contains("constraint conflict"),
+            "should contain message"
+        );
     }
 
     #[test]
@@ -195,7 +205,10 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("button.rs"), "should contain file");
         assert!(msg.contains("42"), "should contain line");
-        assert!(msg.contains("Add feature to Cargo.toml"), "should contain help");
+        assert!(
+            msg.contains("Add feature to Cargo.toml"),
+            "should contain help"
+        );
     }
 
     #[test]

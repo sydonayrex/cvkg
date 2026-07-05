@@ -73,9 +73,21 @@ impl Frustum {
 
             // Find the positive vertex (furthest along plane normal)
             let p = Vec3::new(
-                if n.x >= 0.0 { center.x + half_extents.x } else { center.x - half_extents.x },
-                if n.y >= 0.0 { center.y + half_extents.y } else { center.y - half_extents.y },
-                if n.z >= 0.0 { center.z + half_extents.z } else { center.z - half_extents.z },
+                if n.x >= 0.0 {
+                    center.x + half_extents.x
+                } else {
+                    center.x - half_extents.x
+                },
+                if n.y >= 0.0 {
+                    center.y + half_extents.y
+                } else {
+                    center.y - half_extents.y
+                },
+                if n.z >= 0.0 {
+                    center.z + half_extents.z
+                } else {
+                    center.z - half_extents.z
+                },
             );
 
             // If positive vertex is outside (dot < 0), box is culled

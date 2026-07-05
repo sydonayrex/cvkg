@@ -6,7 +6,7 @@ pub struct Mesh {
     pub vertices: Vec<[f32; 3]>,
     pub normals: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
-    pub tex_coords: Vec<[f32; 2]>,  // ← NEW: UV channel 0
+    pub tex_coords: Vec<[f32; 2]>, // ← NEW: UV channel 0
     pub tangents: Vec<[f32; 4]>,
 }
 impl Mesh {
@@ -59,8 +59,8 @@ impl Mesh {
         Ok(meshes)
     }
     pub fn from_stl(data: &[u8]) -> anyhow::Result<Self> {
-        let stl = cvkg_stl::parse_bytes(data)
-            .map_err(|e| anyhow::anyhow!("STL parse failed: {e}"))?;
+        let stl =
+            cvkg_stl::parse_bytes(data).map_err(|e| anyhow::anyhow!("STL parse failed: {e}"))?;
         let vertex_count = stl.vertices.len();
         let mut m = Self {
             vertices: stl.vertices,
@@ -100,7 +100,7 @@ impl Mesh {
         if vertex_count == 0 {
             return Vec::new();
         }
-        
+
         let mut tan1 = vec![glam::Vec3::ZERO; vertex_count];
         let mut tan2 = vec![glam::Vec3::ZERO; vertex_count];
 
@@ -157,9 +157,13 @@ impl Mesh {
 
             // Gram-Schmidt orthogonalize
             let t_ortho = (t - n * n.dot(t)).normalize_or_zero();
-            
+
             // Handedness
-            let w = if n.cross(t).dot(tan2[i]) < 0.0 { -1.0 } else { 1.0 };
+            let w = if n.cross(t).dot(tan2[i]) < 0.0 {
+                -1.0
+            } else {
+                1.0
+            };
             tangents[i] = [t_ortho.x, t_ortho.y, t_ortho.z, w];
         }
 
@@ -310,7 +314,7 @@ impl Material3D {
 impl Mesh {
     /// Compute the convex hull of this mesh using the QuickHull algorithm.
     /// Returns a vector of hull vertex indices in counterclockwise order.
-    /// 
+    ///
     /// # Panics
     /// Panics if the mesh has fewer than 3 vertices.
     pub fn convex_hull(&self) -> Vec<usize> {
@@ -324,7 +328,7 @@ impl Mesh {
         let mut max_idx = 0;
         let mut min_val = f32::MAX;
         let mut max_val = f32::MIN;
-        
+
         for (i, v) in self.vertices.iter().enumerate() {
             let x = v[0];
             if x < min_val {
@@ -358,7 +362,7 @@ impl Mesh {
 
         // Build the hull from triangle faces
         let hull_indices: Vec<usize> = vec![min_idx, max_idx, p3_idx];
-        
+
         // For a robust implementation, we would use a proper 3D QuickHull
         // This is a simplified version that works for convex input meshes
         hull_indices

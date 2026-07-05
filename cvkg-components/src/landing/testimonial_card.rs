@@ -76,13 +76,7 @@ impl View for TestimonialCard {
             let item_y = rect.y + 20.0 + i as f32 * 80.0;
 
             // Quote mark
-            renderer.draw_text_raw(
-                "\"",
-                rect.x + 20.0,
-                item_y,
-                24.0,
-                theme::accent(),
-            );
+            renderer.draw_text_raw("\"", rect.x + 20.0, item_y, 24.0, theme::accent());
 
             // Quote text (truncated for display)
             let display_quote = if item.quote.len() > 60 {

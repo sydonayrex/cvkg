@@ -1,13 +1,19 @@
-use cvkg_core::{View, Companion, Never, erased_view::ErasedView};
+use cvkg_core::{Companion, Never, View, erased_view::ErasedView};
 use std::any::Any;
 
 #[derive(Clone, Default)]
 struct WithCompanion;
 
 impl Companion for WithCompanion {
-    fn type_name(&self) -> &'static str { "WithCompanion" }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn type_name(&self) -> &'static str {
+        "WithCompanion"
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[derive(Clone)]
@@ -15,7 +21,9 @@ struct HasCompanions;
 
 impl View for HasCompanions {
     type Body = Never;
-    fn body(self) -> Self::Body { unreachable!() }
+    fn body(self) -> Self::Body {
+        unreachable!()
+    }
 
     fn companion_states(&self) -> Vec<Box<dyn Companion>> {
         vec![Box::new(WithCompanion)]

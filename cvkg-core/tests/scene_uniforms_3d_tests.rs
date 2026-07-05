@@ -56,4 +56,3 @@ fn test_scene_uniforms_ambient_color() {
     s.ambient_color = [0.1, 0.2, 0.3, 0.5];
     assert_eq!(s.ambient_color, [0.1, 0.2, 0.3, 0.5]);
 }
-

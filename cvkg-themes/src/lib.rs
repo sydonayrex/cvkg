@@ -1135,7 +1135,10 @@ impl ThemeBuilder {
 
         // Emit typography scale as numeric pixel values
         let ty = &self.base.typography;
-        css.push_str(&format!("  --cvkg-font-large-title: {}px;\n", ty.large_title));
+        css.push_str(&format!(
+            "  --cvkg-font-large-title: {}px;\n",
+            ty.large_title
+        ));
         css.push_str(&format!("  --cvkg-font-title1: {}px;\n", ty.title1));
         css.push_str(&format!("  --cvkg-font-title2: {}px;\n", ty.title2));
         css.push_str(&format!("  --cvkg-font-title3: {}px;\n", ty.title3));

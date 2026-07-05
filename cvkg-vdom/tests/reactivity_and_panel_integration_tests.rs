@@ -1,7 +1,7 @@
 use cvkg_core::mesh::Transform3D;
-use cvkg_core::{ElapsedTime, Renderer, RendererErrorHandler, Rect};
-use cvkg_vdom::signals::{create_effect, create_signal};
+use cvkg_core::{ElapsedTime, Rect, Renderer, RendererErrorHandler};
 use cvkg_vdom::WorldSpacePanel;
+use cvkg_vdom::signals::{create_effect, create_signal};
 use std::sync::{Arc, Mutex};
 
 // ── DependencyGraph Reactivity Tests ──
@@ -62,8 +62,12 @@ impl MockPanelRenderer {
 }
 
 impl ElapsedTime for MockPanelRenderer {
-    fn elapsed_time(&self) -> f32 { 0.0 }
-    fn delta_time(&self) -> f32 { 0.0 }
+    fn elapsed_time(&self) -> f32 {
+        0.0
+    }
+    fn delta_time(&self) -> f32 {
+        0.0
+    }
 }
 
 impl RendererErrorHandler for MockPanelRenderer {}
@@ -96,7 +100,8 @@ impl Renderer for MockPanelRenderer {
     }
 
     fn fill_rect(&mut self, _rect: Rect, _color: [f32; 4]) {
-        self.draw_call_panels.push(("fill_rect".to_string(), self.current_panel_id));
+        self.draw_call_panels
+            .push(("fill_rect".to_string(), self.current_panel_id));
     }
 
     fn fill_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4]) {}
@@ -104,7 +109,8 @@ impl Renderer for MockPanelRenderer {
     fn stroke_rect(&mut self, _rect: Rect, _color: [f32; 4], _width: f32) {}
     fn stroke_rounded_rect(&mut self, _rect: Rect, _radius: f32, _color: [f32; 4], _width: f32) {}
     fn stroke_ellipse(&mut self, _rect: Rect, _color: [f32; 4], _width: f32) {}
-    fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _color: [f32; 4], _width: f32) {}
+    fn draw_line(&mut self, _x1: f32, _y1: f32, _x2: f32, _y2: f32, _color: [f32; 4], _width: f32) {
+    }
     fn memoize(&mut self, _id: u64, _data_hash: u64, render_fn: &dyn Fn(&mut dyn Renderer)) {
         render_fn(self);
     }

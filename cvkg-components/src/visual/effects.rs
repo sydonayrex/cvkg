@@ -232,7 +232,11 @@ impl<V: View> View for RunicTooltip<V> {
         Some(self)
     }
 
-    fn intrinsic_size(&self, renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         self.content.intrinsic_size(renderer, proposal)
     }
 
@@ -286,7 +290,10 @@ impl<V: View> cvkg_core::LayoutView for RunicTooltip<V> {
         if let Some(layout) = self.content.layout() {
             layout.size_that_fits(proposal, &[], cache)
         } else {
-            cvkg_core::Size { width: 0.0, height: 0.0 }
+            cvkg_core::Size {
+                width: 0.0,
+                height: 0.0,
+            }
         }
     }
 
@@ -295,5 +302,6 @@ impl<V: View> cvkg_core::LayoutView for RunicTooltip<V> {
         _bounds: cvkg_core::Rect,
         _subviews: &mut [&mut dyn cvkg_core::LayoutView],
         _cache: &mut cvkg_core::LayoutCache,
-    ) {}
+    ) {
+    }
 }

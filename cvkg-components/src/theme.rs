@@ -13,7 +13,7 @@
 //!   - "error", "warning", "success" → respective fields
 //!   - "accent_hover", "hover", "active", "disabled", etc. → derived from base
 
-use cvkg_core::{use_theme, Color};
+use cvkg_core::{Color, use_theme};
 
 #[inline]
 fn color_from_theme(key: &str) -> [f32; 4] {
@@ -46,7 +46,12 @@ fn color_from_theme(key: &str) -> [f32; 4] {
         }
         "accent_hover" => {
             let a = colors.accent;
-            Color::new((a.r * 1.2).min(1.0), (a.g * 1.2).min(1.0), (a.b * 1.2).min(1.0), a.a)
+            Color::new(
+                (a.r * 1.2).min(1.0),
+                (a.g * 1.2).min(1.0),
+                (a.b * 1.2).min(1.0),
+                a.a,
+            )
         }
         "hover" => {
             let a = colors.accent;

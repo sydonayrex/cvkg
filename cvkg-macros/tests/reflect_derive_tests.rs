@@ -30,10 +30,7 @@ fn test_get_field() {
         opacity: 0.5,
         name: "test".into(),
     };
-    assert_eq!(
-        s.get_field("enabled"),
-        Some(serde_json::Value::Bool(true))
-    );
+    assert_eq!(s.get_field("enabled"), Some(serde_json::Value::Bool(true)));
     assert!(s.get_field("nonexistent").is_none());
 }
 
@@ -68,9 +65,7 @@ fn test_set_field_string() {
         name: "old".into(),
     };
     // "name" is read_only, so this should fail
-    let err = s
-        .set_field("name", serde_json::json!("new"))
-        .unwrap_err();
+    let err = s.set_field("name", serde_json::json!("new")).unwrap_err();
     match err {
         cvkg_reflect::ReflectError::ReadOnly(n) => assert_eq!(n, "name"),
         other => panic!("expected ReadOnly, got {:?}", other),
@@ -106,9 +101,7 @@ fn test_set_field_type_mismatch() {
         .unwrap_err();
     match err {
         cvkg_reflect::ReflectError::TypeMismatch {
-            field,
-            expected,
-            ..
+            field, expected, ..
         } => {
             assert_eq!(field, "enabled");
             assert_eq!(expected, "bool");

@@ -207,6 +207,18 @@ RK4 spring-physics solver (`SleipnirSolver`, `SpringParams`), particle systems, 
 
 WGPU-based render graph. Manages multi-pass pipelines, texture atlases, vertex/index buffers, and draw-call batching. `RendererConfig` controls pipeline settings. `MaterialCompiler` produces GPU-ready material data.
 
+#### 3D Materials
+
+Supports physically-based rendering (PBR) for 3D meshes through dedicated shaders and vertex formats:
+
+- **`Vertex3D`** struct for mesh data (position, normal, uv, color, tangent)
+- **`InstanceData3D`** for per-mesh model matrices and material overrides
+- **PBR shader** (`material_pbr.wgsl`) implements Cook-Torrance BRDF with GGX NDF, Smith geometry, and Fresnel-Schlick
+- **Shadow pipeline** with cascaded shadow maps (4 cascades) and PCF 3x3 filtering
+- **Two API paths**: `render_scene_node_3d()` for VDOM integration, `submit_mesh_3d()` for direct mesh submission
+
+See: [`howto/3d-materials.md`](howto/3d-materials.md) for usage guide.
+
 Build: uses `naga` to compile WGSL shaders at build time.
 
 Feature: `pillage` (extended rendering features).

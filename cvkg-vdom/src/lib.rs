@@ -39,7 +39,8 @@ use std::collections::HashMap;
 pub use accesskit_bridge::A11yNodeEntry;
 pub use diff::VDomPatch;
 pub use vnode::{
-    AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId, VNode, WorldSpacePanel,
+    AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId, VNode,
+    WorldSpacePanel,
 };
 
 /// The root container for the Virtual DOM state.
@@ -159,7 +160,9 @@ impl VDom {
                 VDomPatch::Create(node) => tracing::debug!("ShieldWall: Create node {}", node.id.0),
                 VDomPatch::Update { id, .. } => tracing::debug!("ShieldWall: Update node {}", id.0),
                 VDomPatch::Remove(id) => tracing::debug!("ShieldWall: Remove node {}", id.0),
-                VDomPatch::Replace { id, .. } => tracing::debug!("ShieldWall: Replace node {}", id.0),
+                VDomPatch::Replace { id, .. } => {
+                    tracing::debug!("ShieldWall: Replace node {}", id.0)
+                }
                 VDomPatch::Move { id, .. } => tracing::debug!("ShieldWall: Move node {}", id.0),
                 VDomPatch::SetRoot(id) => tracing::debug!("ShieldWall: SetRoot {:?}", id),
                 VDomPatch::ClearHandlers { id } => {
@@ -618,8 +621,10 @@ impl VDom {
         target: NodeId,
         event: cvkg_core::Event,
     ) -> cvkg_core::EventResponse {
-        if matches!(event, cvkg_core::Event::PointerUp { .. } | cvkg_core::Event::PointerClick { .. })
-            && let Ok(mut capture) = self.captured_node.lock()
+        if matches!(
+            event,
+            cvkg_core::Event::PointerUp { .. } | cvkg_core::Event::PointerClick { .. }
+        ) && let Ok(mut capture) = self.captured_node.lock()
         {
             *capture = None;
         }
@@ -1285,7 +1290,7 @@ impl cvkg_core::Renderer for VNodeRenderer {
         if let Some(id) = self.stack.last() {
             if let Some(node) = self.nodes.get_mut(id) {
                 node.world_space = Some(WorldSpacePanel {
-                    transform: transform.clone(),
+                    transform: *transform,
                     glass,
                     pixels_per_unit,
                     world_size,
@@ -1480,9 +1485,10 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
         // 4. Update the stack entry (the node is still being built).
         if let Some(top) = self.stack.last_mut()
-            && *top == old_id {
-                *top = stable_id;
-            }
+            && *top == old_id
+        {
+            *top = stable_id;
+        }
 
         // 5. Update the parent's children list so the tree stays consistent.
         // During building, the parent is the second-to-last item on the stack.

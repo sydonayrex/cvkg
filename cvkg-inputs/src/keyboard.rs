@@ -1,5 +1,4 @@
 /// Keyboard state and key types.
-
 use std::collections::HashSet;
 
 /// A keyboard key identifier (string-based for flexibility).

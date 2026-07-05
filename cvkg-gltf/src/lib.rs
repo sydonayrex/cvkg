@@ -20,6 +20,4 @@ mod importer;
 mod types;
 
 pub use importer::load_gltf;
-pub use types::{
-    LoadedMesh, LoadedTexture, Node3D, Scene3D, TextureFormat,
-};
+pub use types::{LoadedMesh, LoadedTexture, Node3D, Scene3D, TextureFormat};

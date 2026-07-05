@@ -15,7 +15,11 @@ pub struct FeatureItem {
 
 impl FeatureItem {
     /// Create a new FeatureItem.
-    pub fn new(icon: impl Into<String>, title: impl Into<String>, description: impl Into<String>) -> Self {
+    pub fn new(
+        icon: impl Into<String>,
+        title: impl Into<String>,
+        description: impl Into<String>,
+    ) -> Self {
         Self {
             icon: icon.into(),
             title: title.into(),
@@ -92,23 +96,11 @@ impl View for FeatureGrid {
             renderer.stroke_rounded_rect(item_rect, 8.0, theme::border(), 1.0);
 
             // Render icon
-            renderer.draw_text_raw(
-                &item.icon,
-                x + 16.0,
-                y + 16.0,
-                20.0,
-                theme::accent(),
-            );
+            renderer.draw_text_raw(&item.icon, x + 16.0, y + 16.0, 20.0, theme::accent());
 
             // Render title (height is unused)
             let _ = renderer.measure_text(&item.title, 16.0);
-            renderer.draw_text_raw(
-                &item.title,
-                x + 16.0,
-                y + 45.0,
-                16.0,
-                theme::text(),
-            );
+            renderer.draw_text_raw(&item.title, x + 16.0, y + 45.0, 16.0, theme::text());
 
             // Render description
             renderer.draw_text_raw(

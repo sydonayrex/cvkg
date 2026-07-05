@@ -53,7 +53,10 @@ impl DPadControl {
     }
 
     /// Set the direction callback.
-    pub fn on_direction(mut self, callback: impl Fn(DPadDirection) + Send + Sync + 'static) -> Self {
+    pub fn on_direction(
+        mut self,
+        callback: impl Fn(DPadDirection) + Send + Sync + 'static,
+    ) -> Self {
         self.on_direction = Some(Arc::new(callback));
         self
     }

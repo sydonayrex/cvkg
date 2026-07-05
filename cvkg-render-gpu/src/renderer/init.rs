@@ -387,9 +387,7 @@ impl GpuRenderer {
         );
         let wgsl_shadow = format!(
             "{}{}{}",
-            WGSL_COMMON,
-            WGSL_MATERIAL_SHADOW,
-            materials_generated
+            WGSL_COMMON, WGSL_MATERIAL_SHADOW, materials_generated
         );
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -661,7 +659,11 @@ impl GpuRenderer {
         // The gradient layout expects Float { filterable: false } texture.
         let gradient_dummy_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Gradient Dummy Texture"),
-            size: wgpu::Extent3d { width: 1, height: 1, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -669,7 +671,8 @@ impl GpuRenderer {
             usage: wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let gradient_dummy_view = gradient_dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let gradient_dummy_view =
+            gradient_dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
         let gradient_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &gradient_bind_group_layout,
             entries: &[

@@ -60,15 +60,30 @@ pub fn parse<R: Read>(mut reader: R) -> Result<StlMesh, StlError> {
 
         // Parse normal (bytes 0-11)
         let nx = validate_f32(
-            f32::from_le_bytes([triangle_buf[0], triangle_buf[1], triangle_buf[2], triangle_buf[3]]),
+            f32::from_le_bytes([
+                triangle_buf[0],
+                triangle_buf[1],
+                triangle_buf[2],
+                triangle_buf[3],
+            ]),
             &format!("triangle {tri_idx} normal.x"),
         )?;
         let ny = validate_f32(
-            f32::from_le_bytes([triangle_buf[4], triangle_buf[5], triangle_buf[6], triangle_buf[7]]),
+            f32::from_le_bytes([
+                triangle_buf[4],
+                triangle_buf[5],
+                triangle_buf[6],
+                triangle_buf[7],
+            ]),
             &format!("triangle {tri_idx} normal.y"),
         )?;
         let nz = validate_f32(
-            f32::from_le_bytes([triangle_buf[8], triangle_buf[9], triangle_buf[10], triangle_buf[11]]),
+            f32::from_le_bytes([
+                triangle_buf[8],
+                triangle_buf[9],
+                triangle_buf[10],
+                triangle_buf[11],
+            ]),
             &format!("triangle {tri_idx} normal.z"),
         )?;
         let normal = [nx, ny, nz];
@@ -119,12 +134,18 @@ pub fn parse<R: Read>(mut reader: R) -> Result<StlMesh, StlError> {
 
     for (i, vertex) in raw_vertices.iter().enumerate() {
         let key = [
-            vertex[0].to_le_bytes()[0], vertex[0].to_le_bytes()[1],
-            vertex[0].to_le_bytes()[2], vertex[0].to_le_bytes()[3],
-            vertex[1].to_le_bytes()[0], vertex[1].to_le_bytes()[1],
-            vertex[1].to_le_bytes()[2], vertex[1].to_le_bytes()[3],
-            vertex[2].to_le_bytes()[0], vertex[2].to_le_bytes()[1],
-            vertex[2].to_le_bytes()[2], vertex[2].to_le_bytes()[3],
+            vertex[0].to_le_bytes()[0],
+            vertex[0].to_le_bytes()[1],
+            vertex[0].to_le_bytes()[2],
+            vertex[0].to_le_bytes()[3],
+            vertex[1].to_le_bytes()[0],
+            vertex[1].to_le_bytes()[1],
+            vertex[1].to_le_bytes()[2],
+            vertex[1].to_le_bytes()[3],
+            vertex[2].to_le_bytes()[0],
+            vertex[2].to_le_bytes()[1],
+            vertex[2].to_le_bytes()[2],
+            vertex[2].to_le_bytes()[3],
         ];
 
         let idx = match vertex_map.get(&key) {

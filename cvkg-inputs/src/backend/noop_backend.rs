@@ -1,8 +1,8 @@
 //! Noop backend for testing and headless environments.
 
+use crate::DeviceId;
 use crate::backend::{InputBackend, InputEvent};
 use crate::error::InputError;
-use crate::DeviceId;
 
 /// A backend that never produces events.
 ///

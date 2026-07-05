@@ -1,5 +1,4 @@
 /// Touch state and gesture types.
-
 use std::collections::HashMap;
 
 /// A single touch point.

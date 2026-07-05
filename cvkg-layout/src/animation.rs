@@ -256,11 +256,7 @@ mod spring_constraint_tests {
 
     #[test]
     fn test_spring_step_converges_to_target() {
-        let mut sc = SpringConstraint::new(
-            LayoutProperty::Width,
-            SpringParams::snappy(),
-            0.0,
-        );
+        let mut sc = SpringConstraint::new(LayoutProperty::Width, SpringParams::snappy(), 0.0);
         sc.set_target(100.0);
         for _ in 0..200 {
             sc.step(1.0 / 60.0);
@@ -278,11 +274,7 @@ mod spring_constraint_tests {
 
     #[test]
     fn test_spring_settles_to_target() {
-        let mut sc = SpringConstraint::new(
-            LayoutProperty::MarginLeft,
-            SpringParams::snappy(),
-            0.0,
-        );
+        let mut sc = SpringConstraint::new(LayoutProperty::MarginLeft, SpringParams::snappy(), 0.0);
         sc.set_target(16.0);
         for _ in 0..500 {
             sc.step(1.0 / 60.0);

@@ -1,7 +1,7 @@
 use super::GpuRenderer;
 use super::context_helpers::create_surface_context;
 use crate::types::{DrawCall, MAX_PARTICLES};
-use crate::vertex::{InstanceData, InstanceData3D, Vertex};
+use crate::vertex::{InstanceData, InstanceData3D, Vertex, Vertex3D};
 use cvkg_core::{Rect, Renderer};
 use std::sync::Arc;
 
@@ -994,7 +994,8 @@ impl GpuRenderer {
         for (id, panel) in &self.world_space_panels {
             let width = (panel.world_size.0 * panel.pixels_per_unit).max(1.0) as u32;
             let height = (panel.world_size.1 * panel.pixels_per_unit).max(1.0) as u32;
-            self.registry.allocate_offscreen(&self.device, *id, [width, height]);
+            self.registry
+                .allocate_offscreen(&self.device, *id, [width, height]);
         }
 
         self.current_scene.ibl_enabled = if has_glass { 1 } else { 0 };
@@ -1005,27 +1006,29 @@ impl GpuRenderer {
         );
 
         if !use_cache {
-             let render_graph = crate::kvasir::nodes::build_render_graph(
-                 &crate::kvasir::nodes::RenderGraphConfig {
-                     has_glass,
-                     has_bloom,
-                     has_accessibility,
-                     has_ibl: has_glass,
-                     has_volumetric,
-                     active_offscreens: &self.active_offscreens,
-                     portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
-                     world_space_panels: &self.world_space_panels,
-                     width,
-                     height,
-                     scale,
-                     directional_light: self.pending_directional_light,
-                     mesh_instances_3d: std::mem::take(&mut self.pending_mesh_instances_3d),
-                     transparent_meshes_3d: std::mem::take(&mut self.pending_transparent_instances_3d),
-                     cascade_splits: [8.0, 25.0, 70.0, 200.0],
-                     camera_view_proj: self.current_scene.proj * self.current_scene.view,
-                     camera_pos: glam::Vec3::from(self.current_scene.camera_pos),
-                 },
-             );
+            let render_graph = crate::kvasir::nodes::build_render_graph(
+                &crate::kvasir::nodes::RenderGraphConfig {
+                    has_glass,
+                    has_bloom,
+                    has_accessibility,
+                    has_ibl: has_glass,
+                    has_volumetric,
+                    active_offscreens: &self.active_offscreens,
+                    portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
+                    world_space_panels: &self.world_space_panels,
+                    width,
+                    height,
+                    scale,
+                    directional_light: self.pending_directional_light,
+                    mesh_instances_3d: std::mem::take(&mut self.pending_mesh_instances_3d),
+                    transparent_meshes_3d: std::mem::take(
+                        &mut self.pending_transparent_instances_3d,
+                    ),
+                    cascade_splits: [8.0, 25.0, 70.0, 200.0],
+                    camera_view_proj: self.current_scene.proj * self.current_scene.view,
+                    camera_pos: glam::Vec3::from(self.current_scene.camera_pos),
+                },
+            );
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);
             let compiled_plan = match planner.compile() {
                 Ok(plan) => plan,
@@ -1902,32 +1905,32 @@ impl GpuRenderer {
     ) {
         let model_matrix = transform.to_matrix();
 
-        let mut mesh_vertices: Vec<Vertex> = Vec::with_capacity(mesh.vertices.len());
+        // Use Vertex3D which matches the WGSL VertexInput3D layout (locations 0-4, 9)
+        // This provides position, normal, uv, color, and tangent fields directly.
+        let mut mesh_vertices: Vec<Vertex3D> = Vec::with_capacity(mesh.vertices.len());
         for (i, pos) in mesh.vertices.iter().enumerate() {
             let raw_uv = mesh.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
             let uv = [
                 raw_uv[0] * material.uv_scale[0] + material.uv_offset[0],
                 raw_uv[1] * material.uv_scale[1] + material.uv_offset[1],
             ];
-            mesh_vertices.push(Vertex {
+            mesh_vertices.push(Vertex3D {
                 position: *pos,
                 normal: mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
                 uv,
                 color: material.base_color,
-                material_id: 13,
-                radius: 0.0,
-                slice: [material.metallic, material.roughness, material.opacity, 1.0],
-                logical: [0.0, 0.0],
-                size: [0.0, 0.0],
-                clip: mesh.tangents.get(i).copied().unwrap_or([0.0, 0.0, 1.0, 1.0]),
-                tex_index: 0,
+                tangent: mesh
+                    .tangents
+                    .get(i)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 1.0, 1.0]),
             });
         }
 
         let vertex_bytes: Vec<u8> = bytemuck::cast_slice(&mesh_vertices).to_vec();
         let vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Mesh3D Vertex Buffer"),
-            size: (mesh_vertices.len() * std::mem::size_of::<Vertex>()) as u64,
+            size: (mesh_vertices.len() * std::mem::size_of::<Vertex3D>()) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1955,7 +1958,8 @@ impl GpuRenderer {
                 let world_pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
                 (glam::Vec3::from(self.current_scene.camera_pos) - world_pos).length()
             })
-            .sum::<f32>() / mesh.vertices.len().max(1) as f32;
+            .sum::<f32>()
+            / mesh.vertices.len().max(1) as f32;
 
         let row0 = model_matrix.row(0);
         let row1 = model_matrix.row(1);
@@ -1994,4 +1998,3 @@ impl GpuRenderer {
         }
     }
 }
-

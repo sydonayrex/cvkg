@@ -1,8 +1,8 @@
 //! Shadow pass Kvasir node — renders depth-only shadow map from light's perspective.
 
-use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
-use cvkg_render_gpu::kvasir::nodes::PassId;
 use crate::types::{DirectionalLight, GpuMesh3d};
+use cvkg_render_gpu::kvasir::nodes::PassId;
+use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 
 /// Shadow pass node — renders depth-only shadow map from light's perspective.
 pub struct ShadowNode {
@@ -50,14 +50,19 @@ impl KvasirNode for ShadowNode {
             "ShadowNode::execute — light_vp computed, instances={}, shadow_map={:?}, light_dir=({:.2},{:.2},{:.2})",
             self.mesh_instances.len(),
             self.shadow_map,
-            light_dir.x, light_dir.y, light_dir.z,
+            light_dir.x,
+            light_dir.y,
+            light_dir.z,
         );
 
         // Get the shadow map texture view from the resource registry.
         let shadow_view = match ctx.registry.get_texture_view(self.shadow_map) {
             Some(v) => v,
             None => {
-                tracing::error!("ShadowNode: missing shadow map texture view for {:?}", self.shadow_map);
+                tracing::error!(
+                    "ShadowNode: missing shadow map texture view for {:?}",
+                    self.shadow_map
+                );
                 return;
             }
         };

@@ -50,7 +50,17 @@ mod tests {
     #[test]
     fn mock_draw_text_centered() {
         let mut r = MockRenderer::new();
-        r.draw_text_centered("Centered", &Rect { x: 50.0, y: 50.0, width: 100.0, height: 20.0 }, 12.0, [1.0, 1.0, 1.0, 1.0]);
+        r.draw_text_centered(
+            "Centered",
+            &Rect {
+                x: 50.0,
+                y: 50.0,
+                width: 100.0,
+                height: 20.0,
+            },
+            12.0,
+            [1.0, 1.0, 1.0, 1.0],
+        );
         r.assert_draw_call_count(1);
         r.assert_text_rendered("Centered");
     }

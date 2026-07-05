@@ -80,7 +80,11 @@ impl View for BifrostTabs {
         Some(self)
     }
 
-    fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: cvkg_core::SizeProposal) -> cvkg_core::Size {
+    fn intrinsic_size(
+        &self,
+        _renderer: &mut dyn Renderer,
+        proposal: cvkg_core::SizeProposal,
+    ) -> cvkg_core::Size {
         cvkg_core::Size {
             width: proposal.width.unwrap_or(300.0),
             height: 44.0,
@@ -117,11 +121,7 @@ impl View for BifrostTabs {
         };
 
         // Draw indicator background first
-        renderer.fill_rounded_rect(
-            indicator_rect,
-            RADIUS_MD,
-            theme::surface_high_contrast(),
-        );
+        renderer.fill_rounded_rect(indicator_rect, RADIUS_MD, theme::surface_high_contrast());
 
         // 3. Tab Labels - draw BEFORE glass effect so text sits on top
         for (i, option) in self.options.iter().enumerate() {
@@ -203,12 +203,16 @@ impl View for BifrostTabs {
             "pointerdown",
             Arc::new(move |ev| {
                 if let cvkg_core::Event::PointerDown { x, y, .. } = ev
-                    && y >= rect_y && y <= rect_y + rect_h && x >= start_x && x <= start_x + (num_tabs as f32 * tab_w) {
-                        let idx = ((x - start_x) / tab_w) as usize;
-                        if idx < num_tabs {
-                            on_select(idx);
-                        }
+                    && y >= rect_y
+                    && y <= rect_y + rect_h
+                    && x >= start_x
+                    && x <= start_x + (num_tabs as f32 * tab_w)
+                {
+                    let idx = ((x - start_x) / tab_w) as usize;
+                    if idx < num_tabs {
+                        on_select(idx);
                     }
+                }
             }),
         );
 
@@ -274,5 +278,6 @@ impl cvkg_core::LayoutView for BifrostTabs {
         _bounds: cvkg_core::Rect,
         _subviews: &mut [&mut dyn cvkg_core::LayoutView],
         _cache: &mut cvkg_core::LayoutCache,
-    ) {}
+    ) {
+    }
 }

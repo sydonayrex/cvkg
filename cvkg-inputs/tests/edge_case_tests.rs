@@ -3,8 +3,8 @@
 use cvkg_inputs::backend::{InputEvent, NoopBackend};
 use cvkg_inputs::error::InputError;
 use cvkg_inputs::{
-    ActionMap, DeviceId, GamepadAxis, GamepadButton, GamepadState, InputState,
-    KeyboardState, MouseButton, MouseState, TouchPoint, TouchState,
+    ActionMap, DeviceId, GamepadAxis, GamepadButton, GamepadState, InputState, KeyboardState,
+    MouseButton, MouseState, TouchPoint, TouchState,
 };
 
 #[test]
@@ -79,8 +79,16 @@ fn test_input_state_apply_event_touch_cancel_clears_all() {
     let mut state = InputState::new();
 
     use cvkg_inputs::backend::TouchEvent;
-    state.apply_event(&InputEvent::Touch(TouchEvent::Down { id: 0, x: 10.0, y: 20.0 }));
-    state.apply_event(&InputEvent::Touch(TouchEvent::Down { id: 1, x: 30.0, y: 40.0 }));
+    state.apply_event(&InputEvent::Touch(TouchEvent::Down {
+        id: 0,
+        x: 10.0,
+        y: 20.0,
+    }));
+    state.apply_event(&InputEvent::Touch(TouchEvent::Down {
+        id: 1,
+        x: 30.0,
+        y: 40.0,
+    }));
     assert_eq!(state.touch.active_count(), 2);
 
     state.apply_event(&InputEvent::Touch(TouchEvent::Cancel));
@@ -148,7 +156,15 @@ fn test_mouse_state_default() {
 fn test_touch_state_operations() {
     let mut state = TouchState::new();
 
-    state.points.insert(0, TouchPoint { id: 0, x: 100.0, y: 200.0, pressure: 0.5 });
+    state.points.insert(
+        0,
+        TouchPoint {
+            id: 0,
+            x: 100.0,
+            y: 200.0,
+            pressure: 0.5,
+        },
+    );
     assert_eq!(state.active_count(), 1);
 
     let point = state.get(0).unwrap();

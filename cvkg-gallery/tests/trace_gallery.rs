@@ -175,7 +175,15 @@ impl Renderer for TraceRenderer {
         ));
     }
 
-    fn draw_text(&mut self, text: &str, rect: &Rect, size: f32, color: [f32; 4], h_align: cvkg_core::TextHAlign, v_align: cvkg_core::TextVAlign) {
+    fn draw_text(
+        &mut self,
+        text: &str,
+        rect: &Rect,
+        size: f32,
+        color: [f32; 4],
+        h_align: cvkg_core::TextHAlign,
+        v_align: cvkg_core::TextVAlign,
+    ) {
         self.log(format!(
             "draw_text(\"{}\" at ({:.1},{:.1}) size={:.1} color={:?}",
             text, rect.x, rect.y, size, color
@@ -412,7 +420,10 @@ fn trace_text_render_with_panel_width() {
 
     // Check for wrapping: if max_width is passed and wrapping triggers,
     // we'd see shape_rich_text called with Some(max_width)
-    let shape_calls: Vec<_> = calls.iter().filter(|c| c.contains("shape_rich_text")).collect();
+    let shape_calls: Vec<_> = calls
+        .iter()
+        .filter(|c| c.contains("shape_rich_text"))
+        .collect();
 
     // The intrinsic_size call should have passed Some(panel_width)
     // but the render call (which uses None) should not wrap

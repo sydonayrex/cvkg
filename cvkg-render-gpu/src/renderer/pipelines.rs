@@ -1,5 +1,5 @@
 use crate::types::{GpuParticle, MAX_PARTICLES, ParticleUniforms};
-use crate::vertex::{InstanceData, InstanceData3D, Vertex};
+use crate::vertex::{InstanceData, InstanceData3D, Vertex, Vertex3D};
 use crate::{WGSL_PARTICLES, WGSL_TONEMAP};
 
 pub(crate) struct CompiledPipelines {
@@ -286,7 +286,7 @@ pub(crate) fn compile_render_pipelines(
         vertex: wgpu::VertexState {
             module: &pbr_shader,
             entry_point: Some("vs_main_3d"),
-            buffers: &[Vertex::desc(), InstanceData3D::desc()],
+            buffers: &[Vertex3D::desc(), InstanceData3D::desc()],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -318,7 +318,7 @@ pub(crate) fn compile_render_pipelines(
         vertex: wgpu::VertexState {
             module: &pbr_shader,
             entry_point: Some("vs_main_3d"),
-            buffers: &[Vertex::desc(), InstanceData3D::desc()],
+            buffers: &[Vertex3D::desc(), InstanceData3D::desc()],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
@@ -356,7 +356,7 @@ pub(crate) fn compile_render_pipelines(
         vertex: wgpu::VertexState {
             module: &shadow_shader,
             entry_point: Some("vs_shadow"),
-            buffers: &[Vertex::desc(), InstanceData3D::desc()],
+            buffers: &[Vertex3D::desc(), InstanceData3D::desc()],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: None, // Depth-only pass

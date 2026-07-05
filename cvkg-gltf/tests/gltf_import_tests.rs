@@ -91,10 +91,10 @@ fn write_minimal_glb(path: &std::path::Path) {
     // glb header: magic + version + total_length
     let total_len: u32 = 12                     // header
         + 8 + json_padded.len() as u32          // JSON chunk
-        + 8 + bin_padded.len() as u32;          // BIN chunk
+        + 8 + bin_padded.len() as u32; // BIN chunk
 
     let mut glb = Vec::with_capacity(total_len as usize);
-    glb.extend_from_slice(b"glTF");             // magic
+    glb.extend_from_slice(b"glTF"); // magic
     glb.extend_from_slice(&2u32.to_le_bytes()); // version 2
     glb.extend_from_slice(&total_len.to_le_bytes());
 

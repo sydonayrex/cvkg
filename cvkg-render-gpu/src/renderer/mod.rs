@@ -1483,7 +1483,7 @@ impl GpuRenderer {
         self.current_panel_id = Some(node_id);
 
         let panel = cvkg_vdom::WorldSpacePanel {
-            transform: transform.clone(),
+            transform: *transform,
             glass,
             pixels_per_unit,
             world_size,

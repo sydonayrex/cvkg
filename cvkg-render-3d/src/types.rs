@@ -2,7 +2,7 @@
 
 use cvkg_core::KvasirId;
 use glam::Mat4;
-use wgpu::{Texture, TextureView, Sampler};
+use wgpu::{Sampler, Texture, TextureView};
 
 /// Quality preset for shadow map resolution.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

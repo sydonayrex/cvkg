@@ -2,9 +2,9 @@ use crate::agents;
 use crate::dependency::DependencyGraph;
 use crate::*;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::RwLock;
 
 /// Thread-safe reactive state with multiple storage mechanism.
 ///

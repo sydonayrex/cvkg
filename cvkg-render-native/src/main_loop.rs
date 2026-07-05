@@ -7,7 +7,7 @@ use winit::window::{Window, WindowId};
 use crate::asset_manager::NativeAssetManager;
 use crate::audio::{RodioAudioEngine, VisualHapticEngine};
 use crate::events::{convert_ime_event, convert_keyboard_event};
-use crate::renderer::{GpuFramePtrGuard, GPU_FRAME_PTR, NativeRenderer};
+use crate::renderer::{GPU_FRAME_PTR, GpuFramePtrGuard, NativeRenderer};
 use crate::window::{SafeAreaInsets, WindowManager, WindowState, WindowStateDetector};
 use cvkg_core::{
     AccessibilityPreferences, ColorTheme, FocusableId, FrameBudgetTracker, FrameRenderer,
@@ -280,23 +280,23 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     let layout_start = std::time::Instant::now();
                     let view_changed = self.view.changed();
 
-                     let bounds_changed = state.last_bounds.map_or(true, |b| b != rect);
-                     let new_vdom: Option<cvkg_vdom::VDom> = if view_changed || bounds_changed {
-                         state.last_bounds = Some(rect);
-                         let vdom_start = std::time::Instant::now();
-                         let vdom = cvkg_vdom::VDom::build(&self.view, rect);
-                         let vdom_elapsed = vdom_start.elapsed();
-                         if vdom_elapsed > std::time::Duration::from_millis(1) {
-                             tracing::warn!(
-                                 "[Native] VDom::build took {:?} ({} nodes)",
-                                 vdom_elapsed,
-                                 vdom.nodes.len()
-                             );
-                         }
-                         Some(vdom)
-                     } else {
-                         None
-                     };
+                    let bounds_changed = state.last_bounds.map_or(true, |b| b != rect);
+                    let new_vdom: Option<cvkg_vdom::VDom> = if view_changed || bounds_changed {
+                        state.last_bounds = Some(rect);
+                        let vdom_start = std::time::Instant::now();
+                        let vdom = cvkg_vdom::VDom::build(&self.view, rect);
+                        let vdom_elapsed = vdom_start.elapsed();
+                        if vdom_elapsed > std::time::Duration::from_millis(1) {
+                            tracing::warn!(
+                                "[Native] VDom::build took {:?} ({} nodes)",
+                                vdom_elapsed,
+                                vdom.nodes.len()
+                            );
+                        }
+                        Some(vdom)
+                    } else {
+                        None
+                    };
 
                     if state.needs_cursor_update {
                         if let Some(vdom) = &state.vdom {
@@ -733,7 +733,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         vdom.dispatch_event(pointer_click);
                                     }
                                 } else {
-                                    tracing::info!("[Native] Skipping PointerClick (is_dragging=true)");
+                                    tracing::info!(
+                                        "[Native] Skipping PointerClick (is_dragging=true)"
+                                    );
                                 }
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
@@ -891,7 +893,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         vdom.dispatch_event(pointer_click);
                                     }
                                 } else {
-                                    tracing::info!("[Native] Skipping PointerClick (is_dragging=true)");
+                                    tracing::info!(
+                                        "[Native] Skipping PointerClick (is_dragging=true)"
+                                    );
                                 }
                                 state.is_dragging = false;
                                 state.active_pointer_target = None;
@@ -1082,7 +1086,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                                 state.window.set_fullscreen(Some(
                                                     winit::window::Fullscreen::Borderless(None),
                                                 ));
-                                                tracing::info!("[Native] Fullscreen ON (borderless)");
+                                                tracing::info!(
+                                                    "[Native] Fullscreen ON (borderless)"
+                                                );
                                             }
                                         }
                                         state.window.request_redraw();

@@ -2,9 +2,7 @@ extern crate proc_macro;
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse::{Parse, ParseStream};
-use syn::{
-    parse_macro_input, DeriveInput, FnArg, ItemFn, ItemStruct, Pat, Token,
-};
+use syn::{DeriveInput, FnArg, ItemFn, ItemStruct, Pat, Token, parse_macro_input};
 
 /// State attribute macro -- derives common traits for state structs
 ///
@@ -165,7 +163,7 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 fn body(self) -> Self::Body {
                     // Map fields back to local variables for the body
                     #(let #field_names = self.#field_names;)*
-                    
+
                     // The user's specification requested self.node_id(), but since View doesn't have it natively
                     // without a trait update, we generate a stable ID from the type name as a fallback if needed,
                     // or assume the user has added a node_id() method. We will use a hash of the type for now.
@@ -175,15 +173,15 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         stringify!(#struct_name).hash(&mut __hasher);
                         __hasher.finish()
                     };
-                    
+
                     cvkg_vdom::signals::begin_tracking(__tracking_id);
                     let __result = cvkg_core::AnyView::new(#body);
                     let __reads = cvkg_vdom::signals::end_tracking();
-                    
+
                     for __signal_id in __reads {
                         cvkg_vdom::signals::dependency_graph().write().unwrap().register(__tracking_id, __signal_id);
                     }
-                    
+
                     __result
                 }
 
@@ -335,17 +333,17 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn merge_manifests(input: TokenStream) -> TokenStream {
     let manifests: syn::punctuated::Punctuated<syn::Expr, syn::token::Comma> = parse_macro_input!(input with syn::punctuated::Punctuated::<syn::Expr, syn::token::Comma>::parse_terminated);
     let manifests: Vec<syn::Expr> = manifests.into_iter().collect();
-    
+
     // Build the expanded macro that validates at compile time
     let mut expanded = proc_macro2::TokenStream::new();
-    
+
     // Add all the manifest expressions as statements
     for manifest in &manifests {
         expanded.extend(quote::quote! {
             #manifest;
         });
     }
-    
+
     // Add compile-time validation
     expanded.extend(quote::quote! {
         const _: () = {
@@ -359,7 +357,7 @@ pub fn merge_manifests(input: TokenStream) -> TokenStream {
             #(&#manifests),*
         ]);
     });
-    
+
     TokenStream::from(expanded)
 }
 
@@ -388,24 +386,18 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
     let fields = match &input.data {
         syn::Data::Struct(data) => &data.fields,
         _ => {
-            return syn::Error::new(
-                name.span(),
-                "Reflect can only be derived for structs",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(name.span(), "Reflect can only be derived for structs")
+                .to_compile_error()
+                .into();
         }
     };
 
     let named_fields = match fields {
         syn::Fields::Named(f) => &f.named,
         _ => {
-            return syn::Error::new(
-                name.span(),
-                "Reflect requires named fields",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(name.span(), "Reflect requires named fields")
+                .to_compile_error()
+                .into();
         }
     };
 

@@ -282,7 +282,7 @@ pub fn default_tokens() -> DesignTokens {
         "surface".to_string(),
         TokenValue::Adaptive {
             light: "#FFFFFF".to_string(),
-            dark: "#0C0C12".to_string(),  // Darker flat blood-iron surface
+            dark: "#0C0C12".to_string(), // Darker flat blood-iron surface
         },
     );
     tokens.color.insert(
@@ -311,7 +311,7 @@ pub fn default_tokens() -> DesignTokens {
         "border".to_string(),
         TokenValue::Adaptive {
             light: "#D0D0D8".to_string(),
-            dark: "#3A1A1E".to_string(),  // Subtle red-grey border
+            dark: "#3A1A1E".to_string(), // Subtle red-grey border
         },
     );
     tokens.color.insert(

@@ -9,8 +9,8 @@
 
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View, load_system_state, update_system_state};
-use tracing::info;
 use std::sync::Arc;
+use tracing::info;
 
 /// Multi-line text editor with word wrapping and vertical scrolling.
 #[derive(Clone)]

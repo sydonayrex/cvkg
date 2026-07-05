@@ -1,13 +1,17 @@
+use cvkg_core::{Companion, Rect, Renderer, testing::mock_renderer::MockRenderer};
 use std::any::Any;
-use cvkg_core::{Renderer, Companion, Rect, testing::mock_renderer::MockRenderer};
 
 struct SinkCompanion;
 impl Companion for SinkCompanion {
     fn type_name(&self) -> &'static str {
         "Sink"
     }
-    fn as_any(&self) -> &dyn Any { self }
-    fn as_any_mut(&mut self) -> &mut dyn Any { self }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[test]
