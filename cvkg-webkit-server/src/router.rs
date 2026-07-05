@@ -10,6 +10,7 @@ use axum::{
     middleware::{self, Next},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
+    http::{StatusCode, HeaderMap, Method},
 };
 use clap::Parser;
 use futures_util::StreamExt;
@@ -74,15 +75,38 @@ pub struct AppState {
     pub config: Config,
     /// HMR broadcast sender for pushing updates to clients.
     pub hmr_tx: tokio::sync::broadcast::Sender<String>,
+    /// Authentication token for gating POST requests.
+    pub auth_token: String,
+    /// Dynamically resolved JS entrypoint file name in pkg_dir.
+    pub js_entrypoint: String,
 }
 
 impl AppState {
     /// Create a new AppState instance.
     pub fn new(config: Config, hmr_tx: tokio::sync::broadcast::Sender<String>) -> Self {
+        let auth_token = std::env::var("CVKG_AUTH_TOKEN").unwrap_or_else(|_| "dev-token-default-12345".to_string());
+        
+        let js_entrypoint = if let Ok(entries) = std::fs::read_dir(&config.pkg_dir) {
+            let mut found = None;
+            for entry in entries.flatten() {
+                if let Some(name) = entry.file_name().to_str() {
+                    if name.ends_with(".js") && !name.contains("bg") {
+                        found = Some(name.to_string());
+                        break;
+                    }
+                }
+            }
+            found.unwrap_or_else(|| "berserker_fire_web_demo.js".to_string())
+        } else {
+            "berserker_fire_web_demo.js".to_string()
+        };
+
         Self {
             last_vdom_snapshot: ArcSwap::from_pointee(None),
             config,
             hmr_tx,
+            auth_token,
+            js_entrypoint,
         }
     }
 }
@@ -122,10 +146,86 @@ impl BuildOrchestrator {
     }
 }
 
+/// HTML Sanitizer to prevent XSS (H1)
+fn sanitize_html(html: &str) -> String {
+    let re_script = regex::Regex::new(r"(?i)<script[^>]*>[\s\S]*?</script>").unwrap();
+    let cleaned = re_script.replace_all(html, "");
+
+    let re_events = regex::Regex::new(r#"(?i)\s+on[a-z]+\s*=\s*"[^"]*""#).unwrap();
+    let cleaned = re_events.replace_all(&cleaned, "");
+    let re_events_single = regex::Regex::new(r#"(?i)\s+on[a-z]+\s*=\s*'[^']*'"#).unwrap();
+    let cleaned = re_events_single.replace_all(&cleaned, "");
+
+    let re_javascript = regex::Regex::new(r#"(?i)(href|src)\s*=\s*"\s*javascript:[^"]*""#).unwrap();
+    let cleaned = re_javascript.replace_all(&cleaned, "");
+    let re_javascript_single = regex::Regex::new(r#"(?i)(href|src)\s*=\s*'\s*javascript:[^']*'"#).unwrap();
+    let cleaned = re_javascript_single.replace_all(&cleaned, "");
+
+    cleaned.into_owned()
+}
+
+/// Middleware to validate path traversal sequences (M2)
+async fn path_validation_middleware(req: Request, next: Next) -> Result<Response, StatusCode> {
+    let path = req.uri().path();
+    
+    if path.contains("..") || path.contains("//") || path.contains('\\') {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    let mut decoded = String::new();
+    let mut chars = path.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let mut clone_chars = chars.clone();
+            let h1 = clone_chars.next();
+            let h2 = clone_chars.next();
+            if let (Some(h1), Some(h2)) = (h1, h2) {
+                if let Ok(hex) = u8::from_str_radix(&format!("{}{}", h1, h2), 16) {
+                    decoded.push(hex as char);
+                    chars.next();
+                    chars.next();
+                    continue;
+                }
+            }
+        }
+        decoded.push(c);
+    }
+
+    if decoded.contains("..") || decoded.contains("//") || decoded.contains('\\') {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    Ok(next.run(req).await)
+}
+
+/// Middleware to enforce authentication on POST endpoints (H1, M1)
+async fn check_auth_middleware(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    if req.method() == Method::POST {
+        if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
+            if let Ok(auth_str) = auth_header.to_str() {
+                if auth_str.starts_with("Bearer ") {
+                    let token = &auth_str[7..];
+                    if token == state.auth_token {
+                        return Ok(next.run(req).await);
+                    }
+                }
+            }
+        }
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    Ok(next.run(req).await)
+}
+
 /// Create the Axum router with all middleware and routes.
 pub fn create_router(
     state: Arc<AppState>,
-    metric_handle: metrics_exporter_prometheus::PrometheusHandle,
+    metric_handle: Option<metrics_exporter_prometheus::PrometheusHandle>,
 ) -> Router {
     let pkg_dir = state.config.pkg_dir.clone();
     let assets_dir = state.config.assets_dir.clone();
@@ -145,22 +245,20 @@ pub fn create_router(
         .route("/health/liveness", get(liveness_handler))
         .route("/health/readiness", get(readiness_handler))
         .route("/metrics", get(move || {
-            let rendered = metric_handle.render();
+            let rendered = metric_handle.as_ref().map(|h| h.render()).unwrap_or_default();
             async move { rendered }
         }))
         .route("/api/system/time", get(system_time_handler))
-        .with_state(state)
+        .with_state(state.clone())
+        .layer(middleware::from_fn_with_state(state.clone(), check_auth_middleware))
+        .layer(middleware::from_fn(path_validation_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(middleware::from_fn(metrics_middleware))
                 .layer(SetResponseHeaderLayer::overriding(
                     axum::http::header::CONTENT_SECURITY_POLICY,
-                    axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: blob:; frame-src *;"),
-                ))
-                .layer(SetResponseHeaderLayer::overriding(
-                    axum::http::header::STRICT_TRANSPORT_SECURITY,
-                    axum::http::HeaderValue::from_static("max-age=63072000; includeSubDomains; preload"),
+                    axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* wss:; frame-src 'self';"),
                 ))
                 .layer(SetResponseHeaderLayer::overriding(
                     axum::http::header::X_CONTENT_TYPE_OPTIONS,
@@ -191,8 +289,12 @@ pub fn create_router(
 
 /// Handler for capturing VDOM snapshots.
 pub async fn capture_snapshot(State(state): State<Arc<AppState>>, body: String) -> impl IntoResponse {
-    state.last_vdom_snapshot.store(Arc::new(Some(body)));
-    "Snapshot captured"
+    if body.len() > 256 * 1024 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "Snapshot payload exceeds 256KB limit").into_response();
+    }
+    let sanitized = sanitize_html(&body);
+    state.last_vdom_snapshot.store(Arc::new(Some(sanitized)));
+    "Snapshot captured".into_response()
 }
 
 /// Handler for serving the loading screen or the last snapshot.
@@ -222,6 +324,8 @@ pub async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl In
 <body>
     <div id="cvkg-root">{}</div>
     <script>
+        window.CVKG_AUTH_TOKEN = "{}";
+
         // HMR Client Protocol Integration
         (function() {{
             function connect() {{
@@ -255,21 +359,23 @@ pub async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl In
         }})();
     </script>
     <script type="module">
-        import init from '/cvkg-webkit-server/pkg/berserker_fire_web_demo.js';
+        import init from '/cvkg-webkit-server/pkg/{}';
         async function run() {{
             try {{
-                console.log("Initializing Berserker Fire Demo...");
+                console.log("Initializing Web App Demo...");
                 await init();
-                console.log("Berserker Fire Demo active.");
+                console.log("Web App Demo active.");
             }} catch (e) {{
-                console.error("Berserker Fire Demo failure:", e);
+                console.error("Web App Demo failure:", e);
             }}
         }}
         run();
     </script>
 </body>
 </html>"#,
-        snapshot
+        snapshot,
+        state.auth_token,
+        state.js_entrypoint
     ))
 }
 
@@ -314,16 +420,47 @@ pub async fn system_time_handler() -> impl IntoResponse {
 }
 
 /// WebSocket handler for CVKG protocol.
-pub async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+pub async fn ws_handler(
+    ws: WebSocketUpgrade,
+    headers: HeaderMap,
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, StatusCode> {
+    if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            let is_allowed = origin_str.starts_with("http://localhost:")
+                || origin_str.starts_with("http://127.0.0.1:")
+                || origin_str == "null"
+                || origin_str.starts_with(&format!("http://{}", state.config.addr))
+                || origin_str.starts_with(&format!("https://{}", state.config.addr));
+            
+            if !is_allowed {
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+    }
+    Ok(ws.on_upgrade(handle_socket))
 }
 
 /// WebSocket handler for HMR (Hot Module Relays).
 pub async fn hmr_ws_handler(
     ws: WebSocketUpgrade,
+    headers: HeaderMap,
     State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_hmr_socket(socket, state))
+) -> Result<impl IntoResponse, StatusCode> {
+    if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            let is_allowed = origin_str.starts_with("http://localhost:")
+                || origin_str.starts_with("http://127.0.0.1:")
+                || origin_str == "null"
+                || origin_str.starts_with(&format!("http://{}", state.config.addr))
+                || origin_str.starts_with(&format!("https://{}", state.config.addr));
+            
+            if !is_allowed {
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+    }
+    Ok(ws.on_upgrade(move |socket| handle_hmr_socket(socket, state)))
 }
 
 /// Handle runtime protocol WebSocket connections.

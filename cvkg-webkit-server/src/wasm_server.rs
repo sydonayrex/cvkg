@@ -23,6 +23,7 @@ pub struct HostState {
 pub struct NativeWasmServer {
     engine: Engine,
     session: Arc<Mutex<Option<WasmSession>>>,
+    inherit_stdio: bool,
 }
 
 impl NativeWasmServer {
@@ -36,7 +37,14 @@ impl NativeWasmServer {
         Ok(Self {
             engine,
             session: Arc::new(Mutex::new(None)),
+            inherit_stdio: false,
         })
+    }
+
+    /// Enable stdio inheritance for standard out / error (opt-in) (M6)
+    pub fn with_inherited_stdio(mut self) -> Self {
+        self.inherit_stdio = true;
+        self
     }
 
     /// Initialize or reload a WASM module into a persistent session.
@@ -63,7 +71,9 @@ impl NativeWasmServer {
 
         // Build hardened WASI context for Preview 1
         let mut wasi_builder = WasiCtxBuilder::new();
-        wasi_builder.inherit_stdout().inherit_stderr();
+        if self.inherit_stdio {
+            wasi_builder.inherit_stdout().inherit_stderr();
+        }
 
         // Hardened: Preopen only the current working directory as a safe root.
         // This prevents the WASM guest from accessing the entire host filesystem.
@@ -119,12 +129,16 @@ impl NativeWasmServer {
             self.execute_tick(&mut session)
         }));
 
-        let mut guard = self.session.lock().unwrap_or_else(|p| p.into_inner());
-        *guard = Some(session);
-
         match result {
-            Ok(r) => r,
-            Err(_) => Err(anyhow::anyhow!("WASM tick panicked")),
+            Ok(r) => {
+                let mut guard = self.session.lock().unwrap_or_else(|p| p.into_inner());
+                *guard = Some(session);
+                r
+            }
+            Err(_) => {
+                // Drop poisoned session permanently (M5)
+                Err(anyhow::anyhow!("WASM tick panicked - session dropped"))
+            }
         }
     }
 

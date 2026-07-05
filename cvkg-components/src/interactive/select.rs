@@ -99,7 +99,7 @@ impl<V: Clone> Select<V> {
     }
 }
 
-impl<V: Clone + View> View for Select<V> {
+impl<V: Clone + Send> View for Select<V> {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()

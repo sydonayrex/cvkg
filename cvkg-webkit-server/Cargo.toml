@@ -140,6 +140,9 @@ features = ["env-filter"]
 version = "0.20.0"
 features = ["derive"]
 
+[dependencies.regex]
+version = "1"
+
 [dependencies.wasmtime]
 version = "46"
 features = [

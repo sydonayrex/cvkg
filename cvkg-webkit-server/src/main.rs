@@ -17,10 +17,9 @@ async fn main() -> anyhow::Result<()> {
     // Load environment variables from .env if present.
     let _ = dotenvy::dotenv();
 
-    // Initialize structured logging.
-    tracing_subscriber::fmt()
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+        .try_init();
 
     // Parse configuration.
     let mut config = Config::parse();
@@ -75,11 +74,12 @@ async fn main() -> anyhow::Result<()> {
     // Setup Prometheus metrics without starting a separate HTTP listener.
     let metric_handle = metrics_exporter_prometheus::PrometheusBuilder::new()
         .install_recorder()
-        .expect("Failed to install prometheus recorder");
+        .ok();
 
     let (hmr_tx, _) = tokio::sync::broadcast::channel(16);
 
     let state = Arc::new(AppState::new(config.clone(), hmr_tx));
+    info!("[CVKG] Authentication token active: {}", state.auth_token);
 
     // Spawn the background file watcher task
     spawn_file_watcher(state.clone());

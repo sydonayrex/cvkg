@@ -19,11 +19,14 @@ impl ContactForm {
             email_field: FormField::new("Email", Input::new("Enter your email"))
                 .required()
                 .rule(ValidationRule::Pattern("@".to_string())),
-            country_field: FormField::new("Country", Select::new("Select a country"))
-                .required()
-                .option("USA", "usa")
-                .option("Canada", "canada")
-                .option("UK", "uk"),
+            country_field: FormField::new(
+                "Country",
+                Select::new("Select a country")
+                    .option("USA", "usa")
+                    .option("Canada", "canada")
+                    .option("UK", "uk"),
+            )
+            .required(),
             agree_field: FormField::new("", Checkbox::new(false, |_| {})).required(),
         }
     }

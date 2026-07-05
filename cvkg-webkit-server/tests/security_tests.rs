@@ -1,141 +1,193 @@
-// Security tests for cvkg-webkit-server
+// Security integration tests for cvkg-webkit-server
 // Run with: cargo test --test security_tests
 
-use std::path::PathBuf;
+use axum::{
+    body::Body,
+    http::{Request, StatusCode},
+};
+use std::sync::Arc;
+use tower::ServiceExt;
 
-/// Security: Test path validation prevents directory traversal
-#[test]
-fn test_validate_path_prevents_traversal() {
-    let _base = PathBuf::from("/safe/pkg");
-    let escape_attempt = PathBuf::from("/safe/pkg/../../../etc/passwd");
-    assert!(escape_attempt.iter().any(|p| p == ".."));
+use cvkg_webkit_server::router::{
+    AppState, Config, create_router,
+};
+
+fn setup_test_state() -> Arc<AppState> {
+    let config = Config {
+        addr: "127.0.0.1:3000".parse().unwrap(),
+        pkg_dir: "static".to_string(),
+        assets_dir: "static".to_string(),
+        static_dir: "static".to_string(),
+        rate_limit_rps: 100,
+        timeout_secs: 10,
+        max_concurrent: 10,
+    };
+    let (hmr_tx, _) = tokio::sync::broadcast::channel(16);
+    Arc::new(AppState::new(config, hmr_tx))
 }
 
-/// Security: Test subpath validation rejects traversal sequences
-#[test]
-fn test_validate_subpath_rejects_traversal_sequences() {
-    let malicious_subpaths = vec![
-        "../etc",
-        "../../secret",
-        "wgpu/../../etc",
-        "~/secret",
-        "wgpu/../webgl2/../../../etc",
+/// Security: Test path validation middleware rejects traversal sequences (M2)
+#[tokio::test]
+async fn test_path_validation_middleware_traversal() {
+    let state = setup_test_state();
+    let app = create_router(state, None);
+
+    let test_paths = vec![
+        "/cvkg-webkit-server/static/../../../etc/passwd",
+        "/cvkg-webkit-server/static/..%2f..%2fetc/passwd",
+        "/cvkg-webkit-server/static/..%252f..%252fetc/passwd",
+        "/cvkg-webkit-server/static/..\\..\\etc/passwd",
+        "/cvkg-webkit-server/static//etc/passwd",
     ];
 
-    for subpath in malicious_subpaths {
-        let contains_traversal =
-            subpath.contains("..") || subpath.contains("/") || subpath.starts_with("~");
-        assert!(
-            contains_traversal,
-            "Should be flagged as malicious: {}",
-            subpath
+    for path in test_paths {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            StatusCode::BAD_REQUEST,
+            "Path '{}' should be blocked",
+            path
         );
     }
 }
 
-/// Security: Test subpath validation accepts valid paths
-#[test]
-fn test_validate_subpath_accepts_valid_paths() {
-    let valid_subpaths = vec!["wgpu", "webgl2", "wasm", "native"];
+/// Security: Test path validation middleware accepts normal paths (M2)
+#[tokio::test]
+async fn test_path_validation_middleware_valid() {
+    let state = setup_test_state();
+    let app = create_router(state, None);
 
-    for subpath in valid_subpaths {
-        let contains_traversal =
-            subpath.contains("..") || subpath.contains("/") || subpath.starts_with("~");
-        assert!(!contains_traversal, "Should be valid: {}", subpath);
-    }
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/health/liveness")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Security: Test CORS origin parsing rejects wildcards in production
-#[test]
-fn test_cors_parsing_wildcard_security() {
-    let permissive = "*";
-    let is_permissive = permissive == "*";
-    assert!(is_permissive, "Should detect wildcard");
+/// Security: Test authentication controls gate POST endpoints (H1, M1)
+#[tokio::test]
+async fn test_auth_gating_on_post() {
+    let state = setup_test_state();
+    let token = state.auth_token.clone();
+    let app = create_router(state, None);
 
-    let safe_origins = ["http://localhost:3000"];
-    assert!(!safe_origins.contains(&"*"));
+    // 1. Unauthenticated request should fail
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/snapshot")
+                .body(Body::from("test"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // 2. Request with invalid token should fail
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/snapshot")
+                .header("Authorization", "Bearer invalid-token")
+                .body(Body::from("test"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // 3. Request with valid token should succeed
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/snapshot")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::from("<div>test</div>"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
-/// Security: Test CORS origin parsing accepts valid origins
-#[test]
-fn test_cors_parsing_valid_origins() {
-    let origins = "https://app.example.com, https://admin.example.com";
+/// Security: Test HTML snapshot sanitization removes script tags & inline events (H1)
+#[tokio::test]
+async fn test_html_sanitization() {
+    let state = setup_test_state();
+    let token = state.auth_token.clone();
+    let app = create_router(state.clone(), None);
 
-    let parsed: Vec<&str> = origins
-        .split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .collect();
+    let malicious_payload = "<div>Safe content</div><script>alert('xss')</script><img src='a.jpg' onload='alert(1)'>";
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/snapshot")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::from(malicious_payload))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    assert_eq!(
-        parsed,
-        vec!["https://app.example.com", "https://admin.example.com"]
-    );
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify stored snapshot is sanitized
+    let snapshot_guard = state.last_vdom_snapshot.load();
+    let stored = snapshot_guard.as_ref().as_ref().unwrap();
+    
+    assert!(!stored.contains("<script>"), "Should strip script tags");
+    assert!(!stored.contains("onload="), "Should strip inline event handlers");
+    assert!(stored.contains("<div>Safe content</div>"), "Should keep safe elements");
 }
 
-/// Security: Test AppError variants
-#[test]
-fn test_app_error_display() {
-    let errors = vec![
-        ("Invalid path", "Invalid path: access denied"),
-        ("Unauthorized", "Unauthorized"),
-        ("Rate limited", "Rate limit exceeded"),
-        ("Internal", "Internal error: test"),
-    ];
+/// Security: Test that HTML snapshot endpoint rejects payload > 256KB (L9)
+#[tokio::test]
+async fn test_html_snapshot_size_limit() {
+    let state = setup_test_state();
+    let token = state.auth_token.clone();
+    let app = create_router(state, None);
 
-    for (error_type, expected_msg) in errors {
-        assert!(
-            !expected_msg.is_empty(),
-            "{} should have message",
-            error_type
-        );
-    }
-}
+    // Create a payload larger than 256KB
+    let large_payload = "A".repeat(256 * 1024 + 1);
 
-/// Security: Test authentication header validation
-#[test]
-fn test_auth_header_format() {
-    let valid_header = "Bearer my-secret-key";
-    let invalid_headers = vec!["Basic my-secret-key", "my-secret-key", "Bearer", ""];
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/snapshot")
+                .header("Authorization", format!("Bearer {}", token))
+                .body(Body::from(large_payload))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    for header in invalid_headers {
-        let valid = header.starts_with("Bearer ") && header.len() > 7;
-        assert!(!valid, "Should reject: {}", header);
-    }
-
-    assert!(valid_header.starts_with("Bearer ") && valid_header.len() > 7);
-}
-
-/// Security: Test that malicious paths are detected
-#[test]
-fn test_malicious_path_detection() {
-    let test_cases = vec![
-        ("../../../etc/passwd", true),
-        ("..%2F..%2Fetc%2Fpasswd", true),
-        ("/etc/passwd", true),
-        ("normal.js", false),
-        ("pkg/wgpu/file.js", false),
-    ];
-
-    for (path, should_flag) in test_cases {
-        let flagged = path.contains("..") || path.contains("%2F") || path.starts_with("/");
-        assert_eq!(flagged, should_flag, "Path: {}", path);
-    }
-}
-
-/// Performance: Benchmark path validation speed
-#[test]
-fn test_path_validation_performance() {
-    use std::time::Instant;
-    let start = Instant::now();
-
-    for i in 0..1000 {
-        let _base = PathBuf::from("/pkg");
-        let _target = PathBuf::from(format!("/pkg/subdir/{}", i));
-        let is_valid = !format!("/pkg/subdir/{}", i).contains("..");
-        assert!(is_valid);
-    }
-
-    let elapsed = start.elapsed();
-    assert!(elapsed.as_millis() < 100, "Path validation should be fast");
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
 }
