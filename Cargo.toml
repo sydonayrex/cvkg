@@ -105,7 +105,7 @@ anyhow = "1.0"
 bytemuck = { version = "1.25", features = ["derive"] }
 glam = { version = "0.33", features = ["serde", "bytemuck"] }
 tobj = "4.0"
-bincode = "1.3"
+bincode-next = { version = "3.1.1", features = ["serde"] }
 downcast-rs = "1.7"
 # Lock-free RCU reads for top-level state (ArcSwap replaces RwLock on read-dominated paths)
 arc-swap = "1.9"

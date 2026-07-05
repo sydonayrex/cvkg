@@ -348,16 +348,17 @@ impl SceneGraph {
         layers
     }
 
-    /// Binary Serialization using bincode for sub-millisecond sync.
-    pub fn serialize_binary(&self) -> Result<Vec<u8>, bincode::Error> {
+    /// Binary Serialization using bincode-next for sub-millisecond sync.
+    pub fn serialize_binary(&self) -> Result<Vec<u8>, bincode_next::error::EncodeError> {
         // We only serialize the nodes and root to keep the payload minimal
         let data = (&self.nodes, &self.root);
-        bincode::serialize(&data)
+        bincode_next::serde::encode_to_vec(data, bincode_next::config::standard())
     }
 
     /// Deserialize a scene graph from binary data.
-    pub fn deserialize_binary(data: &[u8]) -> Result<Self, bincode::Error> {
-        let (nodes, root): (HashMap<NodeId, VNode>, Option<NodeId>) = bincode::deserialize(data)?;
+    pub fn deserialize_binary(data: &[u8]) -> Result<Self, bincode_next::error::DecodeError> {
+        let (nodes, root): (HashMap<NodeId, VNode>, Option<NodeId>) = 
+            bincode_next::serde::decode_from_slice(data, bincode_next::config::standard())?.0;
         Ok(Self {
             nodes,
             root,
