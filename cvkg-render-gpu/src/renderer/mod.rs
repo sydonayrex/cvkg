@@ -1354,7 +1354,7 @@ impl GpuRenderer {
         let width = ctx.width;
         let height = ctx.height;
         let row_bytes = width * 4;
-        let padded_row_bytes = ((row_bytes + 255) / 256) * 256;
+        let padded_row_bytes = row_bytes.div_ceil(256) * 256;
         let buffer_size = (padded_row_bytes * height) as u64;
 
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {

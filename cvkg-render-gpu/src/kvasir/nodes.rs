@@ -188,48 +188,48 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     }
 
     // 3D Shadow pass (runs before opaque 3D, outputs shadow map)
-    if let Some(light) = &config.directional_light {
-        if !config.mesh_instances_3d.is_empty() || !config.transparent_meshes_3d.is_empty() {
-            let shadow_rid = ResourceId(10000); // dedicated shadow map resource
-            let shadow_node = builder.add_node(Box::new(ShadowNode {
-                light: *light,
+    if let Some(light) = &config.directional_light
+        && (!config.mesh_instances_3d.is_empty() || !config.transparent_meshes_3d.is_empty())
+    {
+        let shadow_rid = ResourceId(10000); // dedicated shadow map resource
+        let shadow_node = builder.add_node(Box::new(ShadowNode {
+            light: *light,
+            shadow_map: shadow_rid,
+            mesh_instances: config.mesh_instances_3d.clone(),
+            cascade_splits: config.cascade_splits,
+            camera_view_proj: config.camera_view_proj,
+        }));
+        // Shadow runs before scene — scene reads the shadow map.
+
+        // 3D Opaque pass (runs after shadow, reads shadow map)
+        let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
+            mesh_instances: config.mesh_instances_3d.clone(),
+            light: *light,
+            shadow_map: shadow_rid,
+        }));
+        builder.connect(shadow_node, shadow_rid, opaque_3d_node);
+        builder.connect(opaque_3d_node, RES_SCENE, last_scene_node);
+        // Opaque 3d writes to scene — update last_scene_node to chain off it.
+        last_scene_node = opaque_3d_node;
+
+        // 3D Transparent pass (runs after opaque, reads shadow map)
+        // Transparent meshes must be sorted by view_depth (back-to-front)
+        if !config.transparent_meshes_3d.is_empty() {
+            let mut transparent_meshes = config.transparent_meshes_3d.clone();
+            // Sort by view_depth descending (farthest first for back-to-front)
+            transparent_meshes.sort_by(|a, b| {
+                b.view_depth
+                    .partial_cmp(&a.view_depth)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+
+            let transparent_node = builder.add_node(Box::new(TransparentNode {
+                mesh_instances: transparent_meshes,
                 shadow_map: shadow_rid,
-                mesh_instances: config.mesh_instances_3d.clone(),
-                cascade_splits: config.cascade_splits,
-                camera_view_proj: config.camera_view_proj,
+                camera_pos: config.camera_pos,
             }));
-            // Shadow runs before scene — scene reads the shadow map.
-
-            // 3D Opaque pass (runs after shadow, reads shadow map)
-            let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
-                mesh_instances: config.mesh_instances_3d.clone(),
-                light: *light,
-                shadow_map: shadow_rid,
-            }));
-            builder.connect(shadow_node, shadow_rid, opaque_3d_node);
-            builder.connect(opaque_3d_node, RES_SCENE, last_scene_node);
-            // Opaque 3d writes to scene — update last_scene_node to chain off it.
-            last_scene_node = opaque_3d_node;
-
-            // 3D Transparent pass (runs after opaque, reads shadow map)
-            // Transparent meshes must be sorted by view_depth (back-to-front)
-            if !config.transparent_meshes_3d.is_empty() {
-                let mut transparent_meshes = config.transparent_meshes_3d.clone();
-                // Sort by view_depth descending (farthest first for back-to-front)
-                transparent_meshes.sort_by(|a, b| {
-                    b.view_depth
-                        .partial_cmp(&a.view_depth)
-                        .unwrap_or(std::cmp::Ordering::Equal)
-                });
-
-                let transparent_node = builder.add_node(Box::new(TransparentNode {
-                    mesh_instances: transparent_meshes,
-                    shadow_map: shadow_rid,
-                    camera_pos: config.camera_pos,
-                }));
-                builder.connect(last_scene_node, RES_SCENE, transparent_node);
-                last_scene_node = transparent_node;
-            }
+            builder.connect(last_scene_node, RES_SCENE, transparent_node);
+            last_scene_node = transparent_node;
         }
     }
 

@@ -107,8 +107,8 @@ impl KvasirNode for ShadowNode {
             center /= 8.0;
 
             let mut radius = 0.0f32;
-            for j in 0..8 {
-                radius = radius.max(world_corners[j].distance(center));
+            for corner in &world_corners {
+                radius = radius.max(corner.distance(center));
             }
 
             // Snap radius to prevent shimmering
@@ -145,13 +145,10 @@ impl KvasirNode for ShadowNode {
         };
 
         // 3. Render each cascade into its array layer
-        for i in 0..4 {
+        for (i, vp) in cascade_vps.iter().enumerate() {
             // Write cascade_vps[i] into scene_buffer's light_vp field (offset 320)
-            ctx.queue.write_buffer(
-                &ctx.renderer.scene_buffer,
-                320,
-                bytemuck::bytes_of(&cascade_vps[i]),
-            );
+            ctx.queue
+                .write_buffer(&ctx.renderer.scene_buffer, 320, bytemuck::bytes_of(vp));
 
             let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Surtr CSM Shadow Pass Layer {}", i)),

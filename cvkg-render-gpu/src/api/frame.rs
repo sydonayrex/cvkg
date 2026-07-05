@@ -111,19 +111,19 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
             has_writes = true;
         }
 
-        if !self.instance_data_3d.is_empty() {
-            if let Some(ref buffer_3d) = self.instance_buffer_3d {
-                let inst_3d_bytes = bytemuck::cast_slice(&self.instance_data_3d);
-                self.staging_belt
-                    .write_buffer(
-                        &mut staging_encoder,
-                        buffer_3d,
-                        0,
-                        wgpu::BufferSize::new(inst_3d_bytes.len() as u64).unwrap(),
-                    )
-                    .copy_from_slice(inst_3d_bytes);
-                has_writes = true;
-            }
+        if !self.instance_data_3d.is_empty()
+            && let Some(ref buffer_3d) = self.instance_buffer_3d
+        {
+            let inst_3d_bytes = bytemuck::cast_slice(&self.instance_data_3d);
+            self.staging_belt
+                .write_buffer(
+                    &mut staging_encoder,
+                    buffer_3d,
+                    0,
+                    wgpu::BufferSize::new(inst_3d_bytes.len() as u64).unwrap(),
+                )
+                .copy_from_slice(inst_3d_bytes);
+            has_writes = true;
         }
 
         if has_writes {

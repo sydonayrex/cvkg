@@ -13,9 +13,9 @@ use cvkg_core::DirtyFlags;
 thread_local! {
     /// Tracks the currently executing effect to auto-subscribe it to signals.
     /// Thread-local because dependency tracking only matters for the thread executing the effect.
-    static CURRENT_EFFECT: RwLock<Option<Arc<dyn EffectRunner>>> = RwLock::new(None);
+    static CURRENT_EFFECT: RwLock<Option<Arc<dyn EffectRunner>>> = const { RwLock::new(None) };
     /// Tracks signal reads during a component render pass.
-    static COMPONENT_TRACKING: RwLock<Option<(u64, Vec<u64>)>> = RwLock::new(None);
+    static COMPONENT_TRACKING: RwLock<Option<(u64, Vec<u64>)>> = const { RwLock::new(None) };
     /// OR-ed across every set_with_flags call in this frame.
     /// Read and reset by FrameScheduler::begin_frame().
     pub static FRAME_DIRTY_FLAGS: AtomicU8 = const { AtomicU8::new(0) };

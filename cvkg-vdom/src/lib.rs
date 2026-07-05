@@ -1287,17 +1287,17 @@ impl cvkg_core::Renderer for VNodeRenderer {
         pixels_per_unit: f32,
         world_size: (f32, f32),
     ) {
-        if let Some(id) = self.stack.last() {
-            if let Some(node) = self.nodes.get_mut(id) {
-                node.world_space = Some(WorldSpacePanel {
-                    transform: *transform,
-                    glass,
-                    pixels_per_unit,
-                    world_size,
-                    spring: None,
-                    physics: None,
-                });
-            }
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id)
+        {
+            node.world_space = Some(WorldSpacePanel {
+                transform: *transform,
+                glass,
+                pixels_per_unit,
+                world_size,
+                spring: None,
+                physics: None,
+            });
         }
     }
 
