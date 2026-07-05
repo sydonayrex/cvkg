@@ -49,6 +49,7 @@ struct SceneUniforms {
     shadow_map_size: f32,
     shadow_bias:     f32,
     light_vp:        mat4x4<f32>,
+    ambient_color:   vec4<f32>,
 };
 
 // --- Group 2: Berserker Uniforms ---
@@ -115,6 +116,7 @@ struct VertexInput3D {
     @location(1) normal:   vec3<f32>,
     @location(2) uv:       vec2<f32>,
     @location(3) color:    vec4<f32>,
+    @location(9) tangent:  vec4<f32>,
     // Instance attributes (per-mesh model matrix)
     @location(16) model_row0: vec4<f32>,
     @location(17) model_row1: vec4<f32>,
@@ -169,6 +171,8 @@ fn vs_main_3d(in: VertexInput3D) -> VertexOutput {
     out.world_pos = world_pos.xy;
     out.world_pos_3d = world_pos.xyz;
     out.world_normal = normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
+    let world_tangent = normalize((model * vec4<f32>(in.tangent.xyz, 0.0)).xyz);
+    out.clip = vec4<f32>(world_tangent, in.tangent.w);
 
     // Pass material overrides through to the fragment shader via slice.
     let mo = in.material_overrides;

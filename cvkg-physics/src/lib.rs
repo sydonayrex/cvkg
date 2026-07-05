@@ -70,7 +70,7 @@ pub mod sph;
 pub mod world;
 pub mod xpbd;
 
-pub use body::{BodyId, RigidBody};
+pub use body::{BodyId, RigidBody, RigidBody3D};
 pub use broadphase::SpatialHash;
 pub use collider::Collider;
 pub use constraint::{Constraint, ConstraintKind};
@@ -84,7 +84,7 @@ pub use queries::{
     OverlapHit, QueryFilter, RaycastHit, RaycastHit3D, ShapeCastHit, ShapeCastHit3D,
 };
 pub use ragdoll_bridge::{BoneBodyMap, RagdollBridge, RagdollBridgeConfig};
-pub use shape::{Shape, ShapeKind};
+pub use shape::{Shape, ShapeKind, ConvexHull3D, quickhull};
 pub use solver::ImpulseSolver;
 pub use world::{CollisionEvent, CollisionEventType, PhysicsWorld, StepResult, WorldConfig};
 

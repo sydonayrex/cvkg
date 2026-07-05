@@ -14,3 +14,4 @@ pub mod tonemap;
 pub mod ui;
 pub mod volumetric;
 // BackdropRegionNode is defined and wired into the build_render_graph for per-element blur.
+pub mod transparent;

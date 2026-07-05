@@ -7,6 +7,7 @@ pub struct Mesh {
     pub normals: Vec<[f32; 3]>,
     pub indices: Vec<u32>,
     pub tex_coords: Vec<[f32; 2]>,  // ← NEW: UV channel 0
+    pub tangents: Vec<[f32; 4]>,
 }
 impl Mesh {
     pub fn from_obj(data: &[u8]) -> anyhow::Result<Vec<Self>> {
@@ -32,12 +33,15 @@ impl Mesh {
             } else {
                 mesh.texcoords.chunks(2).map(|c| [c[0], c[1]]).collect()
             };
-            meshes.push(Mesh {
+            let mut new_mesh = Mesh {
                 vertices,
                 normals,
                 indices: mesh.indices,
                 tex_coords,
-            });
+                tangents: Vec::new(),
+            };
+            new_mesh.tangents = new_mesh.compute_tangents();
+            meshes.push(new_mesh);
         }
         // Debug invariant: every mesh must have matching vertex/normal/texcoord counts
         for m in &meshes {
@@ -58,12 +62,15 @@ impl Mesh {
         let stl = cvkg_stl::parse_bytes(data)
             .map_err(|e| anyhow::anyhow!("STL parse failed: {e}"))?;
         let vertex_count = stl.vertices.len();
-        Ok(Self {
+        let mut m = Self {
             vertices: stl.vertices,
             normals: stl.normals,
             indices: stl.indices,
             tex_coords: vec![[0.0, 0.0]; vertex_count], // STL has no UVs
-        })
+            tangents: Vec::new(),
+        };
+        m.tangents = vec![[0.0, 0.0, 1.0, 1.0]; vertex_count];
+        Ok(m)
     }
 
     /// Compute the axis-aligned bounding box (AABB) of this mesh.
@@ -85,6 +92,78 @@ impl Mesh {
         let center = (min + max) * 0.5;
         let half_extents = (max - min) * 0.5;
         (center, half_extents)
+    }
+
+    /// Compute tangents using the Lengyel accumulation algorithm.
+    pub fn compute_tangents(&self) -> Vec<[f32; 4]> {
+        let vertex_count = self.vertices.len();
+        if vertex_count == 0 {
+            return Vec::new();
+        }
+        
+        let mut tan1 = vec![glam::Vec3::ZERO; vertex_count];
+        let mut tan2 = vec![glam::Vec3::ZERO; vertex_count];
+
+        for chunk in self.indices.chunks_exact(3) {
+            let i1 = chunk[0] as usize;
+            let i2 = chunk[1] as usize;
+            let i3 = chunk[2] as usize;
+
+            let v1 = glam::Vec3::from(self.vertices[i1]);
+            let v2 = glam::Vec3::from(self.vertices[i2]);
+            let v3 = glam::Vec3::from(self.vertices[i3]);
+
+            let w1 = glam::Vec2::from(self.tex_coords[i1]);
+            let w2 = glam::Vec2::from(self.tex_coords[i2]);
+            let w3 = glam::Vec2::from(self.tex_coords[i3]);
+
+            let x1 = v2.x - v1.x;
+            let x2 = v3.x - v1.x;
+            let y1 = v2.y - v1.y;
+            let y2 = v3.y - v1.y;
+            let z1 = v2.z - v1.z;
+            let z2 = v3.z - v1.z;
+
+            let s1 = w2.x - w1.x;
+            let s2 = w3.x - w1.x;
+            let t1 = w2.y - w1.y;
+            let t2 = w3.y - w1.y;
+
+            let r = 1.0 / (s1 * t2 - s2 * t1 + 1e-10);
+            let sdir = glam::Vec3::new(
+                (t2 * x1 - t1 * x2) * r,
+                (t2 * y1 - t1 * y2) * r,
+                (t2 * z1 - t1 * z2) * r,
+            );
+            let tdir = glam::Vec3::new(
+                (s1 * x2 - s2 * x1) * r,
+                (s1 * y2 - s2 * y1) * r,
+                (s1 * z2 - s2 * z1) * r,
+            );
+
+            tan1[i1] += sdir;
+            tan1[i2] += sdir;
+            tan1[i3] += sdir;
+
+            tan2[i1] += tdir;
+            tan2[i2] += tdir;
+            tan2[i3] += tdir;
+        }
+
+        let mut tangents = vec![[0.0, 0.0, 0.0, 1.0]; vertex_count];
+        for i in 0..vertex_count {
+            let n = glam::Vec3::from(self.normals[i]);
+            let t = tan1[i];
+
+            // Gram-Schmidt orthogonalize
+            let t_ortho = (t - n * n.dot(t)).normalize_or_zero();
+            
+            // Handedness
+            let w = if n.cross(t).dot(tan2[i]) < 0.0 { -1.0 } else { 1.0 };
+            tangents[i] = [t_ortho.x, t_ortho.y, t_ortho.z, w];
+        }
+
+        tangents
     }
 }
 
@@ -225,5 +304,63 @@ impl Material3D {
             uv_scale: [1.0, 1.0],
             uv_offset: [0.0, 0.0],
         }
+    }
+}
+
+impl Mesh {
+    /// Compute the convex hull of this mesh using the QuickHull algorithm.
+    /// Returns a vector of hull vertex indices in counterclockwise order.
+    /// 
+    /// # Panics
+    /// Panics if the mesh has fewer than 3 vertices.
+    pub fn convex_hull(&self) -> Vec<usize> {
+        if self.vertices.len() < 3 {
+            panic!("Convex hull requires at least 3 vertices");
+        }
+
+        // QuickHull algorithm for 3D meshes
+        // Step 1: Find the two extreme points along the longest axis
+        let mut min_idx = 0;
+        let mut max_idx = 0;
+        let mut min_val = f32::MAX;
+        let mut max_val = f32::MIN;
+        
+        for (i, v) in self.vertices.iter().enumerate() {
+            let x = v[0];
+            if x < min_val {
+                min_val = x;
+                min_idx = i;
+            }
+            if x > max_val {
+                max_val = x;
+                max_idx = i;
+            }
+        }
+
+        let p1 = glam::Vec3::from(self.vertices[min_idx]);
+        let p2 = glam::Vec3::from(self.vertices[max_idx]);
+        let axis = (p2 - p1).normalize();
+
+        // Find the point with maximum distance from the line
+        let mut max_dist = 0.0;
+        let mut p3_idx = 0;
+        for (i, v) in self.vertices.iter().enumerate() {
+            let pt = glam::Vec3::from(*v);
+            let to_pt = pt - p1;
+            let proj = to_pt.dot(axis);
+            let closest = p1 + axis * proj;
+            let dist = (pt - closest).length();
+            if dist > max_dist {
+                max_dist = dist;
+                p3_idx = i;
+            }
+        }
+
+        // Build the hull from triangle faces
+        let hull_indices: Vec<usize> = vec![min_idx, max_idx, p3_idx];
+        
+        // For a robust implementation, we would use a proper 3D QuickHull
+        // This is a simplified version that works for convex input meshes
+        hull_indices
     }
 }

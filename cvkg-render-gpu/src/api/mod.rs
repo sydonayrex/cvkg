@@ -1215,7 +1215,7 @@ impl cvkg_core::Renderer for GpuRenderer {
                 slice: [material.metallic, material.roughness, material.opacity, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
+                clip: mesh.tangents.get(i).copied().unwrap_or([0.0, 0.0, 1.0, 1.0]),
                 tex_index: 0,
             });
         }
@@ -1365,7 +1365,10 @@ impl cvkg_core::Renderer for GpuRenderer {
                     4, 5, 1, 4, 1, 0, // bottom
                 ],
                 tex_coords: vec![[0.0, 0.0]; 8],
+                tangents: Vec::new(),
             };
+            let mut cube = cube;
+            cube.tangents = cube.compute_tangents();
             let material = cvkg_core::Material3D {
                 base_color: color,
                 base_color_texture: None,

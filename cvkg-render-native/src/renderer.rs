@@ -4,7 +4,7 @@ use crate::main_loop::{App, AppEvent};
 use crate::window::{SafeAreaInsets, WindowManager};
 use cvkg_core::{
     ColorTheme, DrawMaterial, FrameRenderer, Mesh, Rect, RenderIntensityMode, RenderStateSnapshot,
-    Renderer, TelemetryData,
+    Renderer, TelemetryData, Material3D, Transform3D,
 };
 use std::sync::Arc;
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -241,6 +241,10 @@ impl cvkg_core::Renderer for NativeRenderer {
 
     fn end_world_space_panel(&mut self, node_id: u64) {
         self.gpu_ref().end_world_space_panel(node_id);
+    }
+
+    fn draw_mesh_3d(&mut self, mesh: &Mesh, material: &Material3D, transform: &Transform3D) {
+        self.gpu_ref().draw_mesh_3d(mesh, material, transform);
     }
 
     fn fill_rect(&mut self, rect: Rect, color: [f32; 4]) {

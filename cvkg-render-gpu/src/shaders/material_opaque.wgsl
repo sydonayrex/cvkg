@@ -212,7 +212,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let spec = pow(n_dot_h, shininess) * light_color;
         let f0 = mix(vec3<f32>(0.04), in.color.rgb, metallic);
         let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - max(dot(n, -view_dir), 0.0), 5.0);
-        let ambient = vec3<f32>(0.06, 0.07, 0.1);
+        let ambient = scene.ambient_color.rgb * scene.ambient_color.w;
         var lit_color = in.color.rgb * (ambient + diffuse);
         lit_color += spec * mix(vec3<f32>(1.0), in.color.rgb, metallic) * fresnel;
         let depth = in.clip_position.z;

@@ -8,7 +8,7 @@ The items below are ordered so that every item's prerequisites land before it.
 
 ---
 
-## Item 0 — DependencyGraph → State fan-out
+## Item 0 — DependencyGraph → State fan-out [COMPLETE]
 
 ### Current state
 
@@ -63,7 +63,7 @@ There is no `state_key` field and no `DependencyGraph` reference on `State<T>`.
 
 ---
 
-## Item 1 — Bind pipelines in Opaque3dNode and ShadowNode *(unblocks 2–10)*
+## Item 1 — Bind pipelines in Opaque3dNode and ShadowNode *(unblocks 2–10)* [COMPLETE]
 
 ### Current state
 
@@ -132,7 +132,7 @@ immediately without a new vertex entry point — that resolves Item 10's shader 
 
 ---
 
-## Item 2 — Feed mesh_instances_3d from Renderer trait
+## Item 2 — Feed mesh_instances_3d from Renderer trait [COMPLETE]
 
 ### Current state
 
@@ -206,7 +206,7 @@ scratch" is resolved — it exists and is complete.
 
 ---
 
-## Item 3 — Upgrade PBR to GGX BRDF
+## Item 3 — Upgrade PBR to GGX BRDF [COMPLETE]
 
 ### Current state
 
@@ -259,7 +259,7 @@ Any new field must maintain 16-byte alignment. The struct currently ends with
 
 ---
 
-## Item 4 — Normal map sampling in PBR shader
+## Item 4 — Normal map sampling in PBR shader [COMPLETE]
 
 ### Current state
 

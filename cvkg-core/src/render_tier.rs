@@ -193,6 +193,7 @@ pub struct SceneUniforms {
     pub shadow_bias: f32,
     pub _pad_shadow: [u32; 2],  // 8 bytes padding for 16-byte alignment of light_vp
     pub light_vp: glam::Mat4,
+    pub ambient_color: [f32; 4],
 }
 
 pub const SCENE_AURORA: u32 = 0;
@@ -247,6 +248,7 @@ impl SceneUniforms {
             shadow_bias: 0.005,
             _pad_shadow: [0, 0],
             light_vp: glam::Mat4::IDENTITY,
+            ambient_color: [0.06, 0.07, 0.1, 1.0],
         }
     }
 }

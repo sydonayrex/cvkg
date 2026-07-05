@@ -1919,7 +1919,7 @@ impl GpuRenderer {
                 slice: [material.metallic, material.roughness, material.opacity, 1.0],
                 logical: [0.0, 0.0],
                 size: [0.0, 0.0],
-                clip: [-f32::INFINITY, -f32::INFINITY, f32::INFINITY, f32::INFINITY],
+                clip: mesh.tangents.get(i).copied().unwrap_or([0.0, 0.0, 1.0, 1.0]),
                 tex_index: 0,
             });
         }

@@ -7,6 +7,32 @@
 @group(3) @binding(1) var s_shadow: sampler_comparison;
 @group(3) @binding(8) var t_ibl: texture_2d<f32>;
 @group(3) @binding(9) var s_ibl: sampler;
+@group(3) @binding(6) var t_normal: texture_2d<f32>;
+@group(3) @binding(7) var s_normal: sampler;
+
+fn ggx_ndf(n_dot_h: f32, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let denom = n_dot_h * n_dot_h * (a2 - 1.0) + 1.0;
+    return a2 / (3.1415926535 * denom * denom);
+}
+
+fn geometry_schlick_ggx(n_dot_v: f32, roughness: f32) -> f32 {
+    let r = roughness + 1.0;
+    let k = (r * r) / 8.0;
+    let denom = n_dot_v * (1.0 - k) + k;
+    return n_dot_v / denom;
+}
+
+fn geometry_smith(n_dot_v: f32, n_dot_l: f32, roughness: f32) -> f32 {
+    let ggx1 = geometry_schlick_ggx(n_dot_v, roughness);
+    let ggx2 = geometry_schlick_ggx(n_dot_l, roughness);
+    return ggx1 * ggx2;
+}
+
+fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
+    return f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - cos_theta, 5.0);
+}
 
 fn sample_shadow(cascade_idx: u32, light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
     let light_pos = light_vp * vec4<f32>(world_pos, 1.0);
@@ -53,21 +79,33 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let light_vp = csm.cascade_vps[cascade_idx];
         let shadow = sample_shadow(cascade_idx, light_vp, in.world_pos);
 
-        let n_dot_l = max(dot(n, light_dir), 0.0);
-        let diffuse = n_dot_l * light_color * shadow;
-
         let view_dir = normalize(scene.camera_pos - in.world_pos);
         let half_dir = normalize(light_dir + view_dir);
-        let n_dot_h = max(dot(n, half_dir), 0.0);
-        let shininess = mix(8.0, 256.0, 1.0 - roughness);
-        let spec = pow(n_dot_h, shininess) * light_color * shadow;
 
+        let n_dot_v = max(dot(n, view_dir), 0.0001);
+        let n_dot_l = max(dot(n, light_dir), 0.0001);
+        let n_dot_h = max(dot(n, half_dir), 0.0001);
+        let h_dot_v = max(dot(half_dir, view_dir), 0.0);
+
+        // Cook-Torrance Specular BRDF
         let f0 = mix(vec3<f32>(0.04), in.color.rgb, metallic);
-        let fresnel = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - max(dot(n, -view_dir), 0.0), 5.0);
+        let F = fresnel_schlick(h_dot_v, f0);
+        let D = ggx_ndf(n_dot_h, roughness);
+        let G = geometry_smith(n_dot_v, n_dot_l, roughness);
 
-        let ambient = vec3<f32>(0.06, 0.07, 0.1);
-        var lit_color = in.color.rgb * (ambient + diffuse);
-        lit_color += spec * mix(vec3<f32>(1.0), in.color.rgb, metallic) * fresnel;
+        let numerator = D * G * F;
+        let denominator = 4.0 * n_dot_v * n_dot_l;
+        let specular = numerator / max(denominator, 0.001);
+
+        // Diffuse (Lambert)
+        let kD = (vec3<f32>(1.0) - F) * (1.0 - metallic);
+        let diffuse = kD * in.color.rgb * n_dot_l * light_color * shadow;
+
+        let spec_term = specular * light_color * n_dot_l * shadow;
+
+        let ambient = scene.ambient_color.rgb * scene.ambient_color.w;
+        var lit_color = in.color.rgb * ambient + diffuse + spec_term;
+        let fresnel = F; // for IBL lookup compatibility
 
         if scene.ibl_enabled != 0u {
             let reflect_ws  = reflect(-view_dir, n);

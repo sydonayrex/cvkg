@@ -186,11 +186,16 @@ fn convert_primitive(
 
     Ok(LoadedMesh {
         name,
-        mesh: Mesh {
-            vertices: positions,
-            normals,
-            tex_coords,
-            indices,
+        mesh: {
+            let mut m = Mesh {
+                vertices: positions,
+                normals,
+                tex_coords,
+                indices,
+                tangents: Vec::new(),
+            };
+            m.tangents = m.compute_tangents();
+            m
         },
         material_index,
     })

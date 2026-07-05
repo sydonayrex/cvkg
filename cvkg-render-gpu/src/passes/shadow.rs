@@ -42,19 +42,6 @@ pub struct GpuMesh3d {
     pub instance_index: u32,
 }
 
-impl Default for GpuMesh3d {
-    fn default() -> Self {
-        Self {
-            vertex_buffer: unsafe { std::mem::zeroed() },
-            index_buffer: unsafe { std::mem::zeroed() },
-            index_count: 0,
-            transform: Mat4::IDENTITY,
-            view_depth: 0.0,
-            instance_index: 0,
-        }
-    }
-}
-
 /// Shadow pass node — renders depth-only shadow map from light's perspective.
 pub struct ShadowNode {
     pub light: DirectionalLight,

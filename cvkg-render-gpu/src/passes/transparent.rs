@@ -94,6 +94,14 @@ impl KvasirNode for TransparentNode {
                             binding: 9,
                             resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
                         },
+                        wgpu::BindGroupEntry {
+                            binding: 6,
+                            resource: wgpu::BindingResource::TextureView(&ctx.renderer.dummy_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 7,
+                            resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
+                        },
                     ],
                 }))
             }

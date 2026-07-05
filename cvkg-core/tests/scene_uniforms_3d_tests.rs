@@ -47,3 +47,13 @@ fn test_scene_uniforms_light_fields_writable() {
     assert_eq!(s.light_direction, [0.0, 1.0, 0.0]);
     assert_eq!(s.light_color, [1.0, 0.0, 0.0]);
 }
+
+/// Verify ambient_color defaults and writability.
+#[test]
+fn test_scene_uniforms_ambient_color() {
+    let mut s = SceneUniforms::new(800.0, 600.0);
+    assert_eq!(s.ambient_color, [0.06, 0.07, 0.1, 1.0]);
+    s.ambient_color = [0.1, 0.2, 0.3, 0.5];
+    assert_eq!(s.ambient_color, [0.1, 0.2, 0.3, 0.5]);
+}
+
