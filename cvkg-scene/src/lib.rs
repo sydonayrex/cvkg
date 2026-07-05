@@ -512,23 +512,33 @@ impl SceneGraph {
 
     /// Build a parent-ID map for 3D nodes.
     ///
-    /// Returns a `HashMap<NodeId, NodeId>` mapping each 3D node's ID to its
-    /// parent's ID. Root 3D nodes (no parent) are omitted from the map.
+    /// Returns a `HashMap<NodeId, Option<NodeId>>` mapping each 3D node's ID to its
+    /// parent's ID. Root 3D nodes (no parent) are included with `None` as the value.
     /// Builds the map in O(n) by scanning all children once.
-    pub fn parent_map_3d(&self) -> HashMap<NodeId, NodeId> {
+    pub fn parent_map_3d(&self) -> HashMap<NodeId, Option<NodeId>> {
         // Build complete parent map in a single O(n) pass.
-        let mut all_parents: HashMap<NodeId, NodeId> = HashMap::new();
-        for (parent_id, node) in &self.nodes {
-            for child_id in &node.children {
-                all_parents.insert(*child_id, *parent_id);
+        let mut all_parents: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+        
+        // Initialize all 3D nodes with None (default to root/no parent)
+        for (id, node) in &self.nodes {
+            if node.is_3d {
+                all_parents.insert(*id, None);
             }
         }
-        // Filter to 3D nodes only.
+        
+        // Populate actual parents from children lists
+        for (parent_id, node) in &self.nodes {
+            for child_id in &node.children {
+                if self.nodes.get(child_id).map_or(false, |n| n.is_3d) {
+                    all_parents.insert(*child_id, Some(*parent_id));
+                }
+            }
+        }
+        
+        // Return only 3D nodes
         all_parents
             .into_iter()
-            .filter(|(child_id, _)| {
-                self.nodes.get(child_id).map_or(false, |n| n.is_3d)
-            })
+            .filter(|(id, _)| self.nodes.get(id).map_or(false, |n| n.is_3d))
             .collect()
     }
 }
@@ -971,7 +981,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parent_map_3d_root_3d_node_omitted() {
+    fn test_parent_map_3d_root_3d_node_included() {
         let mut scene = SceneGraph::new();
         let id_root = scene.next_id();
         let mut root_3d = VNode::new(id_root, "Root3D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
@@ -980,7 +990,8 @@ mod tests {
         scene.add_node(root_3d, None);
 
         let map = scene.parent_map_3d();
-        assert!(map.is_empty(), "root 3D node should not appear in parent map");
+        assert_eq!(map.len(), 1, "root 3D node should appear in parent map with None parent");
+        assert_eq!(map.get(&id_root), Some(&None));
     }
 
     #[test]
@@ -999,8 +1010,9 @@ mod tests {
         scene.add_node(child_3d, Some(id_parent));
 
         let map = scene.parent_map_3d();
-        assert_eq!(map.len(), 1);
-        assert_eq!(map.get(&id_child), Some(&id_parent));
+        assert_eq!(map.len(), 2); // root + child
+        assert_eq!(map.get(&id_parent), Some(&None));
+        assert_eq!(map.get(&id_child), Some(&Some(id_parent)));
     }
 
     #[test]
@@ -1018,7 +1030,7 @@ mod tests {
 
         let map = scene.parent_map_3d();
         assert_eq!(map.len(), 1);
-        assert_eq!(map.get(&id_child), Some(&id_parent));
+        assert_eq!(map.get(&id_child), Some(&Some(id_parent)));
     }
 
     #[test]
@@ -1042,8 +1054,9 @@ mod tests {
         scene.add_node(child_3d, Some(id_parent));
 
         let map = scene.parent_map_3d();
-        assert_eq!(map.len(), 1);
-        assert_eq!(map.get(&id_child_3d), Some(&id_parent));
+        assert_eq!(map.len(), 2); // parent + 3d child
+        assert_eq!(map.get(&id_parent), Some(&None));
+        assert_eq!(map.get(&id_child_3d), Some(&Some(id_parent)));
         assert!(!map.contains_key(&id_child_2d));
     }
 }
