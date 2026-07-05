@@ -100,7 +100,39 @@ def topological_sort(crates):
         
     return order
 
-def strip_private_deps(cargo_path, private_crates):
+def relax_dev_dep_versions(cargo_path, workspace_packages):
+    """Relax workspace dev-dependencies to >=0.3.1 instead of exact versions."""
+    with open(cargo_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    backup_path = cargo_path + ".bak"
+    with open(backup_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    lines = content.splitlines()
+    new_lines = []
+    in_dev_deps = False
+
+    for line in lines:
+        if line.strip().startswith('[dev-dependencies'):
+            in_dev_deps = True
+            new_lines.append(line)
+        elif line.strip().startswith('[') and in_dev_deps:
+            in_dev_deps = False
+            new_lines.append(line)
+        elif in_dev_deps:
+            # Relax version for workspace packages: cvkg-foo = "..." -> cvkg-foo = ">="
+            relaxed = re.sub(
+                r'^(\s*(?:' + '|'.join(re.escape(p) for p in workspace_packages) + r')(?:[.\-][a-z0-9-]+)?)(\s*=\s*)".*"$',
+                r'\1\2">=0.3.1"',
+                line
+            )
+            new_lines.append(relaxed)
+        else:
+            new_lines.append(line)
+
+    with open(cargo_path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(new_lines))
     with open(cargo_path, 'r', encoding='utf-8') as f:
         content = f.read()
         
