@@ -240,6 +240,8 @@ pub struct GpuRenderer {
     pub(crate) glass_pipeline: wgpu::RenderPipeline,
     /// PBR rendering pipeline for 3D surfaces (modes 13+ with shadow mapping).
     pub(crate) pbr_pipeline: wgpu::RenderPipeline,
+    /// Transparent 3D rendering pipeline.
+    pub(crate) transparent_pipeline: wgpu::RenderPipeline,
     /// Shadow map rendering pipeline (depth-only for cascaded shadows).
     pub(crate) shadow_pipeline: wgpu::RenderPipeline,
     pub(crate) background_pipeline: wgpu::RenderPipeline,
@@ -270,6 +272,8 @@ pub struct GpuRenderer {
     /// Pending 3D mesh instances for shadow + opaque passes.
     /// Populated by submit_mesh_3d; consumed and cleared in frame graph construction.
     pub(crate) pending_mesh_instances_3d: Vec<crate::passes::shadow::GpuMesh3d>,
+    /// Pending transparent 3D mesh instances for transparent pass.
+    pub(crate) pending_transparent_instances_3d: Vec<crate::passes::shadow::GpuMesh3d>,
     /// Pending scene radius for light VP frustum computation.
     /// Derived from mesh bounds or default 100.0.
     pub(crate) pending_scene_radius: f32,

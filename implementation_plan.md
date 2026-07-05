@@ -566,7 +566,7 @@ radius `r` — the AABB implementation is incomplete). No convex hull type exist
 
 ---
 
-## Item 9 — Transparent pass with back-to-front sorting
+## Item 9 — Transparent pass with back-to-front sorting [COMPLETE]
 
 ### Current state
 

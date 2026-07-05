@@ -944,6 +944,7 @@ impl GpuRenderer {
             ui_pipeline: pipes.ui_pipeline,
             glass_pipeline: pipes.glass_pipeline,
             pbr_pipeline: pipes.pbr_pipeline,
+            transparent_pipeline: pipes.transparent_pipeline,
             shadow_pipeline: pipes.shadow_pipeline,
             bloom_extract_pipeline: pipes.bloom_extract_pipeline,
             copy_pipeline: pipes.copy_pipeline,
@@ -1106,6 +1107,7 @@ impl GpuRenderer {
             // 3D mesh staging
             pending_directional_light: None,
             pending_mesh_instances_3d: Vec::new(),
+            pending_transparent_instances_3d: Vec::new(),
             pending_scene_radius: 100.0,
 
             theme_stack: Vec::new(),

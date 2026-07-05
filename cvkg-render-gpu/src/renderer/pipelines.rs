@@ -33,6 +33,7 @@ pub(crate) struct CompiledPipelines {
     pub(crate) tonemap_pipeline: wgpu::RenderPipeline,
     // New 3D pipelines
     pub(crate) pbr_pipeline: wgpu::RenderPipeline,
+    pub(crate) transparent_pipeline: wgpu::RenderPipeline,
     pub(crate) shadow_pipeline: wgpu::RenderPipeline,
 }
 
@@ -302,6 +303,38 @@ pub(crate) fn compile_render_pipelines(
         depth_stencil: Some(wgpu::DepthStencilState {
             format: wgpu::TextureFormat::Depth32Float,
             depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::GreaterEqual),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: pipeline_cache,
+    });
+
+    let transparent_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Surtr Transparent PBR"),
+        layout: Some(&pbr_layout),
+        vertex: wgpu::VertexState {
+            module: &pbr_shader,
+            entry_point: Some("vs_main_3d"),
+            buffers: &[Vertex::desc(), InstanceData3D::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &pbr_shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rgba16Float,
+                blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(false),
             depth_compare: Some(wgpu::CompareFunction::GreaterEqual),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
@@ -1014,6 +1047,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         particle_render_bgl,
         tonemap_pipeline,
         pbr_pipeline,
+        transparent_pipeline,
         shadow_pipeline,
     }
 }

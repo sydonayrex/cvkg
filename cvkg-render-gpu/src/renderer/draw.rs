@@ -1020,7 +1020,7 @@ impl GpuRenderer {
                      scale,
                      directional_light: self.pending_directional_light,
                      mesh_instances_3d: std::mem::take(&mut self.pending_mesh_instances_3d),
-                     transparent_meshes_3d: Vec::new(),
+                     transparent_meshes_3d: std::mem::take(&mut self.pending_transparent_instances_3d),
                      cascade_splits: [8.0, 25.0, 70.0, 200.0],
                      camera_view_proj: self.current_scene.proj * self.current_scene.view,
                      camera_pos: glam::Vec3::from(self.current_scene.camera_pos),
@@ -1959,13 +1959,19 @@ impl GpuRenderer {
             })
             .sum::<f32>() / mesh.vertices.len().max(1) as f32;
 
-        self.pending_mesh_instances_3d.push(crate::passes::shadow::GpuMesh3d {
+        let gpu_mesh = crate::passes::shadow::GpuMesh3d {
             vertex_buffer,
             index_buffer,
             index_count: mesh.indices.len() as u32,
             transform: model_matrix,
             view_depth,
-        });
+        };
+
+        if material.opacity < 1.0 {
+            self.pending_transparent_instances_3d.push(gpu_mesh);
+        } else {
+            self.pending_mesh_instances_3d.push(gpu_mesh);
+        }
 
         if self.pending_directional_light.is_none() {
             self.pending_directional_light = Some(crate::passes::shadow::DirectionalLight {
