@@ -2034,7 +2034,7 @@ impl GpuRenderer {
             vertex_buffer,
             index_buffer,
             index_count: mesh.indices.len() as u32,
-            transform: *model_matrix,
+            transform: model_matrix,
             view_depth,
             instance_index,
             skinned_buffer,

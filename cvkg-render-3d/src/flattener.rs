@@ -244,7 +244,7 @@ impl SceneFlattener {
                 .and_then(|i| materials.get(i))
                 .unwrap_or(&default_material);
 
-            renderer.submit_mesh_3d_matrix(&instance.mesh, material, instance.transform);
+            renderer.submit_mesh_3d_matrix(&instance.mesh, material, &instance.transform);
         }
     }
 

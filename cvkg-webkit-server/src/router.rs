@@ -93,11 +93,19 @@ impl AppState {
             }
             Err(_) => {
                 // Generate a secure random token for development
-                use rand::Rng;
-                let token: String = rand::rngs::OsRng
-                    .sample_iter(rand::distributions::Alphanumeric)
-                    .take(32)
-                    .map(char::from)
+                // Use rand 0.10.2 API: random() generates thread-local random values
+                let token: String = (0..32)
+                    .map(|_| {
+                        let byte: u8 = rand::random();
+                        // Use alphanumeric characters
+                        if byte < 26 {
+                            (b'a' + byte) as char
+                        } else if byte < 52 {
+                            (b'A' + (byte - 26)) as char
+                        } else {
+                            (b'0' + ((byte - 52) % 10)) as char
+                        }
+                    })
                     .collect();
                 tracing::warn!(
                     "CVKG_AUTH_TOKEN not set. Generated temporary token: {} (save this for authentication!)",
@@ -395,7 +403,6 @@ pub async fn serve_loading_screen(State(state): State<Arc<AppState>>) -> impl In
 </body>
 </html>"#,
         snapshot,
-        state.auth_token,
         state.js_entrypoint
     ))
 }

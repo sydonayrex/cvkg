@@ -3,7 +3,6 @@
 use cvkg_render_gpu::kvasir::nodes::PassId;
 use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use cvkg_render_gpu::passes::shadow::{DirectionalLight, GpuMesh3d};
-use cvkg_render_gpu::renderer::GpuRenderer;
 
 /// Opaque 3D render pass node — renders 3D meshes with PBR shading and PCF shadow sampling.
 pub struct Opaque3dNode {
@@ -79,11 +78,10 @@ impl KvasirNode for Opaque3dNode {
         });
 
         // Bind the PBR pipeline
-        let pipeline = &ctx.renderer.compiled_pipelines.pbr_pipeline;
-        pass.set_pipeline(pipeline);
+        pass.set_pipeline(ctx.renderer.pbr_pipeline());
 
         // Bind shadow map if available
-        if let Some(shadow_view) = shadow_view {
+        if let Some(_shadow_view) = shadow_view {
             // Bind shadow texture to the appropriate bind group
             // This requires the renderer's PBR bind group layout
             // For now, we just log that shadow is available

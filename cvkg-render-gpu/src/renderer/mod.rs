@@ -683,6 +683,21 @@ impl GpuRenderer {
         self.quality_level
     }
 
+    /// Access the PBR rendering pipeline for 3D meshes.
+    pub fn pbr_pipeline(&self) -> &wgpu::RenderPipeline {
+        &self.pbr_pipeline
+    }
+
+    /// Access the shadow map rendering pipeline.
+    pub fn shadow_pipeline(&self) -> &wgpu::RenderPipeline {
+        &self.shadow_pipeline
+    }
+
+    /// Access the scene uniform buffer.
+    pub fn scene_buffer(&self) -> &wgpu::Buffer {
+        &self.scene_buffer
+    }
+
     pub(crate) fn lock_or_clear_cache<'a, T: ClearInto>(
         lock: &'a std::sync::Mutex<T>,
     ) -> std::sync::MutexGuard<'a, T> {

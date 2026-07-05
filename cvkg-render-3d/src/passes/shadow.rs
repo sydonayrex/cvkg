@@ -3,7 +3,6 @@
 use cvkg_render_gpu::kvasir::nodes::PassId;
 use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
 use cvkg_render_gpu::passes::shadow::{DirectionalLight, GpuMesh3d};
-use cvkg_render_gpu::renderer::GpuRenderer;
 
 /// Shadow pass node — renders depth-only shadow map from light's perspective.
 pub struct ShadowNode {
@@ -64,7 +63,7 @@ impl KvasirNode for ShadowNode {
 
         // Upload light VP to the renderer's scene uniforms
         ctx.queue.write_buffer(
-            &ctx.renderer.scene_uniforms,
+            ctx.renderer.scene_buffer(),
             // Offset to light_vp field (after view: Mat4 (64B) + proj: Mat4 (64B) + other fields)
             // Let's calculate: SceneUniforms has view (16), proj (16), time(4), delta_time(4), resolution(8),
             // mouse(8), mouse_velocity(8), shatter_origin(8), shatter_time(4), shatter_force(4),
@@ -93,9 +92,7 @@ impl KvasirNode for ShadowNode {
         });
 
         // Bind the shadow pipeline from the renderer
-        // The GpuRenderer has compiled_pipelines with shadow_pipeline
-        let pipeline = &ctx.renderer.compiled_pipelines.shadow_pipeline;
-        pass.set_pipeline(pipeline);
+        pass.set_pipeline(ctx.renderer.shadow_pipeline());
 
         for (_i, mesh) in self.mesh_instances.iter().enumerate() {
             pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
