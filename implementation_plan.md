@@ -616,7 +616,7 @@ sphere center depth in view space, computed when `submit_mesh_3d` pushes to
 
 ---
 
-## Item 10 — GPU-instanced mesh submission (vs_main_3d)
+## Item 10 — GPU-instanced mesh submission (vs_main_3d) [COMPLETE]
 
 ### Current state
 

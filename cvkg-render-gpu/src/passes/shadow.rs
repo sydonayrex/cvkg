@@ -38,6 +38,8 @@ pub struct GpuMesh3d {
     /// View depth for transparent sorting (world-space distance from camera).
     /// Used by TransparentNode for back-to-front rendering.
     pub view_depth: f32,
+    /// Index of this instance in the 3D instance buffer.
+    pub instance_index: u32,
 }
 
 impl Default for GpuMesh3d {
@@ -48,6 +50,7 @@ impl Default for GpuMesh3d {
             index_count: 0,
             transform: Mat4::IDENTITY,
             view_depth: 0.0,
+            instance_index: 0,
         }
     }
 }

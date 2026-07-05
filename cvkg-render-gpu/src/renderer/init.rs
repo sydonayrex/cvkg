@@ -813,6 +813,13 @@ impl GpuRenderer {
         let geometry_buffers =
             crate::types::GeometryBuffers::forge(&device, MAX_VERTICES, MAX_INDICES);
 
+        let instance_buffer_3d = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Surtr 3D Instance Buffer"),
+            size: (MAX_VERTICES / 4 * std::mem::size_of::<crate::vertex::InstanceData3D>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         // Forge the Heart (Berserker Uniforms)
         let current_theme = ColorTheme::default();
         use wgpu::util::DeviceExt;
@@ -996,7 +1003,7 @@ impl GpuRenderer {
             indices: Vec::with_capacity(MAX_INDICES),
             instance_data: Vec::with_capacity(MAX_VERTICES / 4),
             instance_data_3d: Vec::with_capacity(MAX_VERTICES / 4),
-            instance_buffer_3d: None,
+            instance_buffer_3d: Some(instance_buffer_3d),
             draw_calls: Vec::new(),
             current_texture_id: None,
             current_panel_id: None,

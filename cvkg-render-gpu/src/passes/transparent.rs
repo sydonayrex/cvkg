@@ -132,11 +132,16 @@ impl KvasirNode for TransparentNode {
             pass.set_bind_group(3, bg, &[]);
         }
 
+        if let Some(ref inst_buffer) = ctx.renderer.instance_buffer_3d {
+            pass.set_vertex_buffer(1, inst_buffer.slice(..));
+        }
+
         // Render meshes sorted by view_depth (back-to-front for transparency).
         for mesh in self.mesh_instances.iter() {
             pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+            let inst = mesh.instance_index;
+            pass.draw_indexed(0..mesh.index_count, 0, inst..(inst + 1));
         }
     }
 }

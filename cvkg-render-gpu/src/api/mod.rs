@@ -1192,9 +1192,12 @@ impl cvkg_core::Renderer for GpuRenderer {
         let base_idx = self.vertices.len() as u32;
         let model_matrix = transform.to_matrix();
 
+        // Calculate view_depth for transparent sorting
+        let view_depth = (glam::Vec3::from(self.current_scene.camera_pos) - glam::Vec3::from(transform.position)).length();
+
         for i in 0..mesh.vertices.len() {
-            let pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
-            let norm = model_matrix.transform_vector3(glam::Vec3::from(mesh.normals[i]));
+            let pos = glam::Vec3::from(mesh.vertices[i]);
+            let norm = glam::Vec3::from(mesh.normals[i]);
             // Sample UV: apply scale/offset, defaulting to 0 if tex_coords is empty.
             let raw_uv = mesh.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
             let uv = [
@@ -1230,13 +1233,11 @@ impl cvkg_core::Renderer for GpuRenderer {
             glass_intensity: 1.0,
         });
 
-        // Also record the raw 3x4 model matrix in the per-instance 3D buffer.
-        // This will be consumed by the future vs_main_3d entry point once
-        // instanced rendering is wired up. The CPU-baked fallback above keeps
-        // 3D meshes rendering correctly in the meantime.
+        // Record 3D instance data for instanced rendering
         let row0 = model_matrix.row(0);
         let row1 = model_matrix.row(1);
         let row2 = model_matrix.row(2);
+        let instance_index = self.instance_data_3d.len() as u32;
         self.instance_data_3d.push(InstanceData3D {
             model_row0: [row0.x, row0.y, row0.z, row0.w],
             model_row1: [row1.x, row1.y, row1.z, row1.w],
@@ -1245,6 +1246,22 @@ impl cvkg_core::Renderer for GpuRenderer {
             uv_scale: material.uv_scale,
             uv_offset: material.uv_offset,
         });
+
+        // Also add to pending_mesh_instances_3d or pending_transparent_instances_3d for the render graph
+        let gpu_mesh = crate::passes::shadow::GpuMesh3d {
+            vertex_buffer: self.geometry_buffers.vertex_buffer.clone(),
+            index_buffer: self.geometry_buffers.index_buffer.clone(),
+            index_count: mesh.indices.len() as u32,
+            transform: model_matrix,
+            view_depth,
+            instance_index,
+        };
+
+        if material.opacity < 1.0 {
+            self.pending_transparent_instances_3d.push(gpu_mesh);
+        } else {
+            self.pending_mesh_instances_3d.push(gpu_mesh);
+        }
 
         self.draw_calls.push(DrawCall {
             target_id: None,

@@ -1904,16 +1904,14 @@ impl GpuRenderer {
 
         let mut mesh_vertices: Vec<Vertex> = Vec::with_capacity(mesh.vertices.len());
         for (i, pos) in mesh.vertices.iter().enumerate() {
-            let world_pos = model_matrix.transform_point3(glam::Vec3::from(*pos));
-            let world_norm = model_matrix.transform_vector3(glam::Vec3::from(*mesh.normals.get(i).unwrap_or(&[0.0, 0.0, 1.0])));
             let raw_uv = mesh.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
             let uv = [
                 raw_uv[0] * material.uv_scale[0] + material.uv_offset[0],
                 raw_uv[1] * material.uv_scale[1] + material.uv_offset[1],
             ];
             mesh_vertices.push(Vertex {
-                position: [world_pos.x, world_pos.y, world_pos.z],
-                normal: [world_norm.x, world_norm.y, world_norm.z],
+                position: *pos,
+                normal: mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
                 uv,
                 color: material.base_color,
                 material_id: 13,
@@ -1951,7 +1949,7 @@ impl GpuRenderer {
             self.pending_scene_radius = mesh_radius;
         }
 
-        // Compute average view_depth from transformed vertices
+        // Compute average view_depth from raw vertices in world space
         let view_depth = (0..mesh.vertices.len())
             .map(|i| {
                 let world_pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
@@ -1959,12 +1957,26 @@ impl GpuRenderer {
             })
             .sum::<f32>() / mesh.vertices.len().max(1) as f32;
 
+        let row0 = model_matrix.row(0);
+        let row1 = model_matrix.row(1);
+        let row2 = model_matrix.row(2);
+        let instance_index = self.instance_data_3d.len() as u32;
+        self.instance_data_3d.push(InstanceData3D {
+            model_row0: [row0.x, row0.y, row0.z, row0.w],
+            model_row1: [row1.x, row1.y, row1.z, row1.w],
+            model_row2: [row2.x, row2.y, row2.z, row2.w],
+            material_overrides: [material.metallic, material.roughness, 0.0, material.opacity],
+            uv_scale: material.uv_scale,
+            uv_offset: material.uv_offset,
+        });
+
         let gpu_mesh = crate::passes::shadow::GpuMesh3d {
             vertex_buffer,
             index_buffer,
             index_count: mesh.indices.len() as u32,
             transform: model_matrix,
             view_depth,
+            instance_index,
         };
 
         if material.opacity < 1.0 {
@@ -1975,10 +1987,11 @@ impl GpuRenderer {
 
         if self.pending_directional_light.is_none() {
             self.pending_directional_light = Some(crate::passes::shadow::DirectionalLight {
-                direction: glam::Vec3::new(0.0, -1.0, 0.0),
-                color: glam::Vec3::ONE,
+                direction: glam::Vec3::new(0.5, 0.8, 0.6),
+                color: glam::Vec3::new(1.0, 0.95, 0.9),
                 intensity: 1.0,
             });
         }
     }
 }
+
