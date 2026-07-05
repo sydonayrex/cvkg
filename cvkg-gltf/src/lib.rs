@@ -17,7 +17,11 @@
 //! ```
 
 mod importer;
+pub mod player;
 mod types;
 
 pub use importer::load_gltf;
-pub use types::{LoadedMesh, LoadedTexture, Node3D, Scene3D, TextureFormat};
+pub use types::{
+    Animation3D, AnimationChannel3D, AnimationProperty, LoadedMesh, LoadedTexture, Node3D, Scene3D,
+    Skin3D, TextureFormat,
+};

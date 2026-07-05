@@ -147,9 +147,12 @@ impl FilterGraphView {
             if i > 0 {
                 json.push_str(",\n");
             }
+            // Escape special characters to prevent JSON injection
+            let label = node.label.replace('\\', "\\\\").replace('"', "\\\"");
+            let kind = node.kind.replace('\\', "\\\\").replace('"', "\\\"");
             json.push_str(&format!(
                 "    {{\"index\": {}, \"name\": \"{}\", \"kind\": \"{}\"}}",
-                node.index, node.label, node.kind
+                node.index, label, kind
             ));
         }
         json.push_str("\n  ],\n  \"edges\": [\n");
@@ -157,9 +160,11 @@ impl FilterGraphView {
             if i > 0 {
                 json.push_str(",\n");
             }
+            // Escape special characters to prevent JSON injection
+            let resource = edge.resource.replace('\\', "\\\\").replace('"', "\\\"");
             json.push_str(&format!(
                 "    {{\"from\": {}, \"to\": {}, \"resource\": \"{}\"}}",
-                edge.from, edge.to, edge.resource
+                edge.from, edge.to, resource
             ));
         }
         json.push_str("\n  ]\n}");
@@ -172,13 +177,17 @@ impl FilterGraphView {
         dot.push_str("  node [shape=box];\n");
 
         for node in &self.nodes {
-            dot.push_str(&format!("  {} [label=\"{}\"];\n", node.index, node.label));
+            // Escape special characters to prevent DOT injection
+            let label = node.label.replace('\\', "\\\\").replace('"', "\\\"");
+            dot.push_str(&format!("  {} [label=\"{}\"];\n", node.index, label));
         }
 
         for edge in &self.edges {
+            // Escape special characters to prevent DOT injection
+            let resource = edge.resource.replace('\\', "\\\\").replace('"', "\\\"");
             dot.push_str(&format!(
                 "  {} -> {} [label=\"{}\"];\n",
-                edge.from, edge.to, edge.resource
+                edge.from, edge.to, resource
             ));
         }
 

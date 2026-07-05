@@ -41,11 +41,11 @@ fn test_shadow_quality_sizes_are_powers_of_two() {
     }
 }
 
-/// Verify DirectionalLight default direction is normalized.
+/// Verify DirectionalLightConfig default direction is normalized.
 #[test]
 fn test_directional_light_default_direction_normalized() {
-    use cvkg_render_3d::types::DirectionalLight;
-    let light = DirectionalLight::default();
+    use cvkg_render_3d::types::DirectionalLightConfig;
+    let light = DirectionalLightConfig::default();
     let len = light.direction.length();
     assert!(
         (len - 1.0).abs() < 1e-5,
@@ -53,11 +53,11 @@ fn test_directional_light_default_direction_normalized() {
     );
 }
 
-/// Verify DirectionalLight default biases are positive.
+/// Verify DirectionalLightConfig default biases are positive.
 #[test]
 fn test_directional_light_biases_positive() {
-    use cvkg_render_3d::types::DirectionalLight;
-    let light = DirectionalLight::default();
+    use cvkg_render_3d::types::DirectionalLightConfig;
+    let light = DirectionalLightConfig::default();
     assert!(light.shadow_bias > 0.0, "shadow_bias must be positive");
     assert!(
         light.shadow_normal_bias > 0.0,
@@ -68,10 +68,10 @@ fn test_directional_light_biases_positive() {
 /// Verify Light enum discriminants work for both variants.
 #[test]
 fn test_light_enum_both_variants() {
-    use cvkg_render_3d::types::{DirectionalLight, Light, PointLight};
+    use cvkg_render_3d::types::{DirectionalLightConfig, Light, PointLight};
     use glam::Vec3;
 
-    let d = Light::Directional(DirectionalLight::default());
+    let d = Light::Directional(DirectionalLightConfig::default());
     let p = Light::Point(PointLight {
         position: Vec3::new(1.0, 2.0, 3.0),
         color: [1.0, 0.8, 0.6],

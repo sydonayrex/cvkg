@@ -145,7 +145,7 @@ version = "1"
 
 [dependencies.rand]
 version = "0.9"
-features = ["std"]
+features = ["std", "os_rng"]
 
 [dependencies.wasmtime]
 version = "46"

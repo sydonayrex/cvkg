@@ -55,6 +55,10 @@ impl QuadNode {
     fn split(&mut self, depth: u32) {
         let hw = self.bounds.width * 0.5;
         let hh = self.bounds.height * 0.5;
+        // Prevent degenerate zero-area child nodes
+        if hw < 1.0 || hh < 1.0 {
+            return;
+        }
         let mx = self.bounds.x + hw;
         let my = self.bounds.y + hh;
         let make = |x, y, w, h| {

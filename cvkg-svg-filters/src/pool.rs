@@ -7,6 +7,7 @@ use std::collections::HashMap;
 struct PooledTexture {
     width: u32,
     height: u32,
+    format: wgpu::TextureFormat,
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     /// Whether this buffer is currently in use.
@@ -40,7 +41,7 @@ impl TransientFilterPool {
         if let Some(pos) = self
             .available
             .iter()
-            .position(|p| !p.in_use && p.width == width && p.height == height)
+            .position(|p| !p.in_use && p.width == width && p.height == height && p.format == format)
         {
             let pooled = &mut self.available[pos];
             pooled.in_use = true;
@@ -69,6 +70,7 @@ impl TransientFilterPool {
         self.available.push(PooledTexture {
             width,
             height,
+            format,
             texture,
             view,
             in_use: true,
@@ -132,9 +134,11 @@ pub struct FilterResource {
 
 impl FilterResource {
     pub fn new(name: &str, width: u32, height: u32) -> Self {
+        // Use usize multiplication to avoid u32 overflow on large dimensions
+        let size = (width as usize).saturating_mul(height as usize).saturating_mul(4);
         Self {
             name: name.to_string(),
-            pixels: vec![0; (width * height * 4) as usize],
+            pixels: vec![0; size],
             width,
             height,
             ref_count: 0,

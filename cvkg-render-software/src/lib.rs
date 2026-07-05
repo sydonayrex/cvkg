@@ -40,7 +40,8 @@ pub struct Framebuffer {
 impl Framebuffer {
     /// Creates a new framebuffer filled with transparent black.
     pub fn new(width: u32, height: u32) -> Self {
-        let size = (width * height) as usize;
+        // Use usize multiplication to avoid u32 overflow on large dimensions
+        let size = (width as usize).saturating_mul(height as usize);
         Self {
             width,
             height,
@@ -201,10 +202,11 @@ impl SoftwareRenderer {
     }
 
     fn fill_rect_internal(&mut self, rect: Rect, color: [f32; 4]) {
-        let x0 = rect.x.max(0.0) as u32;
-        let y0 = rect.y.max(0.0) as u32;
-        let x1 = (rect.x + rect.width).min(self.fb.width() as f32) as u32;
-        let y1 = (rect.y + rect.height).min(self.fb.height() as f32) as u32;
+        // Clamp coordinates to valid range before casting to avoid UB
+        let x0 = (rect.x.max(0.0) as u32).min(self.fb.width());
+        let y0 = (rect.y.max(0.0) as u32).min(self.fb.height());
+        let x1 = ((rect.x + rect.width).max(0.0) as u32).min(self.fb.width());
+        let y1 = ((rect.y + rect.height).max(0.0) as u32).min(self.fb.height());
         for y in y0..y1 {
             for x in x0..x1 {
                 self.fb.blend_pixel(x, y, color);
@@ -478,7 +480,14 @@ impl Renderer for SoftwareRenderer {
         end_color: [f32; 4],
         _angle: f32,
     ) {
-        // Horizontal gradient only (angle ignored for simplicity)
+        // NOTE: Angle parameter is currently ignored — gradient is always horizontal.
+        // For vertical/diagonal gradients, implement angle rotation here.
+        if _angle.abs() > 0.01 {
+            tracing::warn!(
+                "draw_linear_gradient: angle={} is ignored (horizontal gradient only)",
+                _angle
+            );
+        }
         let x0 = rect.x.max(0.0) as u32;
         let x1 = (rect.x + rect.width).min(self.fb.width() as f32) as u32;
         let w = rect.width.max(1.0);
@@ -512,8 +521,9 @@ impl Renderer for SoftwareRenderer {
     // the operation is unsupported on this backend.
 
     /// Measures text dimensions using a fast, deterministic monospace estimation.
+    /// Uses character count (not byte length) for correct multi-byte UTF-8 handling.
     fn measure_text(&mut self, text: &str, size: f32) -> (f32, f32) {
-        (text.len() as f32 * size * 0.6, size)
+        (text.chars().count() as f32 * size * 0.6, size)
     }
 
     /// Shapes rich text spans using the Runic text layout engine.

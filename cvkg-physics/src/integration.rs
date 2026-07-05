@@ -17,6 +17,9 @@ pub fn semi_implicit_euler(body: &mut RigidBody, dt: f32, gravity: Vec2) {
     if body.is_static || body.is_sleeping {
         return;
     }
+    if dt <= 0.0 || !dt.is_finite() {
+        return;
+    }
 
     // Acceleration = force / mass + gravity
     let acceleration = body.force * body.inv_mass + gravity * body.gravity_scale;

@@ -14,46 +14,60 @@ impl FilterEngine {
         let w = rect.width().ceil().max(1.0) as u32;
         let h = rect.height().ceil().max(1.0) as u32;
 
+        // Helper macro for safe indexing with error on missing input
+        macro_rules! input {
+            ($idx:expr) => {
+                input_views.get($idx).ok_or_else(|| {
+                    FilterError::UnresolvedInput(format!(
+                        "Filter primitive {:?} requires input at index {} but only {} inputs provided",
+                        std::mem::discriminant(kind),
+                        $idx,
+                        input_views.len()
+                    ))
+                })?
+            };
+        }
+
         match kind {
             usvg::filter::Kind::GaussianBlur(gb) => {
-                self.apply_gaussian_blur(&input_views[0], w, h, gb)
+                self.apply_gaussian_blur(input!(0), w, h, gb)
             }
             usvg::filter::Kind::ColorMatrix(cm) => {
-                self.apply_color_matrix(&input_views[0], w, h, cm)
+                self.apply_color_matrix(input!(0), w, h, cm)
             }
             usvg::filter::Kind::Blend(blend) => {
-                self.apply_blend(&input_views[0], &input_views[1], w, h, blend)
+                self.apply_blend(input!(0), input!(1), w, h, blend)
             }
             usvg::filter::Kind::Composite(comp) => {
-                self.apply_composite(&input_views[0], &input_views[1], w, h, comp)
+                self.apply_composite(input!(0), input!(1), w, h, comp)
             }
             usvg::filter::Kind::Flood(flood) => self.apply_flood(w, h, flood),
             usvg::filter::Kind::Offset(offset) => {
-                self.apply_offset(&input_views[0], w, h, rect, element_bbox, offset)
+                self.apply_offset(input!(0), w, h, rect, element_bbox, offset)
             }
             usvg::filter::Kind::Merge(merge) => self.apply_merge(input_views, w, h, merge),
-            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(&input_views[0], w, h, ds),
+            usvg::filter::Kind::DropShadow(ds) => self.apply_drop_shadow(input!(0), w, h, ds),
             usvg::filter::Kind::ComponentTransfer(ct) => {
-                self.apply_component_transfer(&input_views[0], w, h, ct)
+                self.apply_component_transfer(input!(0), w, h, ct)
             }
             usvg::filter::Kind::ConvolveMatrix(cm) => {
-                self.apply_convolve_matrix(&input_views[0], w, h, cm)
+                self.apply_convolve_matrix(input!(0), w, h, cm)
             }
             usvg::filter::Kind::DisplacementMap(dm) => {
-                self.apply_displacement_map(&input_views[0], &input_views[1], w, h, dm)
+                self.apply_displacement_map(input!(0), input!(1), w, h, dm)
             }
-            usvg::filter::Kind::Morphology(m) => self.apply_morphology(&input_views[0], w, h, m),
+            usvg::filter::Kind::Morphology(m) => self.apply_morphology(input!(0), w, h, m),
             usvg::filter::Kind::Tile(tile) => {
-                self.apply_tile(&input_views[0], w, h, rect, element_bbox, tile)
+                self.apply_tile(input!(0), w, h, rect, element_bbox, tile)
             }
             usvg::filter::Kind::Turbulence(t) => self.apply_turbulence(w, h, t),
             usvg::filter::Kind::DiffuseLighting(dl) => {
-                self.apply_diffuse_lighting(&input_views[0], w, h, dl)
+                self.apply_diffuse_lighting(input!(0), w, h, dl)
             }
             usvg::filter::Kind::SpecularLighting(sl) => {
-                self.apply_specular_lighting(&input_views[0], w, h, sl)
+                self.apply_specular_lighting(input!(0), w, h, sl)
             }
-            usvg::filter::Kind::Image(img) => self.apply_image(&input_views[0], w, h, img),
+            usvg::filter::Kind::Image(img) => self.apply_image(input!(0), w, h, img),
         }
     }
 
@@ -202,7 +216,7 @@ impl FilterEngine {
             usvg::BlendMode::Saturation => 12u32,
             usvg::BlendMode::Color => 13u32,
             usvg::BlendMode::Luminosity => 14u32,
-            usvg::BlendMode::Difference => 0u32,
+            usvg::BlendMode::Difference => 15u32,
         };
 
         let mut params = FilterUniforms::default();
@@ -531,6 +545,9 @@ impl FilterEngine {
         let output_view = self.get_temp_view(w, h)?;
         let input_size = (w as f32, h as f32);
 
+        // Process all four channels (R, G, B, A) with their respective transfer functions.
+        // For now, we use the R channel function for all channels as a simplification.
+        // A full implementation would pack all four functions into the uniform buffer.
         let func = ct.func_r();
         let sub_mode = match func {
             usvg::filter::TransferFunction::Identity => 0u32,
@@ -539,6 +556,12 @@ impl FilterEngine {
             usvg::filter::TransferFunction::Linear { .. } => 3u32,
             usvg::filter::TransferFunction::Gamma { .. } => 4u32,
         };
+
+        // TODO: Pack func_r, func_g, func_b, func_a into param0..param3
+        // and dispatch per-channel in the shader. Currently only R channel is applied.
+        log::debug!(
+            "apply_component_transfer: using R channel function for all channels (full per-channel support TODO)"
+        );
 
         let mut params = FilterUniforms::default();
         params.region = [0.0, 0.0, w as f32, h as f32];

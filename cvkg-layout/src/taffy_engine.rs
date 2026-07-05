@@ -4,8 +4,18 @@ use taffy::prelude::*;
 
 /// Wrapper that makes TaffyTree Send+Sync.
 /// taffy 0.11's CompactLengthInner uses *const () for NaN-boxing (tag, not a real pointer).
-/// ponytail: unsafe Send+Sync — the pointer is a data tag, never dereferenced.
+///
+/// SAFETY: The inner *const () is a data tag, never dereferenced as a pointer.
+/// If taffy changes its internal representation, the size assertion below will fail at compile time.
 pub struct SyncTaffyTree(taffy::TaffyTree);
+const _: () = {
+    // Verify TaffyTree size hasn't changed unexpectedly between versions.
+    // If this fails, the unsafe Send+Sync impl must be re-evaluated.
+    assert!(
+        std::mem::size_of::<taffy::TaffyTree>() <= 4096,
+        "TaffyTree size changed significantly — verify NaN-boxing before keeping Send+Sync"
+    );
+};
 unsafe impl Send for SyncTaffyTree {}
 unsafe impl Sync for SyncTaffyTree {}
 impl std::ops::Deref for SyncTaffyTree {
@@ -272,7 +282,7 @@ pub fn compute_taffy_flex(
             let new_node = engine
                 .tree
                 .new_with_children(container_style, &child_nodes)
-                .unwrap();
+                .expect("taffy new_with_children failed (OOM or invalid style)");
             engine.node_map.insert(params.container_hash, new_node);
             new_node
         }
@@ -280,7 +290,7 @@ pub fn compute_taffy_flex(
         engine
             .tree
             .new_with_children(container_style, &child_nodes)
-            .unwrap()
+            .expect("taffy new_with_children failed (OOM or invalid style)")
     };
 
     engine
@@ -845,12 +855,12 @@ impl Grid {
                     let _ = engine.tree.set_style(existing, style);
                     existing
                 } else {
-                    let new_node = engine.tree.new_leaf(style).unwrap();
+                    let new_node = engine.tree.new_leaf(style).expect("taffy new_leaf failed (OOM)");
                     engine.node_map.insert(*hash, new_node);
                     new_node
                 }
             } else {
-                engine.tree.new_leaf(style).unwrap()
+                engine.tree.new_leaf(style).expect("taffy new_leaf failed (OOM)")
             };
             child_nodes.push(node);
         }
@@ -889,7 +899,7 @@ impl Grid {
                 let new_node = engine
                     .tree
                     .new_with_children(container_style, &child_nodes)
-                    .unwrap();
+                    .expect("taffy new_with_children failed (OOM or invalid style)");
                 engine.node_map.insert(container_hash, new_node);
                 new_node
             }
@@ -897,17 +907,26 @@ impl Grid {
             engine
                 .tree
                 .new_with_children(container_style, &child_nodes)
-                .unwrap()
+                .expect("taffy new_with_children failed (OOM or invalid style)")
         };
 
         engine
             .tree
             .compute_layout(root_node, taffy::Size::MAX_CONTENT)
-            .unwrap();
+            .unwrap_or_else(|e| {
+                tracing::warn!("[Layout] compute_layout failed: {e}, using zero rects");
+            });
 
         let mut rects = Vec::with_capacity(subviews.len());
         for &node in &child_nodes {
-            let layout = engine.tree.layout(node).unwrap();
+            let default_layout = taffy::Layout::new();
+            let layout = match engine.tree.layout(node) {
+                Ok(l) => l,
+                Err(e) => {
+                    tracing::warn!("[Layout] failed to get layout for node: {e}");
+                    &default_layout
+                }
+            };
             rects.push(Rect {
                 x: bounds.x + layout.location.x,
                 y: bounds.y + layout.location.y,

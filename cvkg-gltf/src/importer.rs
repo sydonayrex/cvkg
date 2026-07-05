@@ -70,12 +70,63 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
 
     let nodes = build_hierarchy(scene, mesh_prim_offset.as_slice(), &cameras);
 
+    // ── 6. Parse skeletal and node animations ───────────────────────────
+    let mut animations = Vec::new();
+    for gltf_anim in document.animations() {
+        let name = gltf_anim.name().unwrap_or("").to_string();
+        let mut channels = Vec::new();
+        for channel in gltf_anim.channels() {
+            let target_node = channel.target().node().index();
+            let property = match channel.target().property() {
+                gltf::animation::Property::Translation => crate::types::AnimationProperty::Translation,
+                gltf::animation::Property::Rotation => crate::types::AnimationProperty::Rotation,
+                gltf::animation::Property::Scale => crate::types::AnimationProperty::Scale,
+                gltf::animation::Property::MorphTargetWeights => crate::types::AnimationProperty::MorphWeights,
+            };
+            let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
+            let keyframes = reader.read_inputs().map(|i| i.collect()).unwrap_or_default();
+            let values = reader.read_outputs().map(|o| match o {
+                gltf::animation::util::ReadOutputs::Translations(t) => t.flat_map(|val| val).collect(),
+                gltf::animation::util::ReadOutputs::Rotations(r) => r.into_f32().flat_map(|val| val).collect(),
+                gltf::animation::util::ReadOutputs::Scales(s) => s.flat_map(|val| val).collect(),
+                gltf::animation::util::ReadOutputs::MorphTargetWeights(w) => w.into_f32().collect(),
+            }).unwrap_or_default();
+            channels.push(crate::types::AnimationChannel3D {
+                target_node,
+                property,
+                keyframes,
+                values,
+            });
+        }
+        animations.push(crate::types::Animation3D { name, channels });
+    }
+
+    // ── 7. Parse skins and joint hierarchies ────────────────────────────
+    let mut skins = Vec::new();
+    for gltf_skin in document.skins() {
+        let name = gltf_skin.name().unwrap_or("").to_string();
+        let skeleton_root = gltf_skin.skeleton().map(|n| n.index());
+        let joints = gltf_skin.joints().map(|n| n.index()).collect();
+        let reader = gltf_skin.reader(|buffer| Some(&buffers[buffer.index()]));
+        let inverse_bind_matrices = reader.read_inverse_bind_matrices().map(|m| {
+            m.map(|mat| glam::Mat4::from_cols_array_2d(&mat)).collect()
+        }).unwrap_or_default();
+        skins.push(crate::types::Skin3D {
+            name,
+            skeleton_root,
+            joints,
+            inverse_bind_matrices,
+        });
+    }
+
     Ok(Scene3D {
         nodes,
         meshes,
         materials,
         textures,
         cameras,
+        animations,
+        skins,
     })
 }
 
@@ -169,6 +220,35 @@ fn convert_primitive(
         .into_u32()
         .collect();
 
+    // Joints_0 accessor
+    let joint_indices: Vec<[u32; 4]> = match reader.read_joints(0) {
+        Some(joints) => match joints {
+            gltf::mesh::util::ReadJoints::U8(iter) => {
+                iter.map(|j| [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32]).collect()
+            }
+            gltf::mesh::util::ReadJoints::U16(iter) => {
+                iter.map(|j| [j[0] as u32, j[1] as u32, j[2] as u32, j[3] as u32]).collect()
+            }
+        },
+        None => vec![[0, 0, 0, 0]; positions.len()],
+    };
+
+    // Weights_0 accessor
+    let joint_weights: Vec<[f32; 4]> = match reader.read_weights(0) {
+        Some(weights) => match weights {
+            gltf::mesh::util::ReadWeights::U8(iter) => {
+                iter.map(|w| [w[0] as f32 / 255.0, w[1] as f32 / 255.0, w[2] as f32 / 255.0, w[3] as f32 / 255.0]).collect()
+            }
+            gltf::mesh::util::ReadWeights::U16(iter) => {
+                iter.map(|w| [w[0] as f32 / 65535.0, w[1] as f32 / 65535.0, w[2] as f32 / 65535.0, w[3] as f32 / 65535.0]).collect()
+            }
+            gltf::mesh::util::ReadWeights::F32(iter) => {
+                iter.collect()
+            }
+        },
+        None => vec![[0.0, 0.0, 0.0, 0.0]; positions.len()],
+    };
+
     // Material
     let material_index = primitive.material().index();
 
@@ -187,6 +267,8 @@ fn convert_primitive(
                 tex_coords,
                 indices,
                 tangents: Vec::new(),
+                joint_indices,
+                joint_weights,
             };
             m.tangents = m.compute_tangents();
             m
@@ -283,6 +365,9 @@ fn flatten_node(
         c.index()
     });
 
+    // Map glTF skin to CVKG skin index
+    let skin_index = node.skin().map(|s| s.index());
+
     let name = node.name().unwrap_or("").to_string();
 
     let children: Vec<usize> = node
@@ -298,6 +383,7 @@ fn flatten_node(
         transform,
         mesh_index,
         camera_index,
+        skin_index,
     });
 
     index

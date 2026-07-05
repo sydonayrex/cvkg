@@ -153,6 +153,7 @@ pub(crate) const WGSL_BLOOM: &str = include_str!("shaders/bloom.wgsl");
 pub(crate) const WGSL_COLOR_BLIND: &str = include_str!("shaders/color_blind.wgsl");
 pub(crate) const WGSL_TONEMAP: &str = include_str!("shaders/tonemap.wgsl");
 pub(crate) const WGSL_PARTICLES: &str = include_str!("shaders/particles.wgsl");
+pub(crate) const WGSL_SKINNING: &str = include_str!("shaders/skinning.wgsl");
 
 pub mod color_blindness;
 

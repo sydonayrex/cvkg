@@ -1260,6 +1260,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             transform: model_matrix,
             view_depth,
             instance_index,
+            skinned_buffer: None,
         };
 
         if material.opacity < 1.0 {
@@ -1374,6 +1375,8 @@ impl cvkg_core::Renderer for GpuRenderer {
                 ],
                 tex_coords: vec![[0.0, 0.0]; 8],
                 tangents: Vec::new(),
+                joint_indices: Vec::new(),
+                joint_weights: Vec::new(),
             };
             let mut cube = cube;
             cube.tangents = cube.compute_tangents();

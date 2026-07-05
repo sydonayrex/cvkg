@@ -285,4 +285,244 @@ impl LayerTree {
         self.layer_generations.clear();
         self.generation += 1;
     }
+
+    // ── Layer Reordering ─────────────────────────────────────────────────
+
+    /// Moves `child_id` to the end of its parent's children list (highest Z,
+    /// painted last = visually on top). If the layer is a root, it is moved
+    /// to the end of the roots list.
+    ///
+    /// Returns `true` if the layer was found and moved, `false` if the layer
+    /// does not exist or has no parent.
+    pub fn move_to_front(&mut self, child_id: LayerId) -> bool {
+        // Find which parent owns this child.
+        let parent_id = self
+            .layers
+            .values()
+            .find(|l| l.children.contains(&child_id))
+            .map(|l| l.id);
+
+        match parent_id {
+            Some(parent_id) => {
+                let parent = self.layers.get_mut(&parent_id).unwrap();
+                if let Some(pos) = parent.children.iter().position(|&id| id == child_id) {
+                    parent.children.remove(pos);
+                    parent.children.push(child_id);
+                    self.mark_dirty(child_id);
+                    true
+                } else {
+                    false
+                }
+            }
+            None => {
+                // Might be a root layer.
+                if let Some(pos) = self.roots.iter().position(|&id| id == child_id) {
+                    self.roots.remove(pos);
+                    self.roots.push(child_id);
+                    self.mark_dirty(child_id);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    /// Moves `child_id` to the start of its parent's children list (lowest Z,
+    /// painted first = visually behind siblings). If the layer is a root, it
+    /// is moved to the start of the roots list.
+    ///
+    /// Returns `true` if the layer was found and moved.
+    pub fn move_to_back(&mut self, child_id: LayerId) -> bool {
+        let parent_id = self
+            .layers
+            .values()
+            .find(|l| l.children.contains(&child_id))
+            .map(|l| l.id);
+
+        match parent_id {
+            Some(parent_id) => {
+                let parent = self.layers.get_mut(&parent_id).unwrap();
+                if let Some(pos) = parent.children.iter().position(|&id| id == child_id) {
+                    parent.children.remove(pos);
+                    parent.children.insert(0, child_id);
+                    self.mark_dirty(child_id);
+                    true
+                } else {
+                    false
+                }
+            }
+            None => {
+                if let Some(pos) = self.roots.iter().position(|&id| id == child_id) {
+                    self.roots.remove(pos);
+                    self.roots.insert(0, child_id);
+                    self.mark_dirty(child_id);
+                    true
+                } else {
+                    false
+                }
+            }
+        }
+    }
+
+    // ── Hit Testing ──────────────────────────────────────────────────────
+
+    /// Returns the topmost (highest Z) visible layer at the given point,
+    /// searching roots back-to-front (painter's order). Only checks
+    /// `bounds` — transforms are assumed pre-applied to the bounds.
+    ///
+    /// Returns `None` if no layer contains the point.
+    pub fn layer_at_point(&self, x: f32, y: f32) -> Option<LayerId> {
+        self.layer_at_point_recursive(&self.roots, x, y)
+    }
+
+    fn layer_at_point_recursive(
+        &self,
+        children: &[LayerId],
+        x: f32,
+        y: f32,
+    ) -> Option<LayerId> {
+        // Search back-to-front so the last hit (visually on top) wins.
+        for &child_id in children.iter().rev() {
+            if let Some(layer) = self.layers.get(&child_id) {
+                if !layer.visible {
+                    continue;
+                }
+                // Check children first (they paint on top of this layer).
+                if let Some(found) = self.layer_at_point_recursive(&layer.children, x, y) {
+                    return Some(found);
+                }
+                if layer.bounds.contains(x, y) {
+                    return Some(child_id);
+                }
+            }
+        }
+        None
+    }
+
+    // ── Query ────────────────────────────────────────────────────────────
+
+    /// Returns all layer IDs whose material matches the given one.
+    pub fn find_layers_by_material(&self, material: &Material) -> Vec<LayerId> {
+        self.layers
+            .values()
+            .filter(|l| &l.material == material)
+            .map(|l| l.id)
+            .collect()
+    }
+
+    // ── Validation ───────────────────────────────────────────────────────
+
+    /// Validates the structural integrity of the layer tree.
+    ///
+    /// Checks for:
+    /// - Dangling child references (child ID not in the tree)
+    /// - Orphan layers (in the tree but not reachable from any root)
+    /// - Self-referencing layers (layer is its own child)
+    ///
+    /// Returns `Ok(())` if the tree is valid, or a list of error messages.
+    pub fn validate_tree(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        // 1. Check all root IDs exist.
+        for &root_id in &self.roots {
+            if !self.layers.contains_key(&root_id) {
+                errors.push(format!("root {} references non-existent layer", root_id.0));
+            }
+        }
+
+        // 2. Check all child references exist and no self-references.
+        for layer in self.layers.values() {
+            for &child_id in &layer.children {
+                if child_id == layer.id {
+                    errors.push(format!(
+                        "layer {} is its own child",
+                        layer.id.0
+                    ));
+                }
+                if !self.layers.contains_key(&child_id) {
+                    errors.push(format!(
+                        "layer {} references non-existent child {}",
+                        layer.id.0, child_id.0
+                    ));
+                }
+            }
+        }
+
+        // 3. Check for orphan layers (not reachable from any root).
+        let mut reachable = std::collections::HashSet::new();
+        let mut stack: Vec<LayerId> = self.roots.iter().copied().collect();
+        while let Some(id) = stack.pop() {
+            if !reachable.insert(id) {
+                continue;
+            }
+            if let Some(layer) = self.layers.get(&id) {
+                stack.extend(layer.children.iter().copied());
+            }
+        }
+        for &id in self.layers.keys() {
+            if !reachable.contains(&id) {
+                errors.push(format!("layer {} is orphaned (not reachable from any root)", id.0));
+            }
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
+    // ── Debug ────────────────────────────────────────────────────────────
+
+    /// Returns a human-readable debug dump of the layer tree structure.
+    pub fn dump_tree(&self) -> String {
+        let mut out = String::new();
+        for (i, &root_id) in self.roots.iter().enumerate() {
+            let last = i == self.roots.len() - 1;
+            self.dump_node(root_id, &mut out, "", last);
+        }
+        out
+    }
+
+    fn dump_node(&self, id: LayerId, out: &mut String, prefix: &str, last: bool) {
+        let connector = if last { "└── " } else { "├── " };
+        let layer = match self.layers.get(&id) {
+            Some(l) => l,
+            None => {
+                out.push_str(&format!("{}{}<missing {}>\n", prefix, connector, id.0));
+                return;
+            }
+        };
+        let vis = if layer.visible { "" } else { " [hidden]" };
+        let mat = match &layer.material {
+            Material::Opaque => "Opaque".into(),
+            Material::Overlay => "Overlay".into(),
+            Material::Glass { blur_radius, depth_index } => {
+                format!("Glass(blur={}, depth={})", blur_radius, depth_index)
+            }
+            other => format!("{:?}", other),
+        };
+        out.push_str(&format!(
+            "{}{}[{}] {} ({:.0}x{:.0} @{:.0},{:.0}){}\n",
+            prefix,
+            connector,
+            id.0,
+            mat,
+            layer.bounds.width,
+            layer.bounds.height,
+            layer.bounds.x,
+            layer.bounds.y,
+            vis,
+        ));
+        let child_prefix = if last {
+            format!("{}    ", prefix)
+        } else {
+            format!("{}│   ", prefix)
+        };
+        for (i, &child_id) in layer.children.iter().enumerate() {
+            let child_last = i == layer.children.len() - 1;
+            self.dump_node(child_id, out, &child_prefix, child_last);
+        }
+    }
 }

@@ -93,10 +93,12 @@ impl AppState {
             }
             Err(_) => {
                 // Generate a secure random token for development
-                use rand::{rngs::OsRng, RngCore};
-                let mut bytes = [0u8; 32];
-                OsRng.fill_bytes(&mut bytes);
-                let token: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+                use rand::Rng;
+                let token: String = rand::rngs::OsRng
+                    .sample_iter(rand::distributions::Alphanumeric)
+                    .take(32)
+                    .map(char::from)
+                    .collect();
                 tracing::warn!(
                     "CVKG_AUTH_TOKEN not set. Generated temporary token: {} (save this for authentication!)",
                     &token[..8]

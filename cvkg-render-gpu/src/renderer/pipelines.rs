@@ -1,6 +1,6 @@
 use crate::types::{GpuParticle, MAX_PARTICLES, ParticleUniforms};
 use crate::vertex::{InstanceData, InstanceData3D, Vertex, Vertex3D};
-use crate::{WGSL_PARTICLES, WGSL_TONEMAP};
+use crate::{WGSL_PARTICLES, WGSL_TONEMAP, WGSL_SKINNING};
 
 pub(crate) struct CompiledPipelines {
     pub(crate) pipeline: wgpu::RenderPipeline,
@@ -35,6 +35,10 @@ pub(crate) struct CompiledPipelines {
     pub(crate) pbr_pipeline: wgpu::RenderPipeline,
     pub(crate) transparent_pipeline: wgpu::RenderPipeline,
     pub(crate) shadow_pipeline: wgpu::RenderPipeline,
+    pub(crate) skinning_compute_pipeline: wgpu::ComputePipeline,
+    pub(crate) skinning_bgl0: wgpu::BindGroupLayout,
+    pub(crate) skinning_bgl1: wgpu::BindGroupLayout,
+    pub(crate) skinning_bgl2: wgpu::BindGroupLayout,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1017,6 +1021,94 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         })
         .collect();
 
+    let skinning_bgl0 = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+        label: Some("Skinning Geometry Bind Group Layout"),
+    });
+
+    let skinning_bgl1 = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+        label: Some("Skinning Joint Bind Group Layout"),
+    });
+
+    let skinning_bgl2 = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+        label: Some("Skinning Morph Bind Group Layout"),
+    });
+
+    let skinning_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Skinning Compute Pipeline Layout"),
+        bind_group_layouts: &[Some(&skinning_bgl0), Some(&skinning_bgl1), Some(&skinning_bgl2)],
+        immediate_size: 0,
+    });
+
+    let skinning_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Skinning Compute Shader Module"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(WGSL_SKINNING)),
+    });
+
+    let skinning_compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("Skinning Compute Pipeline"),
+        layout: Some(&skinning_pipeline_layout),
+        module: &skinning_shader,
+        entry_point: Some("main"),
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
+        cache: pipeline_cache,
+    });
+
     CompiledPipelines {
         pipeline,
         opaque_pipeline,
@@ -1049,5 +1141,9 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         pbr_pipeline,
         transparent_pipeline,
         shadow_pipeline,
+        skinning_compute_pipeline,
+        skinning_bgl0,
+        skinning_bgl1,
+        skinning_bgl2,
     }
 }

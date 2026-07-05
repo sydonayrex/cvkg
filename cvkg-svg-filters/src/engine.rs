@@ -484,6 +484,9 @@ impl FilterEngine {
         graph: &FilterGraph,
         ctx: &FilterContext<'a>,
     ) -> Result<FilterResult, FilterError> {
+        // Clear temp textures from previous frame to prevent GPU memory leak
+        self.clear_pool();
+
         self.current_time = ctx.time;
         if graph.nodes().is_empty() {
             return Ok(FilterResult {
@@ -540,7 +543,9 @@ impl FilterEngine {
             results.insert(node.index, result.output_view);
         }
 
-        let last_idx = graph.nodes().last().unwrap().index;
+        let last_idx = graph.nodes().last()
+            .ok_or_else(|| FilterError::UnresolvedInput("empty graph".to_string()))?
+            .index;
         let output_view = results
             .remove(&last_idx)
             .ok_or_else(|| FilterError::UnresolvedInput("last node missing".to_string()))?;
@@ -552,8 +557,15 @@ impl FilterEngine {
     }
 
     pub fn upload_lut(&mut self, data: &[[f32; 4]]) -> Result<(), FilterError> {
+        // Bounds check: LUT texture is 256 entries per channel
+        if data.len() > 256 {
+            log::warn!(
+                "upload_lut: data has {} entries, clamping to 256",
+                data.len()
+            );
+        }
         let mut tex_data: [[[f32; 4]; 256]; 4] = [[[0.0; 4]; 256]; 4];
-        for (i, rgba) in data.iter().enumerate() {
+        for (i, rgba) in data.iter().take(256).enumerate() {
             tex_data[0][i] = [rgba[0], 0.0, 0.0, 0.0];
             tex_data[1][i] = [0.0, rgba[1], 0.0, 0.0];
             tex_data[2][i] = [0.0, 0.0, rgba[2], 0.0];
@@ -608,6 +620,12 @@ impl FilterEngine {
         width: u32,
         height: u32,
     ) -> Result<(), FilterError> {
+        if width == 0 || height == 0 {
+            return Err(FilterError::TextureError(format!(
+                "upload_image: zero dimension ({}x{})",
+                width, height
+            )));
+        }
         if data.len() != (width as usize * height as usize * 4) {
             return Err(FilterError::TextureError(format!(
                 "image data size {} does not match {}x{}x4",

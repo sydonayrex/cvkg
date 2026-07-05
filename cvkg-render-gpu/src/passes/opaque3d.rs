@@ -179,8 +179,15 @@ impl KvasirNode for Opaque3dNode {
         }
 
         // For each mesh instance, set vertex/index buffers and draw.
+        // TODO: Once SkinnedOutput is extended to include UV/color/tangent (matching Vertex3D layout),
+        // enable skinned_buffer binding here. Currently SkinnedOutput only has position+normal,
+        // which causes PBR shaders to read garbage for UVs/colors/tangents.
         for mesh in self.mesh_instances.iter() {
+            // if let Some(skinned) = &mesh.skinned_buffer {
+            //     pass.set_vertex_buffer(0, skinned.slice(..));
+            // } else {
             pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            // }
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             let inst = mesh.instance_index;
             pass.draw_indexed(0..mesh.index_count, 0, inst..(inst + 1));

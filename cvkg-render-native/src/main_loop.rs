@@ -120,15 +120,19 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 &self.view,
             );
 
-            let winit_id = self
+            let winit_id = match self
                 .window_manager
                 .core_to_winit
                 .get(&handle.id)
                 .copied()
-                .unwrap_or_else(|| {
+            {
+                Some(id) => id,
+                None => {
                     tracing::error!("[Native] winit_id not found for window handle: window may have been destroyed");
-                    std::process::exit(1);
-                });
+                    // Return instead of exit(1) to allow RAII cleanup
+                    return;
+                }
+            };
             let window = self
                 .window_manager
                 .windows
@@ -229,6 +233,11 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 }
                 WindowEvent::DroppedFile(path) => {
                     if let Some(vdom) = &state.vdom {
+                        // SECURITY: Path is passed directly to VDOM handlers.
+                        // Handlers MUST validate the path before reading from disk
+                        // to prevent path traversal attacks (e.g., ../../etc/passwd).
+                        // Consider restricting to allowed directories or using
+                        // canonicalize() to resolve symlinks.
                         vdom.dispatch_event(cvkg_core::Event::FileDrop {
                             x: state.cursor_pos[0],
                             y: state.cursor_pos[1],
@@ -1049,6 +1058,16 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             .ok()
                                             .and_then(|mut cb| cb.get_text().ok())
                                             .unwrap_or_default();
+                                        // Clamp clipboard text to prevent DoS via unbounded allocation
+                                        let text = if text.len() > 1_048_576 {
+                                            tracing::warn!(
+                                                "Clipboard text truncated from {} to 1MB",
+                                                text.len()
+                                            );
+                                            text[..1_048_576].to_string()
+                                        } else {
+                                            text
+                                        };
                                         if let Some(vdom) = &state.vdom {
                                             vdom.dispatch_event(cvkg_core::Event::Paste(text));
                                         }

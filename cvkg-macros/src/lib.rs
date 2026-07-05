@@ -314,6 +314,9 @@ pub fn cvkg_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             )*
 
+            /// # Panics
+            /// Panics if any required field was not set via its setter method.
+            /// Use the `try_build()` variant (if available) for non-panicking error handling.
             pub fn build(self) -> #name {
                 #name {
                     #(#field_names: self.#field_names.expect(

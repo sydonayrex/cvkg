@@ -54,9 +54,11 @@ impl HeatmapAggregation {
         let cell_size = lod.cell_size();
         let grid_width = width.div_ceil(cell_size);
         let grid_height = height.div_ceil(cell_size);
+        // Use usize multiplication to avoid u32 overflow on large dimensions
+        let size = (grid_width as usize).saturating_mul(grid_height as usize);
         Self {
             lod,
-            cells: vec![0.0; (grid_width * grid_height) as usize],
+            cells: vec![0.0; size],
             grid_width,
             grid_height,
         }
@@ -84,8 +86,19 @@ impl HeatmapAggregation {
             self.grid_height * self.lod.cell_size(),
             new_lod,
         );
-        for (i, &val) in self.cells.iter().enumerate() {
-            result.cells[i / 4] += val;
+        // Use 2D coordinate mapping instead of flat index to avoid OOB
+        for y in 0..self.grid_height {
+            for x in 0..self.grid_width {
+                let src_idx = (y * self.grid_width + x) as usize;
+                if src_idx < self.cells.len() {
+                    let dst_x = x / 2;
+                    let dst_y = y / 2;
+                    let dst_idx = (dst_y * result.grid_width + dst_x) as usize;
+                    if dst_idx < result.cells.len() {
+                        result.cells[dst_idx] += self.cells[src_idx];
+                    }
+                }
+            }
         }
         result
     }

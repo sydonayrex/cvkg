@@ -1,5 +1,5 @@
 /// Kvasir node tests — verifies that 3D Kvasir nodes implement the trait correctly.
-use cvkg_render_3d::types::DirectionalLight;
+use cvkg_render_gpu::passes::shadow::DirectionalLight;
 use cvkg_render_3d::{Opaque3dNode, ShadowNode};
 use cvkg_render_gpu::kvasir::{KvasirNode, ResourceId};
 

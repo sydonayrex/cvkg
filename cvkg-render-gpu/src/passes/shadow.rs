@@ -24,6 +24,37 @@ impl Default for DirectionalLight {
     }
 }
 
+/// Point light source for omnidirectional shadow rendering.
+#[derive(Debug, Clone, Copy)]
+pub struct PointLight {
+    pub position: glam::Vec3,
+    pub color: glam::Vec3,
+    pub intensity: f32,
+    pub range: f32,
+}
+
+/// Spot light source with conical beam bounds.
+#[derive(Debug, Clone, Copy)]
+pub struct SpotLight {
+    pub position: glam::Vec3,
+    pub direction: glam::Vec3,
+    pub color: glam::Vec3,
+    pub intensity: f32,
+    pub range: f32,
+    pub inner_cone_angle: f32,
+    pub outer_cone_angle: f32,
+}
+
+/// Shadow atlas layout configuration managing viewport division.
+#[derive(Debug, Clone)]
+pub struct ShadowAtlasConfig {
+    /// Total width and height of the combined shadow atlas texture.
+    pub size: u32,
+    /// Viewport padding in pixels.
+    pub padding: u32,
+}
+
+
 /// GPU resources for a single 3D mesh instance ready for rendering.
 #[derive(Debug, Clone)]
 pub struct GpuMesh3d {
@@ -40,6 +71,8 @@ pub struct GpuMesh3d {
     pub view_depth: f32,
     /// Index of this instance in the 3D instance buffer.
     pub instance_index: u32,
+    /// Skinned vertex buffer if this mesh undergoes skeletal compute skinning.
+    pub skinned_buffer: Option<wgpu::Buffer>,
 }
 
 /// Shadow pass node — renders depth-only shadow map from light's perspective.
@@ -144,36 +177,45 @@ impl KvasirNode for ShadowNode {
             }
         };
 
-        // 3. Render each cascade into its array layer
+        let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        // Create a single depth-only render pass covering the entire shadow atlas
+        let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Shadow Atlas Pass (Depth-Only)"),
+            color_attachments: &[], // No color output.
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &shadow_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        let atlas_size = 1024.0f32; // Matches the shadow map texture dimensions
+        let half_size = atlas_size * 0.5;
+
+        // Render each cascade into its viewport quadrant in the atlas
         for (i, vp) in cascade_vps.iter().enumerate() {
             // Write cascade_vps[i] into scene_buffer's light_vp field (offset 320)
             ctx.queue
                 .write_buffer(&ctx.renderer.scene_buffer, 320, bytemuck::bytes_of(vp));
 
-            let layer_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                label: Some(&format!("Surtr CSM Shadow Pass Layer {}", i)),
-                dimension: Some(wgpu::TextureViewDimension::D2),
-                base_array_layer: i as u32,
-                array_layer_count: Some(1),
-                ..wgpu::TextureViewDescriptor::default()
-            });
-
-            // Create a depth-only render pass.
-            let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some(&format!("Shadow Pass Cascade {}", i)),
-                color_attachments: &[], // No color output.
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &layer_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let col = (i % 2) as f32;
+            let row = (i / 2) as f32;
+            
+            pass.set_viewport(
+                col * half_size,
+                row * half_size,
+                half_size,
+                half_size,
+                0.0,
+                1.0,
+            );
 
             // Bind the shadow pipeline and scene uniforms.
             pass.set_pipeline(&ctx.renderer.shadow_pipeline);
@@ -181,7 +223,11 @@ impl KvasirNode for ShadowNode {
 
             // For each mesh, set vertex/index buffers and draw depth only.
             for mesh in self.mesh_instances.iter() {
-                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                if let Some(skinned) = &mesh.skinned_buffer {
+                    pass.set_vertex_buffer(0, skinned.slice(..));
+                } else {
+                    pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                }
                 pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..mesh.index_count, 0, 0..1);
             }

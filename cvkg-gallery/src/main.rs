@@ -43,7 +43,7 @@ fn catalog() -> Vec<GalleryEntry> {
                     VStack::new(8.0)
                         .child(
                             Checkbox::new(state.checkbox_1, move |val| {
-                                let mut s = arc1.lock().unwrap();
+                                let mut s = arc1.lock().unwrap_or_else(|e| e.into_inner());
                                 s.checkbox_1 = val;
                             })
                             .label("Enable Berserk Mode")
@@ -51,7 +51,7 @@ fn catalog() -> Vec<GalleryEntry> {
                         )
                         .child(
                             Checkbox::new(state.checkbox_2, move |val| {
-                                let mut s = arc2.lock().unwrap();
+                                let mut s = arc2.lock().unwrap_or_else(|e| e.into_inner());
                                 s.checkbox_2 = val;
                             })
                             .label("Auto-charge Rage")
@@ -69,7 +69,7 @@ fn catalog() -> Vec<GalleryEntry> {
                     VStack::new(12.0)
                         .child(
                             Input::new(state.input_text.as_str()).on_change(move |text| {
-                                let mut s = arc.lock().unwrap();
+                                let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
                                 s.input_text = text;
                             }),
                         )
@@ -90,11 +90,11 @@ fn catalog() -> Vec<GalleryEntry> {
                 AnyView::new(
                     VStack::new(8.0)
                         .child(Toggle::new("Shield Wall", state.toggle_1, move |val| {
-                            let mut s = arc1.lock().unwrap();
+                            let mut s = arc1.lock().unwrap_or_else(|e| e.into_inner());
                             s.toggle_1 = val;
                         }))
                         .child(Toggle::new("Odin's Sight", state.toggle_2, move |val| {
-                            let mut s = arc2.lock().unwrap();
+                            let mut s = arc2.lock().unwrap_or_else(|e| e.into_inner());
                             s.toggle_2 = val;
                         })),
                 )
@@ -113,7 +113,7 @@ fn catalog() -> Vec<GalleryEntry> {
                                 .color([0.7, 0.7, 0.7, 1.0]),
                         )
                         .child(Slider::new(state.slider_value, 0.0..=1.0, move |val| {
-                            let mut s = arc.lock().unwrap();
+                            let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
                             s.slider_value = val;
                         })),
                 )
@@ -133,7 +133,7 @@ fn catalog() -> Vec<GalleryEntry> {
                         ])
                         .selected(state.combobox_index)
                         .on_change(move |idx| {
-                            let mut s = arc.lock().unwrap();
+                            let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
                             s.combobox_index = idx;
                         })
                         .frame(Some(220.0), Some(38.0)),
@@ -159,7 +159,7 @@ fn catalog() -> Vec<GalleryEntry> {
                             "Search warriors...".to_string(),
                             suggestions,
                             move |query| {
-                                let mut s = arc.lock().unwrap();
+                                let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
                                 s.autocomplete_query = query;
                             },
                             move |_selected| {},
@@ -183,7 +183,7 @@ fn catalog() -> Vec<GalleryEntry> {
                         )
                         .child(
                             DatePicker::new(move |d, m, y| {
-                                let mut s = arc.lock().unwrap();
+                                let mut s = arc.lock().unwrap_or_else(|e| e.into_inner());
                                 s.selected_date = Date {
                                     year: y as i32,
                                     month: m,
@@ -219,7 +219,7 @@ fn catalog() -> Vec<GalleryEntry> {
                     ],
                     state.tab_index,
                     move |idx| {
-                        let mut s = arc_clone.lock().unwrap();
+                        let mut s = arc_clone.lock().unwrap_or_else(|e| e.into_inner());
                         s.tab_index = idx;
                     },
                 ))
@@ -273,7 +273,7 @@ fn catalog() -> Vec<GalleryEntry> {
                         .child(
                             Button::new("Open Command Palette", move || {
                                 // Mark open in gallery state
-                                arc.lock().unwrap().command_palette_open = true;
+                                arc.lock().unwrap_or_else(|e| e.into_inner()).command_palette_open = true;
                                 // Drive the MimirSpotlight system state directly.
                                 update_system_state(|s| {
                                     let mut s = s.clone();
@@ -290,19 +290,19 @@ fn catalog() -> Vec<GalleryEntry> {
                                 .command("Save File", Some("Ctrl+S"), {
                                     let arc = state_arc.clone();
                                     move || {
-                                        arc.lock().unwrap().command_palette_open = false;
+                                        arc.lock().unwrap_or_else(|e| e.into_inner()).command_palette_open = false;
                                     }
                                 })
                                 .command("Open Preferences", Some("Ctrl+P"), {
                                     let arc = state_arc.clone();
                                     move || {
-                                        arc.lock().unwrap().command_palette_open = false;
+                                        arc.lock().unwrap_or_else(|e| e.into_inner()).command_palette_open = false;
                                     }
                                 })
                                 .command("Toggle Fullscreen", Some("F11"), {
                                     let arc = state_arc.clone();
                                     move || {
-                                        arc.lock().unwrap().command_palette_open = false;
+                                        arc.lock().unwrap_or_else(|e| e.into_inner()).command_palette_open = false;
                                     }
                                 })
                                 .search(state.command_query.as_str()),
@@ -456,7 +456,7 @@ impl View for GalleryApp {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let state = self.state.lock().unwrap();
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let selected = state.selected;
         let entries = &state.entries;
         let num_entries = entries.len();
@@ -653,7 +653,7 @@ impl View for GalleryApp {
             renderer.register_handler(
                 "pointerclick",
                 std::sync::Arc::new(move |_| {
-                    let mut s = state_arc_clone.lock().unwrap();
+                    let mut s = state_arc_clone.lock().unwrap_or_else(|e| e.into_inner());
                     s.selected = i;
                 }),
             );
@@ -674,7 +674,7 @@ impl View for GalleryApp {
                 "pointerwheel",
                 std::sync::Arc::new(move |evt| {
                     if let Event::PointerWheel { delta_y, .. } = evt {
-                        let mut s = wheel_state.lock().unwrap();
+                        let mut s = wheel_state.lock().unwrap_or_else(|e| e.into_inner());
                         let num = s.entries.len();
                         if num > 0 {
                             // Throttle: only process wheel movements that represent a full step (delta > 50 or < -50)

@@ -21,7 +21,60 @@ pub struct Scene3D {
     pub textures: Vec<LoadedTexture>,
     /// Cameras defined in the scene.
     pub cameras: Vec<Camera3D>,
+    /// Skeletal and transform animations.
+    pub animations: Vec<Animation3D>,
+    /// Skins containing joint/weight hierarchies.
+    pub skins: Vec<Skin3D>,
 }
+
+/// A skeletal/node animation channel.
+#[derive(Debug, Clone)]
+pub struct Animation3D {
+    /// Human-readable name of the animation sequence.
+    pub name: String,
+    /// Targeted node channels (T/R/S).
+    pub channels: Vec<AnimationChannel3D>,
+}
+
+/// Target channels for keyframe transformations.
+#[derive(Debug, Clone)]
+pub struct AnimationChannel3D {
+    /// Index of the target Node3D being animated.
+    pub target_node: usize,
+    /// Property path to animate (Translation, Rotation, Scale, Weights).
+    pub property: AnimationProperty,
+    /// Timestamps in seconds.
+    pub keyframes: Vec<f32>,
+    /// Raw transform data matching the keyframe timestamps.
+    pub values: Vec<f32>,
+}
+
+/// Transform properties animated by glTF channels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimationProperty {
+    /// Position offset.
+    Translation,
+    /// Rotation quaternion.
+    Rotation,
+    /// Scale factor.
+    Scale,
+    /// Morph target weights.
+    MorphWeights,
+}
+
+/// A skin containing bind matrices and joint node references.
+#[derive(Debug, Clone)]
+pub struct Skin3D {
+    /// Human-readable name of the skin.
+    pub name: String,
+    /// Node index of the skeletal hierarchy root joint.
+    pub skeleton_root: Option<usize>,
+    /// Indices of nodes acting as joints in the skeleton.
+    pub joints: Vec<usize>,
+    /// Inverse bind matrices aligning joints to mesh space.
+    pub inverse_bind_matrices: Vec<glam::Mat4>,
+}
+
 
 /// A single node in a flat scene tree.
 pub struct Node3D {
@@ -39,6 +92,8 @@ pub struct Node3D {
     pub mesh_index: Option<usize>,
     /// Index into `Scene3D::cameras` if this node has a camera.
     pub camera_index: Option<usize>,
+    /// Index into `Scene3D::skins` if this node has an associated skeletal skin.
+    pub skin_index: Option<usize>,
 }
 
 /// A mesh produced from one glTF primitive.

@@ -196,6 +196,42 @@ pub struct SceneUniforms {
     pub ambient_color: [f32; 4],
 }
 
+/// Point light representation aligned for GPU uniform buffers.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+pub struct GpuPointLight {
+    /// World-space position of the point light.
+    pub position: [f32; 3],
+    /// Attenuation range cutoff.
+    pub range: f32,
+    /// RGB color.
+    pub color: [f32; 3],
+    /// Intensity value.
+    pub intensity: f32,
+}
+
+/// Spot light representation aligned for GPU uniform buffers.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable, serde::Serialize, serde::Deserialize)]
+pub struct GpuSpotLight {
+    /// World-space position of the spot light.
+    pub position: [f32; 3],
+    /// Attenuation range cutoff.
+    pub range: f32,
+    /// Normalized direction vector.
+    pub direction: [f32; 3],
+    /// Inner cone angle cutoff in radians.
+    pub inner_cone: f32,
+    /// RGB color.
+    pub color: [f32; 3],
+    /// Outer cone angle cutoff in radians.
+    pub outer_cone: f32,
+    /// Intensity value.
+    pub intensity: f32,
+    /// Padding for 16-byte alignment.
+    pub _pad: [f32; 3],
+}
+
 pub const SCENE_AURORA: u32 = 0;
 pub const SCENE_VOID: u32 = 1;
 pub const SCENE_NEBULA: u32 = 2;

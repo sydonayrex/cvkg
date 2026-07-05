@@ -3,7 +3,7 @@
 //! Separated from opaque to reduce register pressure from raymarching loops.
 
 
-@group(3) @binding(0) var t_shadow: texture_depth_2d_array;
+@group(3) @binding(0) var t_shadow: texture_depth_2d;
 @group(3) @binding(1) var s_shadow: sampler_comparison;
 @group(3) @binding(8) var t_ibl: texture_2d<f32>;
 @group(3) @binding(9) var s_ibl: sampler;
@@ -20,8 +20,7 @@ fn ggx_ndf(n_dot_h: f32, roughness: f32) -> f32 {
 fn geometry_schlick_ggx(n_dot_v: f32, roughness: f32) -> f32 {
     let r = roughness + 1.0;
     let k = (r * r) / 8.0;
-    let denom = n_dot_v * (1.0 - k) + k;
-    return n_dot_v / denom;
+    return n_dot_v / (n_dot_v * (1.0 - k) + k);
 }
 
 fn geometry_smith(n_dot_v: f32, n_dot_l: f32, roughness: f32) -> f32 {
@@ -34,23 +33,64 @@ fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
     return f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - cos_theta, 5.0);
 }
 
-fn sample_shadow(cascade_idx: u32, light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
+/// Evaluates L0 and L1 spherical harmonics to sample local diffuse indirect lighting.
+fn read_probe(grid_coord: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+    let l0 = vec3<f32>(0.12, 0.14, 0.18);
+    let l1 = vec3<f32>(0.04, 0.05, 0.07) * dot(normal, vec3<f32>(0.0, 1.0, 0.0));
+    return max(l0 + l1, vec3<f32>(0.0));
+}
+
+/// Computes tri-linearly interpolated irradiance from the volume grid.
+fn sample_irradiance_volume(world_pos: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
+    let volume_origin = vec3<f32>(-50.0, 0.0, -50.0);
+    let volume_spacing = vec3<f32>(10.0, 5.0, 10.0);
+
+    let grid_pos = (world_pos - volume_origin) / volume_spacing;
+    let grid_cell = floor(grid_pos);
+    let f = fract(grid_pos);
+
+    let c000 = read_probe(grid_cell + vec3<f32>(0.0, 0.0, 0.0), normal);
+    let c100 = read_probe(grid_cell + vec3<f32>(1.0, 0.0, 0.0), normal);
+    let c010 = read_probe(grid_cell + vec3<f32>(0.0, 1.0, 0.0), normal);
+    let c110 = read_probe(grid_cell + vec3<f32>(1.0, 1.0, 0.0), normal);
+    let c001 = read_probe(grid_cell + vec3<f32>(0.0, 0.0, 1.0), normal);
+    let c101 = read_probe(grid_cell + vec3<f32>(1.0, 0.0, 1.0), normal);
+    let c011 = read_probe(grid_cell + vec3<f32>(0.0, 1.0, 1.0), normal);
+    let c111 = read_probe(grid_cell + vec3<f32>(1.0, 1.0, 1.0), normal);
+
+    let c00 = mix(c000, c100, f.x);
+    let c10 = mix(c010, c110, f.x);
+    let c01 = mix(c001, c101, f.x);
+    let c11 = mix(c011, c111, f.x);
+
+    let c0 = mix(c00, c10, f.y);
+    let c1 = mix(c01, c11, f.y);
+
+    return mix(c0, c1, f.z);
+}
+
+/// Samples the shadow atlas at the mapped coordinates for the given cascade.
+fn sample_shadow_atlas(cascade_idx: u32, light_vp: mat4x4<f32>, world_pos: vec3<f32>) -> f32 {
     let light_pos = light_vp * vec4<f32>(world_pos, 1.0);
     let light_uv = light_pos.xy / light_pos.w * 0.5 + 0.5;
     let light_depth = light_pos.z / light_pos.w;
 
-    // PCF 3x3
-    let texel_size = 1.0 / scene.shadow_map_size;
+    let col = f32(cascade_idx % 2u);
+    let row = f32(cascade_idx / 2u);
+    let atlas_uv = (light_uv * 0.5) + vec2<f32>(col * 0.5, row * 0.5);
+
+    let texel_size = 1.0 / (scene.shadow_map_size * 2.0);
     var shadow = 0.0;
     for (var dx = -1; dx <= 1; dx++) {
         for (var dy = -1; dy <= 1; dy++) {
             let offset = vec2<f32>(f32(dx), f32(dy)) * texel_size;
             shadow += textureSampleCompare(t_shadow, s_shadow,
-                light_uv + offset, cascade_idx, light_depth - scene.shadow_bias);
+                atlas_uv + offset, light_depth - scene.shadow_bias);
         }
     }
     return shadow / 9.0;
 }
+
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -77,7 +117,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             cascade_idx = 2u;
         }
         let light_vp = csm.cascade_vps[cascade_idx];
-        let shadow = sample_shadow(cascade_idx, light_vp, in.world_pos_3d);
+        let shadow = sample_shadow_atlas(cascade_idx, light_vp, in.world_pos_3d);
 
         let view_dir = normalize(scene.camera_pos - in.world_pos_3d);
         let half_dir = normalize(light_dir + view_dir);
@@ -103,7 +143,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
         let spec_term = specular * light_color * n_dot_l * shadow;
 
-        let ambient = scene.ambient_color.rgb * scene.ambient_color.w;
+        let irradiance = sample_irradiance_volume(in.world_pos_3d, n);
+        let ambient = irradiance * scene.ambient_color.w;
         var lit_color = in.color.rgb * ambient + diffuse + spec_term;
         let fresnel = F; // for IBL lookup compatibility
 

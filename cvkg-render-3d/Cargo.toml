@@ -20,8 +20,15 @@ bytemuck = { workspace = true }
 cvkg-core = { workspace = true }
 cvkg-render-gpu = { workspace = true }
 cvkg-spatial = { workspace = true }
+cvkg-gltf = { workspace = true, optional = true }
+cvkg-scene = { workspace = true, optional = true }
 tracing = { workspace = true }
 log = { workspace = true }
+
+[features]
+default = []
+gltf = ["dep:cvkg-gltf"]
+scene = ["dep:cvkg-scene"]
 
 [dev-dependencies]
 naga = { workspace = true }

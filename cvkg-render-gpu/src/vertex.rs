@@ -217,3 +217,26 @@ impl FillVertexConstructor<Vertex> for SceneVertexConstructor {
         }
     }
 }
+
+/// Raw input vertex representation for compute-skinning calculations.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct SkinnedVertex {
+    pub position: [f32; 3],
+    pub _pad0: f32,
+    pub normal: [f32; 3],
+    pub _pad1: f32,
+    pub joint_indices: [u32; 4],
+    pub joint_weights: [f32; 4],
+}
+
+/// Output vertex representation containing computed position and normal.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct SkinnedOutput {
+    pub position: [f32; 3],
+    pub _pad0: f32,
+    pub normal: [f32; 3],
+    pub _pad1: f32,
+}
+

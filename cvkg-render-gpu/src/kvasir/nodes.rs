@@ -8,6 +8,7 @@ use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
 use crate::passes::opaque3d::Opaque3dNode;
 use crate::passes::pre_world_panel::PreWorldPanelNode;
 use crate::passes::shadow::{DirectionalLight, GpuMesh3d, ShadowNode};
+use crate::passes::skinning::SkinningNode;
 use crate::passes::transparent::TransparentNode;
 use crate::passes::ui::UINode;
 use crate::passes::volumetric::VolumetricNode;
@@ -39,6 +40,7 @@ pub enum PassId {
     Opaque3d,
     /// Transparent 3D pass with back-to-front sorting.
     Transparent3d,
+    ComputeSkinning,
 }
 
 pub struct PresentNode {
@@ -187,7 +189,15 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
         last_scene_node = volumetric;
     }
 
-    // 3D Shadow pass (runs before opaque 3D, outputs shadow map)
+    // 3D Skinning compute pass (runs before shadow, dispatches GPU skinning for all skinned meshes)
+    let skinning_node = builder.add_node(Box::new(SkinningNode {
+        inputs: vec![],
+        outputs: vec![],
+    }));
+    // SkinningNode writes to per-mesh dst_buffers; no resource connections needed.
+    // It must run before shadow/opaque3d passes that read the skinned vertex data.
+
+    // 3D Shadow pass (runs after skinning, outputs shadow map)
     if let Some(light) = &config.directional_light
         && (!config.mesh_instances_3d.is_empty() || !config.transparent_meshes_3d.is_empty())
     {
@@ -199,6 +209,8 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
             cascade_splits: config.cascade_splits,
             camera_view_proj: config.camera_view_proj,
         }));
+        // Shadow runs after skinning — skinning writes to per-mesh dst_buffers.
+        // No resource connection needed since skinning writes to buffers, not textures.
         // Shadow runs before scene — scene reads the shadow map.
 
         // 3D Opaque pass (runs after shadow, reads shadow map)

@@ -27,8 +27,15 @@ thread_local! {
 
 /// RAII guard that clears `GPU_FRAME_PTR` on drop.
 ///
-/// # Safety
+/// # Safety Contract
 /// Construct ONLY while holding a `MutexGuard<GpuRenderer>` that outlives this guard.
+/// The pointer stored in `GPU_FRAME_PTR` must remain valid for the entire lifetime
+/// of this guard. Dropping the guard invalidates the pointer.
+///
+/// # Drop Ordering
+/// The guard MUST be dropped BEFORE the `MutexGuard` that produced the pointer.
+/// In practice, this means the guard must be created in a scope that outlives
+/// the render pass but is nested within the mutex guard's scope.
 pub(crate) struct GpuFramePtrGuard;
 
 impl GpuFramePtrGuard {
@@ -65,8 +72,9 @@ impl NativeRenderer {
     /// If GPU_FRAME_PTR is set (we're inside a locked render pass) uses that directly.
     /// Otherwise falls back to acquiring the mutex (safe for calls outside the render pass).
     ///
-    /// # Safety
+    /// # Safety Invariant
     /// GPU_FRAME_PTR is only non-null when a MutexGuard is live on the same thread's call stack.
+    /// The pointer must not outlive the MutexGuard that produced it.
     #[inline(always)]
     fn gpu_ref(&mut self) -> impl std::ops::DerefMut<Target = cvkg_render_gpu::GpuRenderer> + '_ {
         GPU_FRAME_PTR.with(|ptr| {
@@ -167,8 +175,15 @@ impl NativeRenderer {
         image_name: &str,
         image_path: &str,
     ) {
-        let image_data = std::fs::read(image_path)
-            .unwrap_or_else(|e| panic!("Failed to load background image '{}': {}", image_path, e));
+        let image_data = match std::fs::read(image_path) {
+            Ok(data) => data,
+            Err(e) => {
+                tracing::error!("Failed to load background image '{}': {}", image_path, e);
+                // Run without background image instead of panicking
+                Self::run(view, None);
+                return;
+            }
+        };
         let assets = vec![(image_name.to_string(), image_data)];
         Self::run(view, Some(assets));
     }
@@ -622,7 +637,9 @@ impl cvkg_core::Renderer for NativeRenderer {
 
     fn capture_png(&mut self) -> Vec<u8> {
         tracing::info!("CAPTURING_FRAME: Initiating GPU readback...");
-        let gpu = self.gpu.lock().unwrap_or_else(|p| p.into_inner());
+        // Use gpu_ref() to avoid double-locking if we're inside a render pass.
+        // This will use the raw pointer fast path if available, or acquire the mutex.
+        let gpu = self.gpu_ref();
         pollster::block_on(gpu.capture_frame()).unwrap_or_else(|e| {
             tracing::error!("GPU frame capture failed: {}", e);
             Vec::new()

@@ -501,6 +501,36 @@ impl SceneGraph {
             }
         }
     }
+
+    /// Return an iterator over all 3D nodes (`is_3d == true`).
+    ///
+    /// Useful for the `SceneFlattener` to quickly collect 3D scene content
+    /// without scanning the entire graph.
+    pub fn nodes_3d(&self) -> impl Iterator<Item = &VNode> {
+        self.nodes.values().filter(|node| node.is_3d)
+    }
+
+    /// Build a parent-ID map for 3D nodes.
+    ///
+    /// Returns a `HashMap<NodeId, NodeId>` mapping each 3D node's ID to its
+    /// parent's ID. Root 3D nodes (no parent) are omitted from the map.
+    /// Builds the map in O(n) by scanning all children once.
+    pub fn parent_map_3d(&self) -> HashMap<NodeId, NodeId> {
+        // Build complete parent map in a single O(n) pass.
+        let mut all_parents: HashMap<NodeId, NodeId> = HashMap::new();
+        for (parent_id, node) in &self.nodes {
+            for child_id in &node.children {
+                all_parents.insert(*child_id, *parent_id);
+            }
+        }
+        // Filter to 3D nodes only.
+        all_parents
+            .into_iter()
+            .filter(|(child_id, _)| {
+                self.nodes.get(child_id).map_or(false, |n| n.is_3d)
+            })
+            .collect()
+    }
 }
 
 /// A patch operation to apply to the retained scene graph.
@@ -905,5 +935,115 @@ mod tests {
         // All three keys must be valid u32 pairs.
         let _ = (k_neg.0, k_neg.1);
         let _ = (k_pos.0, k_pos.1);
+    }
+
+    #[test]
+    fn test_nodes_3d_empty_graph() {
+        let scene = SceneGraph::new();
+        let nodes: Vec<_> = scene.nodes_3d().collect();
+        assert!(nodes.is_empty());
+    }
+
+    #[test]
+    fn test_nodes_3d_only_3d_nodes() {
+        let mut scene = SceneGraph::new();
+        let id_2d = scene.next_id();
+        let mut node_2d = VNode::new(id_2d, "2D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        scene.add_node(node_2d, None);
+
+        let id_3d = scene.next_id();
+        let mut node_3d = VNode::new(id_3d, "3D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        node_3d.is_3d = true;
+        node_3d.position_3d = [1.0, 2.0, 3.0];
+        scene.add_node(node_3d, None);
+
+        let nodes_3d: Vec<_> = scene.nodes_3d().collect();
+        assert_eq!(nodes_3d.len(), 1);
+        assert_eq!(nodes_3d[0].id, id_3d);
+        assert!(nodes_3d[0].is_3d);
+    }
+
+    #[test]
+    fn test_parent_map_3d_empty_graph() {
+        let scene = SceneGraph::new();
+        let map = scene.parent_map_3d();
+        assert!(map.is_empty());
+    }
+
+    #[test]
+    fn test_parent_map_3d_root_3d_node_omitted() {
+        let mut scene = SceneGraph::new();
+        let id_root = scene.next_id();
+        let mut root_3d = VNode::new(id_root, "Root3D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        root_3d.is_3d = true;
+        root_3d.position_3d = [0.0, 0.0, 0.0];
+        scene.add_node(root_3d, None);
+
+        let map = scene.parent_map_3d();
+        assert!(map.is_empty(), "root 3D node should not appear in parent map");
+    }
+
+    #[test]
+    fn test_parent_map_3d_child_3d_with_3d_parent() {
+        let mut scene = SceneGraph::new();
+        let id_parent = scene.next_id();
+        let mut parent_3d = VNode::new(id_parent, "Parent3D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        parent_3d.is_3d = true;
+        parent_3d.position_3d = [10.0, 0.0, 0.0];
+        scene.add_node(parent_3d, None);
+
+        let id_child = scene.next_id();
+        let mut child_3d = VNode::new(id_child, "Child3D", Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        child_3d.is_3d = true;
+        child_3d.position_3d = [1.0, 0.0, 0.0];
+        scene.add_node(child_3d, Some(id_parent));
+
+        let map = scene.parent_map_3d();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get(&id_child), Some(&id_parent));
+    }
+
+    #[test]
+    fn test_parent_map_3d_3d_child_with_2d_parent() {
+        let mut scene = SceneGraph::new();
+        let id_parent = scene.next_id();
+        let mut parent_2d = VNode::new(id_parent, "Parent2D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        scene.add_node(parent_2d, None);
+
+        let id_child = scene.next_id();
+        let mut child_3d = VNode::new(id_child, "Child3D", Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        child_3d.is_3d = true;
+        child_3d.position_3d = [1.0, 0.0, 0.0];
+        scene.add_node(child_3d, Some(id_parent));
+
+        let map = scene.parent_map_3d();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get(&id_child), Some(&id_parent));
+    }
+
+    #[test]
+    fn test_parent_map_3d_mixed_2d_3d_children() {
+        let mut scene = SceneGraph::new();
+        let id_parent = scene.next_id();
+        let mut parent_3d = VNode::new(id_parent, "Parent3D", Rect { x: 0.0, y: 0.0, width: 100.0, height: 100.0 });
+        parent_3d.is_3d = true;
+        scene.add_node(parent_3d, None);
+
+        // 2D child
+        let id_child_2d = scene.next_id();
+        let mut child_2d = VNode::new(id_child_2d, "Child2D", Rect { x: 10.0, y: 10.0, width: 50.0, height: 50.0 });
+        scene.add_node(child_2d, Some(id_parent));
+
+        // 3D child
+        let id_child_3d = scene.next_id();
+        let mut child_3d = VNode::new(id_child_3d, "Child3D", Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 });
+        child_3d.is_3d = true;
+        child_3d.position_3d = [1.0, 0.0, 0.0];
+        scene.add_node(child_3d, Some(id_parent));
+
+        let map = scene.parent_map_3d();
+        assert_eq!(map.len(), 1);
+        assert_eq!(map.get(&id_child_3d), Some(&id_parent));
+        assert!(!map.contains_key(&id_child_2d));
     }
 }

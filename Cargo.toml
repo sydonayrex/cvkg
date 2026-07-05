@@ -136,7 +136,7 @@ arboard = "3.6"
 # Audio playback backend for native targets
 rodio = { version = "0.22", default-features = false, features = ["wav", "mp3"] }
 # SVG serializer (write path) -- usvg is read-only
-quick-xml = "0.40"
+quick-xml = "0.41"
 # SVG parsing and serialization (usvg provides both read and write)
 usvg = "0.47"
 # Boolean path operations (union, intersect, subtract, xor)

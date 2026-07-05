@@ -16,6 +16,16 @@ pub use evdev_backend::EvdevBackend;
 use crate::error::InputError;
 
 /// Converts a cvkg-inputs `InputEvent` into a `cvkg_core::Event`.
+///
+/// # Mapping Notes
+/// - `MouseMove` → `PointerMove` with `dx/dy` as relative x/y (lossy — absolute position lost)
+/// - `MouseButton` → `PointerDown`/`PointerUp` (missing: x/y position, stylus fields default to 0)
+/// - `MouseWheel` → `PointerWheel` (missing: x/y position defaults to 0)
+/// - `Touch` → `TouchStart`/`TouchMove`/`TouchEnd`/`TouchCancel`
+///
+/// # Unmapped Events
+/// `Paste`, `Ime`, `Copy`, `Cut`, `FocusIn`, `FocusOut`, and `Drag*` events have no
+/// cvkg-inputs equivalent. Use `from_cvkg_event` for the reverse (partial) mapping.
 #[inline]
 pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
     match event {
@@ -62,11 +72,65 @@ pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
             barrel_rotation: None,
             pointer_precision: 0.0,
         }),
-        _ => None,
+        InputEvent::MouseButton { button, pressed } => {
+            if *pressed {
+                Some(cvkg_core::Event::PointerDown {
+                    x: 0.0,
+                    y: 0.0,
+                    button: *button,
+                    proximity_field: 0.0,
+                    tilt: None,
+                    azimuth: None,
+                    pressure: None,
+                    barrel_rotation: None,
+                    pointer_precision: 0.0,
+                })
+            } else {
+                Some(cvkg_core::Event::PointerUp {
+                    x: 0.0,
+                    y: 0.0,
+                    button: *button,
+                    tilt: None,
+                    azimuth: None,
+                    pressure: None,
+                    barrel_rotation: None,
+                    pointer_precision: 0.0,
+                })
+            }
+        }
+        InputEvent::MouseWheel { dx, dy } => Some(cvkg_core::Event::PointerWheel {
+            x: 0.0,
+            y: 0.0,
+            delta_x: *dx,
+            delta_y: *dy,
+            pointer_precision: 0.0,
+        }),
+        InputEvent::Touch(touch) => match touch {
+            TouchEvent::Down { id, x, y } => Some(cvkg_core::Event::TouchStart {
+                x: *x,
+                y: *y,
+                touch_id: *id,
+            }),
+            TouchEvent::Move { id, x, y } => Some(cvkg_core::Event::TouchMove {
+                x: *x,
+                y: *y,
+                touch_id: *id,
+            }),
+            TouchEvent::Up { id } => Some(cvkg_core::Event::TouchEnd {
+                x: 0.0,
+                y: 0.0,
+                touch_id: *id,
+            }),
+            TouchEvent::Cancel => Some(cvkg_core::Event::TouchCancel { touch_id: 0 }),
+        },
     }
 }
 
 /// Converts a cvkg_core::Event into a cvkg-inputs `InputEvent` (reverse mapping).
+///
+/// Only events with a cvkg-inputs equivalent are converted. Key, touch, pointer,
+/// and clipboard events are unmapped in the reverse direction because cvkg-inputs
+/// does not track absolute pointer position or text content.
 #[inline]
 pub fn from_cvkg_event(event: &cvkg_core::Event) -> Option<InputEvent> {
     match event {

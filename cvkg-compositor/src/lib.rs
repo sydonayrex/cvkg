@@ -28,7 +28,7 @@ pub mod layer;
 pub mod template;
 
 // Re-export primary types for convenience.
-pub use engine::{CommandBuckets, CompositorEngine, DamageInfo, RoutedDrawCommand};
+pub use engine::{CommandBuckets, CompositorEngine, DamageInfo, RenderCommand, RoutedDrawCommand};
 pub use layer::{DrawCommand, Layer, LayerId, LayerTree, Material};
 pub use template::{RenderTemplate, TemplateError};
 

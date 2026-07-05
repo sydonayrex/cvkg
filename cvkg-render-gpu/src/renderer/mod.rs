@@ -290,6 +290,17 @@ pub struct GpuRenderer {
     /// Environment bind group layout (texture + sampler).
     pub(crate) env_bind_group_layout: wgpu::BindGroupLayout,
 
+    pub(crate) skinning_compute_pipeline: wgpu::ComputePipeline,
+    pub(crate) skinning_bgl0: wgpu::BindGroupLayout,
+    pub(crate) skinning_bgl1: wgpu::BindGroupLayout,
+    pub(crate) skinning_bgl2: wgpu::BindGroupLayout,
+    /// Per-mesh skinning buffer pairs (src, dst) accumulated during frame submission.
+    /// Cleared at the start of each frame. SkinningNode dispatches compute for each pair.
+    pub(crate) skinning_buffer_pairs: Vec<(wgpu::Buffer, wgpu::Buffer)>,
+    pub(crate) skinning_joint_matrices: wgpu::Buffer,
+    pub(crate) skinning_morph_positions: wgpu::Buffer,
+    pub(crate) skinning_morph_weights: wgpu::Buffer,
+
     // Telemetry
     pub telemetry: cvkg_core::TelemetryData,
 

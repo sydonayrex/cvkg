@@ -8,6 +8,10 @@ pub struct Mesh {
     pub indices: Vec<u32>,
     pub tex_coords: Vec<[f32; 2]>, // ← NEW: UV channel 0
     pub tangents: Vec<[f32; 4]>,
+    /// Skeletal joints influencing each vertex.
+    pub joint_indices: Vec<[u32; 4]>,
+    /// Linear weights associated with each joint influence.
+    pub joint_weights: Vec<[f32; 4]>,
 }
 impl Mesh {
     pub fn from_obj(data: &[u8]) -> anyhow::Result<Vec<Self>> {
@@ -26,12 +30,12 @@ impl Mesh {
             let normals = if mesh.normals.is_empty() {
                 vec![[0.0, 0.0, 1.0]; vertices.len()]
             } else {
-                mesh.normals.chunks(3).map(|c| [c[0], c[1], c[2]]).collect()
+                mesh.normals.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect()
             };
             let tex_coords = if mesh.texcoords.is_empty() {
                 vec![[0.0, 0.0]; vertices.len()]
             } else {
-                mesh.texcoords.chunks(2).map(|c| [c[0], c[1]]).collect()
+                mesh.texcoords.chunks_exact(2).map(|c| [c[0], c[1]]).collect()
             };
             let mut new_mesh = Mesh {
                 vertices,
@@ -39,7 +43,22 @@ impl Mesh {
                 indices: mesh.indices,
                 tex_coords,
                 tangents: Vec::new(),
+                joint_indices: Vec::new(),
+                joint_weights: Vec::new(),
             };
+
+            // Validate index bounds before computing tangents
+            let vertex_count = new_mesh.vertices.len();
+            for &idx in &new_mesh.indices {
+                if (idx as usize) >= vertex_count {
+                    anyhow::bail!(
+                        "Index {} out of bounds for {} vertices in OBJ mesh",
+                        idx,
+                        vertex_count
+                    );
+                }
+            }
+
             new_mesh.tangents = new_mesh.compute_tangents();
             meshes.push(new_mesh);
         }
@@ -68,6 +87,8 @@ impl Mesh {
             indices: stl.indices,
             tex_coords: vec![[0.0, 0.0]; vertex_count], // STL has no UVs
             tangents: Vec::new(),
+            joint_indices: Vec::new(),
+            joint_weights: Vec::new(),
         };
         m.tangents = vec![[0.0, 0.0, 1.0, 1.0]; vertex_count];
         Ok(m)
@@ -315,11 +336,10 @@ impl Mesh {
     /// Compute the convex hull of this mesh using the QuickHull algorithm.
     /// Returns a vector of hull vertex indices in counterclockwise order.
     ///
-    /// # Panics
-    /// Panics if the mesh has fewer than 3 vertices.
+    /// Returns an empty vector if the mesh has fewer than 3 vertices.
     pub fn convex_hull(&self) -> Vec<usize> {
         if self.vertices.len() < 3 {
-            panic!("Convex hull requires at least 3 vertices");
+            return Vec::new();
         }
 
         // QuickHull algorithm for 3D meshes

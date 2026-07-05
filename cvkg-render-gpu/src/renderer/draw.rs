@@ -1126,6 +1126,10 @@ impl GpuRenderer {
             }
         }
 
+        // Clear skinning buffer pairs after all nodes have executed
+        // (SkinningNode dispatched compute for each pair during execution)
+        self.skinning_buffer_pairs.clear();
+
         // ── Particle Compute Pass ──────────────────────────────────────────
         // Flush staged particles to GPU, then run compute integration.
         // Must run BEFORE the submit so particle positions are up-to-date.
@@ -1547,7 +1551,17 @@ impl GpuRenderer {
             cvkg_compositor::Material::Color => cvkg_core::DrawMaterial::Blend { mode: 14 },
             cvkg_compositor::Material::Luminosity => cvkg_core::DrawMaterial::Blend { mode: 15 },
             cvkg_compositor::Material::Opaque => cvkg_core::DrawMaterial::Opaque,
-            _ => cvkg_core::DrawMaterial::Opaque,
+            cvkg_compositor::Material::Isolated => {
+                tracing::warn!("Isolated material reached convert_compositor_material (should be handled by PushOffscreen/PopOffscreen)");
+                cvkg_core::DrawMaterial::Opaque
+            }
+            cvkg_compositor::Material::ShaderEffect { effect_name, .. } => {
+                tracing::warn!(
+                    "ShaderEffect '{}' reached convert_compositor_material without params parsing",
+                    effect_name
+                );
+                cvkg_core::DrawMaterial::Opaque
+            }
         }
     }
 
@@ -1969,18 +1983,61 @@ impl GpuRenderer {
             model_row0: [row0.x, row0.y, row0.z, row0.w],
             model_row1: [row1.x, row1.y, row1.z, row1.w],
             model_row2: [row2.x, row2.y, row2.z, row2.w],
-            material_overrides: [material.metallic, material.roughness, 0.0, material.opacity],
+            // material_overrides: [metallic, roughness, reserved, opacity]
+            // The third element is reserved for future use (e.g., AO or emissive).
+            material_overrides: [material.metallic, material.roughness, 0.0 /* reserved */, material.opacity],
             uv_scale: material.uv_scale,
             uv_offset: material.uv_offset,
         });
+
+        // 1. Allocate compute skinning buffers if skeletal joint data is present
+        let skinned_buffer = if !mesh.joint_indices.is_empty() && !mesh.joint_weights.is_empty() {
+            let mut skinned_vertices = Vec::with_capacity(mesh.vertices.len());
+            for i in 0..mesh.vertices.len() {
+                let joints = mesh.joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
+                let weights = mesh.joint_weights.get(i).copied().unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                skinned_vertices.push(crate::vertex::SkinnedVertex {
+                    position: mesh.vertices[i],
+                    _pad0: 0.0,
+                    normal: mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
+                    _pad1: 0.0,
+                    joint_indices: joints,
+                    joint_weights: weights,
+                });
+            }
+
+            let src_bytes: Vec<u8> = bytemuck::cast_slice(&skinned_vertices).to_vec();
+            let src_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Skinned Mesh Source Buffer"),
+                size: src_bytes.len() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.queue.write_buffer(&src_buffer, 0, &src_bytes);
+
+            let dst_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Skinned Mesh Destination Buffer"),
+                size: (mesh.vertices.len() * std::mem::size_of::<crate::vertex::SkinnedOutput>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+
+            // Push this mesh's buffer pair for SkinningNode to dispatch
+            self.skinning_buffer_pairs.push((src_buffer, dst_buffer.clone()));
+
+            Some(dst_buffer)
+        } else {
+            None
+        };
 
         let gpu_mesh = crate::passes::shadow::GpuMesh3d {
             vertex_buffer,
             index_buffer,
             index_count: mesh.indices.len() as u32,
-            transform: model_matrix,
+            transform: *model_matrix,
             view_depth,
             instance_index,
+            skinned_buffer,
         };
 
         if material.opacity < 1.0 {
@@ -1996,5 +2053,172 @@ impl GpuRenderer {
                 intensity: 1.0,
             });
         }
+    }
+
+    /// Submit a 3D mesh for GPU rendering with an explicit Mat4 transform.
+    ///
+    /// Accepts a pre-computed world-space transformation matrix directly,
+    /// avoiding the Transform3D → Mat4 conversion.
+    ///
+    /// Used by `SceneFlattener` output and any code that already has a
+    /// computed model matrix.
+    pub fn submit_mesh_3d_matrix(
+        &mut self,
+        mesh: &cvkg_core::Mesh,
+        material: &cvkg_core::Material3D,
+        model_matrix: &glam::Mat4,
+    ) {
+        let mut mesh_vertices: Vec<Vertex3D> = Vec::with_capacity(mesh.vertices.len());
+        for (i, pos) in mesh.vertices.iter().enumerate() {
+            let raw_uv = mesh.tex_coords.get(i).copied().unwrap_or([0.0, 0.0]);
+            let uv = [
+                raw_uv[0] * material.uv_scale[0] + material.uv_offset[0],
+                raw_uv[1] * material.uv_scale[1] + material.uv_offset[1],
+            ];
+            mesh_vertices.push(Vertex3D {
+                position: *pos,
+                normal: mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
+                uv,
+                color: material.base_color,
+                tangent: mesh
+                    .tangents
+                    .get(i)
+                    .copied()
+                    .unwrap_or([0.0, 0.0, 1.0, 1.0]),
+            });
+        }
+
+        let vertex_bytes: Vec<u8> = bytemuck::cast_slice(&mesh_vertices).to_vec();
+        let vertex_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Mesh3D Matrix Vertex Buffer"),
+            size: (mesh_vertices.len() * std::mem::size_of::<Vertex3D>()) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let index_bytes: Vec<u8> = bytemuck::cast_slice(&mesh.indices).to_vec();
+        let index_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Mesh3D Matrix Index Buffer"),
+            size: (mesh.indices.len() * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        self.queue.write_buffer(&vertex_buffer, 0, &vertex_bytes);
+        self.queue.write_buffer(&index_buffer, 0, &index_bytes);
+
+        let (_center, half_extents) = mesh.aabb();
+        let mesh_radius = half_extents.length().max(1.0);
+        if mesh_radius > self.pending_scene_radius {
+            self.pending_scene_radius = mesh_radius;
+        }
+
+        let view_depth = (0..mesh.vertices.len())
+            .map(|i| {
+                let world_pos = model_matrix.transform_point3(glam::Vec3::from(mesh.vertices[i]));
+                (glam::Vec3::from(self.current_scene.camera_pos) - world_pos).length()
+            })
+            .sum::<f32>()
+            / mesh.vertices.len().max(1) as f32;
+
+        let row0 = model_matrix.row(0);
+        let row1 = model_matrix.row(1);
+        let row2 = model_matrix.row(2);
+        let instance_index = self.instance_data_3d.len() as u32;
+        self.instance_data_3d.push(InstanceData3D {
+            model_row0: [row0.x, row0.y, row0.z, row0.w],
+            model_row1: [row1.x, row1.y, row1.z, row1.w],
+            model_row2: [row2.x, row2.y, row2.z, row2.w],
+            // material_overrides: [metallic, roughness, reserved, opacity]
+            // The third element is reserved for future use (e.g., AO or emissive).
+            material_overrides: [material.metallic, material.roughness, 0.0 /* reserved */, material.opacity],
+            uv_scale: material.uv_scale,
+            uv_offset: material.uv_offset,
+        });
+
+        let skinned_buffer = if !mesh.joint_indices.is_empty() && !mesh.joint_weights.is_empty() {
+            let mut skinned_vertices = Vec::with_capacity(mesh.vertices.len());
+            for i in 0..mesh.vertices.len() {
+                let joints = mesh.joint_indices.get(i).copied().unwrap_or([0, 0, 0, 0]);
+                let weights = mesh.joint_weights.get(i).copied().unwrap_or([0.0, 0.0, 0.0, 0.0]);
+                skinned_vertices.push(crate::vertex::SkinnedVertex {
+                    position: mesh.vertices[i],
+                    _pad0: 0.0,
+                    normal: mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
+                    _pad1: 0.0,
+                    joint_indices: joints,
+                    joint_weights: weights,
+                });
+            }
+
+            let src_bytes: Vec<u8> = bytemuck::cast_slice(&skinned_vertices).to_vec();
+            let src_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Skinned Mesh Source Buffer"),
+                size: src_bytes.len() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            self.queue.write_buffer(&src_buffer, 0, &src_bytes);
+
+            let dst_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Skinned Mesh Destination Buffer"),
+                size: (mesh.vertices.len() * std::mem::size_of::<crate::vertex::SkinnedOutput>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+
+            self.skinning_buffer_pairs.push((src_buffer, dst_buffer.clone()));
+
+            Some(dst_buffer)
+        } else {
+            None
+        };
+
+        let gpu_mesh = crate::passes::shadow::GpuMesh3d {
+            vertex_buffer,
+            index_buffer,
+            index_count: mesh.indices.len() as u32,
+            transform: *model_matrix,
+            view_depth,
+            instance_index,
+            skinned_buffer,
+        };
+
+        if material.opacity < 1.0 {
+            self.pending_transparent_instances_3d.push(gpu_mesh);
+        } else {
+            self.pending_mesh_instances_3d.push(gpu_mesh);
+        }
+
+        if self.pending_directional_light.is_none() {
+            self.pending_directional_light = Some(crate::passes::shadow::DirectionalLight {
+                direction: glam::Vec3::new(0.5, 0.8, 0.6),
+                color: glam::Vec3::new(1.0, 0.95, 0.9),
+                intensity: 1.0,
+            });
+        }
+    }
+
+    /// Upload pre-computed joint matrices to the GPU skinning buffer.
+    ///
+    /// # Contract
+    /// Called by the AnimationPlayer before each frame's `submit_mesh_3d` calls.
+    /// Matrices must be in column-major order (glam::Mat4 layout). The buffer
+    /// supports up to 256 joints — silently truncates if exceeded.
+    pub fn upload_joint_matrices(&mut self, matrices: &[glam::Mat4]) {
+        if matrices.is_empty() {
+            return;
+        }
+        let max_joints = 256;
+        if matrices.len() > max_joints {
+            tracing::warn!(
+                "upload_joint_matrices: {} joints exceeds maximum of 256, truncating",
+                matrices.len()
+            );
+        }
+        let count = matrices.len().min(max_joints);
+        let bytes = bytemuck::cast_slice(&matrices[..count]);
+        self.queue
+            .write_buffer(&self.skinning_joint_matrices, 0, bytes);
     }
 }

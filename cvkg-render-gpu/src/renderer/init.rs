@@ -334,6 +334,9 @@ impl GpuRenderer {
                     None
                 }
             };
+            // SAFETY: create_pipeline_cache is marked unsafe in wgpu but only reads the
+            // data slice and does not require lifetime guarantees beyond the descriptor.
+            // The cache_data is a Vec<u8> that lives for the duration of this call.
             Some(unsafe {
                 device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
                     label: Some("CVKG Pipeline Cache"),
@@ -509,13 +512,13 @@ impl GpuRenderer {
         let pbr_material_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
-                    // Binding 0: Shadow Map Texture Array (depth array)
+                    // Binding 0: Shadow Map Texture Atlas (single 2D depth)
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2Array,
+                            view_dimension: wgpu::TextureViewDimension::D2,
                             sample_type: wgpu::TextureSampleType::Depth,
                         },
                         count: None,
@@ -795,9 +798,9 @@ impl GpuRenderer {
         let shadow_map_texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Surtr CSM Shadow Map Texture"),
             size: wgpu::Extent3d {
-                width: shadow_map_size,
-                height: shadow_map_size,
-                depth_or_array_layers: 4, // 4 cascades
+                width: shadow_map_size * 2, // 2x2 grid double resolution
+                height: shadow_map_size * 2,
+                depth_or_array_layers: 1, // Single 2D texture atlas
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -809,7 +812,7 @@ impl GpuRenderer {
 
         let shadow_map_view = shadow_map_texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some("Surtr CSM Shadow Map View"),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            dimension: Some(wgpu::TextureViewDimension::D2),
             ..wgpu::TextureViewDescriptor::default()
         });
 
@@ -930,7 +933,39 @@ impl GpuRenderer {
 
         let glass_output_bind_group_layout = env_bind_group_layout.clone();
 
+        // Skinning buffers are now managed per-mesh in skinning_buffer_pairs (Vec<(Buffer, Buffer)>)
+        // No persistent src/dst buffers needed — each submit_mesh_3d creates its own pair.
+
+        let skinning_joint_matrices = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Skinning Joint Matrices Buffer"),
+            size: (256 * std::mem::size_of::<glam::Mat4>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let skinning_morph_positions = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Skinning Morph Positions Buffer"),
+            size: (65536 * 2 * 16) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let skinning_morph_weights = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Skinning Morph Weights Buffer"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
+            skinning_compute_pipeline: pipes.skinning_compute_pipeline.clone(),
+            skinning_bgl0: pipes.skinning_bgl0.clone(),
+            skinning_bgl1: pipes.skinning_bgl1.clone(),
+            skinning_bgl2: pipes.skinning_bgl2.clone(),
+            skinning_buffer_pairs: Vec::new(),
+            skinning_joint_matrices,
+            skinning_morph_positions,
+            skinning_morph_weights,
             registry,
             ai_material_rx: None,
             active_offscreens: Vec::new(),

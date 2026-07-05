@@ -1,11 +1,11 @@
-use cvkg_render_3d::types::{DirectionalLight, Light, PointLight, ShadowQuality};
+use cvkg_render_3d::types::{DirectionalLightConfig, Light, PointLight, ShadowQuality};
 use glam::Vec3;
 
 /// Verify light types construct correctly with sane defaults.
 
 #[test]
 fn test_directional_light_defaults() {
-    let light = DirectionalLight::default();
+    let light = DirectionalLightConfig::default();
     assert_eq!(light.shadow_map_size, 1024); // Medium quality default
     assert!((light.shadow_bias - 0.005).abs() < 1e-6);
 }
@@ -32,7 +32,7 @@ fn test_shadow_quality_variants() {
 
 #[test]
 fn test_light_enum_dispatch() {
-    let d = Light::Directional(DirectionalLight::default());
+    let d = Light::Directional(DirectionalLightConfig::default());
     let p = Light::Point(PointLight {
         position: Vec3::ZERO,
         color: [1.0; 3],

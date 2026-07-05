@@ -30,6 +30,46 @@ pub struct SphConfig {
     pub max_particles: usize,
 }
 
+impl SphConfig {
+    /// Returns a new config only if all parameters are valid.
+    ///
+    /// # Errors
+    /// Returns `Err(String)` if any parameter is out of range.
+    pub fn try_new(
+        rest_density: f32,
+        gas_constant: f32,
+        viscosity: f32,
+        surface_tension: f32,
+        smoothing_radius: f32,
+        particle_mass: f32,
+        gravity_scale: f32,
+        max_particles: usize,
+    ) -> Result<Self, String> {
+        if smoothing_radius <= 0.0 {
+            return Err("smoothing_radius must be > 0".into());
+        }
+        if particle_mass <= 0.0 {
+            return Err("particle_mass must be > 0".into());
+        }
+        if rest_density <= 0.0 {
+            return Err("rest_density must be > 0".into());
+        }
+        if !smoothing_radius.is_finite() || !particle_mass.is_finite() {
+            return Err("smoothing_radius and particle_mass must be finite".into());
+        }
+        Ok(Self {
+            rest_density,
+            gas_constant,
+            viscosity,
+            surface_tension,
+            smoothing_radius,
+            particle_mass,
+            gravity_scale,
+            max_particles,
+        })
+    }
+}
+
 impl Default for SphConfig {
     fn default() -> Self {
         Self {

@@ -44,6 +44,7 @@ pub use future_views::{HologramView, ParticleEmitter, StreamingText};
 
 // P1-13: extracted modules
 pub mod asset;
+pub mod assets;
 pub mod dependency;
 pub mod error_boundary;
 pub mod knowledge;
@@ -54,6 +55,7 @@ pub mod window;
 
 // P1-13: re-exports for backward compatibility
 pub use asset::{AssetKey, AssetState, DesignTokens, TokenValue};
+pub use assets::{AssetHotReloadListener, AssetServer};
 pub use dependency::{DependencyGraph, FrameBudgetTracker, InputLatencyTracker, SubsystemBudget};
 pub use error_boundary::{ComponentErrorState, ErrorBoundary};
 #[cfg(not(target_arch = "wasm32"))]

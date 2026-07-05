@@ -1,8 +1,9 @@
 //! Shadow pass Kvasir node — renders depth-only shadow map from light's perspective.
 
-use crate::types::{DirectionalLight, GpuMesh3d};
 use cvkg_render_gpu::kvasir::nodes::PassId;
 use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
+use cvkg_render_gpu::passes::shadow::{DirectionalLight, GpuMesh3d};
+use cvkg_render_gpu::renderer::GpuRenderer;
 
 /// Shadow pass node — renders depth-only shadow map from light's perspective.
 pub struct ShadowNode {
@@ -28,24 +29,19 @@ impl KvasirNode for ShadowNode {
     }
 
     fn pass_id(&self) -> PassId {
-        PassId::Opaque3d
+        PassId::Shadow
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        // Compute light VP: orthographic frustum from light direction toward scene origin.
-        let light_dir = self.light.direction;
+        let light_dir = self.light.direction.normalize();
         let scene_center = glam::Vec3::ZERO;
         let light_pos = scene_center + light_dir * self.scene_radius * 2.0;
         let light_view = glam::Mat4::look_at_lh(light_pos, scene_center, glam::Vec3::Y);
 
-        // Orthographic projection covering the scene bounds.
         let r = self.scene_radius;
         let light_proj = glam::Mat4::orthographic_lh(-r, r, -r, r, 0.0, self.scene_radius * 4.0);
-        let _light_vp = light_proj * light_view;
+        let light_vp = light_proj * light_view;
 
-        // Store light VP in SceneUniforms via the uniform buffer — write through the queue.
-        // ctx.renderer currently owns the Berserker uniform buffer; use the queue to update it.
-        // The 3D shaders access `scene.light_vp` for shadow projection.
         tracing::info!(
             "ShadowNode::execute — light_vp computed, instances={}, shadow_map={:?}, light_dir=({:.2},{:.2},{:.2})",
             self.mesh_instances.len(),
@@ -55,7 +51,6 @@ impl KvasirNode for ShadowNode {
             light_dir.z,
         );
 
-        // Get the shadow map texture view from the resource registry.
         let shadow_view = match ctx.registry.get_texture_view(self.shadow_map) {
             Some(v) => v,
             None => {
@@ -67,10 +62,23 @@ impl KvasirNode for ShadowNode {
             }
         };
 
-        // Create a depth-only render pass.
+        // Upload light VP to the renderer's scene uniforms
+        ctx.queue.write_buffer(
+            &ctx.renderer.scene_uniforms,
+            // Offset to light_vp field (after view: Mat4 (64B) + proj: Mat4 (64B) + other fields)
+            // Let's calculate: SceneUniforms has view (16), proj (16), time(4), delta_time(4), resolution(8),
+            // mouse(8), mouse_velocity(8), shatter_origin(8), shatter_time(4), shatter_force(4),
+            // berzerker_rage(4), berzerker_mode(4), scroll_offset(4), scale_factor(4), scene_type(4),
+            // _pad_vec2_align(4), fireball_pos(8), camera_pos(12+4), light_direction(12+4),
+            // light_color(12+4), ibl_enabled(4), shadow_map_size(4), shadow_bias(4), _pad_shadow(8)
+            // = 144 bytes before light_vp
+            144,
+            bytemuck::bytes_of(&light_vp),
+        );
+
         let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Shadow Pass (Depth-Only)"),
-            color_attachments: &[], // No color output.
+            color_attachments: &[],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &shadow_view,
                 depth_ops: Some(wgpu::Operations {
@@ -84,14 +92,14 @@ impl KvasirNode for ShadowNode {
             multiview_mask: None,
         });
 
-        // For each mesh, set vertex/index buffers and draw.
+        // Bind the shadow pipeline from the renderer
+        // The GpuRenderer has compiled_pipelines with shadow_pipeline
+        let pipeline = &ctx.renderer.compiled_pipelines.shadow_pipeline;
+        pass.set_pipeline(pipeline);
+
         for (_i, mesh) in self.mesh_instances.iter().enumerate() {
-            // Set vertex buffer (assumes interleaved position-normal-UV at location 0).
             pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-
-            // Bind per-instance transform via instance vertex buffer.
-            // For now, push uniforms manually — full 3D pipeline to follow.
             pass.draw_indexed(0..mesh.index_count, 0, 0..1);
         }
     }

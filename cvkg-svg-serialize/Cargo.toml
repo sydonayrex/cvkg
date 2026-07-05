@@ -8,5 +8,5 @@ description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI frame
 
 [dependencies]
 usvg = "0.47"
-quick-xml = "0.40"
+quick-xml = "0.41"
 thiserror = "2.0"

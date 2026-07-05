@@ -36,6 +36,11 @@ impl PathMorpher {
 
     /// Interpolate between the two paths based on a 0.0 to 1.0 scalar
     pub fn lerp(&self, t: f32) -> Vec<PathCommand> {
+        debug_assert_eq!(
+            self.from_path.len(),
+            self.to_path.len(),
+            "PathMorpher paths must have equal length after subdivision"
+        );
         let mut result = Vec::with_capacity(self.from_path.len());
         for (f, t_cmd) in self.from_path.iter().zip(self.to_path.iter()) {
             result.push(match (f, t_cmd) {

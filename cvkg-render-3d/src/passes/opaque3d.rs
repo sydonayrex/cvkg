@@ -1,8 +1,9 @@
 //! Opaque 3D render pass Kvasir node — renders 3D meshes with PBR shading and shadow sampling.
 
-use crate::types::{DirectionalLight, GpuMesh3d};
 use cvkg_render_gpu::kvasir::nodes::PassId;
 use cvkg_render_gpu::kvasir::{ExecutionContext, KvasirNode, ResourceId};
+use cvkg_render_gpu::passes::shadow::{DirectionalLight, GpuMesh3d};
+use cvkg_render_gpu::renderer::GpuRenderer;
 
 /// Opaque 3D render pass node — renders 3D meshes with PBR shading and PCF shadow sampling.
 pub struct Opaque3dNode {
@@ -32,25 +33,8 @@ impl KvasirNode for Opaque3dNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        tracing::info!(
-            "Opaque3dNode::execute — instances={}, shadow_map={:?}",
-            self.mesh_instances.len(),
-            self.shadow_map,
-        );
+        let shadow_view = ctx.registry.get_texture_view(self.shadow_map);
 
-        // Get the shadow map texture view from the resource registry (not used yet
-        // since full pipeline bindings are integrated with GpuRenderer's custom pipelines).
-        let _shadow_texture_view = match ctx.registry.get_texture_view(self.shadow_map) {
-            Some(v) => v,
-            None => {
-                tracing::warn!(
-                    "Opaque3dNode: shadow map texture view not found — proceeding without shadows"
-                );
-                return;
-            }
-        };
-
-        // Use the main scene render target (RES_SCENE) for color output.
         let scene_view = match ctx
             .registry
             .get_texture_view(cvkg_render_gpu::kvasir::nodes::RES_SCENE)
@@ -63,11 +47,8 @@ impl KvasirNode for Opaque3dNode {
         };
         let depth_view = ctx.depth_view;
 
-        // Background color from the current scene configuration.
-        // Access the renderer's scene to get background color.
-        let bg = [0.02f32, 0.02, 0.05, 1.0]; // Default dark background
+        let bg = [0.02f32, 0.02, 0.05, 1.0];
 
-        // Set up PBR render pass with color + depth attachments.
         let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Opaque3d Pass (PBR + Shadows)"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -87,7 +68,7 @@ impl KvasirNode for Opaque3dNode {
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: depth_view,
                 depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Load, // Preserve depth from geometry pass
+                    load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
@@ -97,7 +78,18 @@ impl KvasirNode for Opaque3dNode {
             multiview_mask: None,
         });
 
-        // For each mesh instance, set vertex/index buffers and draw.
+        // Bind the PBR pipeline
+        let pipeline = &ctx.renderer.compiled_pipelines.pbr_pipeline;
+        pass.set_pipeline(pipeline);
+
+        // Bind shadow map if available
+        if let Some(shadow_view) = shadow_view {
+            // Bind shadow texture to the appropriate bind group
+            // This requires the renderer's PBR bind group layout
+            // For now, we just log that shadow is available
+            tracing::trace!("Shadow map available for Opaque3d pass");
+        }
+
         for mesh in self.mesh_instances.iter() {
             pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
