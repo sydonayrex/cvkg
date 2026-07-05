@@ -47,6 +47,12 @@ pub struct WorldSpacePanel {
     pub pixels_per_unit: f32,
     /// Optional glass material for scene refraction through this panel.
     pub glass: Option<GlassMaterial>,
+    /// Optional spring parameters for interactive settling.
+    #[serde(skip)]
+    pub spring: Option<cvkg_core::spring::SpringParams>,
+    /// Optional physics rigid body.
+    #[serde(skip)]
+    pub physics: Option<cvkg_physics::RigidBody3D>,
 }
 
 impl Default for WorldSpacePanel {
@@ -56,6 +62,8 @@ impl Default for WorldSpacePanel {
             world_size: (1.0, 1.0),
             pixels_per_unit: 200.0,
             glass: None,
+            spring: None,
+            physics: None,
         }
     }
 }

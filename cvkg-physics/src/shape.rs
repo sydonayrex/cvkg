@@ -35,6 +35,11 @@ pub enum ShapeKind {
         /// Half the length of the cylindrical midsection (along local y-axis).
         half_height: f32,
     },
+    /// 3D convex hull defined by vertices and face indices.
+    ConvexHull3D {
+        vertices: Vec<Vec3>,
+        faces: Vec<[u32; 3]>,
+    },
 
     // ── Compound shapes ────────────────────────────────────────────────────
     /// 2D compound shape: multiple child shapes with local transforms.
@@ -219,6 +224,14 @@ impl Shape {
                 let sphere = 4.0 * std::f32::consts::PI * radius * radius;
                 cyl + sphere
             }
+            ShapeKind::ConvexHull3D { ref vertices, .. } => {
+                // Approximate surface area using bounding sphere
+                let mut max_dist = 0.0f32;
+                for v in vertices {
+                    max_dist = max_dist.max(v.length());
+                }
+                4.0 * std::f32::consts::PI * max_dist * max_dist
+            }
             ShapeKind::Compound2D { children } => children.iter().map(|c| c.shape.area()).sum(),
             ShapeKind::Compound3D { children } => children.iter().map(|c| c.shape.area()).sum(),
             ShapeKind::Heightmap(ref hm) => {
@@ -294,6 +307,13 @@ impl Shape {
                     / 12.0;
                 let sphere_i = sphere_mass * 0.4 * radius * radius;
                 cyl_i + sphere_i
+            }
+            ShapeKind::ConvexHull3D { ref vertices, .. } => {
+                let mut max_dist = 0.0f32;
+                for v in vertices {
+                    max_dist = max_dist.max(v.length());
+                }
+                0.4 * mass * max_dist * max_dist
             }
             ShapeKind::Compound2D { children } => {
                 // Sum of child inertias (assuming mass distributed proportionally to area)
@@ -395,6 +415,14 @@ impl Shape {
                 let ix = (i - iy).max(0.0);
                 Vec3::new(ix, iy, i)
             }
+            ShapeKind::ConvexHull3D { ref vertices, .. } => {
+                let mut max_dist = 0.0f32;
+                for v in vertices {
+                    max_dist = max_dist.max(v.length());
+                }
+                let i = 0.4 * mass * max_dist * max_dist;
+                Vec3::new(i, i, i)
+            }
             ShapeKind::ConvexHull { .. } => {
                 // Fallback: use scalar inertia for all axes
                 let i = self.moment_of_inertia(mass);
@@ -492,6 +520,22 @@ impl Shape {
                     if d > best_dot {
                         best_dot = d;
                         best = *v;
+                    }
+                }
+                best
+            }
+            ShapeKind::ConvexHull3D { ref vertices, .. } => {
+                if vertices.is_empty() {
+                    return Vec2::ZERO;
+                }
+                let mut best = Vec2::new(vertices[0].x, vertices[0].y);
+                let mut best_dot = best.dot(dir);
+                for v in &vertices[1..] {
+                    let proj = Vec2::new(v.x, v.y);
+                    let d = proj.dot(dir);
+                    if d > best_dot {
+                        best_dot = d;
+                        best = proj;
                     }
                 }
                 best
@@ -605,6 +649,18 @@ impl Shape {
                     Vec3::new(0.0, -half_height, 0.0)
                 };
                 end_center + n * radius
+            }
+            ShapeKind::ConvexHull3D { ref vertices, .. } => {
+                let mut best = vertices[0];
+                let mut best_dot = best.dot(dir);
+                for v in &vertices[1..] {
+                    let d = v.dot(dir);
+                    if d > best_dot {
+                        best_dot = d;
+                        best = *v;
+                    }
+                }
+                best
             }
             // 2D shapes promoted to 3D (flat in Z)
             ShapeKind::Circle { radius } => {
@@ -744,6 +800,9 @@ impl Shape {
             }
             ShapeKind::Sphere { radius } => radius,
             ShapeKind::Box3D { half_extents } => half_extents.length(),
+            ShapeKind::ConvexHull3D { ref vertices, .. } => {
+                vertices.iter().map(|v| v.length()).fold(0.0, f32::max)
+            }
             ShapeKind::Capsule3D {
                 radius,
                 half_height,
@@ -877,5 +936,130 @@ mod tests {
     fn test_box3d_bounding_radius() {
         let s = Shape::box3d(Vec3::new(1.0, 2.0, 3.0));
         assert!((s.bounding_radius() - Vec3::new(1.0, 2.0, 3.0).length()).abs() < 0.001);
+    }
+}
+
+/// A 3D convex hull representation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConvexHull3D {
+    pub vertices: Vec<Vec3>,
+    pub faces: Vec<[u32; 3]>,
+}
+
+/// Compute the 3D convex hull using a simplified incremental QuickHull algorithm.
+pub fn quickhull(points: &[Vec3]) -> ConvexHull3D {
+    if points.len() < 4 {
+        let mut vertices = points.to_vec();
+        while vertices.len() < 4 {
+            vertices.push(Vec3::ZERO);
+        }
+        return ConvexHull3D {
+            vertices,
+            faces: vec![[0, 1, 2], [0, 2, 3], [0, 3, 1], [1, 3, 2]],
+        };
+    }
+
+    let mut vertices = points.to_vec();
+    vertices.dedup_by(|a, b| a.distance_squared(*b) < 1e-6);
+
+    if vertices.len() < 4 {
+        let mut vertices = points.to_vec();
+        while vertices.len() < 4 {
+            vertices.push(Vec3::ZERO);
+        }
+        return ConvexHull3D {
+            vertices,
+            faces: vec![[0, 1, 2], [0, 2, 3], [0, 3, 1], [1, 3, 2]],
+        };
+    }
+
+    let mut faces = vec![[0, 1, 2], [0, 2, 3], [0, 3, 1], [1, 3, 2]];
+    let p0 = vertices[0];
+    let p1 = vertices[1];
+    let p2 = vertices[2];
+    let p3 = vertices[3];
+    let normal = (p1 - p0).cross(p2 - p0);
+    if normal.dot(p3 - p0) > 0.0 {
+        faces[0] = [0, 2, 1];
+        faces[1] = [0, 3, 2];
+        faces[2] = [0, 1, 3];
+        faces[3] = [1, 2, 3];
+    }
+
+    for i in 4..vertices.len() {
+        let p = vertices[i];
+        let mut visible = vec![false; faces.len()];
+        let mut has_visible = false;
+        
+        for (f_idx, face) in faces.iter().enumerate() {
+            let a = vertices[face[0] as usize];
+            let b = vertices[face[1] as usize];
+            let c = vertices[face[2] as usize];
+            let normal = (b - a).cross(c - a);
+            if normal.dot(p - a) > 1e-5 {
+                visible[f_idx] = true;
+                has_visible = true;
+            }
+        }
+
+        if !has_visible {
+            continue;
+        }
+
+        let mut horizon = Vec::new();
+        for (f_idx, &is_visible) in visible.iter().enumerate() {
+            if is_visible {
+                let face = faces[f_idx];
+                let edges = [
+                    (face[0], face[1]),
+                    (face[1], face[2]),
+                    (face[2], face[0]),
+                ];
+                for &(u, v) in &edges {
+                    let mut visible_count = 0;
+                    let mut invisible_count = 0;
+                    for (o_idx, o_face) in faces.iter().enumerate() {
+                        let has_u = o_face[0] == u || o_face[1] == u || o_face[2] == u;
+                        let has_v = o_face[0] == v || o_face[1] == v || o_face[2] == v;
+                        if has_u && has_v {
+                            if visible[o_idx] {
+                                visible_count += 1;
+                            } else {
+                                invisible_count += 1;
+                            }
+                        }
+                    }
+                    if visible_count == 1 && invisible_count == 1 {
+                        horizon.push((u, v));
+                    }
+                }
+            }
+        }
+
+        let mut next_faces = Vec::new();
+        for (f_idx, &is_visible) in visible.iter().enumerate() {
+            if !is_visible {
+                next_faces.push(faces[f_idx]);
+            }
+        }
+        for (u, v) in horizon {
+            next_faces.push([u, v, i as u32]);
+        }
+        faces = next_faces;
+    }
+
+    ConvexHull3D { vertices, faces }
+}
+
+impl Shape {
+    /// Create a 3D convex hull shape from a list of points.
+    pub fn convex_hull_3d(points: &[Vec3]) -> Self {
+        let hull = quickhull(points);
+        Self {
+            kind: ShapeKind::ConvexHull3D {
+                vertices: hull.vertices,
+                faces: hull.faces,
+            },
+        }
     }
 }

@@ -137,6 +137,9 @@ pub enum ShapeSnapshot {
         depth: usize,
         world_size: Vec2,
     },
+    ConvexHull3D {
+        vertices: Vec<Vec3>,
+    },
 }
 
 impl PhysicsSnapshot {
@@ -225,6 +228,9 @@ pub fn shape_to_snapshot(shape: &crate::Shape) -> ShapeSnapshot {
                 .iter()
                 .map(|c| (c.offset, Box::new(shape_to_snapshot(&c.shape))))
                 .collect(),
+        },
+        ShapeKind::ConvexHull3D { vertices, .. } => ShapeSnapshot::ConvexHull3D {
+            vertices: vertices.clone(),
         },
         ShapeKind::Heightmap(hm) => ShapeSnapshot::ConvexHull {
             // Heightmaps can't be perfectly serialized as a shape snapshot;

@@ -13,8 +13,10 @@ pub struct Collider {
     pub body_id: BodyId,
     /// The collision shape.
     pub shape: Shape,
-    /// Local offset from the body's center of mass.
+    /// Local offset from the body's center of mass (2D).
     pub offset: Vec2,
+    /// Local offset from the body's center of mass (3D).
+    pub offset_3d: Vec3,
     /// Local rotation offset (radians).
     pub rotation_offset: f32,
     /// Collision category bitmask for filtering.
@@ -36,6 +38,7 @@ impl Collider {
             body_id,
             shape,
             offset: Vec2::ZERO,
+            offset_3d: Vec3::ZERO,
             rotation_offset: 0.0,
             category: 0x0001,
             collides_with: 0xFFFF,
@@ -126,10 +129,34 @@ impl Collider {
     /// Get the world-space AABB for 3D broad-phase culling.
     /// Requires the body's current 3D position and rotation.
     pub fn world_aabb_3d(&self, body_position: Vec3, body_rotation: Quat) -> (Vec3, Vec3) {
-        let world_offset = body_rotation * self.offset.extend(0.0);
+        let world_offset = body_rotation * self.offset_3d;
         let center = body_position + world_offset;
-        let r = self.shape.bounding_radius();
-        let half = Vec3::new(r, r, r);
-        (center - half, center + half)
+        match &self.shape.kind {
+            crate::shape::ShapeKind::ConvexHull3D { vertices, .. } => {
+                if vertices.is_empty() {
+                    return (center, center);
+                }
+                let first = (body_rotation * vertices[0]) + center;
+                let mut min = first;
+                let mut max = first;
+                for v in &vertices[1..] {
+                    let world_v = (body_rotation * *v) + center;
+                    min = min.min(world_v);
+                    max = max.max(world_v);
+                }
+                (min, max)
+            }
+            _ => {
+                let r = self.shape.bounding_radius();
+                let half = Vec3::new(r, r, r);
+                (center - half, center + half)
+            }
+        }
+    }
+
+    /// Set the 3D local offset from the body's center.
+    pub fn with_offset_3d(mut self, offset: Vec3) -> Self {
+        self.offset_3d = offset;
+        self
     }
 }

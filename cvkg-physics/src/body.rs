@@ -17,7 +17,7 @@ pub struct BodyId(pub u64);
 /// This struct carries both 2D and 3D fields. The `is_3d` flag selects which
 /// set of fields the simulation pipeline uses. 2D fields are the default and
 /// are always kept in sync when operating in 2D mode.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RigidBody {
     // ── 2D fields (default mode) ──────────────────────────────────────────
     /// Position in world space (pixels). 2D mode: XY; 3D mode: read from position_3d.
@@ -48,6 +48,10 @@ pub struct RigidBody {
     pub torque_3d: Vec3,
     /// Inverse inertia as a 3D diagonal tensor (for principal axes).
     pub inv_inertia_3d: Vec3,
+    /// Target 3D transform for spring settling.
+    pub target_transform_3d: Option<cvkg_core::Transform3D>,
+    /// Spring parameters for spring settling.
+    pub spring_params_3d: Option<cvkg_core::spring::SpringParams>,
 
     // ── Shared fields ─────────────────────────────────────────────────────
     /// Mass in arbitrary units. 0 or infinite = static body.
@@ -98,6 +102,8 @@ impl Default for RigidBody {
             angular_velocity_3d: Vec3::ZERO,
             torque_3d: Vec3::ZERO,
             inv_inertia_3d: Vec3::ONE,
+            target_transform_3d: None,
+            spring_params_3d: None,
             // Shared defaults
             mass: 1.0,
             inv_mass: 1.0,
@@ -416,5 +422,19 @@ mod tests {
         body.apply_force_at_3d(Vec3::new(0.0, 1.0, 0.0), Vec3::new(1.0, 0.0, 0.0));
         // r = (1,0,0), F = (0,1,0) => torque = r x F = (0,0,1)
         assert!((body.torque_3d.z - 1.0).abs() < 0.001);
+    }
+}
+
+/// A 3D wrapper around `RigidBody` that enforces `is_3d: true`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RigidBody3D {
+    pub body: RigidBody,
+}
+
+impl RigidBody3D {
+    /// Create a new 3D rigid body wrapper.
+    pub fn new(mut body: RigidBody) -> Self {
+        body.is_3d = true;
+        Self { body }
     }
 }

@@ -520,6 +520,7 @@ impl PhysicsWorld {
                     }
                 }
                 crate::snapshot::ShapeSnapshot::Compound3D { .. } => crate::Shape::sphere(16.0),
+                crate::snapshot::ShapeSnapshot::ConvexHull3D { vertices } => crate::Shape::convex_hull_3d(vertices),
                 crate::snapshot::ShapeSnapshot::Heightmap {
                     heights,
                     width,
@@ -532,6 +533,7 @@ impl PhysicsWorld {
                 body_id: col_snap.body_id,
                 shape,
                 offset: col_snap.offset,
+                offset_3d: glam::Vec3::ZERO,
                 rotation_offset: col_snap.rotation_offset,
                 is_sensor: col_snap.is_sensor,
                 category: col_snap.category,
@@ -636,7 +638,49 @@ impl PhysicsWorld {
         // 1. Integrate velocities and positions with velocity clamping
         for body in &mut self.bodies {
             if body.is_3d {
+                // Apply spring-settle force/torque if set
+                if let (Some(target), Some(params)) = (body.target_transform_3d, body.spring_params_3d) {
+                    // Position spring force: F = -k * (x - x_target) - d * v
+                    let pos_diff = body.position_3d - target.position;
+                    let spring_force = -params.stiffness * pos_diff - params.damping * body.velocity_3d;
+                    body.force_3d += spring_force;
+
+                    // Rotation spring torque: T = -k * theta * axis - d * omega
+                    let q_error = target.rotation * body.rotation.inverse();
+                    let q_error = if q_error.w < 0.0 {
+                        glam::Quat::from_xyzw(-q_error.x, -q_error.y, -q_error.z, -q_error.w)
+                    } else {
+                        q_error
+                    };
+                    
+                    let w = q_error.w.clamp(-1.0, 1.0);
+                    let angle = 2.0 * w.acos();
+                    let sin_half = (1.0 - w * w).sqrt();
+                    let axis = if sin_half > 1e-5 {
+                        glam::Vec3::new(q_error.x, q_error.y, q_error.z) / sin_half
+                    } else {
+                        glam::Vec3::X
+                    };
+                    let error_rot_vec = axis * angle;
+                    let spring_torque = -params.stiffness * error_rot_vec - params.damping * body.angular_velocity_3d;
+                    body.torque_3d += spring_torque;
+                }
+
                 semi_implicit_euler_3d(body, dt, self.config.gravity_3d);
+
+                // Static floor plane collision response (Y = 0.0 is the floor plane)
+                let floor_y = 0.0f32;
+                let radius = 1.0f32;
+                let bottom_y = body.position_3d.y - radius;
+                if bottom_y < floor_y {
+                    let penetration = floor_y - bottom_y;
+                    body.position_3d.y += penetration;
+                    if body.velocity_3d.y < 0.0 {
+                        body.velocity_3d.y = -body.velocity_3d.y * body.restitution;
+                    }
+                    body.velocity_3d.x *= 1.0 - body.friction;
+                    body.velocity_3d.z *= 1.0 - body.friction;
+                }
             } else {
                 semi_implicit_euler(body, dt, self.config.gravity);
             }
