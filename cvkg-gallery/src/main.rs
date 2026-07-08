@@ -464,7 +464,7 @@ impl View for GalleryApp {
 
         // 1. Draw Background Area
         renderer.push_vnode(rect, "GalleryApp");
-        renderer.fill_rect(rect, [0.02, 0.02, 0.025, 1.0]);
+        renderer.fill_rect(rect, [0.005, 0.002, 0.002, 1.0]);
 
         // 2. Draw 3D Carousel (Top Panel)
         let mut draw_order: Vec<usize> = (0..num_entries).collect();
@@ -664,39 +664,31 @@ impl View for GalleryApp {
         // Reset Z-index to default for the rest of the UI
         renderer.set_z_index(0.0);
 
-        // Register scroll-wheel handler for carousel cycling (only once per frame via VDOM setup)
+        // Register scroll-wheel handler for carousel cycling.
+        // event_handlers is cleared every frame (draw.rs:73), so we must
+        // re-register each frame — the previous WHEEL_HANDLER_READY one-shot
+        // latch caused the handler to vanish after frame 1.
         let wheel_state = self.state.clone();
-        static WHEEL_HANDLER_READY: std::sync::atomic::AtomicBool =
-            std::sync::atomic::AtomicBool::new(false);
-
-        if !WHEEL_HANDLER_READY.load(std::sync::atomic::Ordering::Relaxed) {
-            renderer.register_handler(
-                "pointerwheel",
-                std::sync::Arc::new(move |evt| {
-                    if let Event::PointerWheel { delta_y, .. } = evt {
-                        let mut s = wheel_state.lock().unwrap_or_else(|e| e.into_inner());
-                        let num = s.entries.len();
-                        if num > 0 {
-                            // Throttle: only process wheel movements that represent a full step (delta > 50 or < -50)
-                            // Native scroll events send line-based deltas scaled by ~10, so check for meaningful movement
-                            let raw_delta = delta_y.abs();
-                            if raw_delta > 30.0 {
-                                if delta_y > 0.0 {
-                                    s.selected = (s.selected + 1) % num;
-                                } else {
-                                    s.selected = (s.selected + num - 1) % num;
-                                }
-                                // Reset threshold tracking by normalizing the wheel accumulator approach
+        renderer.register_handler(
+            "pointerwheel",
+            std::sync::Arc::new(move |evt| {
+                if let Event::PointerWheel { delta_y, .. } = evt {
+                    let mut s = wheel_state.lock().unwrap_or_else(|e| e.into_inner());
+                    let num = s.entries.len();
+                    if num > 0 {
+                        // Throttle: only process wheel movements that represent a full step
+                        // Native scroll events send line-based deltas scaled by ~10
+                        if delta_y.abs() > 30.0 {
+                            if delta_y > 0.0 {
+                                s.selected = (s.selected + 1) % num;
+                            } else {
+                                s.selected = (s.selected + num - 1) % num;
                             }
                         }
                     }
-                }),
-            );
-            WHEEL_HANDLER_READY.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
-
-        // Note: The VDOM stores event handlers in a map and applies patches.
-        // For the render()-only GalleryApp, we ensure the handler is registered exactly once by using an AtomicBool flag.
+                }
+            }),
+        );
 
         // 3. Draw Divider Line
         let div_y = carousel_rect.y + carousel_rect.height + 15.0;
