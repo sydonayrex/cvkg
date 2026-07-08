@@ -1303,8 +1303,11 @@ let gi_bind_group_layout =
             quality_level: QualityLevel::default(),
             pipeline_cache,
             bloom_enabled: true,
-            // Enable advanced features by default for headless tests and comprehensive rendering
-            volumetric_enabled: true,
+            // Volumetric raymarching is opt-in; it is only meaningful when a
+            // hologram rect is registered (see api::register_hologram), which
+            // sets this flag true. Default false so a fresh renderer does not
+            // wipe the scene with a placeholder fullscreen pass.
+            volumetric_enabled: false,
             deferred_enabled: true,
             frame_counter: 0,
             path_geometry_cache: lru::LruCache::new(NonZeroUsize::new(64).unwrap()),

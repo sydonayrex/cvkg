@@ -693,7 +693,23 @@ cache: pipeline_cache,
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
-                blend: None, // Opaque output
+                // Additive blend: src + dst. The placeholder shader returns
+                // transparent black (0,0,0,0), contributing nothing, so when
+                // volumetric is enabled but no raymarch content is produced
+                // the scene is preserved as-is. A real raymarch shader can
+                // later output glow colors that will add onto the scene.
+                blend: Some(wgpu::BlendState {
+                    color: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                    alpha: wgpu::BlendComponent {
+                        src_factor: wgpu::BlendFactor::One,
+                        dst_factor: wgpu::BlendFactor::One,
+                        operation: wgpu::BlendOperation::Add,
+                    },
+                }),
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),

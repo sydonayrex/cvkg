@@ -22,6 +22,9 @@ fn vs_fullscreen(@builtin(vertex_index) vid: u32) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // DEBUG: Output solid cyan everywhere
-    return vec4<f32>(0.0, 1.0, 1.0, 1.0);
+    // Placeholder: contributes nothing under the additive blend configured on
+    // the volumetric pipeline. A real raymarch implementation (SDF fog, light
+    // shafts, hologram glow) replaces this body and outputs glow colors that
+    // will be added onto the loaded scene.
+    return vec4<f32>(0.0, 0.0, 0.0, 0.0);
 }

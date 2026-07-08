@@ -45,25 +45,30 @@ impl KvasirNode for VolumetricNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
-        eprintln!("[Volumetric] execute() CALLED - writing to scene texture");
+        tracing::trace!("[Volumetric] execute() CALLED - writing to scene texture");
         
         // Get scene view for writing (the texture composite will sample)
         let scene_view = match ctx.registry.get_texture_view(crate::kvasir::nodes::RES_SCENE) {
             Some(v) => v,
             None => {
-                eprintln!("[GPU] Volumetric: missing scene texture view");
+                tracing::error!("[GPU] Volumetric: missing scene texture view");
                 return;
             }
         };
 
-        // Volumetric pass: fullscreen rendering with depth-less render pass (uses volumetric_pipeline)
+        // Volumetric pass: fullscreen rendering with depth-less render pass.
+        // LoadOp::Load preserves the scene produced by Geometry/UI; the placeholder
+        // fragment shader returns transparent black with additive blending, so
+        // without a real raymarch contribution this pass is a no-op write and the
+        // scene survives intact. A future raymarch implementation can output glow
+        // colors that add onto the loaded scene.
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr Volumetric Raymarching"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &scene_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 1.0, b: 1.0, a: 1.0 }), // Clear to cyan
+                    load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -72,12 +77,12 @@ impl KvasirNode for VolumetricNode {
             ..Default::default()
         });
 
-        // Use volumetric_pipeline (depth-less, no bindings needed for solid cyan output).
-        // If we used background_pipeline it would fail validation: that pipeline requires
-        // a depth attachment and a 4-bind-group pipeline layout, but this render pass has
-        // neither. That mismatch causes the "Surtr Background Pipeline invalid" error.
+        // Use volumetric_pipeline (depth-less, no bindings needed for the
+        // placeholder solid-color output). The background_pipeline would fail
+        // validation here: that pipeline requires a depth attachment and a
+        // 4-bind-group pipeline layout, but this render pass has neither.
         p.set_pipeline(&ctx.renderer.volumetric_pipeline);
         p.draw(0..3, 0..1); // Fullscreen triangle
-        eprintln!("[Volumetric] drew fullscreen to scene texture via volumetric_pipeline");
+        tracing::trace!("[Volumetric] drew fullscreen to scene texture via volumetric_pipeline");
     }
 }

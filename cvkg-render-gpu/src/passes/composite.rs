@@ -109,6 +109,6 @@ impl KvasirNode for CompositeNode {
         p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
         // GI bindings were folded into gradient_bind_group at @group(3) bindings 2,3.
         p.draw(0..3, 0..1);
-        eprintln!("[Composite] drew fullscreen triangle (has_bloom={})", self.has_bloom);
+        tracing::trace!("[Composite] drew fullscreen triangle (has_bloom={})", self.has_bloom);
     }
 }

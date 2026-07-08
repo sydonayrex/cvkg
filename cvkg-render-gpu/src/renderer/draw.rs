@@ -1072,7 +1072,7 @@ impl GpuRenderer {
             );
             
             // Debug: log when graph is rebuilt
-            eprintln!("DEBUG: Building new render graph, has_volumetric={}", has_volumetric);
+            tracing::trace!("Building new render graph, has_volumetric={}", has_volumetric);
             
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);
             let compiled_plan = match planner.compile() {
@@ -1153,7 +1153,7 @@ impl GpuRenderer {
                 }
             }
             if let Some(node) = cached.graph.node(node_key) {
-                eprintln!("DEBUG: Executing node: {} (allow_degradation={})", node.label(), allow_degradation);
+                tracing::trace!("Executing node: {} (allow_degradation={})", node.label(), allow_degradation);
                 // SAFETY: ctx.registry borrows registry mutably while ctx.renderer
                 // borrows the rest of self immutably. We split-field borrow
                 // via dedicated local bindings so the borrow checker does not
