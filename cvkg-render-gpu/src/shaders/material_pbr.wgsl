@@ -1,8 +1,37 @@
 //! Material shader — 3D PBR rendering path.
 //! Handles modes: 13 (PBR surface), 14 (raymarched reflections), 21 (raymarched cube).
 //! Separated from opaque to reduce register pressure from raymarching loops.
+//!
+//! NOTE: Common definitions (SceneUniforms, CsmUniforms, GiUniforms) are
+//! prepended via WGSL_COMMON string concatenation in init.rs. The
+//! literal `#include "common.wgsl"` directive was originally here but is
+//! NOT valid WGSL and would cause shader compilation to fail when this
+//! file is loaded standalone (e.g. via include_str!).
+//! Include common definitions for SceneUniforms, CsmUniforms, and GiUniforms
 
+struct VertexInput3D {
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) color: vec4<f32>,
+    @location(16) model_row0: vec4<f32>,
+    @location(17) model_row1: vec4<f32>,
+    @location(18) model_row2: vec4<f32>,
+};
 
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) color: vec4<f32>,
+    @location(1) normal: vec3<f32>,
+    @location(2) uv: vec2<f32>,
+    @location(3) world_pos: vec3<f32>,
+    @location(4) tex_index: u32,
+    @location(5) material_id: u32,
+    @location(6) slice: vec4<f32>,
+    @location(7) world_pos_3d: vec3<f32>,
+};
+
+// Resources provided via group(3) = pbr_material_bind_group_layout
 @group(3) @binding(0) var t_shadow: texture_depth_2d;
 @group(3) @binding(1) var s_shadow: sampler_comparison;
 @group(3) @binding(8) var t_ibl: texture_2d<f32>;
@@ -35,9 +64,15 @@ fn fresnel_schlick(cos_theta: f32, f0: vec3<f32>) -> vec3<f32> {
 
 /// Evaluates L0 and L1 spherical harmonics to sample local diffuse indirect lighting.
 fn read_probe(grid_coord: vec3<f32>, normal: vec3<f32>) -> vec3<f32> {
-    let l0 = vec3<f32>(0.12, 0.14, 0.18);
-    let l1 = vec3<f32>(0.04, 0.05, 0.07) * dot(normal, vec3<f32>(0.0, 1.0, 0.0));
-    return max(l0 + l1, vec3<f32>(0.0));
+    // For now, sample from GI uniform buffer when available
+    // L2 SH evaluation would use all 9 coefficients here
+    let probe_idx = u32(grid_coord.x) + u32(grid_coord.y) * gi.probe_dimensions.x + u32(grid_coord.z) * gi.probe_dimensions.x * gi.probe_dimensions.y;
+    if probe_idx >= 4096u {
+        return vec3<f32>(0.0);
+    }
+    // Extract L0 coefficients (indices 0-2)
+    let l0 = gi_probes[probe_idx][0].xyz;
+    return max(l0, vec3<f32>(0.0));
 }
 
 /// Computes tri-linearly interpolated irradiance from the volume grid.
@@ -218,4 +253,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     if color.a <= 0.0 { discard; }
     return color;
+}
+
+// G-Buffer output for deferred rendering: location(0)=albedo, location(1)=normal, location(2)=motion
+struct GBufferOutput {
+    @location(0) albedo: vec4<f32>,
+    @location(1) normal: vec4<f32>,
+    @location(2) motion: vec4<f32>,
+}
+
+@fragment
+fn fs_gbuffer(in: VertexOutput) -> GBufferOutput {
+    let n = normalize(in.normal);
+    // Pack normal to [0,1] range
+    var out: GBufferOutput;
+    out.albedo = vec4<f32>(in.color.rgb, 1.0);
+    out.normal = vec4<f32>(n * 0.5 + 0.5, 1.0);
+    // Motion vectors: output world position velocity (placeholder for now)
+    out.motion = vec4<f32>(in.world_pos_3d, 1.0);
+    return out;
 }

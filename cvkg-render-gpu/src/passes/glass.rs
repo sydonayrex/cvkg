@@ -123,6 +123,7 @@ impl KvasirNode for BackdropCopyNode {
         p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
         p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
+        // GI bindings were folded into gradient_bind_group at @group(3) bindings 2,3.
         p.draw(0..3, 0..1);
     }
 }
@@ -450,6 +451,7 @@ impl KvasirNode for GlassNode {
         p.set_bind_group(1, ctx_blur_env_bind_group_a, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
         p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
+        // GI bindings were folded into gradient_bind_group at @group(3) bindings 2,3.
 
         let scale = self.scale;
         for call in ctx

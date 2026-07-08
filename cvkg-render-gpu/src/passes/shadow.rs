@@ -54,6 +54,46 @@ pub struct ShadowAtlasConfig {
     pub padding: u32,
 }
 
+impl ShadowAtlasConfig {
+    /// Compute viewport for directional light cascade.
+    /// Returns (x, y, width, height, slice) for atlas quadrant.
+    pub fn cascade_viewport(&self, cascade_idx: u32) -> (f32, f32, f32, f32, u32) {
+        let half = (self.size / 2) as f32;
+        let col = (cascade_idx % 2) as f32;
+        let row = (cascade_idx / 2) as f32;
+        (col * half, row * half, half, half, 0)
+    }
+
+    /// Compute viewport for point light using dual-paraboloid (slice 0 or 1).
+    /// Returns (x, y, width, height, slice) for atlas columns 2-3.
+    pub fn point_light_viewport(&self, light_idx: u32, hemisphere: u32) -> (f32, f32, f32, f32, u32) {
+        let quarter = (self.size / 4) as f32;
+        let col = 2.0 + (light_idx % 2) as f32 * 0.5 + hemisphere as f32 * 0.25;
+        (col * quarter, 0.0, quarter, quarter * 2.0, hemisphere)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cascade_viewport_fits_two_cascades() {
+        let config = ShadowAtlasConfig { size: 1024, padding: 0 };
+        let (x, y, w, h, _) = config.cascade_viewport(0);
+        assert_eq!(w, 512.0);
+        assert_eq!(h, 512.0);
+    }
+
+    #[test]
+    fn point_light_viewports_dont_overlap() {
+        let config = ShadowAtlasConfig { size: 2048, padding: 0 };
+        let (x1, _, w1, _, s1) = config.point_light_viewport(0, 0);
+        let (x2, _, w2, _, s2) = config.point_light_viewport(0, 1);
+        assert!(x1 != x2 || s1 != s2); // Different hemisphere or position
+    }
+}
+
 
 /// GPU resources for a single 3D mesh instance ready for rendering.
 #[derive(Debug, Clone)]
@@ -178,6 +218,13 @@ impl KvasirNode for ShadowNode {
         };
 
         let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        // Publish the shadow-map view under the registered ResourceId so that
+        // downstream passes (Opaque3d, Transparent3d) can resolve it via
+        // ctx.registry.get_texture_view(self.shadow_map). Without this alias the
+        // 3D render passes silently skip their draws (get_texture_view returns
+        // None and they early-return).
+        ctx.registry
+            .alias_view(self.shadow_map, shadow_view.clone());
 
         // Create a single depth-only render pass covering the entire shadow atlas
         let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -218,8 +265,10 @@ impl KvasirNode for ShadowNode {
             );
 
             // Bind the shadow pipeline and scene uniforms.
+            // berserker_bind_group provides: theme@binding(0), scene@binding(1), csm@binding(2)
+            // These are at group(2) in the shader (via common.wgsl includes)
             pass.set_pipeline(&ctx.renderer.shadow_pipeline);
-            pass.set_bind_group(1, &ctx.renderer.berserker_bind_group, &[]);
+            pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
 
             // For each mesh, set vertex/index buffers and draw depth only.
             for mesh in self.mesh_instances.iter() {
@@ -229,7 +278,8 @@ impl KvasirNode for ShadowNode {
                     pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 }
                 pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                pass.draw_indexed(0..mesh.index_count, 0, 0..1);
+                let inst = mesh.instance_index;
+                pass.draw_indexed(0..mesh.index_count, 0, inst..(inst + 1));
             }
         }
     }

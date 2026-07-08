@@ -107,7 +107,12 @@ pub(crate) fn create_surface_context(
     let blur_desc_a = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Surface Blur Texture A".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format: config.format,
+            // Blur textures are HDR; they back the render passes that blur
+            // HDR scene samples. The blur pipeline's color target is
+            // Rgba16Float (kawase_kernel.wgsl WGSL), so this must match —
+            // using config.format (e.g. Bgra8UnormSrgb on Wayland) would
+            // yield IncompatibleColorAttachment at Queue::submit.
+            format: wgpu::TextureFormat::Rgba16Float,
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -122,7 +127,7 @@ pub(crate) fn create_surface_context(
     let blur_desc_b = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Surface Blur Texture B".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format: config.format,
+            format: wgpu::TextureFormat::Rgba16Float,
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -137,7 +142,9 @@ pub(crate) fn create_surface_context(
     let bloom_desc_a = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Surface Bloom Texture A".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format: config.format,
+            // Bloom pipeline declares Rgba16Float color targets; using
+            // config.format here would mismatch the render-pass attachment.
+            format: wgpu::TextureFormat::Rgba16Float,
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -152,7 +159,7 @@ pub(crate) fn create_surface_context(
     let bloom_desc_b = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Surface Bloom Texture B".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format: config.format,
+            format: wgpu::TextureFormat::Rgba16Float,
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -163,6 +170,60 @@ pub(crate) fn create_surface_context(
         lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
     };
     let bloom_tex_b = registry.allocate_image(device, &bloom_desc_b);
+
+    // G-Buffer textures for deferred rendering
+    let gbuffer_albedo_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("G-Buffer Albedo".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rgba16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let gbuffer_albedo_tex = registry.allocate_image(device, &gbuffer_albedo_desc);
+
+    let gbuffer_normal_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("G-Buffer Normal".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rgba16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let gbuffer_normal_tex = registry.allocate_image(device, &gbuffer_normal_desc);
+
+    let gbuffer_motion_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("G-Buffer Motion".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rgba16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let gbuffer_motion_tex = registry.allocate_image(device, &gbuffer_motion_desc);
+
+    // SSAO output texture
+    let ssao_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("SSAO Output".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rg16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let ssao_tex = registry.allocate_image(device, &ssao_desc);
 
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -291,6 +352,10 @@ pub(crate) fn create_surface_context(
         bloom_env_bind_group_b,
         scale_factor,
         sampler,
+        gbuffer_albedo: gbuffer_albedo_tex,
+        gbuffer_normal: gbuffer_normal_tex,
+        gbuffer_motion: gbuffer_motion_tex,
+        ssao_tex,
     }
 }
 
@@ -386,7 +451,7 @@ pub(crate) fn create_headless_context(
     let blur_desc_a = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Headless Blur Texture A".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format,
+            format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom blur chain
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -401,7 +466,7 @@ pub(crate) fn create_headless_context(
     let blur_desc_b = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Headless Blur Texture B".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format,
+            format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom blur chain
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -416,7 +481,7 @@ pub(crate) fn create_headless_context(
     let bloom_desc_a = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Headless Bloom Texture A".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format,
+            format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -431,7 +496,7 @@ pub(crate) fn create_headless_context(
     let bloom_desc_b = crate::kvasir::resource::ResourceDescriptor {
         label: Some("Headless Bloom Texture B".into()),
         kind: crate::kvasir::resource::ResourceKind::Image {
-            format,
+            format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom
             width: blur_width,
             height: blur_height,
             mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -442,6 +507,60 @@ pub(crate) fn create_headless_context(
         lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
     };
     let bloom_tex_b = registry.allocate_image(device, &bloom_desc_b);
+
+    // G-Buffer textures for deferred rendering
+    let gbuffer_albedo_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("G-Buffer Albedo".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rgba16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let gbuffer_albedo_tex = registry.allocate_image(device, &gbuffer_albedo_desc);
+
+    let gbuffer_normal_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("G-Buffer Normal".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rgba16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let gbuffer_normal_tex = registry.allocate_image(device, &gbuffer_normal_desc);
+
+    let gbuffer_motion_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("G-Buffer Motion".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rgba16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let gbuffer_motion_tex = registry.allocate_image(device, &gbuffer_motion_desc);
+
+    // SSAO output texture
+    let ssao_desc = crate::kvasir::resource::ResourceDescriptor {
+        label: Some("SSAO Output".into()),
+        kind: crate::kvasir::resource::ResourceKind::Image {
+            format: wgpu::TextureFormat::Rg16Float,
+            width,
+            height,
+            mip_level_count: 1,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        },
+        lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+    };
+    let ssao_tex = registry.allocate_image(device, &ssao_desc);
 
     let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -572,5 +691,9 @@ pub(crate) fn create_headless_context(
         height,
         output_texture,
         output_view,
+        gbuffer_albedo: gbuffer_albedo_tex,
+        gbuffer_normal: gbuffer_normal_tex,
+        gbuffer_motion: gbuffer_motion_tex,
+        ssao_tex,
     }
 }

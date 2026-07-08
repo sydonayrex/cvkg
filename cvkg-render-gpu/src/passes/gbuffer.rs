@@ -29,14 +29,23 @@ impl KvasirNode for GBufferNode {
     }
 
     fn pass_id(&self) -> PassId {
-        PassId::Geometry
+        PassId::GBuffer
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
+        // Frame 0 check: skip rendering to avoid black frame before G-buffer is valid
+        if ctx.renderer.frame_counter == 0 {
+            return;
+        }
+
         tracing::debug!(
             "GBufferNode::execute - Rendering {} instances into G-Buffer",
             self.mesh_instances.len()
         );
+
+        if self.mesh_instances.is_empty() {
+            return;
+        }
 
         let albedo_view = match ctx.registry.get_texture_view(RES_GBUFFER_ALBEDO) {
             Some(v) => v,
@@ -52,7 +61,7 @@ impl KvasirNode for GBufferNode {
         };
 
         // Create a render pass rendering to three attachments + depth
-        let mut _pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("G-Buffer Pass"),
             color_attachments: &[
                 Some(wgpu::RenderPassColorAttachment {
@@ -96,6 +105,22 @@ impl KvasirNode for GBufferNode {
             multiview_mask: None,
         });
 
-        // Loop and draw instances with normal/position/uv shaders
+        // Bind G-Buffer pipeline and bind groups
+        // berserker_bind_group provides: theme@binding(0), scene@binding(1), csm@binding(2)
+        // These are at group(2) in the PBR layout.
+        pass.set_pipeline(&ctx.renderer.gbuffer_pipeline);
+        pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
+
+        if let Some(ref inst_buffer) = ctx.renderer.instance_buffer_3d {
+            pass.set_vertex_buffer(1, inst_buffer.slice(..));
+        }
+
+        // Draw each mesh instance
+        for mesh in self.mesh_instances.iter() {
+            pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            let inst = mesh.instance_index;
+            pass.draw_indexed(0..mesh.index_count, 0, inst..(inst + 1));
+        }
     }
 }

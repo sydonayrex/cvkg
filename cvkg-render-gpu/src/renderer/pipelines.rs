@@ -39,6 +39,13 @@ pub(crate) struct CompiledPipelines {
     pub(crate) skinning_bgl0: wgpu::BindGroupLayout,
     pub(crate) skinning_bgl1: wgpu::BindGroupLayout,
     pub(crate) skinning_bgl2: wgpu::BindGroupLayout,
+    // Deferred rendering pipelines
+    pub(crate) gbuffer_pipeline: wgpu::RenderPipeline,
+    pub(crate) deferred_lighting_pipeline: wgpu::RenderPipeline,
+    pub(crate) ssao_pipeline: wgpu::RenderPipeline,
+    // Deferred bind group layouts
+    pub(crate) deferred_bgl: wgpu::BindGroupLayout,
+    pub(crate) ssao_bgl: wgpu::BindGroupLayout,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -51,20 +58,24 @@ pub(crate) fn compile_render_pipelines(
     berserker_bind_group_layout: &wgpu::BindGroupLayout,
     gradient_bind_group_layout: &wgpu::BindGroupLayout,
     pbr_material_bind_group_layout: &wgpu::BindGroupLayout,
+    gi_bind_group_layout: &wgpu::BindGroupLayout,
     shader: &wgpu::ShaderModule,
     wgsl_opaque: &str,
     wgsl_glass: &str,
     wgsl_pbr: &str,
     wgsl_shadow: &str,
     queue: &wgpu::Queue,
+    msaa_sample_count: u32,
 ) -> CompiledPipelines {
+    // Main 2D pipeline uses groups 0-3 only (max_bind_groups=4 on AMD WebGPU).
+    // GI bindings are folded into gradient_bind_group_layout at @group(3) bindings 2,3.
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Surtr Main Pipeline Layout"),
         bind_group_layouts: &[
-            Some(texture_bind_group_layout),
-            Some(env_bind_group_layout),
-            Some(berserker_bind_group_layout),
-            Some(gradient_bind_group_layout),
+            Some(texture_bind_group_layout),      // group(0): texture array
+            Some(env_bind_group_layout),           // group(1): env/blur
+            Some(berserker_bind_group_layout),     // group(2): theme/scene/csm
+            Some(gradient_bind_group_layout),      // group(3): gradient + GI (folded)
         ],
         immediate_size: 0,
     });
@@ -91,6 +102,7 @@ pub(crate) fn compile_render_pipelines(
         immediate_size: 0,
     });
 
+    tracing::info!("[Pipelines] Creating Surtr Main Pipeline...");
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Surtr Main Pipeline"),
         layout: Some(&pipeline_layout),
@@ -119,25 +131,52 @@ pub(crate) fn compile_render_pipelines(
             bias: wgpu::DepthBiasState::default(),
         }),
         multisample: wgpu::MultisampleState {
-            count: 4,
+            count: msaa_sample_count,
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
         multiview_mask: None,
-        cache: pipeline_cache,
+cache: pipeline_cache,
+    });
+
+    let opaque_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Muspelheim Opaque"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_opaque)),
+    });
+    let glass_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Muspelheim Glass"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_glass)),
+    });
+
+    // `background_pipeline` (AURORA clear) only references @group(2) (theme/scene)
+    // via vs_fullscreen/fs_background. The shader module also implicitly declares
+    // @group(3) (GI in common.wgsl, gradient in material_opaque.wgsl — but
+    // background_pipeline's shader (fs_background/vs_fullscreen) does NOT include
+    // material_opaque.wgsl, so it never references group 3). Layout declares only
+    // groups 0-3 to stay within WebGPU's max_bind_groups=4 limit. Group 2 is set
+    // at runtime; groups 0/1/3 are unused by fs_background.
+    let background_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Surtr Background Pipeline Layout"),
+        bind_group_layouts: &[
+            None,                                // group(0): unused
+            None,                                // group(1): unused
+            Some(&berserker_bind_group_layout),  // group(2): scene/theme uniforms
+            None,                                // group(3): unused by fs_background
+        ],
+        immediate_size: 0,
     });
 
     let background_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Surtr Background Pipeline"),
-        layout: Some(&pipeline_layout),
+        layout: Some(&background_layout),
         vertex: wgpu::VertexState {
-            module: shader,
+            module: &shader,
             entry_point: Some("vs_fullscreen"),
             buffers: &[],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: shader,
+            module: &shader,
             entry_point: Some("fs_background"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
@@ -155,22 +194,17 @@ pub(crate) fn compile_render_pipelines(
             bias: wgpu::DepthBiasState::default(),
         }),
         multisample: wgpu::MultisampleState {
-            count: 4,
+            count: msaa_sample_count,
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
         multiview_mask: None,
         cache: pipeline_cache,
     });
-
-    let opaque_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Muspelheim Opaque"),
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_opaque)),
-    });
-    let glass_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Muspelheim Glass"),
-        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_glass)),
-    });
+    tracing::info!(
+        "[Pipelines] Surtr Background Pipeline created: label=Surtr Background Pipeline, msaa={}, fmt=Rgba16Float",
+        msaa_sample_count,
+    );
 
     let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("Muspelheim Opaque"),
@@ -200,7 +234,7 @@ pub(crate) fn compile_render_pipelines(
             bias: wgpu::DepthBiasState::default(),
         }),
         multisample: wgpu::MultisampleState {
-            count: 4,
+            count: msaa_sample_count,
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
@@ -274,7 +308,7 @@ pub(crate) fn compile_render_pipelines(
             Some(texture_bind_group_layout),
             Some(env_bind_group_layout),
             Some(berserker_bind_group_layout),
-            Some(pbr_material_bind_group_layout),
+            Some(pbr_material_bind_group_layout), // GI is folded into this layout at @group(3) bindings 2,3
         ],
         immediate_size: 0,
     });
@@ -390,7 +424,7 @@ pub(crate) fn compile_render_pipelines(
             module: shader,
             entry_point: Some("fs_bloom_extract"),
             targets: &[Some(wgpu::ColorTargetState {
-                format,
+                format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -416,7 +450,7 @@ pub(crate) fn compile_render_pipelines(
             module: shader,
             entry_point: Some("fs_copy"),
             targets: &[Some(wgpu::ColorTargetState {
-                format,
+                format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom chains
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -487,7 +521,7 @@ pub(crate) fn compile_render_pipelines(
             module: &kawase_shader,
             entry_point: Some("fs_kawase_down"),
             targets: &[Some(wgpu::ColorTargetState {
-                format,
+                format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -513,7 +547,7 @@ pub(crate) fn compile_render_pipelines(
             module: &kawase_shader,
             entry_point: Some("fs_kawase_up"),
             targets: &[Some(wgpu::ColorTargetState {
-                format,
+                format: wgpu::TextureFormat::Rgba16Float, // HDR for bloom
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -540,18 +574,7 @@ pub(crate) fn compile_render_pipelines(
             entry_point: Some("fs_composite"),
             targets: &[Some(wgpu::ColorTargetState {
                 format,
-                blend: Some(wgpu::BlendState {
-                    color: wgpu::BlendComponent {
-                        src_factor: wgpu::BlendFactor::One,
-                        dst_factor: wgpu::BlendFactor::One,
-                        operation: wgpu::BlendOperation::Add,
-                    },
-                    alpha: wgpu::BlendComponent {
-                        src_factor: wgpu::BlendFactor::SrcAlpha,
-                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                        operation: wgpu::BlendOperation::Add,
-                    },
-                }),
+                blend: None, // No blend - just tonemap and output
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -644,54 +667,15 @@ pub(crate) fn compile_render_pipelines(
         ))),
     });
 
-    let volumetric_bgl =
+    let dummy_bgl =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Volumetric Bind Group Layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(
-                            std::mem::size_of::<[f32; 24]>() as u64
-                        ),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Depth,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: true,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
-                    count: None,
-                },
-            ],
+            label: Some("Dummy BGL"),
+            entries: &[], // Empty layout
         });
 
     let volumetric_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Surtr Volumetric Layout"),
-        bind_group_layouts: &[Some(&volumetric_bgl)],
+        bind_group_layouts: &[Some(&dummy_bgl)], // Keep layout for compatibility
         immediate_size: 0,
     });
 
@@ -709,18 +693,7 @@ pub(crate) fn compile_render_pipelines(
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
-                blend: Some(wgpu::BlendState {
-                    color: wgpu::BlendComponent {
-                        src_factor: wgpu::BlendFactor::One,
-                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                        operation: wgpu::BlendOperation::Add,
-                    },
-                    alpha: wgpu::BlendComponent {
-                        src_factor: wgpu::BlendFactor::One,
-                        dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                        operation: wgpu::BlendOperation::Add,
-                    },
-                }),
+                blend: None, // Opaque output
                 write_mask: wgpu::ColorWrites::ALL,
             })],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -810,7 +783,7 @@ pub(crate) fn compile_render_pipelines(
 
     let volumetric_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Volumetric Uniforms"),
-        size: std::mem::size_of::<[f32; 24]>() as u64,
+        size: std::mem::size_of::<[f32; 32]>() as u64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
@@ -1109,6 +1082,260 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         cache: pipeline_cache,
     });
 
+    // Deferred rendering pipelines
+    let deferred_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Surtr Deferred Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+            "../shaders/deferred_lighting.wgsl"
+        ))),
+    });
+
+    let deferred_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Deferred Lighting BGL"),
+        entries: &[
+            // binding 0: albedo texture
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            // binding 1: albedo sampler
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            // binding 2: normal texture
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            // binding 3: normal sampler
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            // binding 4: depth texture
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Depth,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            // binding 5: depth sampler
+            wgpu::BindGroupLayoutEntry {
+                binding: 5,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            // binding 6: ssao texture
+            wgpu::BindGroupLayoutEntry {
+                binding: 6,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            // binding 7: ssao sampler
+            wgpu::BindGroupLayoutEntry {
+                binding: 7,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+
+let deferred_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Surtr Deferred Layout"),
+        bind_group_layouts: &[
+            Some(berserker_bind_group_layout), // Group 0: Scene uniforms
+            Some(&deferred_bgl),               // Group 1: G-buffer textures
+            Some(gi_bind_group_layout),        // Group 2: GI uniforms (probe coefficients)
+        ],
+        immediate_size: 0,
+    });
+
+    let deferred_lighting_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Surtr Deferred Lighting"),
+        layout: Some(&deferred_layout),
+        vertex: wgpu::VertexState {
+            module: &deferred_shader,
+            entry_point: Some("vs_fullscreen"),
+            buffers: &[],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &deferred_shader,
+            entry_point: Some("fs_deferred_resolve"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: pipeline_cache,
+    });
+
+    // G-Buffer pipeline (vertex shader renders to 3 MRTs).
+// Uses wgsl_pbr (= WGSL_COMMON + WGSL_MATERIAL_PBR + ...) instead of include_str!
+// on material_pbr.wgsl directly, because the raw file references scene/gi/csm
+// bindings that are declared in common.wgsl — only the concatenated version
+// has those declarations in scope.
+let gbuffer_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+    label: Some("Surtr G-Buffer Shader"),
+    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(wgsl_pbr)),
+});
+
+    let gbuffer_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Surtr G-Buffer"),
+        layout: Some(&pbr_layout),
+        vertex: wgpu::VertexState {
+            module: &gbuffer_shader,
+            entry_point: Some("vs_main_3d"),
+            buffers: &[Vertex3D::desc(), InstanceData3D::desc()],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &gbuffer_shader,
+            entry_point: Some("fs_gbuffer"),
+            targets: &[
+                Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                }),
+                Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                }),
+                Some(wgpu::ColorTargetState {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    blend: None,
+                    write_mask: wgpu::ColorWrites::ALL,
+                }),
+            ],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: pipeline_cache,
+    });
+
+    // SSAO pipeline
+    let ssao_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("Surtr SSAO Shader"),
+        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+            "../shaders/ssao.wgsl"
+        ))),
+    });
+
+    let ssao_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("SSAO BGL"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Depth,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+
+    let ssao_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Surtr SSAO Layout"),
+        bind_group_layouts: &[Some(berserker_bind_group_layout), Some(&ssao_bgl)],
+        immediate_size: 0,
+    });
+
+    let ssao_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("Surtr SSAO"),
+        layout: Some(&ssao_layout),
+        vertex: wgpu::VertexState {
+            module: &ssao_shader,
+            entry_point: Some("vs_fullscreen"),
+            buffers: &[],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &ssao_shader,
+            entry_point: Some("fs_main"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rg16Float,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: pipeline_cache,
+    });
+
     CompiledPipelines {
         pipeline,
         opaque_pipeline,
@@ -1120,7 +1347,7 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         composite_pipeline,
         color_blind_pipeline,
         volumetric_pipeline,
-        volumetric_bind_group_layout: volumetric_bgl,
+        volumetric_bind_group_layout: dummy_bgl,
         volumetric_uniform_buffer,
         volumetric_depth_sampler,
         color_blind_bind_group_layout: color_blind_bgl,
@@ -1145,5 +1372,10 @@ fn fs_main(@location(0) color: vec4<f32>) -> @location(0) vec4<f32> {
         skinning_bgl0,
         skinning_bgl1,
         skinning_bgl2,
+        gbuffer_pipeline,
+        deferred_lighting_pipeline,
+        ssao_pipeline,
+        deferred_bgl,
+        ssao_bgl,
     }
 }

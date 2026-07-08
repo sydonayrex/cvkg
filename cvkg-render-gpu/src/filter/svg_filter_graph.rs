@@ -632,71 +632,7 @@ impl FilterEngine {
     }
 }
 
-/// Convert an SVG filter element from pillage-doc into a SvgFilterGraph.
-///
-/// This bridges the document model (FilterNode/FilterPrimitive) to the
-/// render graph model (SvgFilterGraph/FilterPrimitive).
-#[cfg(feature = "pillage")]
-pub fn build_filter_graph(
-    _filter_node: &pillage_doc::node::FilterNode,
-    primitives: &[pillage_doc::node::FilterPrimitive],
-) -> SvgFilterGraph {
-    let mut graph = SvgFilterGraph::default();
 
-    for prim in primitives {
-        let filter_prim = match prim.primitive_type {
-            pillage_doc::node::FilterPrimitiveType::GaussianBlur => FilterPrimitive::GaussianBlur {
-                std_deviation: prim.std_deviation.unwrap_or(0.0),
-                input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                result: prim.result.clone().unwrap_or_else(|| "blur".into()),
-            },
-            pillage_doc::node::FilterPrimitiveType::DropShadow => FilterPrimitive::DropShadow {
-                dx: prim.dx.unwrap_or(0.0),
-                dy: prim.dy.unwrap_or(0.0),
-                std_deviation: prim.std_deviation.unwrap_or(0.0),
-                flood_color: prim.flood_color.unwrap_or([0.0, 0.0, 0.0, 0.5]),
-                input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                result: prim.result.clone().unwrap_or_else(|| "shadow".into()),
-            },
-            pillage_doc::node::FilterPrimitiveType::Offset => FilterPrimitive::Offset {
-                dx: prim.offset_x.unwrap_or(0.0),
-                dy: prim.offset_y.unwrap_or(0.0),
-                input: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                result: prim.result.clone().unwrap_or_else(|| "offset".into()),
-            },
-            pillage_doc::node::FilterPrimitiveType::Blend => FilterPrimitive::Blend {
-                mode: BlendMode::from_name(prim.blend_mode.as_deref().unwrap_or("normal")),
-                in1: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                in2: "background".into(),
-                result: prim.result.clone().unwrap_or_else(|| "blend".into()),
-            },
-            pillage_doc::node::FilterPrimitiveType::Composite => FilterPrimitive::Composite {
-                operator: CompositeOperator::Over,
-                in1: prim.in_attr.clone().unwrap_or_else(|| "source".into()),
-                in2: "background".into(),
-                result: prim.result.clone().unwrap_or_else(|| "composite".into()),
-            },
-            pillage_doc::node::FilterPrimitiveType::Flood => FilterPrimitive::Flood {
-                color: prim.flood_color.unwrap_or([0.0, 0.0, 0.0, 1.0]),
-                result: prim.result.clone().unwrap_or_else(|| "flood".into()),
-            },
-            pillage_doc::node::FilterPrimitiveType::Merge => FilterPrimitive::Merge {
-                inputs: vec!["source".into()],
-                result: prim.result.clone().unwrap_or_else(|| "merge".into()),
-            },
-            _ => {
-                tracing::warn!(
-                    "[FilterEngine] Unsupported filter primitive: {:?}",
-                    prim.primitive_type
-                );
-                continue;
-            }
-        };
-        graph.primitives.push(filter_prim);
-    }
-
-    graph
-}
 
 /// Builder for constructing SVG filter render graph nodes.
 #[derive(Default)]

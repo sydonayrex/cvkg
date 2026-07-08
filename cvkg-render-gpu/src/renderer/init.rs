@@ -27,6 +27,7 @@ impl GpuRenderer {
     /// 2. Forges the Muspelheim multi-pass pipeline layouts.
     /// 3. Initializes the Berserker state buffers and texture registries.
     pub async fn forge(window: Arc<winit::window::Window>) -> Self {
+        let _ = env_logger::try_init();
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             flags: wgpu::InstanceFlags::default(),
@@ -193,10 +194,13 @@ impl GpuRenderer {
         let width = if size.width > 0 { size.width } else { 1280 };
         let height = if size.height > 0 { size.height } else { 720 };
         let surface_caps = surface.get_capabilities(&adapter);
-        // HDR/Display P3 surface format selection:
-        // WHY: Tahoe requires wide-gamut Display P3 or HDR (Rgba16Float) color spaces when available.
-        // CONTRACT: Uses select_best_surface_format to safely fall back on mobile/legacy GPUs.
-        let surface_format = Self::select_best_surface_format(&surface_caps.formats);
+        // Surface format selection. HDR (Rgba16Float) is OPT-IN via the config's
+        // `prefer_hdr` flag (default false): an HDR float swapchain needs OS-level
+        // HDR display configuration, and on a machine without it wgpu presents with
+        // no validation error but the whole window shows wrong/shifted colors.
+        // Forge time has no user config yet, so default to LDR (prefer_hdr = false);
+        // the config-driven choice is applied in register_window/resize.
+        let surface_format = Self::select_best_surface_format(&surface_caps.formats, false);
 
         tracing::info!(
             "[GPU] Available present modes: {:?}",
@@ -505,9 +509,65 @@ impl GpuRenderer {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                         count: None,
                     },
+                    // Folded GI entries (folded into group 3 to respect WebGPU's
+                    // max_bind_groups=4 limit). common.wgsl declares these at
+                    // @group(3) bindings 2,3.
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
                 label: Some("Surtr Gradient Bind Group Layout"),
             });
+
+        // Create GI bind group layout. Two entries:
+//   binding 0: GiHeader uniform buffer (volume params, ≤64 bytes)
+//   binding 1: read-only storage buffer for the 4096 SH probe coefficients.
+// We split them because the probe grid is 4096 * (4 * vec3<f32>) = 256 KB,
+// which exceeds the default 64 KB uniform-buffer limit in wgpu/WebGPU.
+// Every real GI implementation uses a storage buffer for irradiance volumes.
+let gi_bind_group_layout =
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
+        label: Some("Surtr GI Bind Group Layout"),
+    });
 
         let pbr_material_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -566,10 +626,41 @@ impl GpuRenderer {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    // Folded GI entries (folded into group 3 to respect WebGPU's
+                    // max_bind_groups=4 limit). common.wgsl declares these at
+                    // @group(3) bindings 2,3.
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
                 label: Some("Surtr PBR Material Bind Group Layout"),
             });
 
+        let msaa_sample_count = QualityLevel::default().msaa_sample_count();
+        tracing::info!(
+            "[GPU] Forge internal: quality_level={:?}, msaa_sample_count={}, surface_size={}x{}",
+            QualityLevel::default(),
+            msaa_sample_count,
+            surface_info.as_ref().map(|(_, _, c)| c.width).unwrap_or(0),
+            surface_info.as_ref().map(|(_, _, c)| c.height).unwrap_or(0),
+        );
         let pipes = compile_render_pipelines(
             &device,
             format,
@@ -579,12 +670,14 @@ impl GpuRenderer {
             &berserker_bind_group_layout,
             &gradient_bind_group_layout,
             &pbr_material_bind_group_layout,
+            &gi_bind_group_layout,
             &shader,
             wgsl_opaque.as_str(),
             wgsl_glass.as_str(),
             wgsl_pbr.as_str(),
             wgsl_shadow.as_str(),
             &queue,
+            msaa_sample_count,
         );
 
         // Forge the Mega-Heim (4096x4096 RGBA for production batching)
@@ -676,20 +769,10 @@ impl GpuRenderer {
         });
         let gradient_dummy_view =
             gradient_dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let gradient_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &gradient_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&gradient_dummy_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&gradient_sampler),
-                },
-            ],
-            label: Some("Gradient Dummy Bind Group"),
-        });
+        // gradient_dummy_texture, gradient_dummy_view, gradient_sampler are
+        // declared above (line ~753). The actual gradient_bind_group creation is
+        // deferred until after gi_header_buffer / gi_probe_buffer exist, since
+        // the GI bindings (2, 3) were folded into gradient_bind_group_layout.
         let dummy_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -865,7 +948,6 @@ impl GpuRenderer {
         let mut current_scene =
             SceneUniforms::new(width as f32 / scale_factor, height as f32 / scale_factor);
         current_scene.scale_factor = scale_factor;
-        let msaa_sample_count = QualityLevel::default().msaa_sample_count();
         let scene_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Surtr Scene Buffer"),
             contents: bytemuck::bytes_of(&current_scene),
@@ -876,6 +958,101 @@ impl GpuRenderer {
             label: Some("Surtr CSM Buffer"),
             contents: bytemuck::bytes_of(&cvkg_core::render_tier::CsmUniforms::default()),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Forge the GI binding resources. We split GI into two buffers:
+        //   1) gi_header_buffer — small uniform (32 B), holds volume params.
+        //   2) gi_probe_buffer — read-only storage buffer holding the
+        //      4096-probe SH coefficient grid (192 KB).
+        // The CPU-side `GiUniforms` is still used by the GI node for
+        // bookkeeping; we just split the backing storage so the
+        // 196 KB buffer does NOT exceed wgpu's 64 KB uniform-buffer limit
+        // (uniform buffers exceed that limit silently drop the layout).
+        let gi_defaults = cvkg_core::GiUniforms::default();
+        // Header layout (must match GiHeader in common.wgsl/deferred_lighting.wgsl).
+        #[repr(C)]
+        #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+        struct GiHeaderGpu {
+            volume_origin: [f32; 3],
+            _pad0: f32,
+            volume_spacing: [f32; 3],
+            _pad1: f32,
+            probe_dimensions: [u32; 3],
+            _pad2: u32,
+        }
+        let gi_header_init = GiHeaderGpu {
+            volume_origin: gi_defaults.volume_origin,
+            _pad0: gi_defaults._pad0,
+            volume_spacing: gi_defaults.volume_spacing,
+            _pad1: gi_defaults._pad1,
+            probe_dimensions: gi_defaults.probe_dimensions,
+            _pad2: gi_defaults._pad2,
+        };
+
+        let gi_header_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Surtr GI Header Buffer"),
+            contents: bytemuck::bytes_of(&gi_header_init),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Probe coefficients: 4096 * (4 * 3) floats = 192 KB. Lives in a
+        // storage buffer (read-only). mn is `manifest_n` addressing;
+        // wgpu's default storage-buffer limit is 128 MB.
+        let gi_probe_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Surtr GI Probe Buffer"),
+            contents: bytemuck::bytes_of(&gi_defaults.probe_coefficients),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+        tracing::info!(
+            "[GPU] gi_probe_buffer created: {} bytes",
+            bytemuck::bytes_of(&gi_defaults.probe_coefficients).len(),
+        );
+
+        // gradient_bind_group is built here (after gi_header_buffer/gi_probe_buffer
+        // exist), because GI bindings (2, 3) were folded into gradient_bind_group_layout
+        // to respect WebGPU's max_bind_groups=4 limit. common.wgsl declares the
+        // gi uniform + gi_probes storage at @group(3) bindings 2 and 3.
+        let gradient_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &gradient_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&gradient_dummy_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&gradient_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: gi_header_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: gi_probe_buffer.as_entire_binding(),
+                },
+            ],
+            label: Some("Gradient Dummy Bind Group"),
+        });
+
+        // A standalone GI bind group is still required for the deferred lighting
+        // pass (deferred_layout puts GI at group(2), using gi_bind_group_layout
+        // declared at index 2). The 2D pipeline layouts no longer reference
+        // gi_bind_group_layout directly — they use gradient_bind_group_layout
+        // for group 3 with GI folded in.
+        let gi_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &gi_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: gi_header_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: gi_probe_buffer.as_entire_binding(),
+                },
+            ],
+            label: Some("Surtr GI Bind Group"),
         });
 
         let berserker_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1009,6 +1186,9 @@ impl GpuRenderer {
             pbr_pipeline: pipes.pbr_pipeline,
             transparent_pipeline: pipes.transparent_pipeline,
             shadow_pipeline: pipes.shadow_pipeline,
+            gbuffer_pipeline: pipes.gbuffer_pipeline,
+            deferred_lighting_pipeline: pipes.deferred_lighting_pipeline,
+            ssao_pipeline: pipes.ssao_pipeline,
             bloom_extract_pipeline: pipes.bloom_extract_pipeline,
             copy_pipeline: pipes.copy_pipeline,
             composite_pipeline: pipes.composite_pipeline,
@@ -1035,7 +1215,7 @@ impl GpuRenderer {
             texture_views: texture_views_list,
             dummy_sampler,
             dummy_view: dummy_view.clone(),
-            dummy_depth_view,
+            dummy_depth_view: dummy_depth_view.clone(),
             dummy_depth_view_msaa,
             svg: crate::types::SvgSubsystem::forge(
                 &device,
@@ -1123,7 +1303,10 @@ impl GpuRenderer {
             quality_level: QualityLevel::default(),
             pipeline_cache,
             bloom_enabled: true,
-            volumetric_enabled: false,
+            // Enable advanced features by default for headless tests and comprehensive rendering
+            volumetric_enabled: true,
+            deferred_enabled: true,
+            frame_counter: 0,
             path_geometry_cache: lru::LruCache::new(NonZeroUsize::new(64).unwrap()),
             color_blind_mode: crate::color_blindness::ColorBlindMode::Normal,
             color_blind_intensity: 1.0,
@@ -1145,6 +1328,83 @@ impl GpuRenderer {
             kawase_uniform_buffers: pipes.kawase_uniform_buffers,
             bind_group_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
             texture_view_cache: std::sync::Mutex::new(std::collections::HashMap::new()),
+
+            // Deferred rendering bind groups
+            // Create bind groups before assigning layouts
+            deferred_bind_group: {
+                // For initial state, bind empty/default textures
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("Deferred G-Buffer Bind Group"),
+                    layout: &pipes.deferred_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&dummy_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(&dummy_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: wgpu::BindingResource::TextureView(&dummy_depth_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 5,
+                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 6,
+                            resource: wgpu::BindingResource::TextureView(&dummy_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 7,
+                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                        },
+                    ],
+                })
+            },
+            ssao_bind_group: {
+                // Create SSAO bind group with depth/normal textures
+                device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("SSAO Bind Group"),
+                    layout: &pipes.ssao_bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&dummy_depth_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::TextureView(&dummy_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: wgpu::BindingResource::Sampler(&device.create_sampler(&wgpu::SamplerDescriptor::default())),
+                        },
+                    ],
+                })
+            },
+            deferred_bgl: pipes.deferred_bgl,
+            ssao_bgl: pipes.ssao_bgl,
+
+            // GI mapping resources (header uniform + probe storage)
+            gi_header_buffer,
+            gi_probe_buffer,
+            gi_bind_group,
+            gi_bind_group_layout,
 
             // SVG Filter Engine Resources (initialized lazily on first use)
             blur_pipeline: None,

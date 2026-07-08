@@ -230,13 +230,16 @@ pub struct SkinnedVertex {
     pub joint_weights: [f32; 4],
 }
 
-/// Output vertex representation containing computed position and normal.
+/// Output vertex representation containing computed position, normal, uv, color, and tangent.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct SkinnedOutput {
     pub position: [f32; 3],
-    pub _pad0: f32,
+    pub _pad_pos: f32,
     pub normal: [f32; 3],
-    pub _pad1: f32,
+    pub _pad_norm: f32,
+    pub uv: [f32; 2],
+    pub color: [f32; 4],
+    pub tangent: [f32; 4],
 }
 

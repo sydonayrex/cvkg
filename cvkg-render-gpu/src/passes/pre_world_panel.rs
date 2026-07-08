@@ -79,6 +79,13 @@ impl KvasirNode for PreWorldPanelNode {
             pass.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
             pass.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
             pass.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
+            // GI bindings were folded into gradient_bind_group at @group(3) bindings 2,3.
+
+            // Bind the opaque pipeline BEFORE any draw calls. Without this
+            // the render pass encoder has no pipeline bound and wgpu will
+            // reject the recorded draw_indexed command at Queue::submit
+            // time with "no pipeline bound" validation error.
+            pass.set_pipeline(&ctx.renderer.opaque_pipeline);
 
             // Filter draw_calls to only those belonging to this panel's VDOM subtree.
             if !ctx.renderer.draw_calls.is_empty() {
@@ -91,6 +98,14 @@ impl KvasirNode for PreWorldPanelNode {
 
                 for call in &ctx.renderer.draw_calls {
                     if call.panel_id == Some(panel_id) {
+                        pass.set_bind_group(
+                            0,
+                            ctx.renderer
+                                .texture_bind_groups
+                                .get(call.texture_id.unwrap_or(0) as usize)
+                                .unwrap_or(&ctx.renderer.dummy_texture_bind_group),
+                            &[],
+                        );
                         pass.draw_indexed(
                             call.index_start..call.index_start + call.index_count,
                             0,

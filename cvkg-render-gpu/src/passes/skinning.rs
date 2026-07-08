@@ -30,6 +30,10 @@ impl KvasirNode for SkinningNode {
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
+        tracing::trace!(
+            "[Kvasir] SkinningNode::execute: pairs={}",
+            ctx.renderer.skinning_buffer_pairs.len()
+        );
         if ctx.renderer.skinning_buffer_pairs.is_empty() {
             return;
         }

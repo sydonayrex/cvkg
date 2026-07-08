@@ -50,10 +50,11 @@ impl KvasirNode for CompositeNode {
         let scene_view = match ctx.registry.get_texture_view(RES_SCENE) {
             Some(v) => v,
             None => {
-                tracing::error!("Missing texture view for {}", stringify!(RES_SCENE));
+                tracing::error!("Missing texture view for RES_SCENE");
                 return;
             }
         };
+
         let scene_texture_bind_group = ctx.get_or_create_bind_group(
             (RES_SCENE, 1, false),
             &ctx.renderer.texture_bind_group_layout,
@@ -70,23 +71,14 @@ impl KvasirNode for CompositeNode {
             Some("composite_scene_bg"),
         );
 
+        // Clear the target before rendering composite (first pass to touch it)
         let mut p = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Surtr P7 Composite"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: target_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: if self.clear_target {
-                        wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.0,
-                            g: 0.0,
-                            b: 0.0,
-                            a: 1.0,
-                        })
-                    } else {
-                        // Load existing content (e.g., accessibility pass output)
-                        wgpu::LoadOp::Load
-                    },
+                    load: wgpu::LoadOp::Clear(wgpu::Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }),
                     store: wgpu::StoreOp::Store,
                 },
                 depth_slice: None,
@@ -115,6 +107,8 @@ impl KvasirNode for CompositeNode {
         p.set_bind_group(0, &scene_texture_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
         p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
+        // GI bindings were folded into gradient_bind_group at @group(3) bindings 2,3.
         p.draw(0..3, 0..1);
+        eprintln!("[Composite] drew fullscreen triangle (has_bloom={})", self.has_bloom);
     }
 }

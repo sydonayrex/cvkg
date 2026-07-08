@@ -166,7 +166,7 @@ impl GpuRenderer {
         let cp1 = [from[0] + cnx, from[1] + cny];
         let cp2 = [to[0] + cnx, to[1] + cny];
         let cp3 = [to[0] - cnx, to[1] - cny];
-        let cp4 = [from[0] - cnx, from[1] - gny];
+        let cp4 = [from[0] - cnx, from[1] - cny];
         self.push_oriented_quad(
             [cp1, cp2, cp3, cp4],
             [1.0, 1.0, 1.0, c[3]],

@@ -48,6 +48,7 @@ impl GpuRenderer {
         self.vertices.clear();
         self.indices.clear();
         self.instance_data.clear();
+        self.instance_data_3d.clear();
         self.draw_calls.clear();
         self.svg.clear_filter_batches();
         self.shared_elements.clear();
@@ -60,10 +61,12 @@ impl GpuRenderer {
         self.clip_stack.clear();
         self.slice_stack.clear();
         self.transform_stack.clear();
+        self.transform_stack_3d.clear();
         self.portal_regions.clear();
         self.hologram_instances.clear();
         self.pending_directional_light = None;
         self.pending_mesh_instances_3d.clear();
+        self.pending_transparent_instances_3d.clear();
         self.pending_scene_radius = 100.0;
         self.current_z = 0.0;
         self.vnode_stack.clear();
@@ -84,6 +87,14 @@ impl GpuRenderer {
             0,
             bytemuck::cast_slice(&time_uniform),
         );
+
+        // Clear 3D per-frame state to prevent unbounded memory growth across
+        // frames and avoid state leaking from prior frames (e.g. transparent
+        // meshes queued in cached-graph paths since they are only consumed
+        // when the graph rebuilds via std::mem::take inside draw.rs).
+        self.pending_mesh_instances_3d.clear();
+        self.pending_transparent_instances_3d.clear();
+
         // Clear per-frame state but NOT memo_cache -- use generation counter instead
         self.frame_generation += 1;
         // Evict memo cache entries that are too old to prevent unbounded growth.
@@ -170,7 +181,10 @@ impl GpuRenderer {
             .create_surface(window.clone())
             .expect("Failed to create surface");
         let caps = surface.get_capabilities(&self.adapter);
-        let format = caps.formats[0];
+        // HDR (Rgba16Float) swapchain is opt-in via self.config.prefer_hdr.
+        // Default false: an HDR float surface needs OS-level HDR configuration,
+        // and wgpu presents with no validation error but wrong colors otherwise.
+        let format = Self::select_best_surface_format(&caps.formats, self.config.prefer_hdr);
 
         // Dynamic present mode selection -- Mailbox not available on all platforms (e.g. Wayland)
         let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
@@ -917,6 +931,7 @@ impl GpuRenderer {
         let has_bloom = self.bloom_enabled;
         let has_accessibility =
             self.color_blind_mode != crate::color_blindness::ColorBlindMode::Normal;
+        let has_deferred = self.deferred_enabled;
 
         // Build the frame graph using the Kvasir helper for correct pass ordering.
         // Conditional passes (glass, bloom, accessibility) are included/excluded based on frame state.
@@ -944,6 +959,29 @@ impl GpuRenderer {
             crate::kvasir::nodes::RES_SCENE_MSAA,
             res.scene_msaa_texture.clone(),
         );
+
+        // G-Buffer and SSAO resource aliases for deferred rendering
+        let (gbuffer_albedo, gbuffer_normal, gbuffer_motion, ssao_tex) =
+            if let Some(window_id) = self.current_window {
+                let ctx = self.surfaces.get(&window_id).unwrap();
+                (ctx.gbuffer_albedo, ctx.gbuffer_normal, ctx.gbuffer_motion, ctx.ssao_tex)
+            } else {
+                let ctx = self.headless_context.as_ref().unwrap();
+                (ctx.gbuffer_albedo, ctx.gbuffer_normal, ctx.gbuffer_motion, ctx.ssao_tex)
+            };
+        self.registry.alias(
+            crate::kvasir::nodes::RES_GBUFFER_ALBEDO,
+            gbuffer_albedo,
+        );
+        self.registry.alias(
+            crate::kvasir::nodes::RES_GBUFFER_NORMAL,
+            gbuffer_normal,
+        );
+        self.registry.alias(
+            crate::kvasir::nodes::RES_GBUFFER_MOTION,
+            gbuffer_motion,
+        );
+        self.registry.alias(crate::kvasir::nodes::RES_SSAO_OUT, ssao_tex);
 
         let scale = self.current_scale_factor();
         let scale_bits = scale.to_bits();
@@ -978,6 +1016,7 @@ impl GpuRenderer {
                 has_bloom,
                 has_accessibility,
                 has_volumetric,
+                has_deferred,
                 active_offscreens_count,
                 offscreen_hash,
                 portal_regions_count,
@@ -1013,6 +1052,7 @@ impl GpuRenderer {
                     has_accessibility,
                     has_ibl: has_glass,
                     has_volumetric,
+                    has_deferred,
                     active_offscreens: &self.active_offscreens,
                     portal_regions: &self.portal_regions.iter().cloned().collect::<Vec<_>>(),
                     world_space_panels: &self.world_space_panels,
@@ -1027,8 +1067,13 @@ impl GpuRenderer {
                     cascade_splits: [8.0, 25.0, 70.0, 200.0],
                     camera_view_proj: self.current_scene.proj * self.current_scene.view,
                     camera_pos: glam::Vec3::from(self.current_scene.camera_pos),
+                    frame_index: self.frame_counter,
                 },
             );
+            
+            // Debug: log when graph is rebuilt
+            eprintln!("DEBUG: Building new render graph, has_volumetric={}", has_volumetric);
+            
             let planner = crate::kvasir::planner::ExecutionPlanner::new(&render_graph);
             let compiled_plan = match planner.compile() {
                 Ok(plan) => plan,
@@ -1052,6 +1097,7 @@ impl GpuRenderer {
                 has_bloom,
                 has_accessibility,
                 has_volumetric,
+                has_deferred,
                 active_offscreens_count,
                 offscreen_content_hash: offscreen_hash,
                 portal_regions_count,
@@ -1107,13 +1153,18 @@ impl GpuRenderer {
                 }
             }
             if let Some(node) = cached.graph.node(node_key) {
-                tracing::trace!("[Kvasir] Executing node: {}", node.label());
+                eprintln!("DEBUG: Executing node: {} (allow_degradation={})", node.label(), allow_degradation);
+                // SAFETY: ctx.registry borrows registry mutably while ctx.renderer
+                // borrows the rest of self immutably. We split-field borrow
+                // via dedicated local bindings so the borrow checker does not
+                // treat the entire self as accessed simultaneously.
+                let self_ref = &*self;
                 let mut ctx = crate::kvasir::node::ExecutionContext {
-                    device: &self.device,
-                    queue: &self.queue,
+                    device: &self_ref.device,
+                    queue: &self_ref.queue,
                     encoder: &mut encoder,
                     registry: &self.registry,
-                    renderer: self,
+                    renderer: self_ref,
                     target_view: &res.target_view,
                     depth_view: &res.depth_texture_view,
                     blur_env_bind_group_a: &res.blur_env_bind_group_a,
@@ -1336,6 +1387,8 @@ impl GpuRenderer {
             f.present();
             tracing::info!("[Surtr] Frame presented");
         }
+
+        self.frame_counter = self.frame_counter.wrapping_add(1);
     }
 
     /// Submit pre-routed draw command buckets from the cvkg-compositor.
@@ -1843,6 +1896,20 @@ impl GpuRenderer {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.dummy_sampler),
+                },
+                // Folded GI entries — common.wgsl declares gi uniform at
+                // @group(3) binding 2 and gi_probes storage at @group(3)
+                // binding 3. gradient_bind_group_layout carries these for
+                // the same reason as the init-time gradient_bind_group;
+                // every device.create_bind_group against this layout must
+                // supply a resource for every layout entry.
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.gi_header_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: self.gi_probe_buffer.as_entire_binding(),
                 },
             ],
             label: Some("Gradient Bind Group"),

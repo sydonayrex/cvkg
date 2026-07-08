@@ -15,6 +15,8 @@ pub struct CachedGraphPlan {
     pub has_accessibility: bool,
     /// Whether volumetric raymarching pass is enabled.
     pub has_volumetric: bool,
+    /// Whether deferred rendering is enabled.
+    pub has_deferred: bool,
     /// Number of active offscreen compositor nodes.
     pub active_offscreens_count: usize,
     /// Content hash for offscreen effects (effect name, blend mode, args).
@@ -54,6 +56,7 @@ impl CachedGraphPlan {
         has_bloom: bool,
         has_accessibility: bool,
         has_volumetric: bool,
+        has_deferred: bool,
         active_offscreens_count: usize,
         offscreen_content_hash: u64,
         portal_regions_count: usize,
@@ -67,6 +70,7 @@ impl CachedGraphPlan {
             && self.has_bloom == has_bloom
             && self.has_accessibility == has_accessibility
             && self.has_volumetric == has_volumetric
+            && self.has_deferred == has_deferred
             && self.active_offscreens_count == active_offscreens_count
             && self.offscreen_content_hash == offscreen_content_hash
             && self.portal_regions_count == portal_regions_count
@@ -91,6 +95,7 @@ mod p1_9_tests {
             has_bloom: false,
             has_accessibility: false,
             has_volumetric: false,
+            has_deferred: false,
             active_offscreens_count: 0,
             offscreen_content_hash: 0,
             portal_regions_count: 0,
@@ -112,6 +117,7 @@ mod p1_9_tests {
             false,
             false,
             false,
+            false,
             0,
             0,
             0,
@@ -130,6 +136,7 @@ mod p1_9_tests {
         let plan = make_plan(42);
         assert!(!plan.matches(
             true,
+            false,
             false,
             false,
             false,

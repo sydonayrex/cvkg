@@ -65,6 +65,22 @@ struct CsmUniforms {
 };
 @group(2) @binding(2) var<uniform> csm: CsmUniforms;
 
+// --- Group 3: Global Illumination (folded into gradient/pbr group for WebGPU 4-group limit) ---
+// Header is a small uniform buffer (volume parameters). Probe coefficients
+// live in a separate storage buffer (read-only) because they are 4096 *
+// (4 * vec3<f32>) = 256 KB, which exceeds the 64 KB WebGPU default limit on
+// uniform buffer sizes.
+struct GiHeader {
+    volume_origin: vec3<f32>,
+    _pad0: f32,
+    volume_spacing: vec3<f32>,
+    _pad1: f32,
+    probe_dimensions: vec3<u32>,
+    _pad2: u32,
+};
+@group(3) @binding(2) var<uniform> gi: GiHeader;
+@group(3) @binding(3) var<storage, read> gi_probes: array<array<vec3<f32>, 4>>;
+
 // --- Group 0: Main Texture Array ---
 @group(0) @binding(0) var t_diffuse: binding_array<texture_2d<f32>, 32>;
 @group(0) @binding(1) var s_diffuse: sampler;

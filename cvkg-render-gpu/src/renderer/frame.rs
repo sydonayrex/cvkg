@@ -164,7 +164,7 @@ impl GpuRenderer {
             .create_surface(window.clone())
             .expect("Failed to create surface");
         let caps = surface.get_capabilities(&self.adapter);
-        let format = caps.formats[0];
+        let format = Self::select_best_surface_format(&caps.formats, self.config.prefer_hdr);
 
         // Dynamic present mode selection -- Mailbox not available on all platforms (e.g. Wayland)
         let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {

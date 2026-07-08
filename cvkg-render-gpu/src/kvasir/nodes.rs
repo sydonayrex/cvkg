@@ -5,6 +5,11 @@ use crate::passes::bloom::{BloomBlurNode, BloomExtractNode};
 use crate::passes::composite::CompositeNode;
 use crate::passes::geometry::GeometryNode;
 use crate::passes::glass::{BackdropBlurNode, BackdropCopyNode, GlassNode};
+use crate::passes::gbuffer::GBufferNode;
+use crate::passes::ssao::SsaoNode;
+use crate::passes::deferred_lighting::DeferredLightingNode;
+use crate::passes::taa::TaaNode;
+use crate::passes::gi::GlobalIlluminationNode;
 use crate::passes::opaque3d::Opaque3dNode;
 use crate::passes::pre_world_panel::PreWorldPanelNode;
 use crate::passes::shadow::{DirectionalLight, GpuMesh3d, ShadowNode};
@@ -41,6 +46,16 @@ pub enum PassId {
     /// Transparent 3D pass with back-to-front sorting.
     Transparent3d,
     ComputeSkinning,
+    /// G-Buffer pass for deferred rendering.
+    GBuffer,
+    /// SSAO pass for deferred rendering.
+    Ssao,
+    /// Deferred lighting resolve pass.
+    DeferredLighting,
+    /// Temporal Anti-Aliasing pass.
+    Taa,
+    /// Global Illumination probe sampling pass.
+    GlobalIllumination,
 }
 
 pub struct PresentNode {
@@ -77,6 +92,14 @@ pub const RES_BLUR_A: ResourceId = ResourceId(2);
 pub const RES_BLOOM_A: ResourceId = ResourceId(3);
 pub const RES_SWAPCHAIN: ResourceId = ResourceId(4);
 
+// G-Buffer resources (deferred rendering)
+pub const RES_GBUFFER_ALBEDO: ResourceId = ResourceId(400);
+pub const RES_GBUFFER_NORMAL: ResourceId = ResourceId(401);
+pub const RES_GBUFFER_MOTION: ResourceId = ResourceId(402);
+
+/// SSAO output resource.
+pub const RES_SSAO_OUT: ResourceId = ResourceId(403);
+
 /// Render graph configuration parameters.
 pub struct RenderGraphConfig<'a> {
     pub has_glass: bool,
@@ -85,6 +108,8 @@ pub struct RenderGraphConfig<'a> {
     pub has_ibl: bool,
     /// Whether volumetric raymarching pass is active for fog/light shaft effects.
     pub has_volumetric: bool,
+    /// Whether deferred rendering path is active (uses G-Buffer + lighting resolve).
+    pub has_deferred: bool,
     pub active_offscreens: &'a [crate::types::OffscreenEffectConfig],
     pub portal_regions: &'a [cvkg_core::Rect],
     /// World-space UI panels that render to offscreen textures for 3D compositing.
@@ -104,6 +129,8 @@ pub struct RenderGraphConfig<'a> {
     pub camera_view_proj: glam::Mat4,
     /// Camera position for view_depth calculation.
     pub camera_pos: glam::Vec3,
+    /// Current frame index for temporal effects.
+    pub frame_index: u32,
 }
 
 /// Build the dynamic RenderGraph (KvasirGraph)
@@ -165,7 +192,10 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
 
         // Per-element backdrop blur for portal-aware glass elements
         for (i, region) in config.portal_regions.iter().enumerate() {
-            let region_id = ResourceId(2000 + i as u32);
+            // Use resource IDs in a separate range from PreWorldPanel (which uses 2000 + i)
+            // so simultaneous pre-world panels AND portal regions cannot collide on
+            // the same ResourceId (would cause one to overwrite the other).
+            let region_id = ResourceId(3000 + i as u32);
             let region_node =
                 builder.add_node(Box::new(BackdropRegionNode::new(*region, region_id)));
             builder.connect(last_scene_node, RES_SCENE, region_node);
@@ -210,38 +240,88 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
             camera_view_proj: config.camera_view_proj,
         }));
         // Shadow runs after skinning — skinning writes to per-mesh dst_buffers.
-        // No resource connection needed since skinning writes to buffers, not textures.
+        // Connect skinning → shadow to enforce deterministic ordering in topological
+        // sort. Without this edge both nodes have indegree 0 and their relative order
+        // depends on HashMap iteration (non-deterministic across runs), which would
+        // cause shadow to sometimes read stale skinned vertex data.
+        builder.connect(skinning_node, shadow_rid, shadow_node);
         // Shadow runs before scene — scene reads the shadow map.
 
-        // 3D Opaque pass (runs after shadow, reads shadow map)
-        let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
-            mesh_instances: config.mesh_instances_3d.clone(),
-            light: *light,
-            shadow_map: shadow_rid,
-        }));
-        builder.connect(shadow_node, shadow_rid, opaque_3d_node);
-        builder.connect(opaque_3d_node, RES_SCENE, last_scene_node);
-        // Opaque 3d writes to scene — update last_scene_node to chain off it.
-        last_scene_node = opaque_3d_node;
-
-        // 3D Transparent pass (runs after opaque, reads shadow map)
-        // Transparent meshes must be sorted by view_depth (back-to-front)
-        if !config.transparent_meshes_3d.is_empty() {
-            let mut transparent_meshes = config.transparent_meshes_3d.clone();
-            // Sort by view_depth descending (farthest first for back-to-front)
-            transparent_meshes.sort_by(|a, b| {
-                b.view_depth
-                    .partial_cmp(&a.view_depth)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            let transparent_node = builder.add_node(Box::new(TransparentNode {
-                mesh_instances: transparent_meshes,
-                shadow_map: shadow_rid,
-                camera_pos: config.camera_pos,
+        if config.has_deferred {
+            // G-Buffer pass: writes albedo, normal, motion vectors, depth
+            let gbuffer_node = builder.add_node(Box::new(GBufferNode {
+                mesh_instances: config.mesh_instances_3d.clone(),
             }));
-            builder.connect(last_scene_node, RES_SCENE, transparent_node);
-            last_scene_node = transparent_node;
+            // G-Buffer reads skinned vertex buffers — connect via a synthetic
+            // gbuffer-staging resource so the topological sort deterministically
+            // orders skinning before gbuffer.
+            builder.connect(skinning_node, shadow_rid, gbuffer_node);
+
+            // SSAO pass: samples depth/normal + outputs occlusion
+            let ssao_node = builder.add_node(Box::new(SsaoNode {
+                depth_buffer: ResourceId(0), // placeholder - depth sampled from ctx.depth_view
+                normal_buffer: RES_GBUFFER_NORMAL,
+                inputs: [RES_GBUFFER_NORMAL, RES_SCENE], // scene for depth view access
+            }));
+
+            // Deferred lighting: reads G-Buffer + SSAO + shadow map
+            let deferred_lighting_node = builder.add_node(Box::new(DeferredLightingNode {
+                ssao_occlusion: RES_SSAO_OUT,
+                shadow_atlas: shadow_rid,
+                scene_output: RES_SCENE,
+                inputs: [RES_GBUFFER_ALBEDO, RES_GBUFFER_NORMAL],
+            }));
+            builder.connect(gbuffer_node, RES_GBUFFER_ALBEDO, deferred_lighting_node);
+            builder.connect(gbuffer_node, RES_GBUFFER_NORMAL, deferred_lighting_node);
+            builder.connect(ssao_node, RES_SSAO_OUT, deferred_lighting_node);
+            builder.connect(shadow_node, shadow_rid, deferred_lighting_node);
+            // Deferred lighting outputs to RES_SCENE for downstream passes
+            builder.connect(deferred_lighting_node, RES_SCENE, last_scene_node);
+
+            // Global Illumination (baked GI sampling) - runs after deferred lighting
+            let _gi_node = builder.add_node(Box::new(GlobalIlluminationNode {
+                volume: crate::passes::gi::IrradianceVolume {
+                    origin: glam::Vec3::ZERO,
+                    spacing: glam::Vec3::new(8.0, 8.0, 8.0),
+                    dimensions: [8, 8, 8],
+                },
+                environment_probes: Vec::new(),
+                lightmap: None,
+                gi_uniforms: cvkg_core::GiUniforms::default(),
+            }));
+            // GI node has no resource connections currently (stub implementation)
+            last_scene_node = deferred_lighting_node;
+        } else {
+            // 3D Opaque pass (runs after shadow, reads shadow map)
+            let opaque_3d_node = builder.add_node(Box::new(Opaque3dNode {
+                mesh_instances: config.mesh_instances_3d.clone(),
+                light: *light,
+                shadow_map: shadow_rid,
+            }));
+            builder.connect(shadow_node, shadow_rid, opaque_3d_node);
+            builder.connect(opaque_3d_node, RES_SCENE, last_scene_node);
+            // Opaque 3d writes to scene — update last_scene_node to chain off it.
+            last_scene_node = opaque_3d_node;
+
+            // 3D Transparent pass (runs after opaque, reads shadow map)
+            // Transparent meshes must be sorted by view_depth (back-to-front)
+            if !config.transparent_meshes_3d.is_empty() {
+                let mut transparent_meshes = config.transparent_meshes_3d.clone();
+                // Sort by view_depth descending (farthest first for back-to-front)
+                transparent_meshes.sort_by(|a, b| {
+                    b.view_depth
+                        .partial_cmp(&a.view_depth)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
+
+                let transparent_node = builder.add_node(Box::new(TransparentNode {
+                    mesh_instances: transparent_meshes,
+                    shadow_map: shadow_rid,
+                    camera_pos: config.camera_pos,
+                }));
+                builder.connect(last_scene_node, RES_SCENE, transparent_node);
+                last_scene_node = transparent_node;
+            }
         }
     }
 
@@ -280,11 +360,12 @@ pub fn build_render_graph(config: &RenderGraphConfig<'_>) -> super::graph::Kvasi
     }
 
     // Present node marks the graph endpoint (presentation is handled by Surface::present)
+    // Connect from composite, not from last_scene_node, so we wait for bloom blur
     let present = builder.add_node(Box::new(PresentNode {
         inputs: vec![RES_SCENE],
         outputs: vec![],
     }));
-    builder.connect(last_scene_node, RES_SCENE, present);
+    builder.connect(composite, RES_SCENE, present);
 
     builder.build()
 }

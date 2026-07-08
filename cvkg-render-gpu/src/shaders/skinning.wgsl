@@ -8,14 +8,18 @@
 
 struct SkinnedVertex {
     position: vec3<f32>,
+    _pad_pos: f32,
     normal: vec3<f32>,
+    _pad_norm: f32,
     joint_indices: vec4<u32>,
     joint_weights: vec4<f32>,
 };
 
 struct SkinnedOutput {
     position: vec3<f32>,
+    _pad_pos_out: f32,
     normal: vec3<f32>,
+    _pad_norm_out: f32,
 };
 
 // Bind Group 0: Mesh geometry data.

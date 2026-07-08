@@ -237,6 +237,10 @@ fn test_advanced_volumetric_raymarching() {
     let mut renderer = pollster::block_on(GpuRenderer::forge_headless(width, height));
     renderer.bloom_enabled = true; // Required for volumetric glow
     renderer.set_theme(cvkg_core::ColorTheme::vibrant_glass());
+    renderer.frame_budget.allow_degradation = false;
+
+    // Check that volumetric is enabled before running
+    eprintln!("DEBUG: Before test, volumetric_enabled={}", renderer.volumetric_enabled);
 
     let pixels = benchmark_and_capture(&mut renderer, |renderer| {
         let encoder = renderer.begin_frame_headless();
@@ -257,7 +261,30 @@ fn test_advanced_volumetric_raymarching() {
         renderer.end_frame(encoder);
     });
 
-    // Check for cyan/blue volumetric glow
+    // Debug: check specific pixel values
+    // Center pixel (256, 256)
+    let center_idx = (256 * 512 + 256) * 4;
+    eprintln!("DEBUG center pixel: R={}, G={}, B={}, A={}", 
+        pixels[center_idx], pixels[center_idx+1], pixels[center_idx+2], pixels[center_idx+3]);
+    
+    // Hologram rect center (250, 250)
+    let holo_idx = (250 * 512 + 250) * 4;
+    eprintln!("DEBUG holo center pixel: R={}, G={}, B={}, A={}", 
+        pixels[holo_idx], pixels[holo_idx+1], pixels[holo_idx+2], pixels[holo_idx+3]);
+
+    // Debug: check what pixels we actually got
+    let mut max_r = 0u8;
+    let mut max_g = 0u8;
+    let mut max_b = 0u8;
+    for chunk in pixels.chunks(4) {
+        max_r = max_r.max(chunk[0]);
+        max_g = max_g.max(chunk[1]);
+        max_b = max_b.max(chunk[2]);
+    }
+    eprintln!("DEBUG volumetric: max pixel values R={}, G={}, B={}", max_r, max_g, max_b);
+
+    // Check for cyan/blue volumetric glow - any pixel where blue is significantly higher than red
+    // The background is dark (0.02, 0.02, 0.05), volumetric should add cyan (0, 1, 1)
     let bright_pixels =
         count_matching_pixels(&pixels, width, height, |p| p[2] > p[0].saturating_add(20));
     assert!(

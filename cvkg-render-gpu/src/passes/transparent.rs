@@ -104,6 +104,15 @@ impl KvasirNode for TransparentNode {
                             binding: 7,
                             resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
                         },
+                        // Folded GI entries — see opaque3d.rs for context.
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: ctx.renderer.gi_header_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: ctx.renderer.gi_probe_buffer.as_entire_binding(),
+                        },
                     ],
                 }))
             }
@@ -147,15 +156,12 @@ impl KvasirNode for TransparentNode {
         }
 
         // Render meshes sorted by view_depth (back-to-front for transparency).
-        // TODO: Once SkinnedOutput is extended to include UV/color/tangent (matching Vertex3D layout),
-        // enable skinned_buffer binding here. Currently SkinnedOutput only has position+normal,
-        // which causes PBR shaders to read garbage for UVs/colors/tangents.
         for mesh in self.mesh_instances.iter() {
-            // if let Some(skinned) = &mesh.skinned_buffer {
-            //     pass.set_vertex_buffer(0, skinned.slice(..));
-            // } else {
-            pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            // }
+            if let Some(skinned) = &mesh.skinned_buffer {
+                pass.set_vertex_buffer(0, skinned.slice(..));
+            } else {
+                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            }
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             let inst = mesh.instance_index;
             pass.draw_indexed(0..mesh.index_count, 0, inst..(inst + 1));

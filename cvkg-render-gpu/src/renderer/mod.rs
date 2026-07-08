@@ -244,6 +244,13 @@ pub struct GpuRenderer {
     pub(crate) transparent_pipeline: wgpu::RenderPipeline,
     /// Shadow map rendering pipeline (depth-only for cascaded shadows).
     pub(crate) shadow_pipeline: wgpu::RenderPipeline,
+    /// G-Buffer rendering pipeline for deferred shading.
+    pub(crate) gbuffer_pipeline: wgpu::RenderPipeline,
+    /// Deferred lighting resolve pipeline.
+    pub(crate) deferred_lighting_pipeline: wgpu::RenderPipeline,
+    /// SSAO pipeline.
+    pub(crate) ssao_pipeline: wgpu::RenderPipeline,
+    /// Background sprite rendering pipeline.
     pub(crate) background_pipeline: wgpu::RenderPipeline,
     pub(crate) bloom_extract_pipeline: wgpu::RenderPipeline,
     /// Identity copy pipeline for Pass 2 backdrop blur (all pixels, no luminance gate).
@@ -263,6 +270,22 @@ pub struct GpuRenderer {
     pub(crate) pbr_material_bind_group_layout: wgpu::BindGroupLayout,
     /// Comparison sampler for volumetric depth comparison.
     pub(crate) volumetric_depth_sampler: wgpu::Sampler,
+    /// Small uniform buffer for GI header (volume params).
+    pub(crate) gi_header_buffer: wgpu::Buffer,
+    /// Read-only storage buffer for the 4096 SH probe coefficients.
+    pub(crate) gi_probe_buffer: wgpu::Buffer,
+    /// Bind group for GI header + probe storage (group 4).
+    pub(crate) gi_bind_group: wgpu::BindGroup,
+    /// Bind group layout for GI uniforms.
+    pub(crate) gi_bind_group_layout: wgpu::BindGroupLayout,
+    /// Deferred lighting bind group layout (albedo/normal/depth/ssao textures + scene buffer).
+    pub(crate) deferred_bgl: wgpu::BindGroupLayout,
+    /// Deferred lighting bind group for current G-Buffer textures.
+    pub(crate) deferred_bind_group: wgpu::BindGroup,
+    /// SSAO bind group layout (depth/normal textures + samplers).
+    pub(crate) ssao_bgl: wgpu::BindGroupLayout,
+    /// SSAO bind group for current depth/normal views.
+    pub(crate) ssao_bind_group: wgpu::BindGroup,
     /// CPU-side list of hologram instances submitted this frame.
     /// Cleared each frame in reset_frame_state; consumed by VolumetricNode::execute.
     pub(crate) hologram_instances: Vec<HologramInstance>,
@@ -337,6 +360,10 @@ pub struct GpuRenderer {
     pub bloom_enabled: bool,
     /// Dynamic toggle to enable or disable the volumetric raymarching pass, which handles fog and light shaft simulations.
     pub volumetric_enabled: bool,
+    /// Deferred rendering enabled flag (uses G-Buffer + lighting resolve).
+    pub deferred_enabled: bool,
+    /// Frame counter for temporal effects (TAA, animation timing).
+    pub frame_counter: u32,
 
     // Path Geometry Cache — avoids re-tessellating static paths every frame.
     pub(crate) path_geometry_cache: lru::LruCache<u64, (Vec<Vertex>, Vec<u32>)>,
@@ -774,29 +801,59 @@ impl GpuRenderer {
         }
     }
 
+    /// Select the best presentable surface format from the adapter's `formats`.
+    ///
+    /// `prefer_hdr` is opt-in and defaults to `false`. When `false` the picker
+    /// NEVER selects `Rgba16Float` (HDR float): configuring the swapchain as an
+    /// HDR float target requires OS-level HDR display configuration, and on a
+    /// system without it wgpu presents **without any validation error** but the
+    /// whole window shows wrong/shifted colors. That is a silent, hard-to-debug
+    /// failure, so HDR is only chosen when the caller explicitly opts in.
+    ///
+    /// The fallback ladder prefers a universally-supported sRGB format first
+    /// (correct colors + gamma), then linear formats, and only after those a
+    /// HDR float format when `prefer_hdr` is set. When the adapter reports only
+    /// exotic/legacy formats, we return `formats[0]` rather than fabricating a
+    /// format the surface does not actually support.
     pub(crate) fn select_best_surface_format(
         formats: &[wgpu::TextureFormat],
+        prefer_hdr: bool,
     ) -> wgpu::TextureFormat {
         if formats.is_empty() {
+            // No capabilities at all: return a universally-supported format.
             return wgpu::TextureFormat::Rgba8Unorm;
         }
-        let preferred_formats = [
-            wgpu::TextureFormat::Rgba16Float,
-            wgpu::TextureFormat::Rgba8Unorm,
+        // LDR-first by default. Each entry is unique (the previous list had
+        // duplicate Rgba8Unorm entries that were dead weight — once Rgba8Unorm
+        // matched at position 2, the trailing duplicates could never be reached).
+        let ldr_formats = [
             wgpu::TextureFormat::Bgra8UnormSrgb,
             wgpu::TextureFormat::Rgba8UnormSrgb,
             wgpu::TextureFormat::Bgra8Unorm,
             wgpu::TextureFormat::Rgba8Unorm,
+        ];
+        // Only when explicitly opted in: float HDR first, then the sRGB/linear
+        // ladder. Without OS HDR configuration this path produces wrong output
+        // with no validation error, so it must stay opt-in.
+        let hdr_formats = [
+            wgpu::TextureFormat::Rgba16Float,
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureFormat::Bgra8Unorm,
             wgpu::TextureFormat::Rgba8Unorm,
         ];
-        for preferred in &preferred_formats {
+        let preferred_formats: &[wgpu::TextureFormat] = if prefer_hdr {
+            &hdr_formats
+        } else {
+            &ldr_formats
+        };
+        for preferred in preferred_formats {
             if formats.contains(preferred) {
                 return *preferred;
             }
         }
-        if formats.contains(&wgpu::TextureFormat::Rgba8Unorm) {
-            return wgpu::TextureFormat::Rgba8Unorm;
-        }
+        // No preferred format is available (exotic/legacy HDR-only display):
+        // fall back to the first format the surface actually supports.
         formats[0]
     }
 
@@ -988,6 +1045,64 @@ impl GpuRenderer {
                 lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
             };
             ctx.bloom_tex_b = self.registry.allocate_image(&self.device, &bloom_desc_b);
+
+            // Recreate G-Buffer textures on resize for deferred rendering
+            self.registry.remove_image(ctx.gbuffer_albedo);
+            self.registry.remove_image(ctx.gbuffer_normal);
+            self.registry.remove_image(ctx.gbuffer_motion);
+            self.registry.remove_image(ctx.ssao_tex);
+
+            let gbuffer_albedo_desc = crate::kvasir::resource::ResourceDescriptor {
+                label: Some("G-Buffer Albedo Resize".into()),
+                kind: crate::kvasir::resource::ResourceKind::Image {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    width,
+                    height,
+                    mip_level_count: 1,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                },
+                lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+            };
+            ctx.gbuffer_albedo = self.registry.allocate_image(&self.device, &gbuffer_albedo_desc);
+
+            let gbuffer_normal_desc = crate::kvasir::resource::ResourceDescriptor {
+                label: Some("G-Buffer Normal Resize".into()),
+                kind: crate::kvasir::resource::ResourceKind::Image {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    width,
+                    height,
+                    mip_level_count: 1,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                },
+                lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+            };
+            ctx.gbuffer_normal = self.registry.allocate_image(&self.device, &gbuffer_normal_desc);
+
+            let gbuffer_motion_desc = crate::kvasir::resource::ResourceDescriptor {
+                label: Some("G-Buffer Motion Resize".into()),
+                kind: crate::kvasir::resource::ResourceKind::Image {
+                    format: wgpu::TextureFormat::Rgba16Float,
+                    width,
+                    height,
+                    mip_level_count: 1,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                },
+                lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+            };
+            ctx.gbuffer_motion = self.registry.allocate_image(&self.device, &gbuffer_motion_desc);
+
+            let ssao_desc = crate::kvasir::resource::ResourceDescriptor {
+                label: Some("SSAO Resize".into()),
+                kind: crate::kvasir::resource::ResourceKind::Image {
+                    format: wgpu::TextureFormat::Rg16Float,
+                    width,
+                    height,
+                    mip_level_count: 1,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+                },
+                lifetime: crate::kvasir::resource::ResourceLifetime::Persistent,
+            };
+            ctx.ssao_tex = self.registry.allocate_image(&self.device, &ssao_desc);
 
             ctx.scene_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &self.env_bind_group_layout,

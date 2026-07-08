@@ -200,6 +200,10 @@ pub(crate) struct SurfaceContext {
     pub(crate) bloom_env_bind_group_b: wgpu::BindGroup,
     pub(crate) scale_factor: f32,
     pub(crate) sampler: wgpu::Sampler,
+    pub(crate) gbuffer_albedo: crate::kvasir::resource::ResourceId,
+    pub(crate) gbuffer_normal: crate::kvasir::resource::ResourceId,
+    pub(crate) gbuffer_motion: crate::kvasir::resource::ResourceId,
+    pub(crate) ssao_tex: crate::kvasir::resource::ResourceId,
 }
 
 /// HeadlessContext -- A rendering target for surface-less execution.
@@ -223,6 +227,10 @@ pub struct HeadlessContext {
     pub height: u32,
     pub output_texture: wgpu::Texture,
     pub output_view: wgpu::TextureView,
+    pub gbuffer_albedo: crate::kvasir::resource::ResourceId,
+    pub gbuffer_normal: crate::kvasir::resource::ResourceId,
+    pub gbuffer_motion: crate::kvasir::resource::ResourceId,
+    pub ssao_tex: crate::kvasir::resource::ResourceId,
 }
 
 pub(crate) const MAX_VERTICES: usize = 100_000;

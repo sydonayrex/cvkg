@@ -99,7 +99,7 @@ js-sys = "0.3"
 web-sys = "0.3"
 log = "0.4"
 proptest = "1.4"
-tracing = "0.1"
+tracing = { version = "0.1", features = ["log"] }
 notify = "8.0"
 anyhow = "1.0"
 bytemuck = { version = "1.25", features = ["derive"] }

@@ -1,4 +1,5 @@
 use super::resource::{ResourceDescriptor, ResourceId, ResourceKind, ResourceLifetime};
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 pub struct TextureResource {
@@ -9,27 +10,27 @@ pub struct TextureResource {
 
 #[derive(Default)]
 pub struct ResourceRegistry {
-    textures: HashMap<ResourceId, TextureResource>,
-    pool: HashMap<(wgpu::TextureFormat, u32, u32), Vec<TextureResource>>,
-    next_id: u32,
+    textures: RefCell<HashMap<ResourceId, TextureResource>>,
+    pool: RefCell<HashMap<(wgpu::TextureFormat, u32, u32), Vec<TextureResource>>>,
+    next_id: std::cell::Cell<u32>,
 }
 
 impl ResourceRegistry {
     pub fn new() -> Self {
         Self {
-            textures: HashMap::new(),
-            pool: HashMap::new(),
-            next_id: 10000,
+            textures: RefCell::new(HashMap::new()),
+            pool: RefCell::new(HashMap::new()),
+            next_id: std::cell::Cell::new(10000),
         }
     }
 
     pub fn register_external_texture(
-        &mut self,
+        &self,
         id: ResourceId,
         texture: wgpu::Texture,
         view: wgpu::TextureView,
     ) {
-        self.textures.insert(
+        self.textures.borrow_mut().insert(
             id,
             TextureResource {
                 texture: Some(texture),
@@ -39,19 +40,21 @@ impl ResourceRegistry {
         );
     }
 
-    pub fn alias(&mut self, alias_id: ResourceId, actual_id: ResourceId) {
-        if let Some(res) = self.textures.get(&actual_id) {
+    pub fn alias(&self, alias_id: ResourceId, actual_id: ResourceId) {
+        let textures = self.textures.borrow();
+        if let Some(res) = textures.get(&actual_id) {
             let cloned = TextureResource {
                 texture: res.texture.clone(),
                 view: res.view.clone(),
                 lifetime: ResourceLifetime::Frame,
             };
-            self.textures.insert(alias_id, cloned);
+            drop(textures);
+            self.textures.borrow_mut().insert(alias_id, cloned);
         }
     }
 
-    pub fn alias_view(&mut self, alias_id: ResourceId, view: wgpu::TextureView) {
-        self.textures.insert(
+    pub fn alias_view(&self, alias_id: ResourceId, view: wgpu::TextureView) {
+        self.textures.borrow_mut().insert(
             alias_id,
             TextureResource {
                 texture: None,
@@ -62,78 +65,61 @@ impl ResourceRegistry {
     }
 
     pub fn allocate_offscreen(
-        &mut self,
+        &self,
         device: &wgpu::Device,
         target_id: u64,
         size: [u32; 2],
     ) -> ResourceId {
-        let desc = ResourceDescriptor {
-            label: Some(format!("Offscreen {}", target_id)),
-            kind: ResourceKind::Image {
-                format: wgpu::TextureFormat::Bgra8UnormSrgb,
-                width: size[0].max(1),
-                height: size[1].max(1),
+        let id = ResourceId(1000 + target_id as u32);
+        let pool_key = (
+            wgpu::TextureFormat::Bgra8UnormSrgb,
+            size[0].max(1),
+            size[1].max(1),
+        );
+
+        let tex_res = {
+            // Scope the pool borrow so it's released before texture creation (if needed)
+            let mut pool = self.pool.borrow_mut();
+            if let Some(mut t) = pool.get_mut(&pool_key).and_then(|list| list.pop()) {
+                t.lifetime = ResourceLifetime::Frame;
+                return id;
+            }
+            // Pool borrow released here — now create the texture
+            drop(pool);
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some(&format!("Offscreen {}", target_id)),
+                size: wgpu::Extent3d {
+                    width: size[0].max(1),
+                    height: size[1].max(1),
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Bgra8UnormSrgb,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
-            },
-            lifetime: ResourceLifetime::Frame,
+                view_formats: &[],
+            });
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            TextureResource {
+                texture: Some(texture),
+                view,
+                lifetime: ResourceLifetime::Frame,
+            }
         };
-        let id = ResourceId(1000 + target_id as u32);
 
-        if let ResourceKind::Image {
-            format,
-            width,
-            height,
-            mip_level_count,
-            usage,
-        } = &desc.kind
-        {
-            let pool_key = (*format, *width, *height);
-            let pooled_tex = if let Some(pool_list) = self.pool.get_mut(&pool_key) {
-                pool_list.pop()
-            } else {
-                None
-            };
-
-            let tex_res = if let Some(mut t) = pooled_tex {
-                t.lifetime = desc.lifetime;
-                t
-            } else {
-                let texture = device.create_texture(&wgpu::TextureDescriptor {
-                    label: desc.label.as_deref(),
-                    size: wgpu::Extent3d {
-                        width: *width,
-                        height: *height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: *mip_level_count,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: *format,
-                    usage: *usage,
-                    view_formats: &[],
-                });
-                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-                TextureResource {
-                    texture: Some(texture),
-                    view,
-                    lifetime: desc.lifetime,
-                }
-            };
-
-            self.textures.insert(id, tex_res);
-        }
+        self.textures.borrow_mut().insert(id, tex_res);
         id
     }
 
     pub fn allocate_image(
-        &mut self,
+        &self,
         device: &wgpu::Device,
         desc: &ResourceDescriptor,
     ) -> ResourceId {
-        let id = ResourceId(self.next_id);
-        self.next_id += 1;
+        let id = ResourceId(self.next_id.get());
+        self.next_id.set(self.next_id.get() + 1);
 
         if let ResourceKind::Image {
             format,
@@ -144,39 +130,36 @@ impl ResourceRegistry {
         } = &desc.kind
         {
             let pool_key = (*format, *width, *height);
-            let pooled_tex = if let Some(pool_list) = self.pool.get_mut(&pool_key) {
-                pool_list.pop()
-            } else {
-                None
-            };
-
-            let tex_res = if let Some(mut t) = pooled_tex {
-                t.lifetime = desc.lifetime;
-                t
-            } else {
-                let texture = device.create_texture(&wgpu::TextureDescriptor {
-                    label: desc.label.as_deref(),
-                    size: wgpu::Extent3d {
-                        width: *width,
-                        height: *height,
-                        depth_or_array_layers: 1,
-                    },
-                    mip_level_count: *mip_level_count,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
-                    format: *format,
-                    usage: *usage,
-                    view_formats: &[],
-                });
-                let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-                TextureResource {
-                    texture: Some(texture),
-                    view,
-                    lifetime: desc.lifetime,
+            let tex_res = {
+                let mut pool = self.pool.borrow_mut();
+                if let Some(mut t) = pool.get_mut(&pool_key).and_then(|list| list.pop()) {
+                    t.lifetime = desc.lifetime;
+                    t
+                } else {
+                    drop(pool);
+                    let texture = device.create_texture(&wgpu::TextureDescriptor {
+                        label: desc.label.as_deref(),
+                        size: wgpu::Extent3d {
+                            width: *width,
+                            height: *height,
+                            depth_or_array_layers: 1,
+                        },
+                        mip_level_count: *mip_level_count,
+                        sample_count: 1,
+                        dimension: wgpu::TextureDimension::D2,
+                        format: *format,
+                        usage: *usage,
+                        view_formats: &[],
+                    });
+                    let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+                    TextureResource {
+                        texture: Some(texture),
+                        view,
+                        lifetime: desc.lifetime,
+                    }
                 }
             };
-
-            self.textures.insert(id, tex_res);
+            self.textures.borrow_mut().insert(id, tex_res);
         } else {
             panic!("allocate_image called with non-Image descriptor");
         }
@@ -184,33 +167,42 @@ impl ResourceRegistry {
     }
 
     pub fn get_texture_view(&self, id: ResourceId) -> Option<wgpu::TextureView> {
-        self.textures.get(&id).map(|res| res.view.clone())
+        self.textures.borrow().get(&id).map(|res| res.view.clone())
     }
 
     pub fn get_texture(&self, id: ResourceId) -> Option<wgpu::Texture> {
-        self.textures.get(&id).and_then(|res| res.texture.clone())
+        self.textures
+            .borrow()
+            .get(&id)
+            .and_then(|res| res.texture.clone())
     }
 
-    pub fn remove_image(&mut self, id: ResourceId) {
-        self.textures.remove(&id);
+    pub fn remove_image(&self, id: ResourceId) {
+        self.textures.borrow_mut().remove(&id);
     }
 
-    pub fn evict_frame_resources(&mut self) {
+    pub fn evict_frame_resources(&self) {
         // Move transient frame resources back into the pool instead of destroying them
         let mut to_remove = Vec::new();
-        for (id, res) in &self.textures {
-            if res.lifetime == ResourceLifetime::Frame {
-                to_remove.push(*id);
+        {
+            let textures = self.textures.borrow();
+            for (id, res) in textures.iter() {
+                if res.lifetime == ResourceLifetime::Frame {
+                    to_remove.push(*id);
+                }
             }
-        }
+        } // drop textures borrow
+
         for id in to_remove {
-            if let Some(res) = self.textures.remove(&id)
+            let res = self.textures.borrow_mut().remove(&id);
+            if let Some(res) = res
                 && let Some(tex) = res.texture
             {
                 let size = tex.size();
                 let format = tex.format();
                 let pool_key = (format, size.width, size.height);
-                let pool_list = self.pool.entry(pool_key).or_default();
+                let mut pool = self.pool.borrow_mut();
+                let pool_list = pool.entry(pool_key).or_default();
                 if pool_list.len() < 4 {
                     pool_list.push(TextureResource {
                         texture: Some(tex),

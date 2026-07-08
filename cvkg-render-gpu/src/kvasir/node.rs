@@ -135,6 +135,10 @@ use crate::passes::svg_filter::SvgFilterNode;
 use crate::passes::tonemap::ToneMapNode;
 use crate::passes::ui::UINode;
 use crate::passes::volumetric::VolumetricNode;
+use crate::passes::gi::GlobalIlluminationNode;
+use crate::passes::ssao::SsaoNode;
+use crate::passes::deferred_lighting::DeferredLightingNode;
+use crate::passes::gbuffer::GBufferNode;
 
 impl PassNode for GeometryNode {}
 impl PassNode for UINode {}
@@ -154,6 +158,10 @@ impl PassNode for PreWorldPanelNode {}
 impl PassNode for OffscreenGeometryNode {}
 impl PassNode for EffectCompositeNode {}
 impl PassNode for SvgFilterNode {}
+impl PassNode for GlobalIlluminationNode {}
+impl PassNode for SsaoNode {}
+impl PassNode for DeferredLightingNode {}
+impl PassNode for GBufferNode {}
 
 // =========================================================================
 // P1-2: ExecutionContext aliasing contract tests

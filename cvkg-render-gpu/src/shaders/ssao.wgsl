@@ -1,6 +1,9 @@
 // Shader: ssao.wgsl
-// Purpose: Screen Space Ambient Occlusion (SSAO) generation and bilateral blur pass.
+// Purpose: Screen Space Ambient Occlusion (SSAO) generation.
 
+// Bind group layout is: [berserker_bind_group_layout, ssao_bgl]
+// Meaning: group(0) = berserker_bind_group_layout (scene uniforms at binding 1)
+//          group(1) = ssao_bgl (depth/normal textures)
 struct SceneUniforms {
     view:            mat4x4<f32>,
     proj:            mat4x4<f32>,
@@ -33,7 +36,9 @@ struct SceneUniforms {
     ambient_color:   vec4<f32>,
 };
 
-@group(0) @binding(0) var<uniform> scene: SceneUniforms;
+// group(0) = berserker_bind_group_layout (scene uniforms at binding 1)
+// group(1) = ssao_bgl (depth/normal textures at bindings 0-3)
+@group(0) @binding(1) var<uniform> scene: SceneUniforms;
 @group(1) @binding(0) var t_depth: texture_depth_2d;
 @group(1) @binding(1) var s_depth: sampler;
 @group(1) @binding(2) var t_normal: texture_2d<f32>;
@@ -42,7 +47,17 @@ struct SceneUniforms {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-};
+}
+
+@vertex
+fn vs_fullscreen(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
+    var out: VertexOutput;
+    let x = f32(i32(vertex_index) / 2) * 4.0 - 1.0;
+    let y = f32(i32(vertex_index) % 2) * 4.0 - 1.0;
+    out.clip_position = vec4<f32>(x, y, 0.0, 1.0);
+    out.uv = vec2<f32>((x + 1.0) * 0.5, (1.0 - y) * 0.5);
+    return out;
+}
 
 // Generates a simple pseudo-random direction based on fragment coordinates.
 fn random_direction(co: vec2<f32>) -> vec2<f32> {
@@ -52,53 +67,27 @@ fn random_direction(co: vec2<f32>) -> vec2<f32> {
 
 // Fragment shader to compute SSAO occlusion factor.
 @fragment
-fn fs_ssao(in: VertexOutput) -> @location(0) f32 {
+fn fs_main(in: VertexOutput) -> @location(0) vec2<f32> {
     let depth = textureSample(t_depth, s_depth, in.uv);
-    if (depth >= 1.0) {
-        return 1.0;
-    }
+    var occlusion_factor = 1.0;
+    if (depth < 1.0) {
+        let normal = normalize(textureSample(t_normal, s_normal, in.uv).xyz * 2.0 - 1.0);
+        let sample_radius = 0.05;
+        var occlusion = 0.0;
+        let sample_count = 16;
 
-    let normal = normalize(textureSample(t_normal, s_normal, in.uv).xyz * 2.0 - 1.0);
-    let sample_radius = 0.05;
-    var occlusion = 0.0;
-    let sample_count = 16;
+        // Evaluate occlusion by sampling a sphere/hemisphere around the fragment
+        for (var i = 0; i < sample_count; i = i + 1) {
+            let offset_dir = random_direction(in.uv + vec2<f32>(f32(i), 0.0));
+            let sample_uv = in.uv + offset_dir * sample_radius;
+            let sample_depth = textureSample(t_depth, s_depth, sample_uv);
 
-    // Evaluate occlusion by sampling a sphere/hemisphere around the fragment
-    for (var i = 0; i < sample_count; i = i + 1) {
-        let offset_dir = random_direction(in.uv + vec2<f32>(f32(i), 0.0));
-        let sample_uv = in.uv + offset_dir * sample_radius;
-        let sample_depth = textureSample(t_depth, s_depth, sample_uv);
-
-        if (sample_depth < depth - 0.0001) {
-            occlusion += 1.0;
+            if (sample_depth < depth - 0.0001) {
+                occlusion += 1.0;
+            }
         }
-    }
 
-    return 1.0 - (occlusion / f32(sample_count));
-}
-
-// Bilateral blur pass to smooth SSAO while preserving depth edges.
-@fragment
-fn fs_blur(in: VertexOutput) -> @location(0) f32 {
-    let texel_size = 1.0 / scene.resolution;
-    var result = 0.0;
-    var weight_sum = 0.0;
-    
-    let center_val = textureSample(t_depth, s_depth, in.uv);
-    
-    for (var x = -2; x <= 2; x = x + 1) {
-        for (var y = -2; y <= 2; y = y + 1) {
-            let offset = vec2<f32>(f32(x), f32(y)) * texel_size;
-            let sample_val = textureSample(t_depth, s_depth, in.uv + offset);
-            
-            // Bilateral weight based on coordinate distance and value difference
-            let d_val = abs(sample_val - center_val);
-            let weight = exp(-f32(x*x + y*y) / 8.0) * exp(-d_val * d_val / 0.01);
-            
-            result += sample_val * weight;
-            weight_sum += weight;
-        }
+        occlusion_factor = 1.0 - (occlusion / f32(sample_count));
     }
-    
-    return result / max(weight_sum, 0.001);
+    return vec2<f32>(occlusion_factor, occlusion_factor);
 }

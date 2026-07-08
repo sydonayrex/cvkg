@@ -31,10 +31,15 @@ impl KvasirNode for SsaoNode {
     }
 
     fn pass_id(&self) -> PassId {
-        PassId::Geometry
+        PassId::Ssao
     }
 
     fn execute(&self, ctx: &mut ExecutionContext) {
+        // Frame 0 check: skip rendering to avoid black frame
+        if ctx.renderer.frame_counter == 0 {
+            return;
+        }
+
         tracing::debug!("SsaoNode::execute - Computing SSAO texture");
 
         let ssao_view = match ctx.registry.get_texture_view(RES_SSAO_OUT) {
@@ -42,8 +47,41 @@ impl KvasirNode for SsaoNode {
             None => return,
         };
 
+        // Get the normal g-buffer view
+        let normal_view = match ctx.registry.get_texture_view(self.normal_buffer) {
+            Some(v) => v,
+            None => return,
+        };
+
+        let sampler = &ctx.renderer.sampler;
+
+        // Create SSAO bind group with depth (from context) and normal texture
+        let ssao_bg = ctx.get_or_create_bind_group(
+            (ResourceId(403), 0, false), // key for caching (RES_SSAO_OUT-based)
+            &ctx.renderer.ssao_bgl,
+            &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(ctx.depth_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&normal_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Sampler(sampler),
+                },
+            ],
+            Some("SSAO Bind Group"),
+        );
+
         // Standard post-processing full-screen pass to evaluate occlusion factors
-        let mut _pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        let mut pass = ctx.encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("SSAO Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &ssao_view,
@@ -60,6 +98,14 @@ impl KvasirNode for SsaoNode {
             multiview_mask: None,
         });
 
-        // Run full-screen triangle shader sampling normal and depth with randomized hemisphere kernel
+        // Bind scene uniforms at group(0) -- SSAO shader uses scene.resolution
+        pass.set_bind_group(0, &ctx.renderer.berserker_bind_group, &[]);
+        // Bind depth/normal textures at group(1)
+        pass.set_bind_group(1, &ssao_bg, &[]);
+
+        // Use the SSAO pipeline for full-screen triangle shader
+        pass.set_pipeline(&ctx.renderer.ssao_pipeline);
+        
+        pass.draw(0..3, 0..1);
     }
 }

@@ -84,6 +84,7 @@ impl KvasirNode for UINode {
         p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
         p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
         p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
+        // GI bindings were folded into gradient_bind_group at @group(3) bindings 2,3.
 
         for call in ctx
             .renderer

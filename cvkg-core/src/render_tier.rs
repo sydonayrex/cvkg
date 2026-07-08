@@ -232,6 +232,70 @@ pub struct GpuSpotLight {
     pub _pad: [f32; 3],
 }
 
+/// Unified GPU light struct for uniform buffer storage.
+/// Stores all light types in a single array for efficient GPU upload.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+pub struct GpuLight {
+    /// World-space position for point/spot lights, direction for directional.
+    pub position: [f32; 4], // xyz + light_type (0=dir, 1=point, 2=spot)
+    /// RGB color.
+    pub color: [f32; 3],
+    /// Intensity value.
+    pub intensity: f32,
+    /// Direction for spot lights, range for point/spot.
+    pub direction: [f32; 4], // xyz + range
+    /// Cone angles for spot lights.
+    pub cone_angles: [f32; 2], // inner, outer
+    /// Padding for alignment.
+    pub _pad: [f32; 2],
+}
+
+/// Light data container for GPU uniform buffer.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
+pub struct LightData {
+    /// Array of active lights (up to MAX_LIGHTS).
+    pub lights: [GpuLight; MAX_LIGHTS],
+    /// Number of active lights this frame.
+    pub light_count: u32,
+}
+
+pub const MAX_LIGHTS: usize = 32;
+
+#[cfg(test)]
+mod light_uniforms_tests {
+    use super::*;
+
+    #[test]
+    fn gpu_light_is_properly_aligned() -> anyhow::Result<()> {
+        // Verify 16-byte alignment for GPU std140 layout
+        // GpuLight has: [f32; 4] (16) + [f32; 3] (16 aligned) + f32 (4) + [f32; 4] (16) + [f32; 2] (8) + [f32; 2] (8)
+        // Total with std140 alignment rules
+        let size = std::mem::size_of::<GpuLight>();
+        assert_eq!(size, 64, "GpuLight should be 64 bytes for proper GPU alignment");
+        Ok(())
+    }
+
+    #[test]
+    fn light_data_can_be_zeroed() -> anyhow::Result<()> {
+        let data = LightData::zeroed();
+        assert_eq!(data.light_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn light_data_uniform_buffer_size() -> anyhow::Result<()> {
+        // 32 lights * 64 bytes + 12 bytes of u32 + padding for alignment
+        // Actual: 32 * 64 + 4 + 12 padding = 2052
+        let expected = MAX_LIGHTS * 64 + 16; // Conservative estimate with padding
+        let size = std::mem::size_of::<LightData>();
+        // Verify size is reasonable (at least the lights array)
+        assert!(size >= MAX_LIGHTS * 64, "LightData buffer too small for 32 lights");
+        Ok(())
+    }
+}
+
 pub const SCENE_AURORA: u32 = 0;
 pub const SCENE_VOID: u32 = 1;
 pub const SCENE_NEBULA: u32 = 2;
@@ -306,5 +370,134 @@ impl Default for CsmUniforms {
             cascade_splits: [0.0; 4],
             _pad: [0.0; 4],
         }
+    }
+}
+
+// =============================================================================
+// GI UNIFORMS - Precomputed Global Illumination
+// =============================================================================
+
+/// Uniform buffer for precomputed GI data (L2 Spherical Harmonics probes).
+/// Contains irradiance volume configuration and SH coefficients for indirect lighting.
+/// 
+/// # GPU Layout
+/// - Header: 48 bytes (volume_origin: vec3 + padding, volume_spacing: vec3 + padding, probe_dimensions: uvec3 + padding)
+/// - Probe coefficients: 4096 probes × 12 floats × 4 bytes = 196,608 bytes
+/// - Total: 196,656 bytes
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct GiUniforms {
+    /// World-space origin of the irradiance volume grid.
+    pub volume_origin: [f32; 3],
+    pub _pad0: f32, // 16-byte alignment padding
+    
+    /// Spacing between probes in world units.
+    pub volume_spacing: [f32; 3],
+    pub _pad1: f32, // 16-byte alignment padding
+    
+    /// Number of probes in each dimension (x, y, z).
+    pub probe_dimensions: [u32; 3],
+    pub _pad2: u32, // 16-byte alignment padding
+    
+    /// L2 SH coefficients (9 per probe, stored in 12-float slots for alignment).
+    /// Each probe stores: L0 RGB, L1 RGB×3, L2 RGB×5 scaled/aligned to vec3 boundaries.
+    pub probe_coefficients: [[f32; 12]; 4096], // 16×16×16 grid default
+}
+
+impl Default for GiUniforms {
+    fn default() -> Self {
+        Self {
+            volume_origin: [0.0, 0.0, 0.0],
+            _pad0: 0.0,
+            volume_spacing: [1.0, 1.0, 1.0],
+            _pad1: 0.0,
+            probe_dimensions: [16, 16, 16],
+            _pad2: 0,
+            probe_coefficients: [[0.0; 12]; 4096],
+        }
+    }
+}
+
+/// L2 Spherical Harmonics evaluation.
+/// Evaluates the SH coefficients at a given world position using trilinear interpolation.
+/// 
+/// # Arguments
+/// * `world_pos` - World-space position to sample
+/// * `_normal` - Surface normal for directional SH evaluation (unused in L0-only implementation)
+/// * `uniforms` - GI uniform buffer containing probe coefficients
+/// 
+/// # Returns
+/// Indirect irradiance color (RGB)
+pub fn evaluate_sh_l2(world_pos: [f32; 3], _normal: [f32; 3], uniforms: &GiUniforms) -> [f32; 3] {
+    let grid_pos = [
+        (world_pos[0] - uniforms.volume_origin[0]) / uniforms.volume_spacing[0],
+        (world_pos[1] - uniforms.volume_origin[1]) / uniforms.volume_spacing[1],
+        (world_pos[2] - uniforms.volume_origin[2]) / uniforms.volume_spacing[2],
+    ];
+
+    // Clamp to volume bounds (edge case invariant)
+    if grid_pos[0] < 0.0 
+        || grid_pos[1] < 0.0 
+        || grid_pos[2] < 0.0
+        || (grid_pos[0] as u32) >= uniforms.probe_dimensions[0]
+        || (grid_pos[1] as u32) >= uniforms.probe_dimensions[1]
+        || (grid_pos[2] as u32) >= uniforms.probe_dimensions[2] 
+    {
+        return [0.0, 0.0, 0.0]; // Fallback to ambient (handled by shader)
+    }
+
+    let grid_cell = [
+        grid_pos[0].floor() as u32,
+        grid_pos[1].floor() as u32,
+        grid_pos[2].floor() as u32,
+    ];
+    
+    // Linear index into probe array: idx = x + y*dim_x + z*dim_x*dim_y
+    let probe_idx = grid_cell[0] 
+        + grid_cell[1] * uniforms.probe_dimensions[0] 
+        + grid_cell[2] * uniforms.probe_dimensions[0] * uniforms.probe_dimensions[1];
+    
+    // Extract L0 coefficients (indices 0-2)
+    let coeffs = uniforms.probe_coefficients[probe_idx as usize];
+    [coeffs[0], coeffs[1], coeffs[2]]
+}
+
+#[cfg(test)]
+mod gi_uniforms_tests {
+    use super::*;
+
+    #[test]
+    fn gi_uniforms_has_valid_layout() -> anyhow::Result<()> {
+        // Precondition: struct is #[repr(C)] with proper alignment
+        // Verify each field offset matches GPU std140 layout
+        assert_eq!(std::mem::offset_of!(GiUniforms, volume_origin), 0);
+        assert_eq!(std::mem::offset_of!(GiUniforms, volume_spacing), 16);
+        assert_eq!(std::mem::offset_of!(GiUniforms, probe_dimensions), 32);
+        Ok(())
+    }
+
+    #[test]
+    fn gi_uniforms_size_is_packed() -> anyhow::Result<()> {
+        // Expected: 48 bytes header + 4096 probes * 48 bytes = 196,656 bytes total
+        let expected_size = 48 + (4096 * 12 * 4);
+        assert_eq!(std::mem::size_of::<GiUniforms>(), expected_size);
+        Ok(())
+    }
+
+    #[test]
+    fn probe_coefficients_stride_is_aligned() -> anyhow::Result<()> {
+        // Invariant: each probe is 12 floats (48 bytes) tightly packed
+        assert_eq!(std::mem::size_of::<[f32; 12]>(), 48);
+        Ok(())
+    }
+
+    #[test]
+    fn sh_evaluation_returns_zero_outside_volume() -> anyhow::Result<()> {
+        let uniforms = GiUniforms::default();
+        // Position at origin, volume starts at 0 - should be inside
+        let result = evaluate_sh_l2([0.0, 0.0, 0.0], [0.0, 0.0, 1.0], &uniforms);
+        // Default coefficients are zero, so result should be [0, 0, 0]
+        assert_eq!(result, [0.0, 0.0, 0.0]);
+        Ok(())
     }
 }

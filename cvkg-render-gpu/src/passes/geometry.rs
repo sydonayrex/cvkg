@@ -103,12 +103,30 @@ impl KvasirNode for GeometryNode {
         });
 
         if ctx.renderer.current_scene.scene_type == cvkg_core::SCENE_AURORA {
+            // P2-8 guard: poll the device before binding background_pipeline to catch
+            // any deferred validation errors that wgpu queues until submit time.
+            // On Bumblebee/Optimus/NVIDIA, validation errors surface as
+            // "InvalidResource(type: RenderPipeline)" at Queue::submit even though
+            // the pipeline was created without explicit error. Polling here surfaces
+            // the error at the right pass so we can attribute it correctly.
+            let _ = ctx.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            });
+            tracing::info!(
+                "[Geometry] AURORA: binding background_pipeline; msaa_pass_color_format=Rgba16Float, msaa_resolved_to_scene_view"
+            );
             p.set_pipeline(&ctx.renderer.background_pipeline);
-            p.set_bind_group(0, &ctx.renderer.dummy_texture_bind_group, &[]);
-            p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
+            // background_pipeline uses a layout that declares all 5 groups (matching
+            // pipeline_layout). fs_background only binds @group(2) at runtime.
             p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
-            p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
             p.draw(0..3, 0..1);
+
+            // Final poll after draw to catch any immediate errors
+            let _ = ctx.device.poll(wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: None,
+            });
         }
 
         if !ctx.renderer.draw_calls.is_empty() {
@@ -135,6 +153,8 @@ impl KvasirNode for GeometryNode {
             p.set_bind_group(1, &ctx.renderer.dummy_env_bind_group, &[]);
             p.set_bind_group(2, &ctx.renderer.berserker_bind_group, &[]);
             p.set_bind_group(3, &ctx.renderer.gradient_bind_group, &[]);
+            // GI bindings were folded into gradient_bind_group at @group(3)
+            // bindings 2,3; no separate set_bind_group(4, ...) is needed.
 
             // P2-6: Geometry pass filtering contract
             // Only draws Opaque material calls with no render target binding.

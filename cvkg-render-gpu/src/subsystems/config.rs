@@ -31,6 +31,14 @@ pub struct RendererConfig {
     pub mega_heim_width: u32,
     /// Height of the Mega-Heim shared texture atlas.
     pub mega_heim_height: u32,
+    /// Opt in to an HDR (Rgba16Float) swapchain surface.
+    ///
+    /// DEFAULTS TO `false`. When `false`, `select_best_surface_format` never
+    /// picks `Rgba16Float`: an HDR float swapchain requires OS-level HDR
+    /// display configuration, and on a machine without it wgpu presents with
+    /// no validation error but the whole window shows wrong/shifted colors.
+    /// Only enable this when you have confirmed the target display is HDR-capable.
+    pub prefer_hdr: bool,
 }
 
 impl Default for RendererConfig {
@@ -46,6 +54,7 @@ impl Default for RendererConfig {
             texture_registry_capacity: NonZeroUsize::new(31).unwrap(),
             mega_heim_width: 4096,
             mega_heim_height: 4096,
+            prefer_hdr: false,
         }
     }
 }
@@ -62,6 +71,7 @@ impl RendererConfig {
             texture_registry_capacity: NonZeroUsize::new(15).unwrap(),
             mega_heim_width: 2048,
             mega_heim_height: 2048,
+            prefer_hdr: false,
         }
     }
 
@@ -76,7 +86,18 @@ impl RendererConfig {
             texture_registry_capacity: NonZeroUsize::new(127).unwrap(),
             mega_heim_width: 8192,
             mega_heim_height: 8192,
+            prefer_hdr: false,
         }
+    }
+
+    /// Set whether to opt in to an HDR (Rgba16Float) swapchain surface.
+    ///
+    /// HDR is opt-in precisely because of the silent wrong-color failure mode
+    /// described on the `prefer_hdr` field. Call `.with_hdr(true)` only after
+    /// confirming the target display is HDR-capable.
+    pub fn with_hdr(mut self, enabled: bool) -> Self {
+        self.prefer_hdr = enabled;
+        self
     }
 
     /// Total VRAM cost of the Mega-Heim texture in bytes

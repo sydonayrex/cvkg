@@ -125,6 +125,19 @@ impl KvasirNode for Opaque3dNode {
                             binding: 7,
                             resource: wgpu::BindingResource::Sampler(&ctx.renderer.sampler),
                         },
+                        // Folded GI entries — common.wgsl (included via wgsl_pbr) declares
+                        // gi uniform at @group(3) binding 2 and gi_probes storage at
+                        // @group(3) binding 3. pbr_material_bind_group_layout carries
+                        // these entries for that reason. Storing them keeps the bind
+                        // group valid alongside the PBR entries above.
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: ctx.renderer.gi_header_buffer.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: ctx.renderer.gi_probe_buffer.as_entire_binding(),
+                        },
                     ],
                 }))
             }
@@ -179,15 +192,15 @@ impl KvasirNode for Opaque3dNode {
         }
 
         // For each mesh instance, set vertex/index buffers and draw.
-        // TODO: Once SkinnedOutput is extended to include UV/color/tangent (matching Vertex3D layout),
-        // enable skinned_buffer binding here. Currently SkinnedOutput only has position+normal,
-        // which causes PBR shaders to read garbage for UVs/colors/tangents.
         for mesh in self.mesh_instances.iter() {
-            // if let Some(skinned) = &mesh.skinned_buffer {
-            //     pass.set_vertex_buffer(0, skinned.slice(..));
-            // } else {
-            pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            // }
+            if let Some(skinned) = &mesh.skinned_buffer {
+                // Note: SkinnedOutput currently only contains position+normal.
+                // Full Vertex3D layout (uv/color/tangent) must be provided separately
+                // or the skinned buffer must be extended to match Vertex3D layout.
+                pass.set_vertex_buffer(0, skinned.slice(..));
+            } else {
+                pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            }
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             let inst = mesh.instance_index;
             pass.draw_indexed(0..mesh.index_count, 0, inst..(inst + 1));
