@@ -54,6 +54,42 @@ impl From<accesskit_winit::Event> for AppEvent {
     }
 }
 
+/// Dispatch an event to handlers registered via
+/// `cvkg_core::Renderer::register_handler` during the view's render pass.
+///
+/// Components push handlers into `GpuRenderer.event_handlers` keyed by the
+/// strings returned from `cvkg_core::Event::name()` (lowercase, e.g.
+/// "pointerwheel", "pointerdown"). `vdom.dispatch_event` only routes through
+/// the VDOM's separate event map (keyed by node id × event name), so unless
+/// we explicitly mirror the dispatch here the renderer-registered handlers
+/// never fire.
+///
+/// Lock-the-Arc briefly to clone the handler list out, then invoke outside
+/// the lock so handlers may freely call back into renderer methods without
+/// contending a held mutex.
+fn fire_renderer_handlers(
+    gpu_arc: &Arc<std::sync::Mutex<cvkg_render_gpu::GpuRenderer>>,
+    event: &cvkg_core::Event,
+) {
+    let name = event.name();
+    let handlers: Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>> = match gpu_arc
+        .lock()
+    {
+        Ok(g) => g
+            .get_handlers(name)
+            .map(|v| v.clone())
+            .unwrap_or_default(),
+        Err(p) => p
+            .into_inner()
+            .get_handlers(name)
+            .map(|v| v.clone())
+            .unwrap_or_default(),
+    };
+    for handler in handlers {
+        handler(event.clone());
+    }
+}
+
 pub struct App<V: View> {
     pub(crate) view: V,
     pub(crate) window_manager: WindowManager,
@@ -238,11 +274,13 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         // to prevent path traversal attacks (e.g., ../../etc/passwd).
                         // Consider restricting to allowed directories or using
                         // canonicalize() to resolve symlinks.
-                        vdom.dispatch_event(cvkg_core::Event::FileDrop {
+                        let event = cvkg_core::Event::FileDrop {
                             x: state.cursor_pos[0],
                             y: state.cursor_pos[1],
                             path: path.to_string_lossy().into_owned(),
-                        });
+                        };
+                        vdom.dispatch_event(event.clone());
+                        fire_renderer_handlers(&gpu_arc, &event);
                     }
                 }
                 WindowEvent::CloseRequested => {
@@ -309,7 +347,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
 
                     if state.needs_cursor_update {
                         if let Some(vdom) = &state.vdom {
-                            vdom.dispatch_event(cvkg_core::Event::PointerMove {
+                            let event = cvkg_core::Event::PointerMove {
                                 x: state.cursor_pos[0],
                                 y: state.cursor_pos[1],
                                 proximity_field: 0.0,
@@ -318,7 +356,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 pressure: Some(1.0),
                                 barrel_rotation: None,
                                 pointer_precision: 0.0,
-                            });
+                            };
+                            vdom.dispatch_event(event.clone());
+                            fire_renderer_handlers(&gpu_arc, &event);
                         }
                         state.needs_cursor_update = false;
                     }
@@ -574,14 +614,18 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 WindowEvent::CursorEntered { .. } => {
                     tracing::info!("[Native] Cursor ENTERED window");
                     if let Some(vdom) = &state.vdom {
-                        vdom.dispatch_event(cvkg_core::Event::PointerEnter);
+                        let event = cvkg_core::Event::PointerEnter;
+                        vdom.dispatch_event(event.clone());
+                        fire_renderer_handlers(&gpu_arc, &event);
                     }
                     state.window.request_redraw();
                 }
                 WindowEvent::CursorLeft { .. } => {
                     tracing::info!("[Native] Cursor LEFT window");
                     if let Some(vdom) = &state.vdom {
-                        vdom.dispatch_event(cvkg_core::Event::PointerLeave);
+                        let event = cvkg_core::Event::PointerLeave;
+                        vdom.dispatch_event(event.clone());
+                        fire_renderer_handlers(&gpu_arc, &event);
                     }
                     state.window.request_redraw();
                 }
@@ -651,7 +695,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     }
                                 }
                                 tracing::info!("[Native] Dispatching PointerDown to VDOM");
-                                vdom.dispatch_event(cvkg_core::Event::PointerDown {
+                                let event = cvkg_core::Event::PointerDown {
                                     x: state.cursor_pos[0],
                                     y: state.cursor_pos[1],
                                     button: btn_id,
@@ -661,7 +705,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pressure: Some(1.0),
                                     barrel_rotation: None,
                                     pointer_precision: 0.0,
-                                });
+                                };
+                                vdom.dispatch_event(event.clone());
+                                fire_renderer_handlers(&gpu_arc, &event);
                             }
                             winit::event::ElementState::Released => {
                                 tracing::info!("[Native] Dispatching PointerUp to VDOM");
@@ -724,23 +770,25 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pointer_precision: 0.0,
                                 };
                                 if let Some(target) = target {
-                                    vdom.dispatch_event_to_target(target, pointer_up);
+                                    vdom.dispatch_event_to_target(target, pointer_up.clone());
                                 } else {
-                                    vdom.dispatch_event(pointer_up);
+                                    vdom.dispatch_event(pointer_up.clone());
                                 }
+                                fire_renderer_handlers(&gpu_arc, &pointer_up);
                                 if !state.is_dragging {
                                     if let Some(target) = target {
                                         tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (target={:?})",
                                             target
                                         );
-                                        vdom.dispatch_event_to_target(target, pointer_click);
+                                        vdom.dispatch_event_to_target(target, pointer_click.clone());
                                     } else {
                                         tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
                                         );
-                                        vdom.dispatch_event(pointer_click);
+                                        vdom.dispatch_event(pointer_click.clone());
                                     }
+                                    fire_renderer_handlers(&gpu_arc, &pointer_click);
                                 } else {
                                     tracing::info!(
                                         "[Native] Skipping PointerClick (is_dragging=true)"
@@ -766,13 +814,15 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 (pos.x as f32, pos.y as f32)
                             }
                         };
-                        vdom.dispatch_event(cvkg_core::Event::PointerWheel {
+                        let wheel_event = cvkg_core::Event::PointerWheel {
                             x: state.cursor_pos[0],
                             y: state.cursor_pos[1],
                             delta_x: dx,
                             delta_y: dy,
                             pointer_precision: 0.0,
-                        });
+                        };
+                        fire_renderer_handlers(&gpu_arc, &wheel_event);
+                        vdom.dispatch_event(wheel_event);
                         state.window.request_redraw();
                     }
                 }
@@ -802,7 +852,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.active_pointer_target_key = node.key.clone();
                                     }
                                 }
-                                vdom.dispatch_event(cvkg_core::Event::PointerDown {
+                                let pointer_down = cvkg_core::Event::PointerDown {
                                     x,
                                     y,
                                     button: touch_btn,
@@ -814,7 +864,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     ),
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
-                                });
+                                };
+                                fire_renderer_handlers(&gpu_arc, &pointer_down);
+                                vdom.dispatch_event(pointer_down);
                             }
                             winit::event::TouchPhase::Moved => {
                                 if !state.is_dragging {
@@ -825,7 +877,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                         state.is_dragging = true;
                                     }
                                 }
-                                vdom.dispatch_event(cvkg_core::Event::PointerMove {
+                                let pointer_move_touch = cvkg_core::Event::PointerMove {
                                     x,
                                     y,
                                     proximity_field: 0.0,
@@ -836,7 +888,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     ),
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
-                                });
+                                };
+                                fire_renderer_handlers(&gpu_arc, &pointer_move_touch);
+                                vdom.dispatch_event(pointer_move_touch);
                             }
                             winit::event::TouchPhase::Ended => {
                                 let fallback_target = state
@@ -884,23 +938,25 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pointer_precision: 150.0,
                                 };
                                 if let Some(target) = target {
-                                    vdom.dispatch_event_to_target(target, pointer_up);
+                                    vdom.dispatch_event_to_target(target, pointer_up.clone());
                                 } else {
-                                    vdom.dispatch_event(pointer_up);
+                                    vdom.dispatch_event(pointer_up.clone());
                                 }
+                                fire_renderer_handlers(&gpu_arc, &pointer_up);
                                 if !state.is_dragging {
                                     if let Some(target) = target {
                                         tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (target={:?})",
                                             target
                                         );
-                                        vdom.dispatch_event_to_target(target, pointer_click);
+                                        vdom.dispatch_event_to_target(target, pointer_click.clone());
                                     } else {
                                         tracing::info!(
                                             "[Native] Dispatching PointerClick to VDOM (no target, bubbling)"
                                         );
-                                        vdom.dispatch_event(pointer_click);
+                                        vdom.dispatch_event(pointer_click.clone());
                                     }
+                                    fire_renderer_handlers(&gpu_arc, &pointer_click);
                                 } else {
                                     tracing::info!(
                                         "[Native] Skipping PointerClick (is_dragging=true)"
@@ -913,7 +969,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 state.active_pointer_pos = None;
                             }
                             winit::event::TouchPhase::Cancelled => {
-                                vdom.dispatch_event(cvkg_core::Event::PointerUp {
+                                let pointer_up_cancel = cvkg_core::Event::PointerUp {
                                     x,
                                     y,
                                     button: touch_btn,
@@ -922,7 +978,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     pressure: Some(0.0),
                                     barrel_rotation: None,
                                     pointer_precision: 150.0,
-                                });
+                                };
+                                fire_renderer_handlers(&gpu_arc, &pointer_up_cancel);
+                                vdom.dispatch_event(pointer_up_cancel);
                                 state.active_pointer_target = None;
                                 state.active_pointer_pos = None;
                             }
@@ -934,12 +992,14 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     if let Some(vdom) = &state.vdom {
                         let scale = 1.0 + delta as f32;
                         let velocity = delta as f32;
-                        vdom.dispatch_event(cvkg_core::Event::GesturePinch {
+                        let pinch_event = cvkg_core::Event::GesturePinch {
                             center: state.cursor_pos,
                             scale,
                             velocity,
                             phase: cvkg_core::TouchPhase::Moved,
-                        });
+                        };
+                        fire_renderer_handlers(&gpu_arc, &pinch_event);
+                        vdom.dispatch_event(pinch_event);
                     }
                     if let Some(audio) = &self.audio_engine {
                         audio.play_sound("nav_tick", 0.3);
@@ -951,11 +1011,13 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                 WindowEvent::RotationGesture { delta, .. } => {
                     if let Some(vdom) = &state.vdom {
                         let angle = delta;
-                        vdom.dispatch_event(cvkg_core::Event::GestureSwipe {
+                        let swipe_event = cvkg_core::Event::GestureSwipe {
                             direction: [angle.cos(), angle.sin()],
                             velocity: delta.abs(),
                             phase: cvkg_core::TouchPhase::Moved,
-                        });
+                        };
+                        fire_renderer_handlers(&gpu_arc, &swipe_event);
+                        vdom.dispatch_event(swipe_event);
                     }
                     state.window.request_redraw();
                 }
@@ -1020,20 +1082,24 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     winit::keyboard::KeyCode::KeyO => {
                                         tracing::info!("[Native] Shortcut: Open File (Cmd+O)");
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                            let keydown = cvkg_core::Event::KeyDown {
                                                 key: "cmd+o".to_string(),
                                                 modifiers: cvkg_core::KeyModifiers::default(),
-                                            });
+                                            };
+                                            fire_renderer_handlers(&gpu_arc, &keydown);
+                                            vdom.dispatch_event(keydown);
                                         }
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyS => {
                                         tracing::info!("[Native] Shortcut: Save (Cmd+S)");
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                            let keydown = cvkg_core::Event::KeyDown {
                                                 key: "cmd+s".to_string(),
                                                 modifiers: cvkg_core::KeyModifiers::default(),
-                                            });
+                                            };
+                                            fire_renderer_handlers(&gpu_arc, &keydown);
+                                            vdom.dispatch_event(keydown);
                                         }
                                         state.window.request_redraw();
                                     }
@@ -1048,7 +1114,9 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     winit::keyboard::KeyCode::KeyC => {
                                         tracing::info!("[Native] Shortcut: Copy (Cmd+C)");
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::Copy);
+                                            let copy_evt = cvkg_core::Event::Copy;
+                                            fire_renderer_handlers(&gpu_arc, &copy_evt);
+                                            vdom.dispatch_event(copy_evt);
                                         }
                                         state.window.request_redraw();
                                     }
@@ -1069,14 +1137,18 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                             text
                                         };
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::Paste(text));
+                                            let paste_evt = cvkg_core::Event::Paste(text);
+                                            fire_renderer_handlers(&gpu_arc, &paste_evt);
+                                            vdom.dispatch_event(paste_evt);
                                         }
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyX => {
                                         tracing::info!("[Native] Shortcut: Cut (Cmd+X)");
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::Cut);
+                                            let cut_evt = cvkg_core::Event::Cut;
+                                            fire_renderer_handlers(&gpu_arc, &cut_evt);
+                                            vdom.dispatch_event(cut_evt);
                                         }
                                         state.window.request_redraw();
                                     }
@@ -1115,20 +1187,24 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                     winit::keyboard::KeyCode::KeyA => {
                                         tracing::info!("[Native] Shortcut: Select All (Cmd+A)");
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                            let keydown = cvkg_core::Event::KeyDown {
                                                 key: "cmd+a".to_string(),
                                                 modifiers: cvkg_core::KeyModifiers::default(),
-                                            });
+                                            };
+                                            fire_renderer_handlers(&gpu_arc, &keydown);
+                                            vdom.dispatch_event(keydown);
                                         }
                                         state.window.request_redraw();
                                     }
                                     winit::keyboard::KeyCode::KeyF => {
                                         tracing::info!("[Native] Shortcut: Find (Cmd+F)");
                                         if let Some(vdom) = &state.vdom {
-                                            vdom.dispatch_event(cvkg_core::Event::KeyDown {
+                                            let keydown = cvkg_core::Event::KeyDown {
                                                 key: "cmd+f".to_string(),
                                                 modifiers: cvkg_core::KeyModifiers::default(),
-                                            });
+                                            };
+                                            fire_renderer_handlers(&gpu_arc, &keydown);
+                                            vdom.dispatch_event(keydown);
                                         }
                                         state.window.request_redraw();
                                     }
@@ -1167,6 +1243,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     if let Some(vdom) = &state.vdom
                         && let Some(cvkg_event) = convert_keyboard_event(event, &self.modifiers)
                     {
+                        fire_renderer_handlers(&gpu_arc, &cvkg_event);
                         vdom.dispatch_event(cvkg_event);
                         state.window.request_redraw();
                     }
@@ -1175,6 +1252,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     if let Some(vdom) = &state.vdom
                         && let Some(cvkg_event) = convert_ime_event(ime_event)
                     {
+                        fire_renderer_handlers(&gpu_arc, &cvkg_event);
                         vdom.dispatch_event(cvkg_event);
                         state.window.request_redraw();
                     }
@@ -1236,6 +1314,13 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: AppEvent) {
         match event {
             AppEvent::AccessibilityAction(request) => {
+                // Capture the gpu arc up front so we can mirror events into
+                // GpuRenderer's renderer-registered handler map (the VDOM-side
+                // dispatch below only routes through the VDOM's separate map).
+                let gpu_arc = match &self.gpu {
+                    Some(g) => g.clone(),
+                    None => return,
+                };
                 let node_id = cvkg_core::KvasirId(request.target_node.0);
                 let target_state = self.window_manager.windows.values_mut().find(|s| {
                     s.vdom
@@ -1258,6 +1343,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         barrel_rotation: None,
                         pointer_precision: 0.0,
                     };
+                    fire_renderer_handlers(&gpu_arc, &event);
                     vdom.dispatch_event(event);
                 }
             }
