@@ -464,7 +464,9 @@ impl View for GalleryApp {
 
         // 1. Draw Background Area
         renderer.push_vnode(rect, "GalleryApp");
+        renderer.set_z_index(1000.0);
         renderer.fill_rect(rect, [0.07, 0.008, 0.008, 1.0]);
+        renderer.set_z_index(0.0);
 
         // 2. Draw 3D Carousel (Top Panel)
         let mut draw_order: Vec<usize> = (0..num_entries).collect();
