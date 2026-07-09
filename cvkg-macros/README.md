@@ -59,13 +59,12 @@ Solid arrows: compile-time dependencies. Dashed arrows: `cvkg` and `cvkg-cli` de
 
 | Macro | Syntax | What it does |
 |---|---|---|
-| `hamr!` | `hamr! { Expr { child Expr { ... } } }` | DSL for declarative UI trees; each `Expr { ... }` block becomes `Expr.child(...)` chains |
-| `cvkg_model!` | `cvkg_model! { struct ... }` | Derives `Clone, Debug, Default, Serialize, Deserialize` and adds a `vdom_id()` method |
+| `merge_manifests!` | `merge_manifests! { ... }` | Merges multiple component manifests into a single combined manifest |
 
 ## Usage example
 
 ```rust
-use cvkg_macros::{state, view_component, cvkg_component, hamr};
+use cvkg_macros::{state, view_component, cvkg_component};
 use cvkg_core::View;
 
 // State: derives Clone, Debug, Default, Serialize, Deserialize
@@ -96,14 +95,6 @@ let card = Card::builder()
     .title("Hello".into())
     .body("World".into())
     .build();
-
-// Declarative UI DSL
-let tree = hamr! {
-    VStack::new(16.0) {
-        Text::new("Hello")
-        Button::new("Click", || {})
-    }
-};
 ```
 
 ## Use cases
@@ -113,8 +104,6 @@ let tree = hamr! {
 - **Primitive views**: Use `#[derive(View)]` for views that have no body (e.g., layout containers that delegate to children).
 - **Function-to-view conversion**: Annotate a view function with `#[view_component]` to get a named struct that implements `View` without manual boilerplate.
 - **Component scaffolding**: Annotate a component struct with `#[cvkg_component]` to get a type-safe builder pattern.
-- **Declarative UI trees**: Use `hamr!` to write nested UI hierarchies with brace-based nesting instead of chained method calls.
-- **Data models with VDOM metadata**: Use `cvkg_model!` for data structs that need trait derives plus a `vdom_id()` identifier.
 
 ## Edge cases and limitations
 
@@ -123,8 +112,6 @@ let tree = hamr! {
 - `#[view_component]` only handles `FnArg::Typed` arguments with `Pat::Ident` patterns. Destructured or wildcard arguments are silently ignored (no field generated).
 - `#[view_component]` capitalizes the first character of the function name to form the struct name (`counter_display` → `CounterDisplayView`). Non-ASCII first characters are not specially handled.
 - `#[cvkg_component]` supports named fields, tuple fields, and unit structs. Tuple fields are named `_0`, `_1`, etc. in the builder. All fields are required — `build()` panics with `expect()` if any field is missing.
-- `hamr!` parses a custom `HamrNode` grammar, not standard Rust syntax. Errors come from `syn`'s expression parser and may have confusing spans.
-- `cvkg_model!`'s `vdom_id()` uses `DefaultHasher::new().finish()` which produces a non-deterministic ID per call — it is not stable across runs or compilations.
 - This crate depends on `serde` traits being available in the downstream crate's dependency tree. It does not add `serde` as its own dependency; the downstream crate must depend on `serde` with `derive` enabled.
 
 ## Build flags / features / env vars

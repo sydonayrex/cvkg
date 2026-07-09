@@ -152,8 +152,18 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // Generate a unique instance-id counter name for this component type.
+    let counter_name = quote::format_ident!("__{}_instance_counter", name_str.to_ascii_lowercase());
+
     let expanded = quote! {
+            // Per-instance counter — each instance of this component type gets a
+            // unique tracking ID so that signal→component dependency edges are
+            // per-instance, not per-type.
+            #[allow(non_upper_case_globals)]
+            static #counter_name: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
             #vis struct #struct_name {
+                __instance_id: u64,
                 #(#fields),*
             }
 
@@ -164,15 +174,9 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     // Map fields back to local variables for the body
                     #(let #field_names = self.#field_names;)*
 
-                    // The user's specification requested self.node_id(), but since View doesn't have it natively
-                    // without a trait update, we generate a stable ID from the type name as a fallback if needed,
-                    // or assume the user has added a node_id() method. We will use a hash of the type for now.
-                    let __tracking_id = {
-                        use std::hash::{Hash, Hasher};
-                        let mut __hasher = std::collections::hash_map::DefaultHasher::new();
-                        stringify!(#struct_name).hash(&mut __hasher);
-                        __hasher.finish()
-                    };
+                    // Per-instance tracking ID avoids the N-instances-1-reactive bug
+                    // where all instances share a single hash-of-type-name id.
+                    let __tracking_id = self.__instance_id;
 
                     cvkg_vdom::signals::begin_tracking(__tracking_id);
                     let __result = cvkg_core::AnyView::new(#body);
@@ -191,6 +195,7 @@ pub fn view_component(_attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#attrs)*
             #vis fn #name(#inputs) -> #struct_name {
                 #struct_name {
+                    __instance_id: #counter_name.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                     #(#field_names),*
                 }
             }

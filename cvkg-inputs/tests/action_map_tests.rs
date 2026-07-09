@@ -1,7 +1,9 @@
 //! Tests for ActionMap and Binding types.
 //! Red-phase: these test the action mapping system.
 
-use cvkg_inputs::{ActionMap, Binding, DeviceId, GamepadAxis, InputEvent, InputState, MouseButton};
+use cvkg_inputs::{
+    ActionMap, Binding, DeviceId, GamepadAxis, GamepadButton, InputEvent, InputState, MouseButton,
+};
 
 #[test]
 fn test_action_map_new_is_empty() {
@@ -125,28 +127,57 @@ fn test_button_release_not_triggered() {
 }
 
 #[test]
-fn test_chord_binding() {
+fn test_chord_binding_does_not_trigger_with_one_button() {
     let mut map = ActionMap::new();
     map.bind(
         "combo",
         Binding::Chord(vec![Binding::Button(0), Binding::Button(1)]),
     );
 
-    // Only first button → not triggered
+    // Only first button → not triggered (negative case)
     let events = map.evaluate(&InputEvent::GamepadButton {
         device: DeviceId(0),
         button: 0,
         pressure: 1.0,
     });
-    assert!(events.is_empty());
+    assert!(events.is_empty(), "chord should not trigger with one button");
+}
 
-    // Second button alone → not triggered
-    let events = map.evaluate(&InputEvent::GamepadButton {
+#[test]
+fn test_chord_binding_fires_when_both_buttons_held() {
+    let mut map = ActionMap::new();
+    map.bind(
+        "combo",
+        Binding::Chord(vec![Binding::Button(0), Binding::Button(1)]),
+    );
+
+    // Build a state where BOTH buttons are currently held.
+    let mut state = InputState::new();
+    state.apply_event(&InputEvent::GamepadConnected(DeviceId(0)));
+    state.apply_event(&InputEvent::GamepadButton {
+        device: DeviceId(0),
+        button: 0,
+        pressure: 1.0,
+    });
+    state.apply_event(&InputEvent::GamepadButton {
         device: DeviceId(0),
         button: 1,
         pressure: 1.0,
     });
-    assert!(events.is_empty());
+
+    // Now the chord should fire through evaluate_with_state.
+    // The event here is a third button (button 2), but evaluate_with_state
+    // should still trigger "combo" because the chord is satisfied via the
+    // held-set in state.
+    let events = map.evaluate_with_state(
+        &InputEvent::GamepadButton {
+            device: DeviceId(0),
+            button: 2,
+            pressure: 1.0,
+        },
+        &state,
+    );
+    assert_eq!(events, vec!["combo"], "chord should fire when both buttons held");
 }
 
 #[test]

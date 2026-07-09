@@ -64,9 +64,11 @@ impl InputState {
                 self.gamepads.insert(*id, state);
             }
             InputEvent::GamepadDisconnected(id) => {
-                if let Some(state) = self.gamepads.get_mut(id) {
-                    state.connected = false;
-                }
+                // Remove the entry so later Axis/Button events for this device
+                // do not keep mutating a zombie state. Without this, a
+                // disconnected device ghost-shocks inputs that were intended to
+                // come from the actual reconnecting gamepad.
+                self.gamepads.remove(id);
             }
             InputEvent::GamepadAxis {
                 device,

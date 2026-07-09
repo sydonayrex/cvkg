@@ -14,7 +14,9 @@ fn test_input_state_apply_event_gamepad_disconnect() {
     assert!(state.gamepads[&DeviceId(1)].connected);
 
     state.apply_event(&InputEvent::GamepadDisconnected(DeviceId(1)));
-    assert!(!state.gamepads[&DeviceId(1)].connected);
+    // After disconnect the entry is removed so Axis/Button events for this
+    // device don't mutate a zombie state.
+    assert!(!state.gamepads.contains_key(&DeviceId(1)));
 }
 
 #[test]

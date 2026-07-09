@@ -10,6 +10,12 @@ use crate::error::InputError;
 #[cfg(feature = "gilrs")]
 pub struct GilrsBackend {
     gilrs: gilrs::Gilrs,
+    /// Active rumble effects so they don't get dropped immediately.
+    /// Storing these keeps the force-feedback effect alive; otherwise
+    /// the effect handle is dropped at the end of `set_rumble` and the
+    /// rumble stops instantly (or never starts if dropped before the first
+    /// winit frame).
+    active_effects: std::collections::HashMap<DeviceId, gilrs::ff::Effect>,
 }
 
 #[cfg(feature = "gilrs")]
@@ -17,7 +23,10 @@ impl GilrsBackend {
     /// Creates a new GilrsBackend, initializing gilrs.
     pub fn new() -> Result<Self, InputError> {
         let gilrs = gilrs::Gilrs::new().map_err(|e| InputError::BackendInit(e.to_string()))?;
-        Ok(Self { gilrs })
+        Ok(Self {
+            gilrs,
+            active_effects: std::collections::HashMap::new(),
+        })
     }
 }
 
@@ -77,8 +86,8 @@ impl InputBackend for GilrsBackend {
         for (id, gamepad) in self.gilrs.gamepads() {
             if usize::from(id) == target_idx {
                 if gamepad.is_ff_supported() {
-                    let strong_magnitude = ((strong * 65535.0) as u16).max(1);
-                    let weak_magnitude = ((weak * 65535.0) as u16).max(1);
+                    let strong_magnitude = ((strong * 65535.0) as u16).min(u16::MAX).max(1);
+                    let weak_magnitude = ((weak * 65535.0) as u16).min(u16::MAX).max(1);
 
                     let effect = EffectBuilder::new()
                         .add_effect(BaseEffect {
@@ -87,9 +96,10 @@ impl InputBackend for GilrsBackend {
                             },
                             scheduling: Replay {
                                 play_for: Duration::from_secs(30).into(),
-                                ..Default::default()
+                                with_delay: Duration::ZERO.into(),
+                                after: Duration::ZERO.into(),
                             },
-                            ..Default::default()
+                            envelope: Default::default(),
                         })
                         .add_effect(BaseEffect {
                             kind: BaseEffectType::Weak {
@@ -97,9 +107,10 @@ impl InputBackend for GilrsBackend {
                             },
                             scheduling: Replay {
                                 play_for: Duration::from_secs(30).into(),
-                                ..Default::default()
+                                with_delay: Duration::ZERO.into(),
+                                after: Duration::ZERO.into(),
                             },
-                            ..Default::default()
+                            envelope: Default::default(),
                         })
                         .repeat(Repeat::Infinitely)
                         .add_gamepad(&gamepad)
@@ -111,6 +122,10 @@ impl InputBackend for GilrsBackend {
                     effect
                         .play()
                         .map_err(|e| InputError::Platform(format!("rumble play failed: {e}")))?;
+
+                    // Store the effect handle so it isn't dropped immediately.
+                    // Without this, the effect stops as soon as the handle is freed.
+                    self.active_effects.insert(device, effect);
                 }
                 found = true;
                 break;

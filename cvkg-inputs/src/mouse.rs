@@ -25,9 +25,9 @@ pub struct MouseState {
     pub x: f32,
     /// Absolute Y position.
     pub y: f32,
-    /// Wheel delta since last poll.
+    /// Accumulated wheel-X delta this poll cycle. Reset by `take_wheel_deltas`.
     pub wheel_dx: f32,
-    /// Wheel delta since last poll.
+    /// Accumulated wheel-Y delta this poll cycle. Reset by `take_wheel_deltas`.
     pub wheel_dy: f32,
 }
 
@@ -40,5 +40,17 @@ impl MouseState {
     /// Returns true if the given button is pressed.
     pub fn button_pressed(&self, button: MouseButton) -> bool {
         self.pressed.contains(&button)
+    }
+
+    /// Returns the current wheel deltas and resets them to zero.
+    ///
+    /// Consumers MUST call this once per poll cycle to read fresh
+    /// per-frame wheel deltas instead of monotonically-accumulating sums.
+    pub fn take_wheel_deltas(&mut self) -> (f32, f32) {
+        let dx = self.wheel_dx;
+        let dy = self.wheel_dy;
+        self.wheel_dx = 0.0;
+        self.wheel_dy = 0.0;
+        (dx, dy)
     }
 }

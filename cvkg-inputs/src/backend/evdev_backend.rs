@@ -111,7 +111,7 @@ impl InputBackend for EvdevBackend {
                         _ => {}
                     }
                 }
-                break; // Only read once per poll
+                // Consume all pending batches, not just the first.
             }
         }
 

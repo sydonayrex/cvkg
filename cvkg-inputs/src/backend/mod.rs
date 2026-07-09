@@ -17,17 +17,32 @@ use crate::error::InputError;
 
 /// Converts a cvkg-inputs `InputEvent` into a `cvkg_core::Event`.
 ///
-/// # Mapping Notes
-/// - `MouseMove` → `PointerMove` with `dx/dy` as relative x/y (lossy — absolute position lost)
-/// - `MouseButton` → `PointerDown`/`PointerUp` (missing: x/y position, stylus fields default to 0)
-/// - `MouseWheel` → `PointerWheel` (missing: x/y position defaults to 0)
-/// - `Touch` → `TouchStart`/`TouchMove`/`TouchEnd`/`TouchCancel`
+/// `state` is the [`InputState`](crate::InputState) AFTER `apply_event` has
+/// been called for `event`. It is consulted to derive absolute pointer
+/// positions and current keyboard modifiers:
+///
+/// - `MouseMove` → `PointerMove` with the **absolute** position from
+///   `state.mouse.{x,y}` (post-`apply_event`), not the raw delta
+/// - `MouseButton` → `PointerDown`/`PointerUp` with the absolute position
+///   from `state.mouse.{x,y}`
+/// - `MouseWheel` → `PointerWheel` with the absolute position from
+///   `state.mouse.{x,y}`
+/// - `KeyDown`/`KeyUp` → with the current modifier set derived from
+///   `state.keyboard.modifiers()`
+///
+/// # Touch events
+/// `Touch` → `TouchStart`/`TouchMove`/`TouchEnd`/`TouchCancel` with absolute
+/// touch coordinates (these carry no relative-delta confusion).
 ///
 /// # Unmapped Events
-/// `Paste`, `Ime`, `Copy`, `Cut`, `FocusIn`, `FocusOut`, and `Drag*` events have no
-/// cvkg-inputs equivalent. Use `from_cvkg_event` for the reverse (partial) mapping.
+/// `Paste`, `Ime`, `Copy`, `Cut`, `FocusIn`, `FocusOut`, and `Drag*` events
+/// have no cvkg-inputs equivalent. Use [`from_cvkg_event`] for the reverse
+/// (partial) mapping.
 #[inline]
-pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
+pub fn into_cvkg_event(event: &InputEvent, state: &crate::InputState) -> Option<cvkg_core::Event> {
+    let mouse_x = state.mouse.x;
+    let mouse_y = state.mouse.y;
+    let modifiers = state.keyboard.modifiers();
     match event {
         InputEvent::GamepadConnected(id) => Some(cvkg_core::Event::GamepadConnected {
             id: id.0,
@@ -56,15 +71,15 @@ pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
         }),
         InputEvent::KeyDown(key) => Some(cvkg_core::Event::KeyDown {
             key: key.clone(),
-            modifiers: cvkg_core::KeyModifiers::default(),
+            modifiers,
         }),
         InputEvent::KeyUp(key) => Some(cvkg_core::Event::KeyUp {
             key: key.clone(),
-            modifiers: cvkg_core::KeyModifiers::default(),
+            modifiers,
         }),
-        InputEvent::MouseMove { dx, dy } => Some(cvkg_core::Event::PointerMove {
-            x: *dx,
-            y: *dy,
+        InputEvent::MouseMove { .. } => Some(cvkg_core::Event::PointerMove {
+            x: mouse_x,
+            y: mouse_y,
             proximity_field: 0.0,
             tilt: None,
             azimuth: None,
@@ -75,8 +90,8 @@ pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
         InputEvent::MouseButton { button, pressed } => {
             if *pressed {
                 Some(cvkg_core::Event::PointerDown {
-                    x: 0.0,
-                    y: 0.0,
+                    x: mouse_x,
+                    y: mouse_y,
                     button: *button,
                     proximity_field: 0.0,
                     tilt: None,
@@ -87,8 +102,8 @@ pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
                 })
             } else {
                 Some(cvkg_core::Event::PointerUp {
-                    x: 0.0,
-                    y: 0.0,
+                    x: mouse_x,
+                    y: mouse_y,
                     button: *button,
                     tilt: None,
                     azimuth: None,
@@ -99,8 +114,8 @@ pub fn into_cvkg_event(event: &InputEvent) -> Option<cvkg_core::Event> {
             }
         }
         InputEvent::MouseWheel { dx, dy } => Some(cvkg_core::Event::PointerWheel {
-            x: 0.0,
-            y: 0.0,
+            x: mouse_x,
+            y: mouse_y,
             delta_x: *dx,
             delta_y: *dy,
             pointer_precision: 0.0,

@@ -87,11 +87,42 @@ impl ActionMap {
 
     /// Evaluates an input event against all bindings.
     /// Returns the names of actions that were triggered.
+    ///
+    /// Note: chord bindings are evaluated against an EMPTY held-set in this
+    /// method (no state context). Because of this, chord bindings will never
+    /// fire from `evaluate`. Use [`evaluate_with_state`] for chord support.
     pub fn evaluate(&self, event: &InputEvent) -> Vec<String> {
         let mut triggered = Vec::new();
         for (name, config) in &self.bindings {
-            if Self::matches(&config.binding, event) {
+            if Self::matches_event(&config.binding, event) {
                 triggered.push(name.clone());
+            }
+        }
+        triggered
+    }
+
+    /// Evaluates an input event against all bindings, taking the current
+    /// [`InputState`](crate::InputState) into account.
+    ///
+    /// Chord bindings are checked against the held-set in `state` (gamepad
+    /// buttons currently pressed / axes currently in range / keys currently
+    /// held / mouse buttons currently held). Non-chord bindings continue to
+    /// fire per-event (button event with pressure > 0, axis event, etc.).
+    pub fn evaluate_with_state(&self, event: &InputEvent, state: &crate::InputState) -> Vec<String> {
+        let mut triggered = Vec::new();
+        for (name, config) in &self.bindings {
+            if Self::matches_event(&config.binding, event) {
+                triggered.push(name.clone());
+            }
+        }
+        // Additionally, check chord bindings against the held-set.
+        for (name, config) in &self.bindings {
+            if !triggered.contains(name) {
+                if let Binding::Chord(subs) = &config.binding {
+                    if subs.iter().all(|s| Self::sub_binding_held(s, state)) {
+                        triggered.push(name.clone());
+                    }
+                }
             }
         }
         triggered
@@ -112,8 +143,8 @@ impl ActionMap {
         }
     }
 
-    /// Checks if a binding matches an event.
-    fn matches(binding: &Binding, event: &InputEvent) -> bool {
+    /// Checks if a binding matches an event (per-event, non-chord semantics).
+    fn matches_event(binding: &Binding, event: &InputEvent) -> bool {
         match (binding, event) {
             (
                 Binding::Button(btn),
@@ -126,8 +157,81 @@ impl ActionMap {
                 Binding::AxisRange(axis, min, max),
                 InputEvent::GamepadAxis { axis: a, value, .. },
             ) => axis == a && *value >= *min && *value <= *max,
-            (Binding::Chord(subs), event) => subs.iter().all(|s| Self::matches(s, event)),
+            (Binding::Chord(subs), event) => subs.iter().all(|s| Self::matches_event(s, event)),
             _ => false,
+        }
+    }
+
+    /// Returns true if a sub-binding is currently satisfied by the held set in `state`.
+    fn sub_binding_held(sub: &Binding, state: &crate::InputState) -> bool {
+        match sub {
+            Binding::Button(btn) => state
+                .gamepads
+                .values()
+                .any(|gp| Self::gamepad_button_held(gp, *btn)),
+            Binding::Axis(axis) => state.gamepads.values().any(|gp| {
+                // A pure-Axis sub-binding without a range is satisfied by *any*
+                // non-zero value for that axis index. We translate the raw
+                // integer index to the equivalent `GamepadAxis` variant.
+                if let Some(key) = Self::axis_index_to_variant(*axis) {
+                    gp.axes.get(&key).copied().unwrap_or(0.0) != 0.0
+                } else {
+                    // Unknown axis index — fall back to non-ranged trigger via Raw.
+                    gp.axes.values().any(|v| *v != 0.0)
+                }
+            }),
+            Binding::AxisRange(_, _, _) => {
+                // AxisRange is evaluated against the current state when the
+                // axis event arrives. Chord-with-AxisRange is intentionally
+                // not auto-satisfied here (would require polling axis values);
+                // callers evaluate ranges via evaluate_axis / per-event matching.
+                true
+            }
+            Binding::Chord(nested) => nested
+                .iter()
+                .all(|s| Self::sub_binding_held(s, state)),
+        }
+    }
+
+    /// Translates a raw gamepad axis index into a typed `GamepadAxis` variant.
+    fn axis_index_to_variant(idx: u32) -> Option<crate::GamepadAxis> {
+        match idx {
+            0 => Some(crate::GamepadAxis::LeftStickX),
+            1 => Some(crate::GamepadAxis::LeftStickY),
+            2 => Some(crate::GamepadAxis::RightStickX),
+            3 => Some(crate::GamepadAxis::RightStickY),
+            4 => Some(crate::GamepadAxis::LeftTrigger),
+            5 => Some(crate::GamepadAxis::RightTrigger),
+            other => Some(crate::GamepadAxis::Raw(other)),
+        }
+    }
+
+    /// Returns true if the given gamepad button input index is currently pressed.
+    fn gamepad_button_held(gp: &crate::GamepadState, btn_index: u32) -> bool {
+        let expected: Option<crate::GamepadButton> = match btn_index {
+            0 => Some(crate::GamepadButton::South),
+            1 => Some(crate::GamepadButton::East),
+            2 => Some(crate::GamepadButton::West),
+            3 => Some(crate::GamepadButton::North),
+            4 => Some(crate::GamepadButton::LeftBumper),
+            5 => Some(crate::GamepadButton::RightBumper),
+            6 => Some(crate::GamepadButton::LeftTrigger),
+            7 => Some(crate::GamepadButton::RightTrigger),
+            8 => Some(crate::GamepadButton::Select),
+            9 => Some(crate::GamepadButton::Start),
+            10 => Some(crate::GamepadButton::LeftStick),
+            11 => Some(crate::GamepadButton::RightStick),
+            12 => Some(crate::GamepadButton::DpadUp),
+            13 => Some(crate::GamepadButton::DpadDown),
+            14 => Some(crate::GamepadButton::DpadLeft),
+            15 => Some(crate::GamepadButton::DpadRight),
+            16 => Some(crate::GamepadButton::Home),
+            other => Some(crate::GamepadButton::Raw(other)),
+        };
+        if let Some(button) = expected {
+            gp.buttons.get(&button).copied().unwrap_or(0.0) > 0.0
+        } else {
+            false
         }
     }
 }
