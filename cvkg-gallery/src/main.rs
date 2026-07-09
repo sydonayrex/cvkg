@@ -464,7 +464,7 @@ impl View for GalleryApp {
 
         // 1. Draw Background Area
         renderer.push_vnode(rect, "GalleryApp");
-        renderer.fill_rect(rect, [0.005, 0.002, 0.002, 1.0]);
+        renderer.fill_rect(rect, [0.07, 0.008, 0.008, 1.0]);
 
         // 2. Draw 3D Carousel (Top Panel)
         let mut draw_order: Vec<usize> = (0..num_entries).collect();
@@ -603,28 +603,6 @@ impl View for GalleryApp {
                 [0.75, 0.70, 0.62, text_alpha]
             };
 
-            if !is_selected {
-                let covering_diff = if diff < 0.0 { diff + 1.0 } else { diff - 1.0 };
-                let covering_rect = calculate_card_rect(covering_diff);
-                let clip_rect = if diff < 0.0 {
-                    Rect {
-                        x: card_rect.x,
-                        y: card_rect.y,
-                        width: (covering_rect.x - card_rect.x).max(0.0),
-                        height: card_rect.height,
-                    }
-                } else {
-                    let start_x = covering_rect.x + covering_rect.width;
-                    Rect {
-                        x: start_x,
-                        y: card_rect.y,
-                        width: ((card_rect.x + card_rect.width) - start_x).max(0.0),
-                        height: card_rect.height,
-                    }
-                };
-                renderer.push_clip_rect(clip_rect);
-            }
-
             let cat_font_size = 9.0 * scale;
             let (cat_w, _) = renderer.measure_text(entries[i].category, cat_font_size);
             renderer.draw_text_raw(
@@ -644,10 +622,6 @@ impl View for GalleryApp {
                 name_font_size,
                 text_color,
             );
-
-            if !is_selected {
-                renderer.pop_clip_rect();
-            }
 
             renderer.pop_vnode();
         }

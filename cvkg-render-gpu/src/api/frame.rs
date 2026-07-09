@@ -16,21 +16,19 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
 
     fn render_frame(&mut self) {
         // Visual Lint: If layout was dirtied during the render phase (layout thrashing),
-        // draw a 10px red border as a warning flash.
+        // draw a small corner indicator.
         if LAYOUT_DIRTY.swap(false, Ordering::AcqRel)
             && let Some(window_id) = self.current_window
             && let Some(surface_ctx) = self.surfaces.get(&window_id)
         {
             let w = surface_ctx.config.width as f32;
-            let h = surface_ctx.config.height as f32;
-            let border_rect = cvkg_core::Rect {
-                x: 0.0,
+            let dot_rect = cvkg_core::Rect {
+                x: w - 12.0,
                 y: 0.0,
-                width: w,
-                height: h,
+                width: 12.0,
+                height: 12.0,
             };
-            // Draw a thick red border to signal layout-thrashing
-            self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
+            self.fill_rect(dot_rect, [1.0, 0.0, 0.0, 0.6]);
         }
 
         // Dynamic Buffer Growth (Up to 4x tier capacity)
