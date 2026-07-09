@@ -303,6 +303,7 @@ const DIALOG_OPEN_HASH: u64 = 0xB00_0001;
 /// # Contract
 /// Fully blocks interaction with the background, offering title/action controls and keyboard accessibility (ESC/Enter/Tab focus trap).
 #[doc(alias = "Dialog")]
+#[derive(Clone)]
 pub struct GeriDialog<V> {
     pub(crate) is_presented: bool,
     pub(crate) title: Option<String>,

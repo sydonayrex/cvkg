@@ -1,15 +1,18 @@
 use cvkg::components::calendar::Date;
 use cvkg::components::{
-    AutoComplete, BifrostTabs, Breadcrumb, BreadcrumbItem, Combobox, DatePicker, MimirSpotlight,
-    SpinnerVariant, Toggle,
+    AutoComplete, BifrostTabs, Breadcrumb, BreadcrumbItem, Combobox, DatePicker, Dialog,
+    MimirSpotlight, SpinnerVariant, Toggle,
 };
 use cvkg::core::{Event, Renderer, View};
 use cvkg::prelude::AnyView;
 use cvkg::prelude::*;
-use cvkg_core::update_system_state;
+use cvkg_core::{load_system_state, update_system_state};
 
 // Shared system-state key for the command palette open flag (must match command_palette.rs).
 const SPOTLIGHT_OPEN_HASH: u64 = 0xD00_0001;
+
+// Must match DIALOG_OPEN_HASH in cvkg-components/src/container/modal.rs.
+const GALLERY_DIALOG_OPEN_HASH: u64 = 0xB00_0001;
 
 // -- Component catalog ------------------------------------------------
 
@@ -314,6 +317,36 @@ fn catalog() -> Vec<GalleryEntry> {
             name: "Dialog",
             category: "Overlays",
             render: |_state, _state_arc| {
+                // Read the open flag from system state (toggled by the button below
+                // and by GeriDialog's own internal close handlers).
+                let is_open = load_system_state()
+                    .get_component_state::<bool>(GALLERY_DIALOG_OPEN_HASH)
+                    .and_then(|v| v.read().ok().map(|g| *g))
+                    .unwrap_or(false);
+
+                let dialog = Dialog::new(AnyView::new(
+                    VStack::new(8.0)
+                        .child(
+                            Text::new("This is a modal dialog.")
+                                .font_size(14.0)
+                                .color([0.9, 0.9, 0.9, 1.0]),
+                        )
+                        .child(
+                            Text::new("Click outside or press Esc to close.")
+                                .font_size(12.0)
+                                .color([0.6, 0.6, 0.6, 1.0]),
+                        ),
+                ))
+                .presented(is_open)
+                .title("Confirm Action")
+                .action("Close", || {
+                    update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(GALLERY_DIALOG_OPEN_HASH, false);
+                        s
+                    });
+                });
+
                 AnyView::new(
                     VStack::new(12.0)
                         .child(
@@ -321,12 +354,19 @@ fn catalog() -> Vec<GalleryEntry> {
                                 .font_size(14.0)
                                 .color([0.9, 0.9, 0.9, 1.0]),
                         )
-                        .child(Button::new("Open Modal", || {}))
+                        .child(Button::new("Open Modal", || {
+                            update_system_state(|s| {
+                                let mut s = s.clone();
+                                s.set_component_state(GALLERY_DIALOG_OPEN_HASH, true);
+                                s
+                            });
+                        }))
                         .child(
                             Text::new("Click Open Modal to see overlay")
                                 .font_size(11.0)
                                 .color([0.6, 0.6, 0.6, 1.0]),
-                        ),
+                        )
+                        .child(dialog),
                 )
             },
         },
