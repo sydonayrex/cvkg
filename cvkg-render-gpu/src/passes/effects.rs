@@ -181,7 +181,7 @@ impl KvasirNode for EffectCompositeNode {
             &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&input_view; 32]),
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&input_view; ctx.renderer.capability_tier.texture_array_count as usize]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

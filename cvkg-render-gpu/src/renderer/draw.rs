@@ -1,6 +1,6 @@
 use super::GpuRenderer;
 use super::context_helpers::create_surface_context;
-use crate::types::{DrawCall, MAX_PARTICLES};
+use crate::types::DrawCall;
 use crate::vertex::{InstanceData, InstanceData3D, Vertex, Vertex3D};
 use cvkg_core::{Rect, Renderer};
 use std::sync::Arc;
@@ -236,6 +236,7 @@ impl GpuRenderer {
             &self.texture_bind_group_layout,
             window.scale_factor() as f32,
             self.quality_level.msaa_sample_count(),
+            self.capability_tier.texture_array_count,
             &mut self.registry,
         );
 
@@ -1189,7 +1190,7 @@ impl GpuRenderer {
             if !self.particles.staging.is_empty() {
                 let write_start = self.particles.write_head as usize;
                 let write_count = self.particles.staging.len();
-                let max = MAX_PARTICLES;
+                let max = self.capability_tier.max_particles;
 
                 // P1-6 fix: cap the write to max particles to prevent
                 // wrap-around overlap. If write_count > max, only the
@@ -1984,6 +1985,11 @@ impl GpuRenderer {
         material: &cvkg_core::Material3D,
         transform: &cvkg_core::Transform3D,
     ) {
+        // Capacity guard: silently skip if instance buffer is full instead of
+        // writing past `instance_buffer_3d`'s `tier.max_vertices / 4` bound.
+        if self.instance_data_3d.len() >= self.capability_tier.max_vertices / 4 {
+            return;
+        }
         let model_matrix = transform.to_matrix();
 
         // Use Vertex3D which matches the WGSL VertexInput3D layout (locations 0-4, 9)

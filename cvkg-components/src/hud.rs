@@ -95,7 +95,7 @@ impl View for Vegvísir {
                             angle += 2.0 * std::f32::consts::PI;
                         }
 
-                        let idx = ((angle / segment_angle) + 0.5) as usize % items_len;
+                        let idx = (angle / segment_angle) as usize % items_len;
                         on_select(idx);
                     }
                 }

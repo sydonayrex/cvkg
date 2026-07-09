@@ -20,8 +20,7 @@ pub struct Vertex {
 }
 
 /// Vertex format for 3D mesh rendering.
-/// Matches VertexInput3D in WGSL shaders (locations 0-4, 9, 16-21).
-/// This is separate from `Vertex` to avoid layout conflicts with 2D rendering.
+/// Matches VertexInput3D in WGSL shaders (locations 0-4 per-vertex, 5-10 per-instance).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex3D {
@@ -30,7 +29,7 @@ pub struct Vertex3D {
     pub uv: [f32; 2],
     pub color: [f32; 4],
     /// Tangent vector (xyz) + handedness (w) for normal mapping.
-    /// WGSL location 9 maps to this field directly.
+    /// WGSL location 4 maps to this field directly.
     pub tangent: [f32; 4],
 }
 
@@ -78,12 +77,12 @@ impl Default for InstanceData3D {
 
 impl InstanceData3D {
     const ATTRIBUTES: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
-        16 => Float32x4,
-        17 => Float32x4,
-        18 => Float32x4,
-        19 => Float32x4,
-        20 => Float32x2,
-        21 => Float32x2,
+        5 => Float32x4,  // model_row0
+        6 => Float32x4,  // model_row1
+        7 => Float32x4,  // model_row2
+        8 => Float32x4,  // material_overrides
+        9 => Float32x2,  // uv_scale
+        10 => Float32x2, // uv_offset
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {
@@ -151,14 +150,14 @@ impl Vertex {
 }
 
 /// Vertex buffer layout for 3D meshes.
-/// Matches VertexInput3D WGSL layout (locations 0-4, 9).
+/// Matches VertexInput3D WGSL layout (locations 0-4).
 impl Vertex3D {
     const ATTRIBUTES: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
         0 => Float32x3, // position
         1 => Float32x3, // normal
         2 => Float32x2, // uv
         3 => Float32x4, // color
-        9 => Float32x4, // tangent
+        4 => Float32x4, // tangent
     ];
 
     pub(crate) fn desc() -> wgpu::VertexBufferLayout<'static> {

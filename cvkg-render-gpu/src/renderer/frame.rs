@@ -216,6 +216,7 @@ impl GpuRenderer {
             &self.texture_bind_group_layout,
             window.scale_factor() as f32,
             self.quality_level.msaa_sample_count(),
+            self.capability_tier.texture_array_count,
             &mut self.registry,
         );
 

@@ -131,19 +131,19 @@ struct VertexOutput {
 };
 
 struct VertexInput3D {
+    // Per-vertex (buffer 0, VertexStepMode::Vertex)
     @location(0) position: vec3<f32>,
     @location(1) normal:   vec3<f32>,
     @location(2) uv:       vec2<f32>,
     @location(3) color:    vec4<f32>,
-    @location(9) tangent:  vec4<f32>,
-    // Instance attributes (per-mesh model matrix)
-    @location(16) model_row0: vec4<f32>,
-    @location(17) model_row1: vec4<f32>,
-    @location(18) model_row2: vec4<f32>,
-    @location(19) material_overrides: vec4<f32>,
-    // Instance attributes (per-mesh UV transform)
-    @location(20) uv_scale:  vec2<f32>,
-    @location(21) uv_offset: vec2<f32>,
+    @location(4) tangent:  vec4<f32>,
+    // Instance attributes (buffer 1, VertexStepMode::Instance)
+    @location(5) model_row0: vec4<f32>,
+    @location(6) model_row1: vec4<f32>,
+    @location(7) model_row2: vec4<f32>,
+    @location(8) material_overrides: vec4<f32>,
+    @location(9) uv_scale:  vec2<f32>,
+    @location(10) uv_offset: vec2<f32>,
 };
 
 @vertex

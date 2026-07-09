@@ -1,5 +1,4 @@
 /// Mouse state.
-
 /// Standard mouse buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MouseButton {

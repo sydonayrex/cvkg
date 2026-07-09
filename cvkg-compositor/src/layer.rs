@@ -451,7 +451,7 @@ impl LayerTree {
 
         // 3. Check for orphan layers (not reachable from any root).
         let mut reachable = std::collections::HashSet::new();
-        let mut stack: Vec<LayerId> = self.roots.iter().copied().collect();
+        let mut stack: Vec<LayerId> = self.roots.to_vec();
         while let Some(id) = stack.pop() {
             if !reachable.insert(id) {
                 continue;

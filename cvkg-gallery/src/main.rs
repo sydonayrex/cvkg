@@ -518,7 +518,7 @@ impl View for GalleryApp {
                 let cos_a = angle.cos();
                 let sin_a = angle.sin();
                 let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
-                let card_w = 190.0 * scale * cos_a;
+                let card_w = 190.0 * scale * cos_a.abs();
                 let card_h = 110.0 * scale;
                 Rect {
                     x: center_x + 360.0 * sin_a * scale - card_w / 2.0,
@@ -649,25 +649,53 @@ impl View for GalleryApp {
                 renderer.pop_clip_rect();
             }
 
-            let state_arc_clone = self.state.clone();
-            renderer.register_handler(
-                "pointerclick",
-                std::sync::Arc::new(move |_| {
-                    let mut s = state_arc_clone.lock().unwrap_or_else(|e| e.into_inner());
-                    s.selected = i;
-                }),
-            );
-
             renderer.pop_vnode();
         }
 
         // Reset Z-index to default for the rest of the UI
         renderer.set_z_index(0.0);
 
+        // Register a single click handler with manual hit-testing.
+        // GpuRenderer uses a flat handler map (keyed by event type string, not by VNode).
+        // Per-card handlers would ALL fire on every click, with the last one winning.
+        // Instead, we register ONE handler that re-calculates each card's rect and tests
+        // the click coordinates against it.
+        let click_state = self.state.clone();
+        let click_cx = center_x;
+        let click_cy = center_y;
+        let click_num = num_entries;
+        let click_selected = selected;
+        renderer.register_handler(
+            "pointerclick",
+            std::sync::Arc::new(move |evt| {
+                if let Event::PointerClick { x, y, .. } = evt {
+                    let half = click_num as f32 / 2.0;
+                    let sel = click_selected;
+                    for i in 0..click_num {
+                        let mut diff = (i as i32 - sel as i32) as f32;
+                        while diff > half { diff -= click_num as f32; }
+                        while diff < -half { diff += click_num as f32; }
+
+                        let angle = diff * 0.42;
+                        let cos_a = angle.cos();
+                        let sin_a = angle.sin();
+                        let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
+                        let cw = 190.0 * scale * cos_a.abs();
+                        let ch = 110.0 * scale;
+                        let cx = click_cx + 360.0 * sin_a * scale - cw / 2.0;
+                        let cy = click_cy + 12.0 * (1.0 - cos_a) * scale - ch / 2.0;
+
+                        if x >= cx && x <= cx + cw && y >= cy && y <= cy + ch {
+                            let mut s = click_state.lock().unwrap_or_else(|e| e.into_inner());
+                            s.selected = i;
+                            break;
+                        }
+                    }
+                }
+            }),
+        );
+
         // Register scroll-wheel handler for carousel cycling.
-        // event_handlers is cleared every frame (draw.rs:73), so we must
-        // re-register each frame — the previous WHEEL_HANDLER_READY one-shot
-        // latch caused the handler to vanish after frame 1.
         let wheel_state = self.state.clone();
         renderer.register_handler(
             "pointerwheel",
@@ -676,14 +704,10 @@ impl View for GalleryApp {
                     let mut s = wheel_state.lock().unwrap_or_else(|e| e.into_inner());
                     let num = s.entries.len();
                     if num > 0 {
-                        // Throttle: only process wheel movements that represent a full step
-                        // Native scroll events send line-based deltas scaled by ~10
-                        if delta_y.abs() > 30.0 {
-                            if delta_y > 0.0 {
-                                s.selected = (s.selected + 1) % num;
-                            } else {
-                                s.selected = (s.selected + num - 1) % num;
-                            }
+                        if delta_y > 0.0 {
+                            s.selected = (s.selected + 1) % num;
+                        } else if delta_y < 0.0 {
+                            s.selected = (s.selected + num - 1) % num;
                         }
                     }
                 }

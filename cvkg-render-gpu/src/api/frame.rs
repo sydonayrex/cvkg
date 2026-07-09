@@ -1,5 +1,4 @@
 use crate::renderer::GpuRenderer;
-use crate::types::{MAX_INDICES, MAX_VERTICES};
 use cvkg_core::LAYOUT_DIRTY;
 use cvkg_core::Renderer;
 use std::sync::atomic::Ordering;
@@ -34,8 +33,8 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
             self.stroke_rect(border_rect, [1.0, 0.0, 0.0, 1.0], 10.0);
         }
 
-        // Dynamic Buffer Growth (Up to 4x capacity)
-        let max_v_capacity = MAX_VERTICES * 4;
+        // Dynamic Buffer Growth (Up to 4x tier capacity)
+        let max_v_capacity = self.capability_tier.max_vertices * 4;
         let grown = self.geometry_buffers.grow_vertex_buffer(
             &self.device,
             self.vertices.len(),
@@ -49,7 +48,7 @@ impl cvkg_core::FrameRenderer<wgpu::CommandEncoder> for GpuRenderer {
             self.vertices.truncate(max_v_capacity);
         }
 
-        let max_i_capacity = MAX_INDICES * 4;
+        let max_i_capacity = self.capability_tier.max_indices * 4;
         let grown = self.geometry_buffers.grow_index_buffer(
             &self.device,
             self.indices.len(),

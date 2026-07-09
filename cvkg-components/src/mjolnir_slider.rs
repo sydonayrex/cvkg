@@ -73,16 +73,19 @@ impl View for MjolnirSlider {
             theme::text(),
         );
 
-        // 4. Interaction Handler
+        // 4. Interaction Handler — click-to-set. Use PointerDown (not
+        // PointerMove) so merely sweeping the mouse across the track does
+        // not snap the value. A real click-and-drag implementation would need
+        // a captured pointer state to track when the press began.
         let on_change = self.on_change.clone();
         let range = self.range.clone();
         let rect_x = rect.x;
         let rect_w = rect.width;
 
         renderer.register_handler(
-            "pointerclick",
+            "pointerdown",
             Arc::new(move |ev| {
-                if let Event::PointerDown { x, .. } | Event::PointerMove { x, .. } = ev {
+                if let Event::PointerDown { x, .. } = ev {
                     let local_x = x - rect_x;
                     let new_normalized = (local_x / rect_w).clamp(0.0, 1.0);
                     let new_val = range.start() + new_normalized * (range.end() - range.start());

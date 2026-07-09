@@ -77,12 +77,12 @@ fn fire_renderer_handlers(
     {
         Ok(g) => g
             .get_handlers(name)
-            .map(|v| v.clone())
+            .cloned()
             .unwrap_or_default(),
         Err(p) => p
             .into_inner()
             .get_handlers(name)
-            .map(|v| v.clone())
+            .cloned()
             .unwrap_or_default(),
     };
     for handler in handlers {

@@ -118,11 +118,11 @@ impl AppState {
         let js_entrypoint = if let Ok(entries) = std::fs::read_dir(&config.pkg_dir) {
             let mut found = None;
             for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str() {
-                    if name.ends_with(".js") && !name.contains("bg") {
-                        found = Some(name.to_string());
-                        break;
-                    }
+                if let Some(name) = entry.file_name().to_str()
+                    && name.ends_with(".js") && !name.contains("bg")
+                {
+                    found = Some(name.to_string());
+                    break;
                 }
             }
             found.unwrap_or_else(|| "berserker_fire_web_demo.js".to_string())
@@ -208,13 +208,13 @@ async fn path_validation_middleware(req: Request, next: Next) -> Result<Response
             let mut clone_chars = chars.clone();
             let h1 = clone_chars.next();
             let h2 = clone_chars.next();
-            if let (Some(h1), Some(h2)) = (h1, h2) {
-                if let Ok(hex) = u8::from_str_radix(&format!("{}{}", h1, h2), 16) {
-                    decoded.push(hex as char);
-                    chars.next();
-                    chars.next();
-                    continue;
-                }
+            if let (Some(h1), Some(h2)) = (h1, h2)
+                && let Ok(hex) = u8::from_str_radix(&format!("{}{}", h1, h2), 16)
+            {
+                decoded.push(hex as char);
+                chars.next();
+                chars.next();
+                continue;
             }
         }
         decoded.push(c);
@@ -235,15 +235,12 @@ async fn check_auth_middleware(
     next: Next,
 ) -> Result<Response, StatusCode> {
     if req.method() == Method::POST {
-        if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION) {
-            if let Ok(auth_str) = auth_header.to_str() {
-                if auth_str.starts_with("Bearer ") {
-                    let token = &auth_str[7..];
-                    if token == state.auth_token {
-                        return Ok(next.run(req).await);
-                    }
-                }
-            }
+        if let Some(auth_header) = headers.get(axum::http::header::AUTHORIZATION)
+            && let Ok(auth_str) = auth_header.to_str()
+            && let Some(token) = auth_str.strip_prefix("Bearer ")
+            && token == state.auth_token
+        {
+            return Ok(next.run(req).await);
         }
         return Err(StatusCode::UNAUTHORIZED);
     }
@@ -453,17 +450,17 @@ pub async fn ws_handler(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
-        if let Ok(origin_str) = origin.to_str() {
-            let is_allowed = origin_str.starts_with("http://localhost:")
-                || origin_str.starts_with("http://127.0.0.1:")
-                || origin_str == "null"
-                || origin_str.starts_with(&format!("http://{}", state.config.addr))
-                || origin_str.starts_with(&format!("https://{}", state.config.addr));
-            
-            if !is_allowed {
-                return Err(StatusCode::FORBIDDEN);
-            }
+    if let Some(origin) = headers.get(axum::http::header::ORIGIN)
+        && let Ok(origin_str) = origin.to_str()
+    {
+        let is_allowed = origin_str.starts_with("http://localhost:")
+            || origin_str.starts_with("http://127.0.0.1:")
+            || origin_str == "null"
+            || origin_str.starts_with(&format!("http://{}", state.config.addr))
+            || origin_str.starts_with(&format!("https://{}", state.config.addr));
+        
+        if !is_allowed {
+            return Err(StatusCode::FORBIDDEN);
         }
     }
     Ok(ws.on_upgrade(handle_socket))
@@ -475,17 +472,17 @@ pub async fn hmr_ws_handler(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    if let Some(origin) = headers.get(axum::http::header::ORIGIN) {
-        if let Ok(origin_str) = origin.to_str() {
-            let is_allowed = origin_str.starts_with("http://localhost:")
-                || origin_str.starts_with("http://127.0.0.1:")
-                || origin_str == "null"
-                || origin_str.starts_with(&format!("http://{}", state.config.addr))
-                || origin_str.starts_with(&format!("https://{}", state.config.addr));
-            
-            if !is_allowed {
-                return Err(StatusCode::FORBIDDEN);
-            }
+    if let Some(origin) = headers.get(axum::http::header::ORIGIN)
+        && let Ok(origin_str) = origin.to_str()
+    {
+        let is_allowed = origin_str.starts_with("http://localhost:")
+            || origin_str.starts_with("http://127.0.0.1:")
+            || origin_str == "null"
+            || origin_str.starts_with(&format!("http://{}", state.config.addr))
+            || origin_str.starts_with(&format!("https://{}", state.config.addr));
+        
+        if !is_allowed {
+            return Err(StatusCode::FORBIDDEN);
         }
     }
     Ok(ws.on_upgrade(move |socket| handle_hmr_socket(socket, state)))

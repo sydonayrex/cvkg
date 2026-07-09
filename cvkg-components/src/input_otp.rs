@@ -139,8 +139,9 @@ impl View for InputOTP {
             renderer.stroke_rounded_rect(box_rect, RADIUS_MD, border_color, border_width);
 
             // Character content
-            if i < char_count as u32 {
-                if let Some(ch) = self.value.chars().nth(i as usize) {
+            if i < char_count as u32
+                && let Some(ch) = self.value.chars().nth(i as usize)
+            {
                     let display = if self.masked { "•" } else { &ch.to_string() };
                     let (tw, _) = renderer.measure_text(display, FONT_LG);
                     renderer.draw_text_raw(
@@ -151,7 +152,6 @@ impl View for InputOTP {
                         theme::text(),
                     );
                 }
-            }
 
             // Click handler for focus
             if !self.disabled {

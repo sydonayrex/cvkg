@@ -60,8 +60,7 @@ impl CvkgHeadless {
 
     /// Build a headless instance with theme override.
     pub fn with_theme(view: impl View + 'static, viewport: Rect, theme: impl Into<String>) -> Self {
-        let mut options = HeadlessOptions::default();
-        options.theme = Some(theme.into());
+        let options = HeadlessOptions { theme: Some(theme.into()) };
         Self::with_options(view, viewport, options)
     }
 
@@ -169,8 +168,8 @@ impl CvkgHeadless {
             self.viewport.width as u32,
             self.viewport.height as u32
         );
-        if let Some(root) = self.vdom.root {
-            if let Some(node) = self.vdom.nodes.get(&root) {
+        if let Some(root) = self.vdom.root
+            && let Some(node) = self.vdom.nodes.get(&root) {
                 let attr = escape_attr(&node.component_type);
                 let _ = writeln!(
                     s,
@@ -178,7 +177,6 @@ impl CvkgHeadless {
                     node.layout.x, node.layout.y, node.layout.width, node.layout.height, attr
                 );
             }
-        }
         s.push_str("</svg>\n");
         s
     }
@@ -188,9 +186,9 @@ fn escape_attr(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
         match ch {
-            '&' => out.push_str("&"),
-            '<' => out.push_str("<"),
-            '>' => out.push_str(">"),
+            '&' => out.push('&'),
+            '<' => out.push('<'),
+            '>' => out.push('>'),
             '"' => out.push_str("\\\""),
             _ => out.push(ch),
         }

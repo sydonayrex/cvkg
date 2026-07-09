@@ -94,7 +94,7 @@ impl KvasirNode for ShadowNode {
         // Bind the shadow pipeline from the renderer
         pass.set_pipeline(ctx.renderer.shadow_pipeline());
 
-        for (_i, mesh) in self.mesh_instances.iter().enumerate() {
+        for mesh in self.mesh_instances.iter() {
             pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
             pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             pass.draw_indexed(0..mesh.index_count, 0, 0..1);

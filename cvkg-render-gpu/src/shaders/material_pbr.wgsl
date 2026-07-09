@@ -2,34 +2,9 @@
 //! Handles modes: 13 (PBR surface), 14 (raymarched reflections), 21 (raymarched cube).
 //! Separated from opaque to reduce register pressure from raymarching loops.
 //!
-//! NOTE: Common definitions (SceneUniforms, CsmUniforms, GiUniforms) are
-//! prepended via WGSL_COMMON string concatenation in init.rs. The
-//! literal `#include "common.wgsl"` directive was originally here but is
-//! NOT valid WGSL and would cause shader compilation to fail when this
-//! file is loaded standalone (e.g. via include_str!).
-//! Include common definitions for SceneUniforms, CsmUniforms, and GiUniforms
-
-struct VertexInput3D {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
-    @location(3) color: vec4<f32>,
-    @location(16) model_row0: vec4<f32>,
-    @location(17) model_row1: vec4<f32>,
-    @location(18) model_row2: vec4<f32>,
-};
-
-struct VertexOutput {
-    @builtin(position) clip_position: vec4<f32>,
-    @location(0) color: vec4<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
-    @location(3) world_pos: vec3<f32>,
-    @location(4) tex_index: u32,
-    @location(5) material_id: u32,
-    @location(6) slice: vec4<f32>,
-    @location(7) world_pos_3d: vec3<f32>,
-};
+//! NOTE: Common definitions (SceneUniforms, CsmUniforms, GiUniforms,
+//! VertexInput3D, VertexOutput) are prepended via WGSL_COMMON string
+//! concatenation in init.rs. Do NOT redefine them here.
 
 // Resources provided via group(3) = pbr_material_bind_group_layout
 @group(3) @binding(0) var t_shadow: texture_depth_2d;
@@ -185,7 +160,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
         if scene.ibl_enabled != 0u {
             let reflect_ws  = reflect(-view_dir, n);
-            let reflect_cs  = scene.proj * scene.view * vec4<f32>(in.world_pos + reflect_ws, 1.0);
+            let reflect_cs  = scene.proj * scene.view * vec4<f32>(in.world_pos_3d + reflect_ws, 1.0);
             let screen_uv   = reflect_cs.xy / reflect_cs.w * 0.5 + 0.5;
             let ibl_mip     = roughness * 4.0;
             let ibl_sample  = textureSampleLevel(t_ibl, s_ibl, screen_uv, ibl_mip);

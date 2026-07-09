@@ -85,7 +85,7 @@ impl GamepadState {
 
     /// Returns whether a button is currently pressed.
     pub fn button_pressed(&self, button: GamepadButton) -> bool {
-        self.buttons.get(&button).map_or(false, |v| *v > 0.0)
+        self.buttons.get(&button).is_some_and(|v| *v > 0.0)
     }
 
     /// Returns the pressure on a button, or 0.0 if not pressed.

@@ -69,7 +69,7 @@ impl KvasirNode for BloomExtractNode {
             &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&scene_view; 32]),
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&scene_view; ctx.renderer.capability_tier.texture_array_count as usize]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

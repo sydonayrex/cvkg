@@ -6,8 +6,7 @@ use crate::renderer::context_helpers::{
 use crate::renderer::pipelines::compile_render_pipelines;
 use crate::renderer::{GpuRenderer, QualityLevel};
 use crate::types::{
-    GpuParticle, HeadlessContext, MAX_INDICES, MAX_PARTICLES, MAX_VERTICES, ParticleUniforms,
-    SurfaceContext,
+    GpuParticle, HeadlessContext, ParticleUniforms, SurfaceContext,
 };
 use crate::{
     WGSL_BIFROST, WGSL_BLOOM, WGSL_COLOR_BLIND, WGSL_COMMON, WGSL_MATERIAL_GLASS,
@@ -160,21 +159,23 @@ impl GpuRenderer {
             tracing::info!("[GPU] Validation layer enabled (debug build)");
         }
 
+        let tier = crate::renderer::GpuCapabilityTier::detect(&adapter);
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Surtr Forge"),
                 required_features,
-                required_limits: wgpu::Limits {
-                    max_bindings_per_bind_group: 256,
-                    max_binding_array_elements_per_shader_stage: 256,
-                    ..wgpu::Limits::default()
-                },
+                required_limits: tier.required_limits.clone(),
                 memory_hints: wgpu::MemoryHints::default(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 trace: wgpu::Trace::Off,
             })
             .await
-            .expect("Failed to create Surtr device");
+            .map_err(|e| {
+                tracing::error!("[GPU] Failed to create device with tier {:?}: {e}", tier);
+                e
+            })
+            .expect("Failed to create Surtr device even after capability detection");
 
         let instance = Arc::new(instance);
         let adapter = Arc::new(adapter);
@@ -268,6 +269,7 @@ impl GpuRenderer {
             adapter,
             device,
             queue,
+            tier,
             Some((window, surface, config)),
             None,
         )
@@ -282,6 +284,7 @@ impl GpuRenderer {
         adapter: Arc<wgpu::Adapter>,
         device: Arc<wgpu::Device>,
         queue: Arc<wgpu::Queue>,
+        tier: crate::renderer::GpuCapabilityTier,
         surface_info: Option<(
             Arc<winit::window::Window>,
             wgpu::Surface<'static>,
@@ -405,7 +408,8 @@ impl GpuRenderer {
         #[cfg(target_arch = "wasm32")]
         let texture_array_count: Option<std::num::NonZeroU32> = None;
         #[cfg(not(target_arch = "wasm32"))]
-        let texture_array_count: Option<std::num::NonZeroU32> = std::num::NonZeroU32::new(32);
+        let texture_array_count: Option<std::num::NonZeroU32> =
+            std::num::NonZeroU32::new(tier.texture_array_count);
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -663,6 +667,7 @@ let gi_bind_group_layout =
         );
         let pipes = compile_render_pipelines(
             &device,
+            &tier,
             format,
             pipeline_cache.as_ref(),
             &texture_bind_group_layout,
@@ -680,12 +685,13 @@ let gi_bind_group_layout =
             msaa_sample_count,
         );
 
-        // Forge the Mega-Heim (4096x4096 RGBA for production batching)
+        // Forge the Mega-Heim (size from detected GPU tier; 4096x4096 RGBA on full-tier,
+        // 2048x2048 on reduced-tier integrated GPUs)
         let mega_heim_tex = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Surtr Mega-Heim"),
             size: wgpu::Extent3d {
-                width: 4096,
-                height: 4096,
+                width: tier.mega_heim_size,
+                height: tier.mega_heim_size,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -795,7 +801,7 @@ let gi_bind_group_layout =
         });
 
         let mut texture_views_list: Vec<wgpu::TextureView> =
-            (0..32).map(|_| dummy_view.clone()).collect();
+            (0..tier.texture_array_count).map(|_| dummy_view.clone()).collect();
         texture_views_list[0] = mega_heim_view_obj.clone();
 
         let views_refs: Vec<&wgpu::TextureView> = texture_views_list.iter().collect();
@@ -814,7 +820,7 @@ let gi_bind_group_layout =
             label: Some("Mega-Heim Bind Group"),
         });
 
-        let dummy_views_refs: Vec<&wgpu::TextureView> = (0..32).map(|_| &dummy_view).collect();
+        let dummy_views_refs: Vec<&wgpu::TextureView> = (0..tier.texture_array_count).map(|_| &dummy_view).collect();
         let dummy_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
@@ -910,7 +916,8 @@ let gi_bind_group_layout =
             ..wgpu::SamplerDescriptor::default()
         });
 
-        let mut texture_registry = LruCache::new(NonZeroUsize::new(31).unwrap());
+        let mut texture_registry =
+            LruCache::new(NonZeroUsize::new(tier.texture_registry_capacity).unwrap());
         let mut texture_bind_groups = Vec::new();
 
         // Index 0 is permanently reserved for the Mega-Heim atlas. Loaded images start at 1.
@@ -918,11 +925,12 @@ let gi_bind_group_layout =
         texture_bind_groups.push(mega_heim_bind_group.clone());
 
         let geometry_buffers =
-            crate::types::GeometryBuffers::forge(&device, MAX_VERTICES, MAX_INDICES);
+            crate::types::GeometryBuffers::forge(&device, tier.max_vertices, tier.max_indices);
 
         let instance_buffer_3d = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Surtr 3D Instance Buffer"),
-            size: (MAX_VERTICES / 4 * std::mem::size_of::<crate::vertex::InstanceData3D>()) as u64,
+            size: (tier.max_vertices / 4 * std::mem::size_of::<crate::vertex::InstanceData3D>())
+                as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -995,17 +1003,27 @@ let gi_bind_group_layout =
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Probe coefficients: 4096 * (4 * 3) floats = 192 KB. Lives in a
+        // Probe coefficients: tier.gi_probe_count * (4 * 3) floats. Lives in a
         // storage buffer (read-only). mn is `manifest_n` addressing;
-        // wgpu's default storage-buffer limit is 128 MB.
+        // shader declares `array<array<vec3<f32>, 4>>` (runtime-sized), so
+        // reducing the buffer size on the reduced tier just gives the GPU
+        // fewer probes to read -- no WGSL changes needed.
+        let probe_byte_len = (tier.gi_probe_count * 12 * std::mem::size_of::<f32>()) as u64;
+        let probe_init_len = tier
+            .gi_probe_count
+            .min(gi_defaults.probe_coefficients.len());
         let gi_probe_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Surtr GI Probe Buffer"),
-            contents: bytemuck::bytes_of(&gi_defaults.probe_coefficients),
+            contents: bytemuck::cast_slice(
+                &gi_defaults.probe_coefficients[..probe_init_len],
+            ),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         tracing::info!(
-            "[GPU] gi_probe_buffer created: {} bytes",
-            bytemuck::bytes_of(&gi_defaults.probe_coefficients).len(),
+            "[GPU] gi_probe_buffer created: {} bytes ({} probes, tier.gi_probe_count={})",
+            probe_byte_len,
+            tier.gi_probe_count,
+            tier.gi_probe_count,
         );
 
         // gradient_bind_group is built here (after gi_header_buffer/gi_probe_buffer
@@ -1089,6 +1107,7 @@ let gi_bind_group_layout =
                 &texture_bind_group_layout,
                 scale_factor,
                 msaa_sample_count,
+                tier.texture_array_count,
                 &mut registry,
             );
             surfaces.insert(window_id, ctx);
@@ -1101,6 +1120,7 @@ let gi_bind_group_layout =
                 f,
                 &env_bind_group_layout,
                 &texture_bind_group_layout,
+                tier.texture_array_count,
                 &mut registry,
                 msaa_sample_count,
             ));
@@ -1196,8 +1216,9 @@ let gi_bind_group_layout =
             mega_heim_tex,
             mega_heim_bind_group,
             config: crate::subsystems::RendererConfig::default(),
+            capability_tier: tier.clone(),
             text: crate::types::TextSubsystem::forge(NonZeroUsize::new(8192).unwrap()),
-            heim_packer: SkylinePacker::new(4096, 4096),
+            heim_packer: SkylinePacker::new(tier.mega_heim_size, tier.mega_heim_size),
             image_uv_registry: {
                 let mut cache = LruCache::new(NonZeroUsize::new(256).unwrap());
                 cache.put(
@@ -1214,6 +1235,7 @@ let gi_bind_group_layout =
             texture_registry,
             texture_views: texture_views_list,
             dummy_sampler,
+            text_sampler,
             dummy_view: dummy_view.clone(),
             dummy_depth_view: dummy_depth_view.clone(),
             dummy_depth_view_msaa,
@@ -1235,10 +1257,10 @@ let gi_bind_group_layout =
             texture_bind_groups,
             shared_elements: LruCache::new(NonZeroUsize::new(1024).unwrap()),
             geometry_buffers,
-            vertices: Vec::with_capacity(MAX_VERTICES),
-            indices: Vec::with_capacity(MAX_INDICES),
-            instance_data: Vec::with_capacity(MAX_VERTICES / 4),
-            instance_data_3d: Vec::with_capacity(MAX_VERTICES / 4),
+            vertices: Vec::with_capacity(tier.max_vertices),
+            indices: Vec::with_capacity(tier.max_indices),
+            instance_data: Vec::with_capacity(tier.max_vertices / 4),
+            instance_data_3d: Vec::with_capacity(tier.max_vertices / 4),
             instance_buffer_3d: Some(instance_buffer_3d),
             draw_calls: Vec::new(),
             current_texture_id: None,

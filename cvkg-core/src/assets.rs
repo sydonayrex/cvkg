@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
+type ListenerMap = Arc<Mutex<HashMap<PathBuf, Vec<Box<dyn AssetHotReloadListener>>>>>;
+
 /// Listener trait for receiving asset mutation events.
 pub trait AssetHotReloadListener: Send + Sync {
     /// Called when an asset at the specified path has been modified.
@@ -14,7 +16,7 @@ pub trait AssetHotReloadListener: Send + Sync {
 /// The centralized manager for registered, watched, and loaded assets.
 pub struct AssetServer {
     /// Registered listeners grouped by path for change notifications.
-    listeners: Arc<Mutex<HashMap<PathBuf, Vec<Box<dyn AssetHotReloadListener>>>>>,
+    listeners: ListenerMap,
     /// Background file watcher context/thread representation.
     _watcher_handle: Option<std::thread::JoinHandle<()>>,
 }
@@ -29,8 +31,7 @@ impl AssetServer {
     /// Creates a new AssetServer instance and spawns a background thread
     /// to poll watched file paths for changes every 500ms.
     pub fn new() -> Self {
-        let listeners: Arc<Mutex<HashMap<PathBuf, Vec<Box<dyn AssetHotReloadListener>>>>> = 
-            Arc::new(Mutex::new(HashMap::new()));
+        let listeners: ListenerMap = Arc::new(Mutex::new(HashMap::new()));
         let listeners_clone = Arc::clone(&listeners);
         
         let handle = std::thread::spawn(move || {
@@ -48,25 +49,24 @@ impl AssetServer {
                 };
                 
                 for path in paths_to_check {
-                    if let Ok(metadata) = std::fs::metadata(&path) {
-                        if let Ok(modified) = metadata.modified() {
-                            let is_changed = match last_modified.get(&path) {
-                                Some(&prev) => modified > prev,
-                                None => {
-                                    // Store initial time but don't trigger reload on startup
-                                    last_modified.insert(path.clone(), modified);
-                                    false
-                                }
-                            };
-                            if is_changed {
+                    if let Ok(metadata) = std::fs::metadata(&path)
+                        && let Ok(modified) = metadata.modified()
+                    {
+                        let is_changed = match last_modified.get(&path) {
+                            Some(&prev) => modified > prev,
+                            None => {
                                 last_modified.insert(path.clone(), modified);
-                                if let Ok(map) = listeners_clone.lock() {
-                                    if let Some(list) = map.get(&path) {
-                                        for listener in list {
-                                            let path_ref: &Path = &path;
-                                            listener.on_asset_changed(path_ref);
-                                        }
-                                    }
+                                false
+                            }
+                        };
+                        if is_changed {
+                            last_modified.insert(path.clone(), modified);
+                            if let Ok(map) = listeners_clone.lock()
+                                && let Some(list) = map.get(&path)
+                            {
+                                for listener in list {
+                                    let path_ref: &Path = &path;
+                                    listener.on_asset_changed(path_ref);
                                 }
                             }
                         }

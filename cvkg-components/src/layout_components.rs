@@ -604,7 +604,7 @@ impl View for Carousel {
             height: self.page_height,
         };
         // Current page content
-        let page_idx = self.current as usize;
+        let page_idx = (self.current as usize).min(self.count.saturating_sub(1));
         if let Some(label) = self.labels.get(page_idx) {
             let (tw, th) = renderer.measure_text(label, 20.0);
             renderer.draw_text_raw(

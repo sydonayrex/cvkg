@@ -1,4 +1,5 @@
-use crate::types::{GpuParticle, MAX_PARTICLES, ParticleUniforms};
+use crate::renderer::GpuCapabilityTier;
+use crate::types::{GpuParticle, ParticleUniforms};
 use crate::vertex::{InstanceData, InstanceData3D, Vertex, Vertex3D};
 use crate::{WGSL_PARTICLES, WGSL_TONEMAP, WGSL_SKINNING};
 
@@ -51,6 +52,7 @@ pub(crate) struct CompiledPipelines {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn compile_render_pipelines(
     device: &wgpu::Device,
+    tier: &GpuCapabilityTier,
     format: wgpu::TextureFormat,
     pipeline_cache: Option<&wgpu::PipelineCache>,
     texture_bind_group_layout: &wgpu::BindGroupLayout,
@@ -160,7 +162,7 @@ cache: pipeline_cache,
         bind_group_layouts: &[
             None,                                // group(0): unused
             None,                                // group(1): unused
-            Some(&berserker_bind_group_layout),  // group(2): scene/theme uniforms
+            Some(berserker_bind_group_layout),  // group(2): scene/theme uniforms
             None,                                // group(3): unused by fs_background
         ],
         immediate_size: 0,
@@ -170,13 +172,13 @@ cache: pipeline_cache,
         label: Some("Surtr Background Pipeline"),
         layout: Some(&background_layout),
         vertex: wgpu::VertexState {
-            module: &shader,
+            module: shader,
             entry_point: Some("vs_fullscreen"),
             buffers: &[],
             compilation_options: wgpu::PipelineCompilationOptions::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: &shader,
+            module: shader,
             entry_point: Some("fs_background"),
             targets: &[Some(wgpu::ColorTargetState {
                 format: wgpu::TextureFormat::Rgba16Float,
@@ -831,7 +833,7 @@ cache: pipeline_cache,
                     ty: wgpu::BufferBindingType::Storage { read_only: false },
                     has_dynamic_offset: false,
                     min_binding_size: wgpu::BufferSize::new(
-                        (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64,
+                        (tier.max_particles * std::mem::size_of::<GpuParticle>()) as u64,
                     ),
                 },
                 count: None,
@@ -874,7 +876,7 @@ cache: pipeline_cache,
 
     let particle_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Particle Storage Buffer"),
-        size: (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64,
+        size: (tier.max_particles * std::mem::size_of::<GpuParticle>()) as u64,
         usage: wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::VERTEX,
@@ -897,7 +899,7 @@ cache: pipeline_cache,
                 ty: wgpu::BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
                 min_binding_size: wgpu::BufferSize::new(
-                    (MAX_PARTICLES * std::mem::size_of::<GpuParticle>()) as u64,
+                    (tier.max_particles * std::mem::size_of::<GpuParticle>()) as u64,
                 ),
             },
             count: None,

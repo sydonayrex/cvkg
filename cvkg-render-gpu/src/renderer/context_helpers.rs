@@ -49,6 +49,7 @@ pub(crate) fn create_surface_context(
     texture_bind_group_layout: &wgpu::BindGroupLayout,
     scale_factor: f32,
     msaa_sample_count: u32,
+    texture_array_count: u32,
     registry: &mut crate::kvasir::registry::ResourceRegistry,
 ) -> SurfaceContext {
     let width = config.width;
@@ -318,7 +319,7 @@ pub(crate) fn create_surface_context(
         ],
     });
 
-    let scene_views: Vec<&wgpu::TextureView> = (0..32).map(|_| &scene_texture).collect();
+    let scene_views: Vec<&wgpu::TextureView> = (0..texture_array_count).map(|_| &scene_texture).collect();
     let scene_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: texture_bind_group_layout,
         entries: &[
@@ -367,6 +368,7 @@ pub(crate) fn create_surface_context(
 /// CONTRACT: Allocates matching offscreen textures for MSAA, depth, blur, and bloom, and registers
 /// them in the resource registry to ensure graph execution passes can look up their views.
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn create_headless_context(
     device: &wgpu::Device,
     width: u32,
@@ -374,6 +376,7 @@ pub(crate) fn create_headless_context(
     format: wgpu::TextureFormat,
     env_bind_group_layout: &wgpu::BindGroupLayout,
     texture_bind_group_layout: &wgpu::BindGroupLayout,
+    texture_array_count: u32,
     registry: &mut crate::kvasir::registry::ResourceRegistry,
     msaa_sample_count: u32,
 ) -> HeadlessContext {
@@ -655,7 +658,7 @@ pub(crate) fn create_headless_context(
         ],
     });
 
-    let scene_views: Vec<&wgpu::TextureView> = (0..32).map(|_| &scene_texture).collect();
+    let scene_views: Vec<&wgpu::TextureView> = (0..texture_array_count).map(|_| &scene_texture).collect();
     let scene_texture_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: texture_bind_group_layout,
         entries: &[

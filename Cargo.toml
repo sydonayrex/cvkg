@@ -43,9 +43,9 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.4"
+version = "0.3.5"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.95"
 license = "EPL-2.0"
 repository = "https://github.com/sydonayrex/cvkg"
 description = "Cyber Viking Kvasir Graph (CVKG) - High-fidelity agentic UI framework"

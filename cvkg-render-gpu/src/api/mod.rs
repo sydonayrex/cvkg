@@ -992,7 +992,7 @@ impl cvkg_core::Renderer for GpuRenderer {
         effect_type: &str,
         color: [f32; 4],
     ) {
-        use crate::types::{GpuParticle, MAX_PARTICLES};
+        use crate::types::GpuParticle;
 
         let dt = self.current_scene.delta_time;
         let now = std::time::Instant::now();
@@ -1007,7 +1007,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             _ => (30.0..120.0, 1.0..2.0, std::f32::consts::TAU),
         };
 
-        let count = count.min((MAX_PARTICLES - self.particles.count as usize) as u32);
+        let count = count.min((self.capability_tier.max_particles - self.particles.count as usize) as u32);
         if count == 0 {
             return;
         }
@@ -1107,8 +1107,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    // The layout requires 32 entries; only index 0 is the actual texture.
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&view; 32]),
+                    resource: wgpu::BindingResource::TextureViewArray(&vec![&view; self.capability_tier.texture_array_count as usize]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1191,6 +1190,14 @@ impl cvkg_core::Renderer for GpuRenderer {
     ) {
         let base_idx = self.vertices.len() as u32;
         let model_matrix = transform.to_matrix();
+
+        // Capacity guard: silently skip the entire submit if either buffer is
+        // full instead of writing past `instance_buffer_3d` or `vertices`.
+        if self.instance_data_3d.len() >= self.capability_tier.max_vertices / 4
+            || self.vertices.len() >= self.capability_tier.max_vertices
+        {
+            return;
+        }
 
         // Calculate view_depth for transparent sorting
         let view_depth =

@@ -3,7 +3,10 @@ use crate::form_validation::ValidationRule;
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD, RADIUS_SM};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+
+static NEXT_SELECT_ID: AtomicU64 = AtomicU64::new(1);
 
 /// Select/Dropdown component with keyboard navigation, dropdown popover, and focus ring.
 ///
@@ -21,6 +24,7 @@ pub struct Select<V> {
     is_open: bool,
     hover_index: Option<usize>,
     id_hash: u64,
+    pub(crate) on_change: Option<Arc<dyn Fn(V) + Send + Sync>>,
     /// Validation rules for this select
     pub(crate) rules: Vec<ValidationRule>,
     /// Error message when validation fails
@@ -38,19 +42,15 @@ impl<V: Clone> Select<V> {
     ///     .option("Option 2", "val2");
     /// ```
     pub fn new(placeholder: impl Into<String>) -> Self {
-        use std::hash::{Hash, Hasher};
-        let placeholder_string = placeholder.into();
-        let mut s = std::collections::hash_map::DefaultHasher::new();
-        "select".hash(&mut s);
-        placeholder_string.hash(&mut s);
-        let id_hash = s.finish();
+        let id_hash = NEXT_SELECT_ID.fetch_add(2, Ordering::Relaxed);
         Self {
-            placeholder: placeholder_string,
+            placeholder: placeholder.into(),
             options: Vec::new(),
             selected_index: None,
             is_open: false,
             hover_index: None,
             id_hash,
+            on_change: None,
             rules: Vec::new(),
             error_message: None,
         }
@@ -63,6 +63,11 @@ impl<V: Clone> Select<V> {
 
     pub fn selected(mut self, index: usize) -> Self {
         self.selected_index = Some(index);
+        self
+    }
+
+    pub fn on_change(mut self, cb: impl Fn(V) + Send + Sync + 'static) -> Self {
+        self.on_change = Some(Arc::new(cb));
         self
     }
 
@@ -99,7 +104,7 @@ impl<V: Clone> Select<V> {
     }
 }
 
-impl<V: Clone + Send> View for Select<V> {
+impl<V: Clone + Send + Sync + 'static> View for Select<V> {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
@@ -115,6 +120,12 @@ impl<V: Clone + Send> View for Select<V> {
             .and_then(|v| v.read().ok().map(|g| *g))
             .unwrap_or(self.is_open);
 
+        // Read selected index from system state
+        let selected_idx = cvkg_core::load_system_state()
+            .get_component_state::<usize>(self.id_hash.wrapping_add(2))
+            .and_then(|v| v.read().ok().map(|g| *g))
+            .or(self.selected_index);
+
         // Main select box
         let border_color = if is_open {
             theme::input_border_focus()
@@ -129,8 +140,7 @@ impl<V: Clone + Send> View for Select<V> {
             crate::draw_focus_ring(renderer, rect);
         }
 
-        let display_text = self
-            .selected_index
+        let display_text = selected_idx
             .and_then(|i| self.options.get(i))
             .map(|(l, _)| l.as_str())
             .unwrap_or(&self.placeholder);
@@ -139,7 +149,7 @@ impl<V: Clone + Send> View for Select<V> {
             rect.x + 12.0,
             rect.y + (rect.height - FONT_BASE) / 2.0,
             FONT_BASE,
-            if self.selected_index.is_some() {
+            if selected_idx.is_some() {
                 theme::text()
             } else {
                 theme::text_muted()
@@ -189,8 +199,7 @@ impl<V: Clone + Send> View for Select<V> {
 
                 let is_hovered = hover_idx == Some(i);
 
-                // Selected highlight
-                if self.selected_index == Some(i) {
+                if selected_idx == Some(i) {
                     renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::list_item_selected());
                 } else if is_hovered {
                     renderer.fill_rounded_rect(item_rect, RADIUS_SM, theme::list_item_hover());
@@ -201,7 +210,7 @@ impl<V: Clone + Send> View for Select<V> {
                     item_rect.x + 12.0,
                     item_rect.y + (item_height - FONT_BASE) / 2.0,
                     FONT_BASE,
-                    if self.selected_index == Some(i) {
+                    if selected_idx == Some(i) {
                         theme::accent()
                     } else {
                         theme::text()
@@ -222,8 +231,10 @@ impl<V: Clone + Send> View for Select<V> {
             );
         }
 
-        // Toggle on click
+        // Toggle on click + popover item commit
         let id_hash = self.id_hash;
+        let on_change = self.on_change.clone();
+        let options = self.options.clone();
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
@@ -243,14 +254,51 @@ impl<V: Clone + Send> View for Select<V> {
                             s.set_component_state(id_hash, !current);
                             s
                         });
+                        return;
+                    }
+
+                    // If open, check for popover item click
+                    let is_open = cvkg_core::load_system_state()
+                        .get_component_state::<bool>(id_hash)
+                        .and_then(|v| v.read().ok().map(|g| *g))
+                        .unwrap_or(false);
+                    if is_open {
+                        let item_height = 32.0;
+                        let popover_h = (options.len() as f32 * item_height).min(200.0);
+                        let popover_rect = Rect {
+                            x: rect.x,
+                            y: rect.y + rect.height + 4.0,
+                            width: rect.width,
+                            height: popover_h,
+                        };
+                        if x >= popover_rect.x
+                            && x <= popover_rect.x + popover_rect.width
+                            && y >= popover_rect.y
+                            && y <= popover_rect.y + popover_rect.height
+                        {
+                            let idx = ((y - popover_rect.y) / item_height) as usize;
+                            if idx < options.len() {
+                                cvkg_core::update_system_state(|s| {
+                                    let mut s = s.clone();
+                                    s.set_component_state(id_hash, false);
+                                    s.set_component_state(id_hash.wrapping_add(2), idx);
+                                    s
+                                });
+                                if let Some(cb) = on_change.as_ref() {
+                                    (cb)(options[idx].1.clone());
+                                }
+                            }
+                        }
                     }
                 }
             }),
         );
 
-        // Keyboard navigation
+        // Keyboard navigation + commit
         let options_count = self.options.len();
         let id_hash = self.id_hash;
+        let on_change = self.on_change.clone();
+        let options = self.options.clone();
         renderer.register_handler(
             "keydown",
             Arc::new(move |event| {
@@ -281,12 +329,23 @@ impl<V: Clone + Send> View for Select<V> {
                             });
                         }
                         "Enter" => {
+                            // Commit hovered selection and close
+                            let hovered = cvkg_core::load_system_state()
+                                .get_component_state::<usize>(id_hash.wrapping_add(1))
+                                .and_then(|v| v.read().ok().map(|g| *g));
                             cvkg_core::update_system_state(|s| {
                                 let mut s = s.clone();
-                                // Close the dropdown
                                 s.set_component_state(id_hash, false);
+                                if let Some(h) = hovered {
+                                    s.set_component_state(id_hash.wrapping_add(2), h);
+                                }
                                 s
                             });
+                            if let (Some(cb), Some(h)) = (on_change.as_ref(), hovered)
+                                && h < options.len()
+                            {
+                                (cb)(options[h].1.clone());
+                            }
                         }
                         "Escape" => {
                             cvkg_core::update_system_state(|s| {
@@ -358,6 +417,7 @@ pub struct Dropdown {
     pub(crate) selection: usize,
     pub(crate) options: Vec<String>,
     pub(crate) on_change: std::sync::Arc<dyn Fn(usize) + Send + Sync>,
+    id_hash: u64,
 }
 
 impl Dropdown {
@@ -366,10 +426,12 @@ impl Dropdown {
         options: Vec<String>,
         on_change: impl Fn(usize) + Send + Sync + 'static,
     ) -> Self {
+        let id_hash = NEXT_SELECT_ID.fetch_add(1, Ordering::Relaxed);
         Self {
             selection,
             options,
             on_change: std::sync::Arc::new(on_change),
+            id_hash,
         }
     }
 }
@@ -385,13 +447,7 @@ impl View for Dropdown {
         renderer.set_aria_role("combobox");
         renderer.set_aria_label("Dropdown selection");
 
-        let id_hash = {
-            use std::hash::{Hash, Hasher};
-            let mut s = std::collections::hash_map::DefaultHasher::new();
-            "dropdown".hash(&mut s);
-            self.options.len().hash(&mut s);
-            s.finish()
-        };
+        let id_hash = self.id_hash;
 
         // Lock-free read of expanded state
         let is_expanded = {

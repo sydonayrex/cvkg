@@ -2,21 +2,8 @@
 //! Renders 3D meshes to a depth texture from the light's perspective.
 //!
 //! NOTE: Common definitions (SceneUniforms, VertexInput3D, etc.) are
-//! prepended via WGSL_COMMON string concatenation in init.rs. The
-//! literal `#include "common.wgsl"` directive was originally here but is
-//! NOT valid WGSL and would cause shader compilation to fail when this
-//! file is loaded standalone.
-//! Include common definitions for SceneUniforms and VertexInput3D
-
-struct VertexInput3D {
-    @location(0) position: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) uv: vec2<f32>,
-    @location(3) color: vec4<f32>,
-    @location(16) model_row0: vec4<f32>,
-    @location(17) model_row1: vec4<f32>,
-    @location(18) model_row2: vec4<f32>,
-};
+//! prepended via WGSL_COMMON string concatenation in init.rs. Do NOT
+//! redefine VertexInput3D here.
 
 // Vertex shader for shadow map rendering (3D meshes)
 // Uses the same VertexInput3D as material_pbr.wgsl but outputs depth only
@@ -47,13 +34,13 @@ struct DualParaboloidOutput {
 struct DualParaboloidVertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
-    @location(16) model_row0: vec4<f32>,
-    @location(17) model_row1: vec4<f32>,
-    @location(18) model_row2: vec4<f32>,
+    @location(5) model_row0: vec4<f32>,
+    @location(6) model_row1: vec4<f32>,
+    @location(7) model_row2: vec4<f32>,
 };
 
 @vertex
-fn vs_paraboloid(in: DualParaboloidVertexInput, @builtin(instance_idx) idx: u32) -> DualParaboloidOutput {
+fn vs_paraboloid(in: DualParaboloidVertexInput, @builtin(instance_index) idx: u32) -> DualParaboloidOutput {
     // idx 0 = +Z hemisphere, idx 1 = -Z hemisphere
     // Transform to paraboloid space for point light shadow
     let model = mat4x4<f32>(

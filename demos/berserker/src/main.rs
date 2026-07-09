@@ -269,7 +269,7 @@ fn set_bnd(b: i32, x: &mut [f32]) {
     let n = FLUID_GRID_SIZE;
     for i in 1..n - 1 {
         // Left and right edges
-        x[0 * n + i] = if b == 1 { -x[1 * n + i] } else { x[1 * n + i] };
+        x[i] = if b == 1 { -x[1 * n + i] } else { x[1 * n + i] };
         x[(n - 1) * n + i] = if b == 1 {
             -x[(n - 2) * n + i]
         } else {
@@ -1169,7 +1169,7 @@ fn draw_dock(
 
 fn draw_glass_cards(
     r: &mut dyn cvkg_core::Renderer,
-    cards: &mut Vec<Card>,
+    cards: &mut [Card],
     w: f32,
     h: f32,
     rage: f32,

@@ -127,8 +127,8 @@ pub fn propagate_transforms(nodes: &mut [TransformNode3D]) -> Result<(), Hierarc
     }
 
     let mut queue: VecDeque<usize> = VecDeque::new();
-    for i in 0..n {
-        if in_degree[i] == 0 {
+    for (i, &deg) in in_degree.iter().enumerate() {
+        if deg == 0 {
             queue.push_back(i);
         }
     }

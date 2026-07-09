@@ -112,7 +112,7 @@ impl KvasirNode for SkinningNode {
 
             compute_pass.set_bind_group(0, &bind_group_0, &[]);
 
-            let workgroup_count = (vertex_count + 63) / 64;
+            let workgroup_count = vertex_count.div_ceil(64);
             compute_pass.dispatch_workgroups(workgroup_count, 1, 1);
         }
 

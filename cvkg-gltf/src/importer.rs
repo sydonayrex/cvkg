@@ -86,9 +86,9 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
             let reader = channel.reader(|buffer| Some(&buffers[buffer.index()]));
             let keyframes = reader.read_inputs().map(|i| i.collect()).unwrap_or_default();
             let values = reader.read_outputs().map(|o| match o {
-                gltf::animation::util::ReadOutputs::Translations(t) => t.flat_map(|val| val).collect(),
-                gltf::animation::util::ReadOutputs::Rotations(r) => r.into_f32().flat_map(|val| val).collect(),
-                gltf::animation::util::ReadOutputs::Scales(s) => s.flat_map(|val| val).collect(),
+                gltf::animation::util::ReadOutputs::Translations(t) => t.flatten().collect(),
+                gltf::animation::util::ReadOutputs::Rotations(r) => r.into_f32().flatten().collect(),
+                gltf::animation::util::ReadOutputs::Scales(s) => s.flatten().collect(),
                 gltf::animation::util::ReadOutputs::MorphTargetWeights(w) => w.into_f32().collect(),
             }).unwrap_or_default();
             channels.push(crate::types::AnimationChannel3D {
@@ -134,7 +134,7 @@ pub fn load_gltf<P: AsRef<Path>>(path: P) -> Result<Scene3D> {
 
 fn convert_material(gltf_mat: gltf::Material<'_>) -> Material3D {
     let pbr = gltf_mat.pbr_metallic_roughness();
-    let base_color: [f32; 4] = pbr.base_color_factor().into();
+    let base_color: [f32; 4] = pbr.base_color_factor();
     let base_color_texture: Option<String> = pbr
         .base_color_texture()
         .map(|info| info.texture().name().unwrap_or("base_color").to_string());
@@ -144,7 +144,7 @@ fn convert_material(gltf_mat: gltf::Material<'_>) -> Material3D {
     let metallic_roughness_texture: Option<String> = pbr
         .metallic_roughness_texture()
         .map(|info| info.texture().name().unwrap_or("orm").to_string());
-    let emissive: [f32; 3] = gltf_mat.emissive_factor().into();
+    let emissive: [f32; 3] = gltf_mat.emissive_factor();
 
     Material3D {
         base_color,
@@ -325,7 +325,7 @@ fn flatten_node(
     node: gltf::Node<'_>,
     parent: Option<usize>,
     mesh_prim_offset: &[usize],
-    cameras: &[Camera3D],
+    _cameras: &[Camera3D],
     nodes: &mut Vec<Node3D>,
 ) -> usize {
     let index = nodes.len();
@@ -372,7 +372,7 @@ fn flatten_node(
 
     let children: Vec<usize> = node
         .children()
-        .map(|child| flatten_node(child, Some(index), mesh_prim_offset, cameras, nodes))
+        .map(|child| flatten_node(child, Some(index), mesh_prim_offset, _cameras, nodes))
         .collect();
 
     nodes.push(Node3D {

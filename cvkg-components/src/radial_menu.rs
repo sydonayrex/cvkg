@@ -158,10 +158,9 @@ impl RadialMenu {
 
         // Calculate angle (atan2 returns -π..π, 0 = east)
         let mut angle = dy.atan2(dx);
-        // Offset so 0 = 12 o'clock (north), clockwise positive
+        // Apply user offset then shift to 0 = 12 o'clock (north)
+        angle -= self.angle_offset;
         angle -= std::f32::consts::FRAC_PI_2;
-        // Add user offset
-        angle += self.angle_offset;
 
         // Normalize to 0..2π
         while angle < 0.0 {

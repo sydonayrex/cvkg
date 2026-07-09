@@ -19,6 +19,8 @@ pub(crate) mod pipelines;
 pub(crate) mod svg;
 #[cfg(test)]
 pub(crate) mod tests;
+pub(crate) mod capability;
+pub(crate) use capability::GpuCapabilityTier;
 
 /// Material ID constants used in vertex `material_id` and DrawMaterial routing.
 /// These map to shader material indices and control per-draw-call pipeline selection.
@@ -110,6 +112,9 @@ pub struct GpuRenderer {
     pub(crate) texture_registry: LruCache<String, u32>,
     pub(crate) texture_views: Vec<wgpu::TextureView>,
     pub(crate) dummy_sampler: wgpu::Sampler,
+    /// Linear filtering sampler used for sampling textures/atlases in the Mega-Heim.
+    /// Needs to be kept alive for the lifetime of GpuRenderer so that bind groups referencing it remain valid.
+    pub(crate) text_sampler: wgpu::Sampler,
     /// Dummy 1x1 white texture view.
     pub(crate) dummy_view: wgpu::TextureView,
     /// Dummy single-sampled depth texture view.
@@ -442,6 +447,10 @@ pub struct GpuRenderer {
     pub(crate) config: crate::subsystems::RendererConfig,
     /// P1-10: Quality level controlling MSAA sample count.
     pub(crate) quality_level: QualityLevel,
+    /// Detected GPU capability tier -- derived from `adapter.limits()` at
+    /// startup, then threaded into every buffer/texture/atlas size.
+    /// See `renderer/capability.rs` for the detection logic.
+    pub(crate) capability_tier: GpuCapabilityTier,
     /// Thread-safe bind group cache to avoid per-frame allocations during render passes.
     pub(crate) bind_group_cache: std::sync::Mutex<
         std::collections::HashMap<
@@ -857,6 +866,11 @@ impl GpuRenderer {
         formats[0]
     }
 
+    /// rebuild_texture_array_bind_group -- Rebuilds the texture array bind group.
+    ///
+    /// WHY: Recreates the bind group binding the Mega-Heim atlas and texture array after
+    /// VRAM compaction or new textures are loaded.
+    /// CONTRACT: Re-binds all texture views and the text sampler.
     pub(crate) fn rebuild_texture_array_bind_group(&mut self) {
         let views: Vec<&wgpu::TextureView> = self.texture_views.iter().collect();
         self.mega_heim_bind_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -868,7 +882,7 @@ impl GpuRenderer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.dummy_sampler),
+                    resource: wgpu::BindingResource::Sampler(&self.text_sampler),
                 },
             ],
             label: Some("Mega-Heim Rebuilt Bind Group"),
@@ -1438,27 +1452,23 @@ impl GpuRenderer {
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                 | wgpu::Features::TEXTURE_BINDING_ARRAY);
 
+        let tier = GpuCapabilityTier::detect(&adapter);
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Surtr Headless Forge"),
                 required_features,
-                required_limits: wgpu::Limits {
-                    max_bindings_per_bind_group: adapter
-                        .limits()
-                        .max_bindings_per_bind_group
-                        .min(256),
-                    max_binding_array_elements_per_shader_stage: adapter
-                        .limits()
-                        .max_binding_array_elements_per_shader_stage
-                        .min(256),
-                    ..wgpu::Limits::default()
-                },
+                required_limits: tier.required_limits.clone(),
                 memory_hints: wgpu::MemoryHints::default(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 trace: wgpu::Trace::Off,
             })
             .await
-            .expect("Failed to create Surtr device");
+            .map_err(|e| {
+                tracing::error!("[GPU] Failed to create headless device with tier {:?}: {e}", tier);
+                e
+            })
+            .expect("Failed to create Surtr device even after capability detection");
 
         let instance = Arc::new(instance);
         let adapter = Arc::new(adapter);
@@ -1478,6 +1488,7 @@ impl GpuRenderer {
             adapter,
             device,
             queue,
+            tier,
             None,
             Some((width, height, wgpu::TextureFormat::Rgba8UnormSrgb)),
         )
@@ -1595,11 +1606,14 @@ impl GpuRenderer {
             .await
             .expect("No compatible adapter found");
 
+        let tier = GpuCapabilityTier::detect(&adapter);
+
         Self::forge_internal(
             Arc::new(instance),
             Arc::new(adapter),
             device,
             queue,
+            tier,
             None,
             Some((width, height, wgpu::TextureFormat::Rgba8UnormSrgb)),
         )

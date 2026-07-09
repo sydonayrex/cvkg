@@ -529,7 +529,7 @@ impl SceneGraph {
         // Populate actual parents from children lists
         for (parent_id, node) in &self.nodes {
             for child_id in &node.children {
-                if self.nodes.get(child_id).map_or(false, |n| n.is_3d) {
+                if self.nodes.get(child_id).is_some_and(|n| n.is_3d) {
                     all_parents.insert(*child_id, Some(*parent_id));
                 }
             }
@@ -538,7 +538,7 @@ impl SceneGraph {
         // Return only 3D nodes
         all_parents
             .into_iter()
-            .filter(|(id, _)| self.nodes.get(id).map_or(false, |n| n.is_3d))
+            .filter(|(id, _)| self.nodes.get(id).is_some_and(|n| n.is_3d))
             .collect()
     }
 }

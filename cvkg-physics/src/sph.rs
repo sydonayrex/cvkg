@@ -35,6 +35,7 @@ impl SphConfig {
     ///
     /// # Errors
     /// Returns `Err(String)` if any parameter is out of range.
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         rest_density: f32,
         gas_constant: f32,
