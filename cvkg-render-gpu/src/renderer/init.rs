@@ -1311,8 +1311,6 @@ let gi_bind_group_layout =
             particle_render_bgl: pipes.particle_render_bgl,
             particle_render_bind_group: None,
             particle_compute_bind_group: None,
-            vnode_stack: Vec::new(),
-            event_handlers: std::collections::HashMap::new(),
             staging_belt,
             staging_command_buffers: Vec::new(),
             glass_output_bind_group_layout,

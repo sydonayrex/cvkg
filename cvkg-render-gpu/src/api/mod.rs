@@ -833,7 +833,9 @@ impl cvkg_core::Renderer for GpuRenderer {
             slice_depth: self.slice_stack.len() as u32,
             shadow_depth: self.shadow_stack.len() as u32,
             transform_depth: self.transform_stack.len() as u32,
-            vnode_depth: self.vnode_stack.len() as u32,
+            // GpuRenderer no longer tracks vnode depth directly; cvkg-vdom
+            // owns node hierarchy. Field kept for snapshot-struct compat.
+            vnode_depth: 0,
         }
     }
 
@@ -854,9 +856,7 @@ impl cvkg_core::Renderer for GpuRenderer {
         while self.transform_stack.len() as u32 > snap.transform_depth {
             self.transform_stack.pop();
         }
-        while self.vnode_stack.len() as u32 > snap.vnode_depth {
-            self.vnode_stack.pop();
-        }
+        // vnode_depth is always 0 now; nothing to restore here.
     }
 
     fn push_opacity(&mut self, opacity: f32) {
@@ -1476,24 +1476,27 @@ impl cvkg_core::Renderer for GpuRenderer {
         }
     }
 
-    fn push_vnode(&mut self, rect: Rect, name: &'static str) {
-        self.vnode_stack.push((rect, name));
-    }
-
-    fn pop_vnode(&mut self) {
-        self.vnode_stack.pop();
-    }
-
-    fn register_handler(
-        &mut self,
-        event_type: &str,
-        handler: std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>,
-    ) {
-        self.event_handlers
-            .entry(event_type.to_string())
-            .or_insert_with(Vec::new)
-            .push(handler);
-    }
+    // ---- VDOM trait overrides intentionally deleted ----
+    //
+    // `push_vnode`, `pop_vnode`, and `register_handler` previously wrote
+    // into GpuRenderer's flat maps (`vnode_stack`, `event_handlers`),
+    // which had no node identity, no hit-testing, and caused every
+    // component to self-gate by event coordinates.
+    //
+    // The Renderer trait defines default no-op impls for all three
+    // (`cvkg-core/src/renderer_trait.rs:599,613,616`), so removing the
+    // overrides here:
+    //   1. Forces all callers to route event registration through the
+    //      proper owner: `cvkg_vdom::VDom` (via `VNodeRenderer`).
+    //   2. Removes the parallel/competing event registry that this
+    //      crate's own README disclaims ownership of.
+    //   3. Stops re-allocating the same N handler closures every frame
+    //      (they were cleared in `begin_frame` and pushed again).
+    //
+    // See `docs/nodal-coordinate-migration.md` Phase 0. Production
+    // rendering is now expected to wrap `GpuRenderer` in a
+    // `VNodeRenderer` pass for event registration; the most recent
+    // NativeRenderer already does this via `VDom::build`/`VDom::diff`.
 
     fn load_svg(&mut self, name: &str, svg_data: &[u8]) {
         GpuRenderer::load_svg(self, name, svg_data);
@@ -1565,24 +1568,15 @@ impl cvkg_core::Renderer for GpuRenderer {
 // ── Inherent methods on GpuRenderer (not part of the Renderer trait) ──
 
 impl GpuRenderer {
-    /// Clear all registered event handlers. Call at the start of each frame
-    /// before re-rendering the component tree.
-    pub fn clear_event_handlers(&mut self) {
-        self.event_handlers.clear();
-    }
-
     /// Phase 2.1: clear the text shaping cache at the start of each frame.
     pub fn clear_text_cache(&mut self) {
         self.clear_text_cache_impl();
     }
 
-    /// Get all registered event handlers for a specific event type.
-    pub fn get_handlers(
-        &self,
-        event_type: &str,
-    ) -> Option<&Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>> {
-        self.event_handlers.get(event_type)
-    }
+    // `clear_event_handlers` and `get_handlers` were deleted along with
+    // the flat `event_handlers` map. Use `cvkg_vdom::VDom::dispatch_event`
+    // / `VDom::event_handlers` instead. See docs/nodal-coordinate-migration.md
+    // Phase 0.
 
     /// Compute per-vertex transform values from the current matrix.
     /// Extracts translation, scale, rotation, and skew from the affine matrix

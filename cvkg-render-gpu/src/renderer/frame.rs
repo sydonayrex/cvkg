@@ -27,8 +27,6 @@ impl GpuRenderer {
         self.portal_regions.clear();
         self.hologram_instances.clear();
         self.current_z = 0.0;
-        self.vnode_stack.clear();
-        self.event_handlers.clear();
         // P2-13: Always update the volumetric time uniform, even if the
         // volumetric pass is skipped by the frame budget system. This prevents
         // a visible time pop when the pass resumes after being skipped.

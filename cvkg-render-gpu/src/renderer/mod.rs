@@ -401,14 +401,9 @@ pub struct GpuRenderer {
     pub(crate) particle_render_bind_group: Option<wgpu::BindGroup>,
     pub(crate) particle_compute_bind_group: Option<wgpu::BindGroup>,
 
-    // VDOM node stack for hierarchy tracking
-    pub(crate) vnode_stack: Vec<(Rect, &'static str)>,
-
-    /// Event handlers registered during render passes.
-    pub(crate) event_handlers: std::collections::HashMap<
-        String,
-        Vec<std::sync::Arc<dyn Fn(cvkg_core::Event) + Send + Sync>>,
-    >,
+    // VDOM hierarchy and node-target event handlers live in `cvkg-vdom`,
+    // which is the single owner of those concepts. `GpuRenderer` only
+    // draws pixels. See `docs/nodal-coordinate-migration.md` Phase 0.
 
     // Error tracking (set via RendererErrorHandler trait)
     pub(crate) render_error_count: u64,
