@@ -426,6 +426,16 @@ impl CrowdSimulation {
             let mut orca_planes: Vec<(Vec2, Vec2)> = Vec::new();
 
             // Agent-agent ORCA constraints
+            //
+            // Standard RVO2 (van den Berg 2008, ported from dodgy's Rust
+            // implementation but rewritten from first principles here).
+            //
+            // The velocity obstacle for the relative velocity w is a
+            // truncated circle centered at rel_pos/time_horizon with
+            // radius (r_i+r_j)/time_horizon. We pick the closest
+            // point OUTSIDE this VO as `vo_point`, then encode the
+            // resulting "agent i should not venture into the cone" as
+            // a half-plane on agent i's own absolute velocity.
             for j in 0..n {
                 if i == j {
                     continue;
@@ -437,83 +447,89 @@ impl CrowdSimulation {
                 let combined_radius = agent.radius + other.radius;
                 let combined_radius_sq = combined_radius * combined_radius;
 
-                // Check if already colliding
+                // ---- Already penetrating: push apart using an ORCA-style
+                //      half-plane that both agents agree on (each takes
+                //      half responsibility per RVO2 reciprocity). ----
                 if dist_sq < combined_radius_sq {
-                    // Push apart: use normal pointing away from other agent
-                    let dist = dist_sq.sqrt().max(0.001);
+                    let dist = dist_sq.sqrt().max(1e-3);
                     let normal = rel_pos / dist;
-                    let u = (normal * (combined_radius - dist) / dt.max(0.001) - rel_vel)
-                        .max(Vec2::ZERO);
-                    orca_planes.push((agent.velocity + u * 0.5, normal));
+                    // The push velocity needed to clear collision within
+                    // one time step (dt), applied symmetrically.
+                    let push = normal * (combined_radius - dist) / dt.max(1e-3);
+                    let point = other.velocity + push * 0.5;
+                    orca_planes.push((point, normal));
                     continue;
                 }
 
-                // Velocity obstacle computation
-                let w = rel_vel - rel_pos / self.time_horizon;
-                let w_len_sq = w.length_squared();
-
-                // Check if relative velocity is inside the velocity obstacle
-                let dot = w.dot(rel_pos);
-                if dot < 0.0
-                    && dot * dot
-                        > combined_radius_sq * w_len_sq / (self.time_horizon * self.time_horizon)
-                {
-                    // Project onto truncated cone boundary
-                    let leg = (dist_sq - combined_radius_sq).sqrt();
-                    let normal = if rel_pos.x * rel_pos.y >= 0.0 {
-                        Vec2::new(
-                            rel_pos.x * leg - rel_pos.y * combined_radius,
-                            rel_pos.x * combined_radius + rel_pos.y * leg,
-                        ) / dist_sq
-                    } else {
-                        Vec2::new(
-                            rel_pos.x * leg + rel_pos.y * combined_radius,
-                            -rel_pos.x * combined_radius + rel_pos.y * leg,
-                        ) / dist_sq
-                    };
-                    let u = (normal * w.dot(normal) - w) * 0.5;
-                    orca_planes.push((agent.velocity + u, normal.normalize_or_zero()));
-                } else {
-                    // Use leg-based ORCA planes
-                    let leg = (dist_sq - combined_radius_sq).sqrt().max(0.001);
-
-                    // Left leg
-                    let left_normal = Vec2::new(
-                        rel_pos.x * leg - rel_pos.y * combined_radius,
-                        rel_pos.x * combined_radius + rel_pos.y * leg,
-                    ) / dist_sq;
-                    let left_leg = Vec2::new(
-                        rel_pos.x * leg - rel_pos.y * combined_radius,
-                        rel_pos.x * combined_radius + rel_pos.y * leg,
-                    ) / dist_sq;
-                    let left_vel = rel_vel
-                        - left_leg * (rel_vel.dot(left_leg) / left_leg.length_squared().max(0.001));
-                    if left_vel.dot(left_normal) < 0.0 {
-                        let u = (left_normal * (-rel_vel.dot(left_normal))
-                            - (rel_vel - left_normal * rel_vel.dot(left_normal)))
-                            * 0.5;
-                        orca_planes.push((agent.velocity + u, left_normal.normalize_or_zero()));
-                    }
-
-                    // Right leg
-                    let right_normal = Vec2::new(
-                        rel_pos.x * leg + rel_pos.y * combined_radius,
-                        -rel_pos.x * combined_radius + rel_pos.y * leg,
-                    ) / dist_sq;
-                    let right_leg = Vec2::new(
-                        rel_pos.x * leg + rel_pos.y * combined_radius,
-                        -rel_pos.x * combined_radius + rel_pos.y * leg,
-                    ) / dist_sq;
-                    let right_vel = rel_vel
-                        - right_leg
-                            * (rel_vel.dot(right_leg) / right_leg.length_squared().max(0.001));
-                    if right_vel.dot(right_normal) < 0.0 {
-                        let u = (right_normal * (-rel_vel.dot(right_normal))
-                            - (rel_vel - right_normal * rel_vel.dot(right_normal)))
-                            * 0.5;
-                        orca_planes.push((agent.velocity + u, right_normal.normalize_or_zero()));
-                    }
+                // ---- Standard avoidance via truncated-circle VO. ----
+                if self.time_horizon <= 0.0 {
+                    continue;
                 }
+                let inv_th = 1.0 / self.time_horizon;
+                let cutoff_center = rel_pos * inv_th;
+                let cutoff_radius = combined_radius * inv_th;
+                let v_to_center = rel_vel - cutoff_center;
+                let v_to_center_sq = v_to_center.length_squared();
+                let dot = v_to_center.dot(rel_pos);
+
+                let (vo_point, vo_normal, inside_vo);
+                // Is the relative velocity past the cut-off circle's tangent
+                // points? If dot < 0 AND the velocity is far enough that the
+                // tangent-line condition holds, project onto the cut-off
+                // circle directly. Otherwise project onto the shadow (the
+                // extra constraint for scaled-up velocities).
+                if dot < 0.0
+                    && dot * dot > combined_radius_sq * v_to_center_sq.max(1e-12)
+                {
+                    let raw_normal = v_to_center.normalize_or_zero();
+                    vo_point = raw_normal * cutoff_radius + cutoff_center;
+                    vo_normal = if raw_normal.length_squared() > 1e-12 {
+                        raw_normal.normalize()
+                    } else {
+                        rel_pos.normalize_or_zero()
+                    };
+                    inside_vo = v_to_center_sq < cutoff_radius * cutoff_radius;
+                } else {
+                    // Shadow projection: tangent-leg math.
+                    let tangent_leg = (dist_sq - combined_radius_sq).sqrt().max(1e-4);
+                    // Side of the rel_vel w.r.t. the rel_pos.
+                    let det = rel_pos.x * v_to_center.y - rel_pos.y * v_to_center.x;
+                    let side = if det == 0.0 {
+                        1.0
+                    } else {
+                        det.signum()
+                    };
+                    // shadow_dir = (rel_pos*tangent_leg*side - rel_pos.perp()*combined_radius)
+                    // (relative to rel-pos: 90 deg rotated components x,y)
+                    let shadow_dir = Vec2::new(
+                        rel_pos.x * tangent_leg * side - rel_pos.y * combined_radius,
+                        rel_pos.x * combined_radius + rel_pos.y * tangent_leg * side,
+                    ) / dist_sq;
+                    let s_len_sq = shadow_dir.length_squared();
+                    let shadow_unit = if s_len_sq > 1e-12 {
+                        shadow_dir / s_len_sq.sqrt()
+                    } else {
+                        rel_pos.normalize_or_zero()
+                    };
+                    vo_normal = shadow_unit.perp();
+                    vo_point = rel_vel.project_onto_normalized(shadow_unit);
+                    inside_vo =
+                        (rel_vel.x * shadow_unit.y - rel_vel.y * shadow_unit.x) >= 0.0;
+                }
+
+                // avoidance adjustment in relative-velocity space, then
+                // convert to absolute v_i space.
+                let u = vo_point - rel_vel;
+                let responsibility = if inside_vo { 0.5 } else { 1.0 };
+                let point = agent.velocity + u * responsibility;
+                // For our LP convention (feasible side is dot >= 0 with normal
+                // pointing OUTWARD from the constraint), the half-plane
+                // normal is vo_normal rotated 90 deg such that point+v_i is
+                // feasible. Using -vo_normal.perp() matches the dodgy port's
+                // direction convention so that the LP solver places the
+                // feasible velocity region on the correct side.
+                let line_normal = Vec2::new(vo_normal.y, -vo_normal.x);
+                orca_planes.push((point, line_normal));
             }
 
             // Agent-obstacle ORCA constraints
@@ -567,32 +583,217 @@ impl CrowdSimulation {
 
     /// Solve the ORCA linear program for a single agent.
     /// Finds the velocity closest to `pref_vel` that lies on the feasible
-    /// side of all half-planes defined by `(point, normal)`.
+    /// side of all half-planes defined by `(point, normal)` and within
+    /// `max_speed` of the origin.
+    ///
+    /// Uses the RVO2-style 2D linear program from dodgy/rvo2 (van den Berg
+    /// 2008, ported): a 2D LP over a `max_speed` disk intersected with the
+    /// half-planes, solved by sequential line-restricted sub-problems.
+    /// Falls back to least-penetration relaxation (`solve_orca_3d`) when
+    /// the 2D solver leaves a residual violation.
     fn solve_orca(pref_vel: &Vec2, planes: &[(Vec2, Vec2)]) -> Vec2 {
-        let mut result = *pref_vel;
+        // Max speed is taken from preferred velocity magnitude (the
+        // caller computes pref_vel at agent.max_speed already).
+        let max_speed_sq = pref_vel.length_squared();
+        if max_speed_sq <= 0.0 {
+            return Vec2::ZERO;
+        }
+        let radius = max_speed_sq.sqrt();
 
-        for (point, normal) in planes {
-            let n = if normal.length_squared() < 1e-10 {
-                continue;
+        // Normalize the constraint set (drop numerically-degenerate ones).
+        let constraints: Vec<Line> = planes
+            .iter()
+            .filter_map(|(p, n)| {
+                let len_sq = n.length_squared();
+                if len_sq < 1e-10 {
+                    None
+                } else {
+                    // Convention: half-plane is (v - point) · normal >= 0.
+                    // In dodgy: the `direction` normal is OUTWARD and the
+                    // feasible region has `determinant(direction, p - v) <= 0`.
+                    // We translate to that form here so the LP solver below
+                    // can match the RVO2 reference exactly.
+                    Some(Line {
+                        point: *p,
+                        direction: n / len_sq.sqrt(),
+                    })
+                }
+            })
+            .collect();
+
+        if constraints.is_empty() {
+            *pref_vel
+        } else if let Some(solution) =
+            solve_orca_2d(&constraints, radius, *pref_vel)
+        {
+            solution
+        } else {
+            // Infeasible: relax to the least-penetrating point.
+            let partial = solve_orca_partial(&constraints, radius, *pref_vel);
+            solve_orca_3d(&constraints, partial)
+        }
+    }
+}
+
+/// Internal: a half-plane LP constraint with a unit `direction`.
+#[derive(Clone, Copy)]
+struct Line {
+    point: Vec2,
+    direction: Vec2,
+}
+
+/// 2D linear program: closest velocity to `pref` inside `disk(radius)` and
+/// outside all `lines`. Each line's feasible side is the counter-clockwise
+/// side of `point + direction*·t` (i.e., det(direction, v - point) <= 0).
+/// Returns `None` if no feasible point exists (caller should relax).
+fn solve_orca_2d(lines: &[Line], radius: f32, pref: Vec2) -> Option<Vec2> {
+    let mut best = if pref.length_squared() > radius * radius {
+        pref.normalize() * radius
+    } else {
+        pref
+    };
+
+    // Feasible side for our convention:
+    //   ((v - point) · normal >= 0)   (in incoming ORCA line form)
+    //   = det(direction, v - point) >= 0  (in dodgy's CCW form, after the
+    //                                       mapping direction = (ny, -nx))
+    for (i, line) in lines.iter().enumerate() {
+        if det(line.direction, best - line.point) >= 0.0 {
+            continue;
+        }
+
+        // Otherwise we need to restrict to the line itself (and earlier
+        // lines), and within the disk of `radius`.
+        let new_best = solve_orca_along_line(line, radius, &lines[..i], pref)?;
+        best = new_best;
+    }
+    Some(best)
+}
+
+/// Best `point` along `line` (and within radius disk), given prior
+/// constraints that should already be satisfied by `current_best`. We use
+/// `pref` to derive the optimal point along the line (closest to `pref`).
+fn solve_orca_along_line(
+    line: &Line,
+    radius: f32,
+    prior: &[Line],
+    pref: Vec2,
+) -> Option<Vec2> {
+    // Intersect `line` with the radius disk. The standard RVO2 derivation
+    // (line as origin + t*direction), gives:
+    //   a = line.direction; c = line.point
+    //   t^2 + 2 (-a·c) t + (c·c - radius^2) = 0
+    // analogous for `best = c + t*direction` with `|best|^2 = radius^2`.
+    let line_dot_product = line.point.dot(line.direction);
+    let disc = line_dot_product * line_dot_product + radius * radius
+        - line.point.dot(line.point);
+    if disc < 0.0 {
+        return None;
+    }
+    let sq = disc.sqrt();
+    let mut t_left = -line_dot_product - sq;
+    let mut t_right = -line_dot_product + sq;
+    for p in prior {
+        let direction_determinant = det(line.direction, p.direction);
+        let numerator =
+            det(p.direction, line.point - p.point);
+        if direction_determinant.abs() <= 0.00001 {
+            if numerator < 0.0 {
+                return None;
+            }
+            continue;
+        }
+        let t = numerator / direction_determinant;
+        if direction_determinant >= 0.0 {
+            t_right = t_right.min(t);
+        } else {
+            t_left = t_left.max(t);
+        }
+        if t_left > t_right {
+            return None;
+        }
+    }
+    let t = line.direction.dot(pref - line.point).clamp(t_left, t_right);
+    Some(line.point + t * line.direction)
+}
+
+/// Solve 2D LP with non-rigid line relaxation. `prior` is `lines[..rigid_len]`
+/// and is treated as non-relaxable. Returns the partial best found just
+/// before a non-relaxable line failed feasibility.
+fn solve_orca_partial(lines: &[Line], radius: f32, pref: Vec2) -> Vec2 {
+    let mut best = if pref.length_squared() > radius * radius {
+        pref.normalize() * radius
+    } else {
+        pref
+    };
+    for (i, line) in lines.iter().enumerate() {
+        // Infeasible if det(direction, best - point) < 0 (CCW convention).
+        if det(line.direction, best - line.point) < 0.0 {
+            if let Some(new_best) =
+                solve_orca_along_line(line, radius, &lines[..i], pref)
+            {
+                best = new_best;
             } else {
-                normal.normalize()
-            };
-            // Check if current result violates this plane
-            let diff = result - *point;
-            if diff.dot(n) < 0.0 {
-                // Project onto the plane boundary
-                result -= n * diff.dot(n);
+                return best;
             }
         }
-
-        // Clamp to max speed (use a reasonable default)
-        let max_speed_sq = pref_vel.length_squared();
-        if result.length_squared() > max_speed_sq && max_speed_sq > 0.0 {
-            result = result.normalize() * max_speed_sq.sqrt();
-        }
-
-        result
     }
+    best
+}
+
+/// 3D-feasible relaxation: when some non-rigid lines can't be satisfied,
+/// find the point that penetrates them all the LEAST.
+fn solve_orca_3d(lines: &[Line], partial: Vec2) -> Vec2 {
+    let mut best = partial;
+    let mut deepest_penetration: f32 = 0.0;
+    for (i, line) in lines.iter().enumerate() {
+        if det(line.direction, line.point - best) <= deepest_penetration {
+            continue;
+        }
+        // Build the new constraint set: differences of this line with prior
+        // lines, normalized. Skip parallel constraints.
+        let mut new_constraints: Vec<Line> = Vec::with_capacity(i);
+        for prior in &lines[..i] {
+            let intersection_det = det(line.direction, prior.direction);
+            if intersection_det.abs() <= 0.00001 {
+                if line.direction.dot(prior.direction) > 0.0 {
+                    continue;
+                }
+                let intersection_point = (line.point + prior.point) * 0.5;
+                let dir = (prior.direction - line.direction).normalize_or_zero();
+                new_constraints.push(Line {
+                    point: intersection_point,
+                    direction: dir,
+                });
+            } else {
+                let intersection_t = det(
+                    prior.direction,
+                    line.point - prior.point,
+                ) / intersection_det;
+                let intersection_point =
+                    line.point + intersection_t * line.direction;
+                let dir = (prior.direction - line.direction).normalize_or_zero();
+                new_constraints.push(Line {
+                    point: intersection_point,
+                    direction: dir,
+                });
+            }
+        }
+        if let Some(solution_row) =
+            solve_orca_2d(&new_constraints, f32::MAX, line.direction.perp())
+        {
+            best = solution_row;
+            deepest_penetration =
+                det(line.direction, line.point - best);
+        }
+    }
+    best
+}
+
+/// 2D cross product.
+#[inline]
+fn det(a: Vec2, b: Vec2) -> f32 {
+    a.x * b.y - a.y * b.x
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -825,6 +1026,51 @@ mod tests {
         let mut sim = CrowdSimulation::new(agents).with_obstacles(obstacles);
         sim.update(0.016);
         assert_eq!(sim.agents.len(), 1);
+    }
+
+    #[test]
+    fn test_crowd_orca_headon_no_penetration() {
+        // A3 regression: TRUE head-on. Two agents on a direct collision
+        // course at relative speed 2v. Symmetry means both must steer
+        // ~perpendicular to the line of approach to clear each other.
+        //
+        // The previous (asymmetric) regression only caught cases where
+        // the constraint set had a clear feasible side; with true
+        // head-on, every approach-van den Berg formulation narrows the
+        // feasible region to a wedge touching the origin, and the
+        // ad-hoc construction in cvkg-anim previously collapsed to a
+        // single degenerate or missing constraint. With the canonical
+        // RVO2 truncated-circle / shadow half-planes (each agent
+        // projects onto the OUTSIDE of the VO), the symmetric
+        // constraints become two sides of a wedge and the LP steers
+        // each agent around the other.
+        let agents = vec![
+            Agent::new(Vec2::new(0.0, 0.0), Vec2::new(15.0, 0.0), 5.0, 20.0),
+            Agent::new(Vec2::new(20.0, 0.0), Vec2::new(-15.0, 0.0), 5.0, 20.0),
+        ];
+        let mut sim = CrowdSimulation::new(agents);
+
+        let combined = 5.0 + 5.0; // 10.0
+        // Tolerance accounts for discrete stepping at dt=0.05 sweeping
+        // 80 frames. Without the fix, distance drops to ~7 before the
+        // first reflection step (verified empirically).
+        let min_allowed = combined - 1.5; // 8.5
+
+        let mut min_d = f32::MAX;
+        let mut ever_penetrated = false;
+        for _step in 0..80 {
+            sim.update(0.05);
+            let d = (sim.agents[1].position - sim.agents[0].position).length();
+            min_d = min_d.min(d);
+            if d < min_allowed {
+                ever_penetrated = true;
+                break;
+            }
+        }
+        assert!(
+            !ever_penetrated,
+            "head-on ORCA allowed penetration (min={min_d:.2}, combined={combined})"
+        );
     }
 
     #[test]
