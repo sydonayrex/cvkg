@@ -468,7 +468,7 @@ impl XpbdSolver {
                     area += a.x * b.y - a.y * b.x;
                 }
                 area *= 0.5;
-                let c = area - *rest_volume;
+                let _c = area - *rest_volume;
 
                 // Gradient: ∇C_i = 0.5 * (p_{i+1} - p_{i-1})^perp
                 let mut grads = vec![Vec2::ZERO; n];

@@ -12,7 +12,7 @@
 [package]
 edition = "2024"
 name = "cvkg-flow"
-version = "0.3.4"
+version = "0.3.5"
 build = false
 autolib = false
 autobins = false
