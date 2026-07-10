@@ -81,6 +81,12 @@ impl View for VStack {
             .layout_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        // TODO(nodal-coord-migration): Phase 3 — this forwards the
+        // absolute rects returned by VStack::compute_layout to children.
+        // After Phase 3, the call site must pass LOCAL rects and
+        // compose the cumulative offset (per the plan, this is done
+        // via VNodeRenderer tracking the parent's offset from a `clip`
+        // / `frame` walk, not by manually summing here).
         let rects = cvkg_layout::VStack::compute_layout(
             self.spacing,
             self.alignment,

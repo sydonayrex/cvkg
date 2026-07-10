@@ -40,6 +40,10 @@ impl<V: View + Clone + 'static> View for AnimatedBox<V> {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         // The VNodeRenderer intercepts AnimatedBox via dynamic dispatch or downcasting
         // to wire up the signal subscription, but as a fallback, we just render the content.
+        // TODO(nodal-coord-migration): Phase 5 — confirm this forwards LOCAL rects,
+        // not absolute. Per `docs/nodal-coordinate-migration.md` Phase 5,
+        // `AnimatedBox.bounds_signal` should be a LOCAL override relative
+        // to the AnimatedBox's own parent frame.
         self.content.render(renderer, rect);
     }
 }

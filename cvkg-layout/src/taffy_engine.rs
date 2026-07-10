@@ -32,6 +32,10 @@ impl std::ops::DerefMut for SyncTaffyTree {
 
 /// The central Taffy engine that computes flexbox and grid layouts.
 /// Stored opaquely inside `cvkg_core::LayoutCache::engine`.
+// TODO(nodal-coord-migration): Phase 3 — this engine returns ABSOLUTE
+// rects to its callers. The migration plan requires it to return LOCAL
+// rects (offsets from parent's content origin). See
+// `docs/nodal-coordinate-migration.md` Phase 3.
 pub struct TaffyLayoutEngine {
     pub tree: SyncTaffyTree,
     pub node_map: HashMap<u64, taffy::NodeId>,
@@ -356,6 +360,10 @@ impl HStack {
     }
 
     /// Compute the layout rects for children without placing them.
+    ///
+    /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
+    /// to parent's content origin (currently returns ABSOLUTE rects).
+    /// See `docs/nodal-coordinate-migration.md` Phase 3.
     pub fn compute_layout(
         spacing: f32,
         alignment: Alignment,
@@ -455,6 +463,10 @@ impl VStack {
     }
 
     /// Compute the layout rects for children without placing them.
+    ///
+    /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
+    /// to parent's content origin (currently returns ABSOLUTE rects).
+    /// See `docs/nodal-coordinate-migration.md` Phase 3.
     pub fn compute_layout(
         spacing: f32,
         alignment: Alignment,
@@ -775,6 +787,9 @@ impl Grid {
     }
 
     /// Computes the rects for children based on track sizing and grid placements.
+    ///
+    /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
+    /// to parent's content origin (currently returns ABSOLUTE rects).
     pub fn compute_layout_rects(
         &self,
         bounds: Rect,
