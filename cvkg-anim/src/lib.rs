@@ -338,6 +338,10 @@ pub struct ActiveAnimation {
 
     // Internal state for complex animations
     solver: Option<SpringSolver>,
+    /// Persisted decay solver for `Animation::Momentum` so velocity/position
+    /// carry across ticks (re-creating it each frame would reset the
+    /// integration and kill the inertial glide).
+    decay: Option<crate::momentum::DecaySolver>,
     child_states: Vec<ActiveAnimation>,
     current_index: usize,
 }
@@ -350,6 +354,7 @@ impl ActiveAnimation {
             is_finished: false,
             current_value: 0.0,
             solver: None,
+            decay: None,
             child_states: Vec::new(),
             current_index: 0,
         }
@@ -620,11 +625,19 @@ impl ActiveAnimation {
             } => {
                 // Advance the decay simulation using DecaySolver from momentum.rs
                 // to calculate inertial momentum progress.
-                let mut solver = crate::momentum::DecaySolver::new(
-                    *initial_velocity,
-                    *friction,
-                    self.current_value,
-                );
+                //
+                // The solver MUST persist across ticks so its velocity/position
+                // integrate frame-to-frame. Re-creating it every tick (the old
+                // code) reset velocity to `initial_velocity` and position to
+                // `current_value` each frame, collapsing the inertial glide into
+                // a plain constant-velocity step.
+                let solver = self.decay.get_or_insert_with(|| {
+                    crate::momentum::DecaySolver::new(
+                        *initial_velocity,
+                        *friction,
+                        self.current_value,
+                    )
+                });
                 self.current_value = solver.tick(dt_secs);
                 if solver.velocity.abs() < 0.1 {
                     self.is_finished = true;
@@ -713,5 +726,76 @@ mod tests {
         // Complete second animation
         active.update(ProgressDriver::Time(Duration::from_millis(100)), 0.0, 100.0);
         assert!(active.is_finished);
+    }
+
+    #[test]
+    fn test_momentum_integrates_across_frames() {
+        // Regression test for bug A1: `Animation::Momentum` used to
+        // re-create the `DecaySolver` on every tick, which reset the
+        // velocity and start position each frame. That collapsed the inertial
+        // glide into a plain constant-velocity step and the value never
+        // settled. The solver must persist across ticks.
+        let mut active = ActiveAnimation::new(Animation::Momentum {
+            initial_velocity: 200.0,
+            friction: 0.9,
+        });
+
+        let dt = Duration::from_millis(16); // ~60Hz
+        let start = 0.0;
+        let end = 1000.0; // unattainable target-free glide
+
+        // Sample the advance per frame.
+        let mut prev = start;
+        let mut first_step = 0.0_f32;
+        let mut last_step = 0.0_f32;
+        let mut last = start;
+        for i in 0..40 {
+            let v = active.update(ProgressDriver::Time(dt), start, end);
+            let step = (v - prev).abs();
+            if i == 0 {
+                first_step = step;
+            }
+            last_step = step;
+            last = v;
+            prev = v;
+        }
+
+        // (1) The first frame must integrate one tick of the initial
+        // velocity: ~200 * 0.016 = 3.2, not the old broken
+        // per-frame value that re-seeded every tick.
+        assert!(
+            first_step > 1.0 && first_step < 8.0,
+            "first-frame advance should reflect initial velocity (~3.2), got {first_step}"
+        );
+
+        // (2) THE KEY REGRESSION: with the old bug the solver was
+        // re-created every tick, so `current_value` only ever advanced
+        // by a single frame's constant step and never accumulated. The
+        // fixed version integrates across frames, so after 40 frames it
+        // has travelled far beyond one frame's worth.
+        let one_frame = first_step;
+        assert!(
+            last > one_frame * 5.0,
+            "momentum must accumulate across frames (regression A1), last={last}, one_frame={one_frame}"
+        );
+
+        // (3) With friction the per-frame step tapers (inertial decay):
+        // the final-frame step must be smaller than the first-frame step.
+        assert!(
+            last_step < first_step,
+            "momentum step should taper with friction, first={first_step}, last={last_step}"
+        );
+
+        // (4) Over a long run it must settle (velocity decays below 0.1).
+        for _ in 0..2000 {
+            active.update(ProgressDriver::Time(dt), start, end);
+            if active.is_finished {
+                break;
+            }
+        }
+        assert!(
+            active.is_finished,
+            "momentum animation should finish once velocity decays"
+        );
     }
 }

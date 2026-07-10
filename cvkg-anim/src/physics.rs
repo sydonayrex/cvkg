@@ -371,7 +371,7 @@ impl RigidBodyWorld {
                 if dist < 1e-8 {
                     continue;
                 }
-                let correction = delta * (dist / (a.inv_mass + b.inv_mass + c.compliance));
+                let correction = delta / (a.inv_mass + b.inv_mass + c.compliance);
                 if !a.is_static {
                     a.position += correction * a.inv_mass;
                 }
@@ -1386,6 +1386,53 @@ mod tests {
         world.add_body(body);
         world.step(0.016);
         assert!(world.bodies[0].position.y < 1.0);
+    }
+
+    #[test]
+    fn test_rigid_constraint_converges() {
+        // Regression test for bug A2: the constraint solve multiplied the
+        // correction by `dist`, making it proportional to distance² and
+        // preventing the two anchors from ever meeting (over-correction /
+        // no convergence). The correct PBD correction is
+        // `delta / (sum_inv_mass)` so the anchors coincide.
+        let mut world = RigidBodyWorld::new();
+
+        // Body A: heavy, near origin. Body B: light, offset on +X.
+        let mut a = RigidBody::new(CollisionShape::Sphere { radius: 0.5 }, 10.0);
+        a.position = Vec3::new(0.0, 0.0, 0.0);
+        let mut b = RigidBody::new(CollisionShape::Sphere { radius: 0.5 }, 1.0);
+        b.position = Vec3::new(2.0, 0.0, 0.0);
+        let ia = world.add_body(a);
+        let ib = world.add_body(b);
+
+        // Anchor A at its center, anchor B at its center -> rest length 0,
+        // so the constraint should pull them together.
+        world.constraints.push(RigidConstraint {
+            body_a: ia,
+            body_b: ib,
+            anchor_a: Vec3::ZERO,
+            anchor_b: Vec3::ZERO,
+            compliance: 0.0,
+        });
+
+        // Disable gravity so only the constraint acts.
+        world.gravity = Vec3::ZERO;
+
+        for _ in 0..200 {
+            world.step(0.016);
+        }
+
+        let pa = world.bodies[ia].position;
+        let pb = world.bodies[ib].position;
+        let sep = (pb - pa).length();
+        // With the fix the two anchor points coincide (separation ~0).
+        // With the old `dist` over-correction they never settle.
+        assert!(
+            sep < 0.05,
+            "constraint should pull anchors together, separation={sep}"
+        );
+        // And neither body should have blown up to infinity.
+        assert!(pa.length().is_finite() && pb.length().is_finite());
     }
 
     #[test]
