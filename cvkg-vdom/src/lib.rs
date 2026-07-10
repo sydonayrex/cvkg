@@ -265,12 +265,21 @@ impl VDom {
             self.validate_node_sync(*v_child, scene)?;
         }
 
-        // Check visual bounds (within tolerance)
+        // Check visual bounds (within tolerance). Both VDOM and SceneGraph
+        // store LOCAL rects now (`docs/nodal-coordinate-migration.md`
+        // Phase 2), so compare like-for-like. Previously this compared
+        // VDom's local against SceneGraph's world, which would always
+        // fail below the root once Phase 3 stops the calling-flatten step.
         let tolerance = 0.5;
-        if (vnode.layout.x - snode.world_rect.x).abs() > tolerance
-            || (vnode.layout.y - snode.world_rect.y).abs() > tolerance
+        if (vnode.layout.x - snode.local_rect.x).abs() > tolerance
+            || (vnode.layout.y - snode.local_rect.y).abs() > tolerance
+            || (vnode.layout.width - snode.local_rect.width).abs() > tolerance
+            || (vnode.layout.height - snode.local_rect.height).abs() > tolerance
         {
-            return Err(format!("Spatial drift detected in node {}", id.0));
+            return Err(format!(
+                "Spatial drift detected in node {}: vdom.local={:?} vs scene.local={:?}",
+                id.0, vnode.layout, snode.local_rect
+            ));
         }
 
         Ok(())
@@ -455,20 +464,44 @@ impl VDom {
     /// CONTRACT: Uses pointer_precision to define the maximum expansion radius for hit matching.
     pub fn hit_test(&self, x: f32, y: f32, pointer_precision: f32) -> Option<(NodeId, f32)> {
         self.root
-            .and_then(|root_id| self.hit_test_recursive(root_id, x, y, pointer_precision))
+            .and_then(|root_id| self.hit_test_recursive(root_id, x, y, pointer_precision, 0.0, 0.0))
     }
 
     /// Perform recursive hit-testing down the VDOM tree.
+    ///
+    /// `x`, `y` are absolute (screen/world) coordinates; `offset_x`,
+    /// `offset_y` is the cumulative local-to-world offset of the
+    /// ancestor chain walked so far (per `docs/nodal-coordinate-migration.md`
+    /// Phase 2, this avoids recomputing the full ancestor chain at
+    /// every node — which would be O(n*depth)).
+    ///
+    /// For each node, we shift (x, y) by (-offset_x, -offset_y) to obtain
+    /// the point's local coordinates within this node's frame, and use
+    /// that for SDF testing — `VNode.layout` is local (Phase 1).
     fn hit_test_recursive(
         &self,
         node_id: NodeId,
         x: f32,
         y: f32,
         pointer_precision: f32,
+        offset_x: f32,
+        offset_y: f32,
     ) -> Option<(NodeId, f32)> {
         let node = self.nodes.get(&node_id)?;
 
-        let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, x, y);
+        // WorldSpacePanel ancestors project into a different coordinate
+        // space; hit-testing through one is not meaningful until Phase 6
+        // fixes `world_space_position`. For now, skip the subtree.
+        if node.world_space.is_some() {
+            return None;
+        }
+
+        // Translate the absolute click coordinate into this node's local
+        // frame, then SDF-test against the (local) layout. The SDF math
+        // does NOT need to know about the world offset; it's all local.
+        let local_x = x - offset_x;
+        let local_y = y - offset_y;
+        let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, local_x, local_y);
 
         // Scale proximity limit based on the precision of the pointer device.
         let proximity_limit = pointer_precision.max(0.0);
@@ -498,9 +531,21 @@ impl VDom {
         }
 
         for child_id in children_to_test.iter().rev() {
-            if let Some((hit, hit_prox)) =
-                self.hit_test_recursive(*child_id, x, y, pointer_precision)
-            {
+            // Pull the child's local offset to extend the cumulative
+            // world offset for the recursive call.
+            let (child_offset_x, child_offset_y) = self
+                .nodes
+                .get(child_id)
+                .map(|c| (c.layout.x, c.layout.y))
+                .unwrap_or((0.0, 0.0));
+            if let Some((hit, hit_prox)) = self.hit_test_recursive(
+                *child_id,
+                x,
+                y,
+                pointer_precision,
+                offset_x + child_offset_x,
+                offset_y + child_offset_y,
+            ) {
                 // Direct hit (point inside child's SDF): return immediately
                 if hit_prox >= 1.0 {
                     return Some((hit, hit_prox));
