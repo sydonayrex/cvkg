@@ -334,6 +334,73 @@ mod tests {
         assert_eq!(click, cvkg_core::EventResponse::Handled);
         assert_eq!(*fired.lock().unwrap(), vec!["down", "up", "click"]);
     }
+
+    /// Regression for `docs/nodal-coordinate-migration.md` Phase 8. After
+    /// the GPU flat registry was deleted and `fire_renderer_handlers` was
+    /// removed, click handlers must still fire — but they must now go
+    /// through the single canonical path: `vdom.dispatch_event(event)`,
+    /// which finds handlers by NodeId via the VDOM's hit_test + bubble
+    /// machinery.
+    ///
+    /// The original test (galaxy's Dropdown/Calendar/Modal) used to fire
+    /// handlers via a per-component `register_handler("pointerclick", ...)`
+    /// fan-out across every registered handler (with each component
+    /// self-hitting `(x,y)`). That fan-out target field is gone; this
+    /// test pins down the new contract: handlers come from
+    /// `VDom::event_handlers`, and `dispatch_event` routes them via
+    /// `hit_test` → `bubble_event_response`.
+    #[test]
+    fn pointer_click_via_vdom_dispatch_fires_registrations() {
+        use std::sync::Arc;
+        let fired = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+
+        // Build a VDom that has a single button at (20, 20) - (100, 60)
+        // with a pointerclick handler registered against it.
+        let mut vdom = VDom::new();
+        let root_id = cvkg_core::KvasirId(1);
+        let button_id: u64 = 2;
+        let mut root = interactive_node(1, "Root", 0.0, 0.0, 240.0, 240.0, "group");
+        root.children = vec![cvkg_core::KvasirId(button_id)];
+        let button = interactive_node(button_id, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+        let f = Arc::clone(&fired);
+        vdom.event_handlers
+            .entry(cvkg_core::KvasirId(button_id))
+            .or_default()
+            .insert(
+                "pointerclick".to_string(),
+                Arc::new(move |_evt| {
+                    f.lock().unwrap().push("click");
+                }) as _,
+            );
+        vdom.root = Some(root_id);
+        vdom.nodes.insert(root_id, root);
+        vdom.nodes.insert(cvkg_core::KvasirId(button_id), button);
+        vdom.parents
+            .insert(cvkg_core::KvasirId(button_id), root_id);
+
+        // Click center of the button: (60, 40)
+        let response = vdom.dispatch_event(cvkg_core::Event::PointerClick {
+            x: 60.0,
+            y: 40.0,
+            button: 0,
+            tilt: None,
+            azimuth: None,
+            pressure: Some(1.0),
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        });
+
+        assert_eq!(
+            response,
+            cvkg_core::EventResponse::Handled,
+            "VDom.dispatch_event must Handled when a registered handler exists on the hit node"
+        );
+        assert!(
+            fired.lock().unwrap().contains(&"click"),
+            "registered pointerclick handler must fire — got {:?}",
+            *fired.lock().unwrap()
+        );
+    }
 }
 
 #[cfg(test)]
