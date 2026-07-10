@@ -155,6 +155,15 @@ impl CompositorEngine {
         self.layer_tree.remove_layer(id)
     }
 
+    /// Sets the root layer IDs (the top-level layers to be flattened).
+    ///
+    /// Roots are drawn back-to-front; nesting is expressed via each layer's
+    /// `children` list. Called once after building or rebuilding the tree.
+    pub fn set_roots(&mut self, roots: Vec<LayerId>) {
+        self.layer_tree.set_roots(roots);
+        self.current_damage.full_rebuild_needed = true;
+    }
+
     /// Marks a layer as dirty (its content changed).
     pub fn mark_dirty(&mut self, id: LayerId) {
         if self.layer_tree.get_layer(id).is_some() {
@@ -358,7 +367,12 @@ impl CompositorEngine {
         if !self.current_damage.dirty_layers.is_empty() {
             return true;
         }
-        self.layer_tree.generation() > self.last_flatten_generation
+        // Structural/content mutations are captured above via `full_rebuild_needed`
+        // and `dirty_layers` (set by create_layer/remove_layer/mark_dirty). The
+        // tree's `generation()` advances every `end_frame`, so comparing it here
+        // would force a full re-flatten every frame for static content — defeating
+        // the damage-tracking optimization.
+        false
     }
 
     /// Advances the frame. Call once per frame after rendering.

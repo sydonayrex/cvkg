@@ -366,7 +366,10 @@ fn catalog() -> Vec<GalleryEntry> {
                                 .font_size(11.0)
                                 .color([0.6, 0.6, 0.6, 1.0]),
                         )
-                        .child(dialog),
+                        // Give the dialog a full-area rect so its backdrop covers the
+                        // whole preview region (not just its tiny intrinsic size), and
+                        // let it render above sibling content via its own high z-index.
+                        .child(dialog.flex(1.0)),
                 )
             },
         },
@@ -450,6 +453,10 @@ struct GalleryState {
     selected_date: Date,
     command_query: String,
     command_palette_open: bool,
+    /// Accumulated wheel delta; one carousel step fires per notch threshold so a
+    /// single momentum/inertial scroll gesture (many small MouseWheel events)
+    /// advances the carousel smoothly instead of racing through every card.
+    wheel_accum: f32,
 }
 
 impl GalleryState {
@@ -474,6 +481,7 @@ impl GalleryState {
             },
             command_query: String::new(),
             command_palette_open: true,
+            wheel_accum: 0.0,
         }
     }
 }
@@ -712,6 +720,10 @@ impl View for GalleryApp {
         );
 
         // Register scroll-wheel handler for carousel cycling.
+        // A single physical wheel notch (or momentum/inertial trackpad gesture)
+        // produces several small `MouseWheel` events. Accumulate the delta and
+        // advance the carousel exactly one step per notch so it progresses
+        // smoothly instead of racing through every card on one gesture.
         let wheel_state = self.state.clone();
         renderer.register_handler(
             "pointerwheel",
@@ -719,12 +731,24 @@ impl View for GalleryApp {
                 if let Event::PointerWheel { delta_y, .. } = evt {
                     let mut s = wheel_state.lock().unwrap_or_else(|e| e.into_inner());
                     let num = s.entries.len();
-                    if num > 0 {
-                        if delta_y > 0.0 {
-                            s.selected = (s.selected + 1) % num;
-                        } else if delta_y < 0.0 {
-                            s.selected = (s.selected + num - 1) % num;
-                        }
+                    if num == 0 {
+                        return;
+                    }
+                    // One notch ≈ 1.0 logical line; the dispatcher scales LineDelta
+                    // by 10.0, so a full notch yields |delta_y| ≈ 10.0.
+                    const NOTCH: f32 = 10.0;
+                    s.wheel_accum += delta_y;
+                    while s.wheel_accum >= NOTCH {
+                        s.wheel_accum -= NOTCH;
+                        s.selected = (s.selected + 1) % num;
+                    }
+                    while s.wheel_accum <= -NOTCH {
+                        s.wheel_accum += NOTCH;
+                        s.selected = (s.selected + num - 1) % num;
+                    }
+                    // Avoid unbounded accumulation from tiny sub-notch deltas.
+                    if s.wheel_accum.abs() > NOTCH * 4.0 {
+                        s.wheel_accum = 0.0;
                     }
                 }
             }),

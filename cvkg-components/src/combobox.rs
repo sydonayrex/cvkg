@@ -248,6 +248,9 @@ impl View for Combobox {
         self.render_trigger(renderer, rect);
 
         // ── Render dropdown ──
+        // Pop the dropdown above sibling content (the carousel, page chrome, etc.)
+        // so it is never overdrawn by later draws in the same frame.
+        renderer.set_z_index(900.0);
         let item_height = 32.0;
         let dropdown_padding = 4.0;
         let search_height = 32.0;
@@ -502,6 +505,10 @@ impl Combobox {
             14.0,
             [1.0, 1.0, 1.0, 0.9],
         );
+
+        // Reset z-order so the elevated dropdown layer doesn't leak into
+        // sibling draws that follow in the same frame.
+        renderer.set_z_index(0.0);
     }
 }
 

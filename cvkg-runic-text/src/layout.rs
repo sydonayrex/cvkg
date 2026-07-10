@@ -705,15 +705,15 @@ impl TextEngine {
                         .map(|g| g.advance_width)
                         .sum();
 
-                    let x_offset = line_x_start
-                        + Self::compute_x_offset(
-                            align,
-                            line_max_w,
-                            line_width,
-                            glyphs,
-                            line_start_glyph,
-                            break_glyph,
-                        );
+                    let (x_offset, per_space_extra) = Self::compute_x_offset(
+                        align,
+                        line_max_w,
+                        line_width,
+                        text,
+                        glyphs,
+                        line_start_glyph,
+                        break_glyph,
+                    );
 
                     // BiDi Visual Reordering (P0-41)
                     let line_range = line_start_byte..break_byte.min(text.len());
@@ -743,7 +743,7 @@ impl TextEngine {
                     }
 
                     // Position glyphs
-                    let mut x = x_offset;
+                    let mut x = line_x_start + x_offset;
                     for g in &mut glyphs[line_start_glyph..break_glyph] {
                         g.x = x;
                         if g.glyph_id == 0xFFFF {
@@ -774,16 +774,24 @@ impl TextEngine {
                         } else {
                             g.y = current_y;
                         }
-                        x += g.advance_width;
+                        x += g.advance_width
+                            + if per_space_extra > 0.0 && Self::is_space_cluster(text, g.cluster) {
+                                per_space_extra
+                            } else {
+                                0.0
+                            };
                     }
 
                     let line_text = text[line_start_byte..break_byte.min(text.len())].to_string();
+                    let last_g = &glyphs[break_glyph - 1];
+                    let line_extent =
+                        (last_g.x + last_g.advance_width) - glyphs[line_start_glyph].x;
                     lines.push(LineInfo {
                         glyph_start: line_start_glyph,
                         glyph_end: break_glyph,
                         baseline_y: current_y,
                         height: line_height_px,
-                        width: line_width,
+                        width: line_extent,
                         x_offset,
                         byte_offset: line_start_byte,
                         text: line_text,
@@ -810,15 +818,16 @@ impl TextEngine {
                     .sum();
 
                 let glyph_end = glyphs.len();
-                let x_offset = line_x_start
-                    + Self::compute_x_offset(
-                        align,
-                        line_max_w,
-                        line_width,
-                        glyphs,
-                        line_start_glyph,
-                        glyph_end,
-                    );
+                let (x_offset_base, _) = Self::compute_x_offset(
+                    align,
+                    line_max_w,
+                    line_width,
+                    text,
+                    glyphs,
+                    line_start_glyph,
+                    glyph_end,
+                );
+                let x_offset = line_x_start + x_offset_base;
 
                 // BiDi Visual Reordering (P0-41)
                 let line_range = line_start_byte..text.len();
@@ -1000,41 +1009,38 @@ impl TextEngine {
         lines
     }
 
-    /// Compute x offset for alignment.
+    /// Compute x offset for alignment. Returns `(base_offset, per_space_extra)`:
+    /// `base_offset` is added to the start of the line, `per_space_extra` is added
+    /// to the advance of each inter-word space (used to justify). Both are 0 for
+    /// non-Justify alignments.
     fn compute_x_offset(
         align: TextAlign,
         max_w: f32,
         line_width: f32,
-        glyphs: &mut [GlyphInstance],
+        text: &str,
+        glyphs: &[GlyphInstance],
         start: usize,
         end: usize,
-    ) -> f32 {
+    ) -> (f32, f32) {
         match align {
-            TextAlign::Start => 0.0,
-            TextAlign::End => (max_w - line_width).max(0.0),
-            TextAlign::Center => ((max_w - line_width) / 2.0).max(0.0),
+            TextAlign::Start => (0.0, 0.0),
+            TextAlign::End => ((max_w - line_width).max(0.0), 0.0),
+            TextAlign::Center => (((max_w - line_width) / 2.0).max(0.0), 0.0),
             TextAlign::Justify => {
                 if end <= start + 1 || max_w <= line_width {
-                    return 0.0;
+                    return (0.0, 0.0);
                 }
                 let extra = max_w - line_width;
                 let space_count = glyphs[start..end]
                     .iter()
-                    .filter(|g| g.glyph_id == 3)
+                    .filter(|g| Self::is_space_cluster(text, g.cluster))
                     .count();
                 if space_count > 0 {
                     let add_per_space = extra / space_count as f32;
-                    let mut x = 0.0f32;
-                    for i in start..end {
-                        glyphs[i].x = x;
-                        if glyphs[i].glyph_id == 3 {
-                            x += glyphs[i].advance_width + add_per_space;
-                        } else {
-                            x += glyphs[i].advance_width;
-                        }
-                    }
+                    (0.0, add_per_space)
+                } else {
+                    (0.0, 0.0)
                 }
-                0.0
             }
         }
     }

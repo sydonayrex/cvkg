@@ -336,7 +336,10 @@ impl VDom {
         let sdf_shape_changed = old_node.sdf_shape != new_node.sdf_shape;
 
         // P0-7 fix: compare old vs new handler maps directly.
-        let old_handlers = self.event_handlers.get(&new_id);
+        // NOTE: `self` is the OLD tree, so it must be queried with `old_id`.
+        // For keyed children old_id and new_id can differ; using new_id here
+        // silently missed the old handlers and corrupted handler-change detection.
+        let old_handlers = self.event_handlers.get(&old_id);
         let new_handlers = other.event_handlers.get(&new_id);
         let handlers_changed = match (old_handlers, new_handlers) {
             (None, None) => false,

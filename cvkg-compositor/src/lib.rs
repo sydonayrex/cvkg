@@ -53,10 +53,37 @@ mod smoke_tests {
     }
 
     #[test]
-    fn damage_info_default() {
-        let damage = DamageInfo::default();
-        assert!(damage.dirty_layers.is_empty());
-        assert_eq!(damage.frame_generation, 0);
-        assert!(!damage.full_rebuild_needed);
+    fn needs_reflatten_static_after_frame() {
+        // Regression C1: needs_reflatten must be false after a full
+        // flatten+end_frame for UNCHANGED static content. The old logic compared
+        // the tree generation (which advances every end_frame) against the last
+        // flatten generation, so it returned true every frame — forcing a full
+        // re-flatten of static UI.
+        let mut engine = CompositorEngine::new();
+
+        let layer = Layer {
+            id: LayerId(1),
+            ..Default::default()
+        };
+        engine.create_layer(layer);
+        engine.set_roots(vec![LayerId(1)]);
+
+        // First flatten flags work; after end_frame nothing is dirty.
+        assert!(engine.needs_reflatten());
+        let _buckets = engine.flatten_and_route();
+        engine.end_frame();
+
+        // Static content: no more re-flatten until something changes.
+        assert!(
+            !engine.needs_reflatten(),
+            "static content should not require re-flatten after a frame"
+        );
+
+        // A real content change (mark_dirty) must re-arm it.
+        engine.mark_dirty(LayerId(1));
+        assert!(engine.needs_reflatten());
+        let _buckets = engine.flatten_and_route();
+        engine.end_frame();
+        assert!(!engine.needs_reflatten());
     }
 }

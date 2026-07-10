@@ -74,6 +74,61 @@ fn test_word_wrapping() {
 }
 
 #[test]
+fn test_justify_spreads_spaces() {
+    // Regression B1: Justify must widen inter-word gaps on wrapped (non-last)
+    // lines so each such line fills its column width, instead of leaving the
+    // natural font advance (what TextAlign::Start yields).
+    let mut engine = TextEngine::new_test();
+    let style = TextStyle::new("Jupiteroid", 16.0);
+    let text = "one two three four five six seven eight nine ten";
+    let spans = vec![TextSpan::new(text, style.clone())];
+
+    // Narrow column forces several wrapped lines.
+    let col_w = 160.0;
+    let justified = engine
+        .shape_layout(
+            &spans,
+            Some(col_w),
+            TextAlign::Justify,
+            TextOverflow::WordWrap,
+        )
+        .unwrap();
+    let start = engine
+        .shape_layout(
+            &spans,
+            Some(col_w),
+            TextAlign::Start,
+            TextOverflow::WordWrap,
+        )
+        .unwrap();
+
+    // Multiple lines so at least one non-last line is justified.
+    assert!(
+        justified.lines.len() >= 2,
+        "expected wrapping, got {}",
+        justified.lines.len()
+    );
+    assert_eq!(justified.lines.len(), start.lines.len());
+
+    // Every non-last justified line must fill the column width.
+    for li in 0..justified.lines.len() - 1 {
+        let w = justified.lines[li].width;
+        assert!(
+            (w - col_w).abs() < 1.0,
+            "justified line {li} should fill column width, got {w} vs {col_w}"
+        );
+    }
+    // The corresponding Start line must leave slack (not full width).
+    for li in 0..start.lines.len() - 1 {
+        assert!(
+            start.lines[li].width < col_w - 1.0,
+            "Start line {li} should leave slack, got {}",
+            start.lines[li].width
+        );
+    }
+}
+
+#[test]
 fn test_text_style_defaults() {
     let style = TextStyle::default();
     assert_eq!(style.family, "Jupiteroid");

@@ -111,6 +111,12 @@ pub struct FilterEngine {
     pub(crate) lut_view: Option<wgpu::TextureView>,
     pub(crate) image_textures: HashMap<String, (wgpu::Texture, wgpu::TextureView)>,
     pub(crate) current_time: f32,
+    /// 1×1 dummy texture used as the (ignored) input binding for passes whose
+    /// shader does not read its source — e.g. Flood and Turbulence. Binding the
+    /// real output texture as its own input would make the same texture both a
+    /// sampled binding and the render-target attachment in one pass, which is a
+    /// wgpu validation error.
+    pub(crate) dummy_view: wgpu::TextureView,
 }
 
 impl FilterEngine {
@@ -282,6 +288,24 @@ impl FilterEngine {
             mapped_at_creation: false,
         });
 
+        // 1×1 dummy texture used as the (ignored) input binding for passes whose
+        // shader does not sample its source (Flood, Turbulence). See `dummy_view`.
+        let dummy_texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("svg_filter_dummy"),
+            size: wgpu::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let dummy_view = dummy_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         Ok(FilterEngine {
             gpu,
             color_interpolation: usvg::filter::ColorInterpolation::SRGB,
@@ -299,6 +323,7 @@ impl FilterEngine {
             lut_view: None,
             image_textures: HashMap::new(),
             current_time: 0.0,
+            dummy_view,
         })
     }
 

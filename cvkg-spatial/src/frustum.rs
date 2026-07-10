@@ -1,6 +1,6 @@
 use glam::{Mat4, Vec3};
 
-/// Six frustum planes: [left, right, top, bottom, near, far].
+/// Six frustum planes: [left, right, bottom, top, near, far].
 /// Each plane is (nx, ny, nz, d) where dot(n, p) + d = 0.
 /// Normal points inward (toward the visible region).
 #[derive(Debug, Clone, Copy)]

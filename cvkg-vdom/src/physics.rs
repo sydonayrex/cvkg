@@ -4,6 +4,7 @@
 //! to actual drawn layout bounds via signals.
 
 use crate::signals::Signal;
+use cvkg_core::DirtyFlags;
 use cvkg_core::Rect;
 use std::sync::{Arc, RwLock};
 
@@ -39,10 +40,38 @@ impl Spring {
     }
 
     /// Step the physics simulation by `dt` seconds.
+    ///
+    /// No-ops once the spring has settled (target reached and velocity ~zero)
+    /// so a resting animation does not mark the pipeline dirty every frame.
     pub fn tick(&self, dt: f32) {
+        /// Sub-pixel / sub-pixel-per-second thresholds below which the spring
+        /// is considered at rest.
+        const REST_EPSILON: f32 = 0.01;
+
         let target = self.target.get();
         let current = self.current.get();
         let mut vel = self.velocity.write().unwrap();
+
+        // At-rest early-out: if we're already on target and barely moving,
+        // do nothing (no signal write => no dirty flag => pipeline stays clean).
+        let displacement = (target.x - current.x).abs()
+            + (target.y - current.y).abs()
+            + (target.width - current.width).abs()
+            + (target.height - current.height).abs();
+        let speed = vel.x.abs() + vel.y.abs() + vel.width.abs() + vel.height.abs();
+        if displacement < REST_EPSILON && speed < REST_EPSILON {
+            // Snap exactly to target and zero velocity to avoid slow drift.
+            if displacement > 0.0 {
+                *vel = Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 0.0,
+                    height: 0.0,
+                };
+                self.current.set_with_flags(target, DirtyFlags::LAYOUT);
+            }
+            return;
+        }
 
         // Calculate spring forces (Hooke's law + damping)
         let fx = (target.x - current.x) * self.stiffness - vel.x * self.damping;
@@ -63,7 +92,9 @@ impl Spring {
         next_bounds.width += vel.width * dt;
         next_bounds.height += vel.height * dt;
 
-        // Mutate the signal, which synchronously fires effects
-        self.current.set(next_bounds);
+        // Mutate the signal, which synchronously fires effects.
+        // A moving spring changes geometry, so LAYOUT (not the whole pipeline)
+        // is the correct downstream annotation.
+        self.current.set_with_flags(next_bounds, DirtyFlags::LAYOUT);
     }
 }

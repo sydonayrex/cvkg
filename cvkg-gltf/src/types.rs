@@ -77,34 +77,50 @@ pub struct Skin3D {
 
 impl Scene3D {
     /// Hot-reloads scene from file while preserving renderer state.
-    /// Re-parses buffers and updates GPU resources incrementally.
-    /// 
+    ///
+    /// Re-parses buffers and updates GPU resources. To keep `mesh_index` /
+    /// `material_index` / `skin_index` / animation-channel `target_node`
+    /// references valid, the in-place swap only happens when the reloaded
+    /// scene has the **same structural shape** (equal counts of nodes,
+    /// meshes, materials, skins, and animations) as the current scene. When
+    /// the shape differs (e.g. a primitive or material was added/removed), a
+    /// full replacement is performed instead — matching by vertex count would
+    /// silently exchange unrelated meshes and leave every index stale.
+    ///
     /// # Preconditions
     /// - Path must exist and be valid glTF 2.0 format
-    /// - Existing mesh indices preserved if topology unchanged
-    /// 
+    ///
     /// # Invariants
-    /// - mesh vertex count unchanged if no topology change
-    /// - animation playback time preserved
-    /// - texture handles rebound to new GPU resources
+    /// - node / mesh / material / skin / animation indices stay consistent
+    /// - animation playback state preserved by the caller
     pub fn reload_from_path(&mut self, path: &std::path::Path) -> anyhow::Result<()> {
-        // Store current mesh vertex counts for preservation
-        let original_vertex_counts: Vec<_> = self.meshes.iter()
-            .map(|m| m.mesh.vertices.len())
-            .collect();
-        
-        // Re-parse the file
+        // Re-parse the file.
         let reloaded = crate::importer::load_gltf(path)?;
-        
-        // Restore mesh indices if topology matches (invariant)
-        for (i, mesh) in reloaded.meshes.iter().enumerate() {
-            if original_vertex_counts.get(i) == Some(&mesh.mesh.vertices.len()) {
-                self.meshes[i].mesh = mesh.mesh.clone();
+
+        let shape_matches = self.nodes.len() == reloaded.nodes.len()
+            && self.meshes.len() == reloaded.meshes.len()
+            && self.materials.len() == reloaded.materials.len()
+            && self.skins.len() == reloaded.skins.len()
+            && self.animations.len() == reloaded.animations.len();
+
+        if shape_matches {
+            // Topology unchanged: swap mesh geometry in place by index so any
+            // renderer-side handles keyed on mesh index remain valid.
+            for (i, mesh) in reloaded.meshes.into_iter().enumerate() {
+                self.meshes[i].mesh = mesh.mesh;
+                self.meshes[i].material_index = mesh.material_index;
             }
+            self.textures = reloaded.textures;
+            self.animations = reloaded.animations;
+            // nodes / materials / skins counts match, so their indices are still valid.
+            self.materials = reloaded.materials;
+            self.skins = reloaded.skins;
+            self.nodes = reloaded.nodes;
+        } else {
+            // Shape changed: replace everything so every index is internally
+            // consistent. Caller must rebind all GPU resources.
+            *self = reloaded;
         }
-        
-        self.textures = reloaded.textures;
-        self.animations = reloaded.animations;
         Ok(())
     }
 }

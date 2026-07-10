@@ -324,3 +324,93 @@ fn test_load_glb_with_skins_and_animations() {
     std::fs::remove_file(&tmp).ok();
 }
 
+/// Regression G1: `reload_from_path` must not silently swap unrelated meshes
+/// when the reloaded asset has the same mesh vertex counts as the original but
+/// different geometry. The old code matched by vertex count, so two
+/// topologically-identical-but-content-different meshes would be exchanged.
+#[test]
+fn reload_preserves_scene_integrity() {
+    let tmp_a = std::env::temp_dir().join(format!("test_rl_a_{}.glb", unique_id()));
+    let tmp_b = std::env::temp_dir().join(format!("test_rl_b_{}.glb", unique_id()));
+
+    // A: triangle with vertex (1,0,0). B: same topology, vertex (9,0,0).
+    write_minimal_glb_with_vertex(&tmp_a, [1.0, 0.0, 0.0]);
+    write_minimal_glb_with_vertex(&tmp_b, [9.0, 0.0, 0.0]);
+
+    let mut scene = load_gltf(&tmp_a).expect("load A");
+    assert_eq!(scene.meshes[0].mesh.vertices[1], [1.0, 0.0, 0.0]);
+
+    // hot-reload B (same shape: 1 node, 1 mesh, 1 material, 0 skins, 0 anims)
+    scene.reload_from_path(&tmp_b).expect("reload B");
+
+    // After reload the scene must reflect B entirely, not a mix of A's indices
+    // with B's geometry. Vertex[1] must be B's value, and node.mesh_index must
+    // still point at a valid mesh.
+    assert_eq!(scene.meshes[0].mesh.vertices[1], [9.0, 0.0, 0.0]);
+    assert!(scene.nodes[0].mesh_index.is_some());
+    let mi = scene.nodes[0].mesh_index.unwrap();
+    assert!(mi < scene.meshes.len(), "mesh_index must stay valid after reload");
+
+    std::fs::remove_file(&tmp_a).ok();
+    std::fs::remove_file(&tmp_b).ok();
+}
+
+/// Writes a minimal valid .glb whose second vertex is the given position.
+fn write_minimal_glb_with_vertex(path: &std::path::Path, v1: [f32; 3]) {
+    let mut bin = Vec::new();
+    for v in [v1, v1, v1] {
+        bin.extend_from_slice(&v[0].to_le_bytes());
+        bin.extend_from_slice(&v[1].to_le_bytes());
+        bin.extend_from_slice(&v[2].to_le_bytes());
+    }
+    for _ in 0..3 {
+        bin.extend_from_slice(&0.0f32.to_le_bytes());
+        bin.extend_from_slice(&0.0f32.to_le_bytes());
+        bin.extend_from_slice(&1.0f32.to_le_bytes());
+    }
+    for uv in [[0.0f32, 0.0], [1.0, 0.0], [0.0, 1.0]] {
+        bin.extend_from_slice(&uv[0].to_le_bytes());
+        bin.extend_from_slice(&uv[1].to_le_bytes());
+    }
+    for idx in [0u16, 1, 2] {
+        bin.extend_from_slice(&idx.to_le_bytes());
+    }
+
+    let bin_len = bin.len() as u32;
+    let json = serde_json::json!({
+        "asset": {"version": "2.0"},
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1, "TEXCOORD_0": 2}, "indices": 3}]}],
+        "accessors": [
+            {"bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3",
+             "max": [v1[0], v1[1], v1[2]], "min": [v1[0], v1[1], v1[2]]},
+            {"bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3"},
+            {"bufferView": 2, "componentType": 5126, "count": 3, "type": "VEC2"},
+            {"bufferView": 3, "componentType": 5123, "count": 3, "type": "SCALAR"}
+        ],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": 36, "target": 34962},
+            {"buffer": 0, "byteOffset": 36, "byteLength": 36, "target": 34962},
+            {"buffer": 0, "byteOffset": 72, "byteLength": 24, "target": 34962},
+            {"buffer": 0, "byteOffset": 96, "byteLength": 6, "target": 34963}
+        ],
+        "buffers": [{"byteLength": bin_len}],
+        "materials": [{"pbrMetallicRoughness": {"baseColorFactor": [0.5, 0.5, 0.5, 1.0]}}]
+    });
+    let json_bytes = serde_json::to_vec(&json).unwrap();
+    let json_padded = pad4(json_bytes);
+    let bin_padded = pad4(bin);
+    let total_len: u32 = 12 + 8 + json_padded.len() as u32 + 8 + bin_padded.len() as u32;
+    let mut glb = Vec::with_capacity(total_len as usize);
+    glb.extend_from_slice(b"glTF");
+    glb.extend_from_slice(&2u32.to_le_bytes());
+    glb.extend_from_slice(&total_len.to_le_bytes());
+    glb.extend_from_slice(&(json_padded.len() as u32).to_le_bytes());
+    glb.extend_from_slice(&0x4E4F534Au32.to_le_bytes());
+    glb.extend_from_slice(&json_padded);
+    glb.extend_from_slice(&(bin_padded.len() as u32).to_le_bytes());
+    glb.extend_from_slice(&0x004E4942u32.to_le_bytes());
+    glb.extend_from_slice(&bin_padded);
+    std::fs::write(path, &glb).unwrap();
+}

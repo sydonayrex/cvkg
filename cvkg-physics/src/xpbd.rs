@@ -415,7 +415,7 @@ impl XpbdSolver {
 
                 let alpha = *compliance;
                 let beta = *damping;
-                let epsilon = 1e-4_f32;
+                let epsilon = self.config.epsilon;
                 let lambda = -c / (w_sum * alpha + beta * dt + epsilon);
 
                 pa.position += grad_a * (lambda * pa.inv_mass);
@@ -443,7 +443,7 @@ impl XpbdSolver {
                 }
 
                 let alpha = *compliance;
-                let epsilon = 1e-4_f32;
+                let epsilon = self.config.epsilon;
                 let lambda = -c / (w_sum * alpha + epsilon);
 
                 let correction = dir * lambda;
@@ -489,11 +489,29 @@ impl XpbdSolver {
                 }
 
                 let alpha = *compliance;
-                let epsilon = 1e-4_f32;
-                let lambda = -c / (w_sum * alpha + epsilon) * *pressure;
+                let epsilon = self.config.epsilon;
+                // Pressure inflates the target volume; at pressure == 0 the body
+                // should still relax to `rest_volume`. Fold pressure into C rather
+                // than post-multiplying lambda (which zeroed the correction entirely
+                // when pressure was 0 -- that made "enforce rest area" a no-op).
+                let c = area - (*rest_volume + *pressure);
+                let lambda = -c / (w_sum * alpha + epsilon);
+
+                // Clamp per-particle correction so a tiny compliance can't fling a
+                // vertex across the screen and diverge to NaN. Tie the cap to the
+                // REST characteristic length (sqrt of rest_volume), NOT the live
+                // edge length -- the live length grows as the vertex escapes, which
+                // would let the clamp amplify the divergence instead of containing it.
+                let max_corr = (rest_volume.abs().sqrt().max(1e-6)) * 0.4;
 
                 for (i, &idx) in particle_indices.iter().enumerate() {
-                    particles[idx].position += grads[i] * (lambda * particles[idx].inv_mass);
+                    let d = grads[i] * (lambda * particles[idx].inv_mass);
+                    let d = if d.length() > max_corr {
+                        d.normalize() * max_corr
+                    } else {
+                        d
+                    };
+                    particles[idx].position += d;
                 }
             }
             SoftConstraint::Attachment {
@@ -516,7 +534,7 @@ impl XpbdSolver {
                 let w = p.inv_mass;
                 let alpha = *compliance;
                 let beta = *damping;
-                let epsilon = 1e-4_f32;
+                let epsilon = self.config.epsilon;
                 let lambda = -c / (w * alpha + beta * dt + epsilon);
 
                 p.position += dir * (lambda * w);
@@ -781,6 +799,74 @@ mod tests {
         let pb = world.particle(b).unwrap();
         let dist = (pb.position - pa.position).length();
         assert!((dist - 10.0).abs() < 0.5, "dist = {}", dist);
+    }
+
+    #[test]
+    fn test_volume_constraint_relaxes_at_zero_pressure() {
+        // Regression B2: with pressure == 0 the volume constraint must still
+        // pull the polygon toward `rest_volume`. The old code post-multiplied
+        // the correction by pressure, so pressure 0 zeroed it and the area was
+        // never corrected.
+        //
+        // Realistic scenario: a triangle with perimeter (Distance) constraints
+        // anchoring the shape, plus the Volume constraint. Volume is only ever
+        // used alongside a perimeter in practice (balloon / soft body), which
+        // gives the free vertex a well-posed target.
+        let cfg = XpbdSolverConfig {
+            iterations: 32,
+            substeps: 12,
+            ..Default::default()
+        };
+        let mut world = SoftBodyWorld::new(cfg);
+
+        // Three free particles forming a triangle; rest perimeter edges of 20.
+        let a = world.add_particle(Particle::new(Vec2::new(0.0, 0.0), 1.0));
+        let b = world.add_particle(Particle::new(Vec2::new(20.0, 0.0), 1.0));
+        let c = world.add_particle(Particle::new(Vec2::new(10.0, 20.0), 1.0));
+
+        let rest = 1.0 / 1000.0; // stiff perimeter
+        world.add_constraint(SoftConstraint::Distance {
+            particle_a: a,
+            particle_b: b,
+            rest_length: 20.0,
+            compliance: rest,
+            damping: 0.01,
+        });
+        world.add_constraint(SoftConstraint::Distance {
+            particle_a: b,
+            particle_b: c,
+            rest_length: 22.36,
+            compliance: rest,
+            damping: 0.01,
+        });
+        world.add_constraint(SoftConstraint::Distance {
+            particle_a: c,
+            particle_b: a,
+            rest_length: 22.36,
+            compliance: rest,
+            damping: 0.01,
+        });
+
+        // Start the triangle stretched to area ~200; rest area 100.
+        world.add_constraint(SoftConstraint::Volume {
+            particle_indices: vec![a, b, c],
+            rest_volume: 100.0,
+            compliance: 0.001,
+            pressure: 0.0,
+        });
+
+        for _ in 0..600 {
+            world.step(1.0 / 60.0);
+        }
+
+        let pa = world.particle(a).unwrap().position;
+        let pb = world.particle(b).unwrap().position;
+        let pc = world.particle(c).unwrap().position;
+        let area = ((pb.x - pa.x) * (pc.y - pa.y) - (pc.x - pa.x) * (pb.y - pa.y)).abs() * 0.5;
+        assert!(
+            (area - 100.0).abs() < 10.0,
+            "zero-pressure volume constraint should relax to rest_volume, got {area}"
+        );
     }
 
     #[test]

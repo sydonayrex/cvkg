@@ -113,6 +113,10 @@ path = "tests/tactical_tests.rs"
 name = "theming_test"
 path = "tests/theming_test.rs"
 
+[[test]]
+name = "dispatch_probe"
+path = "tests/dispatch_probe.rs"
+
 [dependencies]
 cvkg-runic-text= { version = "0.3.4", path = "../cvkg-runic-text" }
 rfd.workspace = true

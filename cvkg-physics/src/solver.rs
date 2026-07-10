@@ -369,7 +369,11 @@ impl ImpulseSolver {
         let spring_force = dir * (config.stiffness * displacement);
         let rel_vel = ctx.b.velocity - ctx.a.velocity;
         let damping_force = dir * (rel_vel.dot(dir) * config.damping);
-        let total_force = (spring_force + damping_force) * ctx.dt;
+        // Force is accumulated over the `iterations` Gauss-Seidel passes; divide
+        // by the iteration count so the spring is applied exactly once per
+        // substep (iteration-count independent), matching force integration.
+        let total_force =
+            (spring_force + damping_force) * ctx.dt / (self.iterations as f32).max(1.0);
 
         if !ctx.a.is_static {
             ctx.a.velocity += total_force * ctx.a.inv_mass;

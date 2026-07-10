@@ -1218,4 +1218,57 @@ mod tests {
         assert!(broke.load(Ordering::SeqCst));
         assert!(!world.constraints[0].enabled);
     }
+
+    #[test]
+    fn test_spring_stiffness_is_iteration_count_independent() {
+        // Regression B4: solve_spring applied its force on every Gauss-Seidel
+        // iteration, so the effective stiffness scaled with `iterations`. The
+        // same spring at two different iteration counts must settle to the same
+        // rest length.
+        fn settle_rest_length(iterations: usize) -> f32 {
+            let mut config = WorldConfig::default();
+            config.substeps = 1;
+            config.gravity = Vec2::ZERO; // isolate the spring from gravity sag
+            let mut world = PhysicsWorld::new(config);
+            world.solver = ImpulseSolver::new()
+                .with_iterations(iterations)
+                .with_baumgarte(0.2);
+
+            let fixed = world.add_body(RigidBody::static_body());
+            let shape = Shape::circle(8.0);
+            let mut b = RigidBody::new(1.0, &shape);
+            // Start 100px away; rest length is 50, so it should pull in to 50.
+            b.position = Vec2::new(100.0, 0.0);
+            let free = world.add_body(b);
+
+            world.add_constraint(Constraint::spring(
+                fixed,
+                free,
+                Vec2::ZERO,
+                Vec2::ZERO,
+                50.0,
+                200.0,
+                1.0,
+            ));
+
+            for _ in 0..600 {
+                world.step(1.0 / 60.0);
+            }
+
+            let a = world.body(fixed).unwrap().position;
+            let c = world.body(free).unwrap().position;
+            (c - a).length()
+        }
+
+        let lo = settle_rest_length(2);
+        let hi = settle_rest_length(20);
+        assert!(
+            (lo - hi).abs() < 1.0,
+            "spring rest length must not depend on iteration count: {} vs {}",
+            lo,
+            hi
+        );
+        // And it should actually have settled near the rest length.
+        assert!((lo - 50.0).abs() < 2.0, "expected ~50, got {}", lo);
+    }
 }

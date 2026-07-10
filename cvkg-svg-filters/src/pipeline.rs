@@ -314,8 +314,12 @@ impl FilterEngine {
             o,
         ];
 
+        // Flood produces a solid color and ignores its input entirely, so bind
+        // the 1×1 dummy texture as the (unused) source. Binding `output_view` as
+        // its own input would make the same texture both a sampled binding and
+        // the render-target attachment in one pass (a wgpu validation error).
         self.render_pass(
-            &output_view,
+            &self.dummy_view,
             &self.nearest_sampler,
             (w as f32, h as f32),
             &output_view,
@@ -444,8 +448,10 @@ impl FilterEngine {
             c.blue as f32 / 255.0,
             o,
         ];
+        // Flood ignores its input (solid color); bind the dummy texture to avoid
+        // using `flood_view` as both the sampled source and the render target.
         self.render_pass(
-            &flood_view,
+            &self.dummy_view,
             &self.nearest_sampler,
             input_size,
             &flood_view,
@@ -793,8 +799,10 @@ impl FilterEngine {
         params.turb_seed = t.seed() as f32;
         params.turb_num_octaves = t.num_octaves() as f32;
 
+        // Turbulence is procedural and ignores its input, so bind the 1×1 dummy
+        // texture as the (unused) source (same self-reference hazard as Flood).
         self.render_pass(
-            &output_view,
+            &self.dummy_view,
             &self.nearest_sampler,
             (w as f32, h as f32),
             &output_view,

@@ -387,6 +387,48 @@ fn p0_7_handler_swap_emits_update_patch() {
     );
 }
 
+#[test]
+fn keyed_child_handler_removal_uses_old_id_for_lookup() {
+    // Regression: diff_node previously looked up the OLD tree's handlers with
+    // `new_id`. For a keyed child whose backing node id changes between trees,
+    // old_id != new_id, so the old handlers were missed and the ClearHandlers
+    // patch that frees the stale closure was never emitted.
+    //
+    // Tree shape: root -> [ keyed child "row" ]. The child keeps key "row" but
+    // its node id changes (100 -> 200), and its click handler is removed.
+    let root_id = KvasirId(1);
+
+    let mut old = VDom::new();
+    let old_child = create_node(100, Some("row"), "Button", vec![]);
+    old.nodes
+        .insert(root_id, create_node(1, None, "List", vec![KvasirId(100)]));
+    old.nodes.insert(KvasirId(100), old_child);
+    old.event_handlers.insert(
+        KvasirId(100),
+        vec![("click".to_string(), Arc::new(handler_closure) as _)]
+            .into_iter()
+            .collect(),
+    );
+    old.root = Some(root_id);
+
+    let mut new = VDom::new();
+    let new_child = create_node(200, Some("row"), "Button", vec![]);
+    new.nodes
+        .insert(root_id, create_node(1, None, "List", vec![KvasirId(200)]));
+    new.nodes.insert(KvasirId(200), new_child);
+    // No handler on the new child.
+    new.root = Some(root_id);
+
+    let patches = old.diff(&new);
+
+    assert!(
+        patches
+            .iter()
+            .any(|p| matches!(p, VDomPatch::ClearHandlers { id } if *id == KvasirId(100))),
+        "expected ClearHandlers for old keyed child id 100, got: {patches:?}"
+    );
+}
+
 // =========================================================================
 // Phase 6: Click-box regressions
 // =========================================================================

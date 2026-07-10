@@ -292,7 +292,7 @@ impl DatePicker {
             height: pop_h,
         };
 
-        renderer.set_z_index(-900.0);
+        renderer.set_z_index(900.0);
 
         // Semi-transparent backdrop behind the popover
         renderer.fill_rect(anchor_rect, theme::with_alpha(theme::bg(), 0.25));

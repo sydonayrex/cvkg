@@ -278,9 +278,13 @@ impl Telemetry {
         tracing::info!("=== End Telemetry Summary ===");
     }
 
-    /// Clears all recorded events.
+    /// Clears all recorded events and resets aggregate counters.
     pub fn clear(&mut self) {
         self.events.clear();
+        self.frame_count = 0;
+        self.glass_element_count = 0;
+        self.contrast_failure_count = 0;
+        self.budget_exceeded_count = 0;
     }
 }
 
@@ -517,5 +521,34 @@ mod smoke_tests {
         let e = TelemetryEvent::ReducedTransparencyEnabled;
         assert!(e.is_accessibility_issue());
         assert!(!e.is_performance_issue());
+    }
+
+    #[test]
+    fn clear_resets_counters() {
+        // Regression B5: clear() must zero the aggregate counters, not just events.
+        let mut tel = Telemetry::default();
+        tel.record(TelemetryEvent::ContrastFailure {
+            element: "x".into(),
+            apca_lc: 42.0,
+            foreground: [1.0, 1.0, 1.0, 1.0],
+            background: [0.1, 0.1, 0.12, 1.0],
+        });
+        tel.record(TelemetryEvent::GlassElementRendered {
+            blur_radius: 1.0,
+            rect_area: 50.0,
+        });
+        tel.record(TelemetryEvent::FrameBudgetExceeded {
+            frame_time_ms: 30.0,
+            budget_ms: 16.0,
+        });
+        assert_eq!(tel.contrast_failure_count(), 1);
+        assert_eq!(tel.glass_element_count(), 1);
+        assert_eq!(tel.budget_exceeded_count(), 1);
+
+        tel.clear();
+        assert_eq!(tel.event_count(), 0);
+        assert_eq!(tel.contrast_failure_count(), 0);
+        assert_eq!(tel.glass_element_count(), 0);
+        assert_eq!(tel.budget_exceeded_count(), 0);
     }
 }

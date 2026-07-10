@@ -360,6 +360,10 @@ impl<V: View> View for GeriDialog<V> {
             return;
         }
 
+        // Pop the modal above all sibling content (carousel, page chrome, etc.)
+        // so it is never overdrawn or buried when nested inside a layout stack.
+        renderer.set_z_index(2000.0);
+
         renderer.fill_rect(rect, theme::shadow());
 
         let modal_w = (rect.width * 0.8).min(450.0);
