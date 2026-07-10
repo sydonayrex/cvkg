@@ -18,12 +18,18 @@ pub type NodeEventHandlerMap = HashMap<NodeId, EventHandlerMap>;
 /// and flow nodes share the same identity type. Allocates via `KvasirId::new()`.
 pub type NodeId = KvasirId;
 
-/// Represents the computed layout bounds of a component in the Virtual DOM.
+/// Local layout bounds of a component in the Virtual DOM.
+///
+/// `x` and `y` are offsets from the node's parent's content origin
+/// (not absolute screen coordinates); `width` and `height` are
+/// parent-independent. To obtain absolute/screen bounds for a node,
+/// compose the chain via [`VDom::world_rect`]. See
+/// `docs/nodal-coordinate-migration.md` Phase 1.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 pub struct LayoutRect {
-    /// X coordinate
+    /// X offset from parent content origin (NOT screen / world)
     pub x: f32,
-    /// Y coordinate
+    /// Y offset from parent content origin (NOT screen / world)
     pub y: f32,
     /// Width of the bounds
     pub width: f32,
@@ -112,7 +118,10 @@ pub struct VNode {
     pub props: HashMap<String, serde_json::Value>,
     /// Serialized internal state, captured for Inspector debugging
     pub state: Option<HashMap<String, serde_json::Value>>,
-    /// The computed layout bounds of this node
+    /// Local layout bounds, relative to parent content origin.
+    /// See [`VDom::world_rect`] for the absolute/world composition.
+    /// NOTE: As of the nodal-coordinate migration Phase 1, `x` and `y`
+    /// here are offsets, not absolute screen coordinates.
     pub layout: LayoutRect,
     /// Node IDs of the children
     pub children: Vec<NodeId>,

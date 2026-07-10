@@ -108,6 +108,45 @@ impl VDom {
         panels
     }
 
+    /// Compute a node's world-space (absolute) rect by composing local
+    /// offsets up the parent chain.
+    ///
+    /// This is the single source of truth for "where is this node on
+    /// screen" — no other type stores absolute positions. `VNode.layout`
+    /// is local; everything that needs absolute bounds (hit-testing,
+    /// AccessKit, scene graph sync, focus/capture rects) MUST call this.
+    ///
+    /// If the node's ancestor chain passes through a panel with
+    /// `world_space: Some(_)`, this method returns `None` and emits
+    /// `tracing::warn!` — composition past a `WorldSpacePanel`
+    /// requires `world_space_position` instead, since the panel's own
+    /// `Transform3D` projects into a different coordinate space. See
+    /// `docs/nodal-coordinate-migration.md` Phase 6.
+    pub fn world_rect(&self, id: NodeId) -> Option<LayoutRect> {
+        let node = self.nodes.get(&id)?;
+        let mut x = node.layout.x;
+        let mut y = node.layout.y;
+        let width = node.layout.width;
+        let height = node.layout.height;
+        let mut current = id;
+        while let Some(&parent_id) = self.parents.get(&current) {
+            let parent = self.nodes.get(&parent_id)?;
+            if parent.world_space.is_some() {
+                tracing::warn!(
+                    "VDom::world_rect({:?}) reached WorldSpacePanel ancestor {:?} \
+                     — composition is 3D-projected past this point, \
+                     returning None. Use VDom::world_space_position() instead.",
+                    id, parent_id
+                );
+                return None;
+            }
+            x += parent.layout.x;
+            y += parent.layout.y;
+            current = parent_id;
+        }
+        Some(LayoutRect { x, y, width, height })
+    }
+
     /// Build a VDom containing only the subtree rooted at `root_id`.
     fn build_subtree_vdom(&self, root_id: NodeId) -> VDom {
         let mut new_vdom = VDom::new();
