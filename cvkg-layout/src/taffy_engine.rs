@@ -100,6 +100,17 @@ pub struct FlexParams {
     pub distribution: cvkg_core::Distribution,
     pub bounds: Rect,
     pub container_hash: u64,
+    /// When true, child rects are returned in LOCAL coordinates (offsets
+    /// from parent's content origin: `(0,0)`-anchored) instead of ABSOLUTE
+    /// rects (offset accumulated from `bounds.x/y`). Defaults to false to
+    /// preserve existing callers' behavior.
+    ///
+    /// See `docs/nodal-coordinate-migration.md` Phase 3. Opt-in
+    /// because flipping it true at the call site requires the caller
+    /// to also update its `child.render(renderer, child_rect)` walk
+    /// downstream — every absolute rect assumption has to be reversed
+    /// in pairs.
+    pub local_mode: bool,
 }
 
 /// Collect intrinsic sizes for all children without running the Taffy solver.
@@ -309,8 +320,8 @@ pub fn compute_taffy_flex(
         match engine.tree.layout(node) {
             Ok(layout) => {
                 let rect = Rect {
-                    x: params.bounds.x + layout.location.x,
-                    y: params.bounds.y + layout.location.y,
+                    x: if params.local_mode { layout.location.x } else { params.bounds.x + layout.location.x },
+                    y: if params.local_mode { layout.location.y } else { params.bounds.y + layout.location.y },
                     width: layout.size.width,
                     height: layout.size.height,
                 };
@@ -359,6 +370,49 @@ impl HStack {
         }
     }
 
+    /// Compute the layout rects for children without placing them,
+    /// returning LOCAL rects (offsets relative to parent's content
+    /// origin) instead of ABSOLUTE rects.
+    ///
+    /// Opt-in counterpart of `compute_layout`. Used by callers adopting
+    /// `docs/nodal-coordinate-migration.md` Phase 3 — every caller that
+    /// takes the rects and forwards them to `child.render(renderer,
+    /// child_rect)` must be updated to NOT call `push_vnode`/`fill_rect`
+    /// with absolute coords anymore. See `docs/nodal-coordinate-migration-status.md`.
+    ///
+    /// Returns Rects whose `width`/`height` are real sizes; `x`/`y` are
+    /// anchored to (0, 0) regardless of what coordinates the caller
+    /// passes in `bounds.x/y`. `bounds.width` and `bounds.height` are
+    /// honored by taffy for size constraints.
+    pub fn compute_layout_local(
+        spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
+        subviews: &[&dyn LayoutView],
+        cache: &mut LayoutCache,
+        width: Option<f32>,
+        height: Option<f32>,
+    ) -> Vec<Rect> {
+        compute_taffy_flex(
+            &FlexParams {
+                dir: taffy::FlexDirection::Row,
+                spacing,
+                alignment,
+                distribution,
+                bounds: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: width.unwrap_or(std::f32::MAX),
+                    height: height.unwrap_or(std::f32::MAX),
+                },
+                container_hash: 0,
+                local_mode: true,
+            },
+            subviews,
+            cache,
+        )
+    }
+
     /// Compute the layout rects for children without placing them.
     ///
     /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
@@ -400,6 +454,7 @@ impl HStack {
                 distribution,
                 bounds,
                 container_hash,
+                local_mode: false,
             },
             subviews,
             cache,
@@ -462,6 +517,49 @@ impl VStack {
         }
     }
 
+    /// Compute the layout rects for children without placing them,
+    /// returning LOCAL rects (offsets relative to parent's content
+    /// origin) instead of ABSOLUTE rects.
+    ///
+    /// Opt-in counterpart of `compute_layout`. Used by callers adopting
+    /// `docs/nodal-coordinate-migration.md` Phase 3 — every caller that
+    /// takes the rects and forwards them to `child.render(renderer,
+    /// child_rect)` must be updated to NOT call `push_vnode`/`fill_rect`
+    /// with absolute coords anymore. See `docs/nodal-coordinate-migration-status.md`.
+    ///
+    /// Returns Rects whose `width`/`height` are real sizes; `x`/`y` are
+    /// anchored to (0, 0) regardless of what coordinates the caller
+    /// passes in `bounds.x/y`. `bounds.width` and `bounds.height` are
+    /// honored by taffy for size constraints.
+    pub fn compute_layout_local(
+        spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
+        subviews: &[&dyn LayoutView],
+        cache: &mut LayoutCache,
+        width: Option<f32>,
+        height: Option<f32>,
+    ) -> Vec<Rect> {
+        compute_taffy_flex(
+            &FlexParams {
+                dir: taffy::FlexDirection::Column,
+                spacing,
+                alignment,
+                distribution,
+                bounds: Rect {
+                    x: 0.0,
+                    y: 0.0,
+                    width: width.unwrap_or(std::f32::MAX),
+                    height: height.unwrap_or(std::f32::MAX),
+                },
+                container_hash: 0,
+                local_mode: true,
+            },
+            subviews,
+            cache,
+        )
+    }
+
     /// Compute the layout rects for children without placing them.
     ///
     /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
@@ -503,6 +601,7 @@ impl VStack {
                 distribution,
                 bounds,
                 container_hash,
+                local_mode: false,
             },
             subviews,
             cache,
@@ -786,6 +885,29 @@ impl Grid {
         }
     }
 
+    /// Computes the rects for children based on track sizing and grid
+    /// placements, returning LOCAL rects (anchored to (0, 0)) instead
+    /// of ABSOLUTE rects.
+    ///
+    /// Opt-in counterpart of `compute_layout_rects`. See
+    /// `docs/nodal-coordinate-migration.md` Phase 3 and
+    /// `docs/nodal-coordinate-migration-status.md`.
+    pub fn compute_layout_rects_local(
+        &self,
+        subviews: &[&dyn LayoutView],
+        placements: &[Option<cvkg_core::GridPlacement>],
+        cache: &mut LayoutCache,
+    ) -> Vec<Rect> {
+        self.compute_layout_rects_incremental(
+            Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
+            0,
+            subviews,
+            placements,
+            cache,
+            true,
+        )
+    }
+
     /// Computes the rects for children based on track sizing and grid placements.
     ///
     /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
@@ -797,7 +919,7 @@ impl Grid {
         placements: &[Option<cvkg_core::GridPlacement>],
         cache: &mut LayoutCache,
     ) -> Vec<Rect> {
-        self.compute_layout_rects_incremental(bounds, 0, subviews, placements, cache)
+        self.compute_layout_rects_incremental(bounds, 0, subviews, placements, cache, false)
     }
 
     pub fn compute_layout_rects_incremental(
@@ -807,6 +929,7 @@ impl Grid {
         subviews: &[&dyn LayoutView],
         placements: &[Option<cvkg_core::GridPlacement>],
         cache: &mut LayoutCache,
+        local_mode: bool,
     ) -> Vec<Rect> {
         if cache.is_over_budget() {
             let mut rects = Vec::with_capacity(subviews.len());
@@ -943,8 +1066,8 @@ impl Grid {
                 }
             };
             rects.push(Rect {
-                x: bounds.x + layout.location.x,
-                y: bounds.y + layout.location.y,
+                x: if local_mode { layout.location.x } else { bounds.x + layout.location.x },
+                y: if local_mode { layout.location.y } else { bounds.y + layout.location.y },
                 width: layout.size.width,
                 height: layout.size.height,
             });
@@ -985,6 +1108,7 @@ impl LayoutView for Grid {
             &views,
             &placements,
             cache,
+            false,
         );
         crate::animation::apply_layout_animations(rects, subviews, cache);
     }

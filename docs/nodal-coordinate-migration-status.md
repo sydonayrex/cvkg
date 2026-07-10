@@ -15,13 +15,42 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | **B.2** | Regression test for VDom-dispatch routing | **landed** | `cfa4162` |
 | **1** | Document local rect semantics; add `world_rect(id)` accessor | **landed** | `eec00a4` |
 | **2** | Readers route through cumulative offset, not absolute rect | **landed** | `06f0702` |
-| 3 | Stop flattening to absolute during `View::render` | **deferred** | — |
+| 3a | Layout engine opt-in `local_mode` (`compute_layout_local`) | **landed** (this session) | `5d7e0ed` |
+| 3 | Fully remove the absolute-flatten upstream walking | **deferred** | — |
 | 4 | Diff churning — only the parent's `Update` fires when it moves | **blocked** (depends on Phase 3) | — |
 | 5 | Physics + `AnimatedBox` local-rect semantics | **blocked** | — |
 | 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **deferred** | — |
 | 7 | AccessKit bridge routes through `world_rect` | **deferred** (depends on Phase 3) | — |
 | 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** as part of B.1 + B.1 | `b1622b7`, `cfa4162` |
 | 9–10 | Tests + final verification | **deferred** | — |
+
+### Phase 3a landed — opt-in Layout API
+
+`docs/nodal-coordinate-migration.md` Phase 3 has been started (commit `5d7e0ed`) but
+only the layout-engine layer, not the consumer migration. The change adds a
+non-breaking opt-in API to `cvkg-layout`:
+
+- `cvkg_layout::VStack::compute_layout_local(spacing, alignment,
+  distribution, subviews, cache, width, height)` — returns rects
+  anchored at `(0, 0)`, with sizes honored. Width/height are
+  `Option<f32>` so callers can pass `None` (uses `f32::MAX`) or hint
+  the inner size.
+- `cvkg_layout::HStack::compute_layout_local(...)` — same shape,
+  Row direction.
+- `cvkg_layout::Grid::compute_layout_rects_local(...)` — same shape.
+- Existing `compute_layout` and `compute_layout_rects` are
+  unchanged. No consumer breaks.
+
+Migration of any single component to local rects is now
+self-contained: stop calling `compute_layout` in `View::render`,
+start calling `compute_layout_local`, and adjust the downward walk
+to use local coords. Two unit tests (`test_local_layout_*` in
+`cvkg-layout/src/lib.rs`) cover the engine behavior.
+
+The remaining work for full Phase 3 (migrating every `View::render`
+callsite in `cvkg-components/src/` and propagating the
+`local_mode = true` flag through) is still multi-day.
+
 
 **Net result after commit `06f0702`:**
 - Architectural foundations for parent-relative coordinates exist; all

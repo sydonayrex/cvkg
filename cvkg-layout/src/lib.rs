@@ -281,6 +281,87 @@ mod tests {
     }
 
     #[test]
+    fn test_local_layout_vstack_returns_zero_anchored_rects() {
+        // `compute_layout_local` is the opt-in counterpart to `compute_layout`
+        // for Phase 3 of `docs/nodal-coordinate-migration.md`. Output rects
+        // have width/height as real sizes but x/y anchored to (0, 0).
+        let v1 = MockView {
+            size: Size {
+                width: 100.0,
+                height: 50.0,
+            },
+            flex: 0.0,
+        };
+        let v2 = MockView {
+            size: Size {
+                width: 80.0,
+                height: 60.0,
+            },
+            flex: 0.0,
+        };
+        let views: Vec<&dyn LayoutView> = vec![&v1, &v2];
+        let mut cache = LayoutCache::new();
+        let rects = VStack::compute_layout_local(
+            10.0,
+            Alignment::Leading,
+            Distribution::Leading,
+            &views,
+            &mut cache,
+            None,
+            None,
+        );
+
+        assert_eq!(rects.len(), 2);
+        // Both rects anchored at x = 0 under local mode
+        assert_eq!(rects[0].x, 0.0, "first child x must be 0 under local mode");
+        assert_eq!(rects[1].x, 0.0, "second child x must be 0 under local mode");
+        // Y positions are stacked: first child at 0, second below it
+        assert_eq!(rects[0].y, 0.0);
+        assert_eq!(rects[0].width, 100.0);
+        assert_eq!(rects[0].height, 50.0);
+        // Second child is below first (10px spacing between)
+        assert_eq!(rects[1].y, rects[0].height + 10.0);
+        assert_eq!(rects[1].width, 80.0);
+        assert_eq!(rects[1].height, 60.0);
+    }
+
+    #[test]
+    fn test_local_layout_hstack_widths_unchanged() {
+        // Local mode must not change widths/heights, only origin anchoring.
+        let v1 = MockView {
+            size: Size {
+                width: 50.0,
+                height: 30.0,
+            },
+            flex: 0.0,
+        };
+        let v2 = MockView {
+            size: Size {
+                width: 70.0,
+                height: 30.0,
+            },
+            flex: 0.0,
+        };
+        let views: Vec<&dyn LayoutView> = vec![&v1, &v2];
+        let mut cache = LayoutCache::new();
+        let rects = HStack::compute_layout_local(
+            10.0,
+            Alignment::Leading,
+            Distribution::Leading,
+            &views,
+            &mut cache,
+            None,
+            None,
+        );
+
+        assert_eq!(rects.len(), 2);
+        assert_eq!(rects[0].x, 0.0);
+        assert_eq!(rects[1].x, rects[0].width + 10.0);
+        assert_eq!(rects[0].width, 50.0);
+        assert_eq!(rects[1].width, 70.0);
+    }
+
+    #[test]
     fn test_grid_layout() {
         let v1 = MockView {
             size: Size::ZERO,
