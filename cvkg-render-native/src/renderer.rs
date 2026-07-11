@@ -25,6 +25,11 @@ thread_local! {
         const { std::cell::Cell::new(std::ptr::null_mut()) };
 }
 
+// Phase 3b/3c translation thread-local lives in cvkg_core::frame_renderer
+// so both cvkg-render-gpu and cvkg-render-native can read/write it
+// without a cross-crate dep edge. See cvkg_core::set_renderer_translation
+// / current_renderer_translation.
+
 /// RAII guard that clears `GPU_FRAME_PTR` on drop.
 ///
 /// # Safety Contract
@@ -443,29 +448,51 @@ impl cvkg_core::Renderer for NativeRenderer {
         // because components adopting local semantics (Phase 3a) will
         // also call this with LOCAL rects and the same path serves
         // both. Components not opting in get zero-net translation.
-        if self.translation_stack.is_empty() {
-            self.translation_stack.push(glam::Vec2::new(rect.x, rect.y));
+        let new_top = if self.translation_stack.is_empty() {
+            glam::Vec2::new(rect.x, rect.y)
         } else {
             // Compose with the parent's offset to get the new top.
             let parent = *self.translation_stack.last().unwrap();
-            self.translation_stack
-                .push(parent + glam::Vec2::new(rect.x, rect.y));
-        }
+            parent + glam::Vec2::new(rect.x, rect.y)
+        };
+        self.translation_stack.push(new_top);
+        // Broadcast to the GPU-side thread-local so drawing primitives
+        // (which read translation via the bypass pointer) see the same
+        // value the renderer-level `current_translation()` returns.
+        cvkg_core::set_renderer_translation(new_top);
         self.gpu_ref().push_vnode(rect, name);
     }
     fn pop_vnode(&mut self) {
-        let _ = self.translation_stack.pop();
+        let popped = self.translation_stack.pop();
+        // Mirror the pop into the thread-local so primitives no longer
+        // see the popped translation.
+        let new_top = self
+            .translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO);
+        cvkg_core::set_renderer_translation(new_top);
+        let _ = popped;
         self.gpu_ref().pop_vnode();
     }
     fn push_translation(&mut self, translation: glam::Vec2) {
-        if let Some(parent) = self.translation_stack.last() {
-            self.translation_stack.push(*parent + translation);
+        let new_top = if let Some(parent) = self.translation_stack.last() {
+            *parent + translation
         } else {
-            self.translation_stack.push(translation);
-        }
+            translation
+        };
+        self.translation_stack.push(new_top);
+        cvkg_core::set_renderer_translation(new_top);
     }
     fn pop_translation(&mut self) {
-        let _ = self.translation_stack.pop();
+        let popped = self.translation_stack.pop();
+        let new_top = self
+            .translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO);
+        cvkg_core::set_renderer_translation(new_top);
+        let _ = popped;
     }
     fn current_translation(&self) -> glam::Vec2 {
         self.translation_stack

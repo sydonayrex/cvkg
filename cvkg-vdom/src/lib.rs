@@ -1664,10 +1664,24 @@ impl cvkg_core::Renderer for VNodeRenderer {
     // walk (peeled by `pop_translation` at VDOM close).
     fn push_translation(&mut self, translation: glam::Vec2) {
         self.translation_stack.push([translation.x, translation.y]);
+        // Phase 3b/3c: bridge the storage Vec<[f32;2]> to the
+        // cvkg_core thread-local so any GPU consumer that consults
+        // `current_renderer_translation()` (in case VDOM is used as
+        // the painting path in tests) sees the same value.
+        cvkg_core::set_renderer_translation(translation);
     }
 
     fn pop_translation(&mut self) {
-        let _ = self.translation_stack.pop();
+        self.translation_stack.pop();
+        // Restore the new top to the thread-local so nested pops
+        // correctly reflect cumulative state.
+        let new_top = self
+            .translation_stack
+            .last()
+            .copied()
+            .map(|[x, y]| glam::Vec2::new(x, y))
+            .unwrap_or(glam::Vec2::ZERO);
+        cvkg_core::set_renderer_translation(new_top);
     }
 
     fn current_translation(&self) -> glam::Vec2 {

@@ -423,6 +423,14 @@ impl GpuRenderer {
         let texture_id = None; // Oriented quads like lightning don't use textures yet
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        // Phase 3b/3c: components adopting local-rect semantics push
+        // their node-local offset. Compose with the transform-stack
+        // translation so primitives render at the parent frame.
+        let renderer_translation = cvkg_core::current_renderer_translation();
+        let translation = [
+            translation[0] + renderer_translation.x,
+            translation[1] + renderer_translation.y,
+        ];
         let current_instance_data = InstanceData {
             translation,
             scale: scale_transform,
