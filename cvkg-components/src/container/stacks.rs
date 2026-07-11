@@ -166,13 +166,14 @@ impl LayoutView for VStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let _rects = cvkg_layout::VStack::compute_layout(
+        let _rects = cvkg_layout::VStack::compute_layout_local(
             self.spacing,
             self.alignment,
             self.distribution,
-            bounds,
             &layouts,
             cache,
+            Some(bounds.width),
+            Some(bounds.height),
         );
     }
 }
@@ -228,13 +229,21 @@ impl View for LazyVStack {
 
         for idx in start_idx..end_idx {
             let child = &self.children[idx];
-            let child_y = rect.y + idx as f32 * (child_height + self.spacing);
+            // Phase 3d: pass a LOCAL rect to each child. The parent's
+            // translation already covers the vertical position since
+            // push_vnode(rect) registered rect.x/y on the translation
+            // stack in Phase 3b. Setting rect.y to 0 means we pass 0
+            // (local) — translation adds the actual screen y back.
+            // For y, the View::render contract doesn't directly read
+            // rect.y; we compose rect.y ourselves below as the local
+            // child_y offset.
+            let child_y_local = idx as f32 * (child_height + self.spacing);
 
             child.render(
                 renderer,
                 Rect {
-                    x: rect.x,
-                    y: child_y,
+                    x: 0.0,
+                    y: child_y_local,
                     width: rect.width,
                     height: child_height,
                 },
@@ -313,13 +322,14 @@ impl View for HStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let rects = cvkg_layout::HStack::compute_layout(
+        let rects = cvkg_layout::HStack::compute_layout_local(
             self.spacing,
             self.alignment,
             self.distribution,
-            rect,
             &layouts,
             &mut cache,
+            Some(rect.width),
+            Some(rect.height),
         );
 
         let mut rect_idx = 0;
@@ -386,13 +396,14 @@ impl LayoutView for HStack {
         let layouts: Vec<&dyn LayoutView> =
             self.children.iter().filter_map(|c| c.layout()).collect();
 
-        let _rects = cvkg_layout::HStack::compute_layout(
+        let _rects = cvkg_layout::HStack::compute_layout_local(
             self.spacing,
             self.alignment,
             self.distribution,
-            bounds,
             &layouts,
             cache,
+            Some(bounds.width),
+            Some(bounds.height),
         );
     }
 }

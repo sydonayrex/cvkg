@@ -81,20 +81,15 @@ fn test_journey_layout_flex_distribution() {
 
     let views_fixed: Vec<&dyn LayoutView> = vec![&v1_fixed, &v2, &v3];
     let mut cache = LayoutCache::new();
-    let bounds = Rect {
-        x: 0.0,
-        y: 0.0,
-        width: 310.0,
-        height: 100.0,
-    };
 
-    let rects = HStack::compute_layout(
+    let rects = HStack::compute_layout_local(
         10.0,
         Alignment::Center,
         Distribution::Leading,
-        bounds,
         &views_fixed,
         &mut cache,
+        Some(310.0),
+        Some(100.0),
     );
 
     assert_eq!(rects.len(), 3);

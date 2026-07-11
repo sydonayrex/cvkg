@@ -96,7 +96,7 @@ impl<'a> ProgressiveLayoutContext<'a> {
             batch_indices.iter().map(|&i| self.children[i]).collect();
 
         let rects = match cache {
-            Some(ref mut c) => crate::taffy_engine::HStack::compute_layout_incremental(
+            Some(ref mut c) => crate::taffy_engine::HStack::compute_layout_incremental_local(
                 self.spacing,
                 self.alignment,
                 self.distribution,
@@ -107,7 +107,7 @@ impl<'a> ProgressiveLayoutContext<'a> {
             ),
             None => {
                 let mut tmp = LayoutCache::new();
-                crate::taffy_engine::HStack::compute_layout_incremental(
+                crate::taffy_engine::HStack::compute_layout_incremental_local(
                     self.spacing,
                     self.alignment,
                     self.distribution,

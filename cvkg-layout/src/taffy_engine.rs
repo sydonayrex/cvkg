@@ -32,10 +32,11 @@ impl std::ops::DerefMut for SyncTaffyTree {
 
 /// The central Taffy engine that computes flexbox and grid layouts.
 /// Stored opaquely inside `cvkg_core::LayoutCache::engine`.
-// TODO(nodal-coord-migration): Phase 3 — this engine returns ABSOLUTE
-// rects to its callers. The migration plan requires it to return LOCAL
-// rects (offsets from parent's content origin). See
-// `docs/nodal-coordinate-migration.md` Phase 3.
+// NOTE: The `compute_layout` functions on HStack/VStack/Grid have both
+// absolute-mode (legacy, kept for backward compatibility) and local-mode
+// variants. New code should use `compute_layout_local` /
+// `compute_layout_rects_local`. See `docs/nodal-coordinate-migration.md`
+// Phase 3.
 pub struct TaffyLayoutEngine {
     pub tree: SyncTaffyTree,
     pub node_map: HashMap<u64, taffy::NodeId>,
@@ -415,8 +416,7 @@ impl HStack {
 
     /// Compute the layout rects for children without placing them.
     ///
-    /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
-    /// to parent's content origin (currently returns ABSOLUTE rects).
+    /// Legacy absolute-mode API. New code should use `compute_layout_local`.
     /// See `docs/nodal-coordinate-migration.md` Phase 3.
     pub fn compute_layout(
         spacing: f32,
@@ -455,6 +455,32 @@ impl HStack {
                 bounds,
                 container_hash,
                 local_mode: false,
+            },
+            subviews,
+            cache,
+        )
+    }
+
+    /// Opt-in counterpart of `compute_layout_incremental`. Used by callers
+    /// adopting local-rect semantics (Phase 3c).
+    pub fn compute_layout_incremental_local(
+        spacing: f32,
+        alignment: Alignment,
+        distribution: Distribution,
+        bounds: Rect,
+        container_hash: u64,
+        subviews: &[&dyn LayoutView],
+        cache: &mut LayoutCache,
+    ) -> Vec<Rect> {
+        compute_taffy_flex(
+            &FlexParams {
+                dir: taffy::FlexDirection::Row,
+                spacing,
+                alignment,
+                distribution,
+                bounds,
+                container_hash,
+                local_mode: true,
             },
             subviews,
             cache,
@@ -562,8 +588,7 @@ impl VStack {
 
     /// Compute the layout rects for children without placing them.
     ///
-    /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
-    /// to parent's content origin (currently returns ABSOLUTE rects).
+    /// Legacy absolute-mode API. New code should use `compute_layout_local`.
     /// See `docs/nodal-coordinate-migration.md` Phase 3.
     pub fn compute_layout(
         spacing: f32,
@@ -910,8 +935,8 @@ impl Grid {
 
     /// Computes the rects for children based on track sizing and grid placements.
     ///
-    /// TODO(nodal-coord-migration): Phase 3 — return LOCAL rects relative
-    /// to parent's content origin (currently returns ABSOLUTE rects).
+    /// Legacy absolute-mode API. New code should use `compute_layout_rects_local`.
+    /// See `docs/nodal-coordinate-migration.md` Phase 3.
     pub fn compute_layout_rects(
         &self,
         bounds: Rect,

@@ -57,7 +57,7 @@ impl View for Grid {
         unreachable!()
     }
 
-    fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+    fn render(&self, renderer: &mut dyn Renderer, _rect: Rect) {
         if self.children.is_empty() {
             return;
         }
@@ -82,7 +82,7 @@ impl View for Grid {
             .layout_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let rects = grid_engine.compute_layout_rects(rect, &layouts, &placements, &mut cache);
+        let rects = grid_engine.compute_layout_rects_local(&layouts, &placements, &mut cache);
 
         let mut rect_idx = 0;
         for child in &self.children {
@@ -112,13 +112,13 @@ impl View for Grid {
 
         let width = proposal.width.unwrap_or(300.0);
         let height = proposal.height.unwrap_or(300.0);
-        let bounds = Rect::new(0.0, 0.0, width, height);
+        let _bounds = Rect::new(0.0, 0.0, width, height);
 
         let mut cache = self
             .layout_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let rects = grid_engine.compute_layout_rects(bounds, &layouts, &placements, &mut cache);
+        let rects = grid_engine.compute_layout_rects_local(&layouts, &placements, &mut cache);
 
         if rects.is_empty() {
             return Size::ZERO;

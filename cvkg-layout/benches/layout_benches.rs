@@ -52,19 +52,14 @@ fn bench_hstack_single_threaded(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &_n| {
             b.iter(|| {
                 let mut cache = LayoutCache::new();
-                let bounds = Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: n as f32 * 60.0,
-                    height: 200.0,
-                };
-                HStack::compute_layout(
+                HStack::compute_layout_local(
                     0.0,
                     Alignment::Leading,
                     Distribution::Leading,
-                    bounds,
                     &subviews,
                     &mut cache,
+                    Some(n as f32 * 60.0),
+                    Some(200.0),
                 )
             });
         });
@@ -81,24 +76,19 @@ fn bench_hstack_parallel(c: &mut Criterion) {
         let views = make_views(n);
         group.bench_with_input(BenchmarkId::from_parameter(n), &n, |b, &_n| {
             b.iter(|| {
-                let bounds = Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: n as f32 * 60.0,
-                    height: 200.0,
-                };
                 // Parallel size computation on concrete type (Send + Sync)
                 let sizes: Vec<Size> = views.par_iter().map(|v| v.size).collect();
                 let _ = sizes;
                 let subviews = collect_subviews(&views);
                 let mut cache = LayoutCache::new();
-                HStack::compute_layout(
+                HStack::compute_layout_local(
                     0.0,
                     Alignment::Leading,
                     Distribution::Leading,
-                    bounds,
                     &subviews,
                     &mut cache,
+                    Some(n as f32 * 60.0),
+                    Some(200.0),
                 )
             });
         });
@@ -165,19 +155,14 @@ fn bench_wide_tree(c: &mut Criterion) {
     group.bench_function("single_threaded", |b| {
         b.iter(|| {
             let mut cache = LayoutCache::new();
-            let bounds = Rect {
-                x: 0.0,
-                y: 0.0,
-                width: n as f32 * 60.0,
-                height: 200.0,
-            };
-            HStack::compute_layout(
+            HStack::compute_layout_local(
                 0.0,
                 Alignment::Leading,
                 Distribution::Leading,
-                bounds,
                 &subviews,
                 &mut cache,
+                Some(n as f32 * 60.0),
+                Some(200.0),
             )
         });
     });
@@ -187,23 +172,18 @@ fn bench_wide_tree(c: &mut Criterion) {
         use rayon::prelude::*;
         group.bench_function("parallel", |b| {
             b.iter(|| {
-                let bounds = Rect {
-                    x: 0.0,
-                    y: 0.0,
-                    width: n as f32 * 60.0,
-                    height: 200.0,
-                };
                 // Parallel size queries on concrete type
                 let _sizes: Vec<Size> = views.par_iter().map(|v| v.size).collect();
                 let subviews = collect_subviews(&views);
                 let mut cache = LayoutCache::new();
-                HStack::compute_layout(
+                HStack::compute_layout_local(
                     0.0,
                     Alignment::Leading,
                     Distribution::Leading,
-                    bounds,
                     &subviews,
                     &mut cache,
+                    Some(n as f32 * 60.0),
+                    Some(200.0),
                 )
             });
         });

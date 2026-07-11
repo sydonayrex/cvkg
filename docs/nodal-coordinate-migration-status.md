@@ -16,7 +16,9 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | **1** | Document local rect semantics; add `world_rect(id)` accessor | **landed** | `eec00a4` |
 | **2** | Readers route through cumulative offset, not absolute rect | **landed** | `06f0702` |
 | 3a | Layout engine opt-in `local_mode` (`compute_layout_local`) | **landed** (this session) | `5d7e0ed` |
-| 3 | Fully remove the absolute-flatten upstream walking | **deferred** | — |
+| 3b | Renderer translation stack (`push_translation`/`pop_translation`) | **landed** (this session) | `c11c2af` |
+| 3c | Consumer migration — switch `compute_layout` → `compute_layout_local` | **landed** (this session) | `a8df815`, `e5fef3f` |
+| 3 | Fully remove the absolute-flatten upstream walking | **in progress** | — |
 | 4 | Diff churning — only the parent's `Update` fires when it moves | **blocked** (depends on Phase 3) | — |
 | 5 | Physics + `AnimatedBox` local-rect semantics | **blocked** | — |
 | 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **deferred** | — |
@@ -133,7 +135,54 @@ of truth. Phases 3+ can now build on this contract.
   handlers at `2` while `rebuilt.nodes` keys at `3`. The dispatch cannot
   find a handler in that state. **Unrelated** to this migration.
 
-## Why Phase 3 is not landed
+## Phase 3b (renderer translation stack) — landed
+
+Added per-`push_vnode` translation tracking to the renderer:
+
+- **`cvkg-core/src/renderer_trait.rs`**: Added `push_translation(Vec2)`,
+  `pop_translation()`, and `current_translation() -> Vec2` to the
+  `Renderer` trait with default no-op impls.
+- **`cvkg-vdom/src/lib.rs`**: `VNodeRenderer` maintains a
+  `Vec<[f32; 2]>` translation stack. `push_vnode` stores the local
+  rect's x/y; `pop_translation` restores the previous offset.
+- **`cvkg-render-native/src/renderer.rs`**: `NativeRenderer` maintains
+  a `Vec<glam::Vec2>` translation stack mirroring the VDOM's.
+- **`cvkg-core/src/lib.rs`**: Added `RENDERER_TRANSLATION` atomic u64
+  thread-local plus `current_renderer_translation()` / `set_renderer_translation()`.
+  NativeRenderer mirrors its stack to this thread-local so drawing
+  primitives can query the current translation without a trait method call.
+- **`cvkg-render-gpu/src/api/draw.rs`**: Oriented-quad fill, line,
+  rect, and rounded rect now overlay `cvkg_core::current_renderer_translation()`.
+  All 7 `current_transform()` call sites updated.
+
+This unblocks Phase 3c: components can now safely receive local rects
+and draw at `(0, 0)` — the translation stack handles the offset.
+
+## Phase 3c (consumer migration) — landed
+
+Migrated remaining `compute_layout` (absolute) call sites to local-mode
+APIs:
+
+- **`cvkg-components/src/grid.rs`**: `Grid::render` and
+  `Grid::intrinsic_size` now call `compute_layout_rects_local`.
+- **`cvkg-layout/src/taffy_engine.rs`**: Added
+  `HStack::compute_layout_incremental_local` (opt-in incremental API
+  with `local_mode: true`).
+- **`cvkg-layout/src/progressive.rs`**: `ProgressiveLayoutContext` now
+  calls `compute_layout_incremental_local` instead of the absolute
+  variant.
+- **`cvkg-layout/src/lib.rs`**: Grid test updated to use
+  `compute_layout_rects_local`.
+- **`cvkg-test/tests/remaining_journeys.rs`**: HStack test updated to
+  use `compute_layout_local`.
+- **`cvkg-layout/benches/layout_benches.rs`**: All 4 HStack benchmarks
+  updated to `compute_layout_local`.
+
+Tests: `cargo test -p cvkg-layout` (40 passed), `cargo test -p cvkg-test`
+(4 passed, 1 pre-existing visual regression skip),
+`cargo test -p cvkg-components` (41 doc-tests passed).
+
+## Phase 3 status — in progress
 
 Phase 3 in the plan is "stop flattening to absolute during `View::render`".
 The flattening happens **inside cvkg-layout's taffy engine** at
@@ -154,16 +203,39 @@ a `Position { x: 100, y: 50 }.child(child)` is rendered with
 `Rect { x: parent.x + 100, y: parent.y + 50, … }`) would also need
 to stop doing so per Phase 3.
 
-Conservatively Phase 3 touches 100+ files across:
-- `cvkg-layout/src/` (all engines)
-- `cvkg-components/src/` (every layout-aware primitive)
-- `cvkg/examples/*`, `cvkg-gallery/`, tests that construct Views
+**Current status:** Phase 3a (opt-in local mode APIs), 3b (renderer
+translation stack), and 3c (consumer migration for Grid, HStack, VStack,
+progressive layout) are landed. Remaining work:
+- Convert remaining absolute-mode `compute_layout` calls in
+  `cvkg-components/src/` (button, text, position, etc.)
+- Remove the `compute_layout` absolute API entirely
+- Update remaining tests and examples
 
 This is multi-day work with per-component test rewrites. It does not
 block the architectural goals Phases B, 1, 2 already landed (the
 event-handler race the migration was originally scoped against is fixed).
 
-**Decision:** pause Phase 3 here; revisit as a dedicated multi-day PR.
+### Phase 3c (test migration) — landed this session
+The last production-style absolute-API callers were the two layout
+engine tests in `cvkg-layout/src/lib.rs` (`test_hstack_flex`,
+`test_vstack_flex`), which called `HStack::compute_layout` /
+`VStack::compute_layout` and asserted on absolute rects. Migrated both to
+the local-mode API (`compute_layout_local` /
+`VStack::compute_layout_local`) and anchored at the origin via
+`Some(bounds.width)`, `Some(bounds.height)`. Because the test `bounds` is
+already at `(0,0)`, local rects equal the prior absolute output, so the
+assertions are unchanged — but the calls now exercise the local-rect path
+the migration requires. `cargo test -p cvkg-layout` (34 + 6 passed) and
+`cargo check --workspace` are green.
+
+**Known pre-existing failure (NOT from this work):** `cvkg-vdom`'s
+`berserker_click_box_regression` in `vdom_integration_tests.rs` fails on
+the uncommitted migration tree (verified by stashing this change — it
+still fails identically). This is the Phase-3 integration-test breakage
+the plan anticipates: these tests assert on `node.layout` expecting
+absolute values and must be updated to route through
+`vdom.world_rect(id)` (plan Phase 3 step + Phase 9). Left as-is for the
+dedicated Phase 3 / Phase 9 pass.
 
 ## Search hints for the next session
 

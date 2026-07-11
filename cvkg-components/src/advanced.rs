@@ -150,19 +150,22 @@ impl<V: View> View for SvadilVeil<V> {
             let size =
                 content.intrinsic_size(renderer, SizeProposal::tight(rect.width, rect.height));
             // Delegate centering to the layout engine via HStack+VStack
+            // (Phase 3d: switched to *_local — content rendered at
+            // (0, 0, w, h) lands via the renderer's translation stack)
             let inner = Rect::new(rect.x, rect.y, rect.width, rect.height);
             let mut cache = LayoutCache::new();
             let layouts: Vec<&dyn LayoutView> = vec![];
-            let row = cvkg_layout::HStack::compute_layout(
+            let row = cvkg_layout::HStack::compute_layout_local(
                 0.0,
                 cvkg_core::Alignment::Center,
                 cvkg_core::Distribution::Center,
-                inner,
                 &layouts,
                 &mut cache,
+                Some(inner.width),
+                Some(inner.height),
             );
-            let cx = if !row.is_empty() { row[0].x } else { rect.x };
-            let cy = if !row.is_empty() { row[0].y } else { rect.y };
+            let cx = if !row.is_empty() { row[0].x } else { 0.0 };
+            let cy = if !row.is_empty() { row[0].y } else { 0.0 };
             content.render(renderer, Rect::new(cx, cy, size.width, size.height));
         }
         renderer.pop_vnode();
@@ -895,14 +898,20 @@ impl<V: View> View for MuninMenubar<V> {
         let mut cache = cvkg_core::layout::LayoutCache::new();
         let inner_rect = Rect::new(rect.x + 8.0, rect.y, rect.width - 16.0, rect.height);
 
-        // Delegate structural geometry to the layout engine
-        let rects = cvkg_layout::HStack::compute_layout(
+        // Delegate structural geometry to the layout engine.
+        // Phase 3d: switched to *_local. The 8-pixel left/right gutters
+        // are still OPTED INTO via the bounds passed to taffy; the
+        // output rects are local-anchored at (0, 0) and the renderer's
+        // translation stack carries the rect.x + 8 to the children
+        // when they call fill_rect etc.
+        let rects = cvkg_layout::HStack::compute_layout_local(
             12.0,
             cvkg_core::Alignment::Center,
             cvkg_core::Distribution::Leading,
-            inner_rect,
             &layouts,
             &mut cache,
+            Some(inner_rect.width),
+            Some(inner_rect.height),
         );
 
         let mut idx = 0;
@@ -972,13 +981,15 @@ impl<V: View> cvkg_core::layout::LayoutView for MuninMenubar<V> {
         }
         let inner_rect =
             cvkg_core::Rect::new(bounds.x + 8.0, bounds.y, bounds.width - 16.0, bounds.height);
-        let rects = cvkg_layout::HStack::compute_layout(
+        // Phase 3d: switch to *_local — same behavior, local-anchored output.
+        let rects = cvkg_layout::HStack::compute_layout_local(
             12.0,
             cvkg_core::Alignment::Center,
             cvkg_core::Distribution::Leading,
-            inner_rect,
             &layouts,
             cache,
+            Some(inner_rect.width),
+            Some(inner_rect.height),
         );
         // Delegate each subview into its computed rect
         for (i, sv) in subviews.iter_mut().enumerate() {

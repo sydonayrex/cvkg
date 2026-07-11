@@ -195,13 +195,18 @@ mod tests {
             height: 200.0,
         };
 
-        let rects = HStack::compute_layout(
+        // Phase 3: switch to local-mode API (children anchored at (0,0)).
+        // `bounds` is already at the origin, so the local rects match the
+        // previous absolute output — the assertions are unchanged, but the
+        // call now exercises the local-rect path that the migration requires.
+        let rects = HStack::compute_layout_local(
             10.0,
             Alignment::Center,
             Distribution::Leading,
-            bounds,
             &views,
             &mut cache,
+            Some(bounds.width),
+            Some(bounds.height),
         );
 
         assert_eq!(rects.len(), 2);
@@ -250,13 +255,17 @@ mod tests {
             height: 160.0,
         };
 
-        let rects = VStack::compute_layout(
+        // Phase 3: switch to local-mode API (children anchored at (0,0)).
+        // `bounds` is at the origin, so the local rects match the previous
+        // absolute output — assertions unchanged, path now exercises local rects.
+        let rects = VStack::compute_layout_local(
             10.0,
             Alignment::Leading,
             Distribution::Fill,
-            bounds,
             &views,
             &mut cache,
+            Some(bounds.width),
+            Some(bounds.height),
         );
 
         assert_eq!(rects.len(), 2);
@@ -377,12 +386,6 @@ mod tests {
         };
         let views: Vec<&dyn LayoutView> = vec![&v1, &v2, &v3];
         let mut cache = LayoutCache::new();
-        let bounds = Rect {
-            x: 0.0,
-            y: 0.0,
-            width: 210.0,
-            height: 210.0,
-        };
 
         let grid = Grid::new(
             vec![GridTrack::Fixed(100.0), GridTrack::Fixed(100.0)],
@@ -411,7 +414,7 @@ mod tests {
             }),
         ];
 
-        let rects = grid.compute_layout_rects(bounds, &views, &placements, &mut cache);
+        let rects = grid.compute_layout_rects_local(&views, &placements, &mut cache);
 
         assert_eq!(rects.len(), 3);
         assert_eq!(
