@@ -457,6 +457,13 @@ struct GalleryState {
     /// single momentum/inertial scroll gesture (many small MouseWheel events)
     /// advances the carousel smoothly instead of racing through every card.
     wheel_accum: f32,
+    /// Continuous rotation angle for smooth 2.5D carousel animation.
+    /// Radians; updated via spring physics toward `target_angle`.
+    current_angle: f32,
+    /// Target rotation angle (set when `selected` changes).
+    target_angle: f32,
+    /// Angular velocity for spring animation (radians/sec).
+    angular_velocity: f32,
 }
 
 impl GalleryState {
@@ -482,6 +489,9 @@ impl GalleryState {
             command_query: String::new(),
             command_palette_open: true,
             wheel_accum: 0.0,
+            current_angle: 0.0,
+            target_angle: 0.0,
+            angular_velocity: 0.0,
         }
     }
 }
@@ -504,11 +514,30 @@ impl View for GalleryApp {
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        let selected = state.selected;
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+
+        // ── Spring animation: tick current_angle toward target_angle ──
+        // Spring parameters: stiff (snappy) but with enough damping to avoid oscillation.
+        const SPRING_STIFFNESS: f32 = 180.0;
+        const SPRING_DAMPING: f32 = 22.0;
+        let dt = 1.0 / 60.0; // Fixed timestep per frame
+        let displacement = state.current_angle - state.target_angle;
+        let spring_force = -SPRING_STIFFNESS * displacement;
+        let damping_force = -SPRING_DAMPING * state.angular_velocity;
+        let acceleration = spring_force + damping_force;
+        state.angular_velocity += acceleration * dt;
+        state.current_angle += state.angular_velocity * dt;
+        // Snap to target when close enough to avoid sub-pixel jitter
+        if displacement.abs() < 0.001 && state.angular_velocity.abs() < 0.01 {
+            state.current_angle = state.target_angle;
+            state.angular_velocity = 0.0;
+        }
+
+        // Snapshot the state we need for rendering (immutable borrow)
         let entries = &state.entries;
-        let num_entries = entries.len();
-        let half = num_entries as f32 / 2.0;
+        let selected = state.selected;
+        let num_entries = state.entries.len();
+        let current_angle = state.current_angle;
 
         // Capture the cumulative parent translation so the hit-test closure
         // can convert screen-space click coordinates to local space.
@@ -520,27 +549,20 @@ impl View for GalleryApp {
         renderer.fill_rect(rect, [0.07, 0.008, 0.008, 1.0]);
         renderer.set_z_index(0.0);
 
-        // 2. Draw 3D Carousel (Top Panel)
+        // 2. Draw 2.5D Carousel (Top Panel)
+        // Each card is placed at a continuous angle from the carousel center.
+        // The `current_angle` offset provides smooth animated transitions.
+        let card_spacing = 0.42; // radians between cards
+
+        // Sort by depth (back-to-front) for correct overlap.
+        // Use continuous angle so sorting updates smoothly during animation.
         let mut draw_order: Vec<usize> = (0..num_entries).collect();
         draw_order.sort_by(|&a, &b| {
-            let mut diff_a = (a as i32 - selected as i32) as f32;
-            while diff_a > half {
-                diff_a -= num_entries as f32;
-            }
-            while diff_a < -half {
-                diff_a += num_entries as f32;
-            }
-
-            let mut diff_b = (b as i32 - selected as i32) as f32;
-            while diff_b > half {
-                diff_b -= num_entries as f32;
-            }
-            while diff_b < -half {
-                diff_b += num_entries as f32;
-            }
-
-            let cos_a = (diff_a * 0.45).cos();
-            let cos_b = (diff_b * 0.45).cos();
+            let angle_a = current_angle + a as f32 * card_spacing;
+            let angle_b = current_angle + b as f32 * card_spacing;
+            let cos_a = angle_a.cos();
+            let cos_b = angle_b.cos();
+            // Back cards (lower cos) drawn first
             cos_a
                 .partial_cmp(&cos_b)
                 .unwrap_or(std::cmp::Ordering::Equal)
@@ -558,55 +580,88 @@ impl View for GalleryApp {
         let center_x = carousel_rect.x + carousel_rect.width / 2.0;
         let center_y = carousel_rect.y + carousel_rect.height / 2.0;
 
-        for i in draw_order {
-            let mut diff = (i as i32 - selected as i32) as f32;
-            while diff > half {
-                diff -= num_entries as f32;
-            }
-            while diff < -half {
-                diff += num_entries as f32;
-            }
+        // ── 2.5D transform constants ──
+        const YAW_FACTOR: f32 = 0.18; // rotation (yaw) per radian of arc position
+        const SKEW_FACTOR: f32 = 0.12; // horizontal perspective skew per radian
+        const DEPTH_FADE: f32 = 0.4; // opacity reduction at maximum depth
+        const SHADOW_INTENSITY: f32 = 0.6; // shadow alpha at back cards
 
-            let calculate_card_rect = |d: f32| -> Rect {
-                let angle = d * 0.42;
-                let cos_a = angle.cos();
-                let sin_a = angle.sin();
-                let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
-                let card_w = 190.0 * scale * cos_a.abs();
-                let card_h = 110.0 * scale;
-                Rect {
-                    x: center_x + 360.0 * sin_a * scale - card_w / 2.0,
-                    y: center_y + 12.0 * (1.0 - cos_a) * scale - card_h / 2.0,
-                    width: card_w,
-                    height: card_h,
-                }
+        for i in draw_order {
+            // Continuous angle for this card (animated)
+            let angle = current_angle + i as f32 * card_spacing;
+            let cos_a = angle.cos();
+            let sin_a = angle.sin();
+            let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
+
+            // Card rect (same math as before, but using continuous angle)
+            let card_w = 190.0 * scale * cos_a.abs();
+            let card_h = 110.0 * scale;
+            let card_rect = Rect {
+                x: center_x + 360.0 * sin_a * scale - card_w / 2.0,
+                y: center_y + 12.0 * (1.0 - cos_a) * scale - card_h / 2.0,
+                width: card_w,
+                height: card_h,
             };
 
-            let angle = diff * 0.42;
-            let cos_a = angle.cos();
-            let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
-            let card_rect = calculate_card_rect(diff);
-
-            let z_index = diff.abs() * 10.0;
+            // Z-index: cards further from center drawn behind
+            let depth = (angle.rem_euclid(std::f32::consts::TAU / num_entries as f32)
+                - std::f32::consts::PI)
+                .abs();
+            let z_index = depth * 10.0;
             renderer.set_z_index(z_index);
 
             let is_selected = i == selected;
 
+            // ── 2.5D transform: push affine for perspective + rotation ──
+            // Compute yaw rotation (tilt left/right based on arc position)
+            let yaw = -sin_a * YAW_FACTOR;
+            // Compute perspective skew (horizontal compression for side cards)
+            let skew_x = sin_a * SKEW_FACTOR;
+            // Build affine matrix: [a, b, c, d, e, f] = [m11, m12, m21, m22, tx, ty]
+            // Rotation:  cos(yaw)  -sin(yaw)
+            //            sin(yaw)   cos(yaw)
+            // Skew:  applied as horizontal shear
+            let cy = yaw.cos();
+            let sy = yaw.sin();
+            let affine = [
+                cy * scale,                 // m11: scale + yaw rotation
+                sy * scale,                 // m12
+                -sy * scale + skew_x,       // m21: skew
+                cy * scale,                 // m22
+                card_rect.x + card_w / 2.0, // tx: rotate around card center
+                card_rect.y + card_h / 2.0, // ty
+            ];
+            renderer.push_affine(affine);
+            // Translate back so drawing happens at the correct position
+            renderer.push_transform(
+                [
+                    card_rect.x - (card_rect.x + card_w / 2.0),
+                    card_rect.y - (card_rect.y + card_h / 2.0),
+                ],
+                [1.0, 1.0],
+                0.0,
+            );
+
+            // ── Depth-based opacity ──
+            let depth_factor = (1.0 - cos_a).clamp(0.0, 1.0);
+            let depth_alpha = 1.0 - depth_factor * DEPTH_FADE;
+
             let bg_color = if is_selected {
-                [0.06, 0.055, 0.06, 1.0]
+                [0.06, 0.055, 0.06, depth_alpha]
             } else {
-                [0.02, 0.018, 0.02, 1.0]
+                [0.02, 0.018, 0.02, depth_alpha * 0.9]
             };
 
             let border_color = if is_selected {
-                [0.65, 0.58, 0.42, 1.0]
+                [0.65, 0.58, 0.42, depth_alpha]
             } else {
-                [0.14, 0.13, 0.12, 1.0]
+                [0.14, 0.13, 0.12, depth_alpha * 0.7]
             };
 
-            renderer.push_vnode(card_rect, "CarouselCard");
+            // Draw card body
             renderer.fill_rounded_rect(card_rect, 6.0, bg_color);
 
+            // Bevels (top highlight, left edge, bottom shadow)
             let bevel_h = if is_selected { 2.0 } else { 1.0 };
             let bevel_top = Rect {
                 x: card_rect.x + 6.0,
@@ -615,7 +670,11 @@ impl View for GalleryApp {
                 height: bevel_h,
             };
             let bevel_alpha = if is_selected { 0.65 } else { 0.22 };
-            renderer.fill_rounded_rect(bevel_top, 1.0, [0.80, 0.72, 0.55, bevel_alpha]);
+            renderer.fill_rounded_rect(
+                bevel_top,
+                1.0,
+                [0.80, 0.72, 0.55, bevel_alpha * depth_alpha],
+            );
 
             let left_bevel = Rect {
                 x: card_rect.x + 1.0,
@@ -623,16 +682,23 @@ impl View for GalleryApp {
                 width: 1.2,
                 height: card_rect.height - 12.0,
             };
-            renderer.fill_rounded_rect(left_bevel, 1.0, [0.60, 0.52, 0.38, bevel_alpha * 0.45]);
+            renderer.fill_rounded_rect(
+                left_bevel,
+                1.0,
+                [0.60, 0.52, 0.38, bevel_alpha * 0.45 * depth_alpha],
+            );
 
+            // Bottom shadow: intensity varies with depth
+            let shadow_alpha = 0.4 + depth_factor * SHADOW_INTENSITY;
             let shadow_bottom = Rect {
                 x: card_rect.x + 6.0,
                 y: card_rect.y + card_rect.height - 2.0,
                 width: card_rect.width - 12.0,
                 height: 2.0,
             };
-            renderer.fill_rounded_rect(shadow_bottom, 1.0, [0.0, 0.0, 0.0, 0.95]);
+            renderer.fill_rounded_rect(shadow_bottom, 1.0, [0.0, 0.0, 0.0, shadow_alpha]);
 
+            // Border
             renderer.stroke_rounded_rect(
                 card_rect,
                 6.0,
@@ -640,13 +706,14 @@ impl View for GalleryApp {
                 if is_selected { 1.5 } else { 0.8 },
             );
 
-            let abs_diff = diff.abs();
+            // ── Text (depth-faded) ──
+            let abs_diff = (angle / card_spacing).abs() % num_entries as f32;
             let text_alpha = if is_selected {
-                1.0
+                depth_alpha
             } else if abs_diff <= 1.05 {
-                0.55
+                0.55 * depth_alpha
             } else if abs_diff <= 2.05 {
-                0.25
+                0.25 * depth_alpha
             } else {
                 0.0
             };
@@ -677,7 +744,9 @@ impl View for GalleryApp {
                 text_color,
             );
 
-            renderer.pop_vnode();
+            // Pop the two transforms we pushed for this card
+            renderer.pop_transform();
+            renderer.pop_transform();
         }
 
         // Reset Z-index to default for the rest of the UI
@@ -696,9 +765,9 @@ impl View for GalleryApp {
         let click_cx = center_x;
         let click_cy = center_y;
         let click_num = num_entries;
-        let click_selected = selected;
         let click_tx = translation.x;
         let click_ty = translation.y;
+        let card_spacing_click = card_spacing;
         renderer.register_handler(
             "pointerclick",
             std::sync::Arc::new(move |evt| {
@@ -706,14 +775,12 @@ impl View for GalleryApp {
                     // Convert screen-space click to local coordinates
                     let local_x = x - click_tx;
                     let local_y = y - click_ty;
-                    let half = click_num as f32 / 2.0;
-                    let sel = click_selected;
+                    let s = click_state.lock().unwrap_or_else(|e| e.into_inner());
+                    let current_angle = s.current_angle;
+                    drop(s);
                     for i in 0..click_num {
-                        let mut diff = (i as i32 - sel as i32) as f32;
-                        while diff > half { diff -= click_num as f32; }
-                        while diff < -half { diff += click_num as f32; }
-
-                        let angle = diff * 0.42;
+                        // Use continuous angle for hit-testing (matches rendering)
+                        let angle = current_angle + i as f32 * card_spacing_click;
                         let cos_a = angle.cos();
                         let sin_a = angle.sin();
                         let scale = 1.0 / (1.0 + 0.35 * (1.0 - cos_a));
@@ -722,9 +789,27 @@ impl View for GalleryApp {
                         let cx = click_cx + 360.0 * sin_a * scale - cw / 2.0;
                         let cy = click_cy + 12.0 * (1.0 - cos_a) * scale - ch / 2.0;
 
-                        if local_x >= cx && local_x <= cx + cw && local_y >= cy && local_y <= cy + ch {
+                        if local_x >= cx
+                            && local_x <= cx + cw
+                            && local_y >= cy
+                            && local_y <= cy + ch
+                        {
                             let mut s = click_state.lock().unwrap_or_else(|e| e.into_inner());
+                            let old_selected = s.selected;
                             s.selected = i;
+                            // Update target_angle for smooth animation
+                            if i != old_selected {
+                                // Compute shortest-path rotation
+                                let old_angle =
+                                    s.target_angle + old_selected as f32 * card_spacing_click;
+                                let new_angle = s.target_angle + i as f32 * card_spacing_click;
+                                let delta = new_angle - old_angle;
+                                // Wrap to [-PI, PI] for shortest path
+                                let wrapped = (delta + std::f32::consts::PI)
+                                    .rem_euclid(std::f32::consts::TAU)
+                                    - std::f32::consts::PI;
+                                s.target_angle += wrapped;
+                            }
                             break;
                         }
                     }
@@ -738,6 +823,7 @@ impl View for GalleryApp {
         // advance the carousel exactly one step per notch so it progresses
         // smoothly instead of racing through every card on one gesture.
         let wheel_state = self.state.clone();
+        let card_spacing_wheel = card_spacing;
         renderer.register_handler(
             "pointerwheel",
             std::sync::Arc::new(move |evt| {
@@ -753,11 +839,17 @@ impl View for GalleryApp {
                     s.wheel_accum += delta_y;
                     while s.wheel_accum >= NOTCH {
                         s.wheel_accum -= NOTCH;
+                        let old_selected = s.selected;
                         s.selected = (s.selected + 1) % num;
+                        // Update target_angle for smooth animation (one card forward)
+                        s.target_angle += card_spacing_wheel;
                     }
                     while s.wheel_accum <= -NOTCH {
                         s.wheel_accum += NOTCH;
+                        let old_selected = s.selected;
                         s.selected = (s.selected + num - 1) % num;
+                        // Update target_angle for smooth animation (one card backward)
+                        s.target_angle -= card_spacing_wheel;
                     }
                     // Avoid unbounded accumulation from tiny sub-notch deltas.
                     if s.wheel_accum.abs() > NOTCH * 4.0 {
