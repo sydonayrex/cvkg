@@ -24,32 +24,47 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** as part of B.1 + B.1 | `b1622b7`, `cfa4162` |
 | 9–10 | Tests + final verification | **deferred** | — |
 
-### Phase 3a landed — opt-in Layout API
+### Phase 3 surface — bigger than the plan suggested
 
-`docs/nodal-coordinate-migration.md` Phase 3 has been started (commit `5d7e0ed`) but
-only the layout-engine layer, not the consumer migration. The change adds a
-non-breaking opt-in API to `cvkg-layout`:
+Phase 3 in the plan reads as an upstream-only change ("stop
+flattening to absolute during View::render"), but follow-through
+reveals a deeper dependency: the **renderer has no per-`push_vnode`
+translation tracking**. A component calling `push_vnode(local_rect)`
+and then `draw_line(0.0, 0.0, ...)` would draw over its parent's
+position instead of its own — all drawing primitives (`fill_rect`,
+`draw_line`, `draw_rect`, `fill_rounded_rect`, all glyph paths)
+think in screen-pixel space.
 
-- `cvkg_layout::VStack::compute_layout_local(spacing, alignment,
-  distribution, subviews, cache, width, height)` — returns rects
-  anchored at `(0, 0)`, with sizes honored. Width/height are
-  `Option<f32>` so callers can pass `None` (uses `f32::MAX`) or hint
-  the inner size.
-- `cvkg_layout::HStack::compute_layout_local(...)` — same shape,
-  Row direction.
-- `cvkg_layout::Grid::compute_layout_rects_local(...)` — same shape.
-- Existing `compute_layout` and `compute_layout_rects` are
-  unchanged. No consumer breaks.
+To finish Phase 3, the renderer needs a per-`push_vnode`
+translation stack that drawing primitives query before emitting
+vertices. That's a redesign of `cvkg-render-gpu` affecting every
+prim path. Conservatively weeks of work, not a single session.
 
-Migration of any single component to local rects is now
-self-contained: stop calling `compute_layout` in `View::render`,
-start calling `compute_layout_local`, and adjust the downward walk
-to use local coords. Two unit tests (`test_local_layout_*` in
-`cvkg-layout/src/lib.rs`) cover the engine behavior.
+The opt-in API from Phase 3a is **still useful**: it lets reviewers
+verify the engine produces local rects in isolation, and any future
+renderer redesign that adds translation tracking can immediately
+adopt callers to opt in (one at a time) by switching
+`compute_layout` → `compute_layout_local`.
 
-The remaining work for full Phase 3 (migrating every `View::render`
-callsite in `cvkg-components/src/` and propagating the
-`local_mode = true` flag through) is still multi-day.
+Recommended decomposition for future sessions once a renderer-wide
+per-vnode translation lands:
+
+1. **Phase 3b (renderer translation)**: add `Renderer::translate`
+   (push/pop) or implicit translation inside `push_vnode`/
+   `pop_vnode`, then have every drawing primitive in
+   `cvkg-render-gpu/src/api/mod.rs` apply `(translate_x, translate_y)`
+   to its emitted vertices.
+2. **Phase 3c (consumer migration)**: switch each `compute_layout`
+   call site in `cvkg-components/src/` to `compute_layout_local`,
+   one primitive at a time (start with simple ones like `Divider`,
+   `Spacer`, `Separator`).
+3. **Phase 3d (VDOM semantic)**: switch `VNodeRenderer::push_vnode`
+   to store local rects in `VNode.layout`, and extend
+   `VDom::world_rect(id)` consumers (Phase 6 etc.) accordingly.
+
+This commit does NOT attempt 3b — it's a much larger surface that
+needs its own plan + dedicated milestone, fed by the 3a primitives
+this session established.
 
 
 **Net result after commit `06f0702`:**
@@ -166,11 +181,16 @@ event-handler race the migration was originally scoped against is fixed).
 rg -n 'fn render\(&self, renderer: &mut dyn' cvkg-components/src/ | head
 rg -n 'compute_layout' cvkg-layout/src/
 
-# 2. Pick the smallest layout primitive (e.g., Position { x, y })
+# 2. Pick the smallest layout primitive (e.g., Divider/Spacer/Separator
+#    in cvkg-components/src/primitive.rs or layout_primitives.rs)
 #    and migrate just that one to local-rect semantics, with a
 #    regression test that uses parent-cumulative offsets.
-
-# 3. Re-run cargo test -p cvkg-vdom --berkserker_click_box_regression
-#    to make sure the integration test now passes once layout engines
-#    produce local rects.
+#
+# 3. CAREFUL: this only works ONCE renderer translation is in place
+#    (Phase 3b in the status doc above). Without it, primitives like
+#    `draw_line(0, 0, ...)` will draw over the wrong region.
+#
+# 4. Re-run cargo test -p cvkg-vdom --berkserker_click_box_regression
+#    to make sure the integration test passes once local rects flow
+#    through the whole tree (only after 3b is in place).
 ```
