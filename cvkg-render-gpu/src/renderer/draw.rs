@@ -640,6 +640,13 @@ impl GpuRenderer {
         };
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        // Phase 3b/3c: compose with the parent Renderer's translation
+        // (auto-pushed by NativeRenderer::push_vnode(rect, _)).
+        let renderer_translation = cvkg_core::current_renderer_translation();
+        let translation = [
+            translation[0] + renderer_translation.x,
+            translation[1] + renderer_translation.y,
+        ];
         let (blur_radius, ior_override, glass_intensity) = if let cvkg_core::DrawMaterial::Glass {
             blur_radius,
             ior_override,
@@ -1657,6 +1664,13 @@ impl GpuRenderer {
     ) {
         let draw_order = renderer.current_draw_order;
         let (translation, scale_transform, rotation, _, _) = renderer.current_transform();
+        // Phase 3b/3c: compose with the parent Renderer's translation
+        // (auto-pushed by NativeRenderer::push_vnode(rect, _)).
+        let renderer_translation = cvkg_core::current_renderer_translation();
+        let translation = [
+            translation[0] + renderer_translation.x,
+            translation[1] + renderer_translation.y,
+        ];
         let current_instance_data = InstanceData {
             translation,
             scale: scale_transform,

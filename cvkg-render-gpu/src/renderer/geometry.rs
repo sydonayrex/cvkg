@@ -191,6 +191,12 @@ impl GpuRenderer {
         let texture_id = None; // Oriented quads like lightning don't use textures yet
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        // Phase 3b/3c: overlay parent Renderer's translation.
+        let renderer_translation = cvkg_core::current_renderer_translation();
+        let translation = [
+            translation[0] + renderer_translation.x,
+            translation[1] + renderer_translation.y,
+        ];
         let current_instance_data = InstanceData {
             translation,
             scale: scale_transform,
@@ -337,6 +343,12 @@ impl GpuRenderer {
         let material = Self::resolve_material_with_context(material_id, &self.current_draw_material);
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        // Phase 3b/3c: overlay parent Renderer's translation.
+        let renderer_translation = cvkg_core::current_renderer_translation();
+        let translation = [
+            translation[0] + renderer_translation.x,
+            translation[1] + renderer_translation.y,
+        ];
         let (blur_radius, ior_override, glass_intensity) = if let cvkg_core::DrawMaterial::Glass {
             blur_radius,
             ior_override,

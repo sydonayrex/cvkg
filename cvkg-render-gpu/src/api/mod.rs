@@ -1153,6 +1153,13 @@ impl cvkg_core::Renderer for GpuRenderer {
         }
 
         let (translation, scale_transform, rotation, _, _) = self.current_transform();
+        // Phase 3b/3c: overlay parent Renderer's translation so mesh
+        // emission respects local-rect component nesting.
+        let renderer_translation = cvkg_core::current_renderer_translation();
+        let translation = [
+            translation[0] + renderer_translation.x,
+            translation[1] + renderer_translation.y,
+        ];
 
         if self.draw_calls.is_empty() || self.current_texture_id.is_some() {
             self.current_texture_id = None;

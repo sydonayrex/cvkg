@@ -76,6 +76,12 @@ impl GpuRenderer {
         {
             self.current_texture_id = tid;
             let (translation, scale, rotation, _, _) = self.current_transform();
+            // Phase 3b/3c: overlay parent Renderer's translation.
+            let renderer_translation = cvkg_core::current_renderer_translation();
+            let translation = [
+                translation[0] + renderer_translation.x,
+                translation[1] + renderer_translation.y,
+            ];
             self.instance_data.push(InstanceData {
                 translation,
                 scale,
