@@ -39,8 +39,8 @@ use std::collections::HashMap;
 pub use accesskit_bridge::A11yNodeEntry;
 pub use diff::VDomPatch;
 pub use vnode::{
-    AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId, VNode,
-    WorldSpacePanel,
+    AriaProps, DecorativeCmd, EventHandlerMap, LayoutRect, NodeEventHandlerMap, NodeId,
+    ResolvedPosition, VNode, WorldSpacePanel, WorldSpaceResolvedPos,
 };
 
 /// The root container for the Virtual DOM state.
@@ -136,7 +136,8 @@ impl VDom {
                     "VDom::world_rect({:?}) reached WorldSpacePanel ancestor {:?} \
                      — composition is 3D-projected past this point, \
                      returning None. Use VDom::world_space_position() instead.",
-                    id, parent_id
+                    id,
+                    parent_id
                 );
                 return None;
             }
@@ -144,7 +145,80 @@ impl VDom {
             y += parent.layout.y;
             current = parent_id;
         }
-        Some(LayoutRect { x, y, width, height })
+        Some(LayoutRect {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
+    /// Resolve a node's position when it is inside a WorldSpacePanel subtree.
+    ///
+    /// Returns the local 2D offset within the panel's offscreen-texture space,
+    /// combined with the panel's `Transform3D` and `pixels_per_unit` for the
+    /// renderer to composite the offscreen quad.
+    ///
+    /// Returns `None` if the node has no `WorldSpacePanel` ancestor (use
+    /// `world_rect` for pure 2D nodes instead).
+    pub fn world_space_position(&self, id: NodeId) -> Option<WorldSpaceResolvedPos> {
+        let node = self.nodes.get(&id)?;
+        let mut x = node.layout.x;
+        let mut y = node.layout.y;
+        let width = node.layout.width;
+        let height = node.layout.height;
+        let mut current = id;
+
+        // Check if the node itself is a WorldSpacePanel root.
+        if let Some(panel) = &node.world_space {
+            return Some(WorldSpaceResolvedPos {
+                panel_id: id,
+                panel_transform: panel.transform,
+                pixels_per_unit: panel.pixels_per_unit,
+                world_size: panel.world_size,
+                local_offset: (x, y),
+                size: (width, height),
+            });
+        }
+
+        // Walk up the parent chain, accumulating local offsets until we hit
+        // a WorldSpacePanel ancestor.
+        while let Some(&parent_id) = self.parents.get(&current) {
+            let parent = self.nodes.get(&parent_id)?;
+            if let Some(panel) = &parent.world_space {
+                // Found the panel — compose the local offset within its space.
+                return Some(WorldSpaceResolvedPos {
+                    panel_id: parent_id,
+                    panel_transform: panel.transform,
+                    pixels_per_unit: panel.pixels_per_unit,
+                    world_size: panel.world_size,
+                    local_offset: (x, y),
+                    size: (width, height),
+                });
+            }
+            x += parent.layout.x;
+            y += parent.layout.y;
+            current = parent_id;
+        }
+
+        // No WorldSpacePanel ancestor — this node is pure 2D.
+        // Caller should use `world_rect` instead.
+        None
+    }
+
+    /// Resolve a node's position regardless of whether it's in 2D screen
+    /// space or inside a WorldSpacePanel subtree.
+    ///
+    /// This is the single dispatcher that consumers (hit-testing, AccessKit,
+    /// scene graph sync) should call instead of re-implementing the
+    /// WorldSpacePanel check themselves.
+    pub fn resolved_position(&self, id: NodeId) -> Option<ResolvedPosition> {
+        if self.world_space_position(id).is_some() {
+            self.world_space_position(id)
+                .map(ResolvedPosition::WorldSpace)
+        } else {
+            self.world_rect(id).map(ResolvedPosition::ScreenSpace)
+        }
     }
 
     /// Build a VDom containing only the subtree rooted at `root_id`.

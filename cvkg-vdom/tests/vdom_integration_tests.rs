@@ -989,7 +989,12 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
             component_type: "panel".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 10.0, y: 20.0, width: 200.0, height: 100.0 },
+            layout: LayoutRect {
+                x: 10.0,
+                y: 20.0,
+                width: 200.0,
+                height: 100.0,
+            },
             children: vec![KvasirId(2)],
             aria_role: "group".to_string(),
             aria_props: AriaProps::default(),
@@ -1009,7 +1014,12 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
             component_type: "row".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 },
+            layout: LayoutRect {
+                x: 5.0,
+                y: 5.0,
+                width: 180.0,
+                height: 40.0,
+            },
             children: vec![KvasirId(3)],
             aria_role: "group".to_string(),
             aria_props: AriaProps::default(),
@@ -1029,7 +1039,12 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
             component_type: "label".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 },
+            layout: LayoutRect {
+                x: 2.0,
+                y: 2.0,
+                width: 100.0,
+                height: 20.0,
+            },
             children: vec![],
             aria_role: "text".to_string(),
             aria_props: AriaProps::default(),
@@ -1053,7 +1068,12 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
             component_type: "panel".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 40.0, y: 60.0, width: 200.0, height: 100.0 },
+            layout: LayoutRect {
+                x: 40.0,
+                y: 60.0,
+                width: 200.0,
+                height: 100.0,
+            },
             children: vec![KvasirId(2)],
             aria_role: "group".to_string(),
             aria_props: AriaProps::default(),
@@ -1073,7 +1093,12 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
             component_type: "row".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 },
+            layout: LayoutRect {
+                x: 5.0,
+                y: 5.0,
+                width: 180.0,
+                height: 40.0,
+            },
             children: vec![KvasirId(3)],
             aria_role: "group".to_string(),
             aria_props: AriaProps::default(),
@@ -1093,7 +1118,12 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
             component_type: "label".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 },
+            layout: LayoutRect {
+                x: 2.0,
+                y: 2.0,
+                width: 100.0,
+                height: 20.0,
+            },
             children: vec![],
             aria_role: "text".to_string(),
             aria_props: AriaProps::default(),
@@ -1109,7 +1139,10 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
     let patches = old.diff(&new);
 
     // Should emit exactly 1 patch: the root's Update
-    let update_count = patches.iter().filter(|p| matches!(p, VDomPatch::Update { .. })).count();
+    let update_count = patches
+        .iter()
+        .filter(|p| matches!(p, VDomPatch::Update { .. }))
+        .count();
     assert_eq!(
         update_count, 1,
         "Moving root with local rects should emit exactly 1 Update patch, got {}",
@@ -1119,16 +1152,40 @@ fn test_diff_churn_local_rects_no_descendant_updates() {
     // Verify it's the root's patch
     if let Some(VDomPatch::Update { id, layout, .. }) = patches.first() {
         assert_eq!(*id, KvasirId(1));
-        assert_eq!(*layout, Some(LayoutRect { x: 40.0, y: 60.0, width: 200.0, height: 100.0 }));
+        assert_eq!(
+            *layout,
+            Some(LayoutRect {
+                x: 40.0,
+                y: 60.0,
+                width: 200.0,
+                height: 100.0
+            })
+        );
     } else {
         panic!("Expected Update patch as first patch");
     }
 
     // Verify children's layout is unchanged
     let child_layout = new.nodes.get(&KvasirId(2)).unwrap().layout;
-    assert_eq!(child_layout, LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 });
+    assert_eq!(
+        child_layout,
+        LayoutRect {
+            x: 5.0,
+            y: 5.0,
+            width: 180.0,
+            height: 40.0
+        }
+    );
     let grandchild_layout = new.nodes.get(&KvasirId(3)).unwrap().layout;
-    assert_eq!(grandchild_layout, LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 });
+    assert_eq!(
+        grandchild_layout,
+        LayoutRect {
+            x: 2.0,
+            y: 2.0,
+            width: 100.0,
+            height: 20.0
+        }
+    );
 }
 
 /// Phase 1 regression test: world_rect composes local offsets up the parent chain.
@@ -1144,7 +1201,12 @@ fn test_world_rect_composes_local_offsets() {
             component_type: "panel".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 10.0, y: 20.0, width: 200.0, height: 100.0 },
+            layout: LayoutRect {
+                x: 10.0,
+                y: 20.0,
+                width: 200.0,
+                height: 100.0,
+            },
             children: vec![KvasirId(2)],
             aria_role: "group".to_string(),
             aria_props: AriaProps::default(),
@@ -1164,7 +1226,12 @@ fn test_world_rect_composes_local_offsets() {
             component_type: "row".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 },
+            layout: LayoutRect {
+                x: 5.0,
+                y: 5.0,
+                width: 180.0,
+                height: 40.0,
+            },
             children: vec![KvasirId(3)],
             aria_role: "group".to_string(),
             aria_props: AriaProps::default(),
@@ -1184,7 +1251,12 @@ fn test_world_rect_composes_local_offsets() {
             component_type: "label".to_string(),
             props: HashMap::new(),
             state: None,
-            layout: LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 },
+            layout: LayoutRect {
+                x: 2.0,
+                y: 2.0,
+                width: 100.0,
+                height: 20.0,
+            },
             children: vec![],
             aria_role: "text".to_string(),
             aria_props: AriaProps::default(),

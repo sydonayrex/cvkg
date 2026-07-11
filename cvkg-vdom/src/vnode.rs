@@ -84,6 +84,46 @@ impl WorldSpacePanel {
     }
 }
 
+/// The resolved position of a node, either in 2D screen space or
+/// 3D-projected world space (when inside a WorldSpacePanel subtree).
+///
+/// Consumers that need "where is this node, period" should call
+/// [`VDom::resolved_position`] which returns this enum, routing to
+/// either 2D or 3D composition automatically.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResolvedPosition {
+    /// Pure 2D screen-space position (node has no WorldSpacePanel ancestor).
+    ScreenSpace(LayoutRect),
+    /// 3D-projected position inside a WorldSpacePanel subtree.
+    /// Contains the local 2D offset within the panel's offscreen-texture
+    /// space, plus the panel's 3D transform and pixel density for the
+    /// renderer to composite the offscreen quad.
+    WorldSpace(WorldSpaceResolvedPos),
+}
+
+/// A node's resolved position inside a WorldSpacePanel subtree.
+///
+/// The renderer uses this to composite the panel's offscreen texture as a
+/// 3D-positioned quad. `local_offset` is the 2D position within the panel's
+/// own coordinate space (before the panel's 3D transform is applied).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldSpaceResolvedPos {
+    /// The WorldSpacePanel node that owns this subtree.
+    pub panel_id: NodeId,
+    /// The panel's 3D transform (position, rotation, scale in world space).
+    pub panel_transform: Transform3D,
+    /// Pixels per world unit for the panel.
+    pub pixels_per_unit: f32,
+    /// The panel's world-space size (meters).
+    pub world_size: (f32, f32),
+    /// The node's 2D offset within the panel's offscreen-texture coordinate
+    /// space. This is the composition of local offsets from the panel root
+    /// down to this node, before any 3D projection.
+    pub local_offset: (f32, f32),
+    /// The node's width and height in the panel's coordinate space.
+    pub size: (f32, f32),
+}
+
 /// Accessibility ARIA properties for the DOM shadow tree.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct AriaProps {

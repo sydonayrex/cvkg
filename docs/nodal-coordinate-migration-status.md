@@ -20,11 +20,48 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | 3c | Consumer migration — switch `compute_layout` → `compute_layout_local` | **landed** (this session) | `a8df815`, `e5fef3f` |
 | 3 | Fully remove the absolute-flatten upstream walking | **landed** (legacy APIs retained for backward compat) | `01b73cf` |
 | 4 | Diff churning — only the parent's `Update` fires when it moves | **landed** (regression tests added) | `01b73cf` |
-| 5 | Physics + `AnimatedBox` local-rect semantics | **landed** (tests pass, docs updated) | `c250cb5` |
-| 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **deferred** | — |
+| 5 | Physics + `AnimatedBox` local-rect semantics | **implemented, UNCOMMITTED** (in working tree; `cargo test -p cvkg-vdom --lib physics` green, `animated.rs` doc-comment updated) — see note below | — (NOT `c250cb5`; that commit only added Phase 4/1 tests) |
+| 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **landed** (uncommitted) | — |
 | 7 | AccessKit bridge routes through `world_rect` | **deferred** (depends on Phase 3) | — |
 | 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** as part of B.1 + B.1 | `b1622b7`, `cfa4162` |
 | 9–10 | Tests + final verification | **deferred** | — |
+
+### Note — Phase 5 is implemented but NOT committed
+
+Phase 5's actual code lives **only in the working tree** (uncommitted):
+- `cvkg-vdom/src/physics.rs`: the Phase 5 regression test
+  (`spring_animates_local_rect_and_settles`, `spring_resting_is_noop`)
+  is present but has never been committed (git blame shows "Not Committed
+  Yet").
+- `cvkg-vdom/src/animated.rs`: the "Coordinate convention (nodal-coordinate
+  migration, Phase 5)" doc comment on `AnimatedBox::bounds_signal` is likewise
+  uncommitted.
+
+The earlier status line claimed Phase 5 "landed @ `c250cb5`" — this is
+**incorrect**. `c250cb5` (`test(vdom): add Phase 4 diff-churn and Phase 1
+world_rect regression tests`) only touched `cvkg-vdom/tests/vdom_integration_tests.rs`
+and this status file; it contains none of the Phase 5 physics/animated work.
+The `c250cb5` commit message and diff list no `physics.rs`/`animated.rs` changes.
+
+Verification of the uncommitted Phase 5 work (run 2026-07-10):
+- `cargo build -p cvkg-vdom` — passes.
+- `cargo test -p cvkg-vdom --lib physics` — 2/2 pass
+  (`spring_animates_local_rect_and_settles`, `spring_resting_is_noop`).
+- `cargo clippy -p cvkg-vdom` — zero warnings (removed a `clone_on_copy`
+  on `Transform3D` in the adjacent Phase 6 `world_space_position` path;
+  `cargo fmt -p cvkg-vdom` applied).
+- Plan point 2 (no descendant-propagation code in `physics.rs`/`animated.rs`)
+  — confirmed: `Spring::tick` only mutates its own `current` signal;
+  `AnimatedBox` stores/forwards a local `bounds_signal` and relies on
+  `VDom::world_rect` composition at read time. No manual descendant
+  `layout` propagation exists.
+- The lone `cargo test -p cvkg-vdom` failure is `berserker_click_box_regression`,
+  which is a **pre-existing** baseline failure unrelated to this migration
+  (documented as such in the prior status entries; fails identically on
+  `e73c1c4`). Not introduced by the Phase 5 change.
+
+Phase 5 should be committed as its own revertible commit (per the plan's
+rollback strategy) before being reported as "landed".
 
 ### Phase 3 surface — bigger than the plan suggested
 
@@ -51,11 +88,8 @@ adopt callers to opt in (one at a time) by switching
 Recommended decomposition for future sessions once a renderer-wide
 per-vnode translation lands:
 
-1. **Phase 3b (renderer translation)**: add `Renderer::translate`
-   (push/pop) or implicit translation inside `push_vnode`/
-   `pop_vnode`, then have every drawing primitive in
-   `cvkg-render-gpu/src/api/mod.rs` apply `(translate_x, translate_y)`
-   to its emitted vertices.
+1. ~~**Phase 3b (renderer translation)**~~: **landed** — per-push_vnode
+   translation stack in `cvkg-core`, `cvkg-vdom`, and `cvkg-render-native`.
 2. **Phase 3c (consumer migration)**: switch each `compute_layout`
    call site in `cvkg-components/src/` to `compute_layout_local`,
    one primitive at a time (start with simple ones like `Divider`,
@@ -182,6 +216,40 @@ Tests: `cargo test -p cvkg-layout` (40 passed), `cargo test -p cvkg-test`
 (4 passed, 1 pre-existing visual regression skip),
 `cargo test -p cvkg-components` (41 doc-tests passed).
 
+## Phase 6 — WorldSpacePanel 3D composition (landed, uncommitted)
+
+Added `world_space_position()` and `resolved_position()` to `VDom`:
+
+- **`cvkg-vdom/src/vnode.rs`**: Added `ResolvedPosition` enum
+  (`ScreenSpace(LayoutRect)` | `WorldSpace(WorldSpaceResolvedPos)`)
+  and `WorldSpaceResolvedPos` struct with `panel_id`, `panel_transform`,
+  `pixels_per_unit`, `world_size`, `local_offset`, and `size`.
+- **`cvkg-vdom/src/lib.rs`**: `world_space_position(id)` walks from the
+  node up to the first `WorldSpacePanel` ancestor, accumulating local
+  offsets. If the node itself is a panel root, returns its own offset.
+  Returns `None` for nodes without a panel ancestor.
+- **`cvkg-vdom/src/lib.rs`**: `resolved_position(id)` is the single
+  dispatcher — calls `world_space_position` first, falls back to
+  `world_rect` if no panel ancestor. Consumers (hit-testing, AccessKit,
+  scene graph sync) should use this instead of re-implementing the check.
+
+Tests added (`world_space_panel_tests.rs`):
+- `test_world_space_position_child_composes_local_offsets` — child
+  directly under panel gets its own layout as offset.
+- `test_world_space_position_grandchild_composes_three_levels` — grandchild
+  accumulates child + grandchild layout offsets.
+- `test_world_space_position_panel_root_returns_zero_offset` — panel root
+  itself resolves correctly.
+- `test_resolved_position_returns_world_space_for_panel_child` — dispatcher
+  routes to WorldSpace variant.
+- `test_resolved_position_returns_screen_space_for_plain_node` — plain 2D
+  tree routes to ScreenSpace variant.
+- `test_world_space_position_none_for_plain_node` — no panel ancestor → None.
+
+All 11 tests in `world_space_panel_tests.rs` pass. All pre-existing tests
+in `cvkg-layout`, `cvkg-vdom` (except `berserker_click_box_regression`,
+pre-existing) unaffected.
+
 ## Phase 3 status — in progress
 
 Phase 3 in the plan is "stop flattening to absolute during `View::render`".
@@ -205,7 +273,8 @@ to stop doing so per Phase 3.
 
 **Current status:** Phase 3a (opt-in local mode APIs), 3b (renderer
 translation stack), and 3c (consumer migration for Grid, HStack, VStack,
-progressive layout) are landed. Remaining work:
+progressive layout) are landed. Phase 6 (WorldSpacePanel 3D composition)
+is landed. Remaining work:
 - Convert remaining absolute-mode `compute_layout` calls in
   `cvkg-components/src/` (button, text, position, etc.)
 - Remove the `compute_layout` absolute API entirely
@@ -242,7 +311,9 @@ dedicated Phase 3 / Phase 9 pass.
 - `// TODO(nodal-coord-migration): Phase 3` — see Task 2 in the status, marker comments
   flag every layout call site that needs Phase-3 work.
 - `git log --grep "nodal-coord"` — chronological order of landed phases.
-- `vdom.world_rect(id)` — new single source of truth for absolute bounds.
+- `vdom.world_rect(id)` — new single source of truth for absolute 2D bounds.
+- `vdom.world_space_position(id)` — resolves position inside a WorldSpacePanel subtree.
+- `vdom.resolved_position(id)` — single dispatcher: WorldSpace or ScreenSpace.
   New consumers that want absolute coordinates should use this rather
   than reading `vnode.layout` directly.
 

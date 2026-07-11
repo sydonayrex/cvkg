@@ -98,3 +98,71 @@ impl Spring {
         self.current.set_with_flags(next_bounds, DirtyFlags::LAYOUT);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use approx::assert_relative_eq;
+
+    // Phase 5 regression: a `Spring` animates a single node's LOCAL rect.
+    // Per the migration plan, no descendant propagation is needed or present —
+    // composition happens at read time via `VDom::world_rect`. This test pins
+    // that `tick` drives `current` toward `target` and settles (no dirty churn
+    // once at rest), proving the local-rect animation path is correct on its own.
+    #[test]
+    fn spring_animates_local_rect_and_settles() {
+        let start = Rect {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 50.0,
+        };
+        let spring = Spring::new(start, 120.0, 14.0);
+
+        // Move the target (e.g. a parent moved its child's local offset).
+        spring.target.set(start); // ensure same start
+        let target = Rect {
+            x: 40.0,
+            y: 20.0,
+            width: 100.0,
+            height: 50.0,
+        };
+        spring.target.set(target);
+
+        // Before ticking, current == start.
+        assert_relative_eq!(spring.current.get().x, 0.0);
+
+        // Advance the simulation; current should approach the new local target.
+        for _ in 0..240 {
+            spring.tick(1.0 / 60.0);
+        }
+
+        let cur = spring.current.get();
+        assert_relative_eq!(cur.x, target.x, epsilon = 0.5);
+        assert_relative_eq!(cur.y, target.y, epsilon = 0.5);
+        assert_relative_eq!(cur.width, target.width, epsilon = 1e-3);
+        assert_relative_eq!(cur.height, target.height, epsilon = 1e-3);
+
+        // One more tick should be a no-op (resting spring snaps & stops dirtying).
+        let before = spring.current.get();
+        spring.tick(1.0 / 60.0);
+        let after = spring.current.get();
+        assert_relative_eq!(before.x, after.x, epsilon = 1e-6);
+    }
+
+    #[test]
+    fn spring_resting_is_noop() {
+        let r = Rect {
+            x: 10.0,
+            y: 10.0,
+            width: 30.0,
+            height: 30.0,
+        };
+        let spring = Spring::new(r, 120.0, 14.0);
+        // Already at rest at `r`; ticking must not move or dirty.
+        spring.tick(1.0 / 60.0);
+        let cur = spring.current.get();
+        assert_relative_eq!(cur.x, 10.0);
+        assert_relative_eq!(cur.y, 10.0);
+    }
+}
