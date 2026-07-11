@@ -23,7 +23,7 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | 5 | Physics + `AnimatedBox` local-rect semantics | **implemented, UNCOMMITTED** (in working tree; `cargo test -p cvkg-vdom --lib physics` green, `animated.rs` doc-comment updated) — see note below | — (NOT `c250cb5`; that commit only added Phase 4/1 tests) |
 | 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **landed** (uncommitted) | — |
 | 7 | AccessKit bridge routes through `world_rect` | **deferred** (depends on Phase 3) | — |
-| 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** as part of B.1 + B.1 | `b1622b7`, `cfa4162` |
+| 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** | `9995795`, `b1622b7`, `cfa4162`, Phase 8 audit + regression test |
 | 9–10 | Tests + final verification | **deferred** | — |
 
 ### Note — Phase 5 is implemented but NOT committed

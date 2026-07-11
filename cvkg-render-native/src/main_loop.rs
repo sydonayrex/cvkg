@@ -59,6 +59,19 @@ impl From<accesskit_winit::Event> for AppEvent {
 // the Phase-0 deletion of that flat registry, this function is dead and
 // all callers in this file get routed through `vdom.dispatch_event()`
 // instead. See `docs/nodal-coordinate-migration.md` for context.
+//
+// Phase 8 audit (nodal-coordinate-migration): verified that ALL input events
+// flow through `vdom.hit_test()` → `vdom.dispatch_event()` /
+// `vdom.dispatch_event_to_target()`. There is zero GPU-side event routing.
+// GpuRenderer::update_mouse() writes cursor uniforms for shaders only.
+//
+// Input path summary (all in this file):
+//   MouseInput::Pressed  → vdom.hit_test() → vdom.dispatch_event(PointerDown)
+//   MouseInput::Released → vdom.hit_test() fallback → vdom.dispatch_event_to_target(PointerUp/Click)
+//   Touch::Started       → vdom.hit_test() → vdom.dispatch_event(PointerDown)
+//   Touch::Ended         → vdom.hit_test() fallback → vdom.dispatch_event_to_target(PointerUp/Click)
+//   CursorMoved          → deferred → vdom.dispatch_event(PointerMove)
+//   All others           → vdom.dispatch_event() directly
 
 pub struct App<V: View> {
     pub(crate) view: V,
@@ -358,14 +371,14 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                                 {
                                     nodes.push((
                                         accesskit::NodeId(node.id.0),
-                                        node.to_accesskit_node(),
+                                        node.to_accesskit_node(&new_vdom),
                                     ));
                                 } else if let cvkg_vdom::VDomPatch::Update { id, .. } = patch
                                     && let Some(node) = new_vdom.nodes.get(id)
                                 {
                                     nodes.push((
                                         accesskit::NodeId(node.id.0),
-                                        node.to_accesskit_node(),
+                                        node.to_accesskit_node(&new_vdom),
                                     ));
                                 } else if let cvkg_vdom::VDomPatch::Remove(id) = patch {
                                     state
@@ -1275,9 +1288,22 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                     && let Some(node) = vdom.nodes.get(&node_id)
                     && request.action == accesskit::Action::Click
                 {
+                    let (x, y) = match vdom.resolved_position(node_id) {
+                        Some(cvkg_vdom::ResolvedPosition::ScreenSpace(rect)) => {
+                            (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0)
+                        }
+                        Some(cvkg_vdom::ResolvedPosition::WorldSpace(wsp)) => (
+                            wsp.local_offset.0 + wsp.size.0 / 2.0,
+                            wsp.local_offset.1 + wsp.size.1 / 2.0,
+                        ),
+                        None => (
+                            node.layout.x + node.layout.width / 2.0,
+                            node.layout.y + node.layout.height / 2.0,
+                        ),
+                    };
                     let event = cvkg_core::Event::PointerClick {
-                        x: node.layout.x + node.layout.width / 2.0,
-                        y: node.layout.y + node.layout.height / 2.0,
+                        x,
+                        y,
                         button: 0,
                         tilt: None,
                         azimuth: None,
@@ -1294,7 +1320,7 @@ impl<V: View + 'static> ApplicationHandler<AppEvent> for App<V> {
                         let root_id = vdom.root.map(|id| id.0).unwrap_or(1);
                         let mut nodes = Vec::new();
                         for (id, node) in &vdom.nodes {
-                            nodes.push((accesskit::NodeId(id.0), node.to_accesskit_node()));
+                            nodes.push((accesskit::NodeId(id.0), node.to_accesskit_node(vdom)));
                         }
                         let tree = accesskit::Tree::new(accesskit::NodeId(root_id));
                         if let Some(adapter) = &mut state.accesskit_adapter {

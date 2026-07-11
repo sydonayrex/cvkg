@@ -49,6 +49,14 @@ path = "tests/companion_storage_tests.rs"
 name = "reactivity_and_panel_integration_tests"
 path = "tests/reactivity_and_panel_integration_tests.rs"
 
+[[test]]
+name = "nodal_coordinates_tests"
+path = "tests/nodal_coordinates_tests.rs"
+
+[[test]]
+name = "gpu_event_wiring_tests"
+path = "tests/gpu_event_wiring_tests.rs"
+
 [dependencies]
 cvkg-materials.workspace = true
 cvkg-runic-text.workspace = true

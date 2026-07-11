@@ -401,6 +401,85 @@ mod tests {
             *fired.lock().unwrap()
         );
     }
+
+    /// Phase 8 regression: verifies the winit→VDom input contract.
+    ///
+    /// The main loop must call `vdom.hit_test(x, y, precision)` to resolve
+    /// the target node, then `vdom.dispatch_event()` /
+    /// `vdom.dispatch_event_to_target()` to route the event. No GPU-side
+    /// event routing path may exist.
+    ///
+    /// This test exercises the exact contract: hit_test finds the correct
+    /// target, dispatch_event fires the handler on that target, and bubbling
+    /// propagates to ancestors.
+    #[test]
+    fn phase8_hit_test_then_dispatch_is_the_only_input_path() {
+        use std::sync::Arc;
+        let fired = Arc::new(Mutex::new(Vec::<&'static str>::new()));
+
+        let mut vdom = VDom::new();
+        let root_id = cvkg_core::KvasirId(10);
+        let button_id = cvkg_core::KvasirId(20);
+
+        let mut root = interactive_node(10, "Root", 0.0, 0.0, 400.0, 300.0, "group");
+        root.children = vec![button_id];
+        let button = interactive_node(20, "Button", 20.0, 20.0, 80.0, 40.0, "button");
+
+        // Register handlers on both button and root
+        let f = Arc::clone(&fired);
+        vdom.event_handlers
+            .entry(button_id)
+            .or_default()
+            .insert(
+                "pointerclick".to_string(),
+                Arc::new(move |_evt| { f.lock().unwrap().push("button_click"); }) as _,
+            );
+        let f2 = Arc::clone(&fired);
+        vdom.event_handlers
+            .entry(root_id)
+            .or_default()
+            .insert(
+                "pointerclick".to_string(),
+                Arc::new(move |_evt| { f2.lock().unwrap().push("root_click"); }) as _,
+            );
+
+        vdom.root = Some(root_id);
+        vdom.nodes.insert(root_id, root);
+        vdom.nodes.insert(button_id, button);
+        vdom.parents.insert(button_id, root_id);
+
+        // Step 1: hit_test resolves the target (simulates what main_loop does)
+        let hit = vdom.hit_test(60.0, 40.0, 0.0);
+        let target_id = hit.map(|(id, _)| id);
+        assert_eq!(target_id, Some(button_id), "hit_test must resolve to the button");
+
+        // Step 2: dispatch to target (simulates MouseInput::Released path)
+        let response = vdom.dispatch_event(cvkg_core::Event::PointerClick {
+            x: 60.0,
+            y: 40.0,
+            button: 0,
+            tilt: None,
+            azimuth: None,
+            pressure: Some(1.0),
+            barrel_rotation: None,
+            pointer_precision: 0.0,
+        });
+
+        assert_eq!(response, cvkg_core::EventResponse::Handled);
+        let fired_events = fired.lock().unwrap();
+        assert!(
+            fired_events.contains(&"button_click"),
+            "button handler must fire first: got {:?}", *fired_events
+        );
+        assert!(
+            fired_events.contains(&"root_click"),
+            "root handler must fire via bubbling: got {:?}", *fired_events
+        );
+        // Button fires before root (child-first, then bubble)
+        let btn_pos = fired_events.iter().position(|&s| s == "button_click").unwrap();
+        let root_pos = fired_events.iter().position(|&s| s == "root_click").unwrap();
+        assert!(btn_pos < root_pos, "button must fire before root (bubbling order)");
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use crate::VDom;
+use crate::{ResolvedPosition, VDom};
 use crate::vnode::{NodeId, VNode};
 use serde::{Deserialize, Serialize};
 
@@ -27,7 +27,10 @@ impl VNode {
     /// # Contract
     /// Maps the standard ARIA attributes (label, value, description, disabled, hidden, roles)
     /// into platform-neutral AccessKit layout-bounded descriptors.
-    pub fn to_accesskit_node(&self) -> accesskit::Node {
+    ///
+    /// Uses `vdom.resolved_position()` to compute absolute bounds for AccessKit,
+    /// handling both 2D screen-space and 3D WorldSpacePanel subtrees.
+    pub fn to_accesskit_node(&self, vdom: &VDom) -> accesskit::Node {
         let mut node = accesskit::Node::new(match self.aria_role.as_str() {
             // All 53 AriaRole variants mapped to AccessKit Role equivalents
             "alert" => accesskit::Role::Alert,
@@ -126,11 +129,25 @@ impl VNode {
             node.set_hidden();
         }
 
-        node.set_bounds(accesskit::Rect {
-            x0: self.layout.x as f64,
-            y0: self.layout.y as f64,
-            x1: (self.layout.x + self.layout.width) as f64,
-            y1: (self.layout.y + self.layout.height) as f64,
+        node.set_bounds(match vdom.resolved_position(self.id) {
+            Some(ResolvedPosition::ScreenSpace(rect)) => accesskit::Rect {
+                x0: rect.x as f64,
+                y0: rect.y as f64,
+                x1: (rect.x + rect.width) as f64,
+                y1: (rect.y + rect.height) as f64,
+            },
+            Some(ResolvedPosition::WorldSpace(wsp)) => accesskit::Rect {
+                x0: wsp.local_offset.0 as f64,
+                y0: wsp.local_offset.1 as f64,
+                x1: (wsp.local_offset.0 + wsp.size.0) as f64,
+                y1: (wsp.local_offset.1 + wsp.size.1) as f64,
+            },
+            None => accesskit::Rect {
+                x0: self.layout.x as f64,
+                y0: self.layout.y as f64,
+                x1: (self.layout.x + self.layout.width) as f64,
+                y1: (self.layout.y + self.layout.height) as f64,
+            },
         });
 
         node.set_children(
@@ -325,11 +342,25 @@ impl VDom {
                 ak_node.set_hidden();
             }
 
-            ak_node.set_bounds(accesskit::Rect {
-                x0: node.layout.x as f64,
-                y0: node.layout.y as f64,
-                x1: (node.layout.x + node.layout.width) as f64,
-                y1: (node.layout.y + node.layout.height) as f64,
+            ak_node.set_bounds(match self.resolved_position(node_id) {
+                Some(ResolvedPosition::ScreenSpace(rect)) => accesskit::Rect {
+                    x0: rect.x as f64,
+                    y0: rect.y as f64,
+                    x1: (rect.x + rect.width) as f64,
+                    y1: (rect.y + rect.height) as f64,
+                },
+                Some(ResolvedPosition::WorldSpace(wsp)) => accesskit::Rect {
+                    x0: wsp.local_offset.0 as f64,
+                    y0: wsp.local_offset.1 as f64,
+                    x1: (wsp.local_offset.0 + wsp.size.0) as f64,
+                    y1: (wsp.local_offset.1 + wsp.size.1) as f64,
+                },
+                None => accesskit::Rect {
+                    x0: node.layout.x as f64,
+                    y0: node.layout.y as f64,
+                    x1: (node.layout.x + node.layout.width) as f64,
+                    y1: (node.layout.y + node.layout.height) as f64,
+                },
             });
 
             let child_ids: Vec<accesskit::NodeId> = node
