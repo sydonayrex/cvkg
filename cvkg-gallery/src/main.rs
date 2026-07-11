@@ -658,7 +658,15 @@ impl View for GalleryApp {
                 [0.14, 0.13, 0.12, depth_alpha * 0.7]
             };
 
-            // Draw card body
+            // Draw card body.
+            // NOTE: do NOT wrap the carousel in push_vnode(card_rect)/pop_vnode().
+            // Cards are drawn at ABSOLUTE card_rect coords; after the nodal
+            // migration + Phase 3b, push_vnode bumps the renderer translation
+            // stack by (rect.x, rect.y) and GPU primitives add it to every
+            // vertex -> double-offset (card drawn at card_rect + card_rect).
+            // The 2.5D placement is done purely via push_affine/push_transform
+            // (GPU matrix), which does NOT touch the renderer translation
+            // stack. The manual screen-space hit-test needs no VDOM node.
             renderer.fill_rounded_rect(card_rect, 6.0, bg_color);
 
             // Bevels (top highlight, left edge, bottom shadow)
