@@ -20,7 +20,7 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | 3c | Consumer migration — switch `compute_layout` → `compute_layout_local` | **landed** (this session) | `a8df815`, `e5fef3f` |
 | 3 | Fully remove the absolute-flatten upstream walking | **landed** (legacy APIs retained for backward compat) | `01b73cf` |
 | 4 | Diff churning — only the parent's `Update` fires when it moves | **landed** (regression tests added) | `01b73cf` |
-| 5 | Physics + `AnimatedBox` local-rect semantics | **blocked** | — |
+| 5 | Physics + `AnimatedBox` local-rect semantics | **landed** (tests pass, docs updated) | `c250cb5` |
 | 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **deferred** | — |
 | 7 | AccessKit bridge routes through `world_rect` | **deferred** (depends on Phase 3) | — |
 | 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** as part of B.1 + B.1 | `b1622b7`, `cfa4162` |

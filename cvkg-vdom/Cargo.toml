@@ -85,4 +85,5 @@ features = [
 version = "1.0"
 
 [dev-dependencies]
+approx = "0.5"
 glam.workspace = true
