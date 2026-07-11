@@ -81,19 +81,24 @@ impl View for VStack {
             .layout_cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        // TODO(nodal-coord-migration): Phase 3 — this forwards the
-        // absolute rects returned by VStack::compute_layout to children.
-        // After Phase 3, the call site must pass LOCAL rects and
-        // compose the cumulative offset (per the plan, this is done
-        // via VNodeRenderer tracking the parent's offset from a `clip`
-        // / `frame` walk, not by manually summing here).
-        let rects = cvkg_layout::VStack::compute_layout(
+        // Phase 3d: switch from `compute_layout` (absolute rects) to
+        // `compute_layout_local` (anchor at (0,0), sizes preserved).
+        // Combined with Phase 3b/3c's renderer translation tracking,
+        // children rendered at `rect = (0, child_y, ...)` draw at the
+        // correct screen position via the cumulative translation pushed
+        // by `push_vnode(rect, ...)` on this very `VStack`.
+        let rects = cvkg_layout::VStack::compute_layout_local(
             self.spacing,
             self.alignment,
             self.distribution,
-            rect,
             &layouts,
             &mut cache,
+            // Hint the hinted width/height from `rect` so taffy can size
+            // children coherently; the translation is layered on top via
+            // the Renderer's translation stack, so the output rects are
+            // local.
+            Some(rect.width),
+            Some(rect.height),
         );
 
         let mut rect_idx = 0;
