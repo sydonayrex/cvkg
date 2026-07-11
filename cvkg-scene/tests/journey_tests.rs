@@ -45,10 +45,15 @@ fn journey_button_click_flow() {
         .find(|n| n.component_type.contains("Button"))
         .expect("Button node not found in VDOM");
 
-    // Simulate pointer move to center of button and then click
+    // Simulate pointer move to center of button and then click.
+    // `button_node.layout` is now LOCAL (parent-relative) after the
+    // nodal-coordinate migration — click coords must be world-space, so
+    // resolve through VDom::world_rect instead of reading layout directly.
+    let button_id = button_node.id;
+    let button_world = vdom.world_rect(button_id).expect("button world_rect");
     vdom.dispatch_event(Event::PointerMove {
-        x: button_node.layout.x + button_node.layout.width / 2.0,
-        y: button_node.layout.y + button_node.layout.height / 2.0,
+        x: button_world.x + button_world.width / 2.0,
+        y: button_world.y + button_world.height / 2.0,
         proximity_field: 0.0,
         tilt: None,
         azimuth: None,
@@ -58,8 +63,8 @@ fn journey_button_click_flow() {
     });
 
     vdom.dispatch_event(Event::PointerClick {
-        x: button_node.layout.x + button_node.layout.width / 2.0,
-        y: button_node.layout.y + button_node.layout.height / 2.0,
+        x: button_world.x + button_world.width / 2.0,
+        y: button_world.y + button_world.height / 2.0,
         button: 0,
         tilt: None,
         azimuth: None,

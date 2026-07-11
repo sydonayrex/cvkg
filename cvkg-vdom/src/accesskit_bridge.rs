@@ -142,12 +142,14 @@ impl VNode {
                 x1: (wsp.local_offset.0 + wsp.size.0) as f64,
                 y1: (wsp.local_offset.1 + wsp.size.1) as f64,
             },
-            None => accesskit::Rect {
-                x0: self.layout.x as f64,
-                y0: self.layout.y as f64,
-                x1: (self.layout.x + self.layout.width) as f64,
-                y1: (self.layout.y + self.layout.height) as f64,
-            },
+            // `None` means the node cannot be resolved to a position
+            // (neither `world_rect` nor `world_space_position` succeeded).
+            // `VNode.layout` is LOCAL (parent-relative) after the
+            // nodal-coordinate migration — emitting it here would place an
+            // unresolvable node at a wrong, parent-relative coordinate.
+            // Emit a zero rect at the origin instead; valid nodes always
+            // resolve through one of the `Some` arms above.
+            None => accesskit::Rect::ZERO,
         });
 
         node.set_children(
@@ -355,12 +357,10 @@ impl VDom {
                     x1: (wsp.local_offset.0 + wsp.size.0) as f64,
                     y1: (wsp.local_offset.1 + wsp.size.1) as f64,
                 },
-                None => accesskit::Rect {
-                    x0: node.layout.x as f64,
-                    y0: node.layout.y as f64,
-                    x1: (node.layout.x + node.layout.width) as f64,
-                    y1: (node.layout.y + node.layout.height) as f64,
-                },
+                // See the `None` arm above: `VNode.layout` is local after
+                // the nodal-coordinate migration, so an unresolvable node
+                // must not emit local coords. Emit a zero rect instead.
+                None => accesskit::Rect::ZERO,
             });
 
             let child_ids: Vec<accesskit::NodeId> = node

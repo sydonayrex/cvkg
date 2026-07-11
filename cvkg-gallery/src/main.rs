@@ -510,6 +510,10 @@ impl View for GalleryApp {
         let num_entries = entries.len();
         let half = num_entries as f32 / 2.0;
 
+        // Capture the cumulative parent translation so the hit-test closure
+        // can convert screen-space click coordinates to local space.
+        let translation = renderer.current_translation();
+
         // 1. Draw Background Area
         renderer.push_vnode(rect, "GalleryApp");
         renderer.set_z_index(1000.0);
@@ -684,15 +688,24 @@ impl View for GalleryApp {
         // Per-card handlers would ALL fire on every click, with the last one winning.
         // Instead, we register ONE handler that re-calculates each card's rect and tests
         // the click coordinates against it.
+        //
+        // Card rects are in local coordinates (relative to the parent's content origin).
+        // Click events arrive in screen space, so we subtract the cumulative parent
+        // translation captured at the top of render() to convert to local space.
         let click_state = self.state.clone();
         let click_cx = center_x;
         let click_cy = center_y;
         let click_num = num_entries;
         let click_selected = selected;
+        let click_tx = translation.x;
+        let click_ty = translation.y;
         renderer.register_handler(
             "pointerclick",
             std::sync::Arc::new(move |evt| {
                 if let Event::PointerClick { x, y, .. } = evt {
+                    // Convert screen-space click to local coordinates
+                    let local_x = x - click_tx;
+                    let local_y = y - click_ty;
                     let half = click_num as f32 / 2.0;
                     let sel = click_selected;
                     for i in 0..click_num {
@@ -709,7 +722,7 @@ impl View for GalleryApp {
                         let cx = click_cx + 360.0 * sin_a * scale - cw / 2.0;
                         let cy = click_cy + 12.0 * (1.0 - cos_a) * scale - ch / 2.0;
 
-                        if x >= cx && x <= cx + cw && y >= cy && y <= cy + ch {
+                        if local_x >= cx && local_x <= cx + cw && local_y >= cy && local_y <= cy + ch {
                             let mut s = click_state.lock().unwrap_or_else(|e| e.into_inner());
                             s.selected = i;
                             break;

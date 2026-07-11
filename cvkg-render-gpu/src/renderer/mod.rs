@@ -998,7 +998,10 @@ impl GpuRenderer {
             let blur_desc_a = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("Surtr Blur Texture A".into()),
                 kind: crate::kvasir::resource::ResourceKind::Image {
-                    format: ctx.config.format,
+                    // Must be Rgba16Float to match the blur pipeline's color target.
+                    // Using config.format (e.g. Bgra8UnormSrgb) would cause
+                    // IncompatibleColorAttachment at Queue::submit.
+                    format: wgpu::TextureFormat::Rgba16Float,
                     width: blur_width,
                     height: blur_height,
                     mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -1013,7 +1016,7 @@ impl GpuRenderer {
             let blur_desc_b = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("Surtr Blur Texture B".into()),
                 kind: crate::kvasir::resource::ResourceKind::Image {
-                    format: ctx.config.format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     width: blur_width,
                     height: blur_height,
                     mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -1028,7 +1031,10 @@ impl GpuRenderer {
             let bloom_desc_a = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("Surtr Bloom Texture A".into()),
                 kind: crate::kvasir::resource::ResourceKind::Image {
-                    format: ctx.config.format,
+                    // Must be Rgba16Float to match the bloom extract pipeline's color target.
+                    // Using config.format (e.g. Bgra8UnormSrgb) would cause
+                    // IncompatibleColorAttachment at Queue::submit.
+                    format: wgpu::TextureFormat::Rgba16Float,
                     width: blur_width,
                     height: blur_height,
                     mip_level_count: compute_mip_levels(blur_width, blur_height),
@@ -1043,7 +1049,7 @@ impl GpuRenderer {
             let bloom_desc_b = crate::kvasir::resource::ResourceDescriptor {
                 label: Some("Surtr Bloom Texture B".into()),
                 kind: crate::kvasir::resource::ResourceKind::Image {
-                    format: ctx.config.format,
+                    format: wgpu::TextureFormat::Rgba16Float,
                     width: blur_width,
                     height: blur_height,
                     mip_level_count: compute_mip_levels(blur_width, blur_height),

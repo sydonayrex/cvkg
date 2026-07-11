@@ -22,7 +22,7 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | 4 | Diff churning — only the parent's `Update` fires when it moves | **landed** (regression tests added) | `01b73cf` |
 | 5 | Physics + `AnimatedBox` local-rect semantics | **implemented, UNCOMMITTED** (in working tree; `cargo test -p cvkg-vdom --lib physics` green, `animated.rs` doc-comment updated) — see note below | — (NOT `c250cb5`; that commit only added Phase 4/1 tests) |
 | 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **landed** (uncommitted) | — |
-| 7 | AccessKit bridge routes through `world_rect` | **deferred** (depends on Phase 3) | — |
+| **7** | AccessKit bridge routes through `resolved_position` | **landed** (via `resolved_position()` dispatcher, commit `032eac0`; see caveat below) | `032eac0` |
 | 8 | Input dispatch through VDOM (one-shot bundle with Phase 0) | **landed** | `9995795`, `b1622b7`, `cfa4162`, Phase 8 audit + regression test |
 | 9–10 | Tests + final verification | **deferred** | — |
 
@@ -316,6 +316,55 @@ dedicated Phase 3 / Phase 9 pass.
 - `vdom.resolved_position(id)` — single dispatcher: WorldSpace or ScreenSpace.
   New consumers that want absolute coordinates should use this rather
   than reading `vnode.layout` directly.
+
+## Stale-consumer audit (2026-07-11)
+
+Grep of the whole workspace for direct `VNode.layout.{x,y}` reads
+outside `cvkg-vdom` (the plan's Phase 10 final grep) plus a review of
+the migration doc against the actual landed code:
+
+**Genuine stale consumer found and fixed:**
+- `cvkg-scene/tests/journey_tests.rs` — `journey_button_click_flow`
+  computed the click coordinate from `button_node.layout.{x,y} +
+  dims/2`. Since `layout` is now parent-relative (local), this places
+  the click at the node's local offset, NOT its on-screen center. For a
+  nested (non-root) button the handler would never fire. Routed the
+  pointer coords through `vdom.world_rect(button_id)` instead. All 3
+  journey tests pass after the fix.
+
+**Reads confirmed benign (NOT stale consumers):**
+- `cvkg/src/headless.rs:177` — reads `node.layout` of the **root**
+  node only (`x/y == 0` since root has no parent). World == local for
+  the root, so this is correct.
+- `cvkg-components/src/visual/effects.rs:290` — calls
+  `self.content.layout()` returning a `&dyn LayoutView`, NOT
+  `VNode.layout`. Unrelated to the vdom coordinate system.
+- `cvkg-scene/src/lib.rs` — `SceneNode.local_rect` /
+  `SceneNode.world_rect` are the scene graph's OWN independent rects
+  (documented in `cvkg-scene/README.md`); they do not read
+  `VNode.layout`. `validate_node_sync` in `cvkg-vdom` already
+  compares `VNode.layout` against `SceneNode.local_rect` (both local),
+  per Phase 2.
+
+**Latent caveat (RESOLVED 2026-07-11):**
+- `cvkg-vdom/src/accesskit_bridge.rs` (both `set_bounds` sites,
+  lines ~145 and ~358) — the `ResolvedPosition::None` arm formerly
+  fell back to `self.layout.{x,y}` (local coords). Since `layout`
+  is parent-relative after the migration, an unresolvable node would
+  have been emitted at the wrong (local) screen position. Both arms now
+  emit `accesskit::Rect::ZERO` instead — valid nodes always resolve
+  through `world_rect`/`world_space_position`, so the `None` case is
+  genuinely unreachable and a zero rect is the honest fallback.
+
+**Phase 3 still incomplete (documented in prior entries):** the
+opt-in local-mode layout APIs (3a), renderer translation stack (3b),
+and partial consumer migration (3c) are landed, but most
+`cvkg-components` primitives still call the absolute `compute_layout`
+API and the legacy absolute path is retained for compat. This is the
+remaining blast radius the doc's "suggested next-session" covers; it
+does not affect the nodal-coordinate contract (composition through
+`world_rect`/`resolved_position` is the single source of truth) but
+means not every component yet *produces* local rects end-to-end.
 
 ## Suggested next-session starting point
 
