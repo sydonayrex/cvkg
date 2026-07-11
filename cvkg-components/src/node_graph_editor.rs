@@ -115,7 +115,8 @@ impl GraphNode {
         self
     }
 
-    /// Return the center of a port circle in absolute coordinates.
+    /// Return the center of a port circle in local coordinates
+    /// (relative to the editor's content origin).
     pub fn port_position(&self, port: &Port) -> [f32; 2] {
         match port.port_type {
             PortType::Input => {
@@ -406,6 +407,13 @@ impl View for NodeGraphEditor {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let (persistent_hash, interaction_hash) = state_hashes(&self.id);
 
+        // Capture the cumulative parent translation so event handlers can
+        // convert screen-space click coordinates to local space (relative
+        // to this editor's rect). Node positions (node.x/y) are local
+        // coordinates — the renderer's translation stack places them at
+        // the correct screen position during drawing.
+        let translation = renderer.current_translation();
+
         // ── Load or initialize persistent state ────────────────────────
         let mut persistent = {
             let s = cvkg_core::load_system_state();
@@ -442,10 +450,15 @@ impl View for NodeGraphEditor {
         {
             let pn = persistent_nodes.clone();
             let pe = persistent_edges.clone();
+            let tx = translation.x;
+            let ty = translation.y;
             renderer.register_handler(
                 "pointerdown",
                 Arc::new(move |event| {
                     if let Event::PointerDown { x, y, .. } = event {
+                        // Convert screen-space event to local coordinates
+                        let local_x = x - tx;
+                        let local_y = y - ty;
                         cvkg_core::update_system_state(|s| {
                             let mut s2 = s.clone();
 
@@ -468,15 +481,15 @@ impl View for NodeGraphEditor {
                                 for port in node.input_ports.iter().chain(node.output_ports.iter())
                                 {
                                     let [px, py] = node.port_position(port);
-                                    let dx = x - px;
-                                    let dy = y - py;
+                                    let dx = local_x - px;
+                                    let dy = local_y - py;
                                     if dx * dx + dy * dy <= 64.0 {
                                         if port.port_type == PortType::Output {
                                             i.pending_edge = Some(PendingEdge {
                                                 from_node: node.id.clone(),
                                                 from_port: port.id.clone(),
-                                                cursor_x: x,
-                                                cursor_y: y,
+                                                cursor_x: local_x,
+                                                cursor_y: local_y,
                                             });
                                             i.hovered_port =
                                                 Some((node.id.clone(), port.id.clone()));
@@ -494,16 +507,16 @@ impl View for NodeGraphEditor {
                                 // Check if clicking on a node body
                                 let mut hit_node = false;
                                 for node in p.nodes.iter().rev() {
-                                    if x >= node.x
-                                        && x <= node.x + node.width
-                                        && y >= node.y
-                                        && y <= node.y + node.height
+                                    if local_x >= node.x
+                                        && local_x <= node.x + node.width
+                                        && local_y >= node.y
+                                        && local_y <= node.y + node.height
                                     {
                                         i.selected_node = Some(node.id.clone());
                                         p.selected_node = Some(node.id.clone());
-                                        if y <= node.y + 24.0 {
+                                        if local_y <= node.y + 24.0 {
                                             i.dragging_node = Some(node.id.clone());
-                                            i.drag_offset = [x - node.x, y - node.y];
+                                            i.drag_offset = [local_x - node.x, local_y - node.y];
                                         }
                                         hit_node = true;
                                         break;
@@ -530,10 +543,15 @@ impl View for NodeGraphEditor {
         {
             let pn = persistent_nodes.clone();
             let pe = persistent_edges.clone();
+            let tx = translation.x;
+            let ty = translation.y;
             renderer.register_handler(
                 "pointermove",
                 Arc::new(move |event| {
                     if let Event::PointerMove { x, y, .. } = event {
+                        // Convert screen-space event to local coordinates
+                        let local_x = x - tx;
+                        let local_y = y - ty;
                         cvkg_core::update_system_state(|s| {
                             let mut s2 = s.clone();
 
@@ -552,13 +570,13 @@ impl View for NodeGraphEditor {
                             if let Some(ref node_id) = i.dragging_node
                                 && let Some(node) = p.nodes.iter_mut().find(|n| &n.id == node_id)
                             {
-                                node.x = x - i.drag_offset[0];
-                                node.y = y - i.drag_offset[1];
+                                node.x = local_x - i.drag_offset[0];
+                                node.y = local_y - i.drag_offset[1];
                             }
 
                             if let Some(ref mut pending) = i.pending_edge {
-                                pending.cursor_x = x;
-                                pending.cursor_y = y;
+                                pending.cursor_x = local_x;
+                                pending.cursor_y = local_y;
                             }
 
                             // Update hovered port
@@ -567,8 +585,8 @@ impl View for NodeGraphEditor {
                                 for port in node.input_ports.iter().chain(node.output_ports.iter())
                                 {
                                     let [px, py] = node.port_position(port);
-                                    let dx = x - px;
-                                    let dy = y - py;
+                                    let dx = local_x - px;
+                                    let dy = local_y - py;
                                     if dx * dx + dy * dy <= 64.0 {
                                         i.hovered_port = Some((node.id.clone(), port.id.clone()));
                                         break;
@@ -592,10 +610,15 @@ impl View for NodeGraphEditor {
         {
             let pn = persistent_nodes.clone();
             let pe = persistent_edges.clone();
+            let tx = translation.x;
+            let ty = translation.y;
             renderer.register_handler(
                 "pointerup",
                 Arc::new(move |event| {
                     if let Event::PointerUp { x, y, .. } = event {
+                        // Convert screen-space event to local coordinates
+                        let local_x = x - tx;
+                        let local_y = y - ty;
                         cvkg_core::update_system_state(|s| {
                             let mut s2 = s.clone();
 
@@ -616,8 +639,8 @@ impl View for NodeGraphEditor {
                                 for node in &p.nodes {
                                     for port in &node.input_ports {
                                         let [px, py] = node.port_position(port);
-                                        let dx = x - px;
-                                        let dy = y - py;
+                                        let dx = local_x - px;
+                                        let dy = local_y - py;
                                         if dx * dx + dy * dy <= 64.0 {
                                             let edge_id = format!(
                                                 "edge_{}_{}_{}_{}",
