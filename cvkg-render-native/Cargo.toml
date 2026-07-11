@@ -103,3 +103,6 @@ version = "0.30"
 [dependencies.rodio]
 version = "0.22"
 
+[dependencies.glam]
+workspace = true
+

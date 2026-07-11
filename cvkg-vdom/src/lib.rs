@@ -916,6 +916,14 @@ pub struct VNodeRenderer {
     /// Phase 15: theme override stack for portal/subtree inheritance.
     theme_stack: Vec<cvkg_core::ColorTheme>,
     current_theme: cvkg_core::ColorTheme,
+    /// Phase 3b: cumulative translation stack keyed by `push_translation`
+    /// / `pop_translation`. Components adopting local-rect semantics (see
+    /// `docs/nodal-coordinate-migration.md` Phase 3a) consult
+    /// `current_translation()` from primitives that read screen pixel
+    /// positions so local rects render at the right place.
+    /// Stored as `[f32; 2]` (Δx, Δy) so cvkg-vdom doesn't pull in glam
+    /// directly — the trait's `Vec2` is reconstructed on demand.
+    translation_stack: Vec<[f32; 2]>,
 }
 
 impl Default for VNodeRenderer {
@@ -943,6 +951,7 @@ impl VNodeRenderer {
             },
             theme_stack: Vec::new(),
             current_theme: cvkg_core::ColorTheme::default(),
+            translation_stack: Vec::new(),
         }
     }
 
@@ -1636,6 +1645,37 @@ impl cvkg_core::Renderer for VNodeRenderer {
 
     fn current_theme(&self) -> cvkg_core::ColorTheme {
         self.current_theme
+    }
+
+    // ── Phase 3b: Translation stack ───────────────────────────────────
+    //
+    // Tracks cumulative translation pushed by components/primitives via
+    // `push_translation` / `pop_translation`. Components that adopt
+    // `cvkg_layout::*::compute_layout_local` (Phase 3a) push their
+    // node-local offset here so primitives reading `current_translation()`
+    // render at the correct screen position.
+    //
+    // Note: VNodeRenderer is the capture-time renderer used by
+    // `VDom::build`. Components here record *layout* rects and other
+    // state into the VDOM, but most primitives no-op (returning a recorded
+    // command). The translation stack isn't required for correctness in
+    // this capture path itself; it's wired up so that consumers of
+    // `Renderer::current_translation` see a stable value during the
+    // walk (peeled by `pop_translation` at VDOM close).
+    fn push_translation(&mut self, translation: glam::Vec2) {
+        self.translation_stack.push([translation.x, translation.y]);
+    }
+
+    fn pop_translation(&mut self) {
+        let _ = self.translation_stack.pop();
+    }
+
+    fn current_translation(&self) -> glam::Vec2 {
+        self.translation_stack
+            .last()
+            .copied()
+            .map(|[x, y]| glam::Vec2::new(x, y))
+            .unwrap_or(glam::Vec2::ZERO)
     }
 }
 

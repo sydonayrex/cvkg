@@ -65,6 +65,13 @@ pub struct NativeRenderer {
     pub(crate) berserker_mode: RenderIntensityMode,
     pub(crate) rage: f32,
     pub(crate) window: Arc<Window>,
+    /// Phase 3b: cumulative translation stack used by components adopting
+    /// `cvkg_layout::*::compute_layout_local` (opt-in per
+    /// `docs/nodal-coordinate-migration.md` Phase 3a). Components push
+    /// their node-local offset; primitives that read
+    /// `current_translation()` apply it before emitting screen-pixel
+    /// vertices. NativeRenderer is per-frame so the stack is short-lived.
+    pub(crate) translation_stack: Vec<glam::Vec2>,
 }
 
 impl NativeRenderer {
@@ -123,6 +130,7 @@ impl NativeRenderer {
             berserker_mode,
             rage,
             window,
+            translation_stack: Vec::new(),
         }
     }
 
@@ -428,10 +436,42 @@ impl cvkg_core::Renderer for NativeRenderer {
         self.gpu_ref().register_handler(event_type, handler);
     }
     fn push_vnode(&mut self, rect: Rect, name: &'static str) {
+        // Phase 3b: track translation cumulatively so primitives that
+        // call `current_translation()` see the cumulative parent
+        // offset. Rectangles passed by components today are expected
+        // to be ABSOLUTE; we still propagate the translation forward
+        // because components adopting local semantics (Phase 3a) will
+        // also call this with LOCAL rects and the same path serves
+        // both. Components not opting in get zero-net translation.
+        if self.translation_stack.is_empty() {
+            self.translation_stack.push(glam::Vec2::new(rect.x, rect.y));
+        } else {
+            // Compose with the parent's offset to get the new top.
+            let parent = *self.translation_stack.last().unwrap();
+            self.translation_stack
+                .push(parent + glam::Vec2::new(rect.x, rect.y));
+        }
         self.gpu_ref().push_vnode(rect, name);
     }
     fn pop_vnode(&mut self) {
+        let _ = self.translation_stack.pop();
         self.gpu_ref().pop_vnode();
+    }
+    fn push_translation(&mut self, translation: glam::Vec2) {
+        if let Some(parent) = self.translation_stack.last() {
+            self.translation_stack.push(*parent + translation);
+        } else {
+            self.translation_stack.push(translation);
+        }
+    }
+    fn pop_translation(&mut self) {
+        let _ = self.translation_stack.pop();
+    }
+    fn current_translation(&self) -> glam::Vec2 {
+        self.translation_stack
+            .last()
+            .copied()
+            .unwrap_or(glam::Vec2::ZERO)
     }
     fn set_z_index(&mut self, z: f32) {
         self.gpu_ref().set_z_index(z);

@@ -626,6 +626,36 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
         None
     }
 
+    // ── Translation tracking (Phase 3b of nodal-coord-migration) ──
+    //
+    // Phase 3a (commit 472e67a) added an opt-in `compute_layout_local`
+    // API that returns rects with `x = 0, y = 0` (local coordinates).
+    // Consumers that adopt it need to know what cumulative translation
+    // to add to their primitive rects so the rendered output lands at
+    // the correct screen position. These methods give primitives a way
+    // to query the cumulative offset.
+    //
+    // Default impls below are no-ops (translation = (0,0)) so existing
+    // consumers are unaffected. cvkg-render-native and cvkg-vdom
+    // override these on `VNodeRenderer` and `NativeRenderer` so a
+    // stack is maintained in lock-step with `push_vnode`/`pop_vnode`.
+
+    /// Push an absolute-pixel translation. Components and primitives
+    /// may call this when drawing local-coordinate content (e.g. after
+    /// consuming rects from `cvkg_layout::*::compute_layout_local`).
+    /// `pop_translation` must be called once per `push_translation`.
+    fn push_translation(&mut self, _translation: glam::Vec2) {}
+
+    /// Pop the most recent translation pushed via `push_translation`.
+    fn pop_translation(&mut self) {}
+
+    /// Return the cumulative translation from all active
+    /// `push_translation` calls (peeled by their matching pops).
+    /// Default impl returns Vec2::ZERO.
+    fn current_translation(&self) -> glam::Vec2 {
+        glam::Vec2::ZERO
+    }
+
     /// Set the current Z-index for depth sorting.
     /// Higher values appear closer to the viewer.
     fn set_z_index(&mut self, _z: f32) {}

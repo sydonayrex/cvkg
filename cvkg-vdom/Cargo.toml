@@ -69,6 +69,9 @@ path = "../cvkg-physics"
 [dependencies.cvkg-scene]
 version = "0.3.4"
 
+[dependencies.glam]
+workspace = true
+
 [dependencies.log]
 version = "0.4"
 
