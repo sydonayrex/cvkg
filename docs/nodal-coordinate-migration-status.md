@@ -18,8 +18,8 @@ plus an Option B that bundles Phase 0 + Phase 8 for early shippability.
 | 3a | Layout engine opt-in `local_mode` (`compute_layout_local`) | **landed** (this session) | `5d7e0ed` |
 | 3b | Renderer translation stack (`push_translation`/`pop_translation`) | **landed** (this session) | `c11c2af` |
 | 3c | Consumer migration — switch `compute_layout` → `compute_layout_local` | **landed** (this session) | `a8df815`, `e5fef3f` |
-| 3 | Fully remove the absolute-flatten upstream walking | **in progress** | — |
-| 4 | Diff churning — only the parent's `Update` fires when it moves | **blocked** (depends on Phase 3) | — |
+| 3 | Fully remove the absolute-flatten upstream walking | **landed** (legacy APIs retained for backward compat) | `01b73cf` |
+| 4 | Diff churning — only the parent's `Update` fires when it moves | **landed** (regression tests added) | `01b73cf` |
 | 5 | Physics + `AnimatedBox` local-rect semantics | **blocked** | — |
 | 6 | `WorldSpacePanel` 3D composition via `world_space_position` | **deferred** | — |
 | 7 | AccessKit bridge routes through `world_rect` | **deferred** (depends on Phase 3) | — |

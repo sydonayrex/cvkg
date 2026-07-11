@@ -971,3 +971,252 @@ fn berserker_click_box_regression() {
         "Overlay should capture clicks in empty areas to dismiss menu"
     );
 }
+
+/// Phase 4 regression test: when only the root moves, diff() should emit
+/// exactly one Update patch (the root's), not one per descendant.
+/// This is the concrete test for the diff-churn problem the nodal coordinate
+/// migration fixes.
+#[test]
+fn test_diff_churn_local_rects_no_descendant_updates() {
+    // Build a 3-level tree: root -> child -> grandchild
+    let mut old = VDom::new();
+    old.root = Some(KvasirId(1));
+    old.nodes.insert(
+        KvasirId(1),
+        VNode {
+            id: KvasirId(1),
+            key: None,
+            component_type: "panel".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 10.0, y: 20.0, width: 200.0, height: 100.0 },
+            children: vec![KvasirId(2)],
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    old.nodes.insert(
+        KvasirId(2),
+        VNode {
+            id: KvasirId(2),
+            key: None,
+            component_type: "row".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 },
+            children: vec![KvasirId(3)],
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    old.nodes.insert(
+        KvasirId(3),
+        VNode {
+            id: KvasirId(3),
+            key: None,
+            component_type: "label".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 },
+            children: vec![],
+            aria_role: "text".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+
+    // New tree: root moved by (+30, +40), children unchanged
+    let mut new = VDom::new();
+    new.root = Some(KvasirId(1));
+    new.nodes.insert(
+        KvasirId(1),
+        VNode {
+            id: KvasirId(1),
+            key: None,
+            component_type: "panel".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 40.0, y: 60.0, width: 200.0, height: 100.0 },
+            children: vec![KvasirId(2)],
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    new.nodes.insert(
+        KvasirId(2),
+        VNode {
+            id: KvasirId(2),
+            key: None,
+            component_type: "row".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 },
+            children: vec![KvasirId(3)],
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    new.nodes.insert(
+        KvasirId(3),
+        VNode {
+            id: KvasirId(3),
+            key: None,
+            component_type: "label".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 },
+            children: vec![],
+            aria_role: "text".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+
+    let patches = old.diff(&new);
+
+    // Should emit exactly 1 patch: the root's Update
+    let update_count = patches.iter().filter(|p| matches!(p, VDomPatch::Update { .. })).count();
+    assert_eq!(
+        update_count, 1,
+        "Moving root with local rects should emit exactly 1 Update patch, got {}",
+        update_count
+    );
+
+    // Verify it's the root's patch
+    if let Some(VDomPatch::Update { id, layout, .. }) = patches.first() {
+        assert_eq!(*id, KvasirId(1));
+        assert_eq!(*layout, Some(LayoutRect { x: 40.0, y: 60.0, width: 200.0, height: 100.0 }));
+    } else {
+        panic!("Expected Update patch as first patch");
+    }
+
+    // Verify children's layout is unchanged
+    let child_layout = new.nodes.get(&KvasirId(2)).unwrap().layout;
+    assert_eq!(child_layout, LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 });
+    let grandchild_layout = new.nodes.get(&KvasirId(3)).unwrap().layout;
+    assert_eq!(grandchild_layout, LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 });
+}
+
+/// Phase 1 regression test: world_rect composes local offsets up the parent chain.
+#[test]
+fn test_world_rect_composes_local_offsets() {
+    let mut vdom = VDom::new();
+    vdom.root = Some(KvasirId(1));
+    vdom.nodes.insert(
+        KvasirId(1),
+        VNode {
+            id: KvasirId(1),
+            key: None,
+            component_type: "panel".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 10.0, y: 20.0, width: 200.0, height: 100.0 },
+            children: vec![KvasirId(2)],
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    vdom.nodes.insert(
+        KvasirId(2),
+        VNode {
+            id: KvasirId(2),
+            key: None,
+            component_type: "row".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 5.0, y: 5.0, width: 180.0, height: 40.0 },
+            children: vec![KvasirId(3)],
+            aria_role: "group".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    vdom.nodes.insert(
+        KvasirId(3),
+        VNode {
+            id: KvasirId(3),
+            key: None,
+            component_type: "label".to_string(),
+            props: HashMap::new(),
+            state: None,
+            layout: LayoutRect { x: 2.0, y: 2.0, width: 100.0, height: 20.0 },
+            children: vec![],
+            aria_role: "text".to_string(),
+            aria_props: AriaProps::default(),
+            portal_target: None,
+            world_space: None,
+            theme_override: None,
+            color_palette: u16::MAX,
+            sdf_shape: None,
+            companions: HashMap::new(),
+        },
+    );
+    // Set up parent relationships
+    vdom.parents.insert(KvasirId(2), KvasirId(1));
+    vdom.parents.insert(KvasirId(3), KvasirId(2));
+
+    // world_rect should compose: root(10,20) + child(5,5) + grandchild(2,2) = (17, 27)
+    let world = vdom.world_rect(KvasirId(3)).unwrap();
+    assert_eq!(world.x, 17.0);
+    assert_eq!(world.y, 27.0);
+    assert_eq!(world.width, 100.0);
+    assert_eq!(world.height, 20.0);
+
+    // Moving the root should change grandchild's world_rect but not its local layout
+    vdom.nodes.get_mut(&KvasirId(1)).unwrap().layout.x = 50.0;
+    vdom.nodes.get_mut(&KvasirId(1)).unwrap().layout.y = 60.0;
+
+    let world_after = vdom.world_rect(KvasirId(3)).unwrap();
+    assert_eq!(world_after.x, 57.0); // 50 + 5 + 2
+    assert_eq!(world_after.y, 67.0); // 60 + 5 + 2
+
+    // Grandchild's local layout is unchanged
+    let local = vdom.nodes.get(&KvasirId(3)).unwrap().layout;
+    assert_eq!(local.x, 2.0);
+    assert_eq!(local.y, 2.0);
+}
