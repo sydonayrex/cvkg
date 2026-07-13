@@ -192,20 +192,64 @@ impl View for NiflheimSidebar {
         // Glass background
         self.render_background(renderer, rect);
 
-        // Render each item
+        // Get pointer position for hover/click detection
+        let pointer = renderer.get_pointer_position();
+        
+        // Render each item recursively
         let mut y = rect.y + 4.0;
         let item_height = 28.0;
         for item in &self.items {
-            let item_rect = Rect {
-                x: rect.x,
-                y,
-                width: rect.width,
-                height: item_height,
-            };
-            let is_selected = self.selected_id.as_ref() == Some(&item.id);
-            self.render_row(renderer, item_rect, item, is_selected, false, 0);
-            y += item_height;
+            y = self.render_item_recursive(renderer, rect, item, &mut y, item_height, 0, pointer);
         }
+    }
+}
+
+impl NiflheimSidebar {
+    fn render_item_recursive(
+        &self,
+        renderer: &mut dyn Renderer,
+        rect: Rect,
+        item: &SidebarItem,
+        y: &mut f32,
+        item_height: f32,
+        depth: usize,
+        pointer: [f32; 2],
+    ) -> f32 {
+        if *y + item_height > rect.y + rect.height {
+            return *y;
+        }
+
+        let item_rect = Rect {
+            x: rect.x,
+            y: *y,
+            width: rect.width,
+            height: item_height,
+        };
+        let is_selected = self.selected_id.as_ref() == Some(&item.id);
+        self.render_row(renderer, item_rect, item, is_selected, false, depth);
+        
+        // Register click handler for this item
+        let on_select = self.on_select.clone();
+        let item_id = item.id.clone();
+        renderer.register_handler(
+            "pointerclick",
+            std::sync::Arc::new(move |_| {
+                if let Some(ref cb) = on_select {
+                    cb(&item_id);
+                }
+            }),
+        );
+        
+        *y += item_height;
+
+        // Render children if expanded
+        if item.is_expanded && !item.children.is_empty() {
+            for child in &item.children {
+                *y = self.render_item_recursive(renderer, rect, child, y, item_height, depth + 1, pointer);
+            }
+        }
+
+        *y
     }
 }
 

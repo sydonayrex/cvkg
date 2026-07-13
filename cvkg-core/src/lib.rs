@@ -167,6 +167,8 @@ impl Camera3D {
 /// It is typically implemented by the host windowing/rendering environment.
 pub mod spring;
 pub use spring::*;
+pub mod world_space;
+pub use world_space::*;
 pub mod frame_renderer;
 pub use frame_renderer::*;
 pub mod state;

@@ -202,19 +202,20 @@ impl View for TyrCalendar {
             }
         }
 
-        // Event Handling
+        // Event Handling.
+        // VDom hit_test already verified the click is inside this Calendar VNode,
+        // so local coordinates are computed by subtracting the VNode's own rect origin.
         let on_date_select = self.on_date_select.clone();
         let year = self.selected_date.year;
         let month = self.selected_date.month;
-        let rect_clone = rect;
 
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
                 if let cvkg_core::Event::PointerClick { x, y, .. } = event {
-                    // Simplified hit testing for the grid
-                    let local_x = x - rect_clone.x;
-                    let local_y = y - (rect_clone.y + header_h + 25.0);
+                    // Convert screen coords to local grid coordinates
+                    let local_x = x - rect.x;
+                    let local_y = y - (rect.y + header_h + 25.0);
 
                     if (0.0..180.0).contains(&local_y) {
                         let col = (local_x / day_w) as i32;
@@ -233,6 +234,7 @@ impl View for TyrCalendar {
                 }
             }),
         );
+
 
         renderer.pop_vnode();
     }

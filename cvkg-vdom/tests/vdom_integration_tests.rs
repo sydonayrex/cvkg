@@ -723,6 +723,7 @@ fn berserker_click_box_regression() {
         for i in 0..4 {
             let cid = corner_ids[i];
             let (cx, cy) = corner_positions[i];
+            // Root is at (0,0), so corner button local = absolute
             let cb = interactive_node(cid.0, "CornerButton", cx, cy, 100.0, 100.0, "button");
             vdom.nodes.insert(cid, cb);
             root_children.push(cid);
@@ -743,8 +744,9 @@ fn berserker_click_box_regression() {
         let mut dock_children: Vec<KvasirId> = vec![];
         for i in 0..5 {
             let did = dock_item_ids[i];
-            let dx = 384.0 + (512.0 - 304.0) / 2.0 + i as f32 * 64.0;
-            let di = interactive_node(did.0, "HeimdallDockItem", dx, 652.0, 48.0, 56.0, "button");
+            // Dock is at (384, 652), so dock items are local to dock: x relative to 384, y=0
+            let dx = (512.0 - 304.0) / 2.0 + i as f32 * 64.0;
+            let di = interactive_node(did.0, "HeimdallDockItem", dx, 0.0, 48.0, 56.0, "button");
             vdom.nodes.insert(did, di);
             dock_children.push(did);
             vdom.event_handlers.insert(

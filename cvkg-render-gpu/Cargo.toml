@@ -158,6 +158,13 @@ version = ">=0.3.1"
 path = "../cvkg-anim"
 version = ">=0.3.1"
 
+[dev-dependencies.cvkg-gallery]
+path = "../cvkg-gallery"
+version = ">=0.3.1"
+
+[dev-dependencies.png]
+version = "0.17"
+
 [build-dependencies.naga]
 version = "29"
 features = [

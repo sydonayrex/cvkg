@@ -1,4 +1,5 @@
 use crate::RADIUS_SM;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
@@ -21,6 +22,10 @@ pub struct SkollProgress {
     pub fill: [f32; 4],
     pub border_radius: f32,
     pub animated: bool,
+    /// VDOM companion bundle — ARIA progress semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 /// Visual variants for progress indicators.
@@ -42,7 +47,17 @@ impl SkollProgress {
             fill: theme::accent(),
             border_radius: RADIUS_SM,
             animated: true,
+            companions: CompanionBundle::focusable()
+                .with_role("progressbar")
+                .with_label(format!("Progress {}%", (value.clamp(0.0, 1.0) * 100.0) as u32)),
+            world: WorldSpaceConfig::default(),
         }
+    }
+
+    /// Opt this progress indicator into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
+        self
     }
 
     pub fn variant(mut self, v: ProgressVariant) -> Self {
@@ -68,7 +83,27 @@ impl View for SkollProgress {
         unreachable!("Primitive view has no body")
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        let mut bundle = self.companions.clone();
+        let label = format!("Progress {}%", (self.value.clamp(0.0, 1.0) * 100.0) as u32);
+        bundle = bundle.with_label(label);
+        bundle.to_vec()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let world_id = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "skoll_progress".hash(&mut s);
+            (self.value as i32).hash(&mut s);
+            s.finish()
+        };
+
+        // Push a dedicated VNode so companions + 3D world-space attach to the node.
+        renderer.push_vnode_with_companions(rect, "Progress", self.companions.to_vec());
+
+        self.world.begin(renderer, world_id);
+
         let bg_rect = rect;
         renderer.fill_rounded_rect(bg_rect, self.border_radius, self.background);
 
@@ -82,6 +117,12 @@ impl View for SkollProgress {
             };
             renderer.fill_rounded_rect(fill_rect, self.border_radius, self.fill);
         }
+
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(world_id);
+        }
+
+        renderer.pop_vnode();
     }
 
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {

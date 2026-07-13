@@ -132,6 +132,12 @@ version = "0.3.4"
 [dependencies.cvkg-layout]
 version = "0.3.4"
 
+[dependencies.cvkg-materials]
+version = "0.3.4"
+
+[dependencies.cvkg-physics]
+version = "0.3.4"
+
 [dependencies.cvkg-themes]
 version = "0.3.4"
 
@@ -159,8 +165,6 @@ workspace = true
 [dev-dependencies.cvkg-render-native]
 version = ">=0.3.4"
 
-
-
 [dev-dependencies.cvkg-macros]
 version = ">=0.3.4"
 
@@ -169,6 +173,3 @@ version = ">=0.3.4"
 
 [dev-dependencies.winit]
 version = "0.30"
-
-[dev-dependencies.cvkg-materials]
-path = "../cvkg-materials"

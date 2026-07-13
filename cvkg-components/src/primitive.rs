@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::{FONT_SM, FONT_XS, FontWeight, Orientation, SPACE_SM, SPACE_XS};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, Size, View};
@@ -12,17 +13,26 @@ pub struct Text {
     pub(crate) font_size: f32,
     pub(crate) font_weight: FontWeight,
     pub(crate) color: [f32; 4],
+    /// VDOM companion bundle — ARIA text semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Text {
     /// Create a new Text component with the given content.
     /// Default color is theme::text() (adaptive to light/dark mode).
     pub fn new(content: impl Into<String>) -> Self {
+        let content_str = content.into();
         Self {
-            content: content.into(),
+            content: content_str.clone(),
             font_size: 14.0,
             font_weight: FontWeight::Regular,
             color: theme::text(),
+            companions: CompanionBundle::focusable()
+                .with_role("text")
+                .with_label(content_str),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -48,6 +58,12 @@ impl Text {
 
     pub fn bold(self) -> Self {
         self.font_weight(FontWeight::Bold)
+    }
+
+    /// Opt this text into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
+        self
     }
 
     /// Apply a complete TextStyle from cvkg-runic-text.
@@ -77,7 +93,29 @@ impl View for Text {
         unreachable!()
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        let mut bundle = self.companions.clone();
+        if !self.content.is_empty() {
+            bundle = bundle.with_label(self.content.clone());
+        }
+        bundle.to_vec()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
+        let world_id = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "text".hash(&mut s);
+            self.content.hash(&mut s);
+            s.finish()
+        };
+
+        // Push a dedicated VNode so companions + 3D world-space attach to the Text
+        // node itself rather than the parent.
+        renderer.push_vnode_with_companions(rect, "Text", self.companions.to_vec());
+
+        self.world.begin(renderer, world_id);
+
         let mut style = runic::TextStyle::new("SF Pro Text", self.font_size);
         if let FontWeight::Bold = self.font_weight {
             style = style.with_weight(700);
@@ -101,6 +139,12 @@ impl View for Text {
         } else {
             renderer.draw_text_raw(&self.content, rect.x, rect.y, self.font_size, self.color);
         }
+
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(world_id);
+        }
+
+        renderer.pop_vnode();
     }
 
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {

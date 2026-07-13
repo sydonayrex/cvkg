@@ -369,6 +369,161 @@ pub fn merge_manifests(input: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+/// Component metadata derive macro — generates `ComponentMeta` for gallery auto-registration.
+///
+/// # Supported attributes
+/// - `#[component_meta(category = "Forms", description = "Button description")]`
+/// - `#[component_prop(name = "label", type_name = "string", default = "\"Click Me\"", description = "Button text")]`
+///
+/// # Example
+/// ```ignore
+/// #[derive(ComponentMeta)]
+/// #[component_meta(category = "Forms", description = "Clickable button")]
+/// struct Button {
+///     #[component_prop(type_name = "string", default = "\"Click Me\"", description = "Button text")]
+///     label: String,
+///     #[component_prop(type_name = "bool", default = "false", description = "Disable button")]
+///     disabled: bool,
+/// }
+/// ```
+#[proc_macro_derive(ComponentMeta, attributes(component_meta, component_prop))]
+pub fn derive_component_meta(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let name_str = name.to_string();
+
+    // Parse #[component_meta(...)] attribute on the struct
+    let mut category = "Uncategorized".to_string();
+    let mut description = String::new();
+
+    for attr in &input.attrs {
+        if attr.path().is_ident("component_meta") {
+            let _ = attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("category") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    category = value.value();
+                } else if meta.path.is_ident("description") {
+                    let value: syn::LitStr = meta.value()?.parse()?;
+                    description = value.value();
+                }
+                Ok(())
+            });
+        }
+    }
+
+    // Extract fields with #[component_prop(...)] attributes
+    let fields = match &input.data {
+        syn::Data::Struct(data) => &data.fields,
+        _ => {
+            return syn::Error::new(name.span(), "ComponentMeta can only be derived for structs")
+                .to_compile_error()
+                .into();
+        }
+    };
+
+    let named_fields = match fields {
+        syn::Fields::Named(f) => &f.named,
+        _ => {
+            return syn::Error::new(name.span(), "ComponentMeta requires named fields")
+                .to_compile_error()
+                .into();
+        }
+    };
+
+    let mut prop_metas = Vec::new();
+
+    for field in named_fields {
+        let field_name = field.ident.as_ref().unwrap().to_string();
+        let field_ty = &field.ty;
+
+        // Parse #[component_prop(...)] attribute
+        let mut prop_type = quote!(#field_ty).to_string();
+        let mut default = String::new();
+        let mut prop_description = String::new();
+
+        for attr in &field.attrs {
+            if attr.path().is_ident("component_prop") {
+                let _ = attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("type_name") {
+                        let value: syn::LitStr = meta.value()?.parse()?;
+                        prop_type = value.value();
+                    } else if meta.path.is_ident("default") {
+                        let value: syn::LitStr = meta.value()?.parse()?;
+                        default = value.value();
+                    } else if meta.path.is_ident("description") {
+                        let value: syn::LitStr = meta.value()?.parse()?;
+                        prop_description = value.value();
+                    }
+                    Ok(())
+                });
+            }
+        }
+
+        prop_metas.push(quote! {
+            crate::ComponentPropMeta {
+                name: #field_name,
+                type_name: #prop_type,
+                default: #default,
+                description: #prop_description,
+            }
+        });
+    }
+
+    let expanded = quote! {
+        impl #name {
+            /// Returns component metadata for gallery auto-registration
+            pub fn component_meta() -> crate::ComponentMeta {
+                crate::ComponentMeta {
+                    name: #name_str,
+                    category: #category,
+                    description: #description,
+                    props: vec![#(#prop_metas),*],
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+/// Supporting types for component metadata
+/// Note: These are re-exported from cvkg-components for use in the macro output
+// These types are actually defined in cvkg-components to be shared
+// They're referenced here for documentation purposes only
+// The actual types live in cvkg-components/src/registry.rs
+/*
+mod component_meta_types {
+    use std::borrow::Cow;
+
+    /// Metadata for a single component property
+    pub struct ComponentPropMeta {
+        pub name: &'static str,
+        pub type_name: &'static str,
+        pub default: &'static str,
+        pub description: &'static str,
+    }
+
+    /// Full component metadata for gallery registration
+    pub struct ComponentMeta {
+        pub name: &'static str,
+        pub category: &'static str,
+        pub description: &'static str,
+        pub props: Vec<ComponentPropMeta>,
+    }
+
+    impl ComponentMeta {
+        pub fn new(name: &'static str, category: &'static str, description: &'static str) -> Self {
+            Self { name, category, description, props: Vec::new() }
+        }
+
+        pub fn with_props(mut self, props: Vec<ComponentPropMeta>) -> Self {
+            self.props = props;
+            self
+        }
+    }
+}
+*/
+
 /// Reflect derive macro — generates a `cvkg_reflect::Reflected` implementation.
 ///
 /// # Supported attributes
@@ -586,6 +741,172 @@ fn type_to_kind(ty: &syn::Type) -> String {
         "[f32 ; 3]" | "[f32;3]" => "Vec3".to_string(),
         "[f32 ; 4]" | "[f32;4]" => "Color".to_string(),
         _ => type_str.replace(' ', ""),
+    }
+}
+
+/// Include the component gallery registration macro
+#[cfg(test)]
+mod smoke_tests {
+    #[test]
+    fn test_compiles() {
+        // Proc-macro crates cannot unit test macro expansion in-process.
+        // This placeholder verifies the crate compiles and the test harness works.
+    }
+}
+
+/// Component registration attribute macro — generates gallery metadata for auto-registration
+///
+/// This macro can be applied to a component struct to automatically generate
+/// the metadata needed for the gallery registry, including:
+/// - Component name, category, description
+/// - Prop metadata (name, type, default, description)
+/// - Usage example template
+///
+/// # Example
+///
+/// ```ignore
+/// #[cvkg_gallery_component(
+///     name = "Button",
+///     category = "Forms",
+///     description = "Interactive button with variants and states"
+/// )]
+/// #[derive(Reflect)]
+/// pub struct Button {
+///     #[reflect(doc = "Button text")]
+///     pub label: String,
+///     #[reflect(doc = "Click handler")]
+///     pub on_click: Option<Callback<()>>,
+///     #[reflect(kind = "enum", doc = "Primary|Secondary|Destructive|Ghost")]
+///     pub variant: ButtonVariant,
+///     #[reflect(doc = "Disable interaction")]
+///     pub disabled: bool,
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn cvkg_gallery_component(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemStruct);
+
+    // Parse the attribute arguments
+    let args = parse_macro_input!(attr with ComponentGalleryArgs::parse);
+
+    let name = &input.ident;
+    let name_str = name.to_string();
+    let category = &args.category;
+    let description = &args.description;
+
+    // Extract fields with their attributes
+    let mut prop_metas = Vec::new();
+
+    if let syn::Fields::Named(fields_named) = &input.fields {
+        for field in &fields_named.named {
+            let field_name = field.ident.as_ref().unwrap().to_string();
+            let field_type_str = quote!(#field.ty).to_string();
+
+            // Parse #[reflect(...)] attributes
+            let mut prop_description = String::new();
+            let mut prop_kind = None;
+            let mut read_only = false;
+
+            for attr in &field.attrs {
+                if attr.path().is_ident("reflect") {
+                    let _ = attr.parse_nested_meta(|meta| {
+                        if meta.path.is_ident("doc") {
+                            let value: syn::LitStr = meta.value()?.parse()?;
+                            prop_description = value.value();
+                        } else if meta.path.is_ident("kind") {
+                            let value: syn::LitStr = meta.value()?.parse()?;
+                            prop_kind = Some(value.value());
+                        } else if meta.path.is_ident("read_only") {
+                            read_only = true;
+                        }
+                        Ok(())
+                    });
+                }
+            }
+
+            // Determine type name for display
+            let field_type_for_display = field_type_str.clone();
+            let type_display = if let Some(kind) = prop_kind {
+                kind
+            } else if field_type_str.contains("bool") {
+                "bool".to_string()
+            } else if field_type_str.contains("String") {
+                "string".to_string()
+            } else if field_type_str.contains("f32") || field_type_str.contains("f64") {
+                "number".to_string()
+            } else if field_type_str.contains("Option") {
+                "optional".to_string()
+            } else {
+                field_type_for_display
+            };
+
+            // Generate default value string
+            let default = if read_only { "N/A".to_string() } else if field_type_str.contains("bool") { "false".to_string() } else if field_type_str.contains("String") { "\"\"".to_string() } else if field_type_str.contains("f32") || field_type_str.contains("f64") { "0".to_string() } else { "default()".to_string() };
+
+            prop_metas.push(quote! {
+                crate::ComponentPropMeta {
+                    name: #field_name,
+                    type_name: #type_display,
+                    default: #default,
+                    description: #prop_description,
+                }
+            });
+        }
+    }
+
+    let expanded = quote! {
+        impl #name {
+            /// Returns component metadata for gallery auto-registration
+            pub fn component_meta() -> crate::ComponentMeta {
+                crate::ComponentMeta {
+                    name: #name_str,
+                    category: #category,
+                    description: #description,
+                    props: vec![#(#prop_metas),*],
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+/// Arguments for the cvkg_gallery_component attribute
+struct ComponentGalleryArgs {
+    name: String,
+    category: String,
+    description: String,
+}
+
+impl Parse for ComponentGalleryArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut name = String::new();
+        let mut category = String::new();
+        let mut description = String::new();
+
+        while !input.is_empty() {
+            let ident: syn::Ident = input.parse()?;
+            let _: syn::Token![=] = input.parse()?;
+
+            if ident == "name" {
+                let value: syn::LitStr = input.parse()?;
+                name = value.value();
+            } else if ident == "category" {
+                let value: syn::LitStr = input.parse()?;
+                category = value.value();
+            } else if ident == "description" {
+                let value: syn::LitStr = input.parse()?;
+                description = value.value();
+            } else {
+                return Err(syn::Error::new_spanned(ident, "unknown argument"));
+            }
+
+            if !input.is_empty() {
+                let _: syn::token::Comma = input.parse()?;
+            }
+        }
+
+        Ok(Self { name, category, description })
     }
 }
 

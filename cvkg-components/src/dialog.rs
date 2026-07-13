@@ -6,6 +6,7 @@
 //!
 //! All components use cvkg theme system (theme::*) for full themability.
 
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::lingua_tong;
 use crate::theme;
 use crate::{RADIUS_LG, RADIUS_MD, RADIUS_XL};
@@ -33,6 +34,11 @@ pub struct AlertDialog {
     pub variant: AlertVariant,
     /// Close callback (invoked when dialog is dismissed).
     pub on_close: Option<Arc<dyn Fn() + Send + Sync>>,
+    /// VDOM companion bundle — modal focus trap + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement (renders the dialog as a 3D panel
+    /// composited into the scene with glass material + spring settling).
+    pub world: WorldSpaceConfig,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +59,17 @@ impl AlertDialog {
             open: false,
             variant: AlertVariant::Default,
             on_close: None,
+            companions: CompanionBundle::focusable()
+                .with_role("dialog")
+                .with_label(title.to_string()),
+            world: WorldSpaceConfig::default(),
         }
+    }
+
+    /// Opt this dialog into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
+        self
     }
 
     /// Set the description.
@@ -97,12 +113,29 @@ impl View for AlertDialog {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        let mut bundle = self.companions.clone();
+        if !self.title.is_empty() {
+            bundle = bundle.with_label(self.title.clone());
+        }
+        bundle.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.open {
             return;
         }
-        renderer.push_vnode(rect, "AlertDialog");
+        let panel_id = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "alert_dialog".hash(&mut s);
+            self.title.hash(&mut s);
+            s.finish()
+        };
+        renderer.push_vnode_with_companions(rect, "AlertDialog", self.companions.to_vec());
         renderer.register_a11y("alertdialog", &self.title);
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, panel_id);
         renderer.fill_rect(rect, theme::with_alpha(theme::bg(), 0.5));
         let dlg_w = 400.0;
         let dlg_h = 180.0;
@@ -211,12 +244,39 @@ impl View for AlertDialog {
             }),
         );
         renderer.pop_vnode();
+
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(panel_id);
+        }
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, proposal: SizeProposal) -> Size {
         Size {
             width: proposal.width.unwrap_or(400.0),
             height: 180.0,
         }
+    }
+}
+
+impl cvkg_core::LayoutView for AlertDialog {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::SizeProposal,
+        _subviews: &[&dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(400.0),
+            height: 180.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: cvkg_core::Rect,
+        _subviews: &mut [&mut dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) {
     }
 }
 
@@ -385,6 +445,28 @@ impl View for ConfirmationDialog {
             width: proposal.width.unwrap_or(360.0),
             height: 160.0,
         }
+    }
+}
+
+impl cvkg_core::LayoutView for ConfirmationDialog {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::SizeProposal,
+        _subviews: &[&dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) -> cvkg_core::Size {
+        cvkg_core::Size {
+            width: proposal.width.unwrap_or(360.0),
+            height: 160.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: cvkg_core::Rect,
+        _subviews: &mut [&mut dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) {
     }
 }
 

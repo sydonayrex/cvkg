@@ -58,7 +58,7 @@ pub struct WorldSpacePanel {
     pub spring: Option<cvkg_core::spring::SpringParams>,
     /// Optional physics rigid body.
     #[serde(skip)]
-    pub physics: Option<cvkg_physics::RigidBody3D>,
+    pub physics: Option<cvkg_core::PhysicsBody>,
 }
 
 impl Default for WorldSpacePanel {

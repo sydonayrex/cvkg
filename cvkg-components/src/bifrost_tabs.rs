@@ -1,3 +1,4 @@
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use crate::{RADIUS_LG, RADIUS_MD};
 use cvkg_core::{AriaProperties, AriaRole, Event, Never, Rect, Renderer, View};
@@ -24,6 +25,10 @@ pub struct BifrostTabs {
     pub on_close: Option<Arc<dyn Fn(usize) + Send + Sync>>,
     /// Whether tabs show a close button (default: false).
     pub closable: bool,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 /// Standard English alias for BifrostTabs.
@@ -48,12 +53,17 @@ impl BifrostTabs {
         selected: usize,
         on_select: impl Fn(usize) + Send + Sync + 'static,
     ) -> Self {
+        let options_label = options.join(", ");
         Self {
             options,
             selected_index: selected,
             on_select: Arc::new(on_select),
             on_close: None,
             closable: false,
+            companions: CompanionBundle::focusable()
+                .with_role("tablist")
+                .with_label(options_label.clone()),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -68,12 +78,27 @@ impl BifrostTabs {
         self.on_close = Some(Arc::new(f));
         self
     }
+
+    /// Opt these tabs into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
+        self
+    }
 }
 
 impl View for BifrostTabs {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
+    }
+
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        let mut bundle = self.companions.clone();
+        let label = self.options.join(", ");
+        if !label.is_empty() {
+            bundle = bundle.with_label(label);
+        }
+        bundle.to_vec()
     }
 
     fn layout(&self) -> Option<&dyn cvkg_core::LayoutView> {
@@ -94,6 +119,22 @@ impl View for BifrostTabs {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let t = renderer.elapsed_time();
         let tab_width = rect.width / self.options.len() as f32;
+
+        let world_id = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "bifrost_tabs".hash(&mut s);
+            for opt in &self.options {
+                opt.hash(&mut s);
+            }
+            s.finish()
+        };
+
+        // Push a dedicated VNode so companions + 3D world-space attach to the Tabs node.
+        renderer.push_vnode_with_companions(rect, "Tabs", self.companions.to_vec());
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, world_id);
 
         // 1. Background: solid dark background. Glassmorphism sits on top.
         renderer.fill_rounded_rect(
@@ -253,6 +294,13 @@ impl View for BifrostTabs {
                 }
             }),
         );
+
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(world_id);
+        }
+
+        renderer.pop_vnode();
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {

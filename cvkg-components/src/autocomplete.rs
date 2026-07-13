@@ -363,24 +363,26 @@ impl View for AutoComplete {
             }),
         );
 
-        // Pointer click on dropdown items
+        // Pointer click on dropdown items.
+        // VDom hit_test already verified the click is inside the AutoComplete VNode.
         let text_click = text_arc;
         let on_select_click = on_select;
         let options_click = options;
         let placeholder_click = self.placeholder.clone();
-        let rect_clone = rect;
+        let field_rect = rect; // world-coordinate input field rect
         let dropdown_height_for_click = dropdown_height;
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
-                if let Event::PointerClick { x, y, .. } = event
-                    && x >= rect_clone.x
-                    && x <= rect_clone.x + rect_clone.width
-                {
+                if let Event::PointerClick { x, y, .. } = event {
                     let id = AutoComplete::id_hash(&placeholder_click);
 
                     // Check if click is inside the input field
-                    if y >= rect_clone.y && y <= rect_clone.y + rect_clone.height {
+                    if x >= field_rect.x
+                        && x <= field_rect.x + field_rect.width
+                        && y >= field_rect.y
+                        && y <= field_rect.y + field_rect.height
+                    {
                         let sys = cvkg_core::load_system_state();
                         if let Some(st) = sys
                             .get_component_state::<AutoCompleteState>(id)
@@ -407,8 +409,8 @@ impl View for AutoComplete {
                         return;
                     }
 
-                    // Click on a dropdown item
-                    let rel_y = y - (rect_clone.y + rect_clone.height + 4.0);
+                    // Click on a dropdown item — anchored below the field
+                    let rel_y = y - (field_rect.y + field_rect.height + 4.0);
                     if rel_y >= 0.0 && rel_y < dropdown_height_for_click {
                         let vis_idx = (rel_y / item_height) as usize;
 
@@ -438,6 +440,7 @@ impl View for AutoComplete {
                 }
             }),
         );
+
 
         renderer.pop_vnode();
     }

@@ -207,6 +207,7 @@ pub mod holographic_runestone;
 pub mod hud;
 pub mod image;
 pub mod infinite_canvas;
+pub mod integration;
 pub mod interactive;
 pub mod memory;
 pub mod mjolnir_frame;
@@ -285,8 +286,9 @@ pub use hud::{AlertKind, GjallarAlert, TacticalGauge, Vegvísir};
 pub use idunn_persistence::*;
 pub use image::*;
 pub use interactive::{
-    BifrostColorPicker, Button, Checkbox, GeriTransfer, HringrPagination, HrungnirSegmented, Input,
-    Picker, SecureField, Select, Slider, Stepper, Textarea, Toggle, ValhallaRating,
+    BifrostColorPicker, Button, Checkbox, CopyButton, CutButton, GeriTransfer, HringrPagination,
+    HrungnirSegmented, Input, PasteButton, Picker, SecureField, Select, Slider, Stepper, Textarea,
+    Toggle, ValhallaRating,
 };
 pub use layer_system::*;
 pub use memory::*;

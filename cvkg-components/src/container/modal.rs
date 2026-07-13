@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::{FONT_BASE, RADIUS_LG, RADIUS_MD, RADIUS_XL, draw_focus_ring};
 use cvkg_core::{Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
@@ -309,16 +310,25 @@ pub struct GeriDialog<V> {
     pub(crate) title: Option<String>,
     pub(crate) content: V,
     pub(crate) actions: Vec<DialogAction>,
+    /// VDOM companion bundle — modal focus/ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl<V: View> GeriDialog<V> {
     /// Creates a new modal dialog wrapper.
     pub fn new(content: V) -> Self {
+        let title_label = String::new();
         Self {
             is_presented: false,
             title: None,
             content,
             actions: Vec::new(),
+            companions: CompanionBundle::focusable()
+                .with_role("dialog")
+                .with_label(title_label),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -347,6 +357,12 @@ impl<V: View> GeriDialog<V> {
         });
         self
     }
+
+    /// Opt this dialog into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
+        self
+    }
 }
 
 impl<V: View> View for GeriDialog<V> {
@@ -355,15 +371,43 @@ impl<V: View> View for GeriDialog<V> {
         unreachable!()
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        let mut bundle = self.companions.clone();
+        if let Some(title) = &self.title {
+            if !title.is_empty() {
+                bundle = bundle.with_label(title.clone());
+            }
+        }
+        bundle.to_vec()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.is_presented {
             return;
         }
 
+        let panel_id = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "geri_dialog".hash(&mut s);
+            self.title.hash(&mut s);
+            s.finish()
+        };
+
+        renderer.push_vnode_with_companions(rect, "Dialog", self.companions.to_vec());
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, panel_id);
+
         // Pop the modal above all sibling content (carousel, page chrome, etc.)
         // so it is never overdrawn or buried when nested inside a layout stack.
         renderer.set_z_index(2000.0);
 
+        // Capture the Dialog's world offset before child push_vnode calls,
+        // so the backdrop handler can compare in window coordinates.
+        let dialog_world = renderer.current_translation();
+
+        renderer.push_vnode(rect, "DialogBackdrop");
         renderer.fill_rect(rect, theme::shadow());
 
         let modal_w = (rect.width * 0.8).min(450.0);
@@ -396,7 +440,7 @@ impl<V: View> View for GeriDialog<V> {
 
         // Push focus trap when dialog is presented
         let dialog_trap_id = next_focus_trap_id();
-        renderer.push_focus_trap(&format!("dialog-{}", dialog_trap_id));
+        let trap_ret = renderer.push_focus_trap(&format!("dialog-{}", dialog_trap_id));
 
         let modal_bg = theme::with_alpha(theme::surface_elevated(), 0.8 * opacity);
         renderer.fill_rounded_rect(modal_rect, RADIUS_LG, modal_bg);
@@ -448,6 +492,9 @@ impl<V: View> View for GeriDialog<V> {
             };
             let is_focused = focused_action == Some(i);
             let bg = theme::with_alpha(theme::surface_elevated(), opacity);
+            
+            renderer.push_vnode(action_rect, "DialogAction");
+            
             renderer.fill_rounded_rect(action_rect, RADIUS_MD, bg);
             renderer.stroke_rounded_rect(
                 action_rect,
@@ -469,22 +516,27 @@ impl<V: View> View for GeriDialog<V> {
             let on_click = action.on_click.clone();
             renderer.register_handler(
                 "pointerclick",
-                Arc::new(move |event| {
-                    if let Event::PointerClick { x, y, .. } = event
-                        && action_rect.contains(x, y)
-                    {
-                        (on_click)();
-                    }
+                Arc::new(move |_event| {
+                    (on_click)();
                 }),
             );
+            
+            renderer.pop_vnode();
         }
 
-        let mr = modal_rect;
+        // Click outside the modal rect (on the backdrop) closes the dialog.
+        // Convert modal_rect to world space using the Dialog's root offset.
+        let modal_world = Rect {
+            x: dialog_world.x + modal_rect.x,
+            y: dialog_world.y + modal_rect.y,
+            width: modal_rect.width,
+            height: modal_rect.height,
+        };
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event| {
                 if let Event::PointerClick { x, y, .. } = event
-                    && !mr.contains(x, y)
+                    && !modal_world.contains(x, y)
                 {
                     cvkg_core::update_system_state(move |s| {
                         let mut s = s.clone();
@@ -514,7 +566,7 @@ impl<V: View> View for GeriDialog<V> {
                             let mut s = s.clone();
                             let current = s
                                 .get_component_state::<usize>(DIALOG_OPEN_HASH + 200)
-                                .and_then(|v| v.read().ok().map(|g| *g))
+                                .and_then(|v| v.read().ok().map(|v| *v))
                                 .unwrap_or(0);
                             let next = (current + 1) % action_count;
                             s.set_component_state(DIALOG_OPEN_HASH + 200, next);
@@ -533,6 +585,42 @@ impl<V: View> View for GeriDialog<V> {
                 }
             }),
         );
+        
+        renderer.pop_focus_trap(trap_ret);
+        renderer.pop_vnode(); // pop DialogBackdrop
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(panel_id);
+        }
+        renderer.pop_vnode(); // pop Dialog
+        renderer.set_z_index(0.0);
+    }
+}
+
+/// LayoutView implementation for GeriDialog
+impl<V: View> cvkg_core::LayoutView for GeriDialog<V> {
+    fn size_that_fits(
+        &self,
+        proposal: cvkg_core::SizeProposal,
+        _subviews: &[&dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) -> cvkg_core::Size {
+        if !self.is_presented {
+            return cvkg_core::Size::ZERO;
+        }
+        let width = proposal.width.unwrap_or(400.0).min(500.0);
+        cvkg_core::Size {
+            width,
+            height: 300.0,
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: cvkg_core::Rect,
+        _subviews: &mut [&mut dyn cvkg_core::LayoutView],
+        _cache: &mut cvkg_core::LayoutCache,
+    ) {
     }
 }
 

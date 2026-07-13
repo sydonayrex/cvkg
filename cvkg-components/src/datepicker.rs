@@ -146,11 +146,14 @@ pub struct DatePicker {
     id_hash: u64,
 }
 
+static NEXT_DATEPICKER_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0xE00_0000);
+
 impl DatePicker {
     /// Create a new DatePicker with the given change callback.
     ///
     /// The picker defaults to no selected date, closed state, and Single mode.
     pub fn new(on_change: impl Fn(u32, u32, u32) + Send + Sync + 'static) -> Self {
+        let id_hash = NEXT_DATEPICKER_ID.fetch_add(10, std::sync::atomic::Ordering::Relaxed);
         Self {
             selected_date: None,
             range_end: None,
@@ -159,7 +162,7 @@ impl DatePicker {
             range_picking_end: false,
             on_change: Arc::new(on_change),
             on_range_change: None,
-            id_hash: 0xE00_0000,
+            id_hash,
         }
     }
 
@@ -294,12 +297,38 @@ impl DatePicker {
 
         renderer.set_z_index(900.0);
 
+        // Click outside to close: catches clicks outside the calendar because this
+        // backdrop VNode is a sibling rendered behind the calendar.
+        let backdrop_rect = Rect {
+            x: -5000.0,
+            y: -5000.0,
+            width: 10000.0,
+            height: 10000.0,
+        };
+        renderer.push_vnode(backdrop_rect, "DatePickerBackdrop");
+        let id = self.id_hash;
+        renderer.register_handler(
+            "pointerclick",
+            Arc::new(move |_event: Event| {
+                update_system_state(move |s| {
+                    let mut s = s.clone();
+                    s.set_component_state(id, false);
+                    s
+                });
+            }),
+        );
+        renderer.pop_vnode(); // pop DatePickerBackdrop
+        
+        // Push the actual calendar panel so its children (days) are hit-tested correctly
+        renderer.push_vnode(pop_rect, "DatePickerCalendar");
+
         // Semi-transparent backdrop behind the popover
         renderer.fill_rect(anchor_rect, theme::with_alpha(theme::bg(), 0.25));
         renderer.fill_rounded_rect(pop_rect, RADIUS_XL, [0.05, 0.05, 0.07, 1.0]);
         renderer.stroke_rounded_rect(pop_rect, RADIUS_XL, [0.25, 0.25, 0.28, 1.0], 1.5);
 
         let (display_month, display_year) = self.displayed_month_state();
+
 
         // Header: month/year with navigation arrows
         let header_h = 32.0;
@@ -544,6 +573,9 @@ impl DatePicker {
         // Register click handlers
         let id = self.id_hash;
         let on_change = self.on_change.clone();
+        // Capture the DatePicker's world offset (before calendar push_vnode)
+        // so the "click outside to close" handler can compare in window coords.
+        let dp_world = renderer.current_translation();
         let pr = pop_rect;
         let ar = anchor_rect;
 
@@ -692,13 +724,27 @@ impl DatePicker {
             }
         }
 
-        // Click outside to close
+        // Click outside to close: fires when a click misses both the calendar
+        // popover (pr) and the trigger field (ar). Convert both local rects to
+        // world space using the DatePicker's root offset captured earlier.
+        let pr_world = Rect {
+            x: dp_world.x + pr.x,
+            y: dp_world.y + pr.y,
+            width: pr.width,
+            height: pr.height,
+        };
+        let ar_world = Rect {
+            x: dp_world.x + ar.x,
+            y: dp_world.y + ar.y,
+            width: ar.width,
+            height: ar.height,
+        };
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
                 if let Event::PointerClick { x, y, .. } = event
-                    && !pr.contains(x, y)
-                    && !ar.contains(x, y)
+                    && !pr_world.contains(x, y)
+                    && !ar_world.contains(x, y)
                 {
                     update_system_state(move |s| {
                         let mut s = s.clone();
@@ -709,6 +755,7 @@ impl DatePicker {
             }),
         );
 
+        renderer.pop_vnode(); // pop DatePickerCalendar
         renderer.set_z_index(0.0);
     }
 }
@@ -738,58 +785,55 @@ impl View for DatePicker {
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let is_open = self.is_open_state() || self.is_open;
 
-        // Calculate combined bounding box for input field + popped up calendar above it
-        let combined_rect = if is_open {
-            let pop_w: f32 = 280.0;
-            let pop_h: f32 = 260.0;
-            let gap = 6.0;
-            Rect {
-                x: rect.x,
-                y: rect.y - pop_h - gap,
-                width: rect.width.max(pop_w),
-                height: rect.height + pop_h + gap,
-            }
-        } else {
-            rect
-        };
-
-        renderer.push_vnode(combined_rect, "DatePicker");
+        renderer.push_vnode(rect, "DatePicker");
         renderer.set_key(&format!("dp_main_{}", self.id_hash));
 
-        // Render the text field
-        self.render_text_field(renderer, rect);
+        // Render the text field using local coordinates relative to DatePicker
+        let local_field_rect = Rect::new(0.0, 0.0, rect.width, rect.height);
+        self.render_text_field(renderer, local_field_rect);
 
-        // Register click handler on the text field to toggle the popover
+        // Register click handler to toggle the calendar popover open/closed.
+        // Only fire when clicking the text-field area, NOT when a click
+        // bubbled up from a calendar child (day cell, nav button, etc.).
+        // Capture world-space offset so the bounds check uses window coords.
+        let toggle_world = renderer.current_translation();
         let id = self.id_hash;
-        let tr = rect;
         renderer.register_handler(
             "pointerclick",
             Arc::new(move |event: Event| {
-                if let Event::PointerClick { x, y, .. } = event
-                    && tr.contains(x, y)
-                {
-                    let current = {
-                        let s = load_system_state();
-                        s.get_component_state::<bool>(id)
-                            .and_then(|v| v.read().ok().map(|g| *g))
-                            .unwrap_or(false)
-                    };
-                    update_system_state(move |s| {
-                        let mut s = s.clone();
-                        s.set_component_state(id, !current);
-                        s
-                    });
+                if let Event::PointerClick { x, y, .. } = event {
+                    // Text-field world rect: the DatePicker's own bounding box.
+                    if x >= toggle_world.x
+                        && x <= toggle_world.x + rect.width
+                        && y >= toggle_world.y
+                        && y <= toggle_world.y + rect.height
+                    {
+                        let current = {
+                            let s = load_system_state();
+                            s.get_component_state::<bool>(id)
+                                .and_then(|v| v.read().ok().map(|g| *g))
+                                .unwrap_or(false)
+                        };
+                        update_system_state(move |s| {
+                            let mut s = s.clone();
+                            s.set_component_state(id, !current);
+                            s
+                        });
+                    }
                 }
             }),
         );
 
-        // Render calendar popover if open
+        // Render calendar popover if open.
+        // Pass world-coordinate rect so the calendar anchors correctly above
+        // the field on screen, not at a local (0,0) origin.
         if is_open {
             self.render_calendar(renderer, rect);
         }
 
         renderer.pop_vnode();
     }
+
 }
 
 impl cvkg_core::layout::LayoutView for DatePicker {

@@ -386,7 +386,7 @@ impl WindowManager {
             is_dragging: false,
             drag_start_pos: [0.0, 0.0],
             drag_button: 0,
-            drag_threshold: 5.0,
+            drag_threshold: 12.0,
             active_pointer_target: None,
             active_pointer_target_type: None,
             active_pointer_target_key: None,

@@ -10,6 +10,7 @@
 //! All components use cvkg theme system (theme::*) for full themability.
 
 use crate::theme;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use cvkg_core::{Never, Rect, Renderer, Size, SizeProposal, View};
 
 // ----------------------------------------------------------------------------
@@ -26,6 +27,10 @@ pub struct Label {
     pub color: [f32; 4],
     /// Whether the label is required (shows asterisk).
     pub required: bool,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Label {
@@ -36,6 +41,10 @@ impl Label {
             font_size: 14.0,
             color: theme::text(),
             required: false,
+            companions: CompanionBundle::focusable()
+                .with_role("label")
+                .with_label(text.to_string()),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -56,6 +65,12 @@ impl Label {
         self.required = r;
         self
     }
+
+    /// Opt into 3D world-space rendering with the given panel config.
+    pub fn world(mut self, world: WorldSpaceConfig) -> Self {
+        self.world = world;
+        self
+    }
 }
 
 impl View for Label {
@@ -63,8 +78,20 @@ impl View for Label {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Label");
+        renderer.push_vnode_with_companions(rect, "Label", self.companions.to_vec());
+        renderer.register_a11y("label", &self.text);
+        let world_id = {
+            use std::collections::hash_map::DefaultHasher as H;
+            use std::hash::{Hash, Hasher};
+            let mut s = H::new();
+            self.text.hash(&mut s);
+            s.finish()
+        };
+        self.world.begin(renderer, world_id);
         let display = if self.required {
             format!("{} *", self.text)
         } else {
@@ -77,6 +104,7 @@ impl View for Label {
             self.font_size,
             self.color,
         );
+        renderer.end_world_space_panel(world_id);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -108,6 +136,10 @@ pub struct DateTimePicker {
     pub open: bool,
     /// Picker width.
     pub width: f32,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl DateTimePicker {
@@ -121,6 +153,10 @@ impl DateTimePicker {
             year: 2024,
             open: false,
             width: 300.0,
+            companions: CompanionBundle::focusable()
+                .with_role("textbox")
+                .with_label("Date and time picker"),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -150,6 +186,12 @@ impl DateTimePicker {
         self.width = w;
         self
     }
+
+    /// Opt into 3D world-space rendering with the given panel config.
+    pub fn world(mut self, world: WorldSpaceConfig) -> Self {
+        self.world = world;
+        self
+    }
 }
 
 impl Default for DateTimePicker {
@@ -163,8 +205,24 @@ impl View for DateTimePicker {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "DateTimePicker");
+        renderer.push_vnode_with_companions(rect, "DateTimePicker", self.companions.to_vec());
+        renderer.register_a11y("textbox", "Date and time picker");
+        let world_id = {
+            use std::collections::hash_map::DefaultHasher as H;
+            use std::hash::{Hash, Hasher};
+            let mut s = H::new();
+            self.day.hash(&mut s);
+            self.month.hash(&mut s);
+            self.year.hash(&mut s);
+            self.hour.hash(&mut s);
+            self.minute.hash(&mut s);
+            s.finish()
+        };
+        self.world.begin(renderer, world_id);
         renderer.fill_rounded_rect(rect, 8.0, theme::input_bg());
         renderer.stroke_rounded_rect(rect, 8.0, theme::border(), 1.0);
         let dt_str = format!(
@@ -172,6 +230,7 @@ impl View for DateTimePicker {
             self.year, self.month, self.day, self.hour, self.minute
         );
         renderer.draw_text_raw(&dt_str, rect.x + 12.0, rect.y + 20.0, 14.0, theme::text());
+        renderer.end_world_space_panel(world_id);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -194,6 +253,10 @@ pub struct Link {
     pub font_size: f32,
     /// Whether visited.
     pub visited: bool,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Link {
@@ -203,6 +266,10 @@ impl Link {
             text: text.to_string(),
             font_size: 14.0,
             visited: false,
+            companions: CompanionBundle::focusable()
+                .with_role("link")
+                .with_label(text.to_string()),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -217,6 +284,12 @@ impl Link {
         self.visited = v;
         self
     }
+
+    /// Opt into 3D world-space rendering with the given panel config.
+    pub fn world(mut self, world: WorldSpaceConfig) -> Self {
+        self.world = world;
+        self
+    }
 }
 
 impl View for Link {
@@ -224,8 +297,20 @@ impl View for Link {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Link");
+        renderer.push_vnode_with_companions(rect, "Link", self.companions.to_vec());
+        renderer.register_a11y("link", &self.text);
+        let world_id = {
+            use std::collections::hash_map::DefaultHasher as H;
+            use std::hash::{Hash, Hasher};
+            let mut s = H::new();
+            self.text.hash(&mut s);
+            s.finish()
+        };
+        self.world.begin(renderer, world_id);
         let color = if self.visited {
             [0.5, 0.3, 0.8, 1.0]
         } else {
@@ -247,6 +332,7 @@ impl View for Link {
             color,
             1.0,
         );
+        renderer.end_world_space_panel(world_id);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -272,6 +358,10 @@ pub struct SearchField {
     pub focused: bool,
     /// Field width.
     pub width: f32,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl SearchField {
@@ -282,6 +372,10 @@ impl SearchField {
             placeholder: "Search...".to_string(),
             focused: false,
             width: 240.0,
+            companions: CompanionBundle::focusable()
+                .with_role("searchbox")
+                .with_label("Search field"),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -308,6 +402,12 @@ impl SearchField {
         self.width = w;
         self
     }
+
+    /// Opt into 3D world-space rendering with the given panel config.
+    pub fn world(mut self, world: WorldSpaceConfig) -> Self {
+        self.world = world;
+        self
+    }
 }
 
 impl Default for SearchField {
@@ -321,8 +421,20 @@ impl View for SearchField {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "SearchField");
+        renderer.push_vnode_with_companions(rect, "SearchField", self.companions.to_vec());
+        renderer.register_a11y("searchbox", &self.placeholder);
+        let world_id = {
+            use std::collections::hash_map::DefaultHasher as H;
+            use std::hash::{Hash, Hasher};
+            let mut s = H::new();
+            self.placeholder.hash(&mut s);
+            s.finish()
+        };
+        self.world.begin(renderer, world_id);
         renderer.fill_rounded_rect(rect, 8.0, theme::input_bg());
         let border = if self.focused {
             theme::accent()
@@ -361,6 +473,7 @@ impl View for SearchField {
             theme::text()
         };
         renderer.draw_text_raw(display, rect.x + 32.0, rect.y + 18.0, 14.0, color);
+        renderer.end_world_space_panel(world_id);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -385,6 +498,10 @@ pub struct SearchSuggestions {
     pub visible: bool,
     /// Width.
     pub width: f32,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl SearchSuggestions {
@@ -395,6 +512,10 @@ impl SearchSuggestions {
             selected: None,
             visible: true,
             width: 240.0,
+            companions: CompanionBundle::focusable()
+                .with_role("listbox")
+                .with_label("Search suggestions"),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -421,6 +542,12 @@ impl SearchSuggestions {
         self.width = w;
         self
     }
+
+    /// Opt into 3D world-space rendering with the given panel config.
+    pub fn world(mut self, world: WorldSpaceConfig) -> Self {
+        self.world = world;
+        self
+    }
 }
 
 impl Default for SearchSuggestions {
@@ -434,11 +561,23 @@ impl View for SearchSuggestions {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         if !self.visible || self.items.is_empty() {
             return;
         }
-        renderer.push_vnode(rect, "SearchSuggestions");
+        renderer.push_vnode_with_companions(rect, "SearchSuggestions", self.companions.to_vec());
+        renderer.register_a11y("listbox", "Search suggestions");
+        let world_id = {
+            use std::collections::hash_map::DefaultHasher as H;
+            use std::hash::{Hash, Hasher};
+            let mut s = H::new();
+            self.items.len().hash(&mut s);
+            s.finish()
+        };
+        self.world.begin(renderer, world_id);
         let item_h = 32.0;
         let total_h = self.items.len() as f32 * item_h;
         let bg_rect = Rect {
@@ -465,6 +604,7 @@ impl View for SearchSuggestions {
             }
             renderer.draw_text_raw(item, rect.x + 12.0, iy + item_h * 0.6, 13.0, theme::text());
         }
+        renderer.end_world_space_panel(world_id);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, _renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {
@@ -489,6 +629,10 @@ pub struct Tag {
     pub dismissible: bool,
     /// Font size.
     pub font_size: f32,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Tag {
@@ -499,6 +643,10 @@ impl Tag {
             color: theme::accent(),
             dismissible: false,
             font_size: 12.0,
+            companions: CompanionBundle::focusable()
+                .with_role("label")
+                .with_label(text.to_string()),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -519,6 +667,12 @@ impl Tag {
         self.font_size = s;
         self
     }
+
+    /// Opt into 3D world-space rendering with the given panel config.
+    pub fn world(mut self, world: WorldSpaceConfig) -> Self {
+        self.world = world;
+        self
+    }
 }
 
 impl View for Tag {
@@ -526,8 +680,20 @@ impl View for Tag {
     fn body(self) -> Self::Body {
         unreachable!()
     }
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Tag");
+        renderer.push_vnode_with_companions(rect, "Tag", self.companions.to_vec());
+        renderer.register_a11y("label", &self.text);
+        let world_id = {
+            use std::collections::hash_map::DefaultHasher as H;
+            use std::hash::{Hash, Hasher};
+            let mut s = H::new();
+            self.text.hash(&mut s);
+            s.finish()
+        };
+        self.world.begin(renderer, world_id);
         let (tw, th) = renderer.measure_text(&self.text, self.font_size);
         let pad_x = 10.0;
         let pad_y = 4.0;
@@ -572,6 +738,7 @@ impl View for Tag {
                 1.5,
             );
         }
+        renderer.end_world_space_panel(world_id);
         renderer.pop_vnode();
     }
     fn intrinsic_size(&self, renderer: &mut dyn Renderer, _proposal: SizeProposal) -> Size {

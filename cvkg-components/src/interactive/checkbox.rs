@@ -1,4 +1,5 @@
 use crate::form_validation::ValidationRule;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, Size, View};
@@ -28,6 +29,10 @@ pub struct Checkbox {
     pub(crate) rules: Vec<ValidationRule>,
     /// Error message when validation fails
     pub(crate) error_message: Option<String>,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Checkbox {
@@ -50,6 +55,8 @@ impl Checkbox {
             on_change: std::sync::Arc::new(on_change),
             rules: Vec::new(),
             error_message: None,
+            companions: CompanionBundle::focusable().with_role("checkbox"),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -64,6 +71,12 @@ impl Checkbox {
     /// Set the label for the checkbox.
     pub fn label(mut self, label: impl Into<String>) -> Self {
         self.label = Some(label.into());
+        self
+    }
+
+    /// Opt this checkbox into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
         self
     }
 
@@ -107,6 +120,18 @@ impl View for Checkbox {
         unreachable!()
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        let mut bundle = self.companions.clone();
+        if let Some(label) = &self.label {
+            bundle = bundle.with_label(label.clone());
+        }
+        bundle.to_vec()
+    }
+
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let focus_hash = {
             use std::hash::{Hash, Hasher};
@@ -117,8 +142,11 @@ impl View for Checkbox {
         };
         let (is_focused, set_focused) = cvkg_vdom::use_state(focus_hash, false);
 
-        renderer.push_vnode(rect, "Checkbox");
+        renderer.push_vnode_with_companions(rect, "Checkbox", self.companions.to_vec());
         renderer.register_a11y("checkbox", self.label.as_deref().unwrap_or("Checkbox"));
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, focus_hash);
 
         let box_size = 18.0;
         let box_rect = Rect {
@@ -203,21 +231,16 @@ impl View for Checkbox {
         let on_change = self.on_change.clone();
         let lbl = self.label.clone();
 
-        let rect_clone = rect;
+        // No manual bounds-check: VDom hit_test already verified the click was
+        // inside this Checkbox VNode before dispatching here.
         renderer.register_handler(
             "pointerclick",
-            std::sync::Arc::new(move |evt| {
-                if let cvkg_core::Event::PointerClick { x, y, .. } = evt
-                    && x >= rect_clone.x
-                    && x <= rect_clone.x + rect_clone.width
-                    && y >= rect_clone.y
-                    && y <= rect_clone.y + rect_clone.height
-                {
-                    tracing::debug!("Checkbox clicked: {:?}", lbl);
-                    (on_change)(!is_checked);
-                }
+            std::sync::Arc::new(move |_evt| {
+                tracing::debug!("Checkbox clicked: {:?}", lbl);
+                (on_change)(!is_checked);
             }),
         );
+
 
         // Focus handlers
         let set_focused_in = set_focused.clone();
@@ -237,6 +260,11 @@ impl View for Checkbox {
         );
 
         renderer.pop_vnode();
+
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(focus_hash);
+        }
 
         // Focus ring -- WCAG 2.4.7
         if is_focused {
@@ -267,10 +295,6 @@ impl View for Checkbox {
     /// Expose this view to VStack/HStack layout by returning a LayoutView reference.
     /// Without this, the stack's filter_map drops Checkbox from layout and the
     /// render loop guard silently skips it (child.layout().is_some() == false).
-    fn layout(&self) -> Option<&dyn LayoutView> {
-        Some(self)
-    }
-
     fn aria_properties(&self) -> Option<AriaProperties> {
         let label = self.label.as_deref().unwrap_or("Checkbox");
         let checked = match self.state {

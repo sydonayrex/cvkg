@@ -139,52 +139,47 @@ impl View for Combobox {
         renderer.set_aria_role("combobox");
 
         // ── Click on trigger → toggle open ──
+        // No manual bounds-check: VDom hit_test already verified the click was
+        // inside this Combobox VNode before dispatching here.
         let on_change_click = self.on_change.clone();
         let options_click = self.options.clone();
-        let rect_clone = rect;
         renderer.register_handler(
             "pointerclick",
-            Arc::new(move |evt| {
-                if let Event::PointerClick { x, y, .. } = evt
-                    && x >= rect_clone.x
-                    && x <= rect_clone.x + rect_clone.width
-                    && y >= rect_clone.y
-                    && y <= rect_clone.y + rect_clone.height
-                {
-                    let state = load_system_state();
-                    let currently_open = state
-                        .get_component_state::<bool>(COMBO_OPEN_HASH)
+            Arc::new(move |_evt| {
+                let state = load_system_state();
+                let currently_open = state
+                    .get_component_state::<bool>(COMBO_OPEN_HASH)
+                    .and_then(|v| v.read().ok().map(|g| *g))
+                    .unwrap_or(false);
+                if currently_open {
+                    // Close and confirm current selection
+                    let sel: usize = state
+                        .get_component_state::<usize>(COMBO_SELECTED_HASH)
                         .and_then(|v| v.read().ok().map(|g| *g))
-                        .unwrap_or(false);
-                    if currently_open {
-                        // Close and confirm current selection
-                        let sel: usize = state
-                            .get_component_state::<usize>(COMBO_SELECTED_HASH)
-                            .and_then(|v| v.read().ok().map(|g| *g))
-                            .unwrap_or(usize::MAX);
-                        let sel_option = if sel < options_click.len() {
-                            Some(sel)
-                        } else {
-                            None
-                        };
-                        update_system_state(|s| {
-                            let mut s = s.clone();
-                            s.set_component_state(COMBO_OPEN_HASH, false);
-                            s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                            s
-                        });
-                        (on_change_click)(sel_option);
+                        .unwrap_or(usize::MAX);
+                    let sel_option = if sel < options_click.len() {
+                        Some(sel)
                     } else {
-                        update_system_state(|s| {
-                            let mut s = s.clone();
-                            s.set_component_state(COMBO_OPEN_HASH, true);
-                            s.set_component_state(COMBO_SEARCH_HASH, String::new());
-                            s
-                        });
-                    }
+                        None
+                    };
+                    update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(COMBO_OPEN_HASH, false);
+                        s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                        s
+                    });
+                    (on_change_click)(sel_option);
+                } else {
+                    update_system_state(|s| {
+                        let mut s = s.clone();
+                        s.set_component_state(COMBO_OPEN_HASH, true);
+                        s.set_component_state(COMBO_SEARCH_HASH, String::new());
+                        s
+                    });
                 }
             }),
         );
+
 
         // ── Sync builder-API state into system state on first render ──
         {

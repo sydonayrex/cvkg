@@ -20,6 +20,11 @@ impl RunestoneEditor {
             language: "runic".to_string(),
         }
     }
+
+    pub fn language(mut self, lang: impl Into<String>) -> Self {
+        self.language = lang.into();
+        self
+    }
 }
 
 impl View for RunestoneEditor {

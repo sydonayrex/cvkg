@@ -1,5 +1,6 @@
 use crate::theme;
 use cvkg_core::{Never, Rect, Renderer, View};
+use std::sync::Arc;
 
 // Named after Hrungnir, whose heart was stone with three sharp corners.
 
@@ -10,6 +11,7 @@ pub struct HrungnirSegmented {
     pub segments: Vec<String>,
     pub selected: usize,
     pub style: SegmentedStyle,
+    pub on_select: Option<Arc<dyn Fn(usize) + Send + Sync>>,
     pill_x: f32,
     pill_width: f32,
     #[allow(dead_code)]
@@ -32,6 +34,7 @@ impl HrungnirSegmented {
             segments,
             selected,
             style: SegmentedStyle::Glass,
+            on_select: None,
             pill_x: 0.0,
             pill_width: 0.0,
             anim: cvkg_anim::SpringSolver::new(cvkg_anim::SpringParams::snappy(), 0.0, 0.0),
@@ -43,8 +46,9 @@ impl HrungnirSegmented {
         self
     }
 
-    pub fn on_select(&mut self, index: usize) {
-        self.selected = index;
+    pub fn on_select(mut self, callback: impl Fn(usize) + Send + Sync + 'static) -> Self {
+        self.on_select = Some(Arc::new(callback));
+        self
     }
 }
 
@@ -74,7 +78,7 @@ impl View for HrungnirSegmented {
         };
         renderer.fill_rounded_rect(pill_rect, 6.0, [1.0, 1.0, 1.0, 0.15]);
 
-        // Segment labels
+        // Segment labels - register click handlers
         let item_width = rect.width / self.segments.len().max(1) as f32;
         for (i, label) in self.segments.iter().enumerate() {
             let x = rect.x + i as f32 * item_width + item_width / 2.0;
@@ -85,6 +89,18 @@ impl View for HrungnirSegmented {
                 [0.7, 0.7, 0.75, 1.0]
             };
             renderer.draw_text_raw(label, x - w / 2.0, rect.y + 8.0, 12.0, color);
+
+            // Register click handler for this segment
+            if let Some(ref callback) = self.on_select {
+                let callback = callback.clone();
+                let idx = i;
+                renderer.register_handler(
+                    "pointerclick",
+                    std::sync::Arc::new(move |_| {
+                        callback(idx);
+                    }),
+                );
+            }
         }
     }
 }
@@ -103,9 +119,11 @@ mod hrungnir_tests {
 
     #[test]
     fn test_segmented_select() {
-        let mut seg = HrungnirSegmented::new(vec!["A".into(), "B".into(), "C".into()], 0);
-        seg.on_select(2);
-        assert_eq!(seg.selected, 2);
+        let seg = HrungnirSegmented::new(vec!["A".into(), "B".into(), "C".into()], 0)
+            .on_select(|idx| {
+                // callback
+            });
+        assert_eq!(seg.selected, 0);
     }
 
     #[test]

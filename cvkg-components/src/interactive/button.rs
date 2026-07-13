@@ -1,4 +1,5 @@
 use crate::theme;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::{ButtonSize, ButtonVariant, FONT_BASE, RADIUS_MD};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
 use cvkg_core::{AriaProperties, AriaRole, Event, KeyModifiers, Never, Rect, Renderer, Size, View};
@@ -20,6 +21,11 @@ pub struct Button {
     pub(crate) size: ButtonSize,
     pub(crate) disabled: bool,
     pub(crate) loading: bool,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement. When enabled, the button renders
+    /// to an offscreen texture and is composited as a 3D panel in the scene.
+    pub world: WorldSpaceConfig,
 }
 
 impl Button {
@@ -33,13 +39,18 @@ impl Button {
     ///     .size(ButtonSize::Default);
     /// ```
     pub fn new(label: impl Into<String>, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        let label_str = label.into();
         Self {
-            label: label.into(),
+            label: label_str.clone(),
             on_click: Arc::new(on_click),
             variant: ButtonVariant::Default,
             size: ButtonSize::Default,
             disabled: false,
             loading: false,
+            companions: CompanionBundle::focusable()
+                .with_role("button")
+                .with_label(label_str),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -65,6 +76,15 @@ impl Button {
     /// and click events are suppressed.
     pub fn loading(mut self, loading: bool) -> Self {
         self.loading = loading;
+        self
+    }
+
+    /// Opt this button into 3D world-space rendering. When `config` is
+    /// enabled (non-zero world size), the button's VDOM subtree renders to
+    /// an offscreen texture and is composited as a 3D panel in the scene
+    /// with the given transform, glass material, and spring settling.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
         self
     }
 
@@ -283,6 +303,14 @@ impl View for Button {
         unreachable!()
     }
 
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let id_hash = {
             use std::hash::{Hash, Hasher};
@@ -424,9 +452,14 @@ impl View for Button {
             height: scaled_h,
         };
 
-        renderer.push_vnode(final_rect, "Button");
+        renderer.push_vnode_with_companions(final_rect, "Button", self.companions.to_vec());
         renderer.set_key(&self.label);
         renderer.register_a11y("button", &self.label);
+
+        // 3D world-space: when configured, redirect this subtree's draw calls
+        // into an offscreen texture for 3D compositing, forwarding glass +
+        // spring + physics into the VDOM WorldSpacePanel.
+        self.world.begin(renderer, id_hash);
 
         // Apply mani_glow() soft lunar-like highlight
         if !self.disabled && !self.loading {
@@ -629,27 +662,10 @@ impl View for Button {
         );
 
         renderer.pop_vnode();
-    }
 
-    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
-        Some(self)
-    }
-
-    fn intrinsic_size(
-        &self,
-        renderer: &mut dyn Renderer,
-        _proposal: cvkg_core::layout::SizeProposal,
-    ) -> cvkg_core::Size {
-        let font_size = self.font_size();
-        let (tw, _th) = if self.loading {
-            (font_size, font_size)
-        } else {
-            renderer.measure_text(&self.label, font_size)
-        };
-        let h_pad = self.h_padding();
-        cvkg_core::Size {
-            width: (tw + h_pad * 2.0).max(self.height()),
-            height: self.height(),
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(id_hash);
         }
     }
 
@@ -702,6 +718,10 @@ pub struct Toggle {
     pub(crate) label: String,
     pub(crate) is_on: bool,
     pub(crate) on_change: std::sync::Arc<dyn Fn(bool) + Send + Sync>,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Toggle {
@@ -711,11 +731,22 @@ impl Toggle {
         is_on: bool,
         on_change: impl Fn(bool) + Send + Sync + 'static,
     ) -> Self {
+        let label_str = label.into();
         Self {
-            label: label.into(),
+            label: label_str.clone(),
             is_on,
             on_change: std::sync::Arc::new(on_change),
+            companions: CompanionBundle::focusable()
+                .with_role("switch")
+                .with_label(label_str),
+            world: WorldSpaceConfig::default(),
         }
+    }
+
+    /// Opt this toggle into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
+        self
     }
 }
 
@@ -723,6 +754,10 @@ impl View for Toggle {
     type Body = Never;
     fn body(self) -> Self::Body {
         unreachable!()
+    }
+
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
     }
 
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
@@ -773,9 +808,12 @@ impl View for Toggle {
             }
         }
 
-        renderer.push_vnode(rect, "Toggle");
+        renderer.push_vnode_with_companions(rect, "Toggle", self.companions.to_vec());
         renderer.set_aria_role("switch");
         renderer.set_aria_label(&self.label);
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, id_hash);
 
         let track_w = 40.0;
         let track_h = 20.0;
@@ -865,6 +903,11 @@ impl View for Toggle {
 
         renderer.pop_vnode();
 
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(id_hash);
+        }
+
         // Focus ring -- WCAG 2.4.7
         if is_focused {
             let total_w = 40.0 + 8.0 + renderer.measure_text(&self.label, 14.0).0;
@@ -942,6 +985,10 @@ pub struct Slider {
     pub(crate) range: std::ops::RangeInclusive<f32>,
     pub(crate) step: Option<f32>,
     pub(crate) on_change: std::sync::Arc<dyn Fn(f32) + Send + Sync>,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Slider {
@@ -956,12 +1003,20 @@ impl Slider {
             range,
             step: None,
             on_change: std::sync::Arc::new(on_change),
+            companions: CompanionBundle::focusable().with_role("slider"),
+            world: WorldSpaceConfig::default(),
         }
     }
 
     /// Set a step increment for the slider.
     pub fn step(mut self, step: f32) -> Self {
         self.step = Some(step);
+        self
+    }
+
+    /// Opt this slider into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
         self
     }
 }
@@ -972,13 +1027,29 @@ impl View for Slider {
         unreachable!()
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let val_min = *self.range.start();
         let val_max = *self.range.end();
         let val_range = (val_max - val_min).max(0.001);
 
-        renderer.push_vnode(rect, "Slider");
+        let panel_id = {
+            use std::hash::{Hash, Hasher};
+            let mut s = std::collections::hash_map::DefaultHasher::new();
+            "slider".hash(&mut s);
+            (val_min as i32).hash(&mut s);
+            (val_max as i32).hash(&mut s);
+            s.finish()
+        };
+
+        renderer.push_vnode_with_companions(rect, "Slider", self.companions.to_vec());
         renderer.set_aria_role("slider");
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, panel_id);
 
         // ARIA value properties for screen readers
         renderer.set_aria_valuemin(val_min);
@@ -1080,6 +1151,11 @@ impl View for Slider {
         );
 
         renderer.pop_vnode();
+
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(panel_id);
+        }
     }
 
     fn intrinsic_size(

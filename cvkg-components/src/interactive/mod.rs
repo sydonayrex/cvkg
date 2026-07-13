@@ -2,6 +2,8 @@ pub mod button;
 pub use button::*;
 pub mod checkbox;
 pub use checkbox::*;
+pub mod clipboard;
+pub use clipboard::*;
 pub mod textarea;
 pub use textarea::*;
 pub mod input;

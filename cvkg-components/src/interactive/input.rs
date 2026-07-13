@@ -1,4 +1,5 @@
 use crate::form_validation::ValidationRule;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD};
 use cvkg_core::layout::{LayoutCache, LayoutView, SizeProposal};
@@ -38,6 +39,10 @@ pub struct Input {
     pub(crate) rules: Vec<ValidationRule>,
     /// Optional custom validator: `Fn(value) -> Result<(), String>`
     pub(crate) custom_validator: Option<Arc<dyn Fn(&str) -> Result<(), String> + Send + Sync>>,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl Input {
@@ -50,12 +55,13 @@ impl Input {
     ///     .on_change(|text| println!("Input: {}", text));
     /// ```
     pub fn new(placeholder: impl Into<String>) -> Self {
+        let placeholder_str = placeholder.into();
         use std::hash::{Hash, Hasher};
         let mut s = std::collections::hash_map::DefaultHasher::new();
         "input".hash(&mut s);
         std::time::SystemTime::now().hash(&mut s);
         Self {
-            placeholder: placeholder.into(),
+            placeholder: placeholder_str.clone(),
             text: String::new(),
             on_change: Arc::new(|_| {}),
             on_commit: Arc::new(|_| {}),
@@ -65,6 +71,10 @@ impl Input {
             state_id: s.finish(),
             rules: Vec::new(),
             custom_validator: None,
+            companions: CompanionBundle::focusable()
+                .with_role("textbox")
+                .with_label(placeholder_str.clone()),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -80,6 +90,12 @@ impl Input {
 
     pub fn on_commit(mut self, callback: impl Fn(String) + Send + Sync + 'static) -> Self {
         self.on_commit = Arc::new(callback);
+        self
+    }
+
+    /// Opt this input into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
         self
     }
 
@@ -247,9 +263,20 @@ impl View for Input {
         unreachable!()
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
+
+    fn layout(&self) -> Option<&dyn cvkg_core::layout::LayoutView> {
+        Some(self)
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Input");
+        renderer.push_vnode_with_companions(rect, "Input", self.companions.to_vec());
         renderer.register_a11y("textbox", &self.placeholder);
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, self.state_id);
 
         let bg = self.bg_color();
         let border = self.border_color();
@@ -579,6 +606,11 @@ impl View for Input {
         }
 
         renderer.pop_vnode();
+
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(self.state_id);
+        }
     }
 
     fn intrinsic_size(
@@ -590,10 +622,6 @@ impl View for Input {
             width: 200.0,
             height: 44.0,
         }
-    }
-
-    fn layout(&self) -> Option<&dyn LayoutView> {
-        Some(self)
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {

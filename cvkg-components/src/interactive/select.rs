@@ -1,5 +1,6 @@
 use crate::Color;
 use crate::form_validation::ValidationRule;
+use crate::integration::{CompanionBundle, WorldSpaceConfig};
 use crate::theme;
 use crate::{FONT_BASE, RADIUS_MD, RADIUS_SM};
 use cvkg_core::{AriaProperties, AriaRole, KeyModifiers, Never, Rect, Renderer, View};
@@ -29,6 +30,10 @@ pub struct Select<V> {
     pub(crate) rules: Vec<ValidationRule>,
     /// Error message when validation fails
     pub(crate) error_message: Option<String>,
+    /// VDOM companion bundle — focus management + ARIA semantics.
+    pub companions: CompanionBundle,
+    /// Optional 3D world-space placement.
+    pub world: WorldSpaceConfig,
 }
 
 impl<V: Clone> Select<V> {
@@ -42,9 +47,10 @@ impl<V: Clone> Select<V> {
     ///     .option("Option 2", "val2");
     /// ```
     pub fn new(placeholder: impl Into<String>) -> Self {
+        let placeholder_str = placeholder.into();
         let id_hash = NEXT_SELECT_ID.fetch_add(2, Ordering::Relaxed);
         Self {
-            placeholder: placeholder.into(),
+            placeholder: placeholder_str.clone(),
             options: Vec::new(),
             selected_index: None,
             is_open: false,
@@ -53,6 +59,10 @@ impl<V: Clone> Select<V> {
             on_change: None,
             rules: Vec::new(),
             error_message: None,
+            companions: CompanionBundle::focusable()
+                .with_role("combobox")
+                .with_label(placeholder_str.clone()),
+            world: WorldSpaceConfig::default(),
         }
     }
 
@@ -68,6 +78,12 @@ impl<V: Clone> Select<V> {
 
     pub fn on_change(mut self, cb: impl Fn(V) + Send + Sync + 'static) -> Self {
         self.on_change = Some(Arc::new(cb));
+        self
+    }
+
+    /// Opt this select into 3D world-space rendering.
+    pub fn world(mut self, config: WorldSpaceConfig) -> Self {
+        self.world = config;
         self
     }
 
@@ -110,9 +126,16 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
         unreachable!()
     }
 
+    fn companion_states(&self) -> Vec<Box<dyn cvkg_core::Companion>> {
+        self.companions.to_vec()
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
-        renderer.push_vnode(rect, "Select");
+        renderer.push_vnode_with_companions(rect, "Select", self.companions.to_vec());
         renderer.register_a11y("combobox", &self.placeholder);
+
+        // 3D world-space: redirect draw calls to offscreen texture when enabled.
+        self.world.begin(renderer, self.id_hash);
 
         // Read open state from system state
         let is_open = cvkg_core::load_system_state()
@@ -232,6 +255,9 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
         }
 
         // Toggle on click + popover item commit
+        // Capture the world-space offset so the handler can convert local
+        // rects to window coordinates for bounds checking.
+        let world_offset = renderer.current_translation();
         let id_hash = self.id_hash;
         let on_change = self.on_change.clone();
         let options = self.options.clone();
@@ -239,11 +265,18 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
             "pointerclick",
             Arc::new(move |event| {
                 if let cvkg_core::Event::PointerClick { x, y, .. } = event {
+                    // World-space rect of the main toggle box.
+                    let toggle_rect = Rect {
+                        x: world_offset.x,
+                        y: world_offset.y,
+                        width: rect.width,
+                        height: rect.height,
+                    };
                     // If click is inside the main toggle rect, toggle open
-                    if x >= rect.x
-                        && x <= rect.x + rect.width
-                        && y >= rect.y
-                        && y <= rect.y + rect.height
+                    if x >= toggle_rect.x
+                        && x <= toggle_rect.x + toggle_rect.width
+                        && y >= toggle_rect.y
+                        && y <= toggle_rect.y + toggle_rect.height
                     {
                         cvkg_core::update_system_state(|s| {
                             let mut s = s.clone();
@@ -266,8 +299,8 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
                         let item_height = 32.0;
                         let popover_h = (options.len() as f32 * item_height).min(200.0);
                         let popover_rect = Rect {
-                            x: rect.x,
-                            y: rect.y + rect.height + 4.0,
+                            x: world_offset.x,
+                            y: world_offset.y + rect.height + 4.0,
                             width: rect.width,
                             height: popover_h,
                         };
@@ -363,6 +396,7 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
         if is_open {
             let item_height = 32.0;
             let popover_h = (self.options.len() as f32 * item_height).min(200.0);
+            let hover_world = renderer.current_translation();
             let popover_rect = Rect {
                 x: rect.x,
                 y: rect.y + rect.height + 4.0,
@@ -370,9 +404,14 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
                 height: popover_h,
             };
 
-            // Pointer hover tracking
+            // Pointer hover tracking — convert to world space for hit-testing
             let id_hash_hover = self.id_hash.wrapping_add(1);
-            let pr = popover_rect;
+            let pr = Rect {
+                x: hover_world.x,
+                y: hover_world.y + rect.height + 4.0,
+                width: rect.width,
+                height: popover_h,
+            };
             renderer.register_handler(
                 "pointermove",
                 Arc::new(move |event| {
@@ -394,6 +433,11 @@ impl<V: Clone + Send + Sync + 'static> View for Select<V> {
         }
 
         renderer.pop_vnode();
+
+        // End 3D world-space redirection if it was begun above.
+        if self.world.is_enabled() {
+            renderer.end_world_space_panel(self.id_hash);
+        }
     }
 
     fn intrinsic_size(
@@ -523,6 +567,7 @@ impl View for Dropdown {
 
         let options_count = self.options.len();
         let on_change = self.on_change.clone();
+        let drop_world = renderer.current_translation();
 
         renderer.register_handler(
             "pointerclick",
@@ -531,8 +576,8 @@ impl View for Dropdown {
                     if is_expanded {
                         let popover_h = (options_count as f32 * 30.0).min(200.0);
                         let popover_rect = Rect {
-                            x: rect.x,
-                            y: rect.y + rect.height + 4.0,
+                            x: drop_world.x,
+                            y: drop_world.y + rect.height + 4.0,
                             width: rect.width,
                             height: popover_h,
                         };
@@ -757,6 +802,7 @@ impl View for ColorPicker {
         let available_w = (rect.width - grid_relative_x - 10.0).max(0.0);
         let cell_w = available_w / 4.0;
         let cell_h = rect.height - 10.0;
+        let cp_world = renderer.current_translation();
 
         for (i, &col) in colors.iter().enumerate() {
             let cell_rect = Rect {
@@ -768,14 +814,20 @@ impl View for ColorPicker {
 
             renderer.fill_rounded_rect(cell_rect, 2.0, col.as_array());
 
-            // Interaction
+            // Interaction — convert local cell_rect to world space for hit-testing
             let on_change = self.on_change.clone();
+            let world_cell = Rect {
+                x: cp_world.x + grid_relative_x + (i as f32 * (cell_w + 5.0)),
+                y: cp_world.y + 5.0,
+                width: cell_w,
+                height: cell_h,
+            };
             renderer.register_handler(
                 "pointerclick",
                 std::sync::Arc::new(move |event| {
                     if let cvkg_core::Event::PointerClick { x, .. } = event
-                        && x >= cell_rect.x
-                        && x <= cell_rect.x + cell_rect.width
+                        && x >= world_cell.x
+                        && x <= world_cell.x + world_cell.width
                     {
                         (on_change)(col);
                     }

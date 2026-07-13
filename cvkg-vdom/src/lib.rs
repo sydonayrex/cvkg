@@ -490,7 +490,9 @@ impl VDom {
         }
     }
 
-    fn sdf_distance(
+    /// SDF distance for hit testing. Correctly handles inside points (returns
+    /// negative distance) so proximity = 1.0 for points strictly inside the rect.
+    fn hit_test_sdf_distance(
         shape: Option<&cvkg_core::layout::SdfShape>,
         layout: &LayoutRect,
         x: f32,
@@ -509,9 +511,15 @@ impl VDom {
             cvkg_core::layout::SdfShape::Rect(r) => {
                 let dx = (r.x - x).max(x - (r.x + r.width)).max(0.0);
                 let dy = (r.y - y).max(y - (r.y + r.height)).max(0.0);
-                if dx == 0.0 && dy == 0.0 {
+                if dx <= 0.0 && dy <= 0.0 {
                     let in_x = (x - r.x).min(r.x + r.width - x);
                     let in_y = (y - r.y).min(r.y + r.height - y);
+                    // Interior points must be NEGATIVE (inside the SDF), so
+                    // that `hit_test` sees `dist <= 0.0` as "inside" and
+                    // assigns proximity = 1.0. A positive interior distance
+                    // breaks hit-testing for events with pointer_precision 0
+                    // (e.g. PointerWheel), because the fallback
+                    // `(1 - dist/limit)` is skipped and proximity stays 0.
                     -in_x.min(in_y)
                 } else {
                     (dx * dx + dy * dy).sqrt()
@@ -570,12 +578,42 @@ impl VDom {
             return None;
         }
 
-        // Translate the absolute click coordinate into this node's local
-        // frame, then SDF-test against the (local) layout. The SDF math
-        // does NOT need to know about the world offset; it's all local.
-        let local_x = x - offset_x;
-        let local_y = y - offset_y;
-        let dist = Self::sdf_distance(node.sdf_shape.as_ref(), &node.layout, local_x, local_y);
+        // node.sdf_shape (if set) stores coordinates in the node's LOCAL
+        // (parent-relative) frame, but the click point `x, y` and `offset_x,
+        // offset_y` are in world space. `offset_x` is the node's OWN world
+        // position (= parent world offset + node.layout.x), so the parent's
+        // world offset is `offset_x - node.layout.x`. Translate the shape into
+        // world space by that amount so the SDF compares like with like,
+        // preserving non-rectangular shapes (RoundedRect / Circle).
+        let parent_world_x = offset_x - node.layout.x;
+        let parent_world_y = offset_y - node.layout.y;
+        let world_shape = node
+            .sdf_shape
+            .as_ref()
+            .map(|s| match s {
+                cvkg_core::layout::SdfShape::Rect(r) => {
+                    cvkg_core::layout::SdfShape::Rect(r.offset(parent_world_x, parent_world_y))
+                }
+                cvkg_core::layout::SdfShape::RoundedRect { rect, radius } => {
+                    cvkg_core::layout::SdfShape::RoundedRect {
+                        rect: rect.offset(parent_world_x, parent_world_y),
+                        radius: *radius,
+                    }
+                }
+                cvkg_core::layout::SdfShape::Circle { center, radius } => {
+                    cvkg_core::layout::SdfShape::Circle {
+                        center: [center[0] + parent_world_x, center[1] + parent_world_y],
+                        radius: *radius,
+                    }
+                }
+            });
+        let world_layout = LayoutRect {
+            x: offset_x,
+            y: offset_y,
+            width: node.layout.width,
+            height: node.layout.height,
+        };
+        let dist = Self::hit_test_sdf_distance(world_shape.as_ref(), &world_layout, x, y);
 
         // Scale proximity limit based on the precision of the pointer device.
         let proximity_limit = pointer_precision.max(0.0);
@@ -589,55 +627,109 @@ impl VDom {
 
         // Search children in reverse (front-to-back) to maintain proper Z-ordering.
         let mut best_child_hit: Option<(NodeId, f32)> = None;
+        // Fallback candidate: a DropdownOverlay hit while outside the menu bar
+        // (y >= 28.0). Siblings are tested first and win on a match; only if no
+        // sibling matches do we fall back to the overlay (empty-area click).
+        let mut overlay_fallback: Option<(NodeId, f32)> = None;
 
         // Hit test policy: if the click is outside the menu bar (y >= 28.0),
-        // evaluate DropdownOverlay last so it doesn't block sibling interactive elements.
+        // DropdownOverlay siblings must NOT block interactive siblings (corner
+        // buttons, dock items, etc.). We still test the overlay, but LAST, so
+        // that a sibling hit takes priority and an empty-area click falls back
+        // to the overlay.
         let mut children_to_test = node.children.clone();
-        if y >= 28.0
-            && let Some(pos) = children_to_test.iter().position(|&cid| {
+        if y >= 28.0 {
+            children_to_test.retain(|&cid| {
                 self.nodes
                     .get(&cid)
-                    .is_some_and(|n| n.component_type == "DropdownOverlay")
-            })
-        {
-            let overlay_id = children_to_test.remove(pos);
-            children_to_test.insert(0, overlay_id);
+                    .is_none_or(|n| n.component_type != "DropdownOverlay")
+            });
         }
 
         for child_id in children_to_test.iter().rev() {
-            // Pull the child's local offset to extend the cumulative
-            // world offset for the recursive call.
             let (child_offset_x, child_offset_y) = self
                 .nodes
                 .get(child_id)
                 .map(|c| (c.layout.x, c.layout.y))
                 .unwrap_or((0.0, 0.0));
+            let child_cumulative_x = offset_x + child_offset_x;
+            let child_cumulative_y = offset_y + child_offset_y;
             if let Some((hit, hit_prox)) = self.hit_test_recursive(
                 *child_id,
                 x,
                 y,
                 pointer_precision,
-                offset_x + child_offset_x,
-                offset_y + child_offset_y,
+                child_cumulative_x,
+                child_cumulative_y,
             ) {
-                // Direct hit (point inside child's SDF): return immediately
-                if hit_prox >= 1.0 {
+                let is_dropdown_overlay = self
+                    .nodes
+                    .get(&hit)
+                    .is_some_and(|n| n.component_type == "DropdownOverlay");
+                // When outside the menu bar (y >= 28) defer the overlay: siblings
+                // tested earlier win; the overlay is only used as a fallback.
+                if is_dropdown_overlay && y >= 28.0 {
+                    if overlay_fallback.is_none() || hit_prox > overlay_fallback.unwrap().1 {
+                        overlay_fallback = Some((hit, hit_prox));
+                    }
+                    continue;
+                }
+                if hit_prox >= 1.0 - 1e-6 {
                     return Some((hit, hit_prox));
                 }
-                // Track best partial hit among children
                 if best_child_hit.is_none() || hit_prox > best_child_hit.unwrap().1 {
                     best_child_hit = Some((hit, hit_prox));
                 }
             }
         }
 
-        // If any child matched (even partially), prefer the best child hit
+        // After all non-overlay siblings, test any deferred DropdownOverlay
+        // children directly (so an overlay that contains the point but has no
+        // interactive sibling wins over this parent node).
+        if y >= 28.0 {
+            let overlay_children: Vec<NodeId> = node
+                .children
+                .iter()
+                .copied()
+                .filter(|&cid| {
+                    self.nodes
+                        .get(&cid)
+                        .is_some_and(|n| n.component_type == "DropdownOverlay")
+                })
+                .collect();
+            for child_id in overlay_children.iter().rev() {
+                let (child_offset_x, child_offset_y) = self
+                    .nodes
+                    .get(child_id)
+                    .map(|c| (c.layout.x, c.layout.y))
+                    .unwrap_or((0.0, 0.0));
+                let child_cumulative_x = offset_x + child_offset_x;
+                let child_cumulative_y = offset_y + child_offset_y;
+                if let Some((hit, hit_prox)) = self.hit_test_recursive(
+                    *child_id,
+                    x,
+                    y,
+                    pointer_precision,
+                    child_cumulative_x,
+                    child_cumulative_y,
+                ) {
+                    if overlay_fallback.is_none() || hit_prox > overlay_fallback.unwrap().1 {
+                        overlay_fallback = Some((hit, hit_prox));
+                    }
+                }
+            }
+        }
+
         if let Some(bh) = best_child_hit {
             return Some(bh);
         }
 
-        // No child matched at all -- return this node if it's interactive and the point is inside
-        if proximity > 0.0 && (dist <= 0.0 || self.event_handlers.contains_key(&node_id)) {
+        if let Some(of) = overlay_fallback {
+            return Some(of);
+        }
+
+        // No child matched at all -- return this node if it's interactive (has handlers) and the point is inside
+        if proximity > 0.0 && self.event_handlers.contains_key(&node_id) {
             return Some((node_id, proximity));
         }
 
@@ -1251,7 +1343,26 @@ impl cvkg_core::Renderer for VNodeRenderer {
         });
     }
 
+    /// Push a VNode for the given rect and component name onto the VNode stack.
+    ///
+    /// # Translation stack contract
+    /// Mirrors `NativeRenderer::push_vnode`: accumulates `translation_stack` by
+    /// composing `parent_offset + vec2(rect.x, rect.y)`.  This ensures that
+    /// `current_translation()` returns the true cumulative world offset during
+    /// the `VDom::build` capture pass, so closures that call
+    /// `renderer.current_translation()` before calling `register_handler` capture
+    /// the correct screen-space position rather than always `Vec2::ZERO`.
     fn push_vnode(&mut self, rect: cvkg_core::Rect, name: &'static str) {
+        // Accumulate translation: compose parent world offset with this node's
+        // local rect origin, matching NativeRenderer::push_vnode semantics.
+        let new_top = if let Some(parent) = self.translation_stack.last() {
+            glam::Vec2::new(parent[0] + rect.x, parent[1] + rect.y)
+        } else {
+            glam::Vec2::new(rect.x, rect.y)
+        };
+        self.translation_stack.push([new_top.x, new_top.y]);
+        cvkg_core::set_renderer_translation(new_top);
+
         let id = self.next_id();
         let role = match name {
             "CornerButton" => "button",
@@ -1285,12 +1396,24 @@ impl cvkg_core::Renderer for VNodeRenderer {
         self.flush_decorative_batch();
     }
 
+    /// Push a VNode with companion state objects onto the VNode stack.
+    ///
+    /// Translation stack is accumulated identically to `push_vnode`.
     fn push_vnode_with_companions(
         &mut self,
         rect: cvkg_core::Rect,
         name: &'static str,
         companions: Vec<Box<dyn cvkg_core::Companion>>,
     ) {
+        // Accumulate translation — same contract as push_vnode.
+        let new_top = if let Some(parent) = self.translation_stack.last() {
+            glam::Vec2::new(parent[0] + rect.x, parent[1] + rect.y)
+        } else {
+            glam::Vec2::new(rect.x, rect.y)
+        };
+        self.translation_stack.push([new_top.x, new_top.y]);
+        cvkg_core::set_renderer_translation(new_top);
+
         // Convert companions Vec to HashMap
         let mut companion_map: HashMap<String, Box<dyn cvkg_core::Companion>> = HashMap::new();
         for companion in companions {
@@ -1332,8 +1455,19 @@ impl cvkg_core::Renderer for VNodeRenderer {
         self.flush_decorative_batch();
     }
 
+    /// Pop the current VNode from the stack, also restoring the translation
+    /// stack so `current_translation()` reflects the parent's world offset.
     fn pop_vnode(&mut self) {
         self.stack.pop();
+        // Mirror-pop translation to match push_vnode.
+        self.translation_stack.pop();
+        let new_top = self
+            .translation_stack
+            .last()
+            .copied()
+            .map(|[x, y]| glam::Vec2::new(x, y))
+            .unwrap_or(glam::Vec2::ZERO);
+        cvkg_core::set_renderer_translation(new_top);
     }
 
     /// Retrieve a companion state for the VNode currently at the top of the stack.
@@ -1463,6 +1597,30 @@ impl cvkg_core::Renderer for VNodeRenderer {
                 pixels_per_unit,
                 world_size,
                 ..Default::default()
+            });
+        }
+    }
+
+    fn begin_world_space_panel_full(
+        &mut self,
+        _node_id: u64,
+        transform: &cvkg_core::Transform3D,
+        glass: Option<cvkg_materials::GlassMaterial>,
+        spring: Option<cvkg_core::spring::SpringParams>,
+        physics: Option<cvkg_core::PhysicsBody>,
+        pixels_per_unit: f32,
+        world_size: (f32, f32),
+    ) {
+        if let Some(id) = self.stack.last()
+            && let Some(node) = self.nodes.get_mut(id)
+        {
+            node.world_space = Some(WorldSpacePanel {
+                transform: *transform,
+                glass,
+                spring,
+                physics,
+                pixels_per_unit,
+                world_size,
             });
         }
     }

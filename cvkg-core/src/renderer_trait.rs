@@ -714,6 +714,39 @@ pub trait Renderer: ElapsedTime + Send + RendererErrorHandler {
         let _ = (node_id, transform, glass, pixels_per_unit, world_size);
     }
 
+    /// Full variant of [`begin_world_space_panel`] that also forwards
+    /// interactive settling (`spring`) and physics body (`physics`)
+    /// parameters. These are required so a component's `WorldSpaceConfig`
+    /// (which may carry a `cvkg_core::PhysicsBody` and a
+    /// `cvkg_anim::SpringParams`) actually surfaces on the VDOM
+    /// `WorldSpacePanel`.
+    ///
+    /// The `physics` parameter is the core-local `PhysicsBody` descriptor; the
+    /// concrete renderer lowers it into a `cvkg_physics::RigidBody3D` at the
+    /// simulation boundary. Keeping it in `cvkg_core` avoids a
+    /// `cvkg-core <-> cvkg-physics` dependency cycle.
+    ///
+    /// Renderers that don't care about spring/physics may simply delegate to
+    /// this default, which degrades to the glass-only entry point
+    /// (dropping `spring`/`physics`). The `VNodeRenderer` overrides this to
+    /// capture the full panel into the VDOM.
+    fn begin_world_space_panel_full(
+        &mut self,
+        node_id: u64,
+        transform: &Transform3D,
+        glass: Option<cvkg_materials::GlassMaterial>,
+        spring: Option<crate::spring::SpringParams>,
+        physics: Option<crate::PhysicsBody>,
+        pixels_per_unit: f32,
+        world_size: (f32, f32),
+    ) {
+        // Default: degrade gracefully to the glass-only entry point so
+        // renderers that haven't adopted the full form still composite the
+        // panel (losing spring/physics, which the VDOM path does not need).
+        let _ = (spring, physics);
+        self.begin_world_space_panel(node_id, transform, glass, pixels_per_unit, world_size);
+    }
+
     /// Called when the traversal exits a VNode with a WorldSpacePanel configured.
     /// Ends offscreen redirection and records the panel into the renderer state
     /// for 3D compositing later in the frame graph.

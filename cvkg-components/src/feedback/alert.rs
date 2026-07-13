@@ -5,6 +5,7 @@
 //! and can be embedded inline in layouts.
 
 use crate::theme;
+use cvkg_core::layout::{LayoutCache, LayoutView, Size, SizeProposal};
 use cvkg_core::{Never, Rect, Renderer, View};
 
 /// An inline alert component.
@@ -80,6 +81,10 @@ impl View for Alert {
         unreachable!("Primitive view has no body")
     }
 
+    fn layout(&self) -> Option<&dyn LayoutView> {
+        Some(self)
+    }
+
     fn render(&self, renderer: &mut dyn Renderer, rect: Rect) {
         let (icon_color, bg_color) = match self.variant {
             AlertVariant::Info => (theme::info(), [0.05, 0.1, 0.2, 0.8]),
@@ -149,5 +154,31 @@ impl View for Alert {
                 theme::text(),
             );
         }
+    }
+}
+
+impl cvkg_core::LayoutView for Alert {
+    fn size_that_fits(
+        &self,
+        _proposal: SizeProposal,
+        _subviews: &[&dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) -> Size {
+        let title_width = self.title.len() as f32 * 14.0 * 0.55;
+        let desc_width = self.description.len() as f32 * 12.0 * 0.55;
+        let action_width = self.action.as_ref().map_or(0.0, |a| a.len() as f32 * 12.0 * 0.55 + 96.0);
+        let content_width = title_width.max(desc_width).max(action_width);
+        Size {
+            width: (content_width + 64.0).max(280.0),
+            height: if self.description.is_empty() { 56.0 } else { 80.0 },
+        }
+    }
+
+    fn place_subviews(
+        &self,
+        _bounds: Rect,
+        _subviews: &mut [&mut dyn LayoutView],
+        _cache: &mut LayoutCache,
+    ) {
     }
 }
