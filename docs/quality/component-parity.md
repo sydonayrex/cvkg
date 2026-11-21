@@ -141,3 +141,10 @@ path in `render`, not through the accessibility tree type.
 `value` (`bifrost_tabs::aria_tests::tablist_publishes_selected_value`).
 Per-tab `aria-selected`/`tabpanel` semantics are still not represented in the
 accessibility tree.
+
+## Update 2026-11-21 — ToggleGroup
+
+`ToggleGroup` now publishes `role=toolbar` with selected items joined into the
+ARIA `value`, a `disabled` flag and a single/multi-select description
+(`toggle_group::aria_tests::toggle_group_publishes_selected_values`). Per-item
+`aria-pressed` is still not represented in the accessibility tree.

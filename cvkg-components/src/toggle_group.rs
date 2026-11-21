@@ -6,7 +6,7 @@
 
 use crate::theme;
 use crate::{FONT_SM, RADIUS_MD, RADIUS_SM, SPACE_XS};
-use cvkg_core::{Event, Never, Rect, Renderer, View};
+use cvkg_core::{AriaProperties, AriaRole, Event, Never, Rect, Renderer, View};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -94,6 +94,22 @@ impl ToggleGroup {
 }
 
 impl View for ToggleGroup {
+    /// P2-2: expose the group role and its selected items as a readable value.
+    fn aria_properties(&self) -> Option<AriaProperties> {
+        let labels: Vec<&str> = self
+            .value
+            .iter()
+            .filter_map(|i| self.items.get(*i).map(String::as_str))
+            .collect();
+        let mut props = AriaProperties::new(AriaRole::Toolbar, "Toggle group")
+            .disabled(self.disabled)
+            .value(labels.join(", "));
+        if !self.multi {
+            props = props.description("Single select");
+        }
+        Some(props)
+    }
+
     type Body = Never;
 
     fn body(self) -> Self::Body {
@@ -256,5 +272,29 @@ impl View for ToggleGroup {
         }
 
         renderer.pop_vnode();
+    }
+}
+
+#[cfg(test)]
+mod aria_tests {
+    use super::*;
+
+    #[test]
+    fn toggle_group_publishes_selected_values() {
+        let group = ToggleGroup::new(
+            vec![
+                "Left".to_string(),
+                "Center".to_string(),
+                "Right".to_string(),
+            ],
+            vec![0, 2],
+            |_| {},
+        );
+        let props = group
+            .aria_properties()
+            .expect("ToggleGroup must publish aria properties");
+        assert_eq!(props.role, AriaRole::Toolbar);
+        assert_eq!(props.value.as_deref(), Some("Left, Right"));
+        assert_eq!(props.description.as_deref(), Some("Single select"));
     }
 }
