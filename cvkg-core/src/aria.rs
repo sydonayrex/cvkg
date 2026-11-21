@@ -65,6 +65,8 @@ pub struct AriaProperties {
     pub value: Option<String>,
     pub pressed: Option<bool>,
     pub checked: Option<bool>,
+    /// Mirrors the `aria-invalid` state (validation error, not parse failure).
+    pub invalid: Option<bool>,
     pub expanded: Option<bool>,
     pub disabled: bool,
     pub hidden: bool,
@@ -84,6 +86,7 @@ impl AriaProperties {
             value: None,
             pressed: None,
             checked: None,
+            invalid: None,
             expanded: None,
             disabled: false,
             hidden: false,
@@ -107,6 +110,12 @@ impl AriaProperties {
         self.checked = Some(c);
         self
     }
+    /// Set the `aria-invalid` state. `None` (the default) means the attribute
+    /// is not exposed; `Some(false)` explicitly marks a field as valid.
+    pub fn invalid(mut self, invalid: bool) -> Self {
+        self.invalid = Some(invalid);
+        self
+    }
     pub fn disabled(mut self, d: bool) -> Self {
         self.disabled = d;
         self
@@ -126,5 +135,24 @@ impl AriaProperties {
     pub fn focused(mut self, f: bool) -> Self {
         self.focused = f;
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn invalid_state_defaults_to_absent() {
+        let props = AriaProperties::new(AriaRole::Textbox, "value");
+        assert_eq!(props.invalid, None);
+    }
+
+    #[test]
+    fn invalid_builder_sets_explicit_state() {
+        let props = AriaProperties::new(AriaRole::Textbox, "value").invalid(true);
+        assert_eq!(props.invalid, Some(true));
+        let valid = AriaProperties::new(AriaRole::Textbox, "value").invalid(false);
+        assert_eq!(valid.invalid, Some(false));
     }
 }

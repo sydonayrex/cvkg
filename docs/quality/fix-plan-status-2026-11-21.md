@@ -117,6 +117,16 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **Visual test flakiness:** the two `cvkg-test` visual regression tests created
+  separate GPU devices concurrently and the determinism check intermittently
+  failed with >1% diff. Serialized them with a shared test-binary mutex; the
+  determinism test is now stable (0% diff), leaving only the documented
+  `niflheim_hero` golden mismatch.
+
+- **P2-2 ARIA `invalid`:** `AriaProperties` gained an `invalid: Option<bool>`
+  field and builder; `Input::aria_properties` now emits `aria-invalid` in the
+  error state and the error message as a description. Parity scorecard updated.
+
 - **P1-5 native call site:** `convert_keyboard_event` now routes winit physical
   codes through `cvkg_core::normalize_key_name`, so `KeyA` → `a`, `Digit1` → `1`
   and text-input keydown handlers receive the same logical names as the web

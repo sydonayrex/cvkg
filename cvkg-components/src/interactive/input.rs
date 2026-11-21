@@ -625,11 +625,14 @@ impl View for Input {
     }
 
     fn aria_properties(&self) -> Option<AriaProperties> {
-        Some(
-            AriaProperties::new(AriaRole::Textbox, &self.placeholder)
-                .value(self.text.clone())
-                .focused(self.is_focused),
-        )
+        let mut props = AriaProperties::new(AriaRole::Textbox, &self.placeholder)
+            .value(self.text.clone())
+            .focused(self.is_focused)
+            .invalid(self.input_state == InputState::Error);
+        if let Some(message) = &self.error_message {
+            props = props.description(message.clone());
+        }
+        Some(props)
     }
 }
 

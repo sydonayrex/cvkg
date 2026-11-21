@@ -1,9 +1,16 @@
 use cvkg_core::{FrameRenderer, Rect, Renderer, View};
 use cvkg_render_gpu::GpuRenderer;
 use cvkg_test::VisualComparator;
+use std::sync::Mutex;
+
+/// Both tests create their own GPU device and read back full frames. Running
+/// them concurrently caused nondeterministic readbacks on shared hardware, so
+/// serialize them within this test binary.
+static GPU_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[tokio::test]
 async fn test_visual_regression_basic() {
+    let _guard = GPU_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let width = 128;
     let height = 128;
     let mut renderer = GpuRenderer::forge_headless(width, height).await;
@@ -88,6 +95,7 @@ async fn test_visual_regression_basic() {
 
 #[tokio::test]
 async fn test_generate_niflheim_screenshot() {
+    let _guard = GPU_TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     let tokens = cvkg_core::default_tokens();
     cvkg_core::env::insert::<cvkg_core::YggdrasilKey>(tokens);
     cvkg_core::env::insert::<cvkg_core::AppearanceKey>(cvkg_core::Appearance::Dark);
