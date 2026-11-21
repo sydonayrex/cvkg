@@ -155,7 +155,10 @@ const NUMERIC_EPS: f32 = 1.0e-6;
 /// builtin, so NaN is detected via `v != v` and infinities via a magnitude
 /// bound. Callers must negate this to test for non-finite values.
 fn is_finite_f32(v: f32) -> bool {
-    return (v == v) && (v < 3.4028235e38) && (v > -3.4028235e38);
+    // Use a value comfortably inside f32::MAX: the literal 3.4028235e38
+    // rounds past f32::MAX and is rejected by Dawn's WGSL parser (naga accepts
+    // it), so it would break WebGPU at runtime on every wasm backend.
+    return (v == v) && (v < 3.4e38) && (v > -3.4e38);
 }
 
 /// Division that returns `fallback` for zero/near-zero, non-finite or

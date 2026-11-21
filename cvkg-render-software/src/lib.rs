@@ -24,7 +24,27 @@
 //! - No MSAA (uses 4x supersampling for rounded shapes/ellipses)
 
 use cvkg_core::{ElapsedTime, Material3D, Mesh, Rect, Renderer, Transform3D};
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
+
+/// Monotonic-ish timestamp type for this target.
+///
+/// `std::time::Instant::now()` is unimplemented on `wasm32-unknown-unknown`
+/// and panics, so browsers use the JS clock through `js_sys::Date`.
+#[cfg(target_arch = "wasm32")]
+type TimeStamp = f64;
+#[cfg(not(target_arch = "wasm32"))]
+type TimeStamp = Instant;
+
+/// Current timestamp in the target's native unit.
+#[cfg(target_arch = "wasm32")]
+fn now() -> TimeStamp {
+    js_sys::Date::now() / 1000.0
+}
+#[cfg(not(target_arch = "wasm32"))]
+fn now() -> TimeStamp {
+    Instant::now()
+}
 
 // --- Framebuffer ---
 
@@ -141,8 +161,8 @@ fn unpack_rgba(packed: u32) -> [f32; 4] {
 /// The framebuffer can be read back via `framebuffer()` or `into_framebuffer()`.
 pub struct SoftwareRenderer {
     fb: Framebuffer,
-    start_time: Instant,
-    last_frame: Instant,
+    start_time: TimeStamp,
+    last_frame: TimeStamp,
     /// Phase 2 fix: long-lived text engine, constructed once.
     #[cfg(feature = "text")]
     text_engine: cvkg_runic_text::TextEngine,
@@ -154,7 +174,7 @@ pub struct SoftwareRenderer {
 impl SoftwareRenderer {
     /// Creates a software renderer with the given framebuffer dimensions.
     pub fn new(width: u32, height: u32) -> Self {
-        let now = Instant::now();
+        let now = now();
         Self {
             fb: Framebuffer::new(width, height),
             start_time: now,
@@ -171,7 +191,7 @@ impl SoftwareRenderer {
 
     /// Creates a software renderer with a solid background color.
     pub fn with_color(width: u32, height: u32, color: [f32; 4]) -> Self {
-        let now = Instant::now();
+        let now = now();
         Self {
             fb: Framebuffer::with_color(width, height, color),
             start_time: now,
@@ -247,11 +267,25 @@ impl SoftwareRenderer {
 
 impl ElapsedTime for SoftwareRenderer {
     fn elapsed_time(&self) -> f32 {
-        self.start_time.elapsed().as_secs_f32()
+        #[cfg(target_arch = "wasm32")]
+        {
+            (now() - self.start_time) as f32
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.start_time.elapsed().as_secs_f32()
+        }
     }
 
     fn delta_time(&self) -> f32 {
-        self.last_frame.elapsed().as_secs_f32()
+        #[cfg(target_arch = "wasm32")]
+        {
+            (now() - self.last_frame) as f32
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self.last_frame.elapsed().as_secs_f32()
+        }
     }
 }
 

@@ -99,11 +99,18 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   was force-added to tracking — it was previously ignored by `.gitignore:1`
   (`.*`) and had never been committed, so the manual-only trigger had not
   actually reached the remote.
-- **Wasm demo built and loaded in Chromium:** `wasm-pack build --target web`
-  succeeded; the page reported `Adele UI // Active` with no init error. **The
-  canvas is blank** — `main()` installs hooks and runs the capability probe but
-  starts no renderer/frame loop. Recorded as a gap in the demo README and
-  `docs/platform/webkit-compatibility.md` §7.
+- **Wasm demo now renders in Chromium (verified):** `wasm-pack build --target
+  web` succeeds and `src/web_render.rs` paints a real frame via
+  `cvkg-render-software` + `ImageData`. Browser result: zero console errors,
+  `[web-render] frame blitted to canvas`, non-transparent pixels. The software
+  renderer's `Instant::now()` panicked on wasm, so its clock now uses
+  `js_sys::Date` on that target.
+- **WebGPU runtime bugs found by hardware verification** (naga/native tests
+  could not catch these): out-of-range `f32` literal in the numeric guard;
+  `BINDING_INDEXING` feature/TextureViewArray binding on WebGPU; `textureSample`
+  in non-uniform material branches. All three fixed. Remaining WebGPU blockers:
+  `dpdx`/`dpdy`/`fwidth` under non-uniform branches and a `std::thread::spawn`
+  panic — tracked in `docs/platform/webkit-compatibility.md` §7.
 - **Journey reflow test de-flaked:** `cvkg-scene/tests/journey_tests.rs` looked up
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.

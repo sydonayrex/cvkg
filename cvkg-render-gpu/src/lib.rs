@@ -157,6 +157,24 @@ pub(crate) const WGSL_TONEMAP: &str = include_str!("shaders/tonemap.wgsl");
 pub(crate) const WGSL_PARTICLES: &str = include_str!("shaders/particles.wgsl");
 pub(crate) const WGSL_SKINNING: &str = include_str!("shaders/skinning.wgsl");
 
+/// Select the texture binding resource for the active target (P1-4).
+///
+/// WebGPU on wasm has no `BINDING_INDEXING` extension, so the wasm bind group
+/// layout declares a *single* texture and must be given one `TextureView`.
+/// Native uses the 32-element binding array. Keeping the choice in one helper
+/// prevents a wasm-only panic in wgpu's web backend.
+pub(crate) fn texture_binding<'a>(views: &'a [&'a wgpu::TextureView]) -> wgpu::BindingResource<'a> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = views.len();
+        wgpu::BindingResource::TextureView(views[0])
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        wgpu::BindingResource::TextureViewArray(views)
+    }
+}
+
 pub mod color_blindness;
 
 // Re-export ColorBlindMode for downstream users

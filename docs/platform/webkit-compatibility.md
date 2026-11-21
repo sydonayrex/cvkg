@@ -107,7 +107,17 @@ Method: the shipped `capability_probe.rs` was compiled into a minimal wasm harne
 | APIs enabled | `--enable-unsafe-webgpu` | `webgpu=true`, `webgl2=true`, `webkit_like=true`, `supported=true`, `tier=WebGpu` | Not expected; `show_unsupported_notice()` returned `ok` when called explicitly |
 | APIs disabled | `--disable-webgl --disable-3d-apis`, no WebGPU flag | `webgpu=true` (API still exposed), `webgl2=false`, `webkit_like=true`, `supported=true` | Explicit call inserted a **visible** `role="alert"` node with the documented text |
 
-**Full demo load (same environment):** `wasm-pack build --target web --release demos/adele-web` succeeded after the wasm dependency fixes. Serving the built `index.html` in Chromium produced status text `Adele UI // Active` (no init failure), a `<canvas>` element, and zero inserted fallback notices — but the canvas stayed blank. `demos/adele-web/src/lib.rs:56-80` (`#[wasm_bindgen(start)] main()`) only installs the panic hook/logger and runs the capability probe; it never creates a GPU device, renderer, or frame loop. **The web demo currently does not render CVKG components.** This is recorded as a gap, not a pass.
+**Full demo load (same environment):** `wasm-pack build --target web --release demos/adele-web` succeeds. The original `main()` only installed hooks and ran the capability probe, leaving the canvas blank.
+
+**Attempted WebGPU frame path and the bugs it exposed:** wiring `GpuRenderer::forge_headless` to a 2D-canvas `ImageData` blit and running it in Chromium surfaced WebGPU-only problems that naga validation and native tests did not catch:
+
+1. `is_finite_f32` used `3.4028235e38`, which rounds past `f32::MAX`; Dawn's WGSL parser rejects it. **Fixed** (now `3.4e38`).
+2. `forge_headless` requested `TEXTURE_BINDING_ARRAY`/non-uniform-indexing features; WebGPU has no `BINDING_INDEXING` extension. **Fixed** by gating them off on wasm.
+3. Renderer bind groups passed `TextureViewArray`; WebGPU requires a single `TextureView`. **Fixed** via the shared `texture_binding()` helper.
+4. Generated material sampling used `textureSample` inside a non-uniform `material_id` switch. **Fixed** by emitting `textureSampleLevel(..., 0.0)` and switching the textured branches in `material_opaque.wgsl`.
+5. Derivative calls (`dpdx`/`dpdy`/`fwidth`) still occur inside per-material branches, and a `std::thread::spawn` "operation not supported" panic appears during WebGPU init. **Still open** — the GPU canvas path needs a shader uniformity refactor and a wasm-safe threading check.
+
+**Shipped web render path:** because of item 5, `demos/adele-web/src/web_render.rs` now paints the canvas with `cvkg-render-software::SoftwareRenderer` and blits its RGBA framebuffer through `ImageData`. That renderer's `Instant::now()` also panicked on wasm, so its clock now uses `js_sys::Date` on wasm. Verified in Chromium: **zero console errors**, `[web-render] frame blitted to canvas`, and non-transparent canvas pixels (background `[12,15,22,255]`, accent `[255,0,140,255]`). Screenshot: `/tmp/opencode/adele-software2.png` (session-local). The software path renders geometry only — no glyphs, no input, no hit-testing.
 
 Conclusion: the DOM fallback element and the plain-data probe work in a real browser on real hardware. The second case also confirms the documented limitation that API presence (`navigator.gpu`) can outrank actual usability — WebGL2 was disabled but the probe still reported `supported=true` because it does not call `requestAdapter()`.
 

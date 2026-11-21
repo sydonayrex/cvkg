@@ -446,7 +446,7 @@ impl MaterialCompiler {
                 }
                 MaterialOp::SampleTexture { tex_index } => {
                     format!(
-                        "textureSample(t_diffuse[{}u], s_diffuse, in.uv)",
+                        "textureSampleLevel(t_diffuse[{}u], s_diffuse, in.uv, 0.0)",
                         tex_index
                     )
                 }
@@ -613,7 +613,7 @@ impl MaterialCompiler {
                 }
                 MaterialOp::Heatmap => {
                     let val_var = Self::find_input(&var_names, node_id, MaterialSocket::Float, graph)
-                        .unwrap_or_else(|| "textureSample(t_diffuse[0], s_diffuse, in.uv).r".to_string());
+                        .unwrap_or_else(|| "textureSampleLevel(t_diffuse[0], s_diffuse, in.uv, 0.0).r".to_string());
                     format!("vec4<f32>(heatmap_palette({}), col.a)", val_var)
                 }
                 MaterialOp::Raymarch { shape } => {

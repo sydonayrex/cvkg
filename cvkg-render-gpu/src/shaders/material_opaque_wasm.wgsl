@@ -153,7 +153,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         if (perimeter + scene.time * 20.0) % (max(in.slice.y, 1.0) + max(in.slice.z, 1.0)) > max(in.slice.y, 1.0) { alpha = 0.0; }
         color.a *= alpha;
     } else if in.material_id == 2u || in.material_id == 6u {
-        let tex_color = textureSample(t_diffuse, s_diffuse, in.uv);
+        let tex_color = textureSampleLevel(t_diffuse, s_diffuse, in.uv, 0.0);
         if in.material_id == 6u {
             // Apply subpixel typography (LCD horizontal masking) by blending each subpixel component independently.
             // CONTRACT: If the texture contains a subpixel coverage mask (RenderMode::Subpixel), we blend color
@@ -163,10 +163,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
             color *= tex_color;
         }
     } else if in.material_id == 12u {
-        let val = textureSample(t_diffuse, s_diffuse, in.uv).r;
+        let val = textureSampleLevel(t_diffuse, s_diffuse, in.uv, 0.0).r;
         color = vec4<f32>(heatmap_palette(val), in.color.a);
     } else if in.material_id == 20u {
-        let tex_color = textureSample(t_diffuse, s_diffuse, in.uv);
+        let tex_color = textureSampleLevel(t_diffuse, s_diffuse, in.uv, 0.0);
         color *= tex_color;
     } else if in.material_id == 15u {
         // ── Mode 15: Animated Linear Gradient ──

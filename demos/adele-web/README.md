@@ -6,7 +6,7 @@ Web design system explorer built on CVKG with WebGPU/WASM.
 
 Intended to demonstrate CVKG component rendering in a browser via WebGPU (design system explorer / matrix comparison layout).
 
-**Current state (verified 2026-11-21 in Chromium 158):** the crate compiles to wasm and `index.html` loads the module successfully, but `#[wasm_bindgen(start)] main()` (`src/lib.rs:56-80`) only installs the panic hook/logger and runs the P1-4 capability probe. It does **not** create a device, initialize a renderer, or start a frame loop, so the shipped page shows a blank canvas. Treat "demonstrates rendering" as aspirational until a render loop is wired. See `docs/platform/webkit-compatibility.md` §7.
+**Current state (verified 2026-11-21 in Chromium 158):** the crate compiles to wasm and `index.html` loads the module successfully. `#[wasm_bindgen(start)] main()` installs the panic hook/logger, runs the P1-4 capability probe, and paints one frame into the canvas through `src/web_render.rs` using the **software renderer** (geometry only — no glyphs, input, or hit-testing). Verified in a real browser: zero console errors and visible non-transparent pixels. The WebGPU renderer path is blocked by WGSL uniformity violations under a non-uniform `material_id` switch; the specific bugs and fixes are recorded in `docs/platform/webkit-compatibility.md` §7. Do not read the software frame as a complete CVKG web GUI.
 
 ## Boundaries
 

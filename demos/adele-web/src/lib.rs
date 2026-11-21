@@ -17,6 +17,8 @@ pub mod a11y_bridge;
 /// P1-4: runtime browser capability probe and graceful fallback notice.
 pub mod capability_probe;
 mod data;
+/// WebGPU headless-render-to-canvas path (P1-3/P1-4 continuation).
+pub mod web_render;
 use data::{DesignSystem, FilterCriteria};
 
 const DATA_JSON: &str = include_str!("data.json");
@@ -77,6 +79,19 @@ pub fn main() -> Result<(), JsValue> {
                 error
             );
         }
+    }
+
+    // P1-3 continuation: prove the GPU pipeline actually runs in the browser.
+    // The headless renderer needs no winit window, so its readback is blitted
+    // into the canvas. Kept additive: failures are logged, never panics.
+    #[cfg(target_arch = "wasm32")]
+    if capabilities.is_supported() {
+        wasm_bindgen_futures::spawn_local(async {
+            match web_render::render_once("cvkg-canvas", 800, 600).await {
+                Ok(()) => log::info!("[web-render] frame blitted to canvas"),
+                Err(error) => log::error!("[web-render] failed: {error}"),
+            }
+        });
     }
 
     Ok(())

@@ -14,6 +14,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 cvkg-core.workspace = true
 cvkg-render-gpu.workspace = true
+cvkg-render-software.workspace = true
 cvkg-vdom.workspace = true
 cvkg-components.workspace = true
 cvkg-themes.workspace = true
@@ -24,7 +25,7 @@ js-sys = "0.3"
 console_error_panic_hook = "0.1"
 log = "0.4"
 console_log = "1.0"
-web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "Performance", "Document", "Element", "HtmlElement", "Node", "HtmlTextAreaElement", "EventTarget", "Event", "KeyboardEvent", "CompositionEvent", "Navigator", "Clipboard"] }
+web-sys = { version = "0.3", features = ["Window", "HtmlCanvasElement", "Performance", "Document", "Element", "HtmlElement", "Node", "HtmlTextAreaElement", "EventTarget", "Event", "KeyboardEvent", "CompositionEvent", "Navigator", "Clipboard", "CanvasRenderingContext2d", "ImageData"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 glam = "0.33"

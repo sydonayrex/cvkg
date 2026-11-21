@@ -884,7 +884,7 @@ impl GpuRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&views),
+                    resource: crate::texture_binding(&views),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -1163,7 +1163,7 @@ impl GpuRenderer {
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: wgpu::BindingResource::TextureViewArray(&scene_views),
+                            resource: crate::texture_binding(&scene_views),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
@@ -1469,10 +1469,17 @@ impl GpuRenderer {
             caps.vendor
         );
         tracing::info!("[GPU] Driver info: {} - {}", info.driver, info.driver_info);
+        // P1-4: WebGPU (Dawn/Chromium) does not expose the BINDING_INDEXING
+        // extension that these array-indexing features map to. Mirror the
+        // windowed `forge` path and request only universally supported
+        // features on wasm; the `*_wasm.wgsl` variants avoid binding arrays.
+        #[cfg(not(target_arch = "wasm32"))]
         let required_features = adapter.features()
             & (wgpu::Features::TIMESTAMP_QUERY
                 | wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                 | wgpu::Features::TEXTURE_BINDING_ARRAY);
+        #[cfg(target_arch = "wasm32")]
+        let required_features = adapter.features() & wgpu::Features::TIMESTAMP_QUERY;
 
         let tier = GpuCapabilityTier::detect(&adapter);
 

@@ -791,7 +791,7 @@ impl GpuRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&views_refs),
+                    resource: crate::texture_binding(&views_refs),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -808,7 +808,7 @@ impl GpuRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&dummy_views_refs),
+                    resource: crate::texture_binding(&dummy_views_refs),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

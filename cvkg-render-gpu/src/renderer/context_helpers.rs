@@ -325,7 +325,7 @@ pub(crate) fn create_surface_context(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureViewArray(&scene_views),
+                resource: crate::texture_binding(&scene_views),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
@@ -664,7 +664,7 @@ pub(crate) fn create_headless_context(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureViewArray(&scene_views),
+                resource: crate::texture_binding(&scene_views),
             },
             wgpu::BindGroupEntry {
                 binding: 1,

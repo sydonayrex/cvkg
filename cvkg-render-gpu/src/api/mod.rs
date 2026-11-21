@@ -1107,7 +1107,7 @@ impl cvkg_core::Renderer for GpuRenderer {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(&vec![&view; self.capability_tier.texture_array_count as usize]),
+                    resource: crate::texture_binding(&vec![&view; self.capability_tier.texture_array_count as usize]),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

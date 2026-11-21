@@ -102,7 +102,7 @@ impl KvasirNode for BackdropCopyNode {
                         entries: &[
                             wgpu::BindGroupEntry {
                                 binding: 0,
-                                resource: wgpu::BindingResource::TextureViewArray(&vec![
+                                resource: crate::texture_binding(&vec![
                                     &scene_view;
                                     ctx.renderer.capability_tier.texture_array_count as usize
                                 ]),
