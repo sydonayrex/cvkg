@@ -117,6 +117,14 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **P1-5 web input slice:** `demos/adele-web/src/web_input.rs` makes the canvas
+  focusable, normalizes browser key names/modifiers through the shared
+  `cvkg_core` API, tracks pointer position, announces focus/key activity via the
+  P1-3 live region, and exposes `input_state_json_js()` for tests. Verified in
+  Chromium: `focus`/`keydown`/`pointerdown` update state; `ArrowDown` is
+  canonicalized correctly (fixed from an earlier `Down` alias that would have
+  broken component handlers). No hit-testing/caret/declarative bindings yet.
+
 - **P1-3 bridge wired into shipped startup:** `main()` now calls
   `init_a11y_bridge_spike("cvkg-canvas")` and logs failures. Verified in Chromium:
   mirrored heading/textbox nodes, `aria-live=polite` region, focusable textarea

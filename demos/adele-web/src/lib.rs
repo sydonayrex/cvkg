@@ -17,6 +17,8 @@ pub mod a11y_bridge;
 /// P1-4: runtime browser capability probe and graceful fallback notice.
 pub mod capability_probe;
 mod data;
+/// Minimal DOM keyboard/pointer input layer (P1-5).
+pub mod web_input;
 /// WebGPU headless-render-to-canvas path (P1-3/P1-4 continuation).
 pub mod web_render;
 use data::{DesignSystem, FilterCriteria};
@@ -55,6 +57,21 @@ pub fn init_a11y_bridge_spike(canvas_id: &str) -> Result<(), JsValue> {
     Ok(())
 }
 
+/// Announce a short message through the P1-3 bridge, if it is installed.
+/// Used by the input layer so keyboard/pointer activity reaches assistive tech.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn announce_to_a11y(message: &str) -> Result<(), JsValue> {
+    A11Y_SPIKE.with(|slot| match slot.borrow().as_ref() {
+        Some(bridge) => bridge.announce(message),
+        None => Ok(()),
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn announce_to_a11y(_message: &str) -> Result<(), String> {
+    Ok(())
+}
+
 #[wasm_bindgen(start)]
 pub fn main() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
@@ -87,6 +104,13 @@ pub fn main() -> Result<(), JsValue> {
     #[cfg(target_arch = "wasm32")]
     if let Err(error) = init_a11y_bridge_spike("cvkg-canvas") {
         log::warn!("[a11y-spike] init failed: {error:?}");
+    }
+
+    // P1-5: install normalize-on-arrival keyboard/pointer listeners so the
+    // canvas is focusable and key names match the native path.
+    #[cfg(target_arch = "wasm32")]
+    if let Err(error) = web_input::install_input_handlers("cvkg-canvas") {
+        log::warn!("[web-input] init failed: {error:?}");
     }
 
     // P1-3/P1-4 continuation: prove CVKG actually renders in the browser.

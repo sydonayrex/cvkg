@@ -53,7 +53,7 @@ This provides a native platform-facing tree. It does **not** prove that every co
 | Announcements / live regions | **Partial** | `ScreenReaderBridge` + `AnnouncementPriority` (`bridge.rs:36-83`) are a trait and data type only; no default platform backend (`README.md:97`). Native AccessKit tree updates exist (`main_loop.rs:403-408`); web live regions do not. |
 | Reduced motion | **Partial** (native), **Missing** (web) | Native detection in `a11y_prefs.rs` / `hlin_accessibility.rs`. No `matchMedia('(prefers-reduced-motion: reduce)')` or equivalent in web shell (`demos/adele-web/index.html`, `src/lib.rs`). |
 | Contrast | **Missing (as a guarantee)** | Theming/clamping and `ColorBlindMode` exist; no WCAG contrast-ratio audit or enforcement found. Build blocks only. |
-| Keyboard navigation / shortcuts | **Partial** | `on_key_event` / `key_shortcuts` hooks exist (`view.rs:337-344`); `FocusManager` provides cycling. No end-to-end keyboard-only test evidence for representative flows. |
+| Keyboard navigation / shortcuts | **Partial (improved)** | `on_key_event` / `key_shortcuts` hooks exist (`view.rs:337-344`); `FocusManager` provides cycling. The web demo now has a focusable canvas with normalized key/modifier state and live-region announcements (`demos/adele-web/src/web_input.rs`), verified in Chromium. No full keyboard-only flow test yet. |
 | IME / text composition | **Missing** | No composition bridge found in web or native core; audit §4.5/§4.6 rates this High. |
 | Clipboard / selection | **Partial (native dependency only)** | `cvkg-components/Cargo.toml:120-121` puts `arboard` behind `not(target_arch = "wasm32")`; `rfd` at `:118`. No unified clipboard API or web implementation evidenced. |
 

@@ -157,10 +157,10 @@ pub fn normalize_key_name(name: &str) -> Option<String> {
         "del" | "delete" => Some("Delete"),
         "ins" | "insert" => Some("Insert"),
         "return" | "enter" => Some("Enter"),
-        "arrowup" | "up" => Some("Up"),
-        "arrowdown" | "down" => Some("Down"),
-        "arrowleft" | "left" => Some("Left"),
-        "arrowright" | "right" => Some("Right"),
+        "arrowup" | "up" => Some("ArrowUp"),
+        "arrowdown" | "down" => Some("ArrowDown"),
+        "arrowleft" | "left" => Some("ArrowLeft"),
+        "arrowright" | "right" => Some("ArrowRight"),
         _ => None,
     };
     if let Some(canonical) = canonical {
@@ -419,7 +419,7 @@ mod tests {
         assert_eq!(normalize_key_name("Spacebar").as_deref(), Some("Space"));
         assert_eq!(normalize_key_name("Esc").as_deref(), Some("Escape"));
         assert_eq!(normalize_key_name("Return").as_deref(), Some("Enter"));
-        assert_eq!(normalize_key_name("ArrowUp").as_deref(), Some("Up"));
+        assert_eq!(normalize_key_name("ArrowUp").as_deref(), Some("ArrowUp"));
         assert_eq!(normalize_key_name("F13").as_deref(), Some("F13"));
         assert_eq!(normalize_key_name("ShiftLeft"), None);
         assert_eq!(normalize_key_name("   "), None);

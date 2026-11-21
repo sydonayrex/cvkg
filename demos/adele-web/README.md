@@ -33,6 +33,23 @@ wasm-pack build --target web
 
 ---
 
+## Web input layer (P1-5)
+
+`src/web_input.rs` installs keyboard/pointer listeners on the canvas at startup:
+
+- the canvas is focusable (`tabindex=0`) and has an accessible name;
+- `keydown` keys are normalized through `cvkg_core::normalize_key_name` and
+  modifiers are captured into `KeyModifiers` — `KeyA` → `a`, `ArrowDown` stays
+  `ArrowDown` so component handlers keep matching;
+- normalized key/modifier/shortcut state is exposed via
+  `input_state_json_js()` for browser tests;
+- focus and key activity are announced through the P1-3 live region.
+
+Verified in Chromium 158: dispatching `focus`, `keydown` and `pointerdown`
+events updates the snapshot, and `Key ArrowDown` appears in the live region.
+This is an input-normalization layer only — no hit-testing tree, caret rendering
+or declarative shortcut bindings on the web path yet.
+
 ## Accessibility / text bridge spike (P1-3)
 
 **Status: proof of concept only. Do NOT treat this as production accessibility
