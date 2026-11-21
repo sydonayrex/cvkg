@@ -117,6 +117,10 @@ Chrome DevTools Protocol driver was used instead (outside the repo, in
   any node whose `component_type.contains("Text")`, which nondeterministically
   matched either the 500×500 `Text` VNode or the shaped `Primitive::Text` child.
   Narrowed to `component_type == "Primitive::Text"`; 3/3 pass.
+- **WebKit fallback UX verified:** disabling WebGL2 in WebKitGTK produced the
+  `Unsupported` capability tier, the expected warning, and a visible
+  `role="alert"` notice with the documented message.
+
 - **WebKitGTK verification:** drove the wasm demo in WebKitGTK 2.54.3 via
   PyGObject. Found and fixed a real fallback bug: `forge_headless` panicked on
   engines without WebGPU before the software fallback could run. Added a

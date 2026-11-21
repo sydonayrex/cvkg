@@ -154,3 +154,12 @@ Findings:
 
 Safari/macOS/iOS were **not** tested; no Apple browser is available on this
 host. The §3 matrix rows for Safari/iOS remain Untested.
+
+### Fallback UX in WebKitGTK
+
+With WebGL2 disabled at document start (and no WebGPU), WebKitGTK produced:
+`[capability-probe] webgpu=false webgl2=false ... tier=Unsupported`, the warning
+`Neither WebGPU nor WebGL2 is available`, and a visible `role="alert"` element
+containing "This demo needs WebGPU or WebGL2; your browser/WebKit configuration
+is unsupported." The probe/fallback path is therefore verified in a real
+WebKit engine, not just Chromium.
